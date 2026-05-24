@@ -3,7 +3,7 @@
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
-use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Modules\Core\Company\Models\Company;
@@ -89,7 +89,7 @@ test('provisioner creates admin user with default values', function (): void {
     $provisioner->provisionAdminUser();
 })->throws(FrameworkPrimitivesNotConfiguredException::class);
 
-test('provisioner defers admin provisioning when users table is unstable', function (): void {
+test('provisioner defers admin provisioning when users schema is incubating', function (): void {
     Company::provisionLicensee();
     DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
 
@@ -98,26 +98,24 @@ test('provisioner defers admin provisioning when users table is unstable', funct
     $licensee->metadata = [];
     $licensee->save();
 
-    $usersTable = TableRegistry::query()->where('table_name', 'users')->firstOrFail();
-    $originalStable = $usersTable->is_stable;
-    $usersTable->markUnstable();
+    $preflight = Mockery::mock(IncubatingSchemaInspector::class);
+    $preflight->shouldReceive('tableIsIncubating')
+        ->once()
+        ->with('users')
+        ->andReturnTrue();
+
+    app()->instance(IncubatingSchemaInspector::class, $preflight);
 
     $messages = [];
 
-    try {
-        $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
-            $messages[] = $msg;
-        });
+    $provisioner = new FrameworkPrimitivesProvisioner(function (string $msg) use (&$messages): void {
+        $messages[] = $msg;
+    });
 
-        $user = $provisioner->provisionAdminUser();
+    $user = $provisioner->provisionAdminUser();
 
-        expect($user)->toBeNull();
-        expect($messages)->toContain('Skipping admin user provisioning — users table is unstable; re-run setup to bootstrap admin.');
-    } finally {
-        if ($originalStable) {
-            $usersTable->markStable();
-        }
-    }
+    expect($user)->toBeNull();
+    expect($messages)->toContain('Skipping admin user provisioning — users schema is incubating; re-run setup to bootstrap admin.');
 });
 
 test('provisioner creates admin user from bootstrap file even when stale licensee users exist', function (): void {

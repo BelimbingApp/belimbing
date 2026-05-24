@@ -1,4 +1,5 @@
 <?php
+
 /*
  * Commerce domain anchor.
  *
@@ -14,6 +15,18 @@ return [
             'id' => 'commerce',
             'label' => 'Commerce',
             'icon' => 'heroicon-o-shopping-bag',
+        ],
+        [
+            'id' => 'commerce.reports',
+            'label' => 'Reports',
+            'icon' => 'heroicon-o-chart-bar',
+            'parent' => 'commerce',
+        ],
+        [
+            'id' => 'commerce.sales',
+            'label' => 'Sales',
+            'icon' => 'heroicon-o-banknotes',
+            'parent' => 'commerce',
         ],
     ],
 ];

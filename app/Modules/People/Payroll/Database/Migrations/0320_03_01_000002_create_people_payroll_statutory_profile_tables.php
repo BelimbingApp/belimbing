@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Concerns\IncubatingSchema;
 use App\Base\Database\Concerns\RegistersTables;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
     use RegistersTables;
 
     public function up(): void
@@ -34,7 +36,7 @@ return new class extends Migration
                 'effective_from',
                 'effective_to',
             ], 'people_payroll_employee_statutory_profiles_effective_index');
-            $table->index(['company_id', 'country_iso'], 'people_payroll_employee_statutory_profiles_company_country_index');
+            $table->index(['company_id', 'country_iso'], 'people_payroll_employee_stat_profiles_company_country_index');
         });
     }
 

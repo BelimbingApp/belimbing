@@ -101,6 +101,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.button` | All buttons (supports variants, sizes) |
 | `x-ui.input` | Text/email/password inputs with label + error |
 | `x-ui.select` | Select dropdowns with label + error |
+| `x-ui.segmented-control` | Compact mutually exclusive choices where all options stay visible |
 | `x-ui.combobox` | Searchable select/lookup inputs |
 | `x-ui.textarea` | Multi-line text inputs with label + error |
 | `x-ui.search-input` | Search fields with magnifying-glass icon |

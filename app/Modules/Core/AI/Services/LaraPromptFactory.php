@@ -1,11 +1,12 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
+use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\AI\Enums\PromptSectionType;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\Orchestration\AgentCapabilityCatalog;
@@ -48,7 +49,7 @@ class LaraPromptFactory
         if (! $validation->valid) {
             throw new BlbConfigurationException(
                 'Lara workspace validation failed: '.implode('; ', $validation->errors),
-                BlbErrorCode::WORKSPACE_VALIDATION_FAILED,
+                AIErrorCode::WORKSPACE_VALIDATION_FAILED,
                 ['errors' => $validation->errors],
             );
         }
@@ -99,7 +100,7 @@ class LaraPromptFactory
         if (! is_string($encodedContext)) {
             throw new BlbIntegrationException(
                 'Failed to encode Lara runtime context.',
-                BlbErrorCode::LARA_PROMPT_CONTEXT_ENCODE_FAILED,
+                AIErrorCode::LARA_PROMPT_CONTEXT_ENCODE_FAILED,
             );
         }
 

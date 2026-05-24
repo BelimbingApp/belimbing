@@ -24,8 +24,8 @@
 **Context:** Initialization phase. No external users. No production deployment.
 
 **What This Means:**
-- **Destructive evolution allowed:** Drop tables, refactor schemas, rewrite APIs freely
-- **No backward compatibility needed:** If adding columns to a table, rollback and rework the original migration
+- **Progressive evolution allowed:** Rewrite incubating schema in place while keeping schema maturity explicit in source
+- **No backward compatibility needed for incubating schema:** If adding columns to an under-development table, rework the original migration and rebuild with `php artisan migrate --dev`
 - **Zero tolerance for technical debt:** Refactor immediately when design flaws discovered
 - **Strategic over tactical:** Invest in design quality; resist quick fixes
 
@@ -149,7 +149,7 @@ app/Modules/People/{Module}/          # People modules (Modules/Domain/Module)
 
 **Example (Already Implemented):** Migration-file-aware migrations
 - Laravel: Migrations in `database/migrations/` only
-- BLB: Auto-discover from module directories, per-migration-file registry (`base_database_tables`), seeder registry, table stability system
+- BLB: Auto-discover from module directories, per-migration-file registry (`base_database_tables`), seeder registry, source-declared incubating schema
 
 ### Agent Responsibility
 
@@ -210,7 +210,7 @@ When creating implementation plans:
 
 ### Migration Philosophy
 
-See **`app/Base/Database/AGENTS.md`** for the full migration philosophy, command decision guide, table stability system, and seeder registration patterns.
+See **`app/Base/Database/AGENTS.md`** for the full migration philosophy, command decision guide, incubating-schema workflow, and seeder registration patterns.
 
 ### String Literals
 - **Single quotes** (`'`) for literals
@@ -296,7 +296,7 @@ See **`app/Base/Database/AGENTS.md`** for the full migration philosophy, command
 
 **BLB is a customizable framework that adopters extend via git.**
 
-- **Early stage:** Fluid, destructive evolution allowed
+- **Early stage:** Fluid, progressive evolution with source-declared schema maturity
 - **Self-contained modules:** Easy to maintain, package, remove
 - **Auto-discovery:** Convention over configuration
 - **Laravel customization:** Embrace when it serves framework needs

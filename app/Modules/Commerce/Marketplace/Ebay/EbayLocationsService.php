@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Base\Integration\Services\IntegrationGateway;
@@ -8,14 +9,13 @@ use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use Illuminate\Support\Collection;
 
 /**
- * Reads the seller's inventory locations from the eBay Sell Account API.
+ * Reads the seller's inventory locations from the eBay Sell Inventory API.
  *
  * The publish path needs at least one ENABLED location (so the
  * `merchantLocationKey` can be referenced from an Offer's availability).
  * Authentication, base-URL resolution, and marketplace scoping mirror
  * `EbayPoliciesService` — the seller's stored OAuth token must include
- * `sell.account.readonly` (or `sell.account` for write operations like
- * creating a location).
+ * `sell.inventory.readonly` (or `sell.inventory`).
  */
 class EbayLocationsService
 {
@@ -35,8 +35,8 @@ class EbayLocationsService
             system: EbayConfiguration::CHANNEL,
             operation: 'commerce.marketplace.ebay.locations.pull',
             method: 'GET',
-            endpoint: rtrim((string) $config['api_base_url'], '/').'/sell/account/v1/location',
-            protocolOperation: 'GET /sell/account/v1/location',
+            endpoint: rtrim((string) $config['api_base_url'], '/').'/sell/inventory/v1/location',
+            protocolOperation: 'GET /sell/inventory/v1/location',
             provider: EbayConfiguration::CHANNEL,
             headers: ['Authorization' => 'Bearer '.$this->oauth->accessToken($companyId)],
             query: ['limit' => 100],

@@ -349,7 +349,7 @@ base_authz_decision_logs
 ├── reason_code (indexed)
 ├── applied_policies (JSON)
 ├── context (JSON)
-├── correlation_id (nullable, indexed)
+├── trace_id (nullable, indexed)
 ├── occurred_at (timestamp, indexed)
 ├── composite indexes: (actor_type, actor_id, occurred_at), (capability, allowed)
 └── timestamps

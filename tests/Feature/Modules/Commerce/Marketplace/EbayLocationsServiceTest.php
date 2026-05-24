@@ -28,16 +28,16 @@ function configureEbayLocationsEnvironment(int $companyId): void
             'refresh_token' => 'refresh-token-locations',
             'expires_in' => 3600,
         ],
-        ['https://api.ebay.com/oauth/api_scope/sell.account.readonly'],
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
     );
 }
 
-test('pulls inventory locations from the Account API and surfaces address fields', function (): void {
+test('pulls inventory locations from the Inventory API and surfaces address fields', function (): void {
     $user = createAdminUser();
     configureEbayLocationsEnvironment($user->company_id);
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/account/v1/location*' => Http::response([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response([
             'locations' => [
                 [
                     'merchantLocationKey' => 'home_warehouse',
@@ -84,7 +84,7 @@ test('pulls inventory locations from the Account API and surfaces address fields
         ->and($locations->last()->isEnabled())->toBeFalse();
 
     Http::assertSent(function (Request $request): bool {
-        return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/account/v1/location');
+        return str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/inventory/v1/location');
     });
 });
 
@@ -93,7 +93,7 @@ test('returns an empty collection when the seller has no locations defined yet',
     configureEbayLocationsEnvironment($user->company_id);
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/account/v1/location*' => Http::response([]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response([]),
     ]);
 
     $locations = app(EbayLocationsService::class)->pullInventoryLocations($user->company_id);
@@ -106,7 +106,7 @@ test('handles locations with missing address blocks gracefully', function (): vo
     configureEbayLocationsEnvironment($user->company_id);
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/account/v1/location*' => Http::response([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response([
             'locations' => [
                 [
                     'merchantLocationKey' => 'minimal',
@@ -132,7 +132,7 @@ test('exits non-zero by surfacing HTTP failures from eBay', function (): void {
     configureEbayLocationsEnvironment($user->company_id);
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/account/v1/location*' => Http::response(['errors' => ['unauthorized']], 401),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response(['errors' => ['unauthorized']], 401),
     ]);
 
     expect(fn () => app(EbayLocationsService::class)->pullInventoryLocations($user->company_id))

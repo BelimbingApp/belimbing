@@ -43,8 +43,8 @@ LATEST_GIT_VERSION="2.53.0"
 LATEST_BUN_VERSION="1.3.11"
 
 # FrankenPHP: minimum supported version and pinned fallback
-FRANKENPHP_MINIMUM_VERSION="1.12.1"
-FRANKENPHP_FALLBACK_VERSION="1.12.1"
+FRANKENPHP_MINIMUM_VERSION="1.12.3"
+FRANKENPHP_FALLBACK_VERSION="1.12.3"
 
 # === Service Versions ===
 # Versions for services that are installed

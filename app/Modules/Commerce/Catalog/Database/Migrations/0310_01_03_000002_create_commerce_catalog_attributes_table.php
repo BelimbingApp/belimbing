@@ -1,10 +1,14 @@
 <?php
+
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
+
     public function up(): void
     {
         Schema::create('commerce_catalog_attributes', function (Blueprint $table): void {
@@ -22,7 +26,7 @@ return new class extends Migration
 
             $table->index(['company_id', 'code']);
             $table->index(['category_id', 'sort_order']);
-            $table->index(['product_template_id', 'sort_order']);
+            $table->index(['product_template_id', 'sort_order'], 'commerce_catalog_attrs_template_sort_index');
         });
     }
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Database\Factories;
 
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -36,6 +37,8 @@ class ItemFactory extends Factory
             'sku' => 'ITEM-'.fake()->unique()->bothify('####??'),
             'status' => fake()->randomElement(Item::statuses()),
             'title' => $title,
+            'quantity_on_hand' => 1,
+            'storage_location' => fake()->optional()->bothify('Shelf ?-##'),
             'notes' => fake()->optional()->paragraph(),
             'unit_cost_amount' => fake()->optional()->numberBetween(1000, 15000),
             'target_price_amount' => fake()->optional()->numberBetween(2500, 35000),

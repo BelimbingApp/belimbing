@@ -4,7 +4,7 @@
 Belimbing (BLB) is a Laravel-based framework:
 - **PHP:** 8.5+
 - **Framework:** Laravel 13
-- **App Server:** FrankenPHP 1.12.2 (required for BLB's PHP worker model)
+- **App Server:** FrankenPHP 1.12.3 (required for BLB's PHP worker model)
 - **Frontend/Logic:** Livewire 4 + Tailwind CSS 4 + Alpine.js 3
 - **Testing:** Pest 4
 - **Linting:** Laravel Pint
@@ -18,12 +18,12 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
 
 ### Core Principles
 
-- **System Stewardship:** beyond your task, notice entropy: inconsistent patterns, leaky abstractions, duplication, structural drift.
-  - **Boy-scout rule:** fix in passing — dead code, stale references, naming, orphaned artifacts.
+- **Low Entropy:** system-wide, not ticket-only. Drift noticed anywhere (even off-task): fix or plan now — no silent deferral.
+  - **Small corrections:** fix immediately; do not defer.
+  - **Larger corrections:** add a plan under `docs/plans/` in this pass; implementation may follow later, but the plan must exist now.
   - **Completeness:** when modifying an artifact, consider its full purpose. Ask "what else belongs here?"
-  - **Larger drift:** capture as a follow-up plan in `docs/plans/`, don't silently absorb.
 - **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
-- **Destructive Evolution:** best current design over backward compatibility. Drop tables, refactor schemas, rewrite APIs freely — no migration paths for seed/schema data. Persisted user data (prefs, content, configs) is harder to discard than tables; shape it for known-recurring needs from day one.
+- **Progressive Evolution:** build the best current design, but make schema maturity explicit. Incubating schemas may be rewritten in place; stable schemas evolve through normal Laravel migrations or intentional data ports. Persisted user data (prefs, content, configs) is harder to discard than tables; protect it by default unless an incubating schema is intentionally rebuilt.
 - **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
 - **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
 

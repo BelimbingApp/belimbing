@@ -1,10 +1,14 @@
 <?php
+
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
+
     public function up(): void
     {
         if (Schema::hasTable('base_external_oauth_tokens') && ! Schema::hasTable('base_integration_oauth_tokens')) {
@@ -29,7 +33,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['provider', 'account_key', 'scope_type', 'scope_id'], 'base_integration_oauth_tokens_owner_unique');
-            $table->index(['provider', 'scope_type', 'scope_id']);
+            $table->index(['provider', 'scope_type', 'scope_id'], 'base_integration_oauth_tokens_provider_scope_index');
             $table->index('expires_at');
         });
     }

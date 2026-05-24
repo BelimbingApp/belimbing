@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Concerns\IncubatingSchema;
 use App\Base\Database\Concerns\RegistersTables;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
     use RegistersTables;
 
     public function up(): void
@@ -39,8 +41,8 @@ return new class extends Migration
                 ['source_type', 'source_id', 'pay_item_code', 'period_anchor'],
                 'people_payroll_pending_contributions_source_unique',
             );
-            $table->index(['company_id', 'state', 'period_anchor']);
-            $table->index(['employee_id', 'occurred_on']);
+            $table->index(['company_id', 'state', 'period_anchor'], 'people_payroll_pending_company_state_period_index');
+            $table->index(['employee_id', 'occurred_on'], 'people_payroll_pending_employee_date_index');
         });
         $this->registerTable('people_payroll_pending_contributions');
     }

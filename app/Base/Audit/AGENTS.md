@@ -9,7 +9,7 @@ Framework-level audit trail for data mutations and explicit actions. All models 
 - **Mutations** are captured via global Eloquent event listeners (`eloquent.created/updated/deleted`).
 - **Actions** are captured automatically via middleware (HTTP), auth event listeners (login/logout), console event listeners (commands), and queue event listeners (jobs).
 - **Deferred writes** — same pattern as `Authz\DatabaseDecisionLogger`. Entries buffer in memory, batch-INSERT after response via `app->terminating()`.
-- **Correlation** via `correlation_id` UUID links audit entries to Authz decision logs within the same request.
+- **Trace correlation** via compact `trace_id` links audit entries to Authz decision logs within the same request/process. Trace IDs are 12-character Crockford Base32 values stored without separators; UI may display them as 4-4-4 groups.
 
 ## Model-Level Configuration (Optional)
 
@@ -21,6 +21,27 @@ class Employee extends Model
     protected array $auditRedact   = ['ssn'];        // values stored as '[redacted]'
     protected array $auditExclude  = ['cached_html']; // field omitted from diff
     protected array $auditTruncate = ['bio' => 500];  // truncated to N chars
+}
+```
+
+Models can also expose audit subject metadata with duck-typed methods. No module imports Audit classes:
+
+```php
+public function getAuditSubject(): ?array
+{
+    return ['name' => 'employee', 'id' => $this->employee_id];
+}
+
+public function getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array
+{
+    return [[
+        'subject_name' => 'employee',
+        'subject_id' => $this->employee_id,
+        'subject_identifier' => '2026-05-15',
+        'event' => $event,
+        'old_values' => ['shift_code' => 'DAY'],
+        'new_values' => ['shift_code' => 'NIGHT'],
+    ]];
 }
 ```
 

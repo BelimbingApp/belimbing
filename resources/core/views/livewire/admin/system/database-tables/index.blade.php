@@ -14,7 +14,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
         <x-ui.page-header :title="__('Database Tables')" :subtitle="__('Browse and inspect all registered database tables')">
             <x-slot name="help">
                 @if(app()->environment('local'))
-                    <p>{{ __('During development, migrate:fresh wipes all tables and rebuilds from scratch. The Stable flag prevents this for tables whose data is already correct — avoiding unnecessary rebuilds and re-seeding of stable features. Click the badge to toggle. Infrastructure tables (migrations, base_database_tables, base_database_seeders) are always preserved regardless of this flag.') }}</p>
+                    <p>{{ __('During development, use migrate --dev to rebuild source-declared incubating schema before Laravel continues through native migration. This registry shows where each live table came from, plus whether its source migration is currently stable, incubating, or framework infrastructure.') }}</p>
                 @endif
                 <p class="{{ app()->environment('local') ? 'mt-2' : '' }}">{{ __('Click any row to browse its contents. For advanced queries — filtering, joins, aggregations, or data edits — ask Lara via the status bar.') }}</p>
             </x-slot>
@@ -68,20 +68,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                 :sort-dir="$sortDir"
                                 :label="__('Migration')"
                             />
-                            @if(app()->environment('local'))
-                                <x-ui.sortable-th
-                                    column="is_stable"
-                                    :sort-by="$sortBy"
-                                    :sort-dir="$sortDir"
-                                    :label="__('Stable')"
-                                />
-                                <x-ui.sortable-th
-                                    column="stabilized_at"
-                                    :sort-by="$sortBy"
-                                    :sort-dir="$sortDir"
-                                    :label="__('Stabilized At')"
-                                />
-                            @endif
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
@@ -93,27 +80,15 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $table->module_name ?? '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono text-xs" title="{{ $table->migration_file }}">{{ $table->migration_file ? Str::limit($table->migration_file, 50) : '—' }}</td>
-                                @if(app()->environment('local'))
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                        <button
-                                            wire:click="toggleStability({{ $table->id }})"
-                                            onclick="event.stopPropagation()"
-                                            class="cursor-pointer"
-                                            title="{{ $table->is_stable ? __('Click to mark unstable') : __('Click to mark stable') }}"
-                                        >
-                                            <x-ui.badge :variant="$this->stabilityVariant($table->is_stable)">
-                                                {{ $table->is_stable ? __('Stable') : __('Unstable') }}
-                                            </x-ui.badge>
-                                        </button>
-                                    </td>
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
-                                        <x-ui.datetime :value="$table->stabilized_at" />
-                                    </td>
-                                @endif
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                    <x-ui.badge :variant="$this->schemaStateVariant($table->schema_state)">
+                                        {{ Str::headline($table->schema_state) }}
+                                    </x-ui.badge>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ app()->environment('local') ? 5 : 3 }}" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables registered.') }}</td>
+                                <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables registered.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

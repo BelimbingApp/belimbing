@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-05-18
 
 ## Overview
 
@@ -12,6 +12,7 @@ To manage this complexity, the framework enforces:
 1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
 3.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
+4.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
 
 ---
 
@@ -19,7 +20,9 @@ To manage this complexity, the framework enforces:
 
 Migrations are **auto-discovered** from Base and Module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
 
-This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate:fresh --dev --seed` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
+This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
+
+At a high level, `php artisan migrate --dev` means: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed.
 
 ---
 
@@ -72,7 +75,7 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 
 BLB uses database registries to track module-owned database assets.
 
-`base_database_tables` records tables created by migrations, including the owning module, module path, migration file, and stability state. This powers migration provenance, stability-aware fresh rebuilds, and the admin database table browser.
+`base_database_tables` records tables created by migrations, including the owning module, module path, and migration file. This powers migration provenance, source-declared incubating-schema rebuilds, and the admin database table browser.
 
 `base_database_seeders` records seeders registered by migrations via `registerSeeder()` in `up()` and `unregisterSeeder()` in `down()`. Seeders can also be discovered from module `Database/Seeders/` when seeding runs. States: `pending` → `running` → `completed` | `failed` | `skipped`; completed seeders are skipped on later runs.
 
@@ -80,7 +83,17 @@ For registry implementation details, code examples, execution flow, dev vs produ
 
 ---
 
-## 4. Directory Structure
+## 4. PostgreSQL Identifier Guard
+
+PostgreSQL limits identifiers to 63 bytes and silently truncates overlong names. BLB treats that as a migration-time schema error rather than allowing truncated table, column, index, or constraint names to be created.
+
+The guard is scoped to migration commands, where durable schema objects are created or changed. `App\Base\Database\Postgres\GuardedPostgresConnection` registers a pre-execution callback through Laravel's connection hook, but it is active only inside BLB's migration command wrappers. Normal application browsing queries do not execute the identifier guard path.
+
+The guarded path covers Laravel schema builder SQL and raw DDL executed with `DB::statement()` during `migrate`, `migrate:rollback`, and `migrate:reset`. `migrate:fresh` delegates its rebuild phase to `migrate`, so migrations run through BLB's primary fresh workflow are covered without guarding the selective drop phase. Developers should use explicit short names for generated indexes and constraints when Laravel's default names would exceed PostgreSQL's limit.
+
+---
+
+## 5. Directory Structure
 
 All database assets live within their module to support portability.
 
@@ -102,7 +115,7 @@ app/Modules/Core/Geonames/
 
 ---
 
-## 5. Migration Registry
+## 6. Migration Registry
 
 This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique `MM_DD` identifier within its owner range.
 
@@ -195,11 +208,11 @@ Extensions use real calendar years. The MM_DD can be the actual date or a module
 
 ### Maintaining The Registry
 
-When adding a module, choose the owner first, reserve the next `MM_DD` that preserves dependency order, and add the row before creating migrations. If dependencies change during initialization, renumber the affected migrations, update this registry, and rebuild with `migrate:fresh --dev --seed`.
+When adding a module, choose the owner first, reserve the next `MM_DD` that preserves dependency order, and add the row before creating migrations. If dependencies change during initialization, renumber the affected migrations, update this registry, and rebuild with `migrate --dev`.
 
 ---
 
-## 6. Related Documentation
+## 7. Related Documentation
 
 -   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
 -   **docs/architecture/file-structure.md** — Full project directory layout.

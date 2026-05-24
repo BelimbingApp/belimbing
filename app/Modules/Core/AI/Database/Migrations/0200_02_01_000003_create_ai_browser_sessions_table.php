@@ -1,10 +1,14 @@
 <?php
+
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
+
     /**
      * Run the migrations.
      */
@@ -31,7 +35,7 @@ return new class extends Migration
             $table->index(['company_id', 'status']);
             $table->index(['agent_employee_id', 'status']);
             $table->index(['acting_for_user_id', 'status']);
-            $table->index(['agent_employee_id', 'acting_for_user_id', 'company_id', 'status']);
+            $table->index(['agent_employee_id', 'acting_for_user_id', 'company_id', 'status'], 'ai_browser_sessions_agent_user_company_status_index');
             $table->index('expires_at');
         });
     }

@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Foundation\Exceptions;
 
 use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Foundation\Enums\FoundationErrorCode;
 use Throwable;
 
 class BlbConfigurationException extends BlbException
@@ -11,7 +13,7 @@ class BlbConfigurationException extends BlbException
      */
     public function __construct(
         string $message,
-        BlbErrorCode $reasonCode = BlbErrorCode::BLB_CONFIGURATION,
+        BlbErrorCode $reasonCode = FoundationErrorCode::BLB_CONFIGURATION,
         array $context = [],
         int $code = 0,
         ?Throwable $previous = null,

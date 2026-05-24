@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Models;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -34,7 +35,7 @@ class DecisionLog extends Model
         'reason_code',
         'applied_policies',
         'context',
-        'correlation_id',
+        'trace_id',
         'occurred_at',
     ];
 

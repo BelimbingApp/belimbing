@@ -7,6 +7,9 @@ use App\Modules\People\Leave\Contracts\RoutesLeaveApprovals;
 use App\Modules\People\Leave\Data\LeaveApprovalIntent;
 use App\Modules\People\Leave\Data\LeaveDayBreakdown;
 use App\Modules\People\Leave\Data\LeaveDaysPreview;
+use App\Modules\People\Leave\Data\LeaveDaysPreviewInput;
+use App\Modules\People\Leave\Data\LeaveDaysPreviewOptions;
+use App\Modules\People\Leave\Data\LeaveSubmissionContext;
 use App\Modules\People\Leave\Data\LeaveValidationIssue;
 use App\Modules\People\Leave\Exceptions\LeaveRequestValidationException;
 use App\Modules\People\Leave\Models\LeaveAssignment;
@@ -45,27 +48,31 @@ class SubmitLeaveRequestService
             $requestPolicy = $assignment->requestPolicy;
             $entitlementPolicy = $assignment->entitlementPolicy;
 
-            $preview = $this->daysBuilder->preview(
+            $preview = $this->daysBuilder->preview(new LeaveDaysPreviewInput(
                 employee: $employee,
                 startsOn: $startsOn,
                 endsOn: $endsOn,
-                unit: $unit,
-                hoursCount: $hoursCount,
                 policy: $requestPolicy,
-                countryIso: $options['country_iso'] ?? null,
-                stateCode: $options['state_code'] ?? null,
-            );
+                unit: $unit,
+                options: new LeaveDaysPreviewOptions(
+                    hoursCount: $hoursCount,
+                    countryIso: $options['country_iso'] ?? null,
+                    stateCode: $options['state_code'] ?? null,
+                ),
+            ));
 
             $attachmentCount = (int) ($options['attachment_count'] ?? 0);
             $issues = $this->validate(
-                assignment: $assignment,
-                employee: $employee,
-                preview: $preview,
-                attachmentCount: $attachmentCount,
-                startsOn: $startsOn,
-                endsOn: $endsOn,
-                unit: $unit,
-                options: $options,
+                $assignment,
+                $employee,
+                $preview,
+                new LeaveSubmissionContext(
+                    startsOn: $startsOn,
+                    endsOn: $endsOn,
+                    unit: $unit,
+                    attachmentCount: $attachmentCount,
+                    options: $options,
+                ),
             );
 
             $blocking = array_filter($issues, fn (LeaveValidationIssue $i) => $i->isBlocking());
@@ -142,24 +149,18 @@ class SubmitLeaveRequestService
         });
     }
 
-    /**
-     * @return list<LeaveValidationIssue>
-     */
+    /** @return list<LeaveValidationIssue> */
     private function validate(
         LeaveAssignment $assignment,
         Employee $employee,
         LeaveDaysPreview $preview,
-        int $attachmentCount,
-        DateTimeImmutable $startsOn,
-        DateTimeImmutable $endsOn,
-        string $unit,
-        array $options,
+        LeaveSubmissionContext $ctx,
     ): array {
         $issues = [];
         $requestPolicy = $assignment->requestPolicy;
         $leaveType = $assignment->leaveType;
 
-        if (((bool) $requestPolicy->compulsory_attachment || (bool) $leaveType->compulsory_attachment) && $attachmentCount < 1) {
+        if (((bool) $requestPolicy->compulsory_attachment || (bool) $leaveType->compulsory_attachment) && $ctx->attachmentCount < 1) {
             $issues[] = new LeaveValidationIssue(
                 code: 'attachment_required',
                 message: sprintf('%s requires a supporting attachment.', $leaveType->name),
@@ -179,7 +180,7 @@ class SubmitLeaveRequestService
             );
         }
 
-        if ((bool) $requestPolicy->no_cross_month_split && $startsOn->format('Y-m') !== $endsOn->format('Y-m')) {
+        if ((bool) $requestPolicy->no_cross_month_split && $ctx->startsOn->format('Y-m') !== $ctx->endsOn->format('Y-m')) {
             $issues[] = new LeaveValidationIssue(
                 code: 'cross_month_split_not_allowed',
                 message: sprintf(
@@ -191,8 +192,8 @@ class SubmitLeaveRequestService
 
         $issues = [
             ...$issues,
-            ...$this->validateNoticeRules($requestPolicy, $leaveType, $employee, $startsOn, $options),
-            ...$this->validateOverlapRules($requestPolicy, $employee, $preview, $unit),
+            ...$this->validateNoticeRules($requestPolicy, $leaveType, $employee, $ctx->startsOn, $ctx->options),
+            ...$this->validateOverlapRules($requestPolicy, $employee, $preview, $ctx->unit),
         ];
 
         if (! (bool) $requestPolicy->allow_negative_balance && $preview->totalCountedDays > 0) {
@@ -231,90 +232,144 @@ class SubmitLeaveRequestService
         DateTimeImmutable $startsOn,
         array $options,
     ): array {
-        $issues = [];
         $today = new DateTimeImmutable('today');
         $daysUntilStart = (int) $today->diff($startsOn)->format('%r%a');
 
+        return [
+            ...$this->validateAdvanceNotice($requestPolicy, $leaveType, $employee, $startsOn, $daysUntilStart, $options),
+            ...$this->validateBackDateRule($requestPolicy, $leaveType, $startsOn, $today, $daysUntilStart),
+        ];
+    }
+
+    /**
+     * @return list<LeaveValidationIssue>
+     */
+    private function validateAdvanceNotice(
+        LeaveRequestPolicy $requestPolicy,
+        LeaveType $leaveType,
+        Employee $employee,
+        DateTimeImmutable $startsOn,
+        int $daysUntilStart,
+        array $options,
+    ): array {
         $advanceNotice = is_array($requestPolicy->advance_notice) ? $requestPolicy->advance_notice : [];
         $standardDays = max(0, (int) ($advanceNotice['standard_days'] ?? 0));
+
+        if ($standardDays === 0 || $daysUntilStart >= $standardDays) {
+            return [];
+        }
+
         $requestedShortNotice = (bool) ($options['short_notice'] ?? false);
         $shortNotice = is_array($advanceNotice['short_notice'] ?? null) ? $advanceNotice['short_notice'] : [];
 
-        if ($standardDays > 0 && $daysUntilStart < $standardDays) {
-            if (! $requestedShortNotice || ! (bool) ($shortNotice['allowed'] ?? false)) {
-                $issues[] = new LeaveValidationIssue(
-                    code: 'advance_notice_required',
-                    message: sprintf(
-                        '%s requires %d day(s) advance notice unless short-notice handling is explicitly allowed.',
-                        $leaveType->name,
-                        $standardDays,
-                    ),
-                );
-            } else {
-                if ((bool) ($shortNotice['disallow_today'] ?? false) && $daysUntilStart <= 0) {
-                    $issues[] = new LeaveValidationIssue(
-                        code: 'short_notice_same_day_not_allowed',
-                        message: sprintf(
-                            '%s cannot be submitted as short notice on the same day.',
-                            $leaveType->name,
-                        ),
-                    );
-                }
-
-                $annualCap = $shortNotice['annual_cap'] ?? null;
-                if (is_numeric($annualCap)) {
-                    $usedShortNotice = LeaveRequest::query()
-                        ->where('employee_id', $employee->getKey())
-                        ->whereYear('starts_on', (int) $startsOn->format('Y'))
-                        ->where('short_notice', true)
-                        ->whereNotIn('status', [
-                            LeaveRequest::STATUS_REJECTED,
-                            LeaveRequest::STATUS_CANCELLED,
-                            LeaveRequest::STATUS_WITHDRAWN,
-                        ])
-                        ->count();
-
-                    if ($usedShortNotice >= (int) $annualCap) {
-                        $issues[] = new LeaveValidationIssue(
-                            code: 'short_notice_annual_cap_exceeded',
-                            message: sprintf(
-                                '%s short-notice quota of %d request(s) for %d has been exhausted.',
-                                $leaveType->name,
-                                (int) $annualCap,
-                                (int) $startsOn->format('Y'),
-                            ),
-                        );
-                    }
-                }
-            }
+        if (! $requestedShortNotice || ! (bool) ($shortNotice['allowed'] ?? false)) {
+            return [new LeaveValidationIssue(
+                code: 'advance_notice_required',
+                message: sprintf(
+                    '%s requires %d day(s) advance notice unless short-notice handling is explicitly allowed.',
+                    $leaveType->name,
+                    $standardDays,
+                ),
+            )];
         }
 
-        $backDate = is_array($requestPolicy->back_date) ? $requestPolicy->back_date : [];
-        if ($startsOn < $today) {
-            if (! (bool) ($backDate['allowed'] ?? false)) {
-                $issues[] = new LeaveValidationIssue(
-                    code: 'back_date_not_allowed',
-                    message: sprintf('%s does not allow back-dated applications.', $leaveType->name),
-                );
-            } elseif (isset($backDate['max_days']) && is_numeric($backDate['max_days'])) {
-                $maxBackDateDays = max(0, (int) $backDate['max_days']);
-                $daysBackDated = abs($daysUntilStart);
+        return $this->validateShortNoticeWindow($shortNotice, $leaveType, $employee, $startsOn, $daysUntilStart);
+    }
 
-                if ($daysBackDated > $maxBackDateDays) {
-                    $issues[] = new LeaveValidationIssue(
-                        code: 'back_date_window_exceeded',
-                        message: sprintf(
-                            '%s can only be back-dated by %d day(s); requested %d day(s).',
-                            $leaveType->name,
-                            $maxBackDateDays,
-                            $daysBackDated,
-                        ),
-                    );
-                }
-            }
+    /**
+     * @param  array<string, mixed>  $shortNotice
+     * @return list<LeaveValidationIssue>
+     */
+    private function validateShortNoticeWindow(
+        array $shortNotice,
+        LeaveType $leaveType,
+        Employee $employee,
+        DateTimeImmutable $startsOn,
+        int $daysUntilStart,
+    ): array {
+        $issues = [];
+
+        if ((bool) ($shortNotice['disallow_today'] ?? false) && $daysUntilStart <= 0) {
+            $issues[] = new LeaveValidationIssue(
+                code: 'short_notice_same_day_not_allowed',
+                message: sprintf('%s cannot be submitted as short notice on the same day.', $leaveType->name),
+            );
+        }
+
+        $annualCap = $shortNotice['annual_cap'] ?? null;
+        if (! is_numeric($annualCap)) {
+            return $issues;
+        }
+
+        $usedShortNotice = LeaveRequest::query()
+            ->where('employee_id', $employee->getKey())
+            ->whereYear('starts_on', (int) $startsOn->format('Y'))
+            ->where('short_notice', true)
+            ->whereNotIn('status', [
+                LeaveRequest::STATUS_REJECTED,
+                LeaveRequest::STATUS_CANCELLED,
+                LeaveRequest::STATUS_WITHDRAWN,
+            ])
+            ->count();
+
+        if ($usedShortNotice >= (int) $annualCap) {
+            $issues[] = new LeaveValidationIssue(
+                code: 'short_notice_annual_cap_exceeded',
+                message: sprintf(
+                    '%s short-notice quota of %d request(s) for %d has been exhausted.',
+                    $leaveType->name,
+                    (int) $annualCap,
+                    (int) $startsOn->format('Y'),
+                ),
+            );
         }
 
         return $issues;
+    }
+
+    /**
+     * @return list<LeaveValidationIssue>
+     */
+    private function validateBackDateRule(
+        LeaveRequestPolicy $requestPolicy,
+        LeaveType $leaveType,
+        DateTimeImmutable $startsOn,
+        DateTimeImmutable $today,
+        int $daysUntilStart,
+    ): array {
+        if ($startsOn >= $today) {
+            return [];
+        }
+
+        $backDate = is_array($requestPolicy->back_date) ? $requestPolicy->back_date : [];
+
+        if (! (bool) ($backDate['allowed'] ?? false)) {
+            return [new LeaveValidationIssue(
+                code: 'back_date_not_allowed',
+                message: sprintf('%s does not allow back-dated applications.', $leaveType->name),
+            )];
+        }
+
+        if (! isset($backDate['max_days']) || ! is_numeric($backDate['max_days'])) {
+            return [];
+        }
+
+        $maxBackDateDays = max(0, (int) $backDate['max_days']);
+        $daysBackDated = abs($daysUntilStart);
+
+        if ($daysBackDated <= $maxBackDateDays) {
+            return [];
+        }
+
+        return [new LeaveValidationIssue(
+            code: 'back_date_window_exceeded',
+            message: sprintf(
+                '%s can only be back-dated by %d day(s); requested %d day(s).',
+                $leaveType->name,
+                $maxBackDateDays,
+                $daysBackDated,
+            ),
+        )];
     }
 
     /**
@@ -433,25 +488,34 @@ class SubmitLeaveRequestService
             return $explicitTag;
         }
 
-        $today = new DateTimeImmutable('today');
-
         if ((bool) ($options['short_notice'] ?? false)) {
-            $advanceNotice = is_array($requestPolicy->advance_notice) ? $requestPolicy->advance_notice : [];
-            $shortNotice = is_array($advanceNotice['short_notice'] ?? null) ? $advanceNotice['short_notice'] : [];
-            $tag = $shortNotice['tag'] ?? null;
-            if (is_string($tag) && $tag !== '') {
-                return $tag;
+            $shortNoticeTag = $this->shortNoticeTag($requestPolicy);
+            if ($shortNoticeTag !== null) {
+                return $shortNoticeTag;
             }
         }
 
-        if ($startsOn < $today) {
-            $backDate = is_array($requestPolicy->back_date) ? $requestPolicy->back_date : [];
-            $tag = $backDate['tag'] ?? null;
-            if (is_string($tag) && $tag !== '') {
-                return $tag;
-            }
+        if ($startsOn < new DateTimeImmutable('today')) {
+            return $this->backDateTag($requestPolicy);
         }
 
         return null;
+    }
+
+    private function shortNoticeTag(LeaveRequestPolicy $requestPolicy): ?string
+    {
+        $advanceNotice = is_array($requestPolicy->advance_notice) ? $requestPolicy->advance_notice : [];
+        $shortNotice = is_array($advanceNotice['short_notice'] ?? null) ? $advanceNotice['short_notice'] : [];
+        $tag = $shortNotice['tag'] ?? null;
+
+        return is_string($tag) && $tag !== '' ? $tag : null;
+    }
+
+    private function backDateTag(LeaveRequestPolicy $requestPolicy): ?string
+    {
+        $backDate = is_array($requestPolicy->back_date) ? $requestPolicy->back_date : [];
+        $tag = $backDate['tag'] ?? null;
+
+        return is_string($tag) && $tag !== '' ? $tag : null;
     }
 }

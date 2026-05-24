@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Database\Livewire\DatabaseTables;
 
+use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -8,7 +10,6 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Str as BlbStr;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -47,30 +48,14 @@ class Show extends Component
      */
     public array $orphanedRegistryNotices = [];
 
-    /**
-     * Toggle the stability flag for the current table.
-     */
-    public function toggleStability(): void
+    public function schemaStateVariant(string $schemaState): string
     {
-        $table = TableRegistry::query()
-            ->where('table_name', $this->tableName)
-            ->firstOrFail();
-
-        if ($table->isStable()) {
-            $table->markUnstable();
-
-            return;
-        }
-
-        $table->markStable(Auth::id());
-    }
-
-    /**
-     * Map stability to a badge variant.
-     */
-    public function stabilityVariant(bool $isStable): string
-    {
-        return $isStable ? 'success' : 'default';
+        return match ($schemaState) {
+            'incubating' => 'warning',
+            'infrastructure' => 'default',
+            'stable' => 'success',
+            default => 'default',
+        };
     }
 
     /**
@@ -240,11 +225,15 @@ class Show extends Component
         $migrationSource = $inspector->migrationSource($this->tableName);
         $tablesGrouped = $inspector->allTablesGroupedByModule();
         $recentTables = session('recent_tables', []);
+        $tableRegistry = TableRegistry::query()
+            ->where('table_name', $this->tableName)
+            ->first();
 
         return view('livewire.admin.system.database-tables.show', [
-            'tableRegistry' => TableRegistry::query()
-                ->where('table_name', $this->tableName)
-                ->first(),
+            'tableRegistry' => $tableRegistry,
+            'schemaState' => $tableRegistry === null
+                ? 'unknown'
+                : app(IncubatingSchemaInspector::class)->tableSchemaState($this->tableName),
             'columns' => $columns,
             'indexes' => $indexes,
             'rows' => $inspector->rows(

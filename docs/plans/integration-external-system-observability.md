@@ -69,7 +69,7 @@ Correlation fields should include a BLB-generated exchange ID and operation corr
 
 The schema should carry one generic protocol search field, `protocol_operation`, and put protocol-specific detail in `metadata` until query patterns prove otherwise. Examples:
 
-- REST over HTTP: `transport=http`, `protocol=rest`, `endpoint=https://...`, `protocol_operation=GET /sell/account/v1/location`, `metadata.http_method=GET`
+- REST over HTTP: `transport=http`, `protocol=rest`, `endpoint=https://...`, `protocol_operation=GET /sell/inventory/v1/location`, `metadata.http_method=GET`
 - JSON-RPC over HTTP or stdio: `protocol=json_rpc`, `protocol_operation=tools/list`, `metadata.rpc_id=42`, `metadata.rpc_error_code=-32601`
 - GraphQL: `protocol=graphql`, `protocol_operation=GetOrders`, `metadata.operation_type=query`
 - SFTP/file transfer: `transport=sftp`, `protocol=file_transfer`, `protocol_operation=put`, `endpoint=sftp://host/path`, `metadata.remote_path=/orders/file.csv`

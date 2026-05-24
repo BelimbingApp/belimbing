@@ -31,9 +31,9 @@
         </a>
     </div>
 
-    {{-- Right: Timezone selector + Theme toggle --}}
+    {{-- Right: Timezone selector + Theme selector --}}
     <div class="flex items-center gap-3" x-data="{
-        theme: localStorage.getItem('theme') || 'light',
+        theme: 'light',
         tzOpen: false,
         tzMode: @js($tzMode->value),
         tzLabel: @js($tzLabel),
@@ -42,11 +42,13 @@
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
-            if (this.theme === 'dark') {
-                document.documentElement.classList.add('dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-            }
+            const storedTheme = localStorage.getItem('theme');
+
+            this.theme = ['light', 'dark'].includes(storedTheme) ? storedTheme : 'light';
+            this.applyTheme();
+        },
+        applyTheme() {
+            document.documentElement.classList.toggle('dark', this.theme === 'dark');
         },
         tzDisplay(mode) {
             if (mode === 'local') return this.browserTz;
@@ -129,22 +131,20 @@
             </div>
         @endauth
 
-        {{-- Theme Toggle: minimal pill switch --}}
-        <button
-            @click="
-                theme = (theme === 'dark' ? 'light' : 'dark');
+        <x-ui.segmented-control
+            :options="[
+                ['value' => 'light', 'label' => __('Light'), 'icon' => 'heroicon-o-sun'],
+                ['value' => 'dark', 'label' => __('Dark'), 'icon' => 'heroicon-o-moon'],
+            ]"
+            value="light"
+            :label="__('Theme')"
+            :show-labels="false"
+            x-model="theme"
+            @segmented-control-change="
+                theme = $event.detail.value;
                 localStorage.setItem('theme', theme);
-                document.documentElement.classList.toggle('dark');
+                applyTheme();
             "
-            class="relative w-9 h-5 rounded-full bg-border-input dark:bg-zinc-700 transition-colors hover:bg-muted/50 dark:hover:bg-zinc-600 shadow-inner"
-            :aria-label="theme === 'dark' ? '{{ __('Switch to light mode') }}' : '{{ __('Switch to dark mode') }}'"
-            title="{{ __('Toggle theme') }}"
-            :aria-pressed="theme === 'light'"
-        >
-            <span
-                class="absolute top-0.5 w-4 h-4 rounded-full bg-white dark:bg-white shadow transition-transform duration-200"
-                :class="theme === 'dark' ? 'left-0.5' : 'left-4'"
-            ></span>
-        </button>
+        />
     </div>
 </div>

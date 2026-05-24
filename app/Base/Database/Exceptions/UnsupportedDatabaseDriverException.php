@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Database\Exceptions;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 
 /**
@@ -13,7 +14,7 @@ final class UnsupportedDatabaseDriverException extends BlbDataContractException
     {
         return new self(
             "Unsupported database driver '{$driver}' for {$operation}.",
-            BlbErrorCode::DATABASE_DRIVER_UNSUPPORTED,
+            DatabaseErrorCode::DATABASE_DRIVER_UNSUPPORTED,
             ['driver' => $driver, 'operation' => $operation],
         );
     }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Concerns\IncubatingSchema;
 use App\Base\Database\Concerns\RegistersTables;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
     use RegistersTables;
 
     public function up(): void
@@ -40,7 +42,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['payroll_calendar_id', 'code']);
-            $table->index(['payroll_calendar_id', 'starts_on', 'ends_on']);
+            $table->index(['payroll_calendar_id', 'starts_on', 'ends_on'], 'people_payroll_periods_calendar_dates_index');
         });
 
         $this->createRegisteredTable('people_payroll_runs', function (Blueprint $table): void {
@@ -79,7 +81,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['payroll_run_id', 'employee_id']);
+            $table->unique(['payroll_run_id', 'employee_id'], 'people_payroll_run_participants_run_employee_unique');
             $table->index(['company_id', 'employee_id']);
         });
 
@@ -123,7 +125,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['payroll_run_id', 'line_type']);
-            $table->index(['payroll_run_participant_id', 'line_type']);
+            $table->index(['payroll_run_participant_id', 'line_type'], 'people_payroll_result_lines_participant_type_index');
         });
 
         $this->createRegisteredTable('people_payroll_run_audit_events', function (Blueprint $table): void {
@@ -136,7 +138,7 @@ return new class extends Migration
             $table->timestamp('occurred_at');
             $table->timestamps();
 
-            $table->index(['payroll_run_id', 'occurred_at']);
+            $table->index(['payroll_run_id', 'occurred_at'], 'people_payroll_run_audit_events_run_occurred_index');
         });
     }
 

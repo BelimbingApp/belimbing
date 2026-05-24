@@ -25,7 +25,7 @@ class CompanyFactory extends Factory
      */
     public function definition(): array
     {
-        $companyName = fake()->company();
+        $companyName = fake()->unique()->company();
 
         return [
             'name' => $companyName,

@@ -1,11 +1,11 @@
 <?php
 
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 
 /** @var Show $this */
+/** @var ListingDraft|null $ebayListingDraft */
+/** @var list<array{id: string, label: string, description: string|null, entries: list<array{code: string, severity: string, label: string, description?: string, action?: string}>}> $extensionReadinessPanels */
 ?>
 
 <div>
@@ -27,7 +27,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 space-y-6">
-                <x-ui.card>
+                <x-ui.card id="item-facts">
                     @if ($this->canEdit())
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <x-ui.edit-in-place.text
@@ -66,6 +66,27 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     <option value="{{ $statusOption }}">{{ __(Illuminate\Support\Str::headline($statusOption)) }}</option>
                                 @endforeach
                             </x-ui.edit-in-place.select>
+
+                            <x-ui.edit-in-place.text
+                                :label="__('Qty')"
+                                :value="$item->quantity_on_hand"
+                                field="quantity_on_hand"
+                                save-method="saveField"
+                                inputmode="numeric"
+                                tabular
+                                :help="__('Units available for this SKU or tracked item. Use 1 for one-off used parts.')"
+                                :error="$errors->first('quantity_on_hand')"
+                            />
+
+                            <x-ui.edit-in-place.text
+                                :label="__('Storage location')"
+                                :value="$item->storage_location"
+                                field="storage_location"
+                                save-method="saveField"
+                                :empty="__('No location set.')"
+                                :help="__('Internal place to find this stock.')"
+                                :error="$errors->first('storage_location')"
+                            />
 
                             <x-ui.edit-in-place.text
                                 :label="__('Unit Cost')"
@@ -149,14 +170,14 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="catalog-fit">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Catalog Fit') }}</h2>
                             <p class="mt-1 text-sm text-muted">{{ __('Pick the reusable category and template that decide which structured fields apply to this item.') }}</p>
                         </div>
                         <div class="flex flex-wrap justify-end gap-2">
-                            <x-ui.badge>{{ $item->category?->name ?? __('No category') }}</x-ui.badge>
+                            <x-ui.badge>{{ $item->category?->path_label ?? __('No category') }}</x-ui.badge>
                             <x-ui.badge>{{ $item->productTemplate?->name ?? __('No template') }}</x-ui.badge>
                         </div>
                     </div>
@@ -172,7 +193,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             >
                                 <option value="">{{ __('No category') }}</option>
                                 @foreach ($categories as $category)
-                                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                                    <option value="{{ $category->id }}">{{ $category->path_label }}</option>
                                 @endforeach
                             </x-ui.select>
 
@@ -189,7 +210,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     <option value="{{ $template->id }}">
                                         {{ $template->name }}
                                         @if ($template->category)
-                                            {{ __('(:category)', ['category' => $template->category->name]) }}
+                                            {{ __('(:category)', ['category' => $template->category->path_label]) }}
                                         @endif
                                     </option>
                                 @endforeach
@@ -204,7 +225,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Category') }}</dt>
-                                <dd class="mt-1 text-sm text-ink">{{ $item->category?->name ?? __('No category') }}</dd>
+                                <dd class="mt-1 text-sm text-ink">{{ $item->category?->path_label ?? __('No category') }}</dd>
                             </div>
                             <div>
                                 <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Template') }}</dt>
@@ -214,7 +235,181 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="fitment">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Vehicle or application compatibility confirmed for this item. Marketplace publishing will use this instead of title text alone.') }}</p>
+                        </div>
+                        <x-ui.badge>{{ $item->fitments->count() }}</x-ui.badge>
+                    </div>
+
+                    @if ($item->fitments->isEmpty())
+                        <x-ui.alert variant="info">
+                            {{ __('No fitment captured yet. Add compatible vehicles, or explicitly mark the item as universal fit when that is true.') }}
+                        </x-ui.alert>
+                    @else
+                        <div class="space-y-3">
+                            @foreach ($item->fitments as $fitment)
+                                <div wire:key="item-fitment-{{ $fitment->id }}" class="flex items-start justify-between gap-3 border-b border-border-default pb-3 last:border-0 last:pb-0">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-sm font-medium text-ink">
+                                                @if ($fitment->is_universal)
+                                                    {{ __('Universal fit') }}
+                                                @else
+                                                    {{ collect([$fitment->display_year, $fitment->display_make, $fitment->display_model, $fitment->display_trim, $fitment->display_engine])->filter()->implode(' ') }}
+                                                @endif
+                                            </p>
+                                            <x-ui.badge>{{ __(Illuminate\Support\Str::headline($fitment->confidence)) }}</x-ui.badge>
+                                            <x-ui.badge>{{ __(Illuminate\Support\Str::headline($fitment->source)) }}</x-ui.badge>
+                                        </div>
+
+                                        @if (! $fitment->is_universal && ($fitment->compatibility_properties ?? []) !== [])
+                                            <dl class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+                                                @foreach ($fitment->compatibility_properties as $name => $value)
+                                                    <div class="flex gap-1">
+                                                        <dt class="font-medium text-ink">{{ $name }}:</dt>
+                                                        <dd>{{ $value }}</dd>
+                                                    </div>
+                                                @endforeach
+                                            </dl>
+                                        @endif
+
+                                        @if ($fitment->notes)
+                                            <p class="mt-2 text-sm text-muted">{{ $fitment->notes }}</p>
+                                        @endif
+                                    </div>
+
+                                    @if ($this->canEdit())
+                                        <div class="flex shrink-0 items-center gap-1">
+                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="editFitment({{ $fitment->id }})">
+                                                <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
+                                                {{ __('Edit') }}
+                                            </x-ui.button>
+
+                                            <button
+                                                type="button"
+                                                wire:click="deleteFitment({{ $fitment->id }})"
+                                                wire:confirm="{{ __('Remove this fitment entry?') }}"
+                                                class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-status-danger"
+                                                aria-label="{{ __('Remove fitment') }}"
+                                                title="{{ __('Remove') }}"
+                                            >
+                                                <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <div class="mt-4 space-y-4 border-t border-border-default pt-4">
+                            <form wire:submit="{{ $editingFitmentId === null ? 'addFitment' : 'updateFitment' }}" class="space-y-4">
+                                @if ($editingFitmentId !== null)
+                                    <x-ui.alert variant="info">
+                                        {{ __('Editing fitment entry. Save changes or cancel before adding another entry.') }}
+                                    </x-ui.alert>
+                                @endif
+
+                                <x-ui.checkbox
+                                    id="item-fitment-universal"
+                                    wire:model.live="fitmentUniversal"
+                                    :label="__('Universal fit')"
+                                    :help="__('Use only when the part intentionally fits broadly and does not need vehicle-specific compatibility.')"
+                                />
+
+                                @unless ($fitmentUniversal)
+                                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                                        <x-ui.input id="item-fitment-year" wire:model="fitmentYear" :label="__('Year')" :error="$errors->first('fitmentYear')" />
+                                        <x-ui.input id="item-fitment-make" wire:model="fitmentMake" :label="__('Make')" :error="$errors->first('fitmentMake')" />
+                                        <x-ui.input id="item-fitment-model" wire:model="fitmentModel" :label="__('Model')" :error="$errors->first('fitmentModel')" />
+                                        <x-ui.input id="item-fitment-trim" wire:model="fitmentTrim" :label="__('Trim')" :error="$errors->first('fitmentTrim')" />
+                                        <x-ui.input id="item-fitment-engine" wire:model="fitmentEngine" :label="__('Engine')" :error="$errors->first('fitmentEngine')" />
+                                    </div>
+                                @endunless
+
+                                <x-ui.textarea
+                                    id="item-fitment-notes"
+                                    wire:model="fitmentNotes"
+                                    :label="__('Fitment notes')"
+                                    rows="2"
+                                    :help="__('Optional source or qualifier for this compatibility claim.')"
+                                    :error="$errors->first('fitmentNotes')"
+                                />
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <x-ui.button type="submit" variant="primary" size="sm">
+                                        <x-icon name="{{ $editingFitmentId === null ? 'heroicon-o-plus' : 'heroicon-o-check' }}" class="h-4 w-4" />
+                                        {{ $editingFitmentId === null ? __('Add fitment') : __('Save fitment') }}
+                                    </x-ui.button>
+
+                                    @if ($editingFitmentId !== null)
+                                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="cancelFitmentEdit">
+                                            {{ __('Cancel') }}
+                                        </x-ui.button>
+                                    @endif
+                                </div>
+                            </form>
+
+                            @if ($editingFitmentId === null && ($canBootstrapFitmentFromAttributes || $fitmentSourceItems->isNotEmpty()))
+                                <div class="grid gap-4 border-t border-border-default pt-4 lg:grid-cols-2">
+                                    @if ($canBootstrapFitmentFromAttributes)
+                                        <div class="space-y-2">
+                                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Bootstrap') }}</p>
+                                            <p class="text-sm text-muted">{{ __('Create one fitment entry from configured item attributes such as year, make, model, trim, and engine.') }}</p>
+                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="bootstrapFitmentFromAttributes">
+                                                <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                                {{ __('Create from attributes') }}
+                                            </x-ui.button>
+                                        </div>
+                                    @endif
+
+                                    @if ($fitmentSourceItems->isNotEmpty())
+                                        <form wire:submit="copyFitmentsFromItem" class="space-y-3">
+                                            <x-ui.combobox
+                                                id="item-fitment-copy-source"
+                                                wire:model="copyFitmentsFromItemId"
+                                                :label="__('Copy fitment from item')"
+                                                :placeholder="__('Search by SKU or title')"
+                                                :options="$fitmentSourceItems->map(fn ($source) => [
+                                                    'value' => (string) $source->id,
+                                                    'label' => $source->sku . ' — ' . $source->title . ' (' . trans_choice(':count entry|:count entries', $source->fitments_count, ['count' => $source->fitments_count]) . ')',
+                                                ])->all()"
+                                                :error="$errors->first('copyFitmentsFromItemId')"
+                                            />
+
+                                            <x-ui.button type="submit" variant="outline" size="sm">
+                                                <x-icon name="heroicon-o-clipboard-document" class="h-4 w-4" />
+                                                {{ __('Copy fitment') }}
+                                            </x-ui.button>
+                                        </form>
+                                    @endif
+                                </div>
+                            @endif
+
+                            <form wire:submit="importFitments" class="space-y-3 border-t border-border-default pt-4">
+                                <x-ui.textarea
+                                    id="item-fitment-bulk"
+                                    wire:model="fitmentBulk"
+                                    :label="__('Bulk fitment')"
+                                    rows="4"
+                                    :help="__('One row per vehicle/application: Year, Make, Model, Trim, Engine, Notes. CSV quoting is supported.')"
+                                    :error="$errors->first('fitmentBulk')"
+                                />
+
+                                <x-ui.button type="submit" variant="outline" size="sm">
+                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                                    {{ __('Import fitment rows') }}
+                                </x-ui.button>
+                            </form>
+                        </div>
+                    @endif
+                </x-ui.card>
+
+                <x-ui.card id="descriptions">
                     <div x-data="{ helpOpen: false }">
                         <div class="mb-3 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
@@ -347,7 +542,151 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             </div>
 
             <div class="space-y-6">
-                <x-ui.card>
+                <x-ui.card id="ebay-readiness">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay readiness') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Checks this item against the saved eBay Motors draft requirements before publishing.') }}</p>
+                        </div>
+                        @if ($ebayListingDraft)
+                            <x-ui.badge :variant="$ebayListingDraft->readiness_status === 'ready' ? 'success' : 'warning'">
+                                {{ __(Illuminate\Support\Str::headline($ebayListingDraft->readiness_status)) }}
+                            </x-ui.badge>
+                        @else
+                            <x-ui.badge>{{ __('Unchecked') }}</x-ui.badge>
+                        @endif
+                    </div>
+
+                    @if ($ebayListingDraft)
+                        @php($snapshot = $ebayListingDraft->readiness_snapshot ?? [])
+                        @php($blockers = $snapshot['blockers'] ?? [])
+                        @php($warnings = $snapshot['warnings'] ?? [])
+                        @php($gapLinks = [
+                            'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
+                            'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
+                            'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
+                            'descriptions' => ['label' => __('Edit descriptions'), 'href' => '#descriptions'],
+                            'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
+                            'settings' => ['label' => __('Open eBay settings'), 'href' => route('commerce.marketplace.ebay.settings')],
+                        ])
+
+                        @if ($blockers === [] && $warnings === [])
+                            <x-ui.alert variant="success">{{ __('This item has no current eBay readiness gaps.') }}</x-ui.alert>
+                        @else
+                            <div class="space-y-3">
+                                @if ($blockers !== [])
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Blockers') }}</p>
+                                        <ul class="mt-2 space-y-1 text-sm text-muted">
+                                            @foreach ($blockers as $gap)
+                                                <li class="flex gap-2">
+                                                    <span class="text-status-danger">•</span>
+                                                    <span>
+                                                        {{ $gap['label'] ?? '' }}
+                                                        @if (isset($gap['action'], $gapLinks[$gap['action']]))
+                                                            <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 text-accent hover:underline" @if ($gap['action'] === 'settings') wire:navigate @endif>{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                        @endif
+                                                    </span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+
+                                @if ($warnings !== [])
+                                    <div>
+                                        <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Warnings') }}</p>
+                                        <ul class="mt-2 space-y-1 text-sm text-muted">
+                                            @foreach ($warnings as $gap)
+                                                <li class="flex gap-2">
+                                                    <span>•</span>
+                                                    <span>
+                                                        {{ $gap['label'] ?? '' }}
+                                                        @if (isset($gap['action'], $gapLinks[$gap['action']]))
+                                                            <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 text-accent hover:underline" @if ($gap['action'] === 'settings') wire:navigate @endif>{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                        @endif
+                                                    </span>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+
+                        <dl class="mt-4 grid grid-cols-2 gap-3 border-t border-border-default pt-4 text-sm">
+                            <div>
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Category') }}</dt>
+                                <dd class="mt-1 font-mono text-ink">{{ $ebayListingDraft->category_id ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Checked') }}</dt>
+                                <dd class="mt-1 text-ink">{{ $ebayListingDraft->metadata_checked_at?->diffForHumans() ?? __('Never') }}</dd>
+                            </div>
+                        </dl>
+                    @else
+                        <p class="text-sm text-muted">{{ __('Readiness has not been checked for this item yet.') }}</p>
+                    @endif
+
+                    @if ($this->canEdit())
+                        <x-ui.button type="button" variant="outline" size="sm" class="mt-4" wire:click="refreshEbayReadiness" wire:loading.attr="disabled" wire:target="refreshEbayReadiness">
+                            <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                            {{ __('Refresh readiness') }}
+                        </x-ui.button>
+                    @endif
+                </x-ui.card>
+
+                @foreach ($extensionReadinessPanels as $panel)
+                    <x-ui.card id="extension-readiness-{{ Illuminate\Support\Str::slug($panel['id']) }}" wire:key="extension-readiness-{{ $panel['id'] }}">
+                        <div class="mb-3 flex items-start justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-medium tracking-tight text-ink">{{ __($panel['label']) }}</h2>
+                                @if ($panel['description'])
+                                    <p class="mt-1 text-sm text-muted">{{ __($panel['description']) }}</p>
+                                @endif
+                            </div>
+                            <x-ui.badge>{{ count($panel['entries']) }}</x-ui.badge>
+                        </div>
+
+                        <div class="space-y-2">
+                            @foreach ($panel['entries'] as $entry)
+                                @php($entryVariant = match ($entry['severity']) {
+                                    'success' => 'success',
+                                    'blocker' => 'danger',
+                                    'warning' => 'warning',
+                                    default => 'info',
+                                })
+                                @php($actionTargets = [
+                                    'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
+                                    'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
+                                    'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
+                                    'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
+                                    'descriptions' => ['label' => __('Edit descriptions'), 'href' => '#descriptions'],
+                                    'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
+                                ])
+
+                                <div wire:key="extension-readiness-{{ $panel['id'] }}-{{ $entry['code'] }}" class="rounded-2xl border border-border-default bg-surface-subtle p-3">
+                                    <div class="flex items-start gap-3">
+                                        <x-ui.badge :variant="$entryVariant">{{ __(Illuminate\Support\Str::headline($entry['severity'])) }}</x-ui.badge>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-sm font-medium text-ink">{{ __($entry['label']) }}</p>
+                                            @if (isset($entry['description']))
+                                                <p class="mt-1 text-sm text-muted">{{ __($entry['description']) }}</p>
+                                            @endif
+                                            @if (isset($entry['action'], $actionTargets[$entry['action']]))
+                                                <a href="{{ $actionTargets[$entry['action']]['href'] }}" class="mt-2 inline-flex text-sm font-medium text-accent hover:underline">
+                                                    {{ $actionTargets[$entry['action']]['label'] }}
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </x-ui.card>
+                @endforeach
+
+                <x-ui.card id="photos">
                     <div
                         x-data="{ dragging: false, dragDepth: 0, autoUploadOnFinish: false }"
                         class="relative"
@@ -457,7 +796,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     </div>
                 </x-ui.card>
 
-                <x-ui.card>
+                <x-ui.card id="attributes">
                     <div class="mb-3 flex items-center justify-between">
                         <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Attributes') }}</h2>
                         <x-ui.badge>{{ $item->catalogAttributeValues->count() }}</x-ui.badge>
@@ -506,7 +845,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         @if ($attribute->productTemplate)
                                             {{ __('(:template)', ['template' => $attribute->productTemplate->name]) }}
                                         @elseif ($attribute->category)
-                                            {{ __('(:category)', ['category' => $attribute->category->name]) }}
+                                            {{ __('(:category)', ['category' => $attribute->category->path_label]) }}
                                         @endif
                                     </option>
                                 @endforeach

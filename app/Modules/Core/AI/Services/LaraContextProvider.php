@@ -2,6 +2,7 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Services\KnowledgeNavigator;
+use App\Base\AI\Services\ShellCommandRunner;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Foundation\Providers\ProviderRegistry;
 use App\Modules\Core\AI\Models\AiProvider;
@@ -11,6 +12,7 @@ class LaraContextProvider
 {
     public function __construct(
         private readonly KnowledgeNavigator $knowledgeNavigator,
+        private readonly ?ShellCommandRunner $shellRunner = null,
     ) {}
 
     /**
@@ -31,10 +33,30 @@ class LaraContextProvider
                 'user_id' => $this->authenticatedUserId(),
                 'company_id' => $companyId,
             ],
+            'shell' => $this->shellContext(),
             'modules' => $this->installedModules(),
             'providers' => $this->configuredProviders($companyId),
             'knowledge' => $this->knowledgeContext($query),
         ];
+    }
+
+    /**
+     * Return the active shell backend name and label, or null if unavailable.
+     *
+     * @return array{backend: string, label: string}|null
+     */
+    private function shellContext(): ?array
+    {
+        $runner = $this->shellRunner ?? app(ShellCommandRunner::class);
+
+        try {
+            return [
+                'backend' => $runner->backendName(),
+                'label' => $runner->backendLabel(),
+            ];
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

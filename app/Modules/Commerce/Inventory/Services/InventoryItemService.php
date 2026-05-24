@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Services;
 
 use App\Base\Foundation\ValueObjects\Money;
@@ -15,7 +16,7 @@ class InventoryItemService
     public function __construct(private readonly MediaAssetStore $mediaAssets) {}
 
     /**
-     * @param  array{sku: string, title: string, notes?: string|null, status: string, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string, categoryId?: int|null, productTemplateId?: int|null}  $data
+     * @param  array{sku: string, title: string, notes?: string|null, status: string, quantityOnHand?: int|string|null, storageLocation?: string|null, unitCostAmount?: string|null, targetPriceAmount?: string|null, currencyCode: string, categoryId?: int|null, productTemplateId?: int|null}  $data
      */
     public function create(int $companyId, array $data): Item
     {
@@ -28,6 +29,8 @@ class InventoryItemService
             'sku' => strtoupper($data['sku']),
             'status' => $data['status'],
             'title' => $data['title'],
+            'quantity_on_hand' => max(0, (int) ($data['quantityOnHand'] ?? 1)),
+            'storage_location' => trim((string) ($data['storageLocation'] ?? '')) !== '' ? trim((string) $data['storageLocation']) : null,
             'notes' => $data['notes'] ?? null,
             'unit_cost_amount' => Money::fromDecimalString($data['unitCostAmount'] ?? null, $currencyCode)?->minorAmount,
             'target_price_amount' => Money::fromDecimalString($data['targetPriceAmount'] ?? null, $currencyCode)?->minorAmount,

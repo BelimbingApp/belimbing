@@ -1,10 +1,11 @@
 # ham/02-ebay-sell-api-research
 
-**Agents:** claude-code/opus-4.7
-**Status:** Research spike complete; informs Phase 6 of `ham/01-ebay-car-parts-operations`. No code yet.
-**Last Updated:** 2026-05-02
+**Agents:** claude-code/opus-4.7, Amp/claude-sonnet-4.5
+**Status:** Research spike complete; informs Phase 6 of `ham/01-ebay-car-parts-operations`. Corrected for current Motors compatibility direction; no code yet.
+**Last Updated:** 2026-05-20
 **Sources:**
 - Parent plan: `docs/plans/ham/01-ebay-car-parts-operations.md` (Phase 6).
+- Companion plan: `docs/plans/ham/04-ebay-motors-alignment.md`.
 - In-repo adapter (read-only path already wired): `app/Modules/Commerce/Marketplace/Ebay/EbayMarketplaceChannel.php`, `app/Modules/Commerce/Marketplace/Ebay/EbayConfiguration.php`, `app/Modules/Commerce/Marketplace/Ebay/EbayOAuthService.php`.
 - eBay Sell API reference: `https://developer.ebay.com/api-docs/sell/inventory/overview.html` (Inventory API), `https://developer.ebay.com/api-docs/sell/account/overview.html` (Account API for policies), `https://developer.ebay.com/api-docs/commerce/taxonomy/overview.html` (Taxonomy API for category aspects), `https://developer.ebay.com/api-docs/sell/fulfillment/overview.html` (already in use for orders). Direct fetches from `developer.ebay.com` were blocked from this environment; primary sourcing here is the existing adapter code plus the assistant's training-data knowledge of the Sell API. Anything *labelled* below as "verify at implementation" must be re-checked against live docs before code lands.
 
@@ -98,7 +99,7 @@ eBay Motors car-parts categories sit under the US category tree (`categoryTreeId
 - `Placement on Vehicle` (Left / Right / Front / Rear / N/A)
 - Plus condition-related descriptors specific to parts (`Surface Finish`, `Color`, etc.)
 
-**Compatibility (fitment)** is a separate concern from aspects. For categories that support compatibility, the InventoryItem carries a `productFamilyProperties` block listing year/make/model/trim/engine ranges. The valid values for each property come from `getCompatibilityPropertyValues`. Ham's Phase 3 attribute seed already mirrors this shape (`fitment_year`, `fitment_make`, `fitment_model`, `fitment_engine`, `fitment_trim`), so the mapping is straightforward — but we still need a join table or transform that turns BLB's per-Item attribute values into eBay's compatibility array.
+**Compatibility (fitment)** is a separate concern from aspects. For categories that support compatibility, Belimbing should not treat legacy flat `fitment_year` / `fitment_make` / `fitment_model` attributes as the long-term publish shape. Current Motors alignment should model category-scoped compatibility property name/value sets and publish them through eBay's product compatibility surface using `compatibilityProperties[]` where applicable. The valid values for each property come from Taxonomy compatibility-property calls. Ham's flat fitment attributes can seed or bootstrap the canonical fitment rows, but the publish path needs a fitment model and transform that can represent multiple compatible vehicles/applications per item.
 
 **Verify at implementation:** the precise *category leaf* IDs Ham will use. Phase 3's `Config/auto-parts.php` has placeholder `ebay_category_key` slots on each ProductTemplate; those need real category IDs filled in (or pulled live via Taxonomy API by leaf name).
 

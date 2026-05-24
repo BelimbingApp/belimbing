@@ -1,7 +1,7 @@
 <?php
+
 namespace App\Base\Database\Concerns;
 
-use App\Base\Database\Console\Concerns\PrintsTableUnstableUsage;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -11,14 +11,12 @@ use Illuminate\Support\Facades\DB;
  * Blocks `migrate:refresh` and `migrate:reset` unless the database is an
  * in-memory SQLite test database.
  *
- * `migrate:fresh --seed --dev` is the blessed full-reset workflow because it
- * respects table stability. `refresh`/`reset` operate at the migration level
- * where stability cannot be enforced.
+ * `migrate --dev` is the blessed local rebuild workflow because it can honor
+ * source-declared incubating schema before Laravel's native migrator runs.
+ * `refresh`/`reset` operate at the migration level and bypass that preflight.
  */
 trait GuardsGlobalReset
 {
-    use PrintsTableUnstableUsage;
-
     /**
      * Block reset/refresh.
      *
@@ -34,14 +32,14 @@ trait GuardsGlobalReset
         }
 
         $this->components->error(
-            $this->name.' is blocked — it bypasses table stability and would wipe the entire database.'
+            $this->name.' is blocked — it bypasses the incubating-schema rebuild flow and would wipe the entire database.'
         );
         $this->line('');
         $this->line('  Use one of these instead:');
         $this->line('');
-        $this->line('    <comment>php artisan migrate:fresh --seed --dev</comment>        Full rebuild (respects table stability)');
+        $this->line('    <comment>php artisan migrate --dev</comment>                Local rebuild for source-declared incubating schema');
+        $this->line('    <comment>php artisan migrate:fresh</comment>               Full Laravel wipe only when the database is disposable');
         $this->line('');
-        $this->printTableUnstableUsage('  To mark specific tables unstable before migrate:fresh:');
 
         return Command::FAILURE;
     }

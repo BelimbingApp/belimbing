@@ -5,6 +5,7 @@ use App\Base\Authz\Capability\CapabilityCatalog;
 use App\Base\Authz\Capability\CapabilityRegistry;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\Contracts\DecisionLogger;
+use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Policies\ActorContextPolicy;
 use App\Base\Authz\Policies\CompanyScopePolicy;
 use App\Base\Authz\Policies\GrantPolicy;
@@ -16,6 +17,7 @@ use App\Base\Authz\Services\DatabaseDecisionLogger;
 use App\Base\Authz\Services\ImpersonationManager;
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use Illuminate\Contracts\Config\Repository;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -61,6 +63,36 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MenuAccessChecker::class, AuthzMenuAccessChecker::class);
 
         $this->app->singleton(ImpersonationManager::class);
+    }
+
+    /**
+     * Wire BLB's AuthorizationService into Laravel's Gate.
+     *
+     * Blade views use auth()->user()->can($capability), which goes through the Gate.
+     * Without this hook, all BLB capabilities return false from the Gate because no
+     * policies are registered for them. By intercepting dot-notation abilities here,
+     * grant_all roles (core_admin) and explicit grants work correctly in blade views.
+     *
+     * Only dot-notation strings are intercepted — native Gate abilities like viewAny,
+     * create, update do not contain dots and fall through to Laravel's own handling.
+     */
+    public function boot(): void
+    {
+        Gate::before(function ($user, string $ability): ?bool {
+            if (! str_contains($ability, '.')) {
+                return null;
+            }
+
+            try {
+                $allowed = app(AuthorizationService::class)
+                    ->can(Actor::forUser($user), $ability)
+                    ->allowed;
+
+                return $allowed ? true : null;
+            } catch (\Throwable) {
+                return null;
+            }
+        });
     }
 
     /**

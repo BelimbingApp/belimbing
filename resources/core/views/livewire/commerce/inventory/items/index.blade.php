@@ -1,12 +1,15 @@
 <?php
-/** @var \App\Modules\Commerce\Inventory\Livewire\Items\Index $this */
+
+use App\Modules\Commerce\Inventory\Livewire\Items\Index;
+
+/** @var Index $this */
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Inventory Workbench') }}</x-slot>
+    <x-slot name="title">{{ __('Inventory') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Inventory Workbench')" :subtitle="__('Create and track sellable inventory items before AI assist and marketplace sync are connected.')">
+        <x-ui.page-header :title="__('Inventory')" :subtitle="__('Create and track sellable inventory items before AI assist and marketplace sync are connected.')">
             <x-slot name="actions">
                 <x-ui.button variant="primary" as="a" href="{{ route('commerce.inventory.items.create') }}" wire:navigate>
                     <x-icon name="heroicon-o-plus" class="w-4 h-4" />
@@ -57,6 +60,28 @@
                                 :label="__('Status')"
                             />
                             <x-ui.sortable-th
+                                column="quantity_on_hand"
+                                align="right"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('quantity_on_hand')"
+                                :label="__('Qty')"
+                            />
+                            <x-ui.sortable-th
+                                column="fitments_count"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('fitments_count')"
+                                :label="__('Fitment')"
+                            />
+                            <x-ui.sortable-th
+                                column="storage_location"
+                                :sort-by="$sortBy"
+                                :sort-dir="$sortDir"
+                                action="sort('storage_location')"
+                                :label="__('Location')"
+                            />
+                            <x-ui.sortable-th
                                 column="unit_cost_amount"
                                 align="right"
                                 :sort-by="$sortBy"
@@ -98,13 +123,24 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.badge :variant="$this->statusVariant($item->status)">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
                                 </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ number_format($item->quantity_on_hand) }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
+                                    @if ($item->fitments->contains('is_universal', true))
+                                        <x-ui.badge variant="info">{{ __('Universal') }}</x-ui.badge>
+                                    @elseif ($item->fitments_count > 0)
+                                        <x-ui.badge>{{ trans_choice(':count entry|:count entries', $item->fitments_count, ['count' => $item->fitments_count]) }}</x-ui.badge>
+                                    @else
+                                        <span class="text-muted">{{ __('None') }}</span>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $item->storage_location ?: '—' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->unit_cost_amount, $item->currency_code) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-muted tabular-nums">{{ $this->formatMoney($item->target_price_amount, $item->currency_code) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $item->created_at?->diffForHumans() }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
+                                <td colspan="9" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

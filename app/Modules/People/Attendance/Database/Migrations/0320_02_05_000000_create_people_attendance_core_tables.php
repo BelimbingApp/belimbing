@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Concerns\IncubatingSchema;
 use App\Base\Database\Concerns\RegistersTables;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
     use RegistersTables;
 
     public function up(): void
@@ -22,7 +24,7 @@ return new class extends Migration
             $table->unsignedSmallInteger('expected_work_minutes')->default(480);
             $table->json('break_windows')->nullable();
             $table->json('day_type_overrides')->nullable();
-            $table->string('payroll_attribution')->default('shift_start_date');
+            $table->string('cross_midnight_attribution')->default('shift_start_date');
             $table->date('effective_from');
             $table->date('effective_to')->nullable();
             $table->string('status')->default('active')->index();
@@ -33,13 +35,13 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'code']);
-            $table->index(['company_id', 'status', 'effective_from']);
+            $table->index(['company_id', 'status', 'effective_from'], 'people_att_shift_templates_company_status_from_index');
         });
         $this->registerTable('people_attendance_shift_templates');
 
         Schema::create('people_attendance_punch_windows', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('attendance_shift_template_id')->constrained('people_attendance_shift_templates')->cascadeOnDelete();
+            $table->foreignId('attendance_shift_template_id')->constrained('people_attendance_shift_templates', indexName: 'people_att_punch_windows_shift_template_fk')->cascadeOnDelete();
             $table->string('event_type');
             $table->time('expected_at');
             $table->time('earliest_at')->nullable();
@@ -50,7 +52,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['attendance_shift_template_id', 'event_type']);
+            $table->index(['attendance_shift_template_id', 'event_type'], 'people_att_punch_windows_template_event_index');
         });
         $this->registerTable('people_attendance_punch_windows');
 
@@ -65,7 +67,7 @@ return new class extends Migration
             $table->json('overtime_rules')->nullable();
             $table->json('overtime_export_rules')->nullable();
             $table->json('lateness_export_rules')->nullable();
-            $table->json('payroll_defaults')->nullable();
+            $table->string('currency', 3)->nullable();
             $table->date('effective_from');
             $table->date('effective_to')->nullable();
             $table->unsignedInteger('version')->default(1);
@@ -77,14 +79,15 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'code']);
-            $table->index(['company_id', 'status', 'effective_from']);
+            $table->index(['company_id', 'status', 'effective_from'], 'people_att_policy_groups_company_status_from_index');
         });
         $this->registerTable('people_attendance_policy_groups');
 
         Schema::create('people_attendance_allowance_rules', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->constrained('companies')->cascadeOnDelete();
-            $table->foreignId('attendance_policy_group_id')->nullable()->constrained('people_attendance_policy_groups')->nullOnDelete();
+            $table->foreignId('attendance_policy_group_id')->nullable()->constrained('people_attendance_policy_groups', indexName: 'people_att_allowance_rules_policy_group_fk')->nullOnDelete();
+            $table->foreignId('attendance_shift_template_id')->nullable()->constrained('people_attendance_shift_templates', indexName: 'people_att_allowance_rules_shift_template_fk')->nullOnDelete();
             $table->string('code');
             $table->string('name');
             $table->string('allowance_type')->default('daily');
@@ -103,7 +106,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'code']);
-            $table->index(['company_id', 'status', 'allowance_type']);
+            $table->index(['company_id', 'status', 'allowance_type'], 'people_att_allowance_rules_company_status_type_index');
         });
         $this->registerTable('people_attendance_allowance_rules');
 
@@ -122,7 +125,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['company_id', 'code']);
-            $table->index(['company_id', 'status', 'pattern_type']);
+            $table->index(['company_id', 'status', 'pattern_type'], 'people_att_roster_patterns_company_status_type_index');
         });
         $this->registerTable('people_attendance_roster_patterns');
 
@@ -130,9 +133,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('company_id')->constrained('companies')->cascadeOnDelete();
             $table->foreignId('employee_id')->nullable()->constrained('employees')->cascadeOnDelete();
-            $table->foreignId('attendance_roster_pattern_id')->nullable()->constrained('people_attendance_roster_patterns')->nullOnDelete();
-            $table->foreignId('attendance_shift_template_id')->nullable()->constrained('people_attendance_shift_templates')->nullOnDelete();
-            $table->foreignId('attendance_policy_group_id')->nullable()->constrained('people_attendance_policy_groups')->nullOnDelete();
+            $table->foreignId('attendance_roster_pattern_id')->nullable()->constrained('people_attendance_roster_patterns', indexName: 'people_att_roster_assignments_pattern_fk')->nullOnDelete();
+            $table->foreignId('attendance_shift_template_id')->nullable()->constrained('people_attendance_shift_templates', indexName: 'people_att_roster_assignments_shift_fk')->nullOnDelete();
+            $table->foreignId('attendance_policy_group_id')->nullable()->constrained('people_attendance_policy_groups', indexName: 'people_att_roster_assignments_policy_fk')->nullOnDelete();
             $table->json('cohort_predicate')->nullable();
             $table->date('effective_from');
             $table->date('effective_to')->nullable();
@@ -146,8 +149,8 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'employee_id', 'effective_from']);
-            $table->index(['company_id', 'publish_state', 'lock_state']);
+            $table->index(['company_id', 'employee_id', 'effective_from'], 'people_att_roster_assignments_company_employee_from_index');
+            $table->index(['company_id', 'lock_state'], 'people_att_roster_assignments_company_lock_index');
         });
         $this->registerTable('people_attendance_roster_assignments');
 
@@ -190,13 +193,20 @@ return new class extends Migration
 
         Schema::create('people_attendance_geofence_group_fences', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('attendance_geofence_group_id')->constrained('people_attendance_geofence_groups')->cascadeOnDelete();
-            $table->foreignId('attendance_geofence_id')->constrained('people_attendance_geofences')->cascadeOnDelete();
+            $table->foreignId('attendance_geofence_group_id');
+            $table->foreignId('attendance_geofence_id')->constrained('people_attendance_geofences', indexName: 'people_att_group_fences_geofence_fk')->cascadeOnDelete();
             $table->unsignedSmallInteger('sort_order')->default(0);
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['attendance_geofence_group_id', 'attendance_geofence_id']);
+            $table->foreign('attendance_geofence_group_id', 'people_attendance_group_fence_group_id_fk')
+                ->references('id')
+                ->on('people_attendance_geofence_groups')
+                ->cascadeOnDelete();
+            $table->unique(
+                ['attendance_geofence_group_id', 'attendance_geofence_id'],
+                'people_attendance_group_fence_group_fence_unique'
+            );
         });
         $this->registerTable('people_attendance_geofence_group_fences');
 
@@ -241,7 +251,7 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained('employees')->cascadeOnDelete();
             $table->foreignId('attendance_day_id')->nullable()->constrained('people_attendance_days')->nullOnDelete();
             $table->foreignId('attendance_geofence_id')->nullable()->constrained('people_attendance_geofences')->nullOnDelete();
-            $table->foreignId('attendance_geofence_group_id')->nullable()->constrained('people_attendance_geofence_groups')->nullOnDelete();
+            $table->foreignId('attendance_geofence_group_id')->nullable()->constrained('people_attendance_geofence_groups', indexName: 'people_att_clock_events_geofence_group_fk')->nullOnDelete();
             $table->string('event_type');
             $table->timestamp('occurred_at');
             $table->string('timezone')->nullable();
@@ -263,7 +273,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['employee_id', 'occurred_at']);
-            $table->index(['attendance_day_id', 'event_type']);
+            $table->index(['attendance_day_id', 'event_type'], 'people_att_clock_events_day_event_index');
             $table->index(['source', 'occurred_at']);
         });
         $this->registerTable('people_attendance_clock_events');
@@ -307,7 +317,7 @@ return new class extends Migration
             $table->string('approval_profile_key')->nullable();
             $table->json('approval_route_snapshot')->nullable();
             $table->json('policy_snapshot')->nullable();
-            $table->foreignId('submitted_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('submitted_by_user_id')->nullable()->constrained('users', indexName: 'people_att_overtime_requests_submitted_by_fk')->nullOnDelete();
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('approved_at')->nullable();
             $table->timestamp('rejected_at')->nullable();
@@ -319,7 +329,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'status', 'submitted_at']);
+            $table->index(['company_id', 'status', 'submitted_at'], 'people_att_overtime_requests_company_status_submitted_index');
             $table->index(['employee_id', 'starts_at']);
         });
         $this->registerTable('people_attendance_overtime_requests');
@@ -339,14 +349,14 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['company_id', 'status', 'period_starts_on']);
+            $table->index(['company_id', 'status', 'period_starts_on'], 'people_att_absence_batches_company_status_period_index');
         });
         $this->registerTable('people_attendance_absence_batches');
 
         Schema::create('people_attendance_absence_batch_entries', function (Blueprint $table): void {
             $table->id();
-            $table->foreignId('attendance_absence_batch_id')->constrained('people_attendance_absence_batches')->cascadeOnDelete();
-            $table->foreignId('attendance_day_id')->nullable()->constrained('people_attendance_days')->nullOnDelete();
+            $table->foreignId('attendance_absence_batch_id');
+            $table->foreignId('attendance_day_id')->nullable()->constrained('people_attendance_days', indexName: 'people_att_absence_entries_day_fk')->nullOnDelete();
             $table->foreignId('employee_id')->constrained('employees')->cascadeOnDelete();
             $table->date('absence_date');
             $table->string('day_type')->default('normal');
@@ -356,8 +366,15 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['attendance_absence_batch_id', 'employee_id', 'absence_date']);
-            $table->index(['employee_id', 'absence_date', 'status']);
+            $table->foreign('attendance_absence_batch_id', 'people_attendance_absence_entry_batch_id_fk')
+                ->references('id')
+                ->on('people_attendance_absence_batches')
+                ->cascadeOnDelete();
+            $table->unique(
+                ['attendance_absence_batch_id', 'employee_id', 'absence_date'],
+                'people_attendance_absence_entry_batch_employee_date_unique'
+            );
+            $table->index(['employee_id', 'absence_date', 'status'], 'people_att_absence_entries_employee_date_status_index');
         });
         $this->registerTable('people_attendance_absence_batch_entries');
     }

@@ -114,6 +114,57 @@ If an extension is not being discovered, verify that:
 2. The namespace matches the directory structure, for example `Extensions\SbGroup\Quality`.
 3. Config cache has been cleared with `php artisan config:clear`.
 
+### 4.3.1 Commerce Plugin Contributions
+
+Commerce extensions use the normal extension module shape plus an optional
+`Config/commerce.php` contribution file. BLB discovers these files from both
+first-party Commerce modules and nested extensions:
+
+```
+app/Modules/Commerce/*/Config/commerce.php
+extensions/{owner}/{module}/Config/commerce.php
+```
+
+The file returns arrays keyed by the Commerce seams the extension contributes:
+
+| Key | Purpose |
+|---|---|
+| `catalog_presets` | Categories, templates, attributes, mappings, or setup actions the extension can seed or apply. |
+| `marketplace_channel_providers` | `MarketplaceChannelProvider` classes registered with the Commerce marketplace host. |
+| `marketplace_template_mappings` | Channel/category defaults for product templates, such as eBay marketplace, category tree, and category ID. |
+| `readiness_contributors` | Classes that add item/listing readiness checks and operator-facing gaps. |
+| `workbench_panels` | Item or workbench panels that should render inside Commerce surfaces. |
+| `insight_pages` | Extension-owned reports or merchant workflow pages with menu placement metadata. |
+
+Example shape:
+
+```php
+return [
+    'catalog_presets' => [
+        ['id' => 'ham.auto-parts.catalog', 'label' => 'Ham Auto Parts Catalog'],
+    ],
+    'marketplace_channel_providers' => [
+        Extensions\Vendor\Package\Marketplace\ChannelProvider::class,
+    ],
+    'marketplace_template_mappings' => [
+        ['id' => 'vendor.package.ebay.template', 'channel' => 'ebay', 'template_code' => 'vendor-template'],
+    ],
+    'readiness_contributors' => [
+        Extensions\Vendor\Package\Readiness\IdentifierReadiness::class,
+    ],
+    'workbench_panels' => [
+        ['id' => 'vendor.package.panel', 'label' => 'Panel', 'component' => '...'],
+    ],
+    'insight_pages' => [
+        ['id' => 'vendor.package.insight', 'route' => 'vendor.package.insight'],
+    ],
+];
+```
+
+Keep the extension removable: core Commerce must not hard-code extension class
+names, route names, menu entries, or config paths outside this discovery
+surface and the existing route/menu/authz/settings conventions.
+
 ### 4.4 Database Table Naming
 
 Use owner-prefixed table names to prevent collisions with BLB core and other extensions:

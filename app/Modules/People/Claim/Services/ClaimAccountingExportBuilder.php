@@ -14,6 +14,8 @@ use App\Modules\People\Claim\Models\ClaimRequest;
  */
 class ClaimAccountingExportBuilder
 {
+    private const DATE_TIME_FORMAT = 'Y-m-d H:i:s';
+
     private const HEADERS = [
         'reference_number',
         'line_id',
@@ -58,7 +60,7 @@ class ClaimAccountingExportBuilder
 
         return [
             'filename' => 'claim-accounting.csv',
-            'content' => $this->csvContent(self::HEADERS, $rows),
+            'content' => ClaimCsvWriter::write(self::HEADERS, $rows),
         ];
     }
 
@@ -89,10 +91,10 @@ class ClaimAccountingExportBuilder
             'settlement_state' => $this->settlementState($request),
             'provider_name' => $line->provider_name,
             'receipt_number' => $line->receipt_number,
-            'submitted_at' => $request->submitted_at?->format('Y-m-d H:i:s'),
-            'approved_at' => $request->approved_at?->format('Y-m-d H:i:s'),
-            'queued_for_payroll_at' => $request->queued_for_payroll_at?->format('Y-m-d H:i:s'),
-            'reimbursed_at' => $request->reimbursed_at?->format('Y-m-d H:i:s'),
+            'submitted_at' => $request->submitted_at?->format(self::DATE_TIME_FORMAT),
+            'approved_at' => $request->approved_at?->format(self::DATE_TIME_FORMAT),
+            'queued_for_payroll_at' => $request->queued_for_payroll_at?->format(self::DATE_TIME_FORMAT),
+            'reimbursed_at' => $request->reimbursed_at?->format(self::DATE_TIME_FORMAT),
         ];
     }
 
@@ -105,31 +107,5 @@ class ClaimAccountingExportBuilder
             ClaimRequest::STATUS_SETTLED => 'settled',
             default => $request->status,
         };
-    }
-
-    /**
-     * @param  list<string>  $headers
-     * @param  list<array<string, string|null>>  $rows
-     */
-    private function csvContent(array $headers, array $rows): string
-    {
-        $handle = fopen('php://temp', 'r+');
-        if ($handle === false) {
-            return '';
-        }
-
-        fputcsv($handle, $headers);
-        foreach ($rows as $row) {
-            fputcsv($handle, array_map(
-                static fn (string $header): string => (string) ($row[$header] ?? ''),
-                $headers,
-            ));
-        }
-
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return $csv === false ? '' : $csv;
     }
 }

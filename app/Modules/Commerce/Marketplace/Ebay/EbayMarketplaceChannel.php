@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Base\Foundation\ValueObjects\Money;
@@ -9,6 +10,7 @@ use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
 use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Sales\DTO\SalesOrderData;
 use App\Modules\Commerce\Sales\DTO\SalesOrderLineData;
 use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
@@ -21,6 +23,9 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly EbayOAuthService $oauth,
         private readonly IntegrationGateway $integration,
         private readonly SalesOrderMaterializer $salesOrders,
+        private readonly EbayProductReferenceImporter $productReferences,
+        private readonly EbayListingOperationService $listingOperations,
+        private readonly EbayListingReadinessService $readiness,
     ) {}
 
     public function key(): string
@@ -128,17 +133,17 @@ class EbayMarketplaceChannel implements MarketplaceChannel
 
     public function createListing(Item $item): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->createListing($item);
     }
 
     public function reviseListing(Listing $listing): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->reviseListing($listing);
     }
 
     public function endListing(Listing $listing): array
     {
-        throw MarketplaceOperationException::writePathNotEnabled($this->key());
+        return $this->listingOperations->endListing($listing);
     }
 
     /**
@@ -149,17 +154,24 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     {
         $sku = (string) ($offer['sku'] ?? $inventoryItem['sku'] ?? '');
         $listingId = $offer['listing']['listingId'] ?? null;
+        $externalKey = $listingId ?? (string) ($offer['offerId'] ?? $sku);
+        $existing = Listing::query()
+            ->where('company_id', $companyId)
+            ->where('channel', $this->key())
+            ->where('external_listing_id', $externalKey)
+            ->first();
         $item = $sku !== ''
             ? Item::query()->where('company_id', $companyId)->where('sku', strtoupper($sku))->first()
             : null;
         $price = $offer['pricingSummary']['price']['value'] ?? null;
         $currency = $offer['pricingSummary']['price']['currency'] ?? null;
+        $drift = $this->externalDriftState($existing, $offer, $inventoryItem);
 
         return Listing::query()->updateOrCreate(
             [
                 'company_id' => $companyId,
                 'channel' => $this->key(),
-                'external_listing_id' => $listingId ?? (string) ($offer['offerId'] ?? $sku),
+                'external_listing_id' => $externalKey,
             ],
             [
                 'item_id' => $item?->id,
@@ -168,6 +180,9 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 'marketplace_id' => $offer['marketplaceId'] ?? null,
                 'title' => $inventoryItem['product']['title'] ?? null,
                 'status' => $offer['listing']['listingStatus'] ?? $offer['status'] ?? null,
+                'management_state' => $existing?->management_state ?? Listing::MANAGEMENT_IMPORTED,
+                'drift_status' => $drift['status'],
+                'drift_summary' => $drift['summary'],
                 'price_amount' => is_string($price) && is_string($currency) ? Money::fromDecimalString($price, $currency)?->minorAmount : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
                 'listing_url' => $listingId !== null ? 'https://www.ebay.com/itm/'.$listingId : null,
@@ -178,6 +193,66 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 ],
             ],
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $offer
+     * @param  array<string, mixed>  $inventoryItem
+     * @return array{status: string, summary: string|null}
+     */
+    private function externalDriftState(?Listing $existing, array $offer, array $inventoryItem): array
+    {
+        if (! $existing instanceof Listing) {
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
+        }
+
+        if (! $existing->isBelimbingManaged()) {
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
+        }
+
+        $contract = $existing->raw_payload['publish_contract'] ?? null;
+
+        if (! is_array($contract)) {
+            return ['status' => Listing::DRIFT_UNKNOWN, 'summary' => null];
+        }
+
+        $driftedFields = [];
+        $expectedTitle = data_get($contract, 'inventory_item.product.title');
+        $actualTitle = data_get($inventoryItem, 'product.title');
+
+        if (is_string($expectedTitle) && is_string($actualTitle) && trim($expectedTitle) !== trim($actualTitle)) {
+            $driftedFields[] = 'title';
+        }
+
+        $expectedPrice = data_get($contract, 'offer.pricingSummary.price.value');
+        $actualPrice = data_get($offer, 'pricingSummary.price.value');
+
+        if ((string) $expectedPrice !== '' && (string) $actualPrice !== '' && (string) $expectedPrice !== (string) $actualPrice) {
+            $driftedFields[] = 'price';
+        }
+
+        $expectedCurrency = data_get($contract, 'offer.pricingSummary.price.currency');
+        $actualCurrency = data_get($offer, 'pricingSummary.price.currency');
+
+        if ((string) $expectedCurrency !== '' && (string) $actualCurrency !== '' && strtoupper((string) $expectedCurrency) !== strtoupper((string) $actualCurrency)) {
+            $driftedFields[] = 'currency';
+        }
+
+        $expectedQuantity = (string) data_get($contract, 'offer.availableQuantity', '');
+        $actualQuantity = (string) ($offer['availableQuantity'] ?? data_get($inventoryItem, 'availability.shipToLocationAvailability.quantity', ''));
+
+        if ($expectedQuantity !== '' && $actualQuantity !== '' && $expectedQuantity !== $actualQuantity) {
+            $driftedFields[] = 'quantity';
+        }
+
+        if ($driftedFields === []) {
+            return ['status' => Listing::DRIFT_IN_SYNC, 'summary' => null];
+        }
+
+        return [
+            'status' => Listing::DRIFT_DRIFTED,
+            'summary' => 'Externally changed: '.implode(', ', $driftedFields).'.',
+        ];
     }
 
     /**
@@ -217,6 +292,8 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         foreach ($offerResponse['offers'] ?? [] as $offer) {
             $fetched++;
             $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
+            $draft = $this->syncImportedListingDraft($listing);
+            $this->productReferences->importFromListing($listing, $draft);
             $listing->wasRecentlyCreated ? $created++ : $updated++;
 
             if ($listing->item_id !== null) {
@@ -225,6 +302,88 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         return compact('fetched', 'created', 'updated', 'linked');
+    }
+
+    private function syncImportedListingDraft(Listing $listing): ?ListingDraft
+    {
+        $item = $listing->item;
+
+        if ($item === null) {
+            return null;
+        }
+
+        $draft = $this->readiness->refreshForItem($item->fresh());
+        $listingAspects = $this->listingAspectValues($listing);
+
+        $draft->update([
+            'listing_id' => $listing->id,
+            'external_sku' => $listing->external_sku ?? $item->sku,
+            'title' => $listing->title ?? $item->title,
+            'status' => $listing->isBelimbingManaged() ? ListingDraft::STATUS_PUBLISHED : ListingDraft::STATUS_IMPORTED,
+            'management_state' => $listing->management_state,
+            'aspect_values' => $listingAspects !== [] ? $listingAspects : $draft->aspect_values,
+            'readiness_snapshot' => $this->mergeListingFactsIntoReadinessSnapshot($draft->readiness_snapshot, $listing),
+            'publish_intent' => null,
+            'last_failure_summary' => null,
+        ]);
+
+        return $draft->fresh();
+    }
+
+    /**
+     * @return array<string, array{value: string|list<string>, source: string}>
+     */
+    private function listingAspectValues(Listing $listing): array
+    {
+        $aspects = data_get($listing->raw_payload, 'inventory_item.product.aspects');
+
+        if (! is_array($aspects)) {
+            return [];
+        }
+
+        return collect($aspects)
+            ->mapWithKeys(function (mixed $value, mixed $name): array {
+                if (! is_string($name) || trim($name) === '') {
+                    return [];
+                }
+
+                if (is_array($value)) {
+                    $normalized = collect($value)
+                        ->map(fn (mixed $entry): ?string => is_scalar($entry) && trim((string) $entry) !== '' ? trim((string) $entry) : null)
+                        ->filter()
+                        ->values()
+                        ->all();
+
+                    return $normalized === []
+                        ? []
+                        : [trim($name) => ['value' => $normalized, 'source' => 'ebay_listing']];
+                }
+
+                if (is_scalar($value) && trim((string) $value) !== '') {
+                    return [trim($name) => ['value' => trim((string) $value), 'source' => 'ebay_listing']];
+                }
+
+                return [];
+            })
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $snapshot
+     * @return array<string, mixed>
+     */
+    private function mergeListingFactsIntoReadinessSnapshot(?array $snapshot, Listing $listing): array
+    {
+        $snapshot = is_array($snapshot) ? $snapshot : [];
+        $facts = is_array($snapshot['facts'] ?? null) ? $snapshot['facts'] : [];
+
+        $snapshot['facts'] = array_merge($facts, [
+            'inventory_api_visible' => $listing->hasInventoryItemSnapshot(),
+            'inventory_api_writable' => $listing->hasInventoryApiWritePath(),
+            'adoption_state' => $listing->adoptionState(),
+        ]);
+
+        return $snapshot;
     }
 
     /**

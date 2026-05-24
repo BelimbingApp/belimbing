@@ -171,6 +171,9 @@ globalThis.blbFormatDateTimeMatches = (text, config = {}) => {
     })
 }
 
+// Shift builder — interactive clock dial + day strip + grace sliders
+import './shift-builder.js'
+
 // Alpine.js - only initialize if not already loaded by Livewire
 if (!globalThis.Alpine) {
     try {

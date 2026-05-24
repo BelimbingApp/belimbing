@@ -1,10 +1,14 @@
 <?php
+
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
+
     /**
      * Run the migrations.
      */
@@ -18,6 +22,8 @@ return new class extends Migration
             $table->string('sku');
             $table->string('status')->default('draft')->index();
             $table->string('title');
+            $table->unsignedInteger('quantity_on_hand')->default(1);
+            $table->string('storage_location')->nullable();
             $table->text('notes')->nullable();
             $table->unsignedBigInteger('unit_cost_amount')->nullable();
             $table->unsignedBigInteger('target_price_amount')->nullable();

@@ -216,7 +216,7 @@
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y text-xs text-muted">
                                         @if ($type->interacts_with_payroll)
-                                            <span class="font-mono">{{ $type->payroll_pay_item_code ?? '-' }}</span>
+                                            <span class="text-muted">{{ __('Mapped in Payroll') }}</span>
                                         @else
                                             <span class="text-muted">{{ __('No payroll handoff') }}</span>
                                         @endif
@@ -794,7 +794,6 @@
                         <option value="half_day">{{ __('Half-Day') }}</option>
                         <option value="hour">{{ __('Hour') }}</option>
                     </x-ui.select>
-                    <x-ui.input id="leave-type-payroll-code" wire:model="typePayrollPayItemCode" label="{{ __('Payroll Pay Item Code') }}" :error="$errors->first('typePayrollPayItemCode')" />
                 </div>
                 <div class="flex flex-wrap gap-4">
                     <x-ui.checkbox id="leave-type-paid" wire:model="typePaid" label="{{ __('Paid leave') }}" />

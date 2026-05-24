@@ -424,7 +424,6 @@
                                     <option value="above_amount">{{ __('Above Amount') }}</option>
                                     <option value="never">{{ __('Never') }}</option>
                                 </x-ui.select>
-                                <x-ui.input id="claim-type-payroll-code" wire:model="typePayrollPayItemCode" label="{{ __('Payroll Code') }}" :error="$errors->first('typePayrollPayItemCode')" />
                                 <x-ui.input id="claim-type-route" wire:model="typeApprovalRouteKey" label="{{ __('Alternative Route') }}" :error="$errors->first('typeApprovalRouteKey')" />
                             </div>
 
@@ -456,7 +455,7 @@
                                 <tr wire:key="claim-type-{{ $type->id }}">
                                     <td class="px-table-cell-x py-table-cell-y"><div class="font-medium text-ink">{{ $type->name }}</div><div class="font-mono text-xs text-muted">{{ $type->code }}</div></td>
                                     <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ $type->category?->name ?? __('Uncategorised') }}</td>
-                                    <td class="px-table-cell-x py-table-cell-y text-xs text-muted"><div>{{ __('Payroll: :code', ['code' => $type->payroll_pay_item_code ?? '—']) }}</div><div>{{ __('DR: :dr / CR: :cr', ['dr' => $type->debit_account_code ?? '—', 'cr' => $type->credit_account_code ?? '—']) }}</div></td>
+                                    <td class="px-table-cell-x py-table-cell-y text-xs text-muted"><div>{{ $type->payroll_eligible ? __('Mapped in Payroll') : __('No payroll handoff') }}</div><div>{{ __('DR: :dr / CR: :cr', ['dr' => $type->debit_account_code ?? '—', 'cr' => $type->credit_account_code ?? '—']) }}</div></td>
                                     <td class="px-table-cell-x py-table-cell-y text-xs text-muted">{{ __(str_replace('_', ' ', ucfirst($type->receipt_requirement))) }}</td>
                                 </tr>
                             @empty

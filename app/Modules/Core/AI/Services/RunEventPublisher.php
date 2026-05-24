@@ -48,10 +48,35 @@ class RunEventPublisher
                 'run_id' => $turn->id,
                 'seq' => $seq,
                 'event_type' => $eventType->value,
-                'payload' => $payload,
+                'payload' => $this->sanitizePayload($payload),
                 'created_at' => now(),
             ]);
         });
+    }
+
+    /**
+     * Scrub invalid UTF-8 sequences from all string values in the payload.
+     *
+     * Shell output (toolStdoutDelta) and LLM stream chunks can carry bytes
+     * that are not valid UTF-8 (BOM, Windows-1252, partial multi-byte sequences).
+     * json_encode rejects those, causing a model-cast exception on save.
+     *
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>|null
+     */
+    private function sanitizePayload(?array $payload): ?array
+    {
+        if ($payload === null) {
+            return null;
+        }
+
+        array_walk_recursive($payload, static function (mixed &$value): void {
+            if (is_string($value) && ! mb_check_encoding($value, 'UTF-8')) {
+                $value = mb_scrub($value, 'UTF-8');
+            }
+        });
+
+        return $payload;
     }
 
     // ── Run lifecycle ────────────────────────────────────────────────

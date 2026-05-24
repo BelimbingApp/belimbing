@@ -19,7 +19,6 @@
                         <td class="px-table-cell-x py-table-cell-y">
                             <button type="button" class="text-left font-medium text-accent hover:underline" wire:click="editAllowanceRule({{ $rule->id }})">{{ $rule->name }}</button>
                             <div class="font-mono text-xs text-muted">{{ $rule->code }}</div>
-                            <div class="mt-1 text-xs text-muted">{{ $rule->payroll_pay_item_code ?? __('No payroll item') }}</div>
                         </td>
                         <td class="px-table-cell-x py-table-cell-y">
                             <x-ui.button type="button" size="sm" :variant="$rule->status === 'active' ? 'primary' : 'secondary'" wire:click="toggleAllowanceStatus({{ $rule->id }})">{{ __(ucfirst($rule->status)) }}</x-ui.button>

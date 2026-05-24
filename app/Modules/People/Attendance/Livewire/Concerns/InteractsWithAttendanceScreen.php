@@ -111,9 +111,13 @@ trait InteractsWithAttendanceScreen
     /**
      * Returns active payroll pay items as plain rows for dropdown rendering.
      *
-     * Goes through the DB facade — not the PayrollPayItem Eloquent model — so
-     * Attendance respects the producer-to-Payroll boundary enforced by
-     * tests/Feature/Modules/People/Payroll/PayrollIntakeBoundaryTest.
+     * Transitional — used by the PolicyGroups screen for the lateness and
+     * overtime pay-item dropdowns. A future Payroll-side mapping table
+     * (mirror of the allowance mapping) will replace these and remove
+     * the helper.
+     *
+     * Goes through the DB facade rather than the PayrollPayItem Eloquent
+     * model so this file does not import a Payroll class.
      *
      * @return Collection<int, object{code: string, name: string}>
      */
@@ -135,6 +139,8 @@ trait InteractsWithAttendanceScreen
     }
 
     /**
+     * Transitional — see `payrollPayItems`.
+     *
      * @return array<int, mixed>
      */
     protected function payrollPayItemValidationRules(int $companyId): array

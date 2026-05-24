@@ -118,7 +118,7 @@
                     @forelse ($this->policySimulationResult['allowance_candidates'] as $candidate)
                         <div class="rounded-2xl border border-border-default p-3" wire:key="allowance-candidate-{{ $candidate['code'] }}">
                             <div class="font-medium text-ink">{{ $candidate['code'] }} - {{ $candidate['name'] }}</div>
-                            <div class="mt-1 text-xs text-muted">{{ __('Pay item: :code / Matched rows: :count', ['code' => $candidate['payroll_pay_item_code'] ?? '-', 'count' => count($candidate['matched_rows'])]) }}</div>
+                            <div class="mt-1 text-xs text-muted">{{ __('Matched rows: :count', ['count' => count($candidate['matched_rows'])]) }}</div>
                         </div>
                     @empty
                         <p class="text-sm text-muted">{{ __('No daily allowance candidates matched this simulation.') }}</p>

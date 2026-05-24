@@ -1,10 +1,14 @@
 <?php
+
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
+
     /**
      * Run the migrations.
      */
@@ -19,7 +23,7 @@ return new class extends Migration
             $table->boolean('is_allowed')->default(true);
             $table->timestamps();
 
-            $table->index(['principal_type', 'principal_id']);
+            $table->index(['principal_type', 'principal_id'], 'base_authz_principal_caps_principal_index');
             $table->index('capability_key');
             $table->unique(
                 ['company_id', 'principal_type', 'principal_id', 'capability_key'],

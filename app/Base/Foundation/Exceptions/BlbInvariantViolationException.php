@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Foundation\Exceptions;
 
 use App\Base\Foundation\Enums\BlbErrorCode;
+use App\Base\Foundation\Enums\FoundationErrorCode;
 use Throwable;
 
 class BlbInvariantViolationException extends BlbException
@@ -11,7 +13,7 @@ class BlbInvariantViolationException extends BlbException
      */
     public function __construct(
         string $message,
-        BlbErrorCode $reasonCode = BlbErrorCode::BLB_INVARIANT_VIOLATION,
+        BlbErrorCode $reasonCode = FoundationErrorCode::BLB_INVARIANT_VIOLATION,
         array $context = [],
         int $code = 0,
         ?Throwable $previous = null,

@@ -1,31 +1,20 @@
 <?php
+
 namespace App\Base\Database\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Scope;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * Table Registry Model
  *
- * Tracks database tables registered by migrations. Tables marked as stable
- * are preserved during migrate:fresh — their data survives the wipe.
- *
- * @method static \Illuminate\Database\Eloquent\Builder|static stable() Query tables marked as stable
- * @method static \Illuminate\Database\Eloquent\Builder|static unstable() Query tables not marked as stable
+ * Tracks database tables registered by migrations.
  *
  * @property int $id
  * @property string $table_name Physical database table name
  * @property string|null $module_name Module name (e.g., 'AI')
  * @property string|null $module_path Module path (e.g., 'app/Modules/Core/AI')
  * @property string|null $migration_file Migration file that created this table
- * @property bool $is_stable Whether this table survives migrate:fresh
- * @property Carbon|null $stabilized_at When stability was toggled on
- * @property int|null $stabilized_by User who marked it stable
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
  */
 class TableRegistry extends Model
 {
@@ -46,19 +35,6 @@ class TableRegistry extends Model
         'module_name',
         'module_path',
         'migration_file',
-        'is_stable',
-        'stabilized_at',
-        'stabilized_by',
-    ];
-
-    /**
-     * The attributes that should be cast.
-     *
-     * @var array<string, string>
-     */
-    protected $casts = [
-        'is_stable' => 'boolean',
-        'stabilized_at' => 'datetime',
     ];
 
     /**
@@ -70,24 +46,6 @@ class TableRegistry extends Model
         'base_database_seeders',
         'migrations',
     ];
-
-    /**
-     * Scope to query tables marked as stable.
-     */
-    #[Scope]
-    protected function stable(Builder $query): Builder
-    {
-        return $query->where('is_stable', true);
-    }
-
-    /**
-     * Scope to query tables not marked as stable.
-     */
-    #[Scope]
-    protected function unstable(Builder $query): Builder
-    {
-        return $query->where('is_stable', false);
-    }
 
     /**
      * Register a table in the registry.
@@ -118,8 +76,6 @@ class TableRegistry extends Model
             'module_name' => $moduleName,
             'module_path' => $modulePath,
             'migration_file' => $migrationFile,
-            'is_stable' => true,
-            'stabilized_at' => now(),
         ]);
     }
 
@@ -134,57 +90,10 @@ class TableRegistry extends Model
     }
 
     /**
-     * Mark this table as stable (preserved during migrate:fresh).
-     *
-     * @param  int|null  $userId  User who marked it stable
-     */
-    public function markStable(?int $userId = null): bool
-    {
-        return $this->update([
-            'is_stable' => true,
-            'stabilized_at' => now(),
-            'stabilized_by' => $userId,
-        ]);
-    }
-
-    /**
-     * Mark this table as unstable (will be wiped during migrate:fresh).
-     */
-    public function markUnstable(): bool
-    {
-        return $this->update([
-            'is_stable' => false,
-            'stabilized_at' => null,
-            'stabilized_by' => null,
-        ]);
-    }
-
-    /**
-     * Get all table names that should be preserved (stable + infrastructure).
-     *
-     * @return array<string>
-     */
-    public static function getPreservedTableNames(): array
-    {
-        $stable = self::query()->stable()->pluck('table_name')->all();
-
-        return array_unique(array_merge($stable, self::INFRASTRUCTURE_TABLES));
-    }
-
-    /**
-     * Check if this table is stable.
-     */
-    public function isStable(): bool
-    {
-        return $this->is_stable;
-    }
-
-    /**
      * Auto-discover tables from migration files and register them.
      *
      * Scans migration files under app/Base and app/Modules for Schema::create()
      * calls, extracts table names, and registers any not already in the registry.
-     * Does not overwrite existing rows (preserves stability flags).
      */
     public static function ensureDiscoveredRegistered(): void
     {

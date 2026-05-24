@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
@@ -76,9 +77,8 @@ class AuthListener
             'user_agent' => $this->context->userAgent,
             'event' => 'auth.login.failed',
             'payload' => json_encode(['email' => $event->credentials['email'] ?? null]),
-            'correlation_id' => $this->context->correlationId,
+            'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
         ]);
     }
 
@@ -103,9 +103,8 @@ class AuthListener
             'user_agent' => $this->context->userAgent,
             'event' => $event,
             'payload' => null,
-            'correlation_id' => $this->context->correlationId,
+            'trace_id' => $this->context->traceId,
             'occurred_at' => $now,
-            'created_at' => $now,
         ]);
     }
 
@@ -182,11 +181,23 @@ class AuthListener
         }
 
         $principalType = $this->principalTypeForUser($user);
+        $companyId = $this->resolveCompanyId($guard, $eventUser);
 
         $roles = PrincipalRole::query()
             ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
             ->where('base_authz_principal_roles.principal_type', $principalType->value)
             ->where('base_authz_principal_roles.principal_id', $user->getAuthIdentifier())
+            ->where(function ($query) use ($companyId): void {
+                if ($companyId !== null) {
+                    $query->where('base_authz_principal_roles.company_id', $companyId)
+                        ->orWhereNull('base_authz_principal_roles.company_id');
+
+                    return;
+                }
+
+                $query->whereNull('base_authz_principal_roles.company_id');
+            })
+            ->distinct()
             ->pluck('base_authz_roles.code')
             ->sort()
             ->implode(',');

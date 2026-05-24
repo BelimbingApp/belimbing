@@ -3,6 +3,7 @@
 namespace App\Modules\People\Claim\Services;
 
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\People\Claim\Data\ClaimSubmissionInput;
 use App\Modules\People\Claim\Models\ClaimLine;
 use App\Modules\People\Claim\Models\ClaimPolicy;
 use App\Modules\People\Claim\Models\ClaimPolicyBand;
@@ -14,57 +15,19 @@ use DateTimeImmutable;
 class ClaimPolicyEvaluationService
 {
     /**
-     * @param  list<int>  $combinedClaimTypeIds
      * @return array{blocking: list<string>, snapshot: array<string, mixed>}
      */
     public function evaluateBeforeSubmission(
-        int $employeeId,
         ClaimType $claimType,
         ?ClaimPolicy $policy,
-        DateTimeImmutable $incurredOn,
-        float $requestedAmount,
-        int $attachmentCount,
-        ?string $providerName,
-        array $combinedClaimTypeIds = [],
-        ?Employee $employee = null,
+        ClaimSubmissionInput $input,
     ): array {
-        $blocking = [];
-        $yearsOfService = $this->yearsOfService($employee, $incurredOn);
-        $band = $this->matchingBand($policy, $requestedAmount, $yearsOfService);
-        $receiptRequired = $this->receiptRequired($claimType, $policy, $requestedAmount);
+        $yearsOfService = $this->yearsOfService($input->employee, $input->incurredOn);
+        $band = $this->matchingBand($policy, $input->requestedAmount, $yearsOfService);
+        $receiptRequired = $this->receiptRequired($claimType, $policy, $input->requestedAmount);
         $providerRequired = $this->providerRequired($claimType, $policy);
-        $capClaimTypeIds = $combinedClaimTypeIds === [] ? [(int) $claimType->getKey()] : $combinedClaimTypeIds;
 
-        if ($receiptRequired && $attachmentCount < 1) {
-            $blocking[] = sprintf('%s requires a receipt attachment.', $claimType->name);
-        }
-
-        if ($providerRequired && trim((string) $providerName) === '') {
-            $blocking[] = sprintf('%s requires a provider name.', $claimType->name);
-        }
-
-        if ($band !== null) {
-            $perClaimLimit = $this->numericOrNull($band->per_claim_limit);
-            if ($perClaimLimit !== null && $requestedAmount > $perClaimLimit) {
-                $blocking[] = sprintf('%s has a per-claim limit of %.2f.', $claimType->name, $perClaimLimit);
-            }
-
-            $perMonthLimit = $this->numericOrNull($band->per_month_limit);
-            if ($perMonthLimit !== null) {
-                $usedThisMonth = $this->usedAmountForPeriod($employeeId, $capClaimTypeIds, $incurredOn, 'month', $policy);
-                if ($usedThisMonth + $requestedAmount > $perMonthLimit) {
-                    $blocking[] = sprintf('%s has a monthly limit of %.2f; %.2f is already used or pending.', $claimType->name, $perMonthLimit, $usedThisMonth);
-                }
-            }
-
-            $perYearLimit = $this->numericOrNull($band->per_year_limit);
-            if ($perYearLimit !== null) {
-                $usedThisYear = $this->usedAmountForPeriod($employeeId, $capClaimTypeIds, $incurredOn, 'year', $policy);
-                if ($usedThisYear + $requestedAmount > $perYearLimit) {
-                    $blocking[] = sprintf('%s has a yearly limit of %.2f; %.2f is already used or pending.', $claimType->name, $perYearLimit, $usedThisYear);
-                }
-            }
-        }
+        $blocking = $this->buildBlockingForSubmission($claimType, $policy, $band, $input);
 
         return [
             'blocking' => $blocking,
@@ -80,7 +43,7 @@ class ClaimPolicyEvaluationService
                 'per_year_limit' => $band?->per_year_limit,
                 'receipt_required' => $receiptRequired,
                 'provider_required' => $providerRequired,
-                'combined_claim_type_ids' => $combinedClaimTypeIds,
+                'combined_claim_type_ids' => $input->combinedClaimTypeIds,
             ],
         ];
     }
@@ -149,6 +112,54 @@ class ClaimPolicyEvaluationService
             );
             if ($used + $approvingAmount > $perYearLimit) {
                 $blocking[] = sprintf('%s has a yearly limit of %.2f; %.2f is already used or pending.', $claimType?->name ?? 'claim', $perYearLimit, $used);
+            }
+        }
+
+        return $blocking;
+    }
+
+    /** @return list<string> */
+    private function buildBlockingForSubmission(
+        ClaimType $claimType,
+        ?ClaimPolicy $policy,
+        ?ClaimPolicyBand $band,
+        ClaimSubmissionInput $input,
+    ): array {
+        $blocking = [];
+        $receiptRequired = $this->receiptRequired($claimType, $policy, $input->requestedAmount);
+        $providerRequired = $this->providerRequired($claimType, $policy);
+        $capClaimTypeIds = $input->combinedClaimTypeIds === [] ? [(int) $claimType->getKey()] : $input->combinedClaimTypeIds;
+
+        if ($receiptRequired && $input->attachmentCount < 1) {
+            $blocking[] = sprintf('%s requires a receipt attachment.', $claimType->name);
+        }
+
+        if ($providerRequired && trim((string) $input->providerName) === '') {
+            $blocking[] = sprintf('%s requires a provider name.', $claimType->name);
+        }
+
+        if ($band === null) {
+            return $blocking;
+        }
+
+        $perClaimLimit = $this->numericOrNull($band->per_claim_limit);
+        if ($perClaimLimit !== null && $input->requestedAmount > $perClaimLimit) {
+            $blocking[] = sprintf('%s has a per-claim limit of %.2f.', $claimType->name, $perClaimLimit);
+        }
+
+        $perMonthLimit = $this->numericOrNull($band->per_month_limit);
+        if ($perMonthLimit !== null) {
+            $usedThisMonth = $this->usedAmountForPeriod($input->employeeId, $capClaimTypeIds, $input->incurredOn, 'month', $policy);
+            if ($usedThisMonth + $input->requestedAmount > $perMonthLimit) {
+                $blocking[] = sprintf('%s has a monthly limit of %.2f; %.2f is already used or pending.', $claimType->name, $perMonthLimit, $usedThisMonth);
+            }
+        }
+
+        $perYearLimit = $this->numericOrNull($band->per_year_limit);
+        if ($perYearLimit !== null) {
+            $usedThisYear = $this->usedAmountForPeriod($input->employeeId, $capClaimTypeIds, $input->incurredOn, 'year', $policy);
+            if ($usedThisYear + $input->requestedAmount > $perYearLimit) {
+                $blocking[] = sprintf('%s has a yearly limit of %.2f; %.2f is already used or pending.', $claimType->name, $perYearLimit, $usedThisYear);
             }
         }
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannelProvider;
@@ -16,9 +17,9 @@ class EbayMarketplaceChannelProvider implements MarketplaceChannelProvider
             capabilities: [
                 'pull_listings' => true,
                 'pull_orders' => true,
-                'create_listing' => false,
-                'revise_listing' => false,
-                'end_listing' => false,
+                'create_listing' => true,
+                'revise_listing' => true,
+                'end_listing' => true,
             ],
             routes: [
                 'index' => 'commerce.marketplace.ebay.index',

@@ -1,0 +1,26 @@
+{
+    "name": "blb/people-settings",
+    "type": "blb-source-module",
+    "description": "BLB People Settings — work profiles, calendars, reference data, and notification log.",
+    "license": "AGPL-3.0-only",
+    "autoload": {
+        "psr-4": {
+            "App\\Modules\\People\\Settings\\": ""
+        }
+    },
+    "extra": {
+        "blb": {
+            "module": "people/settings",
+            "role": "source",
+            "version": "0.1.0",
+            "description": "People Settings — work profiles, calendars, reference data, notification log.",
+            "requires-modules": {
+                "core/company": "*",
+                "core/employee": "*"
+            },
+            "optional-modules": {},
+            "publishes-events": [],
+            "consumes-events": []
+        }
+    }
+}

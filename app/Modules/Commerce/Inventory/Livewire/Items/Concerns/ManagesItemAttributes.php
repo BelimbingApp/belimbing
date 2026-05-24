@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Livewire\Items\Concerns;
 
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
@@ -77,7 +78,7 @@ trait ManagesItemAttributes
         return $this->constrainApplicableAttributeQuery(
             CatalogAttribute::query()->where('company_id', $companyId),
         )
-            ->with(['category', 'productTemplate'])
+            ->with(['category.parent.parent.parent.parent.parent', 'productTemplate'])
             ->orderBy('sort_order')
             ->orderBy('name');
     }

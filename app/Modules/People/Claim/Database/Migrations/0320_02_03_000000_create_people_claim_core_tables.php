@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Concerns\IncubatingSchema;
 use App\Base\Database\Concerns\RegistersTables;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -7,6 +8,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    use IncubatingSchema;
     use RegistersTables;
 
     public function up(): void
@@ -163,8 +165,8 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->unique(['claim_assignment_id', 'claim_type_id']);
-            $table->index(['claim_assignment_id', 'status', 'sort_order']);
+            $table->unique(['claim_assignment_id', 'claim_type_id'], 'people_claim_assignment_lines_assignment_type_unique');
+            $table->index(['claim_assignment_id', 'status', 'sort_order'], 'people_claim_assignment_lines_assignment_status_sort_index');
         });
         $this->registerTable('people_claim_assignment_lines');
 
@@ -254,9 +256,9 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['employee_id', 'claim_type_id', 'claim_year']);
-            $table->index(['company_id', 'occurred_on']);
-            $table->index(['source_type', 'source_id']);
+            $table->index(['employee_id', 'claim_type_id', 'claim_year'], 'people_claim_usage_entries_employee_type_year_index');
+            $table->index(['company_id', 'occurred_on'], 'people_claim_usage_entries_company_date_index');
+            $table->index(['source_type', 'source_id'], 'people_claim_usage_entries_source_index');
         });
         $this->registerTable('people_claim_entitlement_usage_entries');
 
@@ -271,7 +273,7 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['claim_request_id', 'occurred_at']);
+            $table->index(['claim_request_id', 'occurred_at'], 'people_claim_audit_events_request_occurred_index');
         });
         $this->registerTable('people_claim_request_audit_events');
     }

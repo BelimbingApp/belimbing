@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
-use App\Base\Foundation\Enums\BlbErrorCode;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
+use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
@@ -129,7 +130,7 @@ class LaraCapabilityMatcher
         if (! is_int($employee->id)) {
             throw new BlbDataContractException(
                 'Invalid Agent identifier type.',
-                BlbErrorCode::LARA_AGENT_ID_TYPE_INVALID,
+                AIErrorCode::LARA_AGENT_ID_TYPE_INVALID,
                 ['employee_id' => $employee->id]
             );
         }
