@@ -34,11 +34,9 @@ ensure_tool() {
     echo -e "${CYAN}→${NC} Installing $name..."
     local cmd
     for cmd in "$@"; do
-        if eval "$cmd" 2>/dev/null; then
-            if command -v "$binary" >/dev/null 2>&1; then
-                echo -e "${GREEN}✓${NC} $name installed"
-                return 0
-            fi
+        if eval "$cmd" 2>/dev/null && command -v "$binary" >/dev/null 2>&1; then
+            echo -e "${GREEN}✓${NC} $name installed"
+            return 0
         fi
     done
 
@@ -65,6 +63,8 @@ case "$os_type" in
             rg_cmds=("sudo pacman -S --noconfirm ripgrep" "sudo pacman -S --noconfirm jq")
             jq_cmds=("sudo pacman -S --noconfirm jq")
         fi
+        ;;
+    *)
         ;;
 esac
 

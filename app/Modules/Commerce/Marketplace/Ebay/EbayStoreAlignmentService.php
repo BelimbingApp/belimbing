@@ -170,57 +170,83 @@ class EbayStoreAlignmentService
             ->where('channel', EbayConfiguration::CHANNEL)
             ->with('lines')
             ->get()
-            ->flatMap(function (Order $order) use ($listingById, $listingIdByExternalId): array {
-                $signals = [];
-                $status = strtoupper((string) $order->status);
-                $message = $this->firstString([
-                    data_get($order->raw_payload, 'buyerCheckoutNotes'),
-                    data_get($order->raw_payload, 'buyerMessage'),
-                    data_get($order->raw_payload, 'buyer.buyerMessage'),
-                ]);
-
-                foreach ($order->lines as $line) {
-                    $listingId = $line->listing_id
-                        ?? $listingIdByExternalId->get($line->external_listing_id);
-
-                    if ($listingId === null || ! $listingById->has($listingId)) {
-                        continue;
-                    }
-
-                    $listing = $listingById->get($listingId);
-
-                    if ($message !== null) {
-                        $signals[] = [
-                            'listing_id' => $listingId,
-                            'listing_title' => $listing?->title ?? $line->title ?? $line->external_listing_id,
-                            'buyer' => $order->buyer_username,
-                            'ordered_at' => $order->ordered_at,
-                            'type' => 'buyer_question',
-                            'label' => 'Buyer question',
-                            'detail' => Str::limit($message, 120, '...'),
-                            'severity' => 'warning',
-                            'severity_score' => 30,
-                        ];
-                    }
-
-                    if ($this->hasReturnOrCancelSignal($order)) {
-                        $signals[] = [
-                            'listing_id' => $listingId,
-                            'listing_title' => $listing?->title ?? $line->title ?? $line->external_listing_id,
-                            'buyer' => $order->buyer_username,
-                            'ordered_at' => $order->ordered_at,
-                            'type' => 'return_or_cancel',
-                            'label' => 'Return / cancellation signal',
-                            'detail' => $status !== '' ? $status : 'Return or cancel signal found in eBay order payload.',
-                            'severity' => 'danger',
-                            'severity_score' => 45,
-                        ];
-                    }
-                }
-
-                return $signals;
-            })
+            ->flatMap(fn (Order $order): array => $this->trustSignalsForOrder($order, $listingById, $listingIdByExternalId))
             ->values();
+    }
+
+    /**
+     * @param  Collection<int, Listing>  $listingById
+     * @param  Collection<string, int>  $listingIdByExternalId
+     * @return list<array<string, mixed>>
+     */
+    private function trustSignalsForOrder(Order $order, Collection $listingById, Collection $listingIdByExternalId): array
+    {
+        $signals = [];
+        $message = $this->firstString([
+            data_get($order->raw_payload, 'buyerCheckoutNotes'),
+            data_get($order->raw_payload, 'buyerMessage'),
+            data_get($order->raw_payload, 'buyer.buyerMessage'),
+        ]);
+
+        foreach ($order->lines as $line) {
+            $listingId = $line->listing_id
+                ?? $listingIdByExternalId->get($line->external_listing_id);
+
+            if ($listingId === null || ! $listingById->has($listingId)) {
+                continue;
+            }
+
+            $listing = $listingById->get($listingId);
+            $title = $listing?->title ?? $line->title ?? $line->external_listing_id;
+
+            if ($message !== null) {
+                $signals[] = $this->buyerQuestionSignal($order, $listingId, $title, $message);
+            }
+
+            if ($this->hasReturnOrCancelSignal($order)) {
+                $signals[] = $this->returnOrCancelSignal($order, $listingId, $title);
+            }
+        }
+
+        return $signals;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buyerQuestionSignal(Order $order, int $listingId, ?string $title, string $message): array
+    {
+        return [
+            'listing_id' => $listingId,
+            'listing_title' => $title,
+            'buyer' => $order->buyer_username,
+            'ordered_at' => $order->ordered_at,
+            'type' => 'buyer_question',
+            'label' => 'Buyer question',
+            'detail' => Str::limit($message, 120, '...'),
+            'severity' => 'warning',
+            'severity_score' => 30,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function returnOrCancelSignal(Order $order, int $listingId, ?string $title): array
+    {
+        $status = strtoupper((string) $order->status);
+
+        return [
+            'listing_id' => $listingId,
+            'listing_title' => $title,
+            'buyer' => $order->buyer_username,
+            'ordered_at' => $order->ordered_at,
+            'type' => 'return_or_cancel',
+            'label' => 'Return / cancellation signal',
+            'detail' => $status !== '' ? $status : 'Return or cancel signal found in eBay order payload.',
+            'severity' => 'danger',
+            'severity_score' => 45,
+        ];
     }
 
     /**
