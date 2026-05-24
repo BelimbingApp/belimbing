@@ -21,5 +21,6 @@ php artisan blb:table:unstable \
   ai_channel_conversation_messages \
   company_relationships \
   sbg_quality_* \
+  sbg_ibp_* \
   'people_*' \
   'payroll_*'
