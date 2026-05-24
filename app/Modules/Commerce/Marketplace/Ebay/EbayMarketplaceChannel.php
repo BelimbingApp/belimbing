@@ -342,30 +342,45 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         return collect($aspects)
-            ->mapWithKeys(function (mixed $value, mixed $name): array {
-                if (! is_string($name) || trim($name) === '') {
-                    return [];
-                }
-
-                if (is_array($value)) {
-                    $normalized = collect($value)
-                        ->map(fn (mixed $entry): ?string => is_scalar($entry) && trim((string) $entry) !== '' ? trim((string) $entry) : null)
-                        ->filter()
-                        ->values()
-                        ->all();
-
-                    return $normalized === []
-                        ? []
-                        : [trim($name) => ['value' => $normalized, 'source' => 'ebay_listing']];
-                }
-
-                if (is_scalar($value) && trim((string) $value) !== '') {
-                    return [trim($name) => ['value' => trim((string) $value), 'source' => 'ebay_listing']];
-                }
-
-                return [];
-            })
+            ->mapWithKeys(fn (mixed $value, mixed $name): array => $this->listingAspectValue($value, $name))
             ->all();
+    }
+
+    /**
+     * @return array<string, array{value: string|list<string>, source: string}>
+     */
+    private function listingAspectValue(mixed $value, mixed $name): array
+    {
+        if (! is_string($name) || trim($name) === '') {
+            return [];
+        }
+
+        if (is_array($value)) {
+            return $this->listingAspectArrayValue($value, trim($name));
+        }
+
+        if (is_scalar($value) && trim((string) $value) !== '') {
+            return [trim($name) => ['value' => trim((string) $value), 'source' => 'ebay_listing']];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param  array<int, mixed>  $value
+     * @return array<string, array{value: list<string>, source: string}>
+     */
+    private function listingAspectArrayValue(array $value, string $name): array
+    {
+        $normalized = collect($value)
+            ->map(fn (mixed $entry): ?string => is_scalar($entry) && trim((string) $entry) !== '' ? trim((string) $entry) : null)
+            ->filter()
+            ->values()
+            ->all();
+
+        return $normalized === []
+            ? []
+            : [$name => ['value' => $normalized, 'source' => 'ebay_listing']];
     }
 
     /**

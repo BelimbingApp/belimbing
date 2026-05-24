@@ -79,17 +79,19 @@ class EbayListingReadinessService
         $identifierAlignment = $this->identifierAlignment($aspectFacts);
 
         [$blockers, $warnings] = $this->gaps(
-            item: $item,
-            categoryId: $categoryId,
-            policyIds: $policyIds,
-            merchantLocationKey: $this->merchantLocationKey($companyId),
-            mappedAspects: $mappedAspects,
-            productReferenceCount: $productReferences->count(),
-            metadataMarketplaceId: $metadataMarketplaceId,
-            sellerMarketplaceId: $sellerMarketplaceId,
-            categoryTreeId: $categoryTreeId,
-            aspectFacts: $aspectFacts,
-            identifierAlignment: $identifierAlignment,
+            $item,
+            [
+                'category_id' => $categoryId,
+                'policy_ids' => $policyIds,
+                'merchant_location_key' => $this->merchantLocationKey($companyId),
+                'mapped_aspects' => $mappedAspects,
+                'product_reference_count' => $productReferences->count(),
+                'metadata_marketplace_id' => $metadataMarketplaceId,
+                'seller_marketplace_id' => $sellerMarketplaceId,
+                'category_tree_id' => $categoryTreeId,
+                'aspect_facts' => $aspectFacts,
+                'identifier_alignment' => $identifierAlignment,
+            ],
         );
 
         $readinessStatus = $blockers === [] ? self::STATUS_READY : self::STATUS_BLOCKED;
@@ -246,28 +248,47 @@ class EbayListingReadinessService
     }
 
     /**
-     * @param  array{return: string|null, fulfillment: string|null, payment: string|null}  $policyIds
-     * @param  array<string, mixed>  $mappedAspects
-     * @param  list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>  $aspectFacts
-     * @param  list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>  $identifierAlignment
+     * @param  array{
+     *     category_id: string|null,
+     *     policy_ids: array{return: string|null, fulfillment: string|null, payment: string|null},
+     *     merchant_location_key: string|null,
+     *     mapped_aspects: array<string, mixed>,
+     *     product_reference_count: int,
+     *     metadata_marketplace_id: string,
+     *     seller_marketplace_id: string,
+     *     category_tree_id: string|null,
+     *     aspect_facts: list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>,
+     *     identifier_alignment: list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>
+     * }  $context
      * @return array{0: list<array{key: string, label: string}>, 1: list<array{key: string, label: string}>}
      */
-    private function gaps(
-        Item $item,
-        ?string $categoryId,
-        array $policyIds,
-        ?string $merchantLocationKey,
-        array $mappedAspects,
-        int $productReferenceCount,
-        string $metadataMarketplaceId,
-        string $sellerMarketplaceId,
-        ?string $categoryTreeId,
-        array $aspectFacts,
-        array $identifierAlignment,
-    ): array {
+    private function gaps(Item $item, array $context): array
+    {
         $blockers = [];
         $warnings = [];
 
+        $this->addItemReadinessGaps($item, $context['category_id'], $blockers, $warnings);
+        $this->addPolicyReadinessGaps(
+            $item,
+            $context['policy_ids'],
+            $context['merchant_location_key'],
+            $context['metadata_marketplace_id'],
+            $context['seller_marketplace_id'],
+            $blockers,
+            $warnings,
+        );
+        $this->addAspectReadinessGaps($item, $context, $blockers, $warnings);
+        $this->addConnectionReadinessGaps($item, $context['product_reference_count'], $blockers, $warnings);
+
+        return [$blockers, $warnings];
+    }
+
+    /**
+     * @param  list<array{key: string, label: string}>  $blockers
+     * @param  list<array{key: string, label: string}>  $warnings
+     */
+    private function addItemReadinessGaps(Item $item, ?string $categoryId, array &$blockers, array &$warnings): void
+    {
         if ($categoryId === null) {
             $blockers[] = $this->gap('category', __('Map this item template to an eBay category.'), 'settings');
         }
@@ -297,7 +318,22 @@ class EbayListingReadinessService
         if ($item->photos->count() > 0 && $item->photos->count() < 3) {
             $warnings[] = $this->gap('photo_coverage', __('Add more photos when possible: multiple angles, labels, connectors, mounts, and visible defects.'), 'photos');
         }
+    }
 
+    /**
+     * @param  array{return: string|null, fulfillment: string|null, payment: string|null}  $policyIds
+     * @param  list<array{key: string, label: string}>  $blockers
+     * @param  list<array{key: string, label: string}>  $warnings
+     */
+    private function addPolicyReadinessGaps(
+        Item $item,
+        array $policyIds,
+        ?string $merchantLocationKey,
+        string $metadataMarketplaceId,
+        string $sellerMarketplaceId,
+        array &$blockers,
+        array &$warnings,
+    ): void {
         foreach ($policyIds as $kind => $policyId) {
             if ($policyId === null) {
                 $blockers[] = $this->gap('policy_'.$kind, __('Choose a default :kind policy in eBay settings.', ['kind' => $kind]), 'settings');
@@ -312,46 +348,68 @@ class EbayListingReadinessService
             $warnings[] = $this->gap('merchant_location_unverified', __('Re-import eBay setup choices to confirm the saved merchant location is still enabled.'), 'settings');
         }
 
-        foreach ($this->requiredAspectNames($metadataMarketplaceId, $categoryTreeId, $categoryId) as $aspectName) {
-            if (! array_key_exists($aspectName, $mappedAspects)) {
+        if (($policyIds['fulfillment'] ?? null) !== null) {
+            $warnings[] = $this->gap('package_shipping_facts', __('Confirm package weight and dimensions before publishing if the selected shipping policy requires them.'), 'item_facts');
+        }
+    }
+
+    /**
+     * @param  array{
+     *     category_id: string|null,
+     *     mapped_aspects: array<string, mixed>,
+     *     metadata_marketplace_id: string,
+     *     category_tree_id: string|null,
+     *     aspect_facts: list<array{name: string, value: string|null, normalized_value?: string|null, source: string, confidence: string, internal_attribute_code?: string, validation?: string, message?: string}>,
+     *     identifier_alignment: list<array{key: string, label: string, status: string, sources: array<string, list<string>>}>
+     * }  $context
+     * @param  list<array{key: string, label: string}>  $blockers
+     * @param  list<array{key: string, label: string}>  $warnings
+     */
+    private function addAspectReadinessGaps(Item $item, array $context, array &$blockers, array &$warnings): void
+    {
+        foreach ($this->requiredAspectNames($context['metadata_marketplace_id'], $context['category_tree_id'], $context['category_id']) as $aspectName) {
+            if (! array_key_exists($aspectName, $context['mapped_aspects'])) {
                 $blockers[] = $this->gap('aspect_'.$aspectName, __('Map or enter required eBay aspect: :aspect.', ['aspect' => $aspectName]), 'attributes');
             }
         }
 
-        foreach ($aspectFacts as $fact) {
+        foreach ($context['aspect_facts'] as $fact) {
             if (($fact['validation'] ?? 'ok') === 'invalid') {
                 $blockers[] = $this->gap('aspect_invalid_'.$fact['name'], (string) ($fact['message'] ?? __('Fix an invalid eBay aspect value.')), 'attributes');
             }
         }
 
-        if ($this->categoryHasConditionPolicy($metadataMarketplaceId, $categoryId) && ! $this->hasAnyAspect($aspectFacts, ['Condition', 'Condition Grade', 'Type'])) {
+        if ($this->categoryHasConditionPolicy($context['metadata_marketplace_id'], $context['category_id']) && ! $this->hasAnyAspect($context['aspect_facts'], ['Condition', 'Condition Grade', 'Type'])) {
             $blockers[] = $this->gap('condition_mapping', __('Map a Belimbing condition attribute before publishing to this eBay category.'), 'attributes');
         }
 
-        if (! $this->hasAnyAspect($aspectFacts, ['Brand'])) {
+        if (! $this->hasAnyAspect($context['aspect_facts'], ['Brand'])) {
             $warnings[] = $this->gap('identifier_brand', __('Add a brand identifier when it is known.'), 'attributes');
         }
 
-        if (! $this->hasAnyAspect($aspectFacts, self::PART_NUMBER_ASPECT_NAMES)) {
+        if (! $this->hasAnyAspect($context['aspect_facts'], self::PART_NUMBER_ASPECT_NAMES)) {
             $warnings[] = $this->gap('identifier_part_number', __('Add manufacturer, OEM, or interchange part numbers when available.'), 'attributes');
         }
 
-        if ($this->hasIdentifierConflict($identifierAlignment)) {
+        if ($this->hasIdentifierConflict($context['identifier_alignment'])) {
             $warnings[] = $this->gap('identifier_conflict', __('Review imported eBay identifiers that conflict with Belimbing facts before revising.'), 'attributes');
         }
 
-        if (! $this->titleIncludesUsefulSpecific($item->title, $mappedAspects)) {
+        if (! $this->titleIncludesUsefulSpecific($item->title, $context['mapped_aspects'])) {
             $warnings[] = $this->gap('title_guidance', __('Improve the title with useful specifics such as part type, brand, part number, side, or placement.'), 'item_facts');
         }
 
-        if (($policyIds['fulfillment'] ?? null) !== null) {
-            $warnings[] = $this->gap('package_shipping_facts', __('Confirm package weight and dimensions before publishing if the selected shipping policy requires them.'), 'item_facts');
-        }
-
-        if (! $this->hasFreshCategoryMetadata($metadataMarketplaceId, $categoryTreeId, $categoryId)) {
+        if (! $this->hasFreshCategoryMetadata($context['metadata_marketplace_id'], $context['category_tree_id'], $context['category_id'])) {
             $warnings[] = $this->gap('metadata_stale', __('Refresh eBay metadata before publishing so category rules are current.'), 'settings');
         }
+    }
 
+    /**
+     * @param  list<array{key: string, label: string}>  $blockers
+     * @param  list<array{key: string, label: string}>  $warnings
+     */
+    private function addConnectionReadinessGaps(Item $item, int $productReferenceCount, array &$blockers, array &$warnings): void
+    {
         if ($this->oauth->tokenForCompany($item->company_id)?->refresh_token === null) {
             $blockers[] = $this->gap('oauth_connection', __('Connect eBay before publishing.'), 'settings');
         }
@@ -359,8 +417,6 @@ class EbayListingReadinessService
         if ($productReferenceCount === 0) {
             $warnings[] = $this->gap('product_reference', __('No eBay catalog/ePID suggestion has been imported for this item.'), 'settings');
         }
-
-        return [$blockers, $warnings];
     }
 
     /**
@@ -608,33 +664,40 @@ class EbayListingReadinessService
         }
 
         return collect($aspectValues)
-            ->map(function (mixed $entry, mixed $name) use ($alreadyMappedNames): ?array {
-                if (! is_string($name) || trim($name) === '' || in_array($name, $alreadyMappedNames, true)) {
-                    return null;
-                }
-
-                $source = is_array($entry) && is_string($entry['source'] ?? null)
-                    ? trim((string) $entry['source'])
-                    : 'seller';
-                $value = is_array($entry) ? ($entry['value'] ?? null) : $entry;
-                $value = is_array($value) ? reset($value) : $value;
-
-                if (! is_scalar($value) || trim((string) $value) === '') {
-                    return null;
-                }
-
-                return [
-                    'name' => trim($name),
-                    'value' => trim((string) $value),
-                    'source' => $source,
-                    'confidence' => $source === 'ebay_listing'
-                        ? AspectMapping::CONFIDENCE_IMPORTED
-                        : AspectMapping::CONFIDENCE_MANUAL,
-                ];
-            })
+            ->map(fn (mixed $entry, mixed $name): ?array => $this->draftAspectFact($entry, $name, $alreadyMappedNames))
             ->filter()
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  list<string>  $alreadyMappedNames
+     * @return array{name: string, value: string, source: string, confidence: string}|null
+     */
+    private function draftAspectFact(mixed $entry, mixed $name, array $alreadyMappedNames): ?array
+    {
+        if (! is_string($name) || trim($name) === '' || in_array($name, $alreadyMappedNames, true)) {
+            return null;
+        }
+
+        $source = is_array($entry) && is_string($entry['source'] ?? null)
+            ? trim((string) $entry['source'])
+            : 'seller';
+        $value = is_array($entry) ? ($entry['value'] ?? null) : $entry;
+        $value = is_array($value) ? reset($value) : $value;
+
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        return [
+            'name' => trim($name),
+            'value' => trim((string) $value),
+            'source' => $source,
+            'confidence' => $source === 'ebay_listing'
+                ? AspectMapping::CONFIDENCE_IMPORTED
+                : AspectMapping::CONFIDENCE_MANUAL,
+        ];
     }
 
     /**
