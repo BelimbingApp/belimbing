@@ -22,6 +22,8 @@ Migrations are **auto-discovered** from Base and Module directories when migrati
 
 This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
+At a high level, `php artisan migrate --dev` means: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed.
+
 ---
 
 ## 2. Naming & Execution Order

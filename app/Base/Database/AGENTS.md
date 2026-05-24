@@ -102,9 +102,18 @@ php artisan migrate --dev
 `--dev` means:
 
 - local environment only
+- incubating rebuild + migrate + prod seed + framework primitives + dev seed
 - production seeders still run
 - dev seeders still run
 - source-declared incubating migrations are dropped and rerun before Laravel's native migrator continues
+
+Execution order is:
+
+1. rebuild incubating schema
+2. run Laravel migrations
+3. run production seeders
+4. provision framework primitives
+5. run dev seeders
 
 ### Declare a migration incubating
 
@@ -176,7 +185,7 @@ $table->foreignId('long_related_id')->constrained('related_table', indexName: 's
 | Disposable local database full reset | `migrate:fresh` |
 | Production / staging deploy | `migrate` — never `migrate:fresh` |
 
-`--dev` implies `--seed`, creates the licensee company (id=1) if absent, then runs all dev seeders in dependency order. `APP_ENV=local` only.
+`--dev` implies `--seed` and follows this sequence: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed. It creates the licensee company (id=1) if absent, then runs all dev seeders in dependency order. `APP_ENV=local` only.
 
 `migrate:refresh`, `migrate:reset`, and `db:wipe` are **blocked** in Belimbing — they bypass the incubating-schema preflight.
 
