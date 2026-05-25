@@ -138,7 +138,7 @@
             this.activeTab = tabId
 
             if (this.wireAction && typeof this.$wire !== 'undefined') {
-                this.$wire[this.wireAction](tabId)
+                Promise.resolve(this.$wire[this.wireAction](tabId)).catch(() => {})
             }
 
             if (this.persistence === 'query') {
