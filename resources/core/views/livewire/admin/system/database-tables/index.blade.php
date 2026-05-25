@@ -15,6 +15,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
             <x-slot name="help">
                 @if(app()->environment('local'))
                     <p>{{ __('During development, use migrate --dev to rebuild source-declared incubating schema before Laravel continues through native migration. This registry shows where each live table came from, plus whether its source migration is currently stable, incubating, or framework infrastructure.') }}</p>
+                    <p class="mt-2">{{ __('To add or remove `use IncubatingSchema;` on source migrations, use the Schema Incubation page under this menu.') }}</p>
                 @endif
                 <p class="{{ app()->environment('local') ? 'mt-2' : '' }}">{{ __('Click any row to browse its contents. For advanced queries — filtering, joins, aggregations, or data edits — ask Lara via the status bar.') }}</p>
             </x-slot>
@@ -22,6 +23,10 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
 
         @if (session('warning'))
             <x-ui.alert variant="warning">{{ session('warning') }}</x-ui.alert>
+        @endif
+
+        @if (session('status'))
+            <x-ui.alert variant="success">{{ session('status') }}</x-ui.alert>
         @endif
 
         @foreach($this->orphanedRegistryNotices as $index => $notice)
@@ -39,10 +44,10 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
         @endforeach
 
         <x-ui.card>
-            <div class="mb-2">
+            <div class="mb-4">
                 <x-ui.search-input
                     wire:model.live.debounce.300ms="search"
-                    placeholder="{{ __('Search by table name, module, or migration...') }}"
+                    placeholder="{{ __('Search by table name, module, or migration… Wildcards like people_* and ai_?rowser_* work here.') }}"
                 />
             </div>
 
@@ -69,12 +74,16 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                 :label="__('Migration')"
                             />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
+                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Incubation Source') }}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-surface-card divide-y divide-border-default">
                         @forelse($tables as $table)
                             @php
                                 $tableUrl = route('admin.system.database-tables.show', $table->table_name);
+                                $incubationSource = $table->source_declared
+                                    ? __('Source migration')
+                                    : ($table->deprecated_pattern ? __('Compatibility list: :pattern', ['pattern' => $table->deprecated_pattern]) : '—');
                             @endphp
                             <tr wire:key="table-{{ $table->id }}" class="hover:bg-surface-subtle/50 transition-colors cursor-pointer" tabindex="0" onclick="window.location='{{ $tableUrl }}'" onkeydown="if(event.key==='Enter'||event.key===' '){window.location='{{ $tableUrl }}';event.preventDefault();}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>
@@ -85,10 +94,11 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                         {{ Str::headline($table->schema_state) }}
                                     </x-ui.badge>
                                 </td>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ $incubationSource }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables registered.') }}</td>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables registered.') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

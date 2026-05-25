@@ -4,6 +4,7 @@ return [
         'admin.system.database-table.list',
         'admin.system.database-table.view',
         'admin.system.database-table.edit',
+        'admin.system.database-incubation.manage',
 
         // Database backup admin UI (admin/system/backups).
         'admin.system.database-backup.list',

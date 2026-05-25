@@ -75,7 +75,7 @@ PHP);
         ->and($migrations[0]['tables'])->toBe([INCUBATING_SCHEMA_TEST_TABLE]);
 });
 
-test('preflight can resolve incubating state for a registered table from source metadata', function (): void {
+test('preflight can resolve incubating state for a registered table from trait metadata', function (): void {
     $dir = base_path(INCUBATING_SCHEMA_TEST_DIR);
     $file = $dir.'/'.INCUBATING_SCHEMA_TEST_FILE;
     pointPreflightAtDeprecatedScript(base_path(INCUBATING_SCHEMA_TEST_DISABLED_SCRIPT));
@@ -86,13 +86,14 @@ test('preflight can resolve incubating state for a registered table from source 
 
     file_put_contents($file, <<<'PHP'
 <?php
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public const BLB_SCHEMA_STABLE = false;
+    use IncubatingSchema;
 
     public function up(): void
     {

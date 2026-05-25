@@ -10,6 +10,14 @@ return [
             'parent' => 'admin.system.database',
         ],
         [
+            'id' => 'admin.system.database-incubation',
+            'label' => 'Schema Incubation',
+            'icon' => 'heroicon-o-beaker',
+            'route' => 'admin.system.database-incubation.index',
+            'permission' => 'admin.system.database-incubation.manage',
+            'parent' => 'admin.system.database',
+        ],
+        [
             'id' => 'admin.system.database-query',
             'label' => 'Database Queries',
             'icon' => 'heroicon-o-circle-stack',

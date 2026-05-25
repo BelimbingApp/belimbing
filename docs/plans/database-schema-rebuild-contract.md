@@ -7,7 +7,7 @@
 
 ## Problem Essence
 
-BLB customized Laravel's `migrate:fresh` into a stability-aware selective rebuild, so the command name now promises Laravel's "drop everything and rerun" behavior while the implementation preserves tables based on `is_stable`. The deeper issue is that "destructive evolution" no longer describes the intended workflow: under-development schemas may change, but stable schemas and local/user data need explicit, predictable evolution.
+BLB customized Laravel's `migrate:fresh` into a selective rebuild flow, so the command name now promises Laravel's "drop everything and rerun" behavior while the implementation preserves some tables. The deeper issue is that "destructive evolution" no longer describes the intended workflow: under-development schemas may change, but stable schemas and local/user data need explicit, predictable evolution.
 
 ## Desired Outcome
 
@@ -25,7 +25,7 @@ Laravel migration commands should stay familiar, with the fewest possible BLB-sp
 
 **Module dependency graph** moves toward manifest-declared dependencies for pluggable modules, with timestamp prefixes remaining an ordering aid rather than the only dependency contract.
 
-**Docs and agent guidance** teach agents that `is_stable=false` means "this schema is still under development" rather than "feel free to wipe arbitrary data."
+**Docs and agent guidance** teach agents that source-local `use IncubatingSchema;` means "this schema is still under development" rather than "feel free to wipe arbitrary data."
 
 **Agent-first ergonomics** treats coding agents as primary users of the workflow. Schema state must be discoverable from source, editable in the same place as the schema change, and routed through familiar Laravel commands.
 
@@ -50,16 +50,18 @@ php artisan migrate --dev
 
 `migrate` remains the production/staging path. `migrate --dev` becomes the local development path that handles incubating schemas before native migration. Avoid adding `blb:db:rebuild`, `blb:schema:plan`, or `blb:db:seed-dev` unless a later phase proves a separate diagnostic command is truly needed.
 
-### D3: Make `is_stable=false` migration-local incubation
+### D3: Make incubation migration-local
 
-`is_stable=false` should mean: the owning migration file is incubating, its schema may be rewritten in place, and `migrate --dev` may drop and rebuild its tables.
+`use IncubatingSchema;` should mean: the owning migration file is incubating, its schema may be rewritten in place, and `migrate --dev` may drop and rebuild its tables.
 
 The recommended source declaration is migration-local metadata, not a parallel module manifest. This keeps the state beside the schema it describes and avoids drift from duplicated migration filenames.
 
 ```php
+use App\Base\Database\Concerns\IncubatingSchema;
+
 return new class extends Migration
 {
-    public const BLB_SCHEMA_STABLE = false;
+    use IncubatingSchema;
 
     public function up(): void
     {
@@ -68,7 +70,7 @@ return new class extends Migration
 };
 ```
 
-An enum, attribute, or trait can replace the raw constant once the implementation shape is chosen. The contract is the important part: the migration file declares whether its schema is stable or incubating.
+The important part is the contract: the migration file declares whether its schema is stable or incubating.
 
 `Database/schema.php` should be optional and coarse-grained only, for example to say "this whole module defaults to incubating until release." It should not be the normal place to list individual migration filenames, because that creates a second source of truth. Future composerized plugins can mirror coarse package defaults under `composer.json` `extra.blb.schema` if needed.
 
@@ -78,11 +80,11 @@ Stable schemas may become incubating again while a module is still before a rele
 
 The extra compute cost is acceptable. BLB already scans migration files for declared tables; reading a constant, trait, or attribute during `migrate --dev` is negligible beside Laravel boot, database I/O, migrations, and seeders. If this ever becomes measurable, cache scan results by migration file path plus mtime/content hash.
 
-### D4: Treat `base_database_tables.is_stable` as transitional
+### D4: Treat the legacy local stability column as transitional
 
-Once schema maturity is source-declared, `base_database_tables.is_stable` is YAGNI as an editable source of truth. Keeping it as a local override would reintroduce the original confusion: one machine could silently disagree with the branch.
+Once schema maturity is source-declared, the old local stability column is YAGNI as an editable source of truth. Keeping it as a local override would reintroduce the original confusion: one machine could silently disagree with the branch.
 
-Recommended direction: stop treating the column as policy and remove it after the new flow lands. The current installations are few and operator-controlled, so BLB does not need a long compatibility shim for `is_stable`. If later UI needs to display schema maturity, add cached/observed fields derived from source, such as `schema_state`, `schema_declared_at`, or migration-file hash metadata. The UI may still display whether a table is stable or incubating, but it should not let users toggle source-defined schema maturity from the database browser.
+Recommended direction: stop treating the column as policy and remove it after the new flow lands. The current installations are few and operator-controlled, so BLB does not need a long compatibility shim for the old local flag. If later UI needs to display schema maturity, add cached/observed fields derived from source, such as `schema_state`, `schema_declared_at`, or migration-file hash metadata. The UI may still display whether a table is stable or incubating, but it should not let users toggle source-defined schema maturity from the database browser.
 
 A local-only unstable override can still exist as a diagnostic escape hatch, but it must be named and surfaced as local override state, not as schema truth. The command output should make the difference visible: "source-declared incubating" versus "local override." Local overrides should not be required for another installation to receive the latest schema.
 
@@ -129,7 +131,7 @@ This strengthens the choice to keep the normal path on `php artisan migrate` and
 
 Migration files declare their own schema maturity. Optional `Database/schema.php` or `composer.json extra.blb.schema` metadata may provide coarse module/package defaults, but should not duplicate per-file state.
 
-`base_database_tables` remains useful for table provenance, admin browsing, and mapping tables back to migration files. Its `is_stable` column should not remain the policy source once source declarations exist.
+`base_database_tables` remains useful for table provenance, admin browsing, and mapping tables back to migration files. Any legacy local stability column should not remain the policy source once source declarations exist.
 
 A migration file can move from stable back to incubating in source before release. That is the supported way to make a stable table unstable again across every developer and preview install. Local unstable overrides are allowed only for diagnostics and must not be confused with source-declared maturity.
 
@@ -200,18 +202,6 @@ Goal: make preview installs of under-development modules reliable across repos.
 Goal: finish the conceptual migration.
 
 - [x] Rename user-facing "Stable" labels to schema maturity language.
-- [x] Remove `base_database_tables.is_stable` after source declarations become authoritative; existing controlled installations can drop the column manually once code no longer references it.
+- [x] Remove the legacy local stability column after source declarations become authoritative.
 - [x] Remove `blb:table:unstable` from the steady-state workflow and keep only a deprecated git-tracked compatibility list while other installations adopt migration-local incubating markers.
 - [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
-
-Manual operator cleanup for controlled installations, after the implementation no longer reads `is_stable`:
-
-```bash
-php artisan tinker --execute 'Illuminate\Support\Facades\Schema::table("base_database_tables", function (Illuminate\Database\Schema\Blueprint $table) { $table->dropColumn("is_stable"); });'
-```
-
-Verification:
-
-```bash
-php artisan tinker --execute 'dump(Illuminate\Support\Facades\Schema::hasColumn("base_database_tables", "is_stable"));'
-```

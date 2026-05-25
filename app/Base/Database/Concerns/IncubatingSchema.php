@@ -11,5 +11,4 @@ namespace App\Base\Database\Concerns;
  */
 trait IncubatingSchema
 {
-    public const BLB_SCHEMA_STABLE = false;
 }

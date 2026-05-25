@@ -51,8 +51,8 @@ Full browser user-agent strings are too noisy for a permanent mutation log. `Req
 **Roster cell log retired.**
 `people_attendance_roster_cell_log` and `AttendanceRosterAssignmentObserver` are retired. `AttendanceRosterAssignment` exposes audit subject metadata through `getAuditSubject()` and `getAuditSubjectEntries()`, `MutationListener` writes the enriched rows to `base_audit_mutations`, and the roster history UI queries those rows by `subject_name = 'employee'`, `subject_id = employee_id`, and `subject_identifier = date (ISO)`. The cell log migration is edited in place to drop the table (destructive migration evolution).
 
-**`is_stable` check required before migration.**
-`base_audit_mutations` has production data. Per BLB convention, confirm `is_stable` status and seek explicit user approval before running any schema change against it.
+**Confirm schema maturity before migration.**
+`base_audit_mutations` has production data. Per BLB convention, confirm whether its owning migration is currently incubating and seek explicit user approval before running any schema change against it.
 
 ## Phases
 
@@ -87,7 +87,7 @@ Full browser user-agent strings are too noisy for a permanent mutation log. `Req
 
 ### Phase 4 — Retire the cell log table
 
-- [x] Edit `0320_02_05_000006_create_attendance_roster_cell_log.php` in place to drop the table (destructive evolution; table has no production data yet so no `is_stable` concern). {amp/gpt-5}
+- [x] Edit `0320_02_05_000006_create_attendance_roster_cell_log.php` in place to drop the table (destructive evolution; table has no production data yet so there is no schema-maturity concern). {amp/gpt-5}
 - [x] Remove `AttendanceRosterCellLog` model. {amp/gpt-5}
 - [x] Remove `AttendanceRosterAssignmentObserver` and its service-provider registration. {amp/gpt-5}
 - [x] Remove `ManagesRosterCellHistory` imports of the cell log model. {amp/gpt-5}

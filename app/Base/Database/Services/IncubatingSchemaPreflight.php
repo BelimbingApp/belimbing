@@ -12,12 +12,16 @@ use Illuminate\Support\Str;
 
 final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 {
+    public function __construct(
+        private readonly DeprecatedIncubatingTableList $deprecatedList,
+    ) {}
+
     /**
      * Determine whether the source migration for a registered table is incubating.
      */
     public function tableIsIncubating(string $tableName): bool
     {
-        if ($this->tableMatchesDeprecatedScriptPattern($tableName)) {
+        if ($this->deprecatedList->firstMatchingPattern($tableName) !== null) {
             return true;
         }
 
@@ -47,6 +51,73 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     public function tableSchemaState(string $tableName): string
     {
         return $this->schemaStatesForTables([$tableName])[$tableName] ?? 'unknown';
+    }
+
+    /**
+     * @param  list<string>  $tableNames
+     * @return array<string, array{state: string, source_declared: bool, deprecated_pattern: string|null}>
+     */
+    public function schemaDetailsForTables(array $tableNames): array
+    {
+        if ($tableNames === []) {
+            return [];
+        }
+
+        $rows = TableRegistry::query()
+            ->whereIn('table_name', $tableNames)
+            ->get(['table_name', 'migration_file']);
+
+        $files = $rows
+            ->pluck('migration_file')
+            ->filter(fn (mixed $file): bool => is_string($file) && $file !== '')
+            ->unique()
+            ->values()
+            ->all();
+
+        $sourceIncubatingFiles = [];
+        $deprecatedPatterns = $this->deprecatedList->matchingPatternsForTables($tableNames);
+
+        foreach ($files as $migrationFile) {
+            $path = $this->migrationPathByFileName($migrationFile);
+
+            if ($path === null) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents !== false && $this->isIncubating($contents)) {
+                $sourceIncubatingFiles[$migrationFile] = true;
+            }
+        }
+
+        $details = [];
+
+        foreach ($tableNames as $tableName) {
+            if (in_array($tableName, TableRegistry::INFRASTRUCTURE_TABLES, true)) {
+                $details[$tableName] = [
+                    'state' => 'infrastructure',
+                    'source_declared' => false,
+                    'deprecated_pattern' => null,
+                ];
+
+                continue;
+            }
+
+            $migrationFile = $rows->firstWhere('table_name', $tableName)?->migration_file;
+            $sourceDeclared = is_string($migrationFile) && $migrationFile !== '' && isset($sourceIncubatingFiles[$migrationFile]);
+            $deprecatedPattern = $deprecatedPatterns[$tableName] ?? null;
+
+            $details[$tableName] = [
+                'state' => $sourceDeclared || $deprecatedPattern !== null
+                    ? 'incubating'
+                    : (is_string($migrationFile) && $migrationFile !== '' ? 'stable' : 'unknown'),
+                'source_declared' => $sourceDeclared,
+                'deprecated_pattern' => $deprecatedPattern,
+            ];
+        }
+
+        return $details;
     }
 
     /**
@@ -269,10 +340,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
     private function isIncubating(string $contents): bool
     {
-        if (preg_match('/\bBLB_SCHEMA_STABLE\s*=\s*false\s*;/i', $contents) === 1) {
-            return true;
-        }
-
         return preg_match('/\buse\s+IncubatingSchema\s*;/i', $contents) === 1;
     }
 
@@ -411,7 +478,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      */
     private function deprecatedScriptTables(): array
     {
-        $patterns = $this->deprecatedScriptPatterns();
+        $patterns = $this->deprecatedList->patterns();
 
         if ($patterns === []) {
             return [];
@@ -432,20 +499,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             ->all();
     }
 
-    private function tableMatchesDeprecatedScriptPattern(string $tableName): bool
-    {
-        foreach ($this->deprecatedScriptPatterns() as $pattern) {
-            if (Str::is($pattern, $tableName)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @return list<string>
-     */
     private function deprecatedScriptMigrationFiles(): array
     {
         return TableRegistry::query()
@@ -455,45 +508,5 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             ->unique()
             ->values()
             ->all();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function deprecatedScriptPatterns(): array
-    {
-        $path = env('BLB_DEPRECATED_UNSTABLE_TABLE_LIST', base_path('scripts/unstable-table-list.sh'));
-
-        if (! is_string($path) || trim($path) === '' || ! is_file($path)) {
-            return [];
-        }
-
-        $contents = file_get_contents($path);
-
-        if ($contents === false) {
-            return [];
-        }
-
-        if (preg_match('/BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=\((.*?)\)/s', $contents, $matches) !== 1) {
-            return [];
-        }
-
-        $patterns = [];
-
-        foreach (preg_split('/\R/', $matches[1]) ?: [] as $line) {
-            $pattern = trim($line);
-
-            if ($pattern === '' || str_starts_with($pattern, '#')) {
-                continue;
-            }
-
-            $pattern = trim($pattern, " \t\n\r\0\x0B'\"");
-
-            if ($pattern !== '') {
-                $patterns[] = $pattern;
-            }
-        }
-
-        return array_values(array_unique($patterns));
     }
 }
