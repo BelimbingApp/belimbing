@@ -249,11 +249,52 @@ Security rules:
 - **Escaping discipline is unchanged.** Plugin views use Blade escaping by
   default (`{{ }}`). Raw output (`{!! !!}`) is allowed only for sanitized or
   known-safe HTML owned by the module.
-- **Assets need an explicit contract.** Module-owned CSS/JavaScript may live
+- **Assets use reviewed entry points.** Module-owned CSS/JavaScript may live
   with the module, but ad hoc global script/style injection is not part of the
-  current contract. A future plugin asset contract must define reviewed entry
-  points, build integration, and CSP-compatible behavior before plugin assets
-  become a general extension surface.
+  contract. The host build decides which module asset entry points are compiled,
+  and plugin code must remain compatible with the framework CSP.
+
+### 5.7 Plugin asset contract
+
+Most plugin UI should need no private CSS or JavaScript. A plugin should first
+compose shared Blade components, semantic Tailwind tokens, Livewire actions, and
+small inline Alpine expressions in its own namespaced views. Tailwind scans
+module `Views/` directories, so utility classes used by colocated Blade files
+are already part of the main build.
+
+When a module truly needs owned frontend source, it keeps that source under its
+module root in `Assets/`:
+
+- `Assets/css/` for module-scoped styles.
+- `Assets/js/` for module-scoped JavaScript.
+- Any imported images, fonts, or static files stay below `Assets/` unless the
+  module explicitly stores user-uploaded content through application storage.
+
+Nested-git plugins do **not** get automatic global asset injection. A module
+asset becomes active only through an explicit, reviewable host integration: the
+root app adds the module entry point to the Vite input list or imports it from a
+framework-owned entry point. This keeps production bundles deterministic,
+prevents a private checkout from silently changing the public framework shell,
+and makes CSP/script review visible in the main repo diff.
+
+Rules for module assets:
+
+- Prefer `resources/core` design tokens and components over private CSS.
+- No remote CDNs, hosted fonts, analytics snippets, or third-party widgets from
+  module Blade or assets.
+- JavaScript should be a module-scoped enhancement for that module's DOM, not a
+  global monkey patch. Shared behavior graduates to `resources/core/js`.
+- CSS should target module-owned wrappers or exported utility/component classes;
+  framework-wide tokens still live in `resources/core/css`.
+- Providers may publish or expose static files only through explicit framework
+  support. Do not invent per-module public paths ad hoc.
+
+Composer-installed plugins use the same source layout (`Assets/`) and the same
+security rules. The unresolved composer-specific detail is packaging mechanics:
+whether BLB consumes package asset manifests directly from `vendor/`, publishes
+them into a build workspace, or requires the host app to declare plugin entries.
+Until composerization ships, nested-git plugins use the explicit host Vite entry
+contract above.
 
 ---
 
@@ -563,7 +604,7 @@ These do not block Phase 1 but should be settled before later phases.
 ## 12. What This Document Does Not Cover
 
 - **Implementation details of the boot-time `extra.blb` reader.** Separate design when Phase 1 starts.
-- **Composer package layout, autoloading, asset publishing.** Phase 4 design doc.
+- **Composer package layout and autoloading mechanics.** Package asset source uses the `Assets/` contract in this document, but composer-specific publish mechanics are settled during composerization.
 - **CI/CD across multiple repos.** Phase 2 surfaces this; address when it does.
 - **Versioning policy and release cadence.** Phase 3 surfaces this.
 - **The conceptual layer of any specific domain.** Lives in tutorials (`docs/tutorials/{domain}/`) and per-module design docs (`docs/plans/{domain}/`).

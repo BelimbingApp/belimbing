@@ -51,6 +51,11 @@ Blade views under `extensions/{owner}/{module}/`. Put views in the module's
 `Views/` directory and load them from that module's `ServiceProvider` with a
 view namespace. Do not create a companion `resources/extensions` tree.
 
+If an extension needs module-owned CSS or JavaScript, keep the source under that
+module's `Assets/` directory. Assets are not auto-injected from private nested
+repos; the host BLB checkout must explicitly add or import a reviewed Vite entry
+point. Prefer shared `resources/core` tokens and components whenever possible.
+
 ## Parent Repository Guard
 
 Add these entries to the parent repository's local exclude file:

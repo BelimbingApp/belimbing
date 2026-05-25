@@ -1,6 +1,6 @@
 # pluggable-module-view-colocation.md
 
-**Status:** In Progress
+**Status:** Complete
 **Last Updated:** 2026-05-25
 **Sources:** `docs/architecture/pluggable-modules.md`, `docs/architecture/file-structure.md`, `docs/architecture/ui-layout.md`, `docs/guides/extensions/licensee-development-guide.md`, user discussion on full-stack module colocation.
 **Agents:** Amp/GPT-5
@@ -39,9 +39,14 @@ Each module or plugin registers its `Views/` directory through its service provi
 
 Licensee UI follows the same module-colocation rule as every other plugin. A separate `resources/extensions` layer would reintroduce scattered ownership and hidden override behavior.
 
-### Assets start conservative
+### Assets use explicit host build entry points
 
-Blade colocation is the immediate rule. Module-specific CSS or JavaScript may live with the module, but the default should be to compose shared `resources/core` components and tokens until BLB defines a formal plugin asset contract.
+Blade colocation is the default rule, and most modules should compose shared
+`resources/core` components, tokens, Livewire actions, and small Alpine
+expressions before adding private assets. When module-specific CSS or JavaScript
+is truly needed, source lives under the module's `Assets/` directory and becomes
+active only through an explicit reviewed Vite entry/import in the host app.
+Nested-git plugins do not auto-inject scripts or styles.
 
 ## Public Contract
 
@@ -50,6 +55,7 @@ Blade colocation is the immediate rule. Module-specific CSS or JavaScript may li
 - Non-Core domain modules and extensions own module-specific presentation under `Views/` in the module root.
 - Framework docs and agent guidance should reject new module-owned Blade files under `resources/core` unless the file is genuinely shared framework UI.
 - Build tooling must scan module `Views/` paths so colocated Blade files participate in Tailwind class discovery and dev refresh.
+- Module-owned CSS and JavaScript source belongs under `Assets/` and requires explicit host build wiring; framework-wide tokens and shared JavaScript remain in `resources/core`.
 
 ## Phases
 
@@ -70,10 +76,10 @@ Blade colocation is the immediate rule. Module-specific CSS or JavaScript may li
 - [x] Move Operation IT and Quality module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
 - [x] Move existing People module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
 - [x] Move existing Commerce module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
-- [ ] Place new non-Core domain views under their module roots from the start.
+- [x] Place new non-Core domain views under their module roots from the start. {Amp/GPT-5}
 - [x] Keep only shared framework shell, layouts, and reusable Base/Core presentation in `resources/core`. {Amp/GPT-5}
 
 ### Phase 4 — Define plugin asset packaging after the Blade pattern proves stable
 
-- [ ] Decide how module-owned CSS and JavaScript are registered, built, and published for nested-git plugins.
-- [ ] Revisit the asset contract for composer-installed plugins during the composerization phase.
+- [x] Decide how module-owned CSS and JavaScript are registered, built, and published for nested-git plugins. {Amp/GPT-5}
+- [x] Revisit the asset contract for composer-installed plugins during the composerization phase. {Amp/GPT-5}

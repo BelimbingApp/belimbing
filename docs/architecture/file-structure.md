@@ -264,6 +264,7 @@ app/Modules/{Domain}/{Module}/
 ├── Hooks/                    # Module internals: extension hooks
 ├── Routes/                   # Module internals: routes
 ├── Views/                    # Module internals: views
+├── Assets/                   # Optional module-owned frontend source
 ├── Config/                   # Module internals: config files (PascalCase dir; filenames lowercase, e.g. company.php)
 └── Tests/                    # Module internals: tests
 ```
@@ -272,6 +273,12 @@ For `app/Modules/Core/{Module}`, framework-wide or shared UI may still live in
 `resources/core`. For every other domain, `Views/` is the default home for
 module-owned Blade templates. Shared components promoted out of a module belong
 in `resources/core/views/components/`.
+
+`Assets/` is optional and only for module-owned frontend source that cannot be
+expressed through shared components, Tailwind tokens, Livewire, or small Alpine
+expressions in Blade. `Assets/css` and `Assets/js` are not auto-injected; the
+host app must explicitly add or import reviewed entry points. Framework-wide
+tokens and JavaScript remain in `resources/core`.
 
 ## Extension Structure (`extensions/`)
 
@@ -294,6 +301,7 @@ extensions/
 │   │   ├── Routes/
 │   │   │   └── web.php
 │   │   ├── Views/
+│   │   ├── Assets/             # Optional, reviewed host build entry points only
 │   │   ├── Tests/
 │   │   └── ServiceProvider.php
 │   └── ibp/                   # Another module (scales to many)
@@ -449,17 +457,20 @@ resources/core/
 │       └── ui/              # Reusable UI primitives (x-ui.*)
 │
 ├── css/
-│   ├── app.css              # Main stylesheet (imports tokens)
 │   ├── tokens.css           # Design tokens (colors, spacing)
 │   └── components.css       # Component-level styles
 │
 └── js/                      # JavaScript assets
 ```
 
-Existing non-Core views under `resources/core/views` should move to their
-module roots when those modules are next materially changed. New People,
-Commerce, Operation, Finance, Sales, Procurement, and extension screens should
-start in module-owned `Views/` directories.
+The Vite CSS entry point is `resources/app.css`; it imports the framework token
+and component styles from `resources/core/css/` and scans Core, module, and
+extension view paths for Tailwind classes.
+
+Non-Core views should not live under `resources/core/views`. If one appears,
+move it to its owning module root; new People, Commerce, Operation, Finance,
+Sales, Procurement, and extension screens start in module-owned `Views/`
+directories.
 
 ---
 

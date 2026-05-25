@@ -195,13 +195,15 @@ add licensee presentation under `resources/extensions/`.
 |---|---|---|
 | Framework views and components | `resources/core/views/` | Do not override from extension space |
 | Module-owned pages and reports | — | `extensions/{owner}/{module}/Views/` |
-| Module-owned CSS or assets | — | `extensions/{owner}/{module}/` and explicit module/provider wiring |
+| Module-owned CSS or JavaScript | — | `extensions/{owner}/{module}/Assets/` plus explicit host Vite entry/import review |
 
 Rules:
 
 1. Keep extension-owned pages and reports in `extensions/{licensee}/{module}/Views/`.
 2. Do not use `VITE_THEME_DIR` or `resources/extensions/` for extension UI.
-3. Improvements to BLB-wide usability go in `resources/core/` and are contributed upstream.
+3. Prefer shared `resources/core` components and tokens before adding private assets.
+4. Keep unavoidable module CSS or JavaScript under `Assets/`; it becomes active only when the host app explicitly adds or imports a reviewed Vite entry point.
+5. Improvements to BLB-wide usability go in `resources/core/` and are contributed upstream.
 
 References: `docs/architecture/ui-layout.md`, `docs/guides/theming.md`.
 
