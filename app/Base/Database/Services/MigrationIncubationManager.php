@@ -2,10 +2,13 @@
 
 namespace App\Base\Database\Services;
 
+use App\Base\Database\Exceptions\IncubatingSchemaMutationException;
 use App\Base\Database\Models\TableRegistry;
 
 final class MigrationIncubationManager
 {
+    private const INCUBATING_SCHEMA_TRAIT_USE_PATTERN = '/^\s*use IncubatingSchema;$/m';
+
     /**
      * @param  list<string>  $tableNames
      * @return array{updated: list<string>, skipped: list<string>}
@@ -110,16 +113,16 @@ final class MigrationIncubationManager
         $contents = file_get_contents($path);
 
         if (! is_string($contents)) {
-            throw new \RuntimeException('Unable to read migration file: '.$path);
+            throw IncubatingSchemaMutationException::migrationFileUnreadable($path);
         }
 
-        if (preg_match('/^\s*use IncubatingSchema;$/m', $contents) === 1) {
+        if (preg_match(self::INCUBATING_SCHEMA_TRAIT_USE_PATTERN, $contents) === 1) {
             return 'unchanged';
         }
 
         $updated = $contents;
 
-        if (! str_contains($updated, "use App\\Base\\Database\\Concerns\\IncubatingSchema;")) {
+        if (! str_contains($updated, 'use App\\Base\\Database\\Concerns\\IncubatingSchema;')) {
             $updated = preg_replace(
                 '/^(<\?php\s*\R(?:\R)?)/',
                 "$1use App\\Base\\Database\\Concerns\\IncubatingSchema;\n",
@@ -135,8 +138,8 @@ final class MigrationIncubationManager
             1,
         ) ?? $updated;
 
-        if ($updated === $contents || preg_match('/^\s*use IncubatingSchema;$/m', $updated) !== 1) {
-            throw new \RuntimeException('Unable to mark migration incubating: '.$path);
+        if ($updated === $contents || preg_match(self::INCUBATING_SCHEMA_TRAIT_USE_PATTERN, $updated) !== 1) {
+            throw IncubatingSchemaMutationException::migrationFileNotMarkedIncubating($path);
         }
 
         file_put_contents($path, $updated);
@@ -149,10 +152,10 @@ final class MigrationIncubationManager
         $contents = file_get_contents($path);
 
         if (! is_string($contents)) {
-            throw new \RuntimeException('Unable to read migration file: '.$path);
+            throw IncubatingSchemaMutationException::migrationFileUnreadable($path);
         }
 
-        if (preg_match('/^\s*use IncubatingSchema;$/m', $contents) !== 1) {
+        if (preg_match(self::INCUBATING_SCHEMA_TRAIT_USE_PATTERN, $contents) !== 1) {
             return 'unchanged';
         }
 
