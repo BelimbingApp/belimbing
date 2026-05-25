@@ -53,7 +53,7 @@ class FilesystemSkillPackLoader
     {
         $roots = [];
 
-        foreach (['extensions', 'resources/extensions'] as $base) {
+        foreach (['extensions'] as $base) {
             $basePath = base_path($base);
             if (! is_dir($basePath)) {
                 continue;

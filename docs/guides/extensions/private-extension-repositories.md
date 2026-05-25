@@ -18,10 +18,11 @@ belimbing/                         # Public BLB framework git repo
 │   │   │   ├── Database/
 │   │   │   ├── Livewire/
 │   │   │   ├── Routes/
+│   │   │   ├── Views/
 │   │   │   ├── Tests/
 │   │   │   └── ServiceProvider.php
 │   │   └── <future-module>/       # Additional Ham modules live here
-│   └── sb-group/                  # Private nested git repo root (licensee: SBG)
+│   └── sb-group/                  # Private nested git repo root: kiatng/blb-sbg
 │       ├── .git/
 │       ├── qac/                   # SBG QAC module
 │       │   ├── Config/
@@ -30,15 +31,25 @@ belimbing/                         # Public BLB framework git repo
 │       │   ├── Routes/
 │       │   ├── Services/
 │       │   └── ServiceProvider.php
+│       ├── ibp/                   # SBG IBP module
+│       │   ├── Config/
+│       │   ├── Database/
+│       │   ├── Livewire/
+│       │   ├── Routes/
+│       │   ├── Views/
+│       │   └── ServiceProvider.php
 │       └── <future-module>/       # Additional SBG modules live here
 └── resources/
-    └── extensions/
-        ├── ham/                   # Private UI overrides for Ham
-        └── sb-group/              # Private UI overrides for SBG
+    └── core/                      # Framework presentation only
 ```
 
 The parent BLB repo ignores the private extension path locally. The extension
 has its own `.git`, its own `origin`, and its own commits.
+
+Extension modules own their PHP, routes, migrations, tests, and module-specific
+Blade views under `extensions/{owner}/{module}/`. Put views in the module's
+`Views/` directory and load them from that module's `ServiceProvider` with a
+view namespace. Do not create a companion `resources/extensions` tree.
 
 ## Parent Repository Guard
 
@@ -49,9 +60,7 @@ cat >> .git/info/exclude <<'EOF'
 
 # Private licensee extension repositories.
 /extensions/ham/
-/resources/extensions/ham/
 /extensions/sb-group/
-/resources/extensions/sb-group/
 EOF
 ```
 
@@ -78,7 +87,7 @@ mkdir -p extensions/sb-group
 cd extensions/sb-group
 
 git init -b main
-git remote add origin <private-blb-sbg-repo-url>
+git remote add origin https://github.com/kiatng/blb-sbg
 ```
 
 The remote name should be `origin` inside the nested repo. It must point to the
@@ -121,7 +130,7 @@ git push origin main
 Before every framework commit, verify that no private extension paths are staged:
 
 ```bash
-git diff --cached --name-only | rg '^(extensions/(ham|sb-group)|resources/extensions/(ham|sb-group))/' && exit 1 || true
+git diff --cached --name-only | rg '^extensions/(ham|sb-group)/' && exit 1 || true
 ```
 
 ## What Belongs Where
@@ -138,6 +147,7 @@ Private extension repo:
 - Licensee-specific prompt overrides and description boilerplate.
 - Licensee-specific settings defaults that are not secrets.
 - Extension tests under `extensions/<licensee>/<module>/Tests`.
+- Module-owned Livewire/Blade views under `extensions/<licensee>/<module>/Views`, registered by the module provider.
 
 Secrets, OAuth tokens, and API keys never belong in either repository. Store
 them through `base_settings`.

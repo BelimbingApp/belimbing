@@ -19,7 +19,7 @@ A licensee needs custom modules, branding, and business logic. BLB must keep evo
 2. **Flexible** — licensees can add unlimited modules with no artificial constraints.
 3. **Scalable** — works for one module or fifty.
 4. **Maintainable** — upstream sync (`git pull`) is near-conflict-free by directory design.
-5. **Logical** — backend in `extensions/`, UI in `resources/extensions/{licensee}/`, same patterns as BLB core.
+5. **Logical** — extension modules live in `extensions/{owner}/{module}/`; module-owned views stay with the module under `Views/`.
 
 ---
 
@@ -45,7 +45,7 @@ origin:    {licensee}/belimbing (fork)    # Licensee's fork
 3. Develops on `main` (or feature branches — their choice).
 4. Syncs upstream regularly: `git pull upstream main`.
 
-Merge conflicts are structurally near-impossible because BLB never touches `extensions/{licensee}/` or `resources/extensions/{licensee}/`.
+Merge conflicts are structurally near-impossible because BLB never touches `extensions/{licensee}/`.
 
 ### 3.3 Why a Fork
 
@@ -73,9 +73,9 @@ BLB and licensee code are separated by directory, not by branch. Follow `docs/ar
 | Owner | Backend Code | UI / Presentation |
 |---|---|---|
 | **BLB framework** | `app/Base/`, `app/Modules/` | `resources/core/` |
-| **Licensee** | `extensions/{licensee}/{module}/` | `resources/extensions/{licensee}/` |
+| **Licensee extension module** | `extensions/{licensee}/{module}/` | Module-owned views in `extensions/{licensee}/{module}/Views/` |
 
-Both follow the same structural patterns. The menu discovery glob (`extensions/*/*/Config/menu.php`) already supports this.
+Extension modules mirror BLB's module structure and are discovered by convention. The menu discovery glob (`extensions/*/*/Config/menu.php`) already supports this. Do not create a companion `resources/extensions/{licensee}/` tree; extension UI belongs with the module.
 
 ### 4.2 Extension Module Structure
 
@@ -95,6 +95,7 @@ extensions/{owner}/{module}/
 ├── Services/
 ├── Routes/
 │   └── web.php
+├── Views/
 ├── Tests/
 └── ServiceProvider.php
 ```
@@ -107,6 +108,11 @@ BLB auto-discovers providers inside `app/Base/`, `app/Modules/`, and
 `extensions/*/*/ServiceProvider.php` via `ProviderRegistry`. Routes, menus,
 settings, authz config, and migrations follow the same convention-based
 discovery model.
+
+Module-owned Blade views should live under `extensions/{owner}/{module}/Views/`
+and be registered by the extension provider, for example with
+`$this->loadViewsFrom(__DIR__.'/Views', 'owner-module')`. This keeps a private
+module removable as one directory.
 
 If an extension is not being discovered, verify that:
 
@@ -177,22 +183,25 @@ Examples: `sbg_quality_work_items`, `acme_reporting_dashboards`.
 
 Reference: `docs/guides/extensions/database-migrations.md`.
 
-### 4.5 UI Boundary in `resources/`
+### 4.5 UI Boundary
 
-BLB uses a core/licensee split. Licensee overrides win by CSS cascade and Blade view resolution order.
+BLB framework presentation lives under `resources/core/`. Extension presentation lives under each extension module's `Views/` directory.
 
-| UI Concern | BLB Core | Licensee |
+If a view belongs to an extension route or Livewire component, keep it under
+that module's `Views/` directory and load it from the module provider. Do not
+add licensee presentation under `resources/extensions/`.
+
+| UI Concern | BLB Core | Extension |
 |---|---|---|
-| Design tokens | `resources/core/css/tokens.css` | `resources/extensions/{licensee}/css/tokens.css` |
-| Component styles | `resources/core/css/components.css` | `resources/extensions/{licensee}/css/components.css` |
-| Blade components | `resources/core/views/components/` | `resources/extensions/{licensee}/views/components/` |
-| Livewire page templates | `resources/core/views/livewire/` | `resources/extensions/{licensee}/views/livewire/` |
+| Framework views and components | `resources/core/views/` | Do not override from extension space |
+| Module-owned pages and reports | — | `extensions/{owner}/{module}/Views/` |
+| Module-owned CSS or assets | — | `extensions/{owner}/{module}/` and explicit module/provider wiring |
 
 Rules:
 
-1. Prefer token override and component override before copying full page templates.
-2. Set `VITE_THEME_DIR={licensee}` in `.env` to activate the licensee layer.
-3. Licensee-specific branding, terminology, and layout go in `resources/extensions/{licensee}/`. Improvements to BLB-wide usability go in `resources/core/` and are contributed upstream.
+1. Keep extension-owned pages and reports in `extensions/{licensee}/{module}/Views/`.
+2. Do not use `VITE_THEME_DIR` or `resources/extensions/` for extension UI.
+3. Improvements to BLB-wide usability go in `resources/core/` and are contributed upstream.
 
 References: `docs/architecture/ui-layout.md`, `docs/guides/theming.md`.
 
@@ -228,7 +237,7 @@ No "promotion flow" ceremony — it's a standard PR.
 
 ## 7. Pull Request Discipline
 
-1. **Upstream PRs** must not include `extensions/{licensee}/` or `resources/extensions/{licensee}/` paths.
+1. **Upstream PRs** must not include `extensions/{licensee}/` paths.
 2. **Licensee commits** should not modify BLB core (`app/Base/`, `app/Modules/`, `resources/core/`) unless patching an urgent blocker.
 3. If an urgent licensee fix touches core, follow immediately with either:
    - a PR contributing the reusable part upstream, or
@@ -271,14 +280,14 @@ This keeps the runtime directory layout identical regardless of distribution met
 
 ---
 
-## 9. Example: SBG Quality Extension
+## 9. Example: SBG QAC Extension
 
 ```text
-extensions/sb-group/quality/
+extensions/sb-group/qac/
 ├── Config/
 │   ├── menu.php
 │   ├── authz.php
-│   └── quality.php
+│   └── qac.php
 ├── Database/
 │   ├── Migrations/
 │   │   ├── 2026_03_22_000000_create_sbg_quality_work_items_table.php
@@ -291,33 +300,27 @@ extensions/sb-group/quality/
 │   └── QualityWorkItem.php
 ├── Routes/
 │   └── web.php
+├── Views/
 ├── Tests/
 └── ServiceProvider.php
 ```
 
-UI overrides for SBG:
-
-```text
-resources/extensions/sb-group/
-├── css/
-│   └── tokens.css           # SBG brand colors
-├── views/
-│   ├── components/          # Component overrides
-│   └── livewire/            # Page template overrides
-└── js/
-```
+SBG module-owned pages, such as IBP Livewire views, live beside their
+components in `extensions/sb-group/{module}/Views/` and are registered by that
+module's provider.
 
 ---
 
 ## 10. Operational Checklist
 
 1. Fork `BelimbingApp/belimbing` and add upstream remote.
-2. Place all licensee code in `extensions/{licensee}/` and `resources/extensions/{licensee}/`.
-3. Use owner-prefixed table names (`{owner}_{module}_{entity}`).
-4. Set `VITE_THEME_DIR={licensee}` in `.env`.
-5. Sync upstream regularly: `git pull upstream main`.
-6. Review file paths before commit — licensee code must not touch BLB core.
-7. Contribute reusable improvements upstream via PR.
+2. Place licensee module code in `extensions/{licensee}/{module}/`.
+3. Keep module-owned views in `extensions/{licensee}/{module}/Views/`.
+4. Do not create `resources/extensions/{licensee}/`.
+5. Use owner-prefixed table names (`{owner}_{module}_{entity}`).
+6. Sync upstream regularly: `git pull upstream main`.
+7. Review file paths before commit — licensee code must not touch BLB core.
+8. Contribute reusable improvements upstream via PR.
 
 ---
 

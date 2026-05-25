@@ -322,7 +322,7 @@ Implemented outcome:
 - the default interactive allowlist keeps the `bash` tool and `browser`, still filtered by the logged-in user's capabilities
 - repository work has an explicit target surface: `core` or `extension:<slug>`
 - core repository tools reject extension paths unless the caller selects the matching extension surface
-- extension surfaces are discovered under `extensions/`, `extensions/custom/`, `extensions/vendor/`, and `resources/extensions/`
+- extension surfaces are discovered under `extensions/`, `extensions/custom/`, and `extensions/vendor/`
 - filesystem skills are loaded from BLB core and extension-owned `.agents/skills/*/SKILL.md` roots
 - broad `read`, `search`, and `edit` tools remain registered for explicit profiles and future agents, but are not Lara's default coding/chat path
 

@@ -108,9 +108,9 @@ Extensions can publish their own config files that override or extend base confi
 ### Step 1: Create Config File in Extension
 
 ```
-extensions/sb-group/quality/
+extensions/sb-group/qac/
 ├── Config/
-│   └── quality.php            # Extension's config file (PascalCase dir, lowercase file)
+│   └── qac.php                # Extension's config file (PascalCase dir, lowercase file)
 └── ServiceProvider.php
 ```
 
@@ -154,7 +154,7 @@ class ServiceProvider extends ServiceProvider
 
 ```php
 <?php
-// extensions/sb-group/quality/Config/quality.php
+// extensions/sb-group/qac/Config/qac.php
 
 return [
     'relationship_types' => [
@@ -227,7 +227,7 @@ Extensions can read from environment variables with sensible defaults.
 
 ```php
 <?php
-// extensions/sb-group/quality/Config/quality.php
+// extensions/sb-group/qac/Config/qac.php
 
 return [
     'relationship_types' => [
@@ -333,9 +333,9 @@ Here's a complete example of an extension that adds a "vendor" relationship type
 ### Extension Structure
 
 ```
-extensions/sb-group/quality/
+extensions/sb-group/qac/
 ├── Config/
-│   └── quality.php
+│   └── qac.php
 └── ServiceProvider.php
 ```
 

@@ -90,16 +90,14 @@ belimbing/
 │   ├── schemas/            # Schema definitions (for extensions)
 │   └── scripts/            # Database scripts (config updates, etc.)
 │
-├── extensions/             # Extension packages (vendor or custom)
-│   ├── vendor/             # Third-party extensions
-│   └── custom/             # Custom business-specific extensions
+├── extensions/             # Extension packages: {owner}/{module}
+│   └── sb-group/           # Example private nested repo owner
+│       ├── qac/            # Extension module
+│       └── ibp/            # Extension module
 │
-├── resources/               # Frontend resources
-│   ├── views/              # Blade/Livewire templates
-│   ├── js/                 # JavaScript (with WebAssembly support)
-│   ├── css/                # Stylesheets
-│   ├── wasm/               # WebAssembly modules (performance-critical)
-│   └── ai/                 # AI-generated UI components
+├── resources/               # Framework frontend resources
+│   ├── core/               # Framework CSS, JS, Blade views
+│   └── app.css             # Vite CSS entry point
 │
 ├── routes/                  # Route definitions
 │   ├── web.php             # Web routes
@@ -277,11 +275,11 @@ All extensions — licensee or third-party — follow the same two-level layout:
 ```
 extensions/
 ├── {licensee}/                # Licensee-owned extensions (e.g. sb-group)
-│   ├── quality/               # One module
+│   ├── qac/                   # One module
 │   │   ├── Config/
 │   │   │   ├── menu.php       # Menu items (auto-discovered)
 │   │   │   ├── authz.php
-│   │   │   └── quality.php    # Module config (lowercase)
+│   │   │   └── qac.php        # Module config (lowercase)
 │   │   ├── Database/
 │   │   │   ├── Migrations/
 │   │   │   └── Seeders/
@@ -290,9 +288,10 @@ extensions/
 │   │   ├── Services/
 │   │   ├── Routes/
 │   │   │   └── web.php
+│   │   ├── Views/
 │   │   ├── Tests/
 │   │   └── ServiceProvider.php
-│   └── logistics/             # Another module (scales to many)
+│   └── ibp/                   # Another module (scales to many)
 │       └── ...
 │
 └── {vendor}/                  # Third-party vendor extensions (same structure)
@@ -300,7 +299,7 @@ extensions/
         └── [same structure]
 ```
 
-This layout matches the menu discovery glob (`extensions/*/*/Config/menu.php`) and mirrors BLB's internal module structure. Extension modules include only the internals they need.
+This layout matches the menu discovery glob (`extensions/*/*/Config/menu.php`) and mirrors BLB's internal module structure. Extension modules include only the internals they need. Module-owned views live under `extensions/{owner}/{module}/Views/` and are registered by the module provider; do not create a companion `resources/extensions` tree.
 
 Reference: `docs/guides/licensee-development-guide.md` for the full development model.
 

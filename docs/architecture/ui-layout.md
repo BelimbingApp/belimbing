@@ -269,11 +269,11 @@ app/Http/Livewire/Dashboard.php                        # Logic
 resources/core/views/livewire/dashboard.blade.php      # Presentation
 ```
 
-Licensee overrides either side independently:
+Extension modules keep their own Livewire components and presentation together:
 
 ```
-app/{Licensee}/Http/Livewire/Dashboard.php                  # Override logic
-resources/extensions/{licensee}/views/livewire/dashboard.blade.php     # Override presentation
+extensions/{owner}/{module}/Livewire/Dashboard.php          # Extension logic
+extensions/{owner}/{module}/Views/livewire/dashboard.blade.php         # Extension presentation
 ```
 
 ### What Is Preserved
@@ -287,9 +287,13 @@ Removing Volt loses nothing at runtime:
 | Alpine interactivity | Alpine.js (`x-data`, `@click`) | No -- pure frontend |
 | Component reactivity | Livewire lifecycle | No -- standard Livewire components have full support |
 
-## Core / Licensee Directory Separation
+## Core / Extension Directory Separation
 
-BLB enforces a clear physical boundary between framework-owned assets and licensee customizations at the `resources/` root level.
+BLB enforces a clear physical boundary between framework-owned presentation and
+extension-owned presentation. Framework views and assets live under
+`resources/core/`; extension module views live under
+`extensions/{owner}/{module}/Views/` and are loaded by the extension provider.
+There is no `resources/extensions` layer.
 
 ### Directory Structure
 
@@ -297,11 +301,12 @@ BLB enforces a clear physical boundary between framework-owned assets and licens
 app/                                      # Business logic (PHP)
   Base/                                   #   BLB framework internals
   Modules/                                #   BLB modules
-  Http/
-    Livewire/                             #   BLB core Livewire page components
-  {Licensee}/                             #   Licensee logic overrides
-    Http/
-      Livewire/                           #   Override page logic
+
+extensions/
+  {owner}/
+    {module}/
+      Livewire/                           #   Extension Livewire components
+      Views/                              #   Extension Blade templates
 
 resources/                                # Presentation only
   core/                                   # BLB framework-owned -- do not edit
@@ -313,62 +318,39 @@ resources/                                # Presentation only
       livewire/                           #   Livewire page templates
     js/
       app.js
-  {licensee}/                             # Licensee-owned -- named by licensee
-    css/
-      tokens.css                          #   Override primitives, add palettes
-      components.css                      #   Override/extend component classes
-    views/
-      components/                         #   Blade component overrides
-      livewire/                           #   Page template overrides
-    js/
-  app.css                                 # Entry point: imports core/*, then {licensee}/*
+  app.css                                 # Entry point: imports core/*
 ```
 
 **Override model:**
 
-| What | BLB core location | Licensee override location | Mechanism |
+| What | BLB core location | Extension location | Mechanism |
 |------|-------------------|---------------------------|-----------|
-| Design tokens | `resources/core/css/tokens.css` | `resources/extensions/{licensee}/css/tokens.css` | CSS cascade |
-| CSS components | `resources/core/css/components.css` | `resources/extensions/{licensee}/css/components.css` | CSS cascade |
-| Blade components | `resources/core/views/components/` | `resources/extensions/{licensee}/views/components/` | View resolution order |
-| Page templates | `resources/core/views/livewire/` | `resources/extensions/{licensee}/views/livewire/` | View resolution order |
-| Page logic | `app/Http/Livewire/` | `app/{Licensee}/Http/Livewire/` | Class binding / service container |
-
-### Configuration
-
-The licensee directory name is configured via `.env`:
-
-```env
-VITE_THEME_DIR=acme
-```
-
-- **Vite side:** `vite.config.js` reads `import.meta.env.VITE_THEME_DIR` to resolve CSS/JS entry points and `@source` paths.
-- **PHP side:** The licensee module config reads `env('VITE_THEME_DIR', 'custom')`, exposed via `config('theme.dir')`.
-- **Default:** `custom` when unset.
+| Design tokens | `resources/core/css/tokens.css` | No extension override path | Framework CSS import |
+| CSS components | `resources/core/css/components.css` | No extension override path | Framework CSS import |
+| Framework Blade components | `resources/core/views/components/` | Reuse from extension views | Laravel view/component resolution |
+| Framework page templates | `resources/core/views/livewire/` | No extension override path | Core Livewire views |
+| Extension page templates | — | `extensions/{owner}/{module}/Views/` | Module provider `loadViewsFrom` |
+| Extension page logic | — | `extensions/{owner}/{module}/Livewire/` | Extension routes/components |
 
 ### Load Order
 
-`app.css` imports in strict order -- core first, licensee second:
+`app.css` imports the framework theme:
 
 ```css
 @import 'tailwindcss';
-
-/* Core tokens and components */
-@import './core/tokens.css';
-@import './core/components.css';
-
-/* Licensee overrides (loaded after core, wins by cascade) */
-@import './{licensee}/tokens.css';
-@import './{licensee}/components.css';
+@import './core/css/tokens.css';
+@import './core/css/components.css';
 ```
 
-Licensee CSS overrides core via normal CSS cascade. Licensee Blade components override core via view resolution order (licensee path registered before core path).
+Extension modules may load their own namespaced views from their
+`ServiceProvider`. They should compose framework components instead of
+shadowing them through a global view override path.
 
 ### Design Principles
 
-- **Ownership is visible.** A licensee can see at a glance what they've customized by looking at their directory.
-- **Upgrades are safe.** BLB updates touch `core/` only. Licensee files are never overwritten.
-- **Convention over configuration.** The structure mirrors core exactly -- same subdirectories, same filenames. A licensee only creates the files they want to override.
+- **Ownership is visible.** Framework presentation is in `resources/core/`; extension presentation is in the extension module.
+- **Extensions are removable.** Removing `extensions/{owner}/{module}/` removes its views with its code.
+- **No hidden override layer.** Core UI changes happen in core; extension UI is namespaced by the module provider.
 
 ## Open Questions
 

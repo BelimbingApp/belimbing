@@ -62,7 +62,7 @@ resources/core/views/pdf/
 
 Resolved by Blade as `pdf.payroll.payslip`, `pdf.quality.ncr-report`, etc.
 
-Licensees override templates by placing identically-named files under `resources/extensions/<licensee>/views/pdf/<module>/<template>.blade.php` — the licensee path is registered first in `config/view.php`, so the override wins.
+Extension-owned PDF templates live with the extension module under `extensions/{owner}/{module}/Views/` and are registered by that module's `ServiceProvider`. Core PDF templates live under `resources/core/views/`; BLB no longer supports a `resources/extensions` override path.
 
 ### Styling
 

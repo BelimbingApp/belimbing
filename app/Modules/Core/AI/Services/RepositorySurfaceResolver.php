@@ -13,7 +13,6 @@ class RepositorySurfaceResolver
      */
     private const EXTENSION_PREFIXES = [
         'extensions/',
-        'resources/extensions/',
     ];
 
     public function resolve(?string $targetSurface = null): RepositorySurface
@@ -103,7 +102,6 @@ class RepositorySurfaceResolver
             'extensions/'.$slug,
             'extensions/custom/'.$slug,
             'extensions/vendor/'.$slug,
-            'resources/extensions/'.$slug,
         ];
     }
 

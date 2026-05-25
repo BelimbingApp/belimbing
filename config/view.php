@@ -7,19 +7,15 @@ return [
     | View Storage Paths
     |--------------------------------------------------------------------------
     |
-    | BLB uses a core/licensee directory separation under resources/.
-    | The licensee view path (if it exists) is registered first so that
-    | licensee component overrides take precedence over core components.
-    |
-    | The licensee directory name is read from VITE_THEME_DIR in .env.
-    | Views resolve from resources/extensions/{licensee}/views/.
+    | BLB framework views live under resources/core/views. Extension module
+    | views live with their module under extensions/{owner}/{module}/Views
+    | and are registered by that module's ServiceProvider with loadViewsFrom.
     |
     */
 
-    'paths' => array_filter([
-        env('VITE_THEME_DIR') ? resource_path('extensions/'.env('VITE_THEME_DIR').'/views') : null,
+    'paths' => [
         resource_path('core/views'),
-    ]),
+    ],
 
     /*
     |--------------------------------------------------------------------------

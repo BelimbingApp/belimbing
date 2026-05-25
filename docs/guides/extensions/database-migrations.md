@@ -170,7 +170,7 @@ Extension providers are discovered automatically via `ProviderRegistry::resolve(
 
 If your extension is not being discovered, verify that:
 1. The file is at `extensions/{owner}/{module}/ServiceProvider.php`
-2. The namespace matches the directory structure (e.g., `Extensions\SbGroup\Quality`)
+2. The namespace matches the directory structure (e.g., `Extensions\SbGroup\Qac`)
 3. Clear the config cache: `php artisan config:clear`
 
 ## Running Migrations
@@ -188,7 +188,7 @@ This will run all migrations, including those from extensions.
 To run only your extension's migrations (useful for testing):
 
 ```bash
-php artisan migrate --path=extensions/sb-group/quality/Database/Migrations
+php artisan migrate --path=extensions/sb-group/qac/Database/Migrations
 ```
 
 ### Rolling Back Extension Migrations
@@ -196,7 +196,7 @@ php artisan migrate --path=extensions/sb-group/quality/Database/Migrations
 To rollback extension migrations:
 
 ```bash
-php artisan migrate:rollback --path=extensions/sb-group/quality/Database/Migrations
+php artisan migrate:rollback --path=extensions/sb-group/qac/Database/Migrations
 ```
 
 ## Migration Best Practices

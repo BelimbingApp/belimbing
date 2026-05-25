@@ -39,12 +39,8 @@ function isEnvFlagEnabled(value) {
 
 const frontendDomain = readEnv('FRONTEND_DOMAIN', 'local.blb.lara');
 const viteNoRefresh = isEnvFlagEnabled(readEnv('VITE_NO_REFRESH', ''));
-const viteThemeDir = readEnv('VITE_THEME_DIR', '');
 const bladeRefreshPaths = [
     'resources/core/views/**/*.blade.php',
-    ...(viteThemeDir ? [
-        `resources/extensions/${viteThemeDir}/views/**/*.blade.php`,
-    ] : []),
 ];
 
 function suppressMarkdownReloads() {
