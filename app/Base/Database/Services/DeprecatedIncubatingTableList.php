@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Services;
 
+use App\Base\Database\Exceptions\IncubatingSchemaMutationException;
 use Illuminate\Support\Str;
 
 final class DeprecatedIncubatingTableList
@@ -37,27 +38,7 @@ final class DeprecatedIncubatingTableList
             return [];
         }
 
-        if (preg_match('/BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=\((.*?)^\)/ms', $contents, $matches) !== 1) {
-            return [];
-        }
-
-        $patterns = [];
-
-        foreach (preg_split('/\R/', $matches[1]) ?: [] as $line) {
-            $pattern = trim($line);
-
-            if ($pattern === '' || str_starts_with($pattern, '#')) {
-                continue;
-            }
-
-            $pattern = trim($pattern, " \t\n\r\0\x0B'\"");
-
-            if ($pattern !== '') {
-                $patterns[] = $pattern;
-            }
-        }
-
-        return array_values(array_unique($patterns));
+        return $this->patternsFromScript($contents);
     }
 
     public function firstMatchingPattern(string $tableName): ?string
@@ -168,13 +149,13 @@ final class DeprecatedIncubatingTableList
         $path = $this->path();
 
         if (! is_file($path)) {
-            throw new \RuntimeException('Deprecated incubating table list script not found: '.$path);
+            throw IncubatingSchemaMutationException::deprecatedTableListMissing($path);
         }
 
         $contents = file_get_contents($path);
 
         if ($contents === false) {
-            throw new \RuntimeException('Unable to read deprecated incubating table list script: '.$path);
+            throw IncubatingSchemaMutationException::deprecatedTableListUnreadable($path);
         }
 
         $renderedPatterns = implode(PHP_EOL, array_map(
@@ -182,7 +163,7 @@ final class DeprecatedIncubatingTableList
             $patterns,
         ));
 
-        $replacement = "readonly BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=(".PHP_EOL
+        $replacement = 'readonly BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=('.PHP_EOL
             .$renderedPatterns.PHP_EOL
             .')';
 
@@ -194,9 +175,37 @@ final class DeprecatedIncubatingTableList
         );
 
         if (! is_string($updated) || $updated === $contents) {
-            throw new \RuntimeException('Unable to update deprecated incubating table list script: '.$path);
+            throw IncubatingSchemaMutationException::deprecatedTableListUnwritable($path);
         }
 
         file_put_contents($path, $updated);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function patternsFromScript(string $contents): array
+    {
+        if (preg_match('/BLB_DEPRECATED_UNSTABLE_TABLE_PATTERNS=\((.*?)^\)/ms', $contents, $matches) !== 1) {
+            return [];
+        }
+
+        $patterns = [];
+
+        foreach (preg_split('/\R/', $matches[1]) ?: [] as $line) {
+            $pattern = trim($line);
+
+            if ($pattern === '' || str_starts_with($pattern, '#')) {
+                continue;
+            }
+
+            $pattern = trim($pattern, " \t\n\r\0\x0B'\"");
+
+            if ($pattern !== '') {
+                $patterns[] = $pattern;
+            }
+        }
+
+        return array_values(array_unique($patterns));
     }
 }
