@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\IT\Livewire\Tickets;
 
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
@@ -8,7 +9,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 
 class Index extends SearchablePaginatedList
 {
-    protected const string VIEW_NAME = 'livewire.it.tickets.index';
+    protected const string VIEW_NAME = 'operation-it::livewire.it.tickets.index';
 
     protected const string VIEW_DATA_KEY = 'tickets';
 

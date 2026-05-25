@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Livewire;
 
 use App\Base\Support\AppPath;
@@ -24,9 +25,10 @@ class ComponentDiscoveryService
      * Discover all Livewire component classes and their view-derived names.
      *
      * Scans module Livewire directories for Component subclasses, then
-     * derives the component name from the view('livewire.xxx') call in
-     * the class source. The 'livewire.' prefix is stripped to produce the
-     * component name for <livewire:name /> tags and Livewire::test('name').
+     * derives the component name from the view('livewire.xxx') or
+     * view('namespace::livewire.xxx') call in the class source. The view
+     * namespace and 'livewire.' prefix are stripped to produce the component
+     * name for <livewire:name /> tags and Livewire::test('name').
      *
      * @return array<string, class-string<Component>> Component name => FQCN
      */
@@ -89,9 +91,12 @@ class ComponentDiscoveryService
     /**
      * Resolve the component name from a Livewire class file.
      *
-     * Extracts the first view('livewire.xxx') call from the source
-     * and strips the 'livewire.' prefix. For example, a class returning
-     * view('livewire.admin.companies.index') gets the name 'admin.companies.index'.
+     * Extracts the first view('livewire.xxx') or namespaced
+     * view('namespace::livewire.xxx') call from the source and strips the
+     * namespace and 'livewire.' prefix. For example, a class returning
+     * view('livewire.admin.companies.index') or
+     * view('core-user::livewire.admin.companies.index') gets the name
+     * 'admin.companies.index'.
      *
      * Falls back to VIEW_NAME constant if no view() call is found.
      *
@@ -107,11 +112,11 @@ class ComponentDiscoveryService
 
         $name = null;
 
-        // Match the first view('livewire.xxx') call in the file.
-        // This covers: view('livewire.xxx'), view('livewire.xxx', [...]), view('livewire.xxx', $this->with())
-        // Fallback: check for VIEW_NAME constant with 'livewire.' prefix
-        if (preg_match("/view\(\s*'(livewire\.[\w.\-]+)'/", $source, $matches)
-            || preg_match("/const\s+string\s+VIEW_NAME\s*=\s*'(livewire\.[\w.\-]+)'/", $source, $matches)
+        // Match the first view('livewire.xxx') or view('namespace::livewire.xxx') call in the file.
+        // This covers: view('livewire.xxx'), view('namespace::livewire.xxx', [...]), view('livewire.xxx', $this->with())
+        // Fallback: check for VIEW_NAME constant with optional namespace and 'livewire.' prefix.
+        if (preg_match("/view\(\s*'(?:[\w.\-]+::)?(livewire\.[\w.\-]+)'/", $source, $matches)
+            || preg_match("/const\s+string\s+VIEW_NAME\s*=\s*'(?:[\w.\-]+::)?(livewire\.[\w.\-]+)'/", $source, $matches)
         ) {
             $name = BlbStr::afterPrefix($matches[1], 'livewire.', false);
         }

@@ -72,7 +72,7 @@ Navigation and permission IDs remain menu-domain based:
 
 - [x] Revert the attempted Employee module move back to `app/Modules/Core/Employee/`. codex/gpt-5
 - [x] Restore Employee namespaces to `App\Modules\Core\Employee`. codex/gpt-5
-- [x] Keep Employee PHP classes in Core while rendering Employee Blade views from `resources/core/views/livewire/people/` because view folders mirror navigation domains. codex/gpt-5
+- [x] Keep Employee PHP classes in Core while treating People as the navigation/domain lens for employee-facing UI. codex/gpt-5; superseded for Blade placement by module-colocated People views under each owning `app/Modules/People/*/Views` tree. Amp/GPT-5
 - [x] Update docs so People is described as a licensee-scoped lens rather than the owner of Employee. codex/gpt-5
 - [x] Keep Employee migrations at `0200_01_09_*`. codex/gpt-5
 

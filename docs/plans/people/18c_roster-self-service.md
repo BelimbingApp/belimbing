@@ -5,7 +5,7 @@
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
 - `app/Modules/People/Attendance/Livewire/Rosters.php` — existing roster data
-- `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`
+- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
 **Agents:** claude/sonnet-4.6
 
 ## Problem Essence

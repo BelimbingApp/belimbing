@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\IT\Livewire\Tickets;
 
 use App\Base\Authz\DTO\Actor;
@@ -51,6 +52,6 @@ class Create extends Component
 
     public function render(): View
     {
-        return view('livewire.it.tickets.create');
+        return view('operation-it::livewire.it.tickets.create');
     }
 }

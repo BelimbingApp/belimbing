@@ -433,7 +433,7 @@ class Show extends Component
 
     public function render(): View
     {
-        return view('livewire.commerce.inventory.items.show', [
+        return view('commerce-inventory::livewire.commerce.inventory.items.show', [
             'statuses' => Item::statuses(),
             'availableAttributes' => $this->applicableAttributeQuery(Auth::user()?->company_id)->get(),
             'categories' => Category::query()

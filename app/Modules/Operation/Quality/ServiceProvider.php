@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality;
 
 use App\Modules\Operation\Quality\Contracts\NumberingService;
@@ -21,5 +22,13 @@ class ServiceProvider extends BaseServiceProvider
             NumberingService::class,
             DefaultNumberingService::class
         );
+    }
+
+    /**
+     * Bootstrap services.
+     */
+    public function boot(): void
+    {
+        $this->loadViewsFrom(__DIR__.'/Views', 'operation-quality');
     }
 }

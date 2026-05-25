@@ -2,7 +2,7 @@
 
 Status: Complete
 Last Updated: 2026-05-17
-Sources: `docs/plans/people/09_attendance-module-design.md`, `docs/plans/people/11_attendance-shift-and-allowance-coverage.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`
+Sources: `docs/plans/people/09_attendance-module-design.md`, `docs/plans/people/11_attendance-shift-and-allowance-coverage.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-form.blade.php`
 Agents: {codex/gpt-5, claude/opus-4.7}
 
 ## Problem Essence

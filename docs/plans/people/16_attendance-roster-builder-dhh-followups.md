@@ -2,7 +2,7 @@
 
 Status: Complete
 Last Updated: 2026-05-17
-Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `resources/core/views/livewire/people/attendance/partials/rosters-form.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-list.blade.php`, `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`
+Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `docs/plans/people/sbg_attendance_ref/Roster Builder Review v2 _DHH_ - standalone.html`, `app/Modules/People/Attendance/Livewire/Rosters.php`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-form.blade.php`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
 Agents: {claude/opus-4.7}
 
 ## Problem Essence

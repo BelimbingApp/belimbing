@@ -30,6 +30,8 @@ class ServiceProvider extends BaseServiceProvider
 
     public function boot(): void
     {
+        $this->loadViewsFrom(__DIR__.'/Views', 'commerce-marketplace');
+
         $commercePlugins = $this->app->make(CommercePluginRegistry::class);
         $this->app->make(CommercePluginDiscoveryService::class)->discoverInto($commercePlugins);
 

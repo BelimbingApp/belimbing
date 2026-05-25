@@ -147,7 +147,7 @@ class Create extends Component
 
     public function render(): View
     {
-        return view('livewire.commerce.inventory.items.create', [
+        return view('commerce-inventory::livewire.commerce.inventory.items.create', [
             'statuses' => Item::statuses(),
             'skuAvailable' => $this->skuAvailability(),
             'categories' => Category::query()

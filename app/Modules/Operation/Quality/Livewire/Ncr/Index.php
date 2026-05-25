@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality\Livewire\Ncr;
 
 use App\Modules\Operation\Quality\Livewire\StatusFilteredSearchableIndex;
@@ -8,7 +9,7 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 
 class Index extends StatusFilteredSearchableIndex
 {
-    protected const string VIEW_NAME = 'livewire.quality.ncr.index';
+    protected const string VIEW_NAME = 'operation-quality::livewire.quality.ncr.index';
 
     protected const string VIEW_DATA_KEY = 'ncrs';
 

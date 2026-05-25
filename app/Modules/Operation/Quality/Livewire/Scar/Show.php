@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality\Livewire\Scar;
 
 use App\Base\Authz\DTO\Actor;
@@ -156,7 +157,7 @@ class Show extends Component
 
     public function render(): View
     {
-        return view('livewire.quality.scar.show', [
+        return view('operation-quality::livewire.quality.scar.show', [
             'timeline' => $this->scar->statusTimeline(),
             'availableTransitions' => $this->scar->availableTransitions(),
         ]);

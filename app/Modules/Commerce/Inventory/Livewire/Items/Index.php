@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Auth;
 
 class Index extends SearchablePaginatedList
 {
-    protected const string VIEW_NAME = 'livewire.commerce.inventory.items.index';
+    protected const string VIEW_NAME = 'commerce-inventory::livewire.commerce.inventory.items.index';
 
     protected const string VIEW_DATA_KEY = 'items';
 

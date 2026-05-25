@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality\Livewire\Ncr;
 
 use App\Base\Authz\DTO\Actor;
@@ -76,6 +77,6 @@ class Create extends Component
 
     public function render(): View
     {
-        return view('livewire.quality.ncr.create');
+        return view('operation-quality::livewire.quality.ncr.create');
     }
 }

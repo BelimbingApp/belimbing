@@ -6,8 +6,8 @@
 - `docs/plans/people/18_roster_master.md` — master plan
 - `docs/plans/people/16_attendance-roster-builder-dhh-followups.md` — origin of deferred items
 - `app/Modules/People/Attendance/Livewire/Rosters.php`
-- `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`
-- `resources/core/views/livewire/people/attendance/partials/rosters-list.blade.php`
+- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
+- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php`
 **Agents:** claude/sonnet-4.6
 
 ## Problem Essence

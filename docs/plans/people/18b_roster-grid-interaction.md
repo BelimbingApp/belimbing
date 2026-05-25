@@ -5,7 +5,7 @@
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
 - `app/Modules/People/Attendance/Livewire/Rosters.php` — `saveCellOverride()` to be extended to batch
-- `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid cell rendering
+- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid cell rendering
 - `resources/core/views/components/ui/day-tile.blade.php` — cell tile component
 **Agents:** claude/sonnet-4.6
 

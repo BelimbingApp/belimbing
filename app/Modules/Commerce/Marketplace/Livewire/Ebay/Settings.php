@@ -221,7 +221,7 @@ class Settings extends SettingsForm
     {
         $group = $this->groupConfig();
 
-        return view('livewire.commerce.marketplace.ebay.settings', [
+        return view('commerce-marketplace::livewire.commerce.marketplace.ebay.settings', [
             'groupId' => $this->group(),
             'group' => $group,
             'pageTitle' => __(':label Settings', ['label' => $group['label'] ?? __('Module')]),

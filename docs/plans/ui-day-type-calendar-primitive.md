@@ -2,7 +2,7 @@
 
 Status: In Progress
 Last Updated: 2026-05-17
-Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `app/Modules/People/Attendance/Services/AttendanceCalendarResolver.php`, `resources/core/css/tokens.css`, `resources/core/views/livewire/people/attendance/partials/rosters-grid.blade.php`, `resources/core/views/AGENTS.md`
+Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `app/Modules/People/Attendance/Services/AttendanceCalendarResolver.php`, `resources/core/css/tokens.css`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`, `resources/core/views/AGENTS.md`
 Agents: {claude/opus-4.7}
 
 ## Problem Essence

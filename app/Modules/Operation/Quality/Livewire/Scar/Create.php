@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality\Livewire\Scar;
 
 use App\Base\Authz\DTO\Actor;
@@ -92,7 +93,7 @@ class Create extends Component
 
     public function render(): View
     {
-        return view('livewire.quality.scar.create', [
+        return view('operation-quality::livewire.quality.scar.create', [
             'ncr' => $this->ncr_id ? Ncr::query()->find($this->ncr_id) : null,
         ]);
     }

@@ -239,16 +239,17 @@ app/Modules/Operation/Quality/
 │       ├── Index.php
 │       ├── Create.php
 │       └── Show.php
-└── Routes/
-    └── web.php
-
-resources/core/views/livewire/quality/
-├── ncr/
-│   ├── index.blade.php
-│   ├── create.blade.php
-│   └── show.blade.php
-└── scar/
-    ├── index.blade.php
-    ├── create.blade.php
-    └── show.blade.php
+├── Routes/
+│   └── web.php
+└── Views/
+    └── livewire/
+        └── quality/
+            ├── ncr/
+            │   ├── index.blade.php
+            │   ├── create.blade.php
+            │   └── show.blade.php
+            └── scar/
+                ├── index.blade.php
+                ├── create.blade.php
+                └── show.blade.php
 ```

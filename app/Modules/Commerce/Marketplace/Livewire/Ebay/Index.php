@@ -97,7 +97,7 @@ class Index extends Component
         $token = $oauth->tokenForCompany($companyId);
         $dashboard = $this->storeAlignment()->dashboard($companyId);
 
-        return view('livewire.commerce.marketplace.ebay.index', [
+        return view('commerce-marketplace::livewire.commerce.marketplace.ebay.index', [
             'config' => $configuration->forCompany($companyId),
             'token' => $token,
             'listings' => $this->listings($companyId),

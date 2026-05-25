@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\Quality\Livewire\Ncr;
 
 use App\Base\Authz\DTO\Actor;
@@ -196,7 +197,7 @@ class Show extends Component
 
     public function render(): View
     {
-        return view('livewire.quality.ncr.show', [
+        return view('operation-quality::livewire.quality.ncr.show', [
             'timeline' => $this->ncr->statusTimeline(),
             'availableTransitions' => $this->ncr->availableTransitions(),
         ]);

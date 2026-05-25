@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Operation\IT\Livewire\Tickets;
 
 use App\Base\Authz\DTO\Actor;
@@ -72,7 +73,7 @@ class Show extends Component
 
     public function render(): View
     {
-        return view('livewire.it.tickets.show', [
+        return view('operation-it::livewire.it.tickets.show', [
             'timeline' => $this->ticket->statusTimeline(),
             'availableTransitions' => $this->ticket->availableTransitions(),
         ]);

@@ -549,7 +549,7 @@ class Index extends Component
             ->orderBy('name')
             ->get();
 
-        return view('livewire.commerce.catalog.index', [
+        return view('commerce-catalog::livewire.commerce.catalog.index', [
             'categories' => $categories,
             'categoryBranchIds' => $categoryBranchIds,
             'categoryTree' => $this->categoryTree($categories),

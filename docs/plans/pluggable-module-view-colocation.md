@@ -63,13 +63,15 @@ Blade colocation is the immediate rule. Module-specific CSS or JavaScript may li
 
 - [x] Add Tailwind source scanning for `app/Modules/*/*/Views` and `extensions/*/*/Views`. {Amp/GPT-5}
 - [x] Add Vite refresh paths for module-owned and extension-owned Blade views. {Amp/GPT-5}
-- [ ] Verify Livewire/component discovery expectations once the first non-Core pluggable module ships with colocated views.
+- [x] Verify Livewire/component discovery expectations once the first non-Core pluggable module ships with colocated views. {Amp/GPT-5}
 
 ### Phase 3 — Migrate existing non-Core UI when domains are actively touched
 
-- [ ] Move Operation module-owned views from `resources/core/views` into their module roots when the module is next materially changed.
-- [ ] Place new People and Commerce views under their module roots from the start.
-- [ ] Keep only shared framework shell, layouts, and reusable components in `resources/core`.
+- [x] Move Operation IT and Quality module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
+- [x] Move existing People module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
+- [x] Move existing Commerce module-owned views from `resources/core/views` into their module roots. {Amp/GPT-5}
+- [ ] Place new non-Core domain views under their module roots from the start.
+- [x] Keep only shared framework shell, layouts, and reusable Base/Core presentation in `resources/core`. {Amp/GPT-5}
 
 ### Phase 4 — Define plugin asset packaging after the Blade pattern proves stable
 
