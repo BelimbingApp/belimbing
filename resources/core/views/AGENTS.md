@@ -1,12 +1,19 @@
 # UI Architect — Blade / Livewire 4 / Tailwind CSS 4 / Alpine.js 3
 
-**Canonical UI guidance for all agents.** `.cursor/rules/ui-architect.mdc` is an adapter that references this file. Design intent lives in the repo-root `DESIGN.md`; rendered standards live in `Administration > System > UI Reference`.
+**Canonical UI guidance for shared framework UI.** `.cursor/rules/ui-architect.mdc` is an adapter that references this file. Design intent lives in the repo-root `DESIGN.md`; rendered standards live in `Administration > System > UI Reference`.
 
 You are a specialized UI/UX designer focused on responsive design, high-end aesthetics, and **WCAG 2.1** compliance. Build Laravel Blade components with Tailwind CSS. **Goal:** Elevate the enterprise app beyond "basic CRUD" into "modern sleek" territory using the design system in `resources/core/css/tokens.css`.
 
 ## Livewire View Placement
 
-Livewire view folders in `resources/core/views/livewire/` mirror the sidebar navigation domains. **Before creating a new Livewire view, place it in the correct domain folder:**
+`resources/core/views/` is for Base/Core framework presentation: shell layouts,
+shared Blade components, auth/profile/admin pages, and genuinely reusable UI.
+For non-Core pluggable domains (`People`, `Commerce`, `Operation`, future
+`Finance`, `Sales`, `Procurement`, etc.) and extensions, module-owned Blade
+views live under the module root in `Views/` and are registered by that module's
+provider. Do not add new module-owned screens under `resources/core/views`.
+
+Core Livewire view folders in `resources/core/views/livewire/` mirror the sidebar navigation domains. **Before creating a new Core/shared Livewire view, place it in the correct folder:**
 
 | Folder | Domain | Examples |
 |--------|--------|----------|
@@ -21,6 +28,7 @@ Livewire view folders in `resources/core/views/livewire/` mirror the sidebar nav
 - Guest-only pages (no authenticated session) → `auth/`
 - Current-user self-service pages → `profile/`
 - The view path in `view('livewire.admin.users.index')` must match the folder path `livewire/admin/users/index.blade.php`
+- Non-Core module views should use a module namespace such as `view('owner-module::livewire.dashboard.index')` and live under that module's `Views/` directory.
 
 ## Principles
 

@@ -1,26 +1,26 @@
 # Theme Customization Guide
 
 **Document Type:** Developer Guide
-**Audience:** BLB framework and extension developers
+**Audience:** BLB framework, pluggable module, and extension developers
 **Last Updated:** 2026-05-25
 
 ---
 
 ## Overview
 
-BLB currently has one framework theme surface: `resources/core/`. Extension
-modules do **not** use a companion `resources/extensions` tree, and there is no
-`VITE_THEME_DIR` activation flow. Module-owned presentation belongs beside the
-extension code under `extensions/{owner}/{module}/Views/` and is registered by
-that module's `ServiceProvider`.
+BLB currently has one framework theme surface: `resources/core/`. Pluggable
+modules do **not** use companion presentation trees under `resources/`, and
+there is no `VITE_THEME_DIR` activation flow. Module-owned presentation belongs
+beside the module code under `app/Modules/{Domain}/{Module}/Views/` or
+`extensions/{owner}/{module}/Views/` and is registered by that module's
+`ServiceProvider`.
 
 Theme work falls into two buckets:
 
 1. **Framework-wide theme changes** — edit `resources/core/css/tokens.css` and
    `resources/core/css/components.css` in the BLB framework repo.
-2. **Extension-owned screens** — ship Blade views under the extension module's
-   `Views/` directory, with any module-specific assets wired explicitly by that
-   module.
+2. **Module-owned screens** — ship Blade views under the module's `Views/`
+   directory, with any module-specific assets wired explicitly by that module.
 
 ## Framework Theme Tokens
 
@@ -47,15 +47,15 @@ there only when the change is meant to improve BLB for every adopter. Private
 extension modules should not shadow framework components through a parallel view
 tree.
 
-For extension pages, prefer composing the existing core components from views
-under `extensions/{owner}/{module}/Views/`. If a reusable component is missing,
+For pluggable module pages, prefer composing the existing core components from
+views under the module's `Views/` directory. If a reusable component is missing,
 add it to `resources/core/` and contribute it upstream instead of creating a
-licensee-only duplicate.
+module-only duplicate.
 
-## Extension Module Views
+## Module Views
 
-Extension Livewire components and routes should render namespaced views loaded
-by the extension provider:
+Pluggable module Livewire components and routes should render namespaced views
+loaded by the module provider:
 
 ```php
 public function boot(): void
@@ -64,13 +64,13 @@ public function boot(): void
 }
 ```
 
-Then render extension views with that namespace, for example
+Then render module views with that namespace, for example
 `view('owner-module::livewire.dashboard.index')`.
 
 This keeps the extension removable as one directory:
 
 ```text
-extensions/{owner}/{module}/
+app/Modules/{Domain}/{Module}/ or extensions/{owner}/{module}/
 ├── Livewire/
 ├── Views/
 │   └── livewire/
@@ -100,16 +100,17 @@ When adding or changing tokens:
 4. Test both light and dark modes.
 5. Put reusable UI improvements in `resources/core/`.
 
-### For Extension Developers
+### For Pluggable Module and Extension Developers
 
-1. Keep extension-owned views under `extensions/{owner}/{module}/Views/`.
+1. Keep module-owned views under the module root in `Views/`.
 2. Reuse core components where possible instead of copying them.
-3. Do not create `resources/extensions/{owner}/`.
-4. Document any module-specific CSS or assets in the extension module.
-5. Test extension screens against the current core theme.
+3. Do not create module-owned presentation trees under `resources/`.
+4. Document any module-specific CSS or assets in the module.
+5. Test module screens against the current core theme.
 
 ## Related Documents
 
 - `docs/architecture/ui-layout.md` — shell and presentation architecture
 - `docs/architecture/file-structure.md` — module and extension organization
+- `docs/plans/pluggable-module-view-colocation.md` — migration plan for module-owned views
 - `docs/guides/extensions/licensee-development-guide.md` — extension placement rules

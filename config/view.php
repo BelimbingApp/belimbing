@@ -7,9 +7,10 @@ return [
     | View Storage Paths
     |--------------------------------------------------------------------------
     |
-    | BLB framework views live under resources/core/views. Extension module
-    | views live with their module under extensions/{owner}/{module}/Views
-    | and are registered by that module's ServiceProvider with loadViewsFrom.
+    | BLB framework views live under resources/core/views. Pluggable module
+    | views live with their module under app/Modules/{Domain}/{Module}/Views
+    | or extensions/{owner}/{module}/Views and are registered by that module's
+    | ServiceProvider with loadViewsFrom.
     |
     */
 

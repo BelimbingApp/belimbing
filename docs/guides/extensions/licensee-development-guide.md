@@ -100,7 +100,7 @@ extensions/{owner}/{module}/
 └── ServiceProvider.php
 ```
 
-Tests live inside the extension module (`Tests/`) rather than under `tests/extensions/`. The module is the unit of deployment — deleting or moving a module should remove its tests too. Unlike `resources/`, where Blade and CSS resolution requires a centralized path that Vite and Laravel can scan, tests have no framework-imposed path constraint and benefit more from co-location.
+Tests live inside the extension module (`Tests/`) rather than under `tests/extensions/`. The module is the unit of deployment — deleting or moving a module should remove its tests too. Blade views follow the same rule and live under the module's `Views/` directory; shared framework UI remains in `resources/core`.
 
 ### 4.3 ServiceProvider Discovery
 

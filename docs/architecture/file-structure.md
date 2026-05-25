@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Purpose:** Define the file and directory structure for Belimbing framework
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-04-26
+**Last Updated:** 2026-05-25
 
 ---
 
@@ -20,7 +20,7 @@ This document defines the file structure that supports Belimbing's core principl
 
 ## Directory Layer Convention
 
-BLB uses a layered directory naming convention to define architectural boundaries within `app/`. Layers are numbered from the root, and labeling stops at the **Module** boundary—everything within a module is considered module internals.
+BLB uses a layered directory naming convention to define architectural boundaries within `app/`. Layers are numbered from the root, and labeling stops at the **Module** boundary—everything within a module is considered module internals. For non-Core domains, module internals include module-owned Blade views.
 
 ### Layer Hierarchy
 
@@ -29,7 +29,7 @@ app/Base/{Module}/...                        # Framework infrastructure modules 
 app/Modules/{Domain}/{Module}/...            # Application modules grouped by domain
 ```
 
-**Key Principle:** Stop labeling at the Module boundary. Subdirectories within a module are implementation details, not architectural layers.
+**Key Principle:** Stop labeling at the Module boundary. Subdirectories within a module are implementation details, not architectural layers. In pluggable domains, a module is a full-stack ownership unit.
 
 ### Term Definitions
 
@@ -210,7 +210,7 @@ app/Base/
 
 **Module naming:** use a singular PascalCase capability/domain name for new module directories (`Claim`, `Leave`, `Payroll`, `Employee`) even when the user-facing menu label or route path is plural (`Claims`, `people/claims`). Use plural module directory names only when the domain term is inherently plural or an established aggregate surface already uses it (`Settings`, the People-facing `Employees` workbench).
 
-Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmodulesdomainmodule) for the full list). Modules include only the internals they need.
+Each module is a self-contained capability. Subdirectories are module internals (see [Module Structure Template](#module-structure-template-for-appmodulesdomainmodule) for the full list). Modules include only the internals they need. Outside `app/Modules/Core`, new module-owned Blade views belong under the module's `Views/` directory so the module can become a nested-git or composer plugin without leaving UI behind in `resources/`.
 
 ```
 app/Modules/
@@ -267,6 +267,11 @@ app/Modules/{Domain}/{Module}/
 ├── Config/                   # Module internals: config files (PascalCase dir; filenames lowercase, e.g. company.php)
 └── Tests/                    # Module internals: tests
 ```
+
+For `app/Modules/Core/{Module}`, framework-wide or shared UI may still live in
+`resources/core`. For every other domain, `Views/` is the default home for
+module-owned Blade templates. Shared components promoted out of a module belong
+in `resources/core/views/components/`.
 
 ## Extension Structure (`extensions/`)
 
@@ -412,9 +417,9 @@ tests/
 
 ---
 
-## Frontend Structure (`resources/`)
+## Framework Frontend Structure (`resources/`)
 
-Resources live under `resources/core/` (the Core view namespace). Livewire view folders mirror the sidebar navigation domains — see `resources/core/views/AGENTS.md` for the full placement rules.
+Resources under `resources/core/` are framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for pluggable domains do not belong here; they live under `app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/`.
 
 ```
 resources/core/
@@ -423,7 +428,7 @@ resources/core/
 │   │   ├── app.blade.php
 │   │   └── auth.blade.php
 │   │
-│   ├── livewire/            # Livewire view templates (mirrors navigation)
+│   ├── livewire/            # Core/shared Livewire view templates
 │   │   ├── admin/           # Administration menu items
 │   │   │   ├── addresses/
 │   │   │   ├── ai/
@@ -436,9 +441,7 @@ resources/core/
 │   │   │   ├── users/
 │   │   │   └── workflows/
 │   │   ├── auth/            # Guest authentication flow
-│   │   ├── people/          # People-scoped views over Core records
-│   │   ├── it/              # Operation → IT
-│   │   ├── quality/         # Operation → Quality
+│   │   ├── people/          # Core-owned people workbench views only
 │   │   └── profile/         # Current user's own settings
 │   │
 │   └── components/          # Blade components
@@ -452,6 +455,11 @@ resources/core/
 │
 └── js/                      # JavaScript assets
 ```
+
+Existing non-Core views under `resources/core/views` should move to their
+module roots when those modules are next materially changed. New People,
+Commerce, Operation, Finance, Sales, Procurement, and extension screens should
+start in module-owned `Views/` directories.
 
 ---
 

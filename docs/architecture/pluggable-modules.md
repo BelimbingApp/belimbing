@@ -4,9 +4,10 @@
 **Purpose:** Define how BLB evolves from a monolithic application into a framework that ships an integrated HR core and lets full-stack downstream modules (payroll, finance, country-specific verticals) plug in and out independently.
 **Status:** Direction confirmed. Implementation phased.
 **Audience:** BLB framework team, licensee developers, future plugin contributors.
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-05-25
 **Related:**
 - `docs/architecture/file-structure.md` — directory layer convention.
+- `docs/plans/pluggable-module-view-colocation.md` — migration plan for colocating module-owned Blade views with pluggable modules.
 - `docs/guides/extensions/licensee-development-guide.md` — existing extension separation model.
 - `docs/guides/extensions/private-extension-repositories.md` — existing nested-git pattern.
 - `docs/tutorials/people/` — domain crash course; the People domain is the first pluggable case.
@@ -48,14 +49,16 @@ The layer convention from `docs/architecture/file-structure.md` stays. Plug-abil
 | Layer | Path | Plug-ability | Distribution |
 |---|---|---|---|
 | **Framework infrastructure** | `app/Base/{Module}/` | Not pluggable | Main repo |
-| **Application Core** | `app/Modules/Core/{Module}/` | Not pluggable | Main repo |
-| **HR source modules** | `app/Modules/People/{Module}/` (Attendance, Leave, Claim, Settings) | Optional inside the HR domain | Main repo today; nested-git/composer later |
-| **Downstream plugins** | Plugin repos checked out at `app/Modules/{Domain}/{Module}/` | **Pluggable** | Nested git today; composer later |
+| **Application Core** | `app/Modules/Core/{Module}/` plus shared `resources/core` presentation | Not pluggable | Main repo |
+| **HR source modules** | `app/Modules/People/{Module}/` (Attendance, Leave, Claim, Settings), including module-owned `Views/` | Optional inside the HR domain | Main repo today; nested-git/composer later |
+| **Downstream plugins** | Plugin repos checked out at `app/Modules/{Domain}/{Module}/`, including module-owned `Views/` | **Pluggable** | Nested git today; composer later |
 | **Licensee extensions** | `extensions/{licensee}/{module}/` | Pluggable (private) | Nested git, private origin |
 
 ### 3.1 What stays in main repo
 
 `app/Base/`, `app/Modules/Core/`, and the HR source modules under `app/Modules/People/` are the integrated application BLB ships. They have no compile-time dependency on any downstream plugin and function fully if no plugin is installed.
+
+Base and Core are the exception to full-stack plugin colocation. Framework-wide presentation — shell layout, shared Blade components, navigation components, and design tokens — stays in `resources/core`. Non-Core domains own their module-specific presentation inside the module root.
 
 The HR source modules publish events that downstream plugins listen to. Those event classes are the **public API** of BLB's HR application.
 
@@ -63,7 +66,7 @@ The HR source modules publish events that downstream plugins listen to. Those ev
 
 Anything that *consumes* source-module facts and produces its own output. Today that means payroll. Soon it will mean finance, then potentially sales, procurement, and so on.
 
-Each plugin is a full-stack vertical: it owns its tables, its lifecycle, its calculations, its UI, its exports. It depends on BLB's HR core (for the event classes) but not on any other plugin.
+Each plugin is a full-stack vertical: it owns its tables, its lifecycle, its calculations, its UI, its exports. Module-specific Blade views live under the plugin's `Views/` directory and are registered by that plugin's service provider. The plugin depends on BLB's HR core (for the event classes) but not on any other plugin.
 
 ### 3.3 Why no shared "consumer framework"
 
@@ -92,6 +95,7 @@ Examples: Attendance, Leave, Claim, Settings. Future Sales, Procurement.
 
 Properties:
 - Owns its tables, lifecycle, approvals, UI.
+- Keeps module-owned views under its module root once it is pluggable-shaped.
 - Dispatches public events for facts other modules may care about.
 - Works in isolation — Attendance functions fully on a deployment with no plugin installed.
 - Has no compile-time dependency on any plugin.
@@ -106,6 +110,7 @@ Properties:
 - Depends on BLB's HR core (for event classes and identity models like Employee/Company).
 - Does not depend on any other plugin.
 - Owns its own data model — tables, pay-item taxonomy, run lifecycle, ledger, exports.
+- Owns its own Blade views under `Views/`; shared shell and reusable components still come from `resources/core`.
 - Registers its listeners via service-container tagging when it boots.
 - Can be installed alongside other plugins (a multinational installs `blb-payroll-my` and `blb-payroll-sg`).
 
@@ -214,6 +219,42 @@ The pay-item code is a payroll concept and does not belong on an attendance reco
 
 This deferral is the cost of plugin freedom. Plugins gain the ability to model pay items however they like; producers stay neutral.
 
+### 5.6 Security model for full-stack plugins
+
+Pluggable modules are **trusted application code**, not sandboxed content. A
+plugin that ships a `ServiceProvider`, routes, Livewire components, migrations,
+listeners, and Blade views already has application-code privileges. Colocating
+Blade files under the module root does not make the plugin less safe or more
+safe by itself; it makes the trust boundary explicit and reviewable as one
+directory.
+
+Security rules:
+
+- **No sandbox promise.** Installing a plugin grants it the same trust level as
+  application code. BLB does not promise runtime isolation between installed
+  plugins.
+- **Namespaced views only.** Plugins register their own `Views/` directory with
+  a module-specific namespace. They render their own screens through that
+  namespace, for example `view('payroll-my::livewire.runs.index')`.
+- **No global view shadowing.** Plugins must not prepend global view paths or
+  shadow `resources/core` views/components unless the framework explicitly adds
+  a reviewed extension point for that purpose.
+- **Core components are shared API.** Plugins compose framework components from
+  `resources/core`; reusable UI improvements are contributed to Core rather
+  than copied into plugins.
+- **Authorization is server-side.** Plugin Blade may hide or show controls for
+  usability, but routes, Livewire actions, services, jobs, and listeners enforce
+  capabilities, company scope, and actor context. A view is never the security
+  boundary.
+- **Escaping discipline is unchanged.** Plugin views use Blade escaping by
+  default (`{{ }}`). Raw output (`{!! !!}`) is allowed only for sanitized or
+  known-safe HTML owned by the module.
+- **Assets need an explicit contract.** Module-owned CSS/JavaScript may live
+  with the module, but ad hoc global script/style injection is not part of the
+  current contract. A future plugin asset contract must define reviewed entry
+  points, build integration, and CSP-compatible behavior before plugin assets
+  become a general extension surface.
+
 ---
 
 ## 6. Payroll Plugins as the First Worked Example
@@ -297,6 +338,30 @@ Three categories of code coexist:
 
 A licensee's local working tree looks the same regardless of category — directories on disk. The difference is which remote each directory points at.
 
+### 7.6 Full-stack module directories
+
+Pluggable modules are full-stack ownership units. Their PHP classes, routes,
+database files, tests, config, and module-owned Blade views live under the same
+module root:
+
+```text
+app/Modules/People/Payroll/
+├── Config/
+├── Database/
+├── Livewire/
+├── Routes/
+├── Services/
+├── Tests/
+├── Views/
+└── ServiceProvider.php
+```
+
+The same rule applies to private licensee extensions under
+`extensions/{owner}/{module}/`. Do not create a parallel presentation tree under
+`resources/` for plugin-owned screens. `resources/core` remains the shared
+framework UI surface: shell layouts, reusable components, tokens, and other UI
+that is genuinely owned by the framework.
+
 ---
 
 ## 8. Module Boot and Discovery
@@ -352,7 +417,7 @@ The framework is portable across all of these. No mandatory dependency on Packag
 
 On boot, BLB scans for modules:
 
-- **Phase 1–3:** `app/Base/`, `app/Modules/*/*/`, `extensions/*/*/`. A module root is identified by a `ServiceProvider.php` plus a `composer.json` whose `extra.blb` block declares it as a BLB plugin.
+- **Phase 1–3:** `app/Base/`, `app/Modules/*/*/`, `extensions/*/*/`. A module root is identified by a `ServiceProvider.php` plus a `composer.json` whose `extra.blb` block declares it as a BLB plugin. Module-owned views are loaded from each module's `Views/` directory by its provider.
 - **Phase 4:** add a scan of `vendor/` for installed composer packages with `type: blb-plugin` and an `extra.blb` block. Path-based scans (`app/Modules/`, `extensions/`) stay in place for licensee path-based plugins.
 
 A plugin not present on disk is simply not loaded. No fatal error.

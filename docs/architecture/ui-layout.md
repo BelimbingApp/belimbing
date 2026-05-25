@@ -250,28 +250,31 @@ All zones use a shared design-token vocabulary defined in `resources/core/css/to
 
 ## No Volt -- Standard Livewire Components Only
 
-BLB does not use Livewire Volt (single-file components). All pages use standard Livewire: a PHP component class in `app/` and a Blade template in `resources/`.
+BLB does not use Livewire Volt (single-file components). Pages use standard Livewire: a PHP component class plus a Blade template. For Core framework pages, the Blade template may live in `resources/core`; for pluggable modules, the Blade template lives under the module root in `Views/`.
 
 ### Rationale
 
-Volt embeds PHP logic inside Blade files, collapsing the controller/view boundary. This creates a problem for the core/licensee separation:
+Volt embeds PHP logic inside Blade files, collapsing the controller/view boundary. This creates a problem for module ownership:
 
-- **Logic in `resources/`** means the licensee cannot override presentation without inheriting or duplicating business logic.
-- **No independent override path** -- a licensee wanting to change a page's markup must also adopt its PHP logic, or vice versa.
+- **Logic inside Blade** means a module cannot adjust presentation without inheriting or duplicating behavior.
+- **No independent boundary** -- a module wanting to change a page's markup must also adopt its PHP logic, or vice versa.
 - **Agent convenience is irrelevant.** Volt's single-file format is a human ergonomic. Coding agents do not benefit from fewer files; they benefit from predictable, well-separated locations.
 
 ### Page Structure
 
-Every page is a pair:
+Core framework pages may still be a pair split between `app/Modules/Core` and `resources/core`:
 
 ```
 app/Http/Livewire/Dashboard.php                        # Logic
 resources/core/views/livewire/dashboard.blade.php      # Presentation
 ```
 
-Extension modules keep their own Livewire components and presentation together:
+Pluggable modules and extensions keep their own Livewire components and presentation together:
 
 ```
+app/Modules/{Domain}/{Module}/Livewire/Dashboard.php   # Pluggable module logic
+app/Modules/{Domain}/{Module}/Views/livewire/dashboard.blade.php       # Pluggable module presentation
+
 extensions/{owner}/{module}/Livewire/Dashboard.php          # Extension logic
 extensions/{owner}/{module}/Views/livewire/dashboard.blade.php         # Extension presentation
 ```
@@ -287,12 +290,13 @@ Removing Volt loses nothing at runtime:
 | Alpine interactivity | Alpine.js (`x-data`, `@click`) | No -- pure frontend |
 | Component reactivity | Livewire lifecycle | No -- standard Livewire components have full support |
 
-## Core / Extension Directory Separation
+## Core / Pluggable Module Directory Separation
 
 BLB enforces a clear physical boundary between framework-owned presentation and
-extension-owned presentation. Framework views and assets live under
-`resources/core/`; extension module views live under
-`extensions/{owner}/{module}/Views/` and are loaded by the extension provider.
+module-owned presentation. Framework views and assets live under
+`resources/core/`; pluggable module views live under
+`app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/`
+and are loaded by the module provider.
 There is no `resources/extensions` layer.
 
 ### Directory Structure
@@ -301,6 +305,11 @@ There is no `resources/extensions` layer.
 app/                                      # Business logic (PHP)
   Base/                                   #   BLB framework internals
   Modules/                                #   BLB modules
+    Core/                                 #   Non-pluggable core modules
+    {Domain}/
+      {Module}/
+        Livewire/                         #   Pluggable module Livewire components
+        Views/                            #   Pluggable module Blade templates
 
 extensions/
   {owner}/
@@ -323,14 +332,14 @@ resources/                                # Presentation only
 
 **Override model:**
 
-| What | BLB core location | Extension location | Mechanism |
+| What | BLB core location | Pluggable location | Mechanism |
 |------|-------------------|---------------------------|-----------|
 | Design tokens | `resources/core/css/tokens.css` | No extension override path | Framework CSS import |
 | CSS components | `resources/core/css/components.css` | No extension override path | Framework CSS import |
 | Framework Blade components | `resources/core/views/components/` | Reuse from extension views | Laravel view/component resolution |
 | Framework page templates | `resources/core/views/livewire/` | No extension override path | Core Livewire views |
-| Extension page templates | — | `extensions/{owner}/{module}/Views/` | Module provider `loadViewsFrom` |
-| Extension page logic | — | `extensions/{owner}/{module}/Livewire/` | Extension routes/components |
+| Pluggable module page templates | — | `app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/` | Module provider `loadViewsFrom` |
+| Pluggable module page logic | — | `app/Modules/{Domain}/{Module}/Livewire/` or `extensions/{owner}/{module}/Livewire/` | Module routes/components |
 
 ### Load Order
 
@@ -342,15 +351,15 @@ resources/                                # Presentation only
 @import './core/css/components.css';
 ```
 
-Extension modules may load their own namespaced views from their
-`ServiceProvider`. They should compose framework components instead of
-shadowing them through a global view override path.
+Pluggable modules load their own namespaced views from their `ServiceProvider`.
+They should compose framework components instead of shadowing them through a
+global view override path.
 
 ### Design Principles
 
-- **Ownership is visible.** Framework presentation is in `resources/core/`; extension presentation is in the extension module.
-- **Extensions are removable.** Removing `extensions/{owner}/{module}/` removes its views with its code.
-- **No hidden override layer.** Core UI changes happen in core; extension UI is namespaced by the module provider.
+- **Ownership is visible.** Framework presentation is in `resources/core/`; module presentation is in the module.
+- **Plugins are removable.** Removing a pluggable module removes its views with its code.
+- **No hidden override layer.** Core UI changes happen in core; module UI is namespaced by the module provider.
 
 ## Open Questions
 
