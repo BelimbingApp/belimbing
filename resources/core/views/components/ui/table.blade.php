@@ -60,6 +60,12 @@
             <thead class="{{ $headClasses }}">
                 {{ $head }}
             </thead>
+        @else
+            <thead class="sr-only">
+                <tr>
+                    <th scope="col">{{ $caption ?? __('Table content') }}</th>
+                </tr>
+            </thead>
         @endif
 
         <tbody class="{{ $bodyClasses }}">

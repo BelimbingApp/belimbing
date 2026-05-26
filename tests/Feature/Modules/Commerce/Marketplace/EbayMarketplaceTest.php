@@ -311,85 +311,46 @@ test('ebay settings default template mappings from commerce plugins', function (
         ->assertSet("templateCategoryMappings.{$template->id}.category_id", '33710');
 });
 
-test('ebay marketplace surfaces imported listing audit states', function (): void {
-    $user = createAdminUser();
-    $this->actingAs($user);
+function createEbayAuditItem(
+    int $companyId,
+    ProductTemplate $template,
+    string $sku,
+    string $status,
+    ?int $targetPriceAmount = null,
+    ?string $title = null,
+): Item {
+    return Item::factory()->create(array_filter([
+        'company_id' => $companyId,
+        'product_template_id' => $template->id,
+        'sku' => $sku,
+        'title' => $title,
+        'status' => $status,
+        'target_price_amount' => $targetPriceAmount,
+        'currency_code' => $targetPriceAmount === null ? null : 'USD',
+    ], fn (mixed $value): bool => $value !== null));
+}
 
-    $sharedTemplate = ProductTemplate::factory()->create([
-        'company_id' => $user->company_id,
-    ]);
+function seedEbayMarketplaceAuditItems(int $companyId, ProductTemplate $template): array
+{
+    $items = [
+        'ready' => createEbayAuditItem($companyId, $template, 'AUDIT-READY-1', Item::STATUS_LISTED, 12000),
+        'fitment' => createEbayAuditItem($companyId, $template, 'AUDIT-FITMENT-1', Item::STATUS_READY, 13000),
+        'identifier' => createEbayAuditItem($companyId, $template, 'AUDIT-ID-1', Item::STATUS_READY, 14000),
+        'managed' => createEbayAuditItem($companyId, $template, 'AUDIT-MANAGED-1', Item::STATUS_LISTED, 15000),
+        'legacy' => createEbayAuditItem($companyId, $template, 'AUDIT-LEGACY-1', Item::STATUS_READY, 15500),
+        'conflict' => createEbayAuditItem($companyId, $template, 'AUDIT-CONFLICT-1', Item::STATUS_READY, 16000),
+        'fitmentSource' => createEbayAuditItem($companyId, $template, 'FIT-SOURCE-1', Item::STATUS_READY, title: 'BMW donor vehicle set'),
+    ];
 
-    $readyItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-READY-1',
-        'status' => Item::STATUS_LISTED,
-        'target_price_amount' => 12000,
-        'currency_code' => 'USD',
-    ]);
-    $fitmentItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-FITMENT-1',
-        'status' => Item::STATUS_READY,
-        'target_price_amount' => 13000,
-        'currency_code' => 'USD',
-    ]);
-    $identifierItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-ID-1',
-        'status' => Item::STATUS_READY,
-        'target_price_amount' => 14000,
-        'currency_code' => 'USD',
-    ]);
-    $managedItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-MANAGED-1',
-        'status' => Item::STATUS_LISTED,
-        'target_price_amount' => 15000,
-        'currency_code' => 'USD',
-    ]);
-    $legacyItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-LEGACY-1',
-        'status' => Item::STATUS_READY,
-        'target_price_amount' => 15500,
-        'currency_code' => 'USD',
-    ]);
-    $conflictItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'AUDIT-CONFLICT-1',
-        'status' => Item::STATUS_READY,
-        'target_price_amount' => 16000,
-        'currency_code' => 'USD',
-    ]);
-    $fitmentSourceItem = Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'FIT-SOURCE-1',
-        'title' => 'BMW donor vehicle set',
-        'status' => Item::STATUS_READY,
-    ]);
-    Item::factory()->create([
-        'company_id' => $user->company_id,
-        'product_template_id' => $sharedTemplate->id,
-        'sku' => 'FIT-TARGET-1',
-        'title' => 'BMW spare dust shield',
-        'status' => Item::STATUS_READY,
-    ]);
-
-    $legacyItem->forceFill([
+    createEbayAuditItem($companyId, $template, 'FIT-TARGET-1', Item::STATUS_READY, title: 'BMW spare dust shield');
+    $items['legacy']->forceFill([
         'created_at' => now()->subDays(60),
         'updated_at' => now()->subDays(60),
     ])->saveQuietly();
 
     ItemFitment::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $fitmentSourceItem->id,
+        'company_id' => $companyId,
+        'item_id' => $items['fitmentSource']->id,
         'compatibility_properties' => ['Year' => '2011', 'Make' => 'BMW', 'Model' => '135i'],
         'display_year' => '2011',
         'display_make' => 'BMW',
@@ -398,120 +359,88 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
     ]);
 
-    $readyListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $readyItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-ready-1',
-        'external_offer_id' => 'offer-audit-ready-1',
-        'external_sku' => $readyItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Ready to adopt caliper',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'price_amount' => 12000,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => ['inventory_item' => ['sku' => $readyItem->sku]],
-    ]);
-    $fitmentListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $fitmentItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-fitment-1',
-        'external_offer_id' => 'offer-audit-fitment-1',
-        'external_sku' => $fitmentItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Missing fitment rotor',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'price_amount' => 13000,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => ['inventory_item' => ['sku' => $fitmentItem->sku]],
-    ]);
-    $identifierListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $identifierItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-id-1',
-        'external_offer_id' => 'offer-audit-id-1',
-        'external_sku' => $identifierItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Missing identifiers mirror',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'price_amount' => 14000,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => ['inventory_item' => ['sku' => $identifierItem->sku]],
-    ]);
-    $managedListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $managedItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-managed-1',
-        'external_offer_id' => 'offer-audit-managed-1',
-        'external_sku' => $managedItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Externally changed headlight',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
-        'drift_status' => Listing::DRIFT_DRIFTED,
-        'drift_summary' => 'Externally changed: price.',
-        'price_amount' => 15500,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => [],
-    ]);
-    $legacyListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $legacyItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-legacy-1',
-        'external_offer_id' => null,
-        'external_sku' => $legacyItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Legacy relist bumper cover',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'price_amount' => 15500,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => [],
-    ]);
-    $conflictListing = Listing::query()->create([
-        'company_id' => $user->company_id,
-        'item_id' => $conflictItem->id,
-        'channel' => EbayConfiguration::CHANNEL,
-        'external_listing_id' => 'audit-conflict-1',
-        'external_offer_id' => 'offer-audit-conflict-1',
-        'external_sku' => $conflictItem->sku,
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'Conflicting identifiers caliper',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'price_amount' => 16000,
-        'currency_code' => 'USD',
-        'last_synced_at' => now(),
-        'raw_payload' => ['inventory_item' => ['sku' => $conflictItem->sku]],
-    ]);
+    return $items;
+}
 
+function createEbayAuditListing(Item $item, array $attributes): Listing
+{
+    return Listing::query()->create(array_merge([
+        'company_id' => $item->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_sku' => $item->sku,
+        'marketplace_id' => 'EBAY_US',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'drift_status' => Listing::DRIFT_UNKNOWN,
+        'currency_code' => 'USD',
+        'last_synced_at' => now(),
+        'raw_payload' => ['inventory_item' => ['sku' => $item->sku]],
+    ], $attributes));
+}
+
+function seedEbayMarketplaceAuditListings(array $items): array
+{
+    return [
+        'ready' => createEbayAuditListing($items['ready'], [
+            'external_listing_id' => 'audit-ready-1',
+            'external_offer_id' => 'offer-audit-ready-1',
+            'title' => 'Ready to adopt caliper',
+            'price_amount' => 12000,
+        ]),
+        'fitment' => createEbayAuditListing($items['fitment'], [
+            'external_listing_id' => 'audit-fitment-1',
+            'external_offer_id' => 'offer-audit-fitment-1',
+            'title' => 'Missing fitment rotor',
+            'price_amount' => 13000,
+        ]),
+        'identifier' => createEbayAuditListing($items['identifier'], [
+            'external_listing_id' => 'audit-id-1',
+            'external_offer_id' => 'offer-audit-id-1',
+            'title' => 'Missing identifiers mirror',
+            'price_amount' => 14000,
+        ]),
+        'managed' => createEbayAuditListing($items['managed'], [
+            'external_listing_id' => 'audit-managed-1',
+            'external_offer_id' => 'offer-audit-managed-1',
+            'title' => 'Externally changed headlight',
+            'management_state' => Listing::MANAGEMENT_BELIMBING_MANAGED,
+            'drift_status' => Listing::DRIFT_DRIFTED,
+            'drift_summary' => 'Externally changed: price.',
+            'price_amount' => 15500,
+            'raw_payload' => [],
+        ]),
+        'legacy' => createEbayAuditListing($items['legacy'], [
+            'external_listing_id' => 'audit-legacy-1',
+            'external_offer_id' => null,
+            'title' => 'Legacy relist bumper cover',
+            'price_amount' => 15500,
+            'raw_payload' => [],
+        ]),
+        'conflict' => createEbayAuditListing($items['conflict'], [
+            'external_listing_id' => 'audit-conflict-1',
+            'external_offer_id' => 'offer-audit-conflict-1',
+            'title' => 'Conflicting identifiers caliper',
+            'price_amount' => 16000,
+        ]),
+    ];
+}
+
+function seedEbayMarketplaceAuditDrafts(array $items, array $listings): void
+{
     foreach ([
-        [$readyItem, $readyListing, [], []],
-        [$fitmentItem, $fitmentListing, [['key' => 'fitment', 'label' => 'Add fitment.', 'action' => 'fitment']], []],
-        [$identifierItem, $identifierListing, [], [['key' => 'identifier_part_number', 'label' => 'Add part number.', 'action' => 'attributes']]],
-        [$managedItem, $managedListing, [], []],
-        [$legacyItem, $legacyListing, [], []],
-        [$conflictItem, $conflictListing, [], [['key' => 'identifier_conflict', 'label' => 'Review conflict.', 'action' => 'attributes']]],
-    ] as [$item, $listing, $blockers, $warnings]) {
+        ['ready', [], []],
+        ['fitment', [['key' => 'fitment', 'label' => 'Add fitment.', 'action' => 'fitment']], []],
+        ['identifier', [], [['key' => 'identifier_part_number', 'label' => 'Add part number.', 'action' => 'attributes']]],
+        ['managed', [], []],
+        ['legacy', [], []],
+        ['conflict', [], [['key' => 'identifier_conflict', 'label' => 'Review conflict.', 'action' => 'attributes']]],
+    ] as [$key, $blockers, $warnings]) {
+        $item = $items[$key];
+        $listing = $listings[$key];
+
         ListingDraft::query()->create([
-            'company_id' => $user->company_id,
+            'company_id' => $item->company_id,
             'item_id' => $item->id,
             'listing_id' => $listing->id,
             'channel' => EbayConfiguration::CHANNEL,
@@ -525,7 +454,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
             'readiness_snapshot' => [
                 'blockers' => $blockers,
                 'warnings' => $warnings,
-                'identifier_alignment' => $listing->external_listing_id === 'audit-conflict-1'
+                'identifier_alignment' => $key === 'conflict'
                     ? [[
                         'key' => 'part_number',
                         'label' => 'Part Number',
@@ -539,9 +468,12 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
             ],
         ]);
     }
+}
 
+function seedEbayMarketplaceAuditOrder(int $companyId, Item $legacyItem, Listing $legacyListing): void
+{
     $order = Order::query()->create([
-        'company_id' => $user->company_id,
+        'company_id' => $companyId,
         'channel' => EbayConfiguration::CHANNEL,
         'external_order_id' => 'ORDER-AUDIT-1',
         'marketplace_id' => 'EBAY_US',
@@ -555,7 +487,7 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         ],
     ]);
     OrderLine::query()->create([
-        'company_id' => $user->company_id,
+        'company_id' => $companyId,
         'order_id' => $order->id,
         'item_id' => $legacyItem->id,
         'listing_id' => $legacyListing->id,
@@ -568,6 +500,19 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
         'currency_code' => 'USD',
         'raw_payload' => [],
     ]);
+}
+
+test('ebay marketplace surfaces imported listing audit states', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $sharedTemplate = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+    ]);
+    $items = seedEbayMarketplaceAuditItems($user->company_id, $sharedTemplate);
+    $listings = seedEbayMarketplaceAuditListings($items);
+    seedEbayMarketplaceAuditDrafts($items, $listings);
+    seedEbayMarketplaceAuditOrder($user->company_id, $items['legacy'], $listings['legacy']);
 
     Livewire::actingAs($user)
         ->test(MarketplaceIndex::class)
