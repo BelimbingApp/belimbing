@@ -31,10 +31,12 @@ use Carbon\CarbonImmutable;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
 
 const ATTENDANCE_POLICY_OFFICE_EMPLOYEE_NAME = 'Office Olive';
 const ATTENDANCE_POLICY_PRODUCTION_EMPLOYEE_NAME = 'Production Pat';
+const ATTENDANCE_SHIFT_CODE_LABEL = 'Shift code';
 
 function attendancePolicyGroupForOperationsTest(Company $company, array $attributes = []): AttendancePolicyGroup
 {
@@ -77,7 +79,47 @@ function attendanceRosterAssignmentForOperationsTest(
         'lock_state' => 'open',
         'revision' => 1,
         'exceptions' => [],
+        'metadata' => [],
     ], $attributes));
+}
+
+function startAttendanceTemplateBuilderForOperationsTest(
+    string $component,
+    string $startMethod,
+    string $useMethod,
+    string $templateKey,
+    string $templateListText,
+    string $formText,
+): Testable {
+    return Livewire::test($component)
+        ->assertSet('mode', 'list')
+        ->assertDontSee($templateListText)
+        ->call($startMethod)
+        ->assertSet('mode', 'form')
+        ->assertSee($templateListText)
+        ->assertDontSee($formText)
+        ->call($useMethod, $templateKey)
+        ->assertSee($formText);
+}
+
+/**
+ * @return array{Employee, AttendancePolicyGroup, AttendanceShiftTemplate, string, string}
+ */
+function publishedRosterScenarioForOperationsTest(Company $company): array
+{
+    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
+    $policyGroup = attendancePolicyGroupForOperationsTest($company);
+    $shift = attendanceShiftTemplateForOperationsTest($company);
+    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
+    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
+
+    attendanceRosterAssignmentForOperationsTest($company, $employee, $shift, $policyGroup, [
+        'effective_from' => $monday,
+        'effective_to' => $sunday,
+        'publish_state' => 'published',
+    ]);
+
+    return [$employee, $policyGroup, $shift, $monday, $sunday];
 }
 
 it('returns stable validation findings for unsafe attendance policy setup', function (): void {
@@ -318,16 +360,15 @@ it('lets managers build, save, and edit policies inline on the studio page', fun
 
     $this->actingAs($user);
 
-    Livewire::test(PolicyGroups::class)
+    startAttendanceTemplateBuilderForOperationsTest(
+        PolicyGroups::class,
+        'startNewPolicy',
+        'usePolicyTemplate',
+        'office-grace',
+        'Templates',
+        'Identification',
+    )
         ->assertSee('Policy Groups')
-        ->assertSet('mode', 'list')
-        ->assertDontSee('Templates')
-        ->call('startNewPolicy')
-        ->assertSet('mode', 'form')
-        ->assertSee('Templates')
-        ->assertDontSee('Identification')
-        ->call('usePolicyTemplate', 'office-grace')
-        ->assertSee('Identification')
         ->assertSet('policyGraceIn', '10')
         ->set('policyCode', 'std_8_5')
         ->set('policyName', 'Standard 8 to 5')
@@ -1109,15 +1150,14 @@ it('lets managers build shift templates inline from guided templates and import 
 
     $this->actingAs($user);
 
-    Livewire::test(ShiftTemplates::class)
-        ->assertSet('mode', 'list')
-        ->assertDontSee('Best for')
-        ->call('startNewShift')
-        ->assertSet('mode', 'form')
-        ->assertSee('Best for')
-        ->assertDontSee('Shift code')
-        ->call('useShiftTemplate', 'night-shift')
-        ->assertSee('Shift code')
+    startAttendanceTemplateBuilderForOperationsTest(
+        ShiftTemplates::class,
+        'startNewShift',
+        'useShiftTemplate',
+        'night-shift',
+        'Best for',
+        ATTENDANCE_SHIFT_CODE_LABEL,
+    )
         ->assertSet('shiftCode', 'NIGHT_SHIFT')
         ->set('shiftCode', 'NIGHT_MAIN')
         ->set('shiftName', 'Night Main')
@@ -1222,7 +1262,7 @@ it('restores shift edit mode from the URL', function (): void {
         ->assertSet('editingShiftTemplateId', $shift->id)
         ->assertSet('shiftCode', 'URL_SHIFT')
         ->assertSet('shiftStartsAt', '06:00')
-        ->assertSee('Shift code');
+        ->assertSee(ATTENDANCE_SHIFT_CODE_LABEL);
 });
 
 it('restores shift create mode and selected template from the URL', function (): void {
@@ -1237,7 +1277,7 @@ it('restores shift create mode and selected template from the URL', function ():
         ->assertSet('showShiftBuilderForm', true)
         ->assertSet('shiftCode', 'NIGHT_SHIFT')
         ->assertSet('shiftStartsAt', '20:00')
-        ->assertSee('Shift code');
+        ->assertSee(ATTENDANCE_SHIFT_CODE_LABEL);
 });
 
 it('toggles shift template status from the list', function (): void {
@@ -1483,26 +1523,7 @@ it('lets an employee acknowledge their schedule for the current period', functio
 it('resets acknowledgment when a published cell override is saved for an employee', function (): void {
     $adminUser = createAdminUser();
     $company = Company::query()->findOrFail($adminUser->company_id);
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-
-    $policyGroup = attendancePolicyGroupForOperationsTest($company);
-    $shift = attendanceShiftTemplateForOperationsTest($company);
-    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
-    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
-
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => $monday,
-        'effective_to' => $sunday,
-        'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
-        'metadata' => [],
-    ]);
+    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
 
     AttendanceRosterAcknowledgment::query()->create([
         'company_id' => $company->id,
@@ -1528,26 +1549,7 @@ it('resets acknowledgment when a published cell override is saved for an employe
 it('locks a roster period and blocks cell override on locked dates', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-
-    $policyGroup = attendancePolicyGroupForOperationsTest($company);
-    $shift = attendanceShiftTemplateForOperationsTest($company);
-    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
-    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
-
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => $monday,
-        'effective_to' => $sunday,
-        'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
-        'metadata' => [],
-    ]);
+    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
 
     $this->actingAs($user);
 
@@ -1624,26 +1626,7 @@ it('unlocks a roster period after providing a reason', function (): void {
 it('exposes actual attendance outcomes in actualMode for the grid', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
-    $employee = Employee::factory()->active()->create(['company_id' => $company->id]);
-
-    $policyGroup = attendancePolicyGroupForOperationsTest($company);
-    $shift = attendanceShiftTemplateForOperationsTest($company);
-    $monday = CarbonImmutable::today()->startOfWeek(CarbonImmutable::MONDAY)->toDateString();
-    $sunday = CarbonImmutable::today()->endOfWeek(CarbonImmutable::SUNDAY)->toDateString();
-
-    AttendanceRosterAssignment::query()->create([
-        'company_id' => $company->id,
-        'employee_id' => $employee->id,
-        'attendance_shift_template_id' => $shift->id,
-        'attendance_policy_group_id' => $policyGroup->id,
-        'effective_from' => $monday,
-        'effective_to' => $sunday,
-        'publish_state' => 'published',
-        'lock_state' => 'open',
-        'revision' => 1,
-        'exceptions' => [],
-        'metadata' => [],
-    ]);
+    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
 
     AttendanceDay::query()->create([
         'company_id' => $company->id,
