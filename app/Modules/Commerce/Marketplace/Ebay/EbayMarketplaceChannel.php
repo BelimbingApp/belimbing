@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
+use App\Base\Foundation\ValueObjects\Money;
 use App\Base\Integration\Services\IntegrationGateway;
 use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Commerce\Inventory\Models\Item;
