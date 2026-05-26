@@ -63,78 +63,83 @@
         <div class="space-y-4">
             <x-ui.catalog-section
                 :title="__('Table Pattern')"
-                component="<code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>, <code>x-icon</code>"
+                component="<code>x-ui.table</code>, <code>x-ui.sortable-th</code>, <code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
             >
-                {{ __('Tables should preserve compact rhythm, clear row hover, tabular values, aligned supporting actions, and the standard sortable-header affordance when a column can reorder results.') }}
+                {{ __('Tables should use the shared shell for overflow, border rhythm, captions, optional sticky headers, row hover or striping, empty states, and the standard sortable-header affordance when a column can reorder results.') }}
             </x-ui.catalog-section>
 
             <p class="text-xs text-muted">
                 {!! __('Server-side note: keep the click-to-sort behavior consistent across Livewire tables (toggle direction when clicking the active column, otherwise set the default direction). Prefer the shared :trait concern where practical.', ['trait' => '<code>App/Base/Foundation/Livewire/Concerns/TogglesSort</code>']) !!}
             </p>
 
-            <div class="overflow-x-auto rounded-2xl border border-border-default">
-                <table class="min-w-full divide-y divide-border-default">
-                    <thead class="bg-surface-subtle/80">
-                        <tr>
-                            <x-ui.sortable-th
-                                column="workflow"
-                                :sort-by="$dataDisplaySortBy"
-                                :sort-dir="$dataDisplaySortDir"
-                                method="sortDataDisplay"
-                                :label="__('Workflow')"
-                            />
-                            <x-ui.sortable-th
-                                column="owner"
-                                :sort-by="$dataDisplaySortBy"
-                                :sort-dir="$dataDisplaySortDir"
-                                method="sortDataDisplay"
-                                :label="__('Owner')"
-                            />
-                            <x-ui.sortable-th
-                                column="status"
-                                :sort-by="$dataDisplaySortBy"
-                                :sort-dir="$dataDisplaySortDir"
-                                method="sortDataDisplay"
-                                :label="__('Status')"
-                            />
-                            <x-ui.sortable-th
-                                column="updated_at"
-                                :sort-by="$dataDisplaySortBy"
-                                :sort-dir="$dataDisplaySortDir"
-                                method="sortDataDisplay"
-                                :label="__('Updated')"
-                            />
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default bg-surface-card">
-                        @foreach ($tableRows as $row)
-                            <tr class="hover:bg-surface-subtle/60 transition-colors">
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __($row['name']) }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __($row['owner']) }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm">
-                                    <x-ui.badge :variant="match ($row['status']) {
-                                        'Active' => 'success',
-                                        'Queued' => 'warning',
-                                        default => 'default',
-                                    }">
-                                        {{ __($row['status']) }}
-                                    </x-ui.badge>
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">
-                                    <x-ui.datetime :value="$row['updated_at']" />
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y">
-                                    <x-ui.icon-action-group>
-                                        <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
-                                        <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
-                                    </x-ui.icon-action-group>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
+            <x-ui.table
+                :caption="__('Workflow status overview')"
+                caption-position="top"
+                sticky-header
+                striped
+                :empty="empty($tableRows)"
+                empty-colspan="5"
+                :empty-message="__('No workflows found.')"
+            >
+                <x-slot name="head">
+                    <tr>
+                        <x-ui.sortable-th
+                            column="workflow"
+                            :sort-by="$dataDisplaySortBy"
+                            :sort-dir="$dataDisplaySortDir"
+                            method="sortDataDisplay"
+                            :label="__('Workflow')"
+                        />
+                        <x-ui.sortable-th
+                            column="owner"
+                            :sort-by="$dataDisplaySortBy"
+                            :sort-dir="$dataDisplaySortDir"
+                            method="sortDataDisplay"
+                            :label="__('Owner')"
+                        />
+                        <x-ui.sortable-th
+                            column="status"
+                            :sort-by="$dataDisplaySortBy"
+                            :sort-dir="$dataDisplaySortDir"
+                            method="sortDataDisplay"
+                            :label="__('Status')"
+                        />
+                        <x-ui.sortable-th
+                            column="updated_at"
+                            :sort-by="$dataDisplaySortBy"
+                            :sort-dir="$dataDisplaySortDir"
+                            method="sortDataDisplay"
+                            :label="__('Updated')"
+                        />
+                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
+                    </tr>
+                </x-slot>
+
+                @foreach ($tableRows as $row)
+                    <tr>
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __($row['name']) }}</td>
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __($row['owner']) }}</td>
+                        <td class="px-table-cell-x py-table-cell-y text-sm">
+                            <x-ui.badge :variant="match ($row['status']) {
+                                'Active' => 'success',
+                                'Queued' => 'warning',
+                                default => 'default',
+                            }">
+                                {{ __($row['status']) }}
+                            </x-ui.badge>
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">
+                            <x-ui.datetime :value="$row['updated_at']" />
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y">
+                            <x-ui.icon-action-group>
+                                <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
+                                <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
+                            </x-ui.icon-action-group>
+                        </td>
+                    </tr>
+                @endforeach
+            </x-ui.table>
         </div>
     </x-ui.card>
 </div>
