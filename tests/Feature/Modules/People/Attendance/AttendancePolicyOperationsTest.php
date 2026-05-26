@@ -1523,7 +1523,7 @@ it('lets an employee acknowledge their schedule for the current period', functio
 it('resets acknowledgment when a published cell override is saved for an employee', function (): void {
     $adminUser = createAdminUser();
     $company = Company::query()->findOrFail($adminUser->company_id);
-    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
+    [$employee, , , $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
 
     AttendanceRosterAcknowledgment::query()->create([
         'company_id' => $company->id,
