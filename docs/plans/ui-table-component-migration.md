@@ -1,7 +1,7 @@
 # UI Table Component Migration
 
 **Agents:** Amp; GPT-5.5/gpt-5.5
-**Status:** In Progress (Phase 3 complete)
+**Status:** In Progress (Phase 4 complete)
 **Last Updated:** 2026-05-26
 **Sources:** `resources/core/views/AGENTS.md`, `resources/core/views/components/ui/table.blade.php`, `resources/core/views/components/ui/sortable-th.blade.php`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`
 
@@ -121,25 +121,25 @@ High-level buckets:
 
 ### Phase 4 — Module Application Tables
 
-- [ ] `app/Modules/Commerce/Catalog/Views/livewire/commerce/catalog/index.blade.php`
-- [ ] `app/Modules/Commerce/Inventory/Views/livewire/commerce/inventory/items/index.blade.php`
-- [ ] `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/index.blade.php`
-- [ ] `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php`
-- [ ] `app/Modules/Operation/IT/Views/livewire/it/tickets/index.blade.php`
-- [ ] `app/Modules/Operation/Quality/Views/livewire/quality/ncr/index.blade.php`
-- [ ] `app/Modules/Operation/Quality/Views/livewire/quality/scar/index.blade.php`
-- [ ] `app/Modules/People/Employees/Views/livewire/people/employees/index.blade.php`
-- [ ] `app/Modules/People/Settings/Views/livewire/people/settings/index.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/approvals.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/policy-groups.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/roster-employee-history.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/allowance-rules-table.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/approvals-queue.blade.php`
-- [ ] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/shift-templates-table.blade.php`
-- [ ] `app/Modules/People/Payroll/Views/livewire/people/payroll/attendance-allowance-mapping.blade.php`
-- [ ] `app/Modules/People/Payroll/Views/livewire/people/payroll/claim-type-pay-item-mapping.blade.php`
-- [ ] `app/Modules/People/Payroll/Views/livewire/people/payroll/index.blade.php`
-- [ ] `app/Modules/People/Payroll/Views/livewire/people/payroll/leave-type-pay-item-mapping.blade.php`
+- [x] `app/Modules/Commerce/Catalog/Views/livewire/commerce/catalog/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Commerce/Inventory/Views/livewire/commerce/inventory/items/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Operation/IT/Views/livewire/it/tickets/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Operation/Quality/Views/livewire/quality/ncr/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/Operation/Quality/Views/livewire/quality/scar/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Employees/Views/livewire/people/employees/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Settings/Views/livewire/people/settings/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/approvals.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/policy-groups.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/roster-employee-history.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/allowance-rules-table.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/approvals-queue.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/shift-templates-table.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Payroll/Views/livewire/people/payroll/attendance-allowance-mapping.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Payroll/Views/livewire/people/payroll/claim-type-pay-item-mapping.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Payroll/Views/livewire/people/payroll/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `app/Modules/People/Payroll/Views/livewire/people/payroll/leave-type-pay-item-mapping.blade.php` {GPT-5.5/gpt-5.5}
 
 ### Phase 5 — Special-Case Assessment
 

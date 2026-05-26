@@ -31,9 +31,10 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('IT tickets')">
+
+
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="id"
@@ -85,10 +86,10 @@
                                 :label="__('Created')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($tickets as $ticket)
-                            <tr wire:key="ticket-{{ $ticket->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="ticket-{{ $ticket->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $ticket->id }}</td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <a href="{{ route('it.tickets.show', $ticket) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $ticket->title }}</a>
@@ -108,9 +109,9 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tickets found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $tickets->links() }}

@@ -186,17 +186,17 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                 @if ($productTemplates->isEmpty())
                     <x-ui.alert variant="info">{{ __('No catalog templates exist yet. Create templates in Catalog before mapping eBay categories.') }}</x-ui.alert>
                 @else
-                    <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                        <table class="min-w-full divide-y divide-border-default text-sm">
-                            <thead class="bg-surface-subtle/80">
+                    <x-ui.table container="flush" :caption="__('eBay settings')">
+
+                        <x-slot name="head">
                                 <tr>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Marketplace') }}</th>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Category tree') }}</th>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay category ID') }}</th>
                                 </tr>
-                            </thead>
-                            <tbody class="divide-y divide-border-default">
+                            </x-slot>
+
                                 @foreach ($productTemplates as $template)
                                     <tr wire:key="ebay-template-category-{{ $template->id }}">
                                         <td class="px-table-cell-x py-table-cell-y">
@@ -229,9 +229,8 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                                         </td>
                                     </tr>
                                 @endforeach
-                            </tbody>
-                        </table>
-                    </div>
+                            
+                    </x-ui.table>
 
                     <div class="flex flex-wrap items-center gap-3">
                         <x-ui.button type="button" variant="primary" wire:click="saveTemplateCategoryMappings" wire:loading.attr="disabled" wire:target="saveTemplateCategoryMappings">

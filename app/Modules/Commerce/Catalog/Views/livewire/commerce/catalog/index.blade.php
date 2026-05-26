@@ -101,15 +101,24 @@
             @if ($tab === 'categories')
                 @include('commerce-catalog::livewire.commerce.catalog.partials.categories-workspace')
             @else
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
+                <x-ui.table
+                    container="flush"
+                    :caption="$tab === 'templates' ? __('Product templates') : __('Catalog attributes')"
+                >
+                    <x-slot name="head">
+                        @if ($tab === 'templates')
+                            @include('commerce-catalog::livewire.commerce.catalog.partials.templates-table', ['section' => 'head'])
+                        @else
+                            @include('commerce-catalog::livewire.commerce.catalog.partials.attributes-table', ['section' => 'head'])
+                        @endif
+                    </x-slot>
+
                     @if ($tab === 'templates')
-                        @include('commerce-catalog::livewire.commerce.catalog.partials.templates-table')
+                        @include('commerce-catalog::livewire.commerce.catalog.partials.templates-table', ['section' => 'body'])
                     @else
-                        @include('commerce-catalog::livewire.commerce.catalog.partials.attributes-table')
+                        @include('commerce-catalog::livewire.commerce.catalog.partials.attributes-table', ['section' => 'body'])
                     @endif
-                    </table>
-                </div>
+                </x-ui.table>
 
                 <div class="mt-2">
                     {{ $rows->links() }}

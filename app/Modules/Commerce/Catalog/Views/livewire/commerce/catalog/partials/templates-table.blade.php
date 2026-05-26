@@ -1,5 +1,5 @@
-<thead class="bg-surface-subtle/80">
-    <tr>
+@if (! isset($section) || $section === 'head')
+<tr>
         <x-ui.sortable-th
             column="code"
             :sort-by="$sortBy"
@@ -35,10 +35,10 @@
         <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Items') }}</th>
         <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
     </tr>
-</thead>
-<tbody class="bg-surface-card divide-y divide-border-default">
+@endif
+@if (! isset($section) || $section === 'body')
     @forelse ($rows as $template)
-        <tr wire:key="template-{{ $template->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+        <tr wire:key="template-{{ $template->id }}">
             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-mono text-muted"
                 x-data="{ editing: false, val: @js($template->code) }"
             >
@@ -116,4 +116,4 @@
                 <td colspan="9" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No templates found.') }}</td>
             </tr>
         @endforelse
-    </tbody>
+@endif

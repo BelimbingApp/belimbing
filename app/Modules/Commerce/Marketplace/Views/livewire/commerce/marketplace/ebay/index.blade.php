@@ -170,9 +170,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                 <x-ui.badge>{{ $cleanupQueue->count() }}</x-ui.badge>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Cleanup queue')">
+
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Priority') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Listing / Item') }}</th>
@@ -181,11 +182,11 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recommendations') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Performance') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse ($cleanupQueue as $row)
                             @php($listing = $row['listing'])
-                            <tr class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr>
                                 <td class="px-table-cell-x py-table-cell-y align-top">
                                     <div class="flex flex-col gap-2">
                                         <x-ui.badge :variant="$row['state_variant']">{{ $row['state_label'] }}</x-ui.badge>
@@ -268,9 +269,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No cleanup queue rows yet.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
@@ -341,9 +342,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                 <x-ui.badge>{{ $listings->total() }}</x-ui.badge>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Synced eBay listings')">
+
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reconciliation') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay Listing') }}</th>
@@ -352,10 +354,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Price') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse ($listings as $listing)
-                            <tr wire:key="ebay-listing-{{ $listing->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="ebay-listing-{{ $listing->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.badge :variant="$this->reconciliationVariant($listing)">
                                         {{ $this->reconciliationLabel($listing) }}
@@ -419,9 +421,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No eBay listings have been synced yet.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-4">
                 {{ $listings->links() }}
@@ -434,9 +436,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                 <x-ui.badge>{{ $unlistedItems->total() }}</x-ui.badge>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Inventory not listed on eBay')">
+
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('SKU') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Item') }}</th>
@@ -444,10 +447,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Target Price') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Created') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse ($unlistedItems as $item)
-                            <tr wire:key="ebay-unlisted-item-{{ $item->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="ebay-unlisted-item-{{ $item->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <a href="{{ route('commerce.inventory.items.show', $item) }}" class="font-mono text-sm text-accent hover:underline" wire:navigate>
                                         {{ $item->sku }}
@@ -476,9 +479,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active Belimbing inventory is missing from eBay.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-4">
                 {{ $unlistedItems->links() }}

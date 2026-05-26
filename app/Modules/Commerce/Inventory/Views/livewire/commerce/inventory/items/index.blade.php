@@ -34,9 +34,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Inventory items')">
+
+
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="sku"
@@ -105,10 +106,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                                 :label="__('Created')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($items as $item)
-                            <tr wire:key="item-{{ $item->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="item-{{ $item->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
                                     <a href="{{ route('commerce.inventory.items.show', $item) }}" class="text-accent hover:underline" wire:navigate>
                                         {{ $item->sku }}
@@ -143,9 +144,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Index;
                                 <td colspan="9" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No items found. Create the first item to begin the workbench.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $items->links() }}

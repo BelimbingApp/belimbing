@@ -1,5 +1,5 @@
-<thead class="bg-surface-subtle/80">
-    <tr>
+@if (! isset($section) || $section === 'head')
+<tr>
         <x-ui.sortable-th
             column="code"
             :sort-by="$sortBy"
@@ -44,11 +44,11 @@
             :label="__('Sort')"
         />
     </tr>
-</thead>
-<tbody class="bg-surface-card divide-y divide-border-default">
+@endif
+@if (! isset($section) || $section === 'body')
     @forelse ($rows as $attribute)
         @php($optionText = collect($attribute->options ?? [])->implode(', '))
-        <tr wire:key="attribute-{{ $attribute->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+        <tr wire:key="attribute-{{ $attribute->id }}">
             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-mono text-muted"
                 x-data="{ editing: false, val: @js($attribute->code) }"
             >
@@ -141,4 +141,4 @@
             <td colspan="8" class="px-table-cell-x py-10 text-center text-sm text-muted">{{ __('No attributes found.') }}</td>
         </tr>
     @endforelse
-</tbody>
+@endif
