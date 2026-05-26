@@ -47,9 +47,9 @@
         <x-ui.card>
             <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Statuses') }}</h2>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Workflow steps')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="position"
@@ -101,8 +101,8 @@
                                 :label="__('Active')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($statuses as $status)
                             <tr wire:key="status-{{ $status->id }}" class="group/row hover:bg-surface-subtle/50 transition-colors">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $status->position }}</td>
@@ -198,18 +198,18 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No statuses configured.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
 
         {{-- Transitions --}}
         <x-ui.card>
             <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Transitions') }}</h2>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Workflow transitions')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="from_code"
@@ -268,10 +268,10 @@
                                 :label="__('Active')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($transitions as $transition)
-                            <tr wire:key="transition-{{ $transition->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="transition-{{ $transition->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $transition->from_code }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $transition->to_code }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">{{ $transition->label ?? '—' }}</td>
@@ -292,9 +292,9 @@
                                 <td colspan="8" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No transitions configured.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
 
         {{-- Kanban Columns --}}
@@ -302,9 +302,9 @@
             <x-ui.card>
                 <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Kanban Columns') }}</h2>
 
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
-                        <thead class="bg-surface-subtle/80">
+                <x-ui.table container="flush" :caption="__('Workflow instances')">
+
+                        <x-slot name="head">
                             <tr>
                                 <x-ui.sortable-th
                                     column="position"
@@ -335,19 +335,17 @@
                                     :label="__('WIP Limit')"
                                 />
                             </tr>
-                        </thead>
-                        <tbody class="bg-surface-card divide-y divide-border-default">
+                        </x-slot>
+
                             @foreach($kanbanColumns as $column)
-                                <tr wire:key="kanban-{{ $column->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                <tr wire:key="kanban-{{ $column->id }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $column->position }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $column->code }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">{{ $column->label }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $column->wip_limit ?? '—' }}</td>
                                 </tr>
                             @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                                        </x-ui.table>
             </x-ui.card>
         @endif
     </div>

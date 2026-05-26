@@ -28,9 +28,9 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Saved queries')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="name"
@@ -62,8 +62,8 @@
                             />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($views as $view)
                             @php
                                 $viewUrl = route('admin.system.database-queries.show', $view->slug);
@@ -100,9 +100,9 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No queries found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $views->links() }}

@@ -13,9 +13,9 @@
         <x-ui.badge variant="default">{{ trans_choice(':count column|:count columns', count($columns), ['count' => count($columns)]) }}</x-ui.badge>
     </div>
 
-    <div class="overflow-x-auto -mx-card-inner px-card-inner">
-        <table class="min-w-full divide-y divide-border-default text-sm">
-            <thead class="bg-surface-subtle/80">
+    <x-ui.table container="flush" :caption="__('Table columns')">
+
+            <x-slot name="head">
                 <tr>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Column') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
@@ -24,11 +24,11 @@
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Attributes') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('References') }}</th>
                 </tr>
-            </thead>
-            <tbody class="bg-surface-card divide-y divide-border-default">
+            </x-slot>
+
                 @foreach($columns as $col)
                     @php $foreignKeyLinks = $columnForeignKeys->get($col['name'], collect()); @endphp
-                    <tr wire:key="schema-column-{{ $col['name'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                    <tr wire:key="schema-column-{{ $col['name'] }}">
                         <td class="px-table-cell-x py-table-cell-y text-sm font-mono text-ink">{{ $col['name'] }}</td>
                         <td class="px-table-cell-x py-table-cell-y text-sm font-mono text-ink">{{ $col['type_name'] }}</td>
                         <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ $col['nullable'] ? __('Yes') : __('No') }}</td>
@@ -75,9 +75,7 @@
                         </td>
                     </tr>
                 @endforeach
-            </tbody>
-        </table>
-    </div>
+                </x-ui.table>
 </x-ui.card>
 
 <x-ui.card>
@@ -89,19 +87,19 @@
         <x-ui.badge variant="default">{{ trans_choice(':count index|:count indexes', count($indexes), ['count' => count($indexes)]) }}</x-ui.badge>
     </div>
 
-    <div class="overflow-x-auto -mx-card-inner px-card-inner">
-        <table class="min-w-full divide-y divide-border-default text-sm">
-            <thead class="bg-surface-subtle/80">
+    <x-ui.table container="flush" :caption="__('Table indexes')">
+
+            <x-slot name="head">
                 <tr>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Columns') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Flags') }}</th>
                 </tr>
-            </thead>
-            <tbody class="bg-surface-card divide-y divide-border-default">
+            </x-slot>
+
                 @forelse($indexes as $index)
-                    <tr wire:key="schema-index-{{ $index['name'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                    <tr wire:key="schema-index-{{ $index['name'] }}">
                         <td class="px-table-cell-x py-table-cell-y text-sm font-mono text-ink">{{ $index['name'] }}</td>
                         <td class="px-table-cell-x py-table-cell-y text-sm font-mono text-ink">{{ implode(', ', $index['columns']) }}</td>
                         <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ str_replace('_', ' ', $index['type']) }}</td>
@@ -126,9 +124,9 @@
                         </td>
                     </tr>
                 @endforelse
-            </tbody>
-        </table>
-    </div>
+
+
+    </x-ui.table>
 </x-ui.card>
 
 @if($migrationSource)

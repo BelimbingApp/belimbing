@@ -51,9 +51,9 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                 </div>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Incubating tables')">
+
+                    <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
                                 <x-ui.checkbox wire:model.live="selectIncubatingPage" id="select-visible-incubation-tables" />
@@ -79,15 +79,15 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Incubation Source') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($incubatingTables as $table)
                             @php
                                 $incubationSource = $table->source_declared
                                     ? __('Source migration')
                                     : ($table->deprecated_pattern ? __('Deprecated compatibility list: :pattern', ['pattern' => $table->deprecated_pattern]) : __('Not incubating'));
                             @endphp
-                            <tr wire:key="incubation-table-{{ $table->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="incubation-table-{{ $table->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.checkbox
                                         wire:model.live="selectedIncubatingTables"
@@ -110,9 +110,9 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables are currently under incubation.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $incubatingTables->links() }}
@@ -139,9 +139,9 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                 {{ __('Search results only show tables that are not currently under incubation. Moving a selected table edits its owning migration file to add `use IncubatingSchema;`. Tables still covered only by the deprecated compatibility script are intentionally excluded here.') }}
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Incubating migrations')">
+
+                    <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
                                 <x-ui.checkbox wire:model.live="selectSearchPage" id="select-visible-search-tables" />
@@ -165,15 +165,15 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                 :label="__('Migration')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @if(trim($search) === '')
                             <tr>
                                 <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('Search for tables to move into incubation.') }}</td>
                             </tr>
                         @else
                             @forelse($searchTables as $table)
-                                <tr wire:key="search-table-{{ $table->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                <tr wire:key="search-table-{{ $table->id }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                         <x-ui.checkbox
                                             wire:model.live="selectedSearchTables"
@@ -191,9 +191,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                 </tr>
                             @endforelse
                         @endif
-                    </tbody>
-                </table>
-            </div>
+                                </x-ui.table>
 
             <div class="mt-2">
                 {{ $searchTables->links() }}

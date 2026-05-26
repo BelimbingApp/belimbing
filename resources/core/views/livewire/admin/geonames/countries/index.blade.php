@@ -28,8 +28,8 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
+            <x-ui.table container="flush" :caption="__('Countries')">
+                <x-slot name="colgroup">
                     <colgroup>
                         <col>
                         <col>
@@ -39,7 +39,8 @@
                         <col style="width: 7rem;">
                         <col style="width: 6rem;">
                     </colgroup>
-                    <thead class="bg-surface-subtle/80">
+                </x-slot>
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="iso"
@@ -94,10 +95,10 @@
                                 class="pl-3"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($countries as $country)
-                            <tr wire:key="country-{{ $country->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="country-{{ $country->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-medium text-ink tabular-nums">{{ $country->iso }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-ink"
                                     x-data="{ editing: false, name: '{{ addslashes($country->country) }}' }"
@@ -128,9 +129,7 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-muted">{{ __('No countries found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $countries->links() }}

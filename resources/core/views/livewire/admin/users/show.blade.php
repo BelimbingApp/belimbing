@@ -321,9 +321,9 @@
             </div>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Employment records linking this user to companies. A user can have multiple records across different companies (e.g. contractors). Not all employees require a user account.') }}</p>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Employee Records')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="employee_number"
@@ -369,10 +369,10 @@
                             />
                             <th scope="col" class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($sortedEmployees as $employee)
-                            <tr wire:key="employee-{{ $employee->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="employee-{{ $employee->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">
                                     <a href="{{ route('admin.employees.show', $employee) }}" wire:navigate class="text-accent hover:underline">{{ $employee->employee_number ?? '—' }}</a>
                                 </td>
@@ -412,9 +412,9 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No employee records.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             @if($canManageRoles && $unlinkableEmployees->isNotEmpty())
                 <div x-data="{ linking: false }" class="mt-4 pt-4 border-t border-border-default">
@@ -477,9 +477,9 @@
             </h3>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Portal access granted to this user by other companies. Allows customers or suppliers to view orders, invoices, and other shared data.') }}</p>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('External Accesses')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="company"
@@ -517,10 +517,10 @@
                                 :label="__('Expires At')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($sortedExternalAccesses as $access)
-                            <tr wire:key="access-{{ $access->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="access-{{ $access->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     @if ($access->company)
                                         <a href="{{ route('admin.companies.show', $access->company) }}" wire:navigate class="text-accent hover:underline">{{ $access->company->name }}</a>
@@ -558,9 +558,9 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No external accesses.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

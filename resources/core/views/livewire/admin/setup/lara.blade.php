@@ -63,9 +63,9 @@
                 </div>
                 <p class="text-xs text-muted mb-4">{{ __('Each slot is resolved from the workspace first, then the framework default. Override to copy the default into the workspace and edit it; revert to delete the workspace copy and fall back to the framework default.') }}</p>
 
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
-                        <thead class="bg-surface-subtle/80">
+                <x-ui.table container="flush" :caption="__('Lara setup')">
+
+                    <x-slot name="head">
                             <tr>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Slot') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('File') }}</th>
@@ -74,10 +74,10 @@
                                 <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Last Edit') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             </tr>
-                        </thead>
-                        <tbody class="bg-surface-card divide-y divide-border-default">
+                        </x-slot>
+
                             @foreach ($slots as $slot)
-                                <tr wire:key="slot-{{ $slot['slot'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                <tr wire:key="slot-{{ $slot['slot'] }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $slot['label'] }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-xs text-muted font-mono">{{ $slot['filename'] }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
@@ -142,9 +142,9 @@
                                     </td>
                                 </tr>
                             @endforeach
-                        </tbody>
-                    </table>
-                </div>
+
+
+                </x-ui.table>
             </x-ui.card>
 
             {{-- Task models cross-link --}}

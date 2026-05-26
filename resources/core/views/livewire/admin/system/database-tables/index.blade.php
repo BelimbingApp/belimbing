@@ -51,9 +51,9 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Database tables')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="table_name"
@@ -76,8 +76,8 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Incubation Source') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($tables as $table)
                             @php
                                 $tableUrl = route('admin.system.database-tables.show', $table->table_name);
@@ -101,9 +101,9 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables registered.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $tables->links() }}

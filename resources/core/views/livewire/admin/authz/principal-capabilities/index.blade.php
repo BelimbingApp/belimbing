@@ -12,9 +12,8 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Principal capability overrides')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="principal_name"
@@ -59,10 +58,10 @@
                                 :label="__('Granted At')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($capabilities as $cap)
-                            <tr wire:key="cap-{{ $cap->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="cap-{{ $cap->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <div class="text-sm font-medium text-ink">{{ $cap->principal_name ?? '#'.$cap->principal_id }}</div>
                                     @if($cap->principal_email)
@@ -92,9 +91,7 @@
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No per-user overrides. Capabilities are currently granted through roles only.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $capabilities->links() }}

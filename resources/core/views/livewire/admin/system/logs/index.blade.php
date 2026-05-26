@@ -5,9 +5,8 @@
         <x-ui.page-header :title="__('Logs')" :subtitle="__('Application log files')" />
 
         <x-ui.card>
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Application log files')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="filename"
@@ -31,13 +30,13 @@
                                 :label="__('Last Modified')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($files as $file)
                             @php
                                 $modifiedAt = \Carbon\Carbon::createFromTimestamp($file->getMTime());
                             @endphp
-                            <tr wire:key="log-{{ $file->getRelativePathname() }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="log-{{ $file->getRelativePathname() }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium">
                                     <a href="{{ route('admin.system.logs.show', $file->getRelativePathname()) }}" class="text-accent hover:underline" wire:navigate>
                                         {{ $file->getRelativePathname() }}
@@ -58,9 +57,7 @@
                                 <td colspan="3" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No log files found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

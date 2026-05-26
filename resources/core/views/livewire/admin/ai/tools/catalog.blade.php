@@ -55,9 +55,8 @@
         </div>
 
         {{-- Tool table --}}
-        <div class="overflow-x-auto -mx-card-inner px-card-inner">
-            <table class="min-w-full divide-y divide-border-default text-sm">
-                <thead class="bg-surface-subtle/80">
+        <x-ui.table container="flush" :caption="__('Tool catalog')">
+            <x-slot name="head">
                     <tr>
                         @php
                             $thBase = 'px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider select-none';
@@ -111,8 +110,8 @@
                         <th class="{{ $thBase }} {{ $thInactive }}">{{ __('Readiness') }}</th>
                         <th class="{{ $thBase }} {{ $thInactive }} hidden lg:table-cell">{{ __('Verified') }}</th>
                     </tr>
-                </thead>
-                <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                     @forelse($snapshots as $name => $snap)
                         @php
                             $meta = $snap['metadata'];
@@ -121,8 +120,7 @@
                         @endphp
                         <tr
                             wire:key="tool-{{ $name }}"
-                            @click="Livewire.navigate('{{ route('admin.ai.tools', ['toolName' => $name]) }}')"
-                            class="hover:bg-surface-subtle/50 transition-colors cursor-pointer"
+                            @click="Livewire.navigate('{{ route('admin.ai.tools', ['toolName' => $name]) }}')" class="cursor-pointer"
                         >
                             <td class="px-table-cell-x py-table-cell-y">
                                 <div class="min-w-0">
@@ -162,8 +160,7 @@
                             </td>
                         </tr>
                     @endforelse
-                </tbody>
-            </table>
-        </div>
+
+        </x-ui.table>
     </x-ui.card>
 </div>

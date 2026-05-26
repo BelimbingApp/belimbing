@@ -20,9 +20,8 @@
                 </x-ui.select>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Registered capabilities')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="key"
@@ -60,10 +59,10 @@
                                 :label="__('Module')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($capabilities as $cap)
-                            <tr wire:key="cap-{{ $cap->key }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="cap-{{ $cap->key }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $cap->key }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $cap->domain }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $cap->resource }}</td>
@@ -75,9 +74,7 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No capabilities found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
 
             <div class="mt-2 text-xs text-muted">
                 {{ trans_choice(':count capability|:count capabilities', $capabilities->count(), ['count' => $capabilities->count()]) }}

@@ -12,9 +12,8 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Principal role assignments')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="principal_name"
@@ -52,10 +51,10 @@
                                 :label="__('Assigned At')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($assignments as $assignment)
-                            <tr wire:key="assignment-{{ $assignment->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="assignment-{{ $assignment->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     @if($assignment->principal_name && $assignment->principal_type === \App\Base\Authz\Enums\PrincipalType::USER->value)
                                         <a href="{{ route('admin.users.show', $assignment->principal_id) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $assignment->principal_name }}</a>
@@ -85,9 +84,7 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No principal role assignments found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $assignments->links() }}

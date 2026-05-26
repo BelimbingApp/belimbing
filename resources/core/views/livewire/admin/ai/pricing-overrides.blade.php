@@ -102,9 +102,9 @@
                 </div>
             </div>
 
-            <div class="-mx-card-inner overflow-x-auto px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Pricing overrides')">
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Model') }}</th>
@@ -114,8 +114,8 @@
                             <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reason') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default bg-surface-card">
+                    </x-slot>
+
                         @forelse ($overrides as $override)
                             <tr wire:key="pricing-override-{{ $override->id }}">
                                 <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-muted">{{ $override->provider ?? __('Any') }}</td>
@@ -147,9 +147,9 @@
                                 <td colspan="7" class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No pricing overrides match the current filters.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-4">
                 {{ $overrides->links() }}

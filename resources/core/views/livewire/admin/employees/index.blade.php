@@ -39,9 +39,9 @@
                 </x-ui.select>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Employees')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="full_name"
@@ -75,10 +75,10 @@
                             />
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($employees as $employee)
-                            <tr wire:key="employee-{{ $employee->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="employee-{{ $employee->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <a href="{{ route('admin.employees.show', $employee) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $employee->full_name }}</a>
                                     <div class="text-xs text-muted tabular-nums">{{ $employee->employee_number }}</div>
@@ -122,9 +122,9 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No employees found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $employees->links() }}

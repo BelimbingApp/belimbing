@@ -117,8 +117,8 @@ use Illuminate\Support\Collection;
     @endif
 
     @if($models->count() > 0)
-        <table class="min-w-full divide-y divide-border-default text-sm">
-            <thead class="bg-surface-subtle/80">
+        <x-ui.table container="plain" :caption="__('Provider models')">
+            <x-slot name="head">
                 <tr>
                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Model ID') }}</th>
                     <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost Override Input $/1M') }}</th>
@@ -127,10 +127,10 @@ use Illuminate\Support\Collection;
                     <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cache Write $/1M') }}</th>
                     <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Access') }}</th>
                 </tr>
-            </thead>
-            <tbody class="bg-surface-card divide-y divide-border-default">
+            </x-slot>
+
                 @foreach($models as $model)
-                    <tr wire:key="model-{{ $model->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                    <tr wire:key="model-{{ $model->id }}">
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink font-mono">
                             {{ $model->model_id }}
                         </td>
@@ -207,8 +207,8 @@ use Illuminate\Support\Collection;
                         </td>
                     </tr>
                 @endforeach
-            </tbody>
-        </table>
+
+        </x-ui.table>
     @else
         <p class="text-sm text-muted py-4 text-center">{{ __('No models registered for this provider.') }}</p>
     @endif

@@ -16,9 +16,9 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Company addresses')">
+
+                    <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Address') }}</th>
@@ -29,10 +29,10 @@
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid To') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($addresses as $address)
-                            <tr wire:key="address-{{ $address->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="address-{{ $address->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                     <button wire:click="openAddressModal({{ $address->id }})" class="text-accent hover:underline cursor-pointer">{{ $address->label ?? '-' }}</button>
                                 </td>
@@ -120,9 +120,9 @@
                                 <td colspan="8" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No addresses linked.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
 
         <x-ui.card x-data="{ savedMsg: '' }" @timezone-saved.window="savedMsg = $event.detail.timezone ? '{{ __('Timezone saved:') }} ' + $event.detail.timezone : '{{ __('Timezone cleared.') }}'; setTimeout(() => savedMsg = '', 3000)">

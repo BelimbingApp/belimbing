@@ -8,17 +8,17 @@
             <x-ui.badge variant="default">{{ count($foreignKeys['outgoing']) }}</x-ui.badge>
         </div>
 
-        <div class="overflow-x-auto -mx-card-inner px-card-inner">
-            <table class="min-w-full divide-y divide-border-default text-sm">
-                <thead class="bg-surface-subtle/80">
+        <x-ui.table container="flush" :caption="__('Outgoing relationships')">
+
+                <x-slot name="head">
                     <tr>
                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Column') }}</th>
                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('References') }}</th>
                     </tr>
-                </thead>
-                <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                     @forelse($foreignKeys['outgoing'] as $fk)
-                        <tr wire:key="relationship-outgoing-{{ $fk['column'] }}-{{ $fk['foreign_table'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                        <tr wire:key="relationship-outgoing-{{ $fk['column'] }}-{{ $fk['foreign_table'] }}">
                             <td class="px-table-cell-x py-table-cell-y text-sm font-mono text-ink">{{ $fk['column'] }}</td>
                             <td class="px-table-cell-x py-table-cell-y text-sm text-ink">
                                 <a
@@ -38,9 +38,9 @@
                             </td>
                         </tr>
                     @endforelse
-                </tbody>
-            </table>
-        </div>
+
+
+        </x-ui.table>
     </x-ui.card>
 
     <x-ui.card>
@@ -52,18 +52,18 @@
             <x-ui.badge variant="default">{{ count($foreignKeys['incoming']) }}</x-ui.badge>
         </div>
 
-        <div class="overflow-x-auto -mx-card-inner px-card-inner">
-            <table class="min-w-full divide-y divide-border-default text-sm">
-                <thead class="bg-surface-subtle/80">
+        <x-ui.table container="flush" :caption="__('Incoming relationships')">
+
+                <x-slot name="head">
                     <tr>
                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Table') }}</th>
                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Column') }}</th>
                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Local column') }}</th>
                     </tr>
-                </thead>
-                <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                     @forelse($foreignKeys['incoming'] as $fk)
-                        <tr wire:key="relationship-incoming-{{ $fk['table'] }}-{{ $fk['column'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                        <tr wire:key="relationship-incoming-{{ $fk['table'] }}-{{ $fk['column'] }}">
                             <td class="px-table-cell-x py-table-cell-y text-sm text-ink">
                                 <a
                                     href="{{ route('admin.system.database-tables.show', $fk['table']) }}"
@@ -84,8 +84,8 @@
                             </td>
                         </tr>
                     @endforelse
-                </tbody>
-            </table>
-        </div>
+
+
+        </x-ui.table>
     </x-ui.card>
 </div>

@@ -134,9 +134,8 @@ $formatCents = static fn (?int $cents): string => $cents !== null
     @if(! empty($run['calls']))
         <div>
             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Calls') }}</span>
-            <div class="mt-1 overflow-x-auto">
-                <table class="min-w-full text-xs">
-                    <thead class="bg-surface-subtle/80 text-muted uppercase tracking-wider">
+            <x-ui.table container="plain" size="xs" :caption="__('Run calls')">
+                <x-slot name="head">
                         <tr>
                             <th class="text-left py-table-cell-y px-table-cell-x font-semibold">#</th>
                             <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Model') }}</th>
@@ -150,8 +149,8 @@ $formatCents = static fn (?int $cents): string => $cents !== null
                             <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Latency') }}</th>
                             <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Finish') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @foreach($run['calls'] as $call)
                             <tr>
                                 <td class="py-table-cell-y px-table-cell-x tabular-nums text-ink">{{ (int) $call['attempt_index'] + 1 }}</td>
@@ -173,9 +172,8 @@ $formatCents = static fn (?int $cents): string => $cents !== null
                                 <td class="py-table-cell-y px-table-cell-x text-muted">{{ $call['finish_reason'] ?? '—' }}</td>
                             </tr>
                         @endforeach
-                    </tbody>
-                </table>
-            </div>
+
+            </x-ui.table>
         </div>
     @endif
 

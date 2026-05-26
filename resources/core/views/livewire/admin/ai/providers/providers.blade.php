@@ -54,9 +54,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
              ═══════════════════════════════════════════════════ --}}
         @if($providers->isNotEmpty())
             <x-ui.card>
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
-                        <thead class="bg-surface-subtle/80">
+                <x-ui.table container="flush" :caption="__('Connected providers')">
+                    <x-slot name="head">
                             <tr>
                                 <th class="px-table-cell-x py-table-header-y w-8"></th>
                                 <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
@@ -67,8 +66,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                 <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
                                 <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
                             </tr>
-                        </thead>
-                        <tbody class="bg-surface-card divide-y divide-border-default">
+                        </x-slot>
+
                             @foreach($providers as $provider)
                                 <tr
                                     wire:key="provider-{{ $provider->id }}"
@@ -76,7 +75,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     x-data="{ flash: false }"
                                     x-init="$wire.$on('priority-changed', (detail) => { const id = Array.isArray(detail) ? detail[0] : detail; if (id == {{ $provider->id }}) { flash = true; setTimeout(() => flash = false, 1800) } })"
                                     :class="flash ? 'bg-accent/10' : ''"
-                                    class="hover:bg-surface-subtle/50 transition-colors duration-800 cursor-pointer"
+                                    class="cursor-pointer duration-800"
                                 >
                                     <td class="px-table-cell-x py-table-cell-y">
                                         <x-icon
@@ -160,9 +159,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     </tr>
                                 @endif
                             @endforeach
-                        </tbody>
-                    </table>
-                </div>
+
+                </x-ui.table>
             </x-ui.card>
         @endif
 
@@ -295,9 +293,9 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                 </div>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Provider catalog')">
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y w-8"></th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Provider') }}</th>
@@ -306,8 +304,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                             <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost $/1M') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @foreach($catalog as $entry)
                             @php
                                 $catalogSearchText = mb_strtolower($entry['key'].' '.$entry['display_name'].' '.($entry['description'] ?? ''));
@@ -315,8 +313,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                             @endphp
                             <tr
                                 wire:key="catalog-{{ $entry['key'] }}"
-                                wire:click="toggleCatalogProvider('{{ $entry['key'] }}')"
-                                class="hover:bg-surface-subtle/50 transition-colors cursor-pointer"
+                                wire:click="toggleCatalogProvider('{{ $entry['key'] }}')" class="cursor-pointer"
                                 x-show="{{ $catalogVisibility }}"
                             >
                                 <td class="px-table-cell-x py-table-cell-y">
@@ -375,8 +372,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                     <td colspan="6" class="p-0">
                                         <div class="bg-surface-subtle/30 border-t border-border-default px-8 py-3">
                                             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2 block">{{ __('Model Catalog') }}</span>
-                                            <table class="min-w-full divide-y divide-border-default text-sm">
-                                                <thead class="bg-surface-subtle/80">
+                                            <x-ui.table container="plain" :caption="__('Model catalog')">
+                                                <x-slot name="head">
                                                     <tr>
                                                         <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Model') }}</th>
                                                         <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Context') }}</th>
@@ -384,10 +381,10 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                                         <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Input $/1M') }}</th>
                                                         <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Output $/1M') }}</th>
                                                     </tr>
-                                                </thead>
-                                                <tbody class="bg-surface-card divide-y divide-border-default">
+                                                </x-slot>
+
                                                     @foreach($entry['models'] as $catModel)
-                                                        <tr class="hover:bg-surface-subtle/50 transition-colors">
+                                                        <tr>
                                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $catModel['display_name'] }}</td>
                                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatTokenCount($catModel['context_window'] ?? null) }}</td>
                                                             <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatTokenCount($catModel['max_tokens'] ?? null) }}</td>
@@ -396,8 +393,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                                             <td class="hidden lg:table-cell px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums text-right">{{ $this->formatCost($catCost['output'] ?? null) }}</td>
                                                         </tr>
                                                     @endforeach
-                                                </tbody>
-                                            </table>
+                                            </x-ui.table>
                                         </div>
                                     </td>
                                 </tr>
@@ -411,9 +407,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                 </tr>
                             @endif
                         @endforeach
-                    </tbody>
-                </table>
-            </div>
+                    
+            </x-ui.table>
         </x-ui.card>
 
         {{-- Empty state: shown when no providers connected and catalog is the only section --}}

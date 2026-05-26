@@ -1,7 +1,7 @@
 # UI Table Component Migration
 
-**Agent:** Amp
-**Status:** Proposed
+**Agents:** Amp; GPT-5.5/gpt-5.5
+**Status:** In Progress (Phase 3 complete)
 **Last Updated:** 2026-05-26
 **Sources:** `resources/core/views/AGENTS.md`, `resources/core/views/components/ui/table.blade.php`, `resources/core/views/components/ui/sortable-th.blade.php`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`
 
@@ -61,63 +61,63 @@ High-level buckets:
 
 ### Phase 0 — Confirm Component Contract
 
-- [ ] Review `x-ui.table` API before broad adoption: container variants, caption behavior, empty-state slot, sticky-header class, `row-hover`, `striped`, `divided`, `size`, and whether named `body` is necessary in addition to the default slot.
-- [ ] Confirm the UI reference example demonstrates the preferred usage clearly enough for future agents.
-- [ ] Run `php artisan view:cache` after any component API adjustment.
+- [x] Review `x-ui.table` API before broad adoption: container variants, caption behavior, empty-state slot, sticky-header class, `row-hover`, `striped`, `divided`, `size`, and whether named `body` is necessary in addition to the default slot. {GPT-5.5/gpt-5.5}
+- [x] Confirm the UI reference example demonstrates the preferred usage clearly enough for future agents. {GPT-5.5/gpt-5.5}
+- [x] Run `php artisan view:cache` after any component API adjustment. {GPT-5.5/gpt-5.5}
 
 ### Phase 1 — Low-Risk Core Admin Index Tables
 
-- [ ] `resources/core/views/livewire/admin/authz/capabilities/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/authz/decision-logs/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/authz/principal-capabilities/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/authz/principal-roles/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/audit/actions.blade.php`
-- [ ] `resources/core/views/livewire/admin/audit/mutations.blade.php`
-- [ ] `resources/core/views/livewire/admin/roles/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/sessions/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/scheduled-tasks/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/job-batches/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/failed-jobs/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/logs/index.blade.php`
+- [x] `resources/core/views/livewire/admin/authz/capabilities/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/authz/decision-logs/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/authz/principal-capabilities/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/authz/principal-roles/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/audit/actions.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/audit/mutations.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/roles/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/sessions/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/scheduled-tasks/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/job-batches/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/failed-jobs/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/logs/index.blade.php` {GPT-5.5/gpt-5.5}
 
 ### Phase 2 — Core Admin Detail and System Tables
 
-- [ ] `resources/core/views/livewire/admin/addresses/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/addresses/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/companies/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/companies/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/companies/relationships.blade.php`
-- [ ] `resources/core/views/livewire/admin/companies/partials/company-addresses.blade.php`
-- [ ] `resources/core/views/livewire/admin/employees/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/employees/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/users/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/users/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/workflows/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/workflows/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-tables/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-tables/partials/show-data-tab.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-tables/partials/show-relationships-tab.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-tables/partials/show-schema-tab.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-queries/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-queries/show.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-incubation/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/database-backups/index.blade.php`
+- [x] `resources/core/views/livewire/admin/addresses/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/addresses/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/companies/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/companies/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/companies/relationships.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/companies/partials/company-addresses.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/employees/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/employees/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/users/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/users/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/workflows/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/workflows/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-tables/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-tables/partials/show-data-tab.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-tables/partials/show-relationships-tab.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-tables/partials/show-schema-tab.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-queries/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-queries/show.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-incubation/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/database-backups/index.blade.php` {GPT-5.5/gpt-5.5}
 
 ### Phase 3 — AI, Integration, GeoNames, and Other Core Tables
 
-- [ ] `resources/core/views/livewire/admin/ai/control-plane.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/pricing-overrides.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/control-plane/partials/recent-runs.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/control-plane/partials/run-detail.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/providers/providers.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/providers/partials/model-table.blade.php`
-- [ ] `resources/core/views/livewire/admin/ai/tools/catalog.blade.php`
-- [ ] `resources/core/views/livewire/admin/integration/outbound-exchanges/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/geonames/admin1/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/geonames/countries/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/geonames/postcodes/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/system/menu-inspector/index.blade.php`
-- [ ] `resources/core/views/livewire/admin/setup/lara.blade.php`
+- [x] `resources/core/views/livewire/admin/ai/control-plane.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/pricing-overrides.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/control-plane/partials/recent-runs.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/control-plane/partials/run-detail.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/providers/providers.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/providers/partials/model-table.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/ai/tools/catalog.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/integration/outbound-exchanges/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/geonames/admin1/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/geonames/countries/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/geonames/postcodes/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/system/menu-inspector/index.blade.php` {GPT-5.5/gpt-5.5}
+- [x] `resources/core/views/livewire/admin/setup/lara.blade.php` {GPT-5.5/gpt-5.5}
 
 ### Phase 4 — Module Application Tables
 

@@ -83,9 +83,8 @@
         </x-ui.card>
 
         <x-ui.card>
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Outbound exchanges')">
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Exchange') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('System') }}</th>
@@ -96,8 +95,8 @@
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Occurred') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($exchanges as $exchange)
                             <tr wire:key="outbound-exchange-{{ $exchange->id }}" class="hover:bg-surface-subtle/50">
                                 <td class="px-table-cell-x py-table-cell-y">
@@ -152,9 +151,8 @@
                                 <td colspan="8" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No outbound exchanges found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+            </x-ui.table>
 
             <div class="mt-4">
                 {{ $exchanges->links() }}

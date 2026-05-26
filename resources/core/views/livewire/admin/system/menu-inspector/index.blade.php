@@ -43,9 +43,9 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Menu items')">
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('ID') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
@@ -56,10 +56,10 @@
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Source') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Visible') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse ($rows as $row)
-                            <tr wire:key="menu-{{ $row['id'] }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="menu-{{ $row['id'] }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-xs text-ink">
                                     {{ $row['id'] }}
                                 </td>
@@ -108,9 +108,9 @@
                                 </td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

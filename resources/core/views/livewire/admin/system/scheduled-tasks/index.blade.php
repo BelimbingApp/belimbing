@@ -8,9 +8,8 @@
         />
 
         <x-ui.card>
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Registered scheduled tasks')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="command"
@@ -48,10 +47,10 @@
                                 :label="__('Flags')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($events as $index => $event)
-                            <tr wire:key="event-{{ $index }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="event-{{ $index }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $this->cleanCommand($event->command) }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono">{{ $event->expression }}</td>
                                 <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ $event->description ?? '—' }}</td>
@@ -75,9 +74,7 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No scheduled tasks registered.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

@@ -22,9 +22,8 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Job batches')">
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="name"
@@ -63,14 +62,14 @@
                             />
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider"></th>
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                </x-slot>
+
                         @forelse($batches as $batch)
                             @php
                                 $completed = $batch->total_jobs - $batch->pending_jobs - $batch->failed_jobs;
                                 $percentage = $batch->total_jobs > 0 ? round(($completed / $batch->total_jobs) * 100) : 0;
                             @endphp
-                            <tr wire:key="batch-{{ $batch->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="batch-{{ $batch->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">{{ $batch->name }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $completed }}/{{ $batch->total_jobs }} ({{ $percentage }}%)</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $batch->failed_jobs }}</td>
@@ -104,9 +103,7 @@
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No job batches found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $batches->links() }}

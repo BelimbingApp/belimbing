@@ -40,9 +40,9 @@
                     <x-ui.badge>{{ $company->children->count() }}</x-ui.badge>
                 </h3>
 
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
-                        <thead class="bg-surface-subtle/80">
+                <x-ui.table container="flush" :caption="__('Child companies')">
+
+                        <x-slot name="head">
                             <tr>
                                 <x-ui.sortable-th
                                     column="name"
@@ -73,10 +73,10 @@
                                     :label="__('Jurisdiction')"
                                 />
                             </tr>
-                        </thead>
-                        <tbody class="bg-surface-card divide-y divide-border-default">
+                        </x-slot>
+
                             @foreach($sortedChildren as $child)
-                                <tr wire:key="child-{{ $child->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                                <tr wire:key="child-{{ $child->id }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                         <a href="{{ route('admin.companies.show', $child) }}" wire:navigate class="text-accent hover:underline">{{ $child->name }}</a>
                                     </td>
@@ -92,9 +92,7 @@
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $child->jurisdiction ?? '-' }}</td>
                                 </tr>
                             @endforeach
-                        </tbody>
-                    </table>
-                </div>
+                                        </x-ui.table>
             </x-ui.card>
         @endif
 
@@ -110,9 +108,9 @@
                 </x-ui.button>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Departments')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="department_type"
@@ -143,10 +141,10 @@
                                 :label="__('Head')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($sortedDepartments as $dept)
-                            <tr wire:key="dept-{{ $dept->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="dept-{{ $dept->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">{{ $dept->type->name }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $dept->type->category ?? '-' }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
@@ -164,9 +162,9 @@
                                 <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No departments.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+                </x-ui.table>
         </x-ui.card>
 
         <x-ui.card>
@@ -181,9 +179,9 @@
                 </x-ui.button>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Employees')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="company_name"
@@ -228,10 +226,10 @@
                                 :label="__('Status')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($sortedRelationships as $rel)
-                            <tr wire:key="rel-{{ $rel->id }}-{{ $rel->direction }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="rel-{{ $rel->id }}-{{ $rel->direction }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-medium">
                                     <a href="{{ route('admin.companies.show', $rel->company) }}" wire:navigate class="text-accent hover:underline">{{ $rel->company->name }}</a>
                                 </td>
@@ -248,9 +246,9 @@
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No relationships.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
 
         <x-ui.card>
@@ -260,9 +258,9 @@
             </h3>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Portal access granted by this company to external users. Allows customers or suppliers to view shared data.') }}</p>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('External Accesses')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="user"
@@ -300,10 +298,10 @@
                                 :label="__('Expires At')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($sortedExternalAccesses as $access)
-                            <tr wire:key="access-{{ $access->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="access-{{ $access->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     @if($access->user)
                                         <a href="{{ route('admin.users.show', $access->user) }}" wire:navigate class="text-accent hover:underline">{{ $access->user->name }}</a>
@@ -341,9 +339,9 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No external accesses.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

@@ -292,9 +292,9 @@
                 </span>
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Query results')">
+
+                    <x-slot name="head">
                         <tr>
                             @foreach($columns as $col)
                                 <x-ui.sortable-th
@@ -306,10 +306,10 @@
                                 />
                             @endforeach
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($rows as $index => $row)
-                            <tr wire:key="row-{{ $index }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="row-{{ $index }}">
                                 @foreach($columns as $col)
                                     @php
                                         $value = $row[$col] ?? null;
@@ -336,9 +336,9 @@
                                 </td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             {{-- Manual Pagination --}}
             @if($lastPage > 1)

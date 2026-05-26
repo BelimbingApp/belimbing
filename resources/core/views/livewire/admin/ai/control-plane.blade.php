@@ -199,9 +199,9 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                         </div>
                     </div>
 
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-border-default text-sm">
-                            <thead class="bg-surface-subtle/80">
+                    <x-ui.table container="plain" :caption="__('Tool health')">
+
+                        <x-slot name="head">
                                 <tr>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Tool') }}</th>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Readiness') }}</th>
@@ -209,8 +209,8 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Presence') }}</th>
                                     <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Explanation') }}</th>
                                 </tr>
-                            </thead>
-                            <tbody class="divide-y divide-border-default bg-surface-card">
+                            </x-slot>
+
                                 @forelse ($toolSnapshots as $snapshot)
                                     <tr wire:key="tool-snapshot-{{ $snapshot['target_id'] }}">
                                         <td class="px-table-cell-x py-table-cell-y font-medium text-ink">{{ $snapshot['target_id'] }}</td>
@@ -224,9 +224,9 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                         <td colspan="5" class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No tool snapshots are available.') }}</td>
                                     </tr>
                                 @endforelse
-                            </tbody>
-                        </table>
-                    </div>
+
+
+                    </x-ui.table>
                 </x-ui.card>
             </div>
         </x-ui.tab>

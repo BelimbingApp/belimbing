@@ -172,9 +172,8 @@
         </x-ui.card>
 
         <x-ui.card>
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Database backups')">
+                    <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Backup ID') }}</th>
                             <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Driver') }}</th>
@@ -185,8 +184,8 @@
                             <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</th>
                             <th class="px-table-cell-x py-table-cell-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse ($rows as $row)
                             <tr wire:key="backup-{{ $row['manifest_path'] }}">
                                 <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $row['backup_id'] }}</td>
@@ -239,9 +238,8 @@
                                 </td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

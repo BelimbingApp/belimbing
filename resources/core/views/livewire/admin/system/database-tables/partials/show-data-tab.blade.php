@@ -53,9 +53,9 @@
         </div>
     </div>
 
-    <div class="overflow-x-auto -mx-card-inner px-card-inner">
-        <table class="min-w-full divide-y divide-border-default text-sm">
-            <thead class="bg-surface-subtle/80">
+    <x-ui.table container="flush" :caption="__('Table data')">
+
+            <x-slot name="head">
                 <tr>
                     @foreach($columns as $col)
                         @php
@@ -85,10 +85,10 @@
                         </x-ui.sortable-th>
                     @endforeach
                 </tr>
-            </thead>
-            <tbody class="bg-surface-card divide-y divide-border-default">
+            </x-slot>
+
                 @forelse($rows as $row)
-                    <tr wire:key="{{ $this->rowKey($row, $loop->index) }}" class="hover:bg-surface-subtle/50 transition-colors">
+                    <tr wire:key="{{ $this->rowKey($row, $loop->index) }}">
                         @foreach($columns as $col)
                             @php
                                 $value = data_get((array) $row, $col['name']);
@@ -172,9 +172,9 @@
                         </td>
                     </tr>
                 @endforelse
-            </tbody>
-        </table>
-    </div>
+
+
+    </x-ui.table>
 
     <div class="mt-2">
         {{ $rows->links() }}

@@ -40,9 +40,9 @@
                 </div>
             @endif
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Recent runs')">
+
+                <x-slot name="head">
                         <tr>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Run') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Footprint') }}</th>
@@ -51,8 +51,8 @@
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
                             <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Turn') }}</th>
                         </tr>
-                    </thead>
-                    <tbody class="divide-y divide-border-default bg-surface-card">
+                    </x-slot>
+
                         @forelse ($recentRuns as $run)
                             @php($isSelectedRun = ($inspectRunId ?? '') === $run['run_id'])
                             <tr
@@ -102,9 +102,9 @@
                                 <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No runs have been recorded yet.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $recentRuns->links() }}

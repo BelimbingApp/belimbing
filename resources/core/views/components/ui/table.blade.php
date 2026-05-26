@@ -41,6 +41,7 @@
     $footClasses = 'bg-surface-subtle/60';
     $emptyText = $emptyMessage ?? __('No records found.');
 
+    $hasColgroup = isset($colgroup) && trim((string) $colgroup) !== '';
     $hasHead = isset($head) && trim((string) $head) !== '';
     $hasFoot = isset($foot) && trim((string) $foot) !== '';
 @endphp
@@ -49,6 +50,10 @@
     <table class="{{ $tableClasses }}">
         @if($caption)
             <caption class="{{ $captionClasses }}">{{ $caption }}</caption>
+        @endif
+
+        @if($hasColgroup)
+            {{ $colgroup }}
         @endif
 
         @if($hasHead)

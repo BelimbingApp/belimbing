@@ -93,9 +93,8 @@
         @if ($hasData && $countryRecordCounts->isNotEmpty())
             <x-ui.card>
                 <h2 class="text-sm font-semibold text-ink mb-3">{{ __('Postcodes by country') }}</h2>
-                <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                    <table class="min-w-full divide-y divide-border-default text-sm">
-                        <thead class="bg-surface-subtle/80">
+                <x-ui.table container="flush" :caption="__('Postcodes by country')">
+                    <x-slot name="head">
                             <tr>
                                 <x-ui.sortable-th
                                     column="country_name"
@@ -121,10 +120,10 @@
                                     :label="__('Records')"
                                 />
                             </tr>
-                        </thead>
-                        <tbody class="bg-surface-card divide-y divide-border-default">
+                        </x-slot>
+
                             @foreach ($countryRecordCounts as $row)
-                                <tr class="hover:bg-surface-subtle/50 transition-colors">
+                                <tr>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">
                                         {{ $row->country_name ?? $row->country_iso }}
                                     </td>
@@ -134,9 +133,8 @@
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right font-medium text-ink tabular-nums">{{ app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($row->record_count) }}</td>
                                 </tr>
                             @endforeach
-                        </tbody>
-                    </table>
-                </div>
+
+                </x-ui.table>
             </x-ui.card>
         @endif
 
@@ -148,9 +146,9 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Postcodes')">
+
+                <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="country_name"
@@ -188,10 +186,10 @@
                                 :label="__('Updated')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($postcodes as $postcode)
-                            <tr class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     <span class="font-mono text-xs text-muted">{{ $postcode->country_iso }}</span>
                                     <span class="ml-1">{{ $postcode->country_name ?? '' }}</span>
@@ -206,9 +204,9 @@
                                 <td colspan="5" class="px-table-cell-x py-8 text-center text-muted">{{ __('No postcodes found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $postcodes->links() }}

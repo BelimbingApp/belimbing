@@ -130,9 +130,9 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-1">{{ __('Linked Entities') }}</h3>
             <p class="text-xs text-muted mb-4">{{ __('Companies, employees, or other records that use this address. One address can be shared by multiple entities with different roles (e.g., billing, shipping).') }}</p>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Linked entities')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="type"
@@ -184,10 +184,10 @@
                                 :label="__('Valid To')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($linkedEntities as $entity)
-                            <tr wire:key="entity-{{ $entity->type }}-{{ $entity->model->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="entity-{{ $entity->type }}-{{ $entity->model->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $entity->type }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     @if($entity->type === 'Company')
@@ -219,9 +219,9 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No linked entities.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
         </x-ui.card>
     </div>
 </div>

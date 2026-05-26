@@ -16,9 +16,9 @@
                 />
             </div>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
+            <x-ui.table container="flush" :caption="__('Workflows')">
+
+                    <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th
                                 column="label"
@@ -70,10 +70,10 @@
                                 :label="__('Active')"
                             />
                         </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
+                    </x-slot>
+
                         @forelse($workflows as $workflow)
-                            <tr wire:key="wf-{{ $workflow->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                            <tr wire:key="wf-{{ $workflow->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <a href="{{ route('admin.workflows.show', $workflow) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $workflow->label }}</a>
                                 </td>
@@ -95,9 +95,9 @@
                                 <td colspan="7" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No workflows found.') }}</td>
                             </tr>
                         @endforelse
-                    </tbody>
-                </table>
-            </div>
+
+
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $workflows->links() }}
