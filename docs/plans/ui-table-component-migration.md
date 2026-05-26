@@ -1,7 +1,7 @@
 # UI Table Component Migration
 
-**Agents:** Amp; GPT-5.5/gpt-5.5
-**Status:** In Progress (Phase 4 complete)
+**Agents:** Amp; GPT-5.5/gpt-5.5; Amp/amp
+**Status:** Complete
 **Last Updated:** 2026-05-26
 **Sources:** `resources/core/views/AGENTS.md`, `resources/core/views/components/ui/table.blade.php`, `resources/core/views/components/ui/sortable-th.blade.php`, `resources/core/views/livewire/admin/system/ui-reference/partials/data-display.blade.php`
 
@@ -143,20 +143,20 @@ High-level buckets:
 
 ### Phase 5 — Special-Case Assessment
 
-- [ ] Decide whether `resources/core/views/components/ui/template-picker.blade.php` should use `x-ui.table` or remain a self-contained chooser primitive.
-- [ ] Decide whether `resources/core/views/components/ui/day-strip.blade.php` should stay raw because it renders only a `<thead>` fragment for calendar-like tables.
-- [ ] Decide whether `resources/core/views/livewire/admin/system/logs/show.blade.php` should stay raw because it is a monospace log viewer.
-- [ ] Decide whether People claim and leave multi-table workspaces should migrate as-is or wait for a stronger domain-specific table/edit pattern.
-- [ ] Decide whether People attendance `rosters-grid` and `attendance-days-card` are true tables or calendar/grid layouts that should remain local.
-- [ ] Decide whether all payroll PDF views stay raw permanently or need a separate PDF-table primitive.
+- [x] Decide whether `resources/core/views/components/ui/template-picker.blade.php` should use `x-ui.table` or remain a self-contained chooser primitive. It now uses `x-ui.table` because it is a normal selectable table inside a shared UI primitive. {Amp/amp}
+- [x] Decide whether `resources/core/views/components/ui/day-strip.blade.php` should stay raw because it renders only a `<thead>` fragment for calendar-like tables. It stays raw because it is a header fragment, not a complete table shell. {Amp/amp}
+- [x] Decide whether `resources/core/views/livewire/admin/system/logs/show.blade.php` should stay raw because it is a monospace log viewer. It stays raw because it uses a specialized screen-reader header and monospace log layout. {Amp/amp}
+- [x] Decide whether People claim and leave multi-table workspaces should migrate as-is or wait for a stronger domain-specific table/edit pattern. The repeated application table shells migrated to `x-ui.table`; one compact inner entitlement-band table remains raw because it is a specialized nested summary. {Amp/amp}
+- [x] Decide whether People attendance `rosters-grid` and `attendance-days-card` are true tables or calendar/grid layouts that should remain local. `attendance-days-card` migrated to `x-ui.table`; `rosters-grid` stays raw because it composes with `x-ui.day-strip`, which emits the table header fragment. {Amp/amp}
+- [x] Decide whether all payroll PDF views stay raw permanently or need a separate PDF-table primitive. Payroll PDF tables stay raw for this migration; if they drift later, they should get a separate PDF-safe primitive rather than use the interactive app shell. {Amp/amp}
 
 ### Phase 6 — Cleanup and Verification
 
-- [ ] Re-scan Blade views for raw application table shells that should have migrated.
-- [ ] Re-scan for `min-w-full divide-y divide-border-default text-sm` outside `x-ui.table` and document intentional exceptions.
-- [ ] Run `php artisan view:cache`.
-- [ ] Spot-check representative pages in browser if available: one core index table, one core detail table, one module table, one empty state, and one table with editable cells or row actions.
-- [ ] Set plan status to Complete when migrated tables and documented exceptions match the final scan.
+- [x] Re-scan Blade views for raw application table shells that should have migrated. Remaining raw `<table>` uses are the `x-ui.table` implementation, payroll PDFs, the day-strip/rosters-grid calendar composition, the admin log viewer, and one compact nested leave entitlement-band summary. {Amp/amp}
+- [x] Re-scan for `min-w-full divide-y divide-border-default text-sm` outside `x-ui.table` and document intentional exceptions. No `text-sm` repeated app shells remain; the only repeated `divide-y` table class left outside the component is the `rosters-grid` calendar table using `x-ui.day-strip`. {Amp/amp}
+- [x] Run `php artisan view:cache`. {Amp/amp}
+- [x] Spot-check representative pages in browser if available: one core index table, one core detail table, one module table, one empty state, and one table with editable cells or row actions. Browser tooling was not available in this pass; representative coverage was by scan, diff inspection, and Blade compilation. {Amp/amp}
+- [x] Set plan status to Complete when migrated tables and documented exceptions match the final scan. {Amp/amp}
 
 ## Verification Strategy
 
@@ -166,4 +166,4 @@ Each implementation batch should run `php artisan view:cache`. For batches that 
 
 - Should `x-ui.table` expose a dedicated `empty-class` prop, or is the `emptyState` slot enough for richer empty states?
 - Should `x-ui.table` provide a documented row class helper later, or should row styling remain entirely caller-owned?
-- Should PDF tables get their own primitive after application tables are stable?
+- Should PDF tables get their own primitive after application tables are stable? This remains deferred until PDF table drift appears.

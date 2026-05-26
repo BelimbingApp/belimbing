@@ -24,109 +24,106 @@
         @endif
 
         <x-ui.card>
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
-                        <tr>
-                            <x-ui.sortable-th
-                                column="code"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                action="sort('code')"
-                                :label="__('Code')"
+            <x-ui.table container="flush" :caption="__('Legal entity types')" :row-hover="false">
+                <x-slot name="head">
+                <tr>
+                    <x-ui.sortable-th
+                        column="code"
+                        :sort-by="$sortBy"
+                        :sort-dir="$sortDir"
+                        action="sort('code')"
+                        :label="__('Code')"
+                    />
+                    <x-ui.sortable-th
+                        column="name"
+                        :sort-by="$sortBy"
+                        :sort-dir="$sortDir"
+                        action="sort('name')"
+                        :label="__('Name')"
+                    />
+                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
+                    <x-ui.sortable-th
+                        column="is_active"
+                        :sort-by="$sortBy"
+                        :sort-dir="$sortDir"
+                        action="sort('is_active')"
+                        :label="__('Status')"
+                    />
+                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                </tr>
+                </x-slot>
+
+                @forelse($types as $type)
+                    <tr wire:key="type-{{ $type->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono">{{ $type->code }}</td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink"
+                            x-data="{ editing: false, val: '{{ addslashes($type->name) }}' }"
+                        >
+                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
+                                <span x-text="val"></span>
+                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+                            <input
+                                x-show="editing"
+                                x-ref="input"
+                                x-model="val"
+                                @keydown.enter="editing = false; $wire.saveField({{ $type->id }}, 'name', val)"
+                                @keydown.escape="editing = false; val = '{{ addslashes($type->name) }}'"
+                                @blur="editing = false; $wire.saveField({{ $type->id }}, 'name', val)"
+                                type="text"
+                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                             />
-                            <x-ui.sortable-th
-                                column="name"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                action="sort('name')"
-                                :label="__('Name')"
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-muted max-w-xs"
+                            x-data="{ editing: false, val: '{{ addslashes($type->description ?? '') }}' }"
+                        >
+                            <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
+                                <span class="truncate" x-text="val || '-'"></span>
+                                <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                            </div>
+                            <input
+                                x-show="editing"
+                                x-ref="input"
+                                x-model="val"
+                                @keydown.enter="editing = false; $wire.saveField({{ $type->id }}, 'description', val)"
+                                @keydown.escape="editing = false; val = '{{ addslashes($type->description ?? '') }}'"
+                                @blur="editing = false; $wire.saveField({{ $type->id }}, 'description', val)"
+                                type="text"
+                                class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                            <x-ui.sortable-th
-                                column="is_active"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                action="sort('is_active')"
-                                :label="__('Status')"
-                            />
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($types as $type)
-                            <tr wire:key="type-{{ $type->id }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono">{{ $type->code }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink"
-                                    x-data="{ editing: false, val: '{{ addslashes($type->name) }}' }"
-                                >
-                                    <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                        <span x-text="val"></span>
-                                        <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </div>
-                                    <input
-                                        x-show="editing"
-                                        x-ref="input"
-                                        x-model="val"
-                                        @keydown.enter="editing = false; $wire.saveField({{ $type->id }}, 'name', val)"
-                                        @keydown.escape="editing = false; val = '{{ addslashes($type->name) }}'"
-                                        @blur="editing = false; $wire.saveField({{ $type->id }}, 'name', val)"
-                                        type="text"
-                                        class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                                    />
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted max-w-xs"
-                                    x-data="{ editing: false, val: '{{ addslashes($type->description ?? '') }}' }"
-                                >
-                                    <div x-show="!editing" @click="editing = true; $nextTick(() => $refs.input.select())" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
-                                        <span class="truncate" x-text="val || '-'"></span>
-                                        <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                                    </div>
-                                    <input
-                                        x-show="editing"
-                                        x-ref="input"
-                                        x-model="val"
-                                        @keydown.enter="editing = false; $wire.saveField({{ $type->id }}, 'description', val)"
-                                        @keydown.escape="editing = false; val = '{{ addslashes($type->description ?? '') }}'"
-                                        @blur="editing = false; $wire.saveField({{ $type->id }}, 'description', val)"
-                                        type="text"
-                                        class="w-full px-1 -mx-1 py-0.5 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
-                                    />
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <button
-                                        wire:click="toggleActive({{ $type->id }})"
-                                        class="cursor-pointer"
-                                        title="{{ __('Toggle active status') }}"
-                                    >
-                                        @if($type->is_active)
-                                            <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
-                                        @else
-                                            <x-ui.badge variant="default">{{ __('Inactive') }}</x-ui.badge>
-                                        @endif
-                                    </button>
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
-                                    <x-ui.button
-                                        variant="danger-ghost"
-                                        size="sm"
-                                        wire:click="deleteType({{ $type->id }})"
-                                        wire:confirm="{{ __('Are you sure you want to delete this legal entity type?') }}"
-                                        :title="__('Delete legal entity type')"
-                                    >
-                                        <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                        <span class="sr-only">{{ __('Delete') }}</span>
-                                    </x-ui.button>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No legal entity types found.') }}</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                            <button
+                                wire:click="toggleActive({{ $type->id }})"
+                                class="cursor-pointer"
+                                title="{{ __('Toggle active status') }}"
+                            >
+                                @if($type->is_active)
+                                    <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="default">{{ __('Inactive') }}</x-ui.badge>
+                                @endif
+                            </button>
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                            <x-ui.button
+                                variant="danger-ghost"
+                                size="sm"
+                                wire:click="deleteType({{ $type->id }})"
+                                wire:confirm="{{ __('Are you sure you want to delete this legal entity type?') }}"
+                                :title="__('Delete legal entity type')"
+                            >
+                                <x-icon name="heroicon-o-trash" class="w-4 h-4" />
+                                <span class="sr-only">{{ __('Delete') }}</span>
+                            </x-ui.button>
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No legal entity types found.') }}</td>
+                    </tr>
+                @endforelse
+            </x-ui.table>
 
             <div class="mt-2">
                 {{ $types->links() }}

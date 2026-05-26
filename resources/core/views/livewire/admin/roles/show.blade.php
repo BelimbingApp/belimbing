@@ -193,67 +193,64 @@
             </h3>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Users who have been assigned this role.') }}</p>
 
-            <div class="overflow-x-auto -mx-card-inner px-card-inner">
-                <table class="min-w-full divide-y divide-border-default text-sm">
-                    <thead class="bg-surface-subtle/80">
-                        <tr>
-                            <x-ui.sortable-th
-                                column="name"
-                                :sort-by="$assignedUsersSortBy"
-                                :sort-dir="$assignedUsersSortDir"
-                                action="sortAssignedUsers('name')"
-                                :label="__('Name')"
-                            />
-                            <x-ui.sortable-th
-                                column="email"
-                                :sort-by="$assignedUsersSortBy"
-                                :sort-dir="$assignedUsersSortDir"
-                                action="sortAssignedUsers('email')"
-                                :label="__('Email')"
-                            />
-                            <x-ui.sortable-th
-                                column="company"
-                                :sort-by="$assignedUsersSortBy"
-                                :sort-dir="$assignedUsersSortDir"
-                                action="sortAssignedUsers('company')"
-                                :label="__('Company')"
-                            />
-                            @if ($canEdit)
-                                <th scope="col" class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
-                            @endif
-                        </tr>
-                    </thead>
-                    <tbody class="bg-surface-card divide-y divide-border-default">
-                        @forelse($assignedUsers as $assignedUser)
-                            <tr wire:key="user-{{ $assignedUser->id }}" class="hover:bg-surface-subtle/50 transition-colors">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <a href="{{ route('admin.users.show', $assignedUser) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $assignedUser->name }}</a>
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignedUser->email }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignedUser->company?->name ?? '—' }}</td>
-                                @if ($canEdit)
-                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
-                                        <button
-                                            type="button"
-                                            wire:click="removeUser({{ $assignedUser->pivot_id }})"
-                                            wire:confirm="{{ __('Remove :name from this role?', ['name' => $assignedUser->name]) }}"
-                                            class="text-muted hover:text-status-danger transition-colors"
-                                            title="{{ __('Remove user') }}"
-                                            aria-label="{{ __('Remove user') }}"
-                                        >
-                                            <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
-                                        </button>
-                                    </td>
-                                @endif
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="{{ $canEdit ? 4 : 3 }}" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No users assigned.') }}</td>
-                            </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+            <x-ui.table container="flush" :caption="__('Assigned users')" :row-hover="false">
+                <x-slot name="head">
+                <tr>
+                    <x-ui.sortable-th
+                        column="name"
+                        :sort-by="$assignedUsersSortBy"
+                        :sort-dir="$assignedUsersSortDir"
+                        action="sortAssignedUsers('name')"
+                        :label="__('Name')"
+                    />
+                    <x-ui.sortable-th
+                        column="email"
+                        :sort-by="$assignedUsersSortBy"
+                        :sort-dir="$assignedUsersSortDir"
+                        action="sortAssignedUsers('email')"
+                        :label="__('Email')"
+                    />
+                    <x-ui.sortable-th
+                        column="company"
+                        :sort-by="$assignedUsersSortBy"
+                        :sort-dir="$assignedUsersSortDir"
+                        action="sortAssignedUsers('company')"
+                        :label="__('Company')"
+                    />
+                    @if ($canEdit)
+                        <th scope="col" class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                    @endif
+                </tr>
+                </x-slot>
+
+                @forelse($assignedUsers as $assignedUser)
+                    <tr wire:key="user-{{ $assignedUser->id }}" class="hover:bg-surface-subtle/50 transition-colors">
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                            <a href="{{ route('admin.users.show', $assignedUser) }}" wire:navigate class="text-sm font-medium text-accent hover:underline">{{ $assignedUser->name }}</a>
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignedUser->email }}</td>
+                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $assignedUser->company?->name ?? '—' }}</td>
+                        @if ($canEdit)
+                            <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                                <button
+                                    type="button"
+                                    wire:click="removeUser({{ $assignedUser->pivot_id }})"
+                                    wire:confirm="{{ __('Remove :name from this role?', ['name' => $assignedUser->name]) }}"
+                                    class="text-muted hover:text-status-danger transition-colors"
+                                    title="{{ __('Remove user') }}"
+                                    aria-label="{{ __('Remove user') }}"
+                                >
+                                    <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
+                                </button>
+                            </td>
+                        @endif
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="{{ $canEdit ? 4 : 3 }}" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No users assigned.') }}</td>
+                    </tr>
+                @endforelse
+            </x-ui.table>
 
             {{-- Assign Users --}}
             @if ($canEdit && $availableUsers->isNotEmpty())

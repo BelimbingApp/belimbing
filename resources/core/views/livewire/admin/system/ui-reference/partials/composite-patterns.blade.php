@@ -29,39 +29,36 @@
                     </x-ui.select>
                 </div>
 
-                <div class="mt-4 overflow-x-auto rounded-2xl border border-border-default">
-                    <table class="min-w-full divide-y divide-border-default">
-                        <thead class="bg-surface-subtle/80">
-                            <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Provider') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('State') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border-default bg-surface-card">
-                            <tr class="hover:bg-surface-subtle/60">
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __('OpenAI') }}</td>
-                                <td class="px-table-cell-x py-table-cell-y"><x-ui.badge variant="success">{{ __('Configured') }}</x-ui.badge></td>
-                                <td class="px-table-cell-x py-table-cell-y">
-                                    <x-ui.icon-action-group>
-                                        <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
-                                        <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
-                                    </x-ui.icon-action-group>
-                                </td>
-                            </tr>
-                            <tr class="hover:bg-surface-subtle/60">
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __('GitHub Copilot') }}</td>
-                                <td class="px-table-cell-x py-table-cell-y"><x-ui.badge variant="warning">{{ __('Needs review') }}</x-ui.badge></td>
-                                <td class="px-table-cell-x py-table-cell-y">
-                                    <x-ui.icon-action-group>
-                                        <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
-                                        <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
-                                    </x-ui.icon-action-group>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <x-ui.table container="bordered" class="mt-4" :caption="__('Provider status examples')" :row-hover="false">
+                    <x-slot name="head">
+                    <tr>
+                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Provider') }}</th>
+                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('State') }}</th>
+                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
+                    </tr>
+                    </x-slot>
+
+                    <tr class="hover:bg-surface-subtle/60">
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __('OpenAI') }}</td>
+                        <td class="px-table-cell-x py-table-cell-y"><x-ui.badge variant="success">{{ __('Configured') }}</x-ui.badge></td>
+                        <td class="px-table-cell-x py-table-cell-y">
+                            <x-ui.icon-action-group>
+                                <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
+                                <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
+                            </x-ui.icon-action-group>
+                        </td>
+                    </tr>
+                    <tr class="hover:bg-surface-subtle/60">
+                        <td class="px-table-cell-x py-table-cell-y text-sm text-ink">{{ __('GitHub Copilot') }}</td>
+                        <td class="px-table-cell-x py-table-cell-y"><x-ui.badge variant="warning">{{ __('Needs review') }}</x-ui.badge></td>
+                        <td class="px-table-cell-x py-table-cell-y">
+                            <x-ui.icon-action-group>
+                                <x-ui.icon-action icon="heroicon-o-eye" :label="__('View')" />
+                                <x-ui.icon-action icon="heroicon-o-document-text" :label="__('Edit')" />
+                            </x-ui.icon-action-group>
+                        </td>
+                    </tr>
+                </x-ui.table>
             </div>
         </div>
     </x-ui.card>

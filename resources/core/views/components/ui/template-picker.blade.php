@@ -22,27 +22,24 @@
         @endif
     </div>
 
-    <div class="mt-4 overflow-hidden rounded-2xl border border-border-default">
-        <table class="min-w-full divide-y divide-border-default text-sm">
-            <thead class="bg-surface-subtle/80">
-                <tr>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Best for') }}</th>
+    <x-ui.table container="bordered" class="mt-4" :caption="$title" :row-hover="false">
+        <x-slot name="head">
+        <tr>
+            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
+            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Best for') }}</th>
+        </tr>
+        </x-slot>
+
+        @foreach ($templates as $template)
+            @if ($showAll || $selectedKey === $template['key'])
+                <tr class="cursor-pointer border-l-4 transition hover:bg-surface-subtle {{ $selectedKey === $template['key'] ? 'border-accent bg-surface-subtle/70' : 'border-transparent' }}" wire:click="{{ $selectAction }}('{{ $template['key'] }}')" wire:key="template-picker-{{ $selectAction }}-{{ $template['key'] }}">
+                    <td class="px-table-cell-x py-2.5 align-top">
+                        <div class="font-medium text-ink">{{ $template['name'] }}</div>
+                        <p class="mt-0.5 text-xs text-muted">{{ $template['summary'] }}</p>
+                    </td>
+                    <td class="px-table-cell-x py-2.5 align-top text-xs text-muted">{{ $template['best_for'] }}</td>
                 </tr>
-            </thead>
-            <tbody class="divide-y divide-border-default bg-surface-card">
-                @foreach ($templates as $template)
-                    @if ($showAll || $selectedKey === $template['key'])
-                        <tr class="cursor-pointer border-l-4 transition hover:bg-surface-subtle {{ $selectedKey === $template['key'] ? 'border-accent bg-surface-subtle/70' : 'border-transparent' }}" wire:click="{{ $selectAction }}('{{ $template['key'] }}')" wire:key="template-picker-{{ $selectAction }}-{{ $template['key'] }}">
-                            <td class="px-table-cell-x py-2.5 align-top">
-                                <div class="font-medium text-ink">{{ $template['name'] }}</div>
-                                <p class="mt-0.5 text-xs text-muted">{{ $template['summary'] }}</p>
-                            </td>
-                            <td class="px-table-cell-x py-2.5 align-top text-xs text-muted">{{ $template['best_for'] }}</td>
-                        </tr>
-                    @endif
-                @endforeach
-            </tbody>
-        </table>
-    </div>
+            @endif
+        @endforeach
+    </x-ui.table>
 </x-ui.card>
