@@ -1523,7 +1523,7 @@ it('lets an employee acknowledge their schedule for the current period', functio
 it('resets acknowledgment when a published cell override is saved for an employee', function (): void {
     $adminUser = createAdminUser();
     $company = Company::query()->findOrFail($adminUser->company_id);
-    [$employee, , , $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
+    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
 
     AttendanceRosterAcknowledgment::query()->create([
         'company_id' => $company->id,
@@ -1626,7 +1626,7 @@ it('unlocks a roster period after providing a reason', function (): void {
 it('exposes actual attendance outcomes in actualMode for the grid', function (): void {
     $user = createAdminUser();
     $company = Company::query()->findOrFail($user->company_id);
-    [$employee, $policyGroup, $shift, $monday, $sunday] = publishedRosterScenarioForOperationsTest($company);
+    [$employee, , , $monday] = publishedRosterScenarioForOperationsTest($company);
 
     AttendanceDay::query()->create([
         'company_id' => $company->id,
