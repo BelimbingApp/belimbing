@@ -41,7 +41,7 @@
                                 action="sort('actor_name')"
                                 :label="__('Actor')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Role') }}</th>
+                            <x-ui.th>{{ __('Role') }}</x-ui.th>
                             <x-ui.sortable-th
                                 column="event"
                                 :sort-by="$sortBy"
@@ -63,8 +63,8 @@
                                 action="sort('url')"
                                 :label="__('URL')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Payload') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Retain') }}</th>
+                            <x-ui.th>{{ __('Payload') }}</x-ui.th>
+                            <x-ui.th align="center">{{ __('Retain') }}</x-ui.th>
                         </tr>
                 </x-slot>
 

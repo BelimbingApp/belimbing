@@ -55,9 +55,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
 
                     <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                <x-ui.checkbox wire:model.live="selectIncubatingPage" id="select-visible-incubation-tables" />
-                            </th>
+                            <x-ui.th><x-ui.checkbox wire:model.live="selectIncubatingPage" id="select-visible-incubation-tables" /></x-ui.th>
                             <x-ui.sortable-th
                                 column="table_name"
                                 :sort-by="$sortBy"
@@ -76,8 +74,8 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                 :sort-dir="$sortDir"
                                 :label="__('Migration')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Incubation Source') }}</th>
+                            <x-ui.th>{{ __('Schema') }}</x-ui.th>
+                            <x-ui.th>{{ __('Incubation Source') }}</x-ui.th>
                         </tr>
                     </x-slot>
 
@@ -143,9 +141,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
 
                     <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">
-                                <x-ui.checkbox wire:model.live="selectSearchPage" id="select-visible-search-tables" />
-                            </th>
+                            <x-ui.th><x-ui.checkbox wire:model.live="selectSearchPage" id="select-visible-search-tables" /></x-ui.th>
                             <x-ui.sortable-th
                                 column="table_name"
                                 :sort-by="$sortBy"

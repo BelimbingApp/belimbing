@@ -41,7 +41,7 @@
                                 action="sort('actor_name')"
                                 :label="__('Actor')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Role') }}</th>
+                            <x-ui.th>{{ __('Role') }}</x-ui.th>
                             <x-ui.sortable-th
                                 column="event"
                                 :sort-by="$sortBy"
@@ -56,7 +56,7 @@
                                 action="sort('auditable_type')"
                                 :label="__('Model')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Details') }}</th>
+                            <x-ui.th>{{ __('Details') }}</x-ui.th>
                         </tr>
                 </x-slot>
 

@@ -73,8 +73,8 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                                 :sort-dir="$sortDir"
                                 :label="__('Migration')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Schema') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Incubation Source') }}</th>
+                            <x-ui.th>{{ __('Schema') }}</x-ui.th>
+                            <x-ui.th>{{ __('Incubation Source') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

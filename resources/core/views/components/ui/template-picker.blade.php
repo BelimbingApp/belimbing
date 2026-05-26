@@ -25,8 +25,8 @@
     <x-ui.table container="bordered" class="mt-4" :caption="$title" :row-hover="false">
         <x-slot name="head">
         <tr>
-            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
-            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Best for') }}</th>
+            <x-ui.th>{{ __('Template') }}</x-ui.th>
+            <x-ui.th>{{ __('Best for') }}</x-ui.th>
         </tr>
         </x-slot>
 

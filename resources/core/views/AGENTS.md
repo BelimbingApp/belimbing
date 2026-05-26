@@ -120,6 +120,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.flash-stack` | Fixed-position flash stack wrapper |
 | `x-ui.badge` | Status badges |
 | `x-ui.card` | Card containers |
+| `x-ui.table` | Application table shell with overflow, captions, head/body/foot slots, row hover, striping, and empty state support |
+| `x-ui.th` | Non-sortable table header cells; use instead of raw `<th>` so `scope` and header styling stay consistent |
 | `x-ui.modal` | Modal dialogs |
 | `x-ui.page-header` | Page title + actions + optional `help` slot (slide-down panel) |
 | `x-ui.help` | Standalone "?" toggle button for contextual help |

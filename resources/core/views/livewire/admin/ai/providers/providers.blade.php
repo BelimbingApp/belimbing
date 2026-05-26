@@ -57,14 +57,14 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                 <x-ui.table container="flush" :caption="__('Connected providers')">
                     <x-slot name="head">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y w-8"></th>
-                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Display Name') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
-                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Base URL') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Models') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                                <x-ui.th class="w-8"><span class="sr-only">{{ __('Actions') }}</span></x-ui.th>
+                                <x-ui.th class="hidden md:table-cell">{{ __('Name') }}</x-ui.th>
+                                <x-ui.th>{{ __('Display Name') }}</x-ui.th>
+                                <x-ui.th>{{ __('Priority') }}</x-ui.th>
+                                <x-ui.th class="hidden md:table-cell">{{ __('Base URL') }}</x-ui.th>
+                                <x-ui.th>{{ __('Models') }}</x-ui.th>
+                                <x-ui.th>{{ __('Status') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                             </tr>
                         </x-slot>
 
@@ -297,12 +297,12 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y w-8"></th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Provider') }}</th>
-                            <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
-                            <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Models') }}</th>
-                            <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost $/1M') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
+                            <x-ui.th class="w-8"><span class="sr-only">{{ __('Actions') }}</span></x-ui.th>
+                            <x-ui.th>{{ __('Provider') }}</x-ui.th>
+                            <x-ui.th class="hidden md:table-cell">{{ __('Description') }}</x-ui.th>
+                            <x-ui.th align="right" class="hidden md:table-cell">{{ __('Models') }}</x-ui.th>
+                            <x-ui.th align="right" class="hidden md:table-cell">{{ __('Cost $/1M') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Status') }}</x-ui.th>
                         </tr>
                     </x-slot>
 
@@ -375,11 +375,11 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                             <x-ui.table container="plain" :caption="__('Model catalog')">
                                                 <x-slot name="head">
                                                     <tr>
-                                                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Model') }}</th>
-                                                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Context') }}</th>
-                                                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Max Output') }}</th>
-                                                        <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Input $/1M') }}</th>
-                                                        <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Output $/1M') }}</th>
+                                                        <x-ui.th>{{ __('Model') }}</x-ui.th>
+                                                        <x-ui.th align="right">{{ __('Context') }}</x-ui.th>
+                                                        <x-ui.th align="right">{{ __('Max Output') }}</x-ui.th>
+                                                        <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Input $/1M') }}</x-ui.th>
+                                                        <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Output $/1M') }}</x-ui.th>
                                                     </tr>
                                                 </x-slot>
 

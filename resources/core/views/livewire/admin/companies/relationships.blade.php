@@ -69,7 +69,7 @@
                                 action="sort('active')"
                                 :label="__('Active?')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

@@ -17,12 +17,12 @@
 
             <x-slot name="head">
                 <tr>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Column') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Null') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Default') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Attributes') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('References') }}</th>
+                    <x-ui.th>{{ __('Column') }}</x-ui.th>
+                    <x-ui.th>{{ __('Type') }}</x-ui.th>
+                    <x-ui.th>{{ __('Null') }}</x-ui.th>
+                    <x-ui.th>{{ __('Default') }}</x-ui.th>
+                    <x-ui.th>{{ __('Attributes') }}</x-ui.th>
+                    <x-ui.th>{{ __('References') }}</x-ui.th>
                 </tr>
             </x-slot>
 
@@ -91,10 +91,10 @@
 
             <x-slot name="head">
                 <tr>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Name') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Columns') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Type') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Flags') }}</th>
+                    <x-ui.th>{{ __('Name') }}</x-ui.th>
+                    <x-ui.th>{{ __('Columns') }}</x-ui.th>
+                    <x-ui.th>{{ __('Type') }}</x-ui.th>
+                    <x-ui.th>{{ __('Flags') }}</x-ui.th>
                 </tr>
             </x-slot>
 

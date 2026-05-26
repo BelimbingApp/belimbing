@@ -175,14 +175,14 @@
             <x-ui.table container="flush" :caption="__('Database backups')">
                     <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Backup ID') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Driver') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Encryption') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Finished') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Size (bytes)') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Trigger') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-cell-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
+                            <x-ui.th>{{ __('Backup ID') }}</x-ui.th>
+                            <x-ui.th>{{ __('Driver') }}</x-ui.th>
+                            <x-ui.th>{{ __('Encryption') }}</x-ui.th>
+                            <x-ui.th>{{ __('Finished') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Size (bytes)') }}</x-ui.th>
+                            <x-ui.th>{{ __('Trigger') }}</x-ui.th>
+                            <x-ui.th>{{ __('Status') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

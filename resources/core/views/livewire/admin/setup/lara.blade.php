@@ -67,12 +67,12 @@
 
                     <x-slot name="head">
                             <tr>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Slot') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('File') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Source') }}</th>
-                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Size') }}</th>
-                                <th class="hidden md:table-cell px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Last Edit') }}</th>
-                                <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                                <x-ui.th>{{ __('Slot') }}</x-ui.th>
+                                <x-ui.th>{{ __('File') }}</x-ui.th>
+                                <x-ui.th>{{ __('Source') }}</x-ui.th>
+                                <x-ui.th align="right" class="hidden md:table-cell">{{ __('Size') }}</x-ui.th>
+                                <x-ui.th class="hidden md:table-cell">{{ __('Last Edit') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                             </tr>
                         </x-slot>
 

@@ -190,10 +190,10 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
 
                         <x-slot name="head">
                                 <tr>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Template') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Marketplace') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Category tree') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay category ID') }}</th>
+                                    <x-ui.th>{{ __('Template') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Marketplace') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Category tree') }}</x-ui.th>
+                                    <x-ui.th>{{ __('eBay category ID') }}</x-ui.th>
                                 </tr>
                             </x-slot>
 

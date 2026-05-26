@@ -32,9 +32,9 @@
                 <x-ui.table container="bordered" class="mt-4" :caption="__('Provider status examples')" :row-hover="false">
                     <x-slot name="head">
                     <tr>
-                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Provider') }}</th>
-                        <th class="px-table-cell-x py-table-header-y text-left text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('State') }}</th>
-                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
+                        <x-ui.th>{{ __('Provider') }}</x-ui.th>
+                        <x-ui.th>{{ __('State') }}</x-ui.th>
+                        <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                     </tr>
                     </x-slot>
 

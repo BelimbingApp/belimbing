@@ -137,17 +137,17 @@ $formatCents = static fn (?int $cents): string => $cents !== null
             <x-ui.table container="plain" size="xs" :caption="__('Run calls')">
                 <x-slot name="head">
                         <tr>
-                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">#</th>
-                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Model') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Prompt') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Cached') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Completion') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Reasoning') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Total') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Cost') }}</th>
-                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Pricing') }}</th>
-                            <th class="text-right py-table-cell-y px-table-cell-x font-semibold">{{ __('Latency') }}</th>
-                            <th class="text-left py-table-cell-y px-table-cell-x font-semibold">{{ __('Finish') }}</th>
+                            <x-ui.th>#</x-ui.th>
+                            <x-ui.th>{{ __('Model') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Prompt') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Cached') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Completion') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Reasoning') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Total') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Cost') }}</x-ui.th>
+                            <x-ui.th>{{ __('Pricing') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Latency') }}</x-ui.th>
+                            <x-ui.th>{{ __('Finish') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

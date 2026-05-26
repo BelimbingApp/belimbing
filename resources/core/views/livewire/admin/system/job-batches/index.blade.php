@@ -60,7 +60,7 @@
                                 action="sort('created_at')"
                                 :label="__('Created At')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider"></th>
+                            <x-ui.th><span class="sr-only">{{ __('Actions') }}</span></x-ui.th>
                         </tr>
                 </x-slot>
 

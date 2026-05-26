@@ -47,8 +47,8 @@
                                 action="sort('last_activity')"
                                 :label="__('Last Activity')"
                             />
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            <x-ui.th>{{ __('Status') }}</x-ui.th>
+                            <x-ui.th>{{ __('Actions') }}</x-ui.th>
                         </tr>
                 </x-slot>
 

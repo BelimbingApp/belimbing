@@ -20,14 +20,14 @@
 
                     <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Address') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Primary') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Priority') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid From') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Valid To') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                            <x-ui.th>{{ __('Label') }}</x-ui.th>
+                            <x-ui.th>{{ __('Address') }}</x-ui.th>
+                            <x-ui.th>{{ __('Kind') }}</x-ui.th>
+                            <x-ui.th>{{ __('Primary') }}</x-ui.th>
+                            <x-ui.th>{{ __('Priority') }}</x-ui.th>
+                            <x-ui.th>{{ __('Valid From') }}</x-ui.th>
+                            <x-ui.th>{{ __('Valid To') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

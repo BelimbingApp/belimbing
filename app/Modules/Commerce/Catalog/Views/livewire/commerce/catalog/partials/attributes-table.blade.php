@@ -36,7 +36,7 @@
             :sort-dir="$sortDir"
             :label="__('Required')"
         />
-        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Options') }}</th>
+        <x-ui.th>{{ __('Options') }}</x-ui.th>
         <x-ui.sortable-th
             column="sort_order"
             :sort-by="$sortBy"

@@ -175,12 +175,12 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Priority') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Listing / Item') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Import Audit') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Quality') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recommendations') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Performance') }}</th>
+                            <x-ui.th>{{ __('Priority') }}</x-ui.th>
+                            <x-ui.th>{{ __('Listing / Item') }}</x-ui.th>
+                            <x-ui.th>{{ __('Import Audit') }}</x-ui.th>
+                            <x-ui.th>{{ __('Quality') }}</x-ui.th>
+                            <x-ui.th>{{ __('Recommendations') }}</x-ui.th>
+                            <x-ui.th>{{ __('Performance') }}</x-ui.th>
                         </tr>
                     </x-slot>
 
@@ -347,12 +347,12 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Reconciliation') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay Listing') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Belimbing Item') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Price') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</th>
+                            <x-ui.th>{{ __('Reconciliation') }}</x-ui.th>
+                            <x-ui.th>{{ __('eBay Listing') }}</x-ui.th>
+                            <x-ui.th>{{ __('Belimbing Item') }}</x-ui.th>
+                            <x-ui.th>{{ __('Status') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Price') }}</x-ui.th>
+                            <x-ui.th>{{ __('Synced') }}</x-ui.th>
                         </tr>
                     </x-slot>
 
@@ -441,11 +441,11 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('SKU') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Item') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Target Price') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Created') }}</th>
+                            <x-ui.th>{{ __('SKU') }}</x-ui.th>
+                            <x-ui.th>{{ __('Item') }}</x-ui.th>
+                            <x-ui.th>{{ __('Status') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Target Price') }}</x-ui.th>
+                            <x-ui.th>{{ __('Created') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

@@ -44,12 +44,12 @@
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Run') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Footprint') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Agent') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Turn') }}</th>
+                            <x-ui.th>{{ __('Run') }}</x-ui.th>
+                            <x-ui.th>{{ __('Footprint') }}</x-ui.th>
+                            <x-ui.th>{{ __('Agent') }}</x-ui.th>
+                            <x-ui.th>{{ __('Provider') }}</x-ui.th>
+                            <x-ui.th>{{ __('Status') }}</x-ui.th>
+                            <x-ui.th>{{ __('Turn') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

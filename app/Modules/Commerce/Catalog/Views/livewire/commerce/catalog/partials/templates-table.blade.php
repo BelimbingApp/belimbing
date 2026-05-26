@@ -18,7 +18,7 @@
             :sort-dir="$sortDir"
             :label="__('Category')"
         />
-        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
+        <x-ui.th>{{ __('Description') }}</x-ui.th>
         <x-ui.sortable-th
             column="is_active"
             :sort-by="$sortBy"
@@ -31,9 +31,9 @@
             :sort-dir="$sortDir"
             :label="__('Template attrs')"
         />
-        <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Applies') }}</th>
-        <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Items') }}</th>
-        <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+        <x-ui.th>{{ __('Applies') }}</x-ui.th>
+        <x-ui.th align="right">{{ __('Items') }}</x-ui.th>
+        <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
     </tr>
 @endif
 @if (! isset($section) || $section === 'body')

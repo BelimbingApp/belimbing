@@ -63,7 +63,7 @@
         <div class="space-y-4">
             <x-ui.catalog-section
                 :title="__('Table Pattern')"
-                component="<code>x-ui.table</code>, <code>x-ui.sortable-th</code>, <code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
+                component="<code>x-ui.table</code>, <code>x-ui.th</code>, <code>x-ui.sortable-th</code>, <code>x-ui.datetime</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
             >
                 {{ __('Tables should use the shared shell for overflow, border rhythm, captions, optional sticky headers, row hover or striping, empty states, and the standard sortable-header affordance when a column can reorder results.') }}
             </x-ui.catalog-section>
@@ -111,7 +111,7 @@
                             method="sortDataDisplay"
                             :label="__('Updated')"
                         />
-                        <th class="px-table-cell-x py-table-header-y text-right text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Actions') }}</th>
+                        <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                     </tr>
                 </x-slot>
 

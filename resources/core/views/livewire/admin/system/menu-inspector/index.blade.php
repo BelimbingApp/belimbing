@@ -47,14 +47,14 @@
 
                 <x-slot name="head">
                         <tr>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('ID') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Label') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Parent') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Kind') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Permission') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Condition') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Source') }}</th>
-                            <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Visible') }}</th>
+                            <x-ui.th>{{ __('ID') }}</x-ui.th>
+                            <x-ui.th>{{ __('Label') }}</x-ui.th>
+                            <x-ui.th>{{ __('Parent') }}</x-ui.th>
+                            <x-ui.th>{{ __('Kind') }}</x-ui.th>
+                            <x-ui.th>{{ __('Permission') }}</x-ui.th>
+                            <x-ui.th>{{ __('Condition') }}</x-ui.th>
+                            <x-ui.th>{{ __('Source') }}</x-ui.th>
+                            <x-ui.th>{{ __('Visible') }}</x-ui.th>
                         </tr>
                     </x-slot>
 

@@ -203,11 +203,11 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
                         <x-slot name="head">
                                 <tr>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Tool') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Readiness') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Health') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Presence') }}</th>
-                                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Explanation') }}</th>
+                                    <x-ui.th>{{ __('Tool') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Readiness') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Health') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Presence') }}</x-ui.th>
+                                    <x-ui.th>{{ __('Explanation') }}</x-ui.th>
                                 </tr>
                             </x-slot>
 

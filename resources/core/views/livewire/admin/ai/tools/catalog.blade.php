@@ -66,6 +66,7 @@
                         @endphp
 
                         <th
+                            scope="col"
                             wire:click="sortOn('name')"
                             title="{{ $sortBy === 'name' ? ($sortDir === 'asc' ? __('Sorted A→Z — click to reverse') : __('Sorted Z→A — click to reverse')) : __('Sort by name') }}"
                             class="{{ $thSortable }} {{ $sortBy === 'name' ? $thActive : $thInactive }}"
@@ -80,6 +81,7 @@
                             </span>
                         </th>
                         <th
+                            scope="col"
                             wire:click="sortOn('category')"
                             title="{{ $sortBy === 'category' ? ($sortDir === 'asc' ? __('Sorted by category — click to reverse') : __('Sorted by category (reversed) — click to restore')) : __('Sort by category') }}"
                             class="{{ $thSortable }} hidden md:table-cell {{ $sortBy === 'category' ? $thActive : $thInactive }}"
@@ -94,6 +96,7 @@
                             </span>
                         </th>
                         <th
+                            scope="col"
                             wire:click="sortOn('risk')"
                             title="{{ $sortBy === 'risk' ? ($sortDir === 'asc' ? __('Sorted lowest risk first — click to reverse') : __('Sorted highest risk first — click to reverse')) : __('Sort by risk level') }}"
                             class="{{ $thSortable }} {{ $sortBy === 'risk' ? $thActive : $thInactive }}"
@@ -107,8 +110,8 @@
                                 @endif
                             </span>
                         </th>
-                        <th class="{{ $thBase }} {{ $thInactive }}">{{ __('Readiness') }}</th>
-                        <th class="{{ $thBase }} {{ $thInactive }} hidden lg:table-cell">{{ __('Verified') }}</th>
+                        <x-ui.th class="{{ $thBase }} {{ $thInactive }}">{{ __('Readiness') }}</x-ui.th>
+                        <x-ui.th class="{{ $thBase }} {{ $thInactive }} hidden lg:table-cell">{{ __('Verified') }}</x-ui.th>
                     </tr>
                 </x-slot>
 

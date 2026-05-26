@@ -120,12 +120,12 @@ use Illuminate\Support\Collection;
         <x-ui.table container="plain" :caption="__('Provider models')">
             <x-slot name="head">
                 <tr>
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Model ID') }}</th>
-                    <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost Override Input $/1M') }}</th>
-                    <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cost Override Output $/1M') }}</th>
-                    <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cache Read $/1M') }}</th>
-                    <th class="hidden lg:table-cell px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Cache Write $/1M') }}</th>
-                    <th class="px-table-cell-x py-table-header-y text-center text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Access') }}</th>
+                    <x-ui.th>{{ __('Model ID') }}</x-ui.th>
+                    <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Cost Override Input $/1M') }}</x-ui.th>
+                    <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Cost Override Output $/1M') }}</x-ui.th>
+                    <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Cache Read $/1M') }}</x-ui.th>
+                    <x-ui.th align="right" class="hidden lg:table-cell">{{ __('Cache Write $/1M') }}</x-ui.th>
+                    <x-ui.th align="center">{{ __('Access') }}</x-ui.th>
                 </tr>
             </x-slot>
 

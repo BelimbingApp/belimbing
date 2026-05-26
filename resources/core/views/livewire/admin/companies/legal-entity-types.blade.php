@@ -41,7 +41,7 @@
                         action="sort('name')"
                         :label="__('Name')"
                     />
-                    <th class="px-table-cell-x py-table-header-y text-left text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Description') }}</th>
+                    <x-ui.th>{{ __('Description') }}</x-ui.th>
                     <x-ui.sortable-th
                         column="is_active"
                         :sort-by="$sortBy"
@@ -49,7 +49,7 @@
                         action="sort('is_active')"
                         :label="__('Status')"
                     />
-                    <th class="px-table-cell-x py-table-header-y text-right text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Actions') }}</th>
+                    <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                 </tr>
                 </x-slot>
 
