@@ -6,7 +6,6 @@ use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
-use App\Modules\Commerce\Sales\Models\Order;
 use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -30,6 +29,8 @@ class EbayStoreAlignmentService
 
     public function __construct(
         private readonly EbayListingAuditService $audit,
+        private readonly EbayBuyerSignalService $buyerSignals,
+        private readonly EbayListingQualityScorer $qualityScorer,
     ) {}
 
     /**
@@ -59,7 +60,7 @@ class EbayStoreAlignmentService
             ->get();
 
         $salesByListing = $this->salesByListing($companyId);
-        $trustSignals = $this->trustSignals($companyId, $listings);
+        $trustSignals = $this->buyerSignals->trustSignals($companyId, $listings);
         $trustSignalsByListing = $trustSignals->groupBy('listing_id');
 
         $cleanupQueue = $listings
@@ -92,8 +93,8 @@ class EbayStoreAlignmentService
         $draft = $listing->draft;
         $item = $listing->item;
         $state = $this->audit->state($listing);
-        $baselineQuality = $this->baselineQuality($listing);
-        $currentQuality = $this->currentQuality($listing, $draft, $sales, $trustSignals);
+        $baselineQuality = $this->qualityScorer->baselineQuality($listing);
+        $currentQuality = $this->qualityScorer->currentQuality($listing, $draft, $sales, $trustSignals);
         $performance = [
             'sale_count' => $sales['sale_count'],
             'last_sold_at' => $sales['last_sold_at'],
@@ -155,101 +156,6 @@ class EbayStoreAlignmentService
     }
 
     /**
-     * @param  Collection<int, Listing>  $listings
-     * @return Collection<int, array<string, mixed>>
-     */
-    private function trustSignals(int $companyId, Collection $listings): Collection
-    {
-        $listingById = $listings->keyBy('id');
-        $listingIdByExternalId = $listings
-            ->filter(fn (Listing $listing): bool => $listing->external_listing_id !== null)
-            ->mapWithKeys(fn (Listing $listing): array => [$listing->external_listing_id => $listing->id]);
-
-        return Order::query()
-            ->where('company_id', $companyId)
-            ->where('channel', EbayConfiguration::CHANNEL)
-            ->with('lines')
-            ->get()
-            ->flatMap(fn (Order $order): array => $this->trustSignalsForOrder($order, $listingById, $listingIdByExternalId))
-            ->values();
-    }
-
-    /**
-     * @param  Collection<int, Listing>  $listingById
-     * @param  Collection<string, int>  $listingIdByExternalId
-     * @return list<array<string, mixed>>
-     */
-    private function trustSignalsForOrder(Order $order, Collection $listingById, Collection $listingIdByExternalId): array
-    {
-        $signals = [];
-        $message = $this->firstString([
-            data_get($order->raw_payload, 'buyerCheckoutNotes'),
-            data_get($order->raw_payload, 'buyerMessage'),
-            data_get($order->raw_payload, 'buyer.buyerMessage'),
-        ]);
-
-        foreach ($order->lines as $line) {
-            $listingId = $line->listing_id
-                ?? $listingIdByExternalId->get($line->external_listing_id);
-
-            if ($listingId === null || ! $listingById->has($listingId)) {
-                continue;
-            }
-
-            $listing = $listingById->get($listingId);
-            $title = $listing?->title ?? $line->title ?? $line->external_listing_id;
-
-            if ($message !== null) {
-                $signals[] = $this->buyerQuestionSignal($order, $listingId, $title, $message);
-            }
-
-            if ($this->hasReturnOrCancelSignal($order)) {
-                $signals[] = $this->returnOrCancelSignal($order, $listingId, $title);
-            }
-        }
-
-        return $signals;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buyerQuestionSignal(Order $order, int $listingId, ?string $title, string $message): array
-    {
-        return [
-            'listing_id' => $listingId,
-            'listing_title' => $title,
-            'buyer' => $order->buyer_username,
-            'ordered_at' => $order->ordered_at,
-            'type' => 'buyer_question',
-            'label' => 'Buyer question',
-            'detail' => Str::limit($message, 120, '...'),
-            'severity' => 'warning',
-            'severity_score' => 30,
-        ];
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function returnOrCancelSignal(Order $order, int $listingId, ?string $title): array
-    {
-        $status = strtoupper((string) $order->status);
-
-        return [
-            'listing_id' => $listingId,
-            'listing_title' => $title,
-            'buyer' => $order->buyer_username,
-            'ordered_at' => $order->ordered_at,
-            'type' => 'return_or_cancel',
-            'label' => 'Return / cancellation signal',
-            'detail' => $status !== '' ? $status : 'Return or cancel signal found in eBay order payload.',
-            'severity' => 'danger',
-            'severity_score' => 45,
-        ];
-    }
-
-    /**
      * @return Collection<int, array<string, mixed>>
      */
     private function fitmentBatchCandidates(int $companyId): Collection
@@ -301,86 +207,6 @@ class EbayStoreAlignmentService
             'strong' => $cleanupQueue->filter(fn (array $row): bool => $row['current_quality']['status'] === 'strong')->count(),
             'needs_work' => $cleanupQueue->filter(fn (array $row): bool => in_array($row['current_quality']['status'], ['attention', 'risk'], true))->count(),
         ];
-    }
-
-    /**
-     * @return array{score: int, label: string, status: string, variant: string}
-     */
-    private function baselineQuality(Listing $listing): array
-    {
-        $score = 20;
-        $aspects = data_get($listing->raw_payload, 'inventory_item.product.aspects', []);
-
-        if ($listing->hasInventoryItemSnapshot()) {
-            $score += 15;
-        }
-
-        if ($listing->hasInventoryApiWritePath()) {
-            $score += 15;
-        }
-
-        if (is_array($aspects) && $aspects !== []) {
-            $score += 20;
-        }
-
-        if ($this->firstString([
-            data_get($listing->raw_payload, 'inventory_item.product.epid'),
-            data_get($listing->raw_payload, 'inventory_item.product.brand'),
-            data_get($listing->raw_payload, 'inventory_item.product.mpn'),
-        ]) !== null) {
-            $score += 15;
-        }
-
-        if ($listing->item_id !== null) {
-            $score += 10;
-        }
-
-        return $this->qualityStatus($score);
-    }
-
-    /**
-     * @param  array{sale_count: int, last_sold_at: Carbon|null}  $sales
-     * @return array{score: int, label: string, status: string, variant: string}
-     */
-    private function currentQuality(Listing $listing, ?ListingDraft $draft, array $sales, Collection $trustSignals): array
-    {
-        $score = 100;
-        $blockers = count(data_get($draft?->readiness_snapshot, 'blockers', []));
-        $warnings = count(data_get($draft?->readiness_snapshot, 'warnings', []));
-
-        $score -= $blockers * 12;
-        $score -= $warnings * 5;
-
-        if ($listing->adoptionState() === Listing::ADOPTION_LEGACY_RELIST_REQUIRED) {
-            $score -= 15;
-        }
-
-        if ($listing->isExternallyChanged()) {
-            $score -= 12;
-        }
-
-        $score -= min(20, $trustSignals->count() * 10);
-
-        if ($sales['sale_count'] > 0) {
-            $score += 8;
-        }
-
-        return $this->qualityStatus($score);
-    }
-
-    /**
-     * @return array{score: int, label: string, status: string, variant: string}
-     */
-    private function qualityStatus(int $score): array
-    {
-        $score = max(0, min(100, $score));
-
-        return match (true) {
-            $score >= 85 => ['score' => $score, 'label' => 'Strong', 'status' => 'strong', 'variant' => 'success'],
-            $score >= 65 => ['score' => $score, 'label' => 'Workable', 'status' => 'workable', 'variant' => 'info'],
-            $score >= 45 => ['score' => $score, 'label' => 'Attention', 'status' => 'attention', 'variant' => 'warning'],
-            default => ['score' => $score, 'label' => 'At Risk', 'status' => 'risk', 'variant' => 'danger'],
-        };
     }
 
     /**
@@ -666,33 +492,6 @@ class EbayStoreAlignmentService
             ?? $item->descriptions->first();
 
         return trim((string) $description?->body);
-    }
-
-    private function hasReturnOrCancelSignal(Order $order): bool
-    {
-        $haystacks = [
-            strtoupper((string) $order->status),
-            strtoupper((string) data_get($order->raw_payload, 'cancelStatus')),
-            strtoupper((string) data_get($order->raw_payload, 'returnStatus')),
-            strtoupper((string) data_get($order->raw_payload, 'orderPaymentStatus')),
-            strtoupper((string) data_get($order->raw_payload, 'orderFulfillmentStatus')),
-        ];
-
-        return collect($haystacks)->contains(fn (string $value): bool => Str::contains($value, ['RETURN', 'REFUND', 'CANCEL']));
-    }
-
-    /**
-     * @param  list<mixed>  $candidates
-     */
-    private function firstString(array $candidates): ?string
-    {
-        foreach ($candidates as $candidate) {
-            if (is_string($candidate) && trim($candidate) !== '') {
-                return trim($candidate);
-            }
-        }
-
-        return null;
     }
 
     private function alignmentStatus(Collection $valueSets): string
