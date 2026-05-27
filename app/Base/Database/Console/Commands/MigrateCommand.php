@@ -235,6 +235,10 @@ class MigrateCommand extends IlluminateMigrateCommand
             $this->components->twoColumnDetail('Dropped table', $table);
         }
 
+        foreach ($result['cascaded'] as $table) {
+            $this->components->twoColumnDetail('Cascaded dependent', $table);
+        }
+
         foreach ($result['migrations'] as $migration) {
             $this->components->twoColumnDetail('Cleared migration', $migration);
         }

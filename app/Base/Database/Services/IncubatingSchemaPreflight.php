@@ -61,28 +61,47 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
     /**
      * @param  list<string>  $migrationPaths
-     * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int}
+     * @return array{files: list<string>, tables: list<string>, cascaded: list<string>, migrations: list<string>, seeders_reset: int}
      */
     public function run(array $migrationPaths): array
     {
         if (! Schema::hasTable('migrations')) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
+            return ['files' => [], 'tables' => [], 'cascaded' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
         $incubating = $this->incubatingMigrations($migrationPaths);
 
         if ($incubating === []) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
+            return ['files' => [], 'tables' => [], 'cascaded' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
         $tables = $this->liveTablesDeclaredBy($incubating);
+        $migrationFiles = array_values(array_unique(array_map(
+            fn (array $migration): string => $migration['file'],
+            $incubating,
+        )));
         $migrationNames = array_values(array_unique(array_map(
             fn (array $migration): string => $migration['migration_name'],
             $incubating,
         )));
 
+        $cascaded = [];
+
         if ($tables !== []) {
-            $this->guardNoStableDependents($tables);
+            $cascaded = $this->resolveDependentRebuilds($tables);
+
+            if ($cascaded !== []) {
+                $tables = array_values(array_unique(array_merge($tables, $cascaded)));
+
+                foreach ($this->migrationFilesForTables($cascaded) as $file) {
+                    $migrationFiles[] = $file;
+                    $migrationNames[] = preg_replace('/\.php$/', '', $file);
+                }
+
+                $migrationFiles = array_values(array_unique($migrationFiles));
+                $migrationNames = array_values(array_unique($migrationNames));
+            }
+
             $this->dropTables($tables);
         }
 
@@ -95,11 +114,12 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             DB::table('migrations')->whereIn('migration', $deletedMigrations)->delete();
         }
 
-        $seedersReset = $this->resetSeedersFor($incubating);
+        $seedersReset = $this->resetSeedersForFiles($migrationFiles);
 
         return [
             'files' => array_map(fn (array $migration): string => $migration['relative_path'], $incubating),
             'tables' => $tables,
+            'cascaded' => $cascaded,
             'migrations' => array_values($deletedMigrations),
             'seeders_reset' => $seedersReset,
         ];
@@ -208,19 +228,92 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
+     * Tables that must be dropped and rebuilt alongside the incubating set
+     * because they hold foreign keys (directly or transitively) into it.
+     *
+     * Rather than refusing to rebuild when a stable sibling depends on an
+     * incubating table, we cascade the rebuild: the dependent table is dropped
+     * and its migration record cleared so the subsequent `migrate` re-creates
+     * it. A dependent can only be rebuilt this way if its owning migration is
+     * known via the registry; if any dependent is not re-creatable, we fall
+     * back to the original hard error so data is never silently lost.
+     *
      * @param  list<string>  $tablesToDrop
+     * @return list<string>
      */
-    private function guardNoStableDependents(array $tablesToDrop): void
+    private function resolveDependentRebuilds(array $tablesToDrop): array
+    {
+        $dependents = $this->dependentClosure($tablesToDrop);
+
+        if ($dependents === []) {
+            return [];
+        }
+
+        $rebuildable = $this->migrationFilesForTables($dependents);
+        $unrebuildable = array_values(array_diff($dependents, array_keys($rebuildable)));
+
+        if ($unrebuildable !== []) {
+            throw IncubatingSchemaDependencyException::forStableDependents(
+                $this->dependenciesInto($unrebuildable, array_merge($tablesToDrop, $dependents)),
+            );
+        }
+
+        return $dependents;
+    }
+
+    /**
+     * Transitive closure of live tables holding a foreign key into the seed
+     * set, excluding the seed set itself.
+     *
+     * @param  list<string>  $seed
+     * @return list<string>
+     */
+    private function dependentClosure(array $seed): array
+    {
+        $live = $this->liveTableNames();
+        $inSet = array_fill_keys($seed, true);
+        $added = [];
+
+        do {
+            $changed = false;
+
+            foreach ($live as $table) {
+                if (isset($inSet[$table])) {
+                    continue;
+                }
+
+                foreach (Schema::getForeignKeys($table) as $foreignKey) {
+                    if (! isset($inSet[$foreignKey['foreign_table']])) {
+                        continue;
+                    }
+
+                    $inSet[$table] = true;
+                    $added[$table] = true;
+                    $changed = true;
+
+                    break;
+                }
+            }
+        } while ($changed);
+
+        return array_keys($added);
+    }
+
+    /**
+     * Foreign-key dependencies from $dependents into $foreignTables, for error
+     * reporting when a dependent cannot be rebuilt automatically.
+     *
+     * @param  list<string>  $dependents
+     * @param  list<string>  $foreignTables
+     * @return list<array{table: string, column: string, foreign_table: string}>
+     */
+    private function dependenciesInto(array $dependents, array $foreignTables): array
     {
         $dependencies = [];
 
-        foreach ($this->liveTableNames() as $table) {
-            if (in_array($table, $tablesToDrop, true)) {
-                continue;
-            }
-
+        foreach ($dependents as $table) {
             foreach (Schema::getForeignKeys($table) as $foreignKey) {
-                if (! in_array($foreignKey['foreign_table'], $tablesToDrop, true)) {
+                if (! in_array($foreignKey['foreign_table'], $foreignTables, true)) {
                     continue;
                 }
 
@@ -234,9 +327,28 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             }
         }
 
-        if ($dependencies !== []) {
-            throw IncubatingSchemaDependencyException::forStableDependents($dependencies);
+        return $dependencies;
+    }
+
+    /**
+     * Map live tables to their owning migration file via the registry, keeping
+     * only those with a known, non-empty migration file.
+     *
+     * @param  list<string>  $tables
+     * @return array<string, string>
+     */
+    private function migrationFilesForTables(array $tables): array
+    {
+        if ($tables === [] || ! Schema::hasTable('base_database_tables')) {
+            return [];
         }
+
+        return TableRegistry::query()
+            ->whereIn('table_name', $tables)
+            ->whereNotNull('migration_file')
+            ->where('migration_file', '!=', '')
+            ->pluck('migration_file', 'table_name')
+            ->all();
     }
 
     /**
@@ -266,18 +378,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
-     * @param  list<array{file: string}>  $migrations
+     * @param  list<string>  $migrationFiles
      */
-    private function resetSeedersFor(array $migrations): int
+    private function resetSeedersForFiles(array $migrationFiles): int
     {
         if (! Schema::hasTable('base_database_seeders')) {
             return 0;
         }
 
-        $migrationFiles = array_values(array_unique(array_map(
-            fn (array $migration): string => $migration['file'],
-            $migrations,
-        )));
+        $migrationFiles = array_values(array_unique($migrationFiles));
 
         if ($migrationFiles === []) {
             return 0;
