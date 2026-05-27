@@ -49,6 +49,34 @@ test('schema incubation index can remove selected tables from source incubation'
     }
 });
 
+test('schema incubation index can filter currently incubating tables by table name', function (): void {
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(SchemaIncubationIndex::class)
+        ->set('incubatingSearch', 'leave_type')
+        ->assertSee('people_leave_types')
+        ->assertDontSee('people_leave_policies');
+});
+
+test('schema incubation index can filter currently incubating tables by module', function (): void {
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(SchemaIncubationIndex::class)
+        ->set('incubatingModule', 'Leave')
+        ->assertSee('people_leave_types')
+        ->assertDontSee('people_claim_types');
+});
+
+test('schema incubation page select checkbox only selects filtered incubating tables', function (): void {
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(SchemaIncubationIndex::class)
+        ->set('incubatingModule', 'Leave')
+        ->set('incubatingSearch', 'leave_type')
+        ->set('selectIncubatingPage', true)
+        ->assertSet('selectedIncubatingTables', ['people_leave_types']);
+});
+
 test('schema incubation index hides non-incubating stable tables from the main incubation list', function (): void {
     $this->actingAs(createAdminUser());
 

@@ -3,15 +3,19 @@
 use App\Base\Database\Livewire\SchemaIncubation\Index;
 
 /** @var Index $this */
+
+$migrationScopeHelp = __('This screen edits migration files by adding or removing `use IncubatingSchema;`. Actions operate at migration scope, so selecting one table can move sibling tables from the same migration too.');
+$sourceOnlyHelp = __('Only source-local incubation is editable here.');
+$addHelp = __('Moving a selected table edits its owning migration file to add `use IncubatingSchema;`.');
 ?>
 <div>
     <x-slot name="title">{{ __('Schema Incubation') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('Schema Incubation')" :subtitle="__('Manage source-local IncubatingSchema markers on owning migration files')">
+        <x-ui.page-header :title="__('Schema Incubation')" :subtitle="__('Keep still-changing tables editable in their original migration files during development, instead of adding new migrations for schema changes')">
             <x-slot name="help">
-                <p>{{ __('This screen edits migration files by adding or removing `use IncubatingSchema;`. Actions operate at migration scope, so selecting one table can move sibling tables from the same migration too.') }}</p>
-                <p class="mt-2">{{ __('Wildcard search is supported for discovery, but only source-local incubation is editable here.') }}</p>
+                <p>{{ $migrationScopeHelp }}</p>
+                <p class="mt-2">{{ __('Wildcard search is supported for discovery. :sourceOnly', ['sourceOnly' => $sourceOnlyHelp]) }}</p>
             </x-slot>
         </x-ui.page-header>
 
@@ -38,16 +42,29 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
         @endforeach
 
         <x-ui.card>
-            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div class="space-y-1">
-                    <h2 class="text-sm font-semibold text-ink">{{ __('Currently Incubating') }}</h2>
-                    <p class="text-sm text-muted">{{ __('Only tables already under incubation are listed here. Removing a selected table removes `use IncubatingSchema;` from its owning migration, which may also move sibling tables from that migration out of incubation.') }}</p>
-                </div>
+            <div class="mb-4 space-y-3">
+                <h2 class="text-sm font-semibold text-ink">{{ __('Currently Incubating') }}</h2>
 
-                <div class="flex flex-wrap gap-2">
-                    <x-ui.button wire:click="removeSelectedFromIncubation" variant="primary" size="sm">
+                <div class="flex flex-col gap-3 xl:flex-row xl:items-end">
+                    <div class="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                        <x-ui.search-input
+                            wire:model.live.debounce.300ms="incubatingSearch"
+                            placeholder="{{ __('Filter incubating tables by table name…') }}"
+                        />
+
+                        <x-ui.select id="incubating-module-filter" wire:model.live="incubatingModule">
+                            <option value="">{{ __('All modules') }}</option>
+                            @foreach($incubatingModules as $module)
+                                <option value="{{ $module }}">{{ $module }}</option>
+                            @endforeach
+                        </x-ui.select>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                    <x-ui.button wire:click="removeSelectedFromIncubation" variant="primary" size="md" class="whitespace-nowrap">
                         {{ __('Un-incubate') }}
                     </x-ui.button>
+                    </div>
                 </div>
             </div>
 
@@ -75,14 +92,10 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                 :label="__('Migration')"
                             />
                             <x-ui.th>{{ __('Schema') }}</x-ui.th>
-                            <x-ui.th>{{ __('Incubation Source') }}</x-ui.th>
                         </tr>
                     </x-slot>
 
                         @forelse($incubatingTables as $table)
-                            @php
-                                $incubationSource = __('Source migration');
-                            @endphp
                             <tr wire:key="incubation-table-{{ $table->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.checkbox
@@ -99,11 +112,10 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                                         {{ Str::headline($table->schema_state) }}
                                     </x-ui.badge>
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ $incubationSource }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables are currently under incubation.') }}</td>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables are currently under incubation.') }}</td>
                             </tr>
                         @endforelse
 
@@ -132,7 +144,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
             </div>
 
             <div class="mb-4 rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3 text-sm text-muted">
-                {{ __('Search results only show tables that are not currently under source-local incubation. Moving a selected table edits its owning migration file to add `use IncubatingSchema;`.') }}
+                {{ __('Search results only show tables that are not currently under source-local incubation. :addHelp', ['addHelp' => $addHelp]) }}
             </div>
 
             <x-ui.table container="flush" :caption="__('Incubating migrations')">

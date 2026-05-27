@@ -17,6 +17,10 @@ class Index extends Component
     use TogglesSort;
     use WithPagination;
 
+    public string $incubatingSearch = '';
+
+    public string $incubatingModule = '';
+
     public string $search = '';
 
     public string $sortBy = 'table_name';
@@ -42,8 +46,21 @@ class Index extends Component
      */
     public array $orphanedRegistryNotices = [];
 
+    public function updatedIncubatingSearch(): void
+    {
+        $this->resetIncubatingSelection();
+        $this->resetPage('incubatingPage');
+    }
+
+    public function updatedIncubatingModule(): void
+    {
+        $this->resetIncubatingSelection();
+        $this->resetPage('incubatingPage');
+    }
+
     public function updatedSearch(): void
     {
+        $this->resetSearchSelection();
         $this->resetPage('searchPage');
     }
 
@@ -193,16 +210,19 @@ class Index extends Component
 
         return view('livewire.admin.system.database-incubation.index', [
             'incubatingTables' => $incubatingTables,
+            'incubatingModules' => $this->incubatingModuleOptions(),
             'searchTables' => $searchTables,
         ]);
     }
 
     private function incubatingTableQuery(): Builder
     {
-        return TableRegistry::query()->whereIn(
-            'table_name',
-            $this->sourceIncubatingTableNames(),
-        );
+        return TableRegistry::query()
+            ->whereIn('table_name', $this->sourceIncubatingTableNames())
+            ->when($this->incubatingModule !== '', fn (Builder $query) => $query->where('module_name', $this->incubatingModule))
+            ->when(trim($this->incubatingSearch) !== '', function (Builder $query): void {
+                $query->where('table_name', 'like', '%'.trim($this->incubatingSearch).'%');
+            });
     }
 
     private function searchResultsQuery(): Builder
@@ -274,6 +294,22 @@ class Index extends Component
             $details,
             fn (array $detail): bool => ($detail['source_declared'] ?? false) === true,
         )));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function incubatingModuleOptions(): array
+    {
+        return TableRegistry::query()
+            ->whereIn('table_name', $this->sourceIncubatingTableNames())
+            ->whereNotNull('module_name')
+            ->pluck('module_name')
+            ->filter(fn (mixed $module): bool => is_string($module) && $module !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
     }
 
     private function wildcardToSqlLike(string $pattern): string
