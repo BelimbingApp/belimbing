@@ -127,12 +127,13 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 continue;
             }
 
+            $file = basename($path);
             $migration = [
                 'path' => $path,
                 'relative_path' => $this->relativeBasePath($path),
-                'file' => basename($path),
+                'file' => $file,
                 'migration_name' => pathinfo($path, PATHINFO_FILENAME),
-                'tables' => $this->createdTables($contents),
+                'tables' => $this->declaredTables($file, $contents),
             ];
 
             $migrations[] = $migration;
@@ -161,7 +162,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 'relative_path' => $this->relativeBasePath($path),
                 'file' => basename($path),
                 'migration_name' => pathinfo($path, PATHINFO_FILENAME),
-                'tables' => $this->createdTables($contents),
+                'tables' => $this->declaredTables(basename($path), $contents),
             ];
         }
 
@@ -169,9 +170,41 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
+     * Tables owned by a migration, merged from the authoritative registry
+     * (populated by RegistersTables::registerTable()) and the source-level
+     * regex. The registry covers migrations that build tables via helper
+     * traits or dynamic calls; the regex covers migrations that haven't
+     * been run yet so their registry rows don't exist.
+     *
      * @return list<string>
      */
-    private function createdTables(string $contents): array
+    private function declaredTables(string $migrationFile, string $contents): array
+    {
+        return array_values(array_unique(array_merge(
+            $this->registeredTablesForMigrationFile($migrationFile),
+            $this->parsedCreatedTables($contents),
+        )));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function registeredTablesForMigrationFile(string $migrationFile): array
+    {
+        if (! Schema::hasTable('base_database_tables')) {
+            return [];
+        }
+
+        return TableRegistry::query()
+            ->where('migration_file', $migrationFile)
+            ->pluck('table_name')
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parsedCreatedTables(string $contents): array
     {
         if (preg_match_all('/Schema::create\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches) === false) {
             return [];
