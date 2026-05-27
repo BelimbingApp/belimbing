@@ -81,9 +81,7 @@ use App\Base\Database\Livewire\DatabaseTables\Index;
                         @forelse($tables as $table)
                             @php
                                 $tableUrl = route('admin.system.database-tables.show', $table->table_name);
-                                $incubationSource = $table->source_declared
-                                    ? __('Source migration')
-                                    : ($table->deprecated_pattern ? __('Compatibility list: :pattern', ['pattern' => $table->deprecated_pattern]) : '—');
+                                $incubationSource = $table->source_declared ? __('Source migration') : '—';
                             @endphp
                             <tr wire:key="table-{{ $table->id }}" class="hover:bg-surface-subtle/50 transition-colors cursor-pointer" tabindex="0" onclick="window.location='{{ $tableUrl }}'" onkeydown="if(event.key==='Enter'||event.key===' '){window.location='{{ $tableUrl }}';event.preventDefault();}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>

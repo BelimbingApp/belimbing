@@ -58,7 +58,7 @@ Full browser user-agent strings are too noisy for a permanent mutation log. `Req
 
 ### Phase 1 — Audit schema cleanup and entity index
 
-- [x] Check table stability and add affected audit/Authz tables to `scripts/unstable-table-list.sh`; `base_audit_actions` and `base_authz_decision_logs` now join `base_audit_mutations` for destructive local rebuilds. {amp/gpt-5}
+- [x] Check table stability and add affected audit/Authz tables to migration-local `use IncubatingSchema;` declarations; `base_audit_actions` and `base_authz_decision_logs` now join `base_audit_mutations` for destructive local rebuilds. {amp/gpt-5}
 - [x] Choose the schema-change path explicitly before editing: destructive local rebuild after marking audit/Authz log tables unstable. {amp/gpt-5}
 - [x] Edit `0100_01_17_000000_create_base_audit_mutations_table.php` in place only after the chosen schema path is approved: add `subject_name` (string, nullable), `subject_id` (bigint unsigned, nullable), `subject_identifier` (string, nullable), `source` (string, default `listener`). {amp/gpt-5}
 - [x] Add the matching fields to `AuditMutation` fillable/casts or document that all enriched rows use low-level inserts intentionally. {amp/gpt-5}

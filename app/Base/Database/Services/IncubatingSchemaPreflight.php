@@ -12,7 +12,6 @@ use Illuminate\Support\Facades\Schema;
 final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 {
     public function __construct(
-        private readonly DeprecatedIncubatingTableList $deprecatedList,
         private readonly IncubatingMigrationFiles $migrationFiles,
         private readonly IncubatingSchemaTableClassifier $tableClassifier,
     ) {}
@@ -22,10 +21,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      */
     public function tableIsIncubating(string $tableName): bool
     {
-        if ($this->deprecatedList->firstMatchingPattern($tableName) !== null) {
-            return true;
-        }
-
         if (! Schema::hasTable('base_database_tables')) {
             return false;
         }
@@ -48,7 +43,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
     /**
      * @param  list<string>  $tableNames
-     * @return array<string, array{state: string, source_declared: bool, deprecated_pattern: string|null}>
+     * @return array<string, array{state: string, source_declared: bool}>
      */
     public function schemaDetailsForTables(array $tableNames): array
     {
@@ -66,18 +61,18 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
     /**
      * @param  list<string>  $migrationPaths
-     * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int, deprecated_script_tables: list<string>}
+     * @return array{files: list<string>, tables: list<string>, migrations: list<string>, seeders_reset: int}
      */
     public function run(array $migrationPaths): array
     {
         if (! Schema::hasTable('migrations')) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0, 'deprecated_script_tables' => []];
+            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
         $incubating = $this->incubatingMigrations($migrationPaths);
 
         if ($incubating === []) {
-            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0, 'deprecated_script_tables' => []];
+            return ['files' => [], 'tables' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
         $tables = $this->liveTablesDeclaredBy($incubating);
@@ -107,7 +102,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             'tables' => $tables,
             'migrations' => array_values($deletedMigrations),
             'seeders_reset' => $seedersReset,
-            'deprecated_script_tables' => $this->tableClassifier->deprecatedTables(),
         ];
     }
 
@@ -118,7 +112,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     public function incubatingMigrations(array $migrationPaths): array
     {
         $migrations = [];
-        $seenFiles = [];
 
         foreach ($this->migrationFiles->paths($migrationPaths) as $path) {
             $contents = file_get_contents($path);
@@ -137,33 +130,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             ];
 
             $migrations[] = $migration;
-            $seenFiles[$migration['file']] = true;
-        }
-
-        foreach ($this->deprecatedScriptMigrationFiles() as $migrationFile) {
-            if (isset($seenFiles[$migrationFile])) {
-                continue;
-            }
-
-            $path = $this->migrationFiles->pathByFileName($migrationFile);
-
-            if ($path === null) {
-                continue;
-            }
-
-            $contents = file_get_contents($path);
-
-            if ($contents === false) {
-                continue;
-            }
-
-            $migrations[] = [
-                'path' => $path,
-                'relative_path' => $this->relativeBasePath($path),
-                'file' => basename($path),
-                'migration_name' => pathinfo($path, PATHINFO_FILENAME),
-                'tables' => $this->declaredTables(basename($path), $contents),
-            ];
         }
 
         return $migrations;
@@ -329,16 +295,5 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     private function relativeBasePath(string $absolutePath): string
     {
         return str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $absolutePath);
-    }
-
-    private function deprecatedScriptMigrationFiles(): array
-    {
-        return TableRegistry::query()
-            ->whereIn('table_name', $this->tableClassifier->deprecatedTables())
-            ->whereNotNull('migration_file')
-            ->pluck('migration_file')
-            ->unique()
-            ->values()
-            ->all();
     }
 }

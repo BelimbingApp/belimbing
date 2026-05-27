@@ -242,14 +242,6 @@ class MigrateCommand extends IlluminateMigrateCommand
         if ($result['seeders_reset'] > 0) {
             $this->components->twoColumnDetail('Seeders reset', (string) $result['seeders_reset']);
         }
-
-        if ($result['deprecated_script_tables'] !== []) {
-            $this->components->warn('Deprecated script compatibility is still active for some incubating tables. Move those tables into migration-local IncubatingSchema declarations.');
-
-            foreach ($result['deprecated_script_tables'] as $table) {
-                $this->components->twoColumnDetail('Deprecated script', $table);
-            }
-        }
     }
 
     /**

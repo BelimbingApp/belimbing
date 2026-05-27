@@ -6,7 +6,6 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\MigrationIncubationManager;
 use App\Base\Database\Services\TableInspector;
-use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,7 +14,6 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
 
@@ -43,6 +41,11 @@ class Index extends Component
      * @var list<string>
      */
     public array $orphanedRegistryNotices = [];
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage('searchPage');
+    }
 
     public function mount(TableInspector $inspector): void
     {
@@ -100,7 +103,7 @@ class Index extends Component
         $skipped = [];
 
         foreach ($this->selectedSearchTables as $tableName) {
-            $detail = $details[$tableName] ?? ['state' => 'unknown', 'source_declared' => false, 'deprecated_pattern' => null];
+            $detail = $details[$tableName] ?? ['state' => 'unknown', 'source_declared' => false];
 
             if (($detail['state'] ?? 'unknown') === 'infrastructure') {
                 $skipped[] = $tableName.' (infrastructure)';
@@ -112,16 +115,12 @@ class Index extends Component
                 continue;
             }
 
-            if (($detail['deprecated_pattern'] ?? null) !== null) {
-                $skipped[] = $tableName.' (still on deprecated compatibility list)';
-                continue;
-            }
-
             $toUpdate[] = $tableName;
         }
 
         $result = app(MigrationIncubationManager::class)->markTablesIncubating($toUpdate);
         $this->resetSearchSelection();
+        $this->resetIncubationPagination();
         $this->flashIncubationResult(
             action: 'moved to incubation',
             changed: $result['updated'],
@@ -143,15 +142,10 @@ class Index extends Component
         $skipped = [];
 
         foreach ($this->selectedIncubatingTables as $tableName) {
-            $detail = $details[$tableName] ?? ['state' => 'unknown', 'source_declared' => false, 'deprecated_pattern' => null];
+            $detail = $details[$tableName] ?? ['state' => 'unknown', 'source_declared' => false];
 
             if (($detail['source_declared'] ?? false) === true) {
                 $toUpdate[] = $tableName;
-                continue;
-            }
-
-            if (($detail['deprecated_pattern'] ?? null) !== null) {
-                $skipped[] = $tableName.' (managed by deprecated compatibility list)';
                 continue;
             }
 
@@ -160,6 +154,7 @@ class Index extends Component
 
         $result = app(MigrationIncubationManager::class)->unmarkTablesIncubating($toUpdate);
         $this->resetIncubatingSelection();
+        $this->resetIncubationPagination();
         $this->flashIncubationResult(
             action: 'removed from incubation',
             changed: $result['updated'],
@@ -186,10 +181,9 @@ class Index extends Component
         $details = app(IncubatingSchemaPreflight::class)->schemaDetailsForTables($allVisible);
 
         $transform = function (TableRegistry $table) use ($details): TableRegistry {
-            $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false, 'deprecated_pattern' => null];
+            $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false];
             $table->schema_state = $detail['state'];
             $table->source_declared = $detail['source_declared'];
-            $table->deprecated_pattern = $detail['deprecated_pattern'];
 
             return $table;
         };
@@ -207,7 +201,7 @@ class Index extends Component
     {
         return TableRegistry::query()->whereIn(
             'table_name',
-            $this->incubatingTableNames(),
+            $this->sourceIncubatingTableNames(),
         );
     }
 
@@ -219,10 +213,10 @@ class Index extends Component
             return TableRegistry::query()->whereRaw('1 = 0');
         }
 
-        $incubating = $this->incubatingTableNames();
+        $excluded = $this->sourceIncubatingTableNames();
 
         return TableRegistry::query()
-            ->when($incubating !== [], fn (Builder $query) => $query->whereNotIn('table_name', $incubating))
+            ->when($excluded !== [], fn (Builder $query) => $query->whereNotIn('table_name', $excluded))
             ->whereNotIn('table_name', TableRegistry::INFRASTRUCTURE_TABLES)
             ->where(function (Builder $nested) use ($search): void {
                 if (str_contains($search, '*') || str_contains($search, '?')) {
@@ -270,7 +264,7 @@ class Index extends Component
     /**
      * @return list<string>
      */
-    private function incubatingTableNames(): array
+    private function sourceIncubatingTableNames(): array
     {
         $details = app(IncubatingSchemaPreflight::class)->schemaDetailsForTables(
             TableRegistry::query()->pluck('table_name')->all(),
@@ -278,7 +272,7 @@ class Index extends Component
 
         return array_values(array_keys(array_filter(
             $details,
-            fn (array $detail): bool => ($detail['state'] ?? 'unknown') === 'incubating',
+            fn (array $detail): bool => ($detail['source_declared'] ?? false) === true,
         )));
     }
 
@@ -322,5 +316,11 @@ class Index extends Component
     {
         $this->selectedSearchTables = [];
         $this->selectSearchPage = false;
+    }
+
+    private function resetIncubationPagination(): void
+    {
+        $this->resetPage('incubatingPage');
+        $this->resetPage('searchPage');
     }
 }

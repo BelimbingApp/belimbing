@@ -11,7 +11,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
         <x-ui.page-header :title="__('Schema Incubation')" :subtitle="__('Manage source-local IncubatingSchema markers on owning migration files')">
             <x-slot name="help">
                 <p>{{ __('This screen edits migration files by adding or removing `use IncubatingSchema;`. Actions operate at migration scope, so selecting one table can move sibling tables from the same migration too.') }}</p>
-                <p class="mt-2">{{ __('Wildcard search is supported for discovery, but only source-local incubation is editable here. Tables still covered only by the deprecated compatibility script are shown as read-only so you can migrate them deliberately.') }}</p>
+                <p class="mt-2">{{ __('Wildcard search is supported for discovery, but only source-local incubation is editable here.') }}</p>
             </x-slot>
         </x-ui.page-header>
 
@@ -45,8 +45,8 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <x-ui.button wire:click="removeSelectedFromIncubation" variant="ghost" size="sm">
-                        {{ __('Remove Selected From Incubation') }}
+                    <x-ui.button wire:click="removeSelectedFromIncubation" variant="primary" size="sm">
+                        {{ __('Un-incubate') }}
                     </x-ui.button>
                 </div>
             </div>
@@ -81,9 +81,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
 
                         @forelse($incubatingTables as $table)
                             @php
-                                $incubationSource = $table->source_declared
-                                    ? __('Source migration')
-                                    : ($table->deprecated_pattern ? __('Deprecated compatibility list: :pattern', ['pattern' => $table->deprecated_pattern]) : __('Not incubating'));
+                                $incubationSource = __('Source migration');
                             @endphp
                             <tr wire:key="incubation-table-{{ $table->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
@@ -134,7 +132,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
             </div>
 
             <div class="mb-4 rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3 text-sm text-muted">
-                {{ __('Search results only show tables that are not currently under incubation. Moving a selected table edits its owning migration file to add `use IncubatingSchema;`. Tables still covered only by the deprecated compatibility script are intentionally excluded here.') }}
+                {{ __('Search results only show tables that are not currently under source-local incubation. Moving a selected table edits its owning migration file to add `use IncubatingSchema;`.') }}
             </div>
 
             <x-ui.table container="flush" :caption="__('Incubating migrations')">

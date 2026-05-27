@@ -79,10 +79,9 @@ class Index extends Component
         );
 
         $tables->getCollection()->transform(function (TableRegistry $table) use ($details): TableRegistry {
-            $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false, 'deprecated_pattern' => null];
+            $detail = $details[$table->table_name] ?? ['state' => 'unknown', 'source_declared' => false];
             $table->schema_state = $detail['state'];
             $table->source_declared = $detail['source_declared'];
-            $table->deprecated_pattern = $detail['deprecated_pattern'];
 
             return $table;
         });
