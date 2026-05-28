@@ -95,7 +95,61 @@ class Index extends Component
             'comboboxOptions' => $this->comboboxOptions(),
             'tableRows' => $this->tableRows(),
             'demoPaginator' => $this->demoPaginator(),
+            'secretInputVariants' => $this->secretInputVariants(),
         ]);
+    }
+
+    /**
+     * @return list<array{
+     *     id: string,
+     *     title: string,
+     *     description: string,
+     *     code: string,
+     *     label: string,
+     *     value: string,
+     *     hasValue: bool,
+     *     showRevealButton: bool,
+     *     savedMask: string,
+     *     placeholder: string,
+     *     help: string,
+     *     error: string|null,
+     *     required: bool,
+     * }>
+     */
+    private function secretInputVariants(): array
+    {
+        return [
+            [
+                'id' => 'ui-reference-secret-with-reveal-icon',
+                'title' => 'With reveal icon',
+                'description' => '<code>:show-reveal-button</code> on. Field chrome below; settings loads saved secrets for reveal.',
+                'code' => '<x-ui.secret-input label="API Key" placeholder="Enter password or API key" help="Short guidance below the field." required :show-reveal-button="true" />',
+                'label' => 'API Key',
+                'value' => '',
+                'hasValue' => false,
+                'showRevealButton' => true,
+                'savedMask' => '******',
+                'placeholder' => 'Enter password or API key',
+                'help' => 'Short guidance below the field.',
+                'error' => null,
+                'required' => true,
+            ],
+            [
+                'id' => 'ui-reference-secret-no-reveal-icon',
+                'title' => 'No reveal icon',
+                'description' => '<code>:show-reveal-button</code> off. Fixed mask only; value never loaded (e.g. WeChat parser token).',
+                'code' => '<x-ui.secret-input :has-value="true" :show-reveal-button="false" saved-mask="******" help="Focus to replace. Saving without changes keeps the current value." />',
+                'label' => 'Parser token',
+                'value' => '******',
+                'hasValue' => true,
+                'showRevealButton' => false,
+                'savedMask' => '******',
+                'placeholder' => '',
+                'help' => 'Leave blank to keep the current parser token.',
+                'error' => null,
+                'required' => false,
+            ],
+        ];
     }
 
     /**

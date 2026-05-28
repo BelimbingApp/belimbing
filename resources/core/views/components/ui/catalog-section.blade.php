@@ -11,7 +11,7 @@
     @endif
 
     @if(! $slot->isEmpty())
-        <p class="text-xs text-muted">{{ $slot }}</p>
+        <p class="text-xs text-muted">{!! $slot !!}</p>
     @endif
 </div>
 

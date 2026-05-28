@@ -38,14 +38,14 @@
     <x-ui.secret-input
         id="new-provider-api-key"
         wire:model="providerApiKey"
+        value="{{ $providerApiKey }}"
         label="{{ __('API Key') }}"
         :required="!$isEditingProvider"
-        :placeholder="$isEditingProvider ? __('Leave blank to keep current key') : ''"
+        :placeholder="($isEditingProvider && ! $providerHasStoredApiKey) ? __('Enter API key') : ''"
+        :help="$isEditingProvider ? __('Focus to replace. Saving without changes keeps the current key.') : ''"
         :error="$errors->first('providerApiKey')"
-        :has-value="$isEditingProvider"
-        :saved-label="__('Current key:')"
-        :saved-value-preview="$providerApiKeyPreview"
-        :empty-saved-value-label="__('not set')"
+        :has-value="$isEditingProvider && $providerHasStoredApiKey"
+        :show-reveal-button="$isEditingProvider && $providerHasStoredApiKey"
     />
 
     <x-ui.checkbox id="provider-is-active" wire:model="providerIsActive" label="{{ __('Active') }}" />

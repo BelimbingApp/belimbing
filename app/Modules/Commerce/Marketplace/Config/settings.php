@@ -79,8 +79,7 @@ return [
                     'type' => 'password',
                     'scope' => 'company',
                     'encrypted' => true,
-                    'placeholder' => 'Leave blank to keep current secret',
-                    'help' => 'Paste Cert ID from the same eBay keyset. Leave blank to keep the saved secret.',
+                    'help' => 'Paste Cert ID from the same eBay keyset. Focus to replace; saving without changes keeps the saved secret.',
                     'rules' => ['nullable', 'string', 'max:500'],
                 ],
                 [

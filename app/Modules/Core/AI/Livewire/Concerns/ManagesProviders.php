@@ -27,7 +27,7 @@ trait ManagesProviders
 
     public string $providerApiKey = '';
 
-    public ?string $providerApiKeyPreview = null;
+    public bool $providerHasStoredApiKey = false;
 
     public bool $providerIsActive = true;
 
@@ -82,7 +82,9 @@ trait ManagesProviders
         $this->providerName = $provider->name;
         $this->providerDisplayName = $provider->display_name ?? '';
         $this->providerBaseUrl = $provider->base_url;
-        $this->providerApiKeyPreview = BlbStr::maskMiddle($provider->credentials['api_key'] ?? '', 7, 4);
+        $apiKey = (string) ($provider->credentials['api_key'] ?? '');
+        $this->providerHasStoredApiKey = $apiKey !== '';
+        $this->providerApiKey = $apiKey;
         $this->providerIsActive = $provider->is_active;
         $this->showProviderForm = true;
 
@@ -128,7 +130,7 @@ trait ManagesProviders
             if ($provider) {
                 unset($data['name']);
 
-                if ($this->providerApiKey !== '') {
+                if (! BlbStr::isUnchangedSecretValue($this->providerApiKey)) {
                     $data['credentials'] = ['api_key' => $this->providerApiKey];
                 }
 
@@ -210,9 +212,10 @@ trait ManagesProviders
         $this->providerDisplayName = '';
         $this->providerBaseUrl = '';
         $this->providerApiKey = '';
-        $this->providerApiKeyPreview = null;
+        $this->providerHasStoredApiKey = false;
         $this->providerIsActive = true;
         $this->selectedTemplate = '';
         $this->resetValidation();
     }
+
 }

@@ -15,7 +15,7 @@ const AI_PROVIDERS_SAVED_KEY = 'sk-test-1234567890abcd';
 const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
 const AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI = 'https://github.com/login/device';
 
-test('edit provider modal shows the current masked api key in the label', function (): void {
+test('edit provider modal hydrates the api key when one exists', function (): void {
     $user = createAiProvidersTestUser();
     $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_SAVED_KEY);
 
@@ -23,11 +23,11 @@ test('edit provider modal shows the current masked api key in the label', functi
 
     Livewire::test(Providers::class)
         ->call('openEditProvider', $provider->id)
-        ->assertSee('Current key:')
-        ->assertSee('sk-test***********abcd');
+        ->assertSee('Focus to replace')
+        ->assertSet('providerApiKey', AI_PROVIDERS_SAVED_KEY);
 });
 
-test('edit provider modal shows current key not set when no api key is saved', function (): void {
+test('edit provider modal stays empty when no api key is saved', function (): void {
     $user = createAiProvidersTestUser();
     $provider = createAiProvidersTestProvider($user, '');
 
@@ -35,8 +35,7 @@ test('edit provider modal shows current key not set when no api key is saved', f
 
     Livewire::test(Providers::class)
         ->call('openEditProvider', $provider->id)
-        ->assertSee('Current key:')
-        ->assertSee('not set');
+        ->assertSet('providerApiKey', '');
 });
 
 test('edit provider advanced settings can be saved and reset (global)', function (): void {
