@@ -49,6 +49,12 @@ function Resolve-FrankenPhpHome {
         return $env:FRANKENPHP_INSTALL
     }
 
+    $frankenPhpCommand = Get-Command frankenphp -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($frankenPhpCommand) {
+        return Split-Path -Parent $frankenPhpCommand.Source
+    }
+
     return Join-Path $HOME '.frankenphp'
 }
 
@@ -122,7 +128,7 @@ $phpExe = Join-Path $frankenPhpHome 'php.exe'
 $frankenPhpExe = Join-Path $frankenPhpHome 'frankenphp.exe'
 
 if (-not (Test-Path $phpExe) -or -not (Test-Path $frankenPhpExe)) {
-    throw "FrankenPHP was not found in '$frankenPhpHome'. Set FRANKENPHP_INSTALL or run scripts/setup.ps1 first."
+    throw "FrankenPHP was not found in '$frankenPhpHome'. Set FRANKENPHP_INSTALL, add FrankenPHP to PATH, or run scripts/setup.ps1 first."
 }
 
 if (-not (Test-Path $PhpIniPath)) {

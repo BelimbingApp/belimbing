@@ -72,6 +72,12 @@ function Resolve-FrankenPhpHome {
         return $env:FRANKENPHP_INSTALL
     }
 
+    $frankenPhpCommand = Get-Command frankenphp -CommandType Application -ErrorAction SilentlyContinue |
+        Select-Object -First 1
+    if ($frankenPhpCommand) {
+        return Split-Path -Parent $frankenPhpCommand.Source
+    }
+
     return Join-Path $HOME '.frankenphp'
 }
 
@@ -301,7 +307,7 @@ try {
     $extensionDir = Join-Path $frankenPhpHome 'ext'
 
     if (-not (Test-Path $frankenPhpExe) -or -not (Test-Path $script:PhpExe)) {
-        throw "FrankenPHP was not found in '$frankenPhpHome'. Set FRANKENPHP_INSTALL or install FrankenPHP first."
+        throw "FrankenPHP was not found in '$frankenPhpHome'. Set FRANKENPHP_INSTALL, add FrankenPHP to PATH, or install FrankenPHP first."
     }
 
     $env:Path = "$frankenPhpHome;$env:Path"
@@ -314,7 +320,7 @@ try {
         Invoke-WebRequest -Uri 'https://curl.se/ca/cacert.pem' -OutFile $CaBundlePath -TimeoutSec 30
     }
 
-    @"
+    $phpIniContent = @"
 extension_dir="$extensionDir"
 curl.cainfo="$CaBundlePath"
 openssl.cafile="$CaBundlePath"
@@ -330,7 +336,8 @@ memory_limit=512M
 upload_max_filesize=64M
 post_max_size=64M
 variables_order=EGPCS
-"@ | Set-Content -Path $PhpIniPath -Encoding ASCII
+"@
+    Set-Content -Path $PhpIniPath -Value $phpIniContent -Encoding ASCII
     $env:PHPRC = $PhpConfigDir
     Write-Ok "PHP ini: $PhpIniPath"
 
@@ -411,6 +418,9 @@ variables_order=EGPCS
 
         Write-Step "Installing PHP dependencies"
         Invoke-Composer @('install')
+
+        Write-Step "Publishing Livewire browser assets"
+        Invoke-Php @('artisan', 'vendor:publish', '--tag=livewire:assets', '--force', '--no-interaction')
     }
 
     if (-not $SkipNodeInstall) {
@@ -445,7 +455,7 @@ variables_order=EGPCS
             if (Get-Command $tool.Binary -ErrorAction SilentlyContinue) {
                 Write-Ok "$($tool.Name) installed"
             } else {
-                Write-Warning "$($tool.Name) installed but not yet on PATH — restart your shell or add winget's install path to PATH"
+                Write-Warning "$($tool.Name) installed but not yet on PATH. Restart your shell or add the winget install path to PATH."
             }
         } else {
             Write-Warning "$($tool.Name) not found and winget is unavailable — install manually: https://github.com/$($tool.WingetId.ToLower())"
