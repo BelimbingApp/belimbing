@@ -35,7 +35,17 @@ abstract class SettingsForm extends Component
             $formKey = $this->formKey($key);
 
             if ($field['encrypted'] ?? false) {
-                $this->values[$formKey] = '';
+                $fieldScope = $this->scopeForField($field, $scope);
+
+                if ($this->shouldHydrateEncryptedValue($field)) {
+                    $value = $settings->get($key, '', $fieldScope);
+                } elseif ($settings->has($key, $fieldScope)) {
+                    $value = $this->savedSecretMask($field);
+                } else {
+                    $value = '';
+                }
+
+                $this->values[$formKey] = is_scalar($value) ? (string) $value : '';
 
                 continue;
             }
@@ -62,8 +72,12 @@ abstract class SettingsForm extends Component
             $formKey = $this->formKey($key);
             $value = $validated['values'][$formKey] ?? null;
 
-            if (($field['encrypted'] ?? false) && trim((string) $value) === '') {
-                continue;
+            if ($field['encrypted'] ?? false) {
+                $normalized = trim((string) $value);
+
+                if (BlbStr::isUnchangedSecretValue($normalized, $this->savedSecretMask($field))) {
+                    continue;
+                }
             }
 
             $value = $this->normalizeValue($value, $field);
@@ -82,7 +96,13 @@ abstract class SettingsForm extends Component
             );
 
             if ($field['type'] === 'password') {
-                $this->values[$formKey] = '';
+                $fieldScope = $this->scopeForField($field, $scope);
+
+                $this->values[$formKey] = $settings->has($key, $fieldScope)
+                    ? ($this->shouldHydrateEncryptedValue($field)
+                        ? (string) $value
+                        : $this->savedSecretMask($field))
+                    : '';
             }
 
             $this->resetValidation('values.'.$formKey);
@@ -118,17 +138,21 @@ abstract class SettingsForm extends Component
     /**
      * @param  array<string, mixed>  $field
      */
-    public function encryptedValuePreview(array $field): ?string
+    public function savedSecretMask(array $field): string
+    {
+        return (string) ($field['saved_mask'] ?? $field['saved_placeholder'] ?? BlbStr::DEFAULT_SAVED_SECRET_MASK);
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    protected function shouldHydrateEncryptedValue(array $field): bool
     {
         if (! ($field['encrypted'] ?? false)) {
-            return null;
+            return false;
         }
 
-        $value = app(SettingsService::class)->get($field['key'], null, $this->scopeForField($field, $this->companyScope()));
-
-        return is_string($value) && $value !== ''
-            ? BlbStr::maskMiddle($value, 7, 4)
-            : null;
+        return (bool) ($field['show_reveal_button'] ?? false);
     }
 
     public function render(): View

@@ -64,6 +64,10 @@
                         <dt class="text-muted">{{ __('Radio') }}</dt>
                         <dd class="text-right text-ink">{{ $radioValue }}</dd>
                     </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Datetime') }}</dt>
+                        <dd class="text-right text-ink">{{ $dateValue }}</dd>
+                    </div>
                 </dl>
             </div>
         </x-ui.card>
@@ -104,21 +108,6 @@
                     :label="__('Textarea')"
                     :help="__('Do not truncate help copy. If it cannot fit here, rewrite it shorter or move it to page help.')"
                     rows="4"
-                />
-
-                <x-ui.input
-                    id="ui-reference-datetime"
-                    type="datetime-local"
-                    wire:model.live="dateValue"
-                    :label="__('Datetime Input')"
-                />
-
-                <x-ui.secret-input
-                    id="ui-reference-secret"
-                    :label="__('Secret Input')"
-                    value="sample-client-secret"
-                    :help="__('Use for credentials that may need reveal-on-entry verification without exposing saved secrets by default.')"
-                    has-value
                 />
             </div>
         </x-ui.card>
@@ -221,27 +210,70 @@
             </div>
         </x-ui.card>
 
-        {{-- Time input --}}
         <x-ui.card>
-            <x-ui.catalog-section
-                :title="__('Time Input')"
-                component="<code>x-ui.time-input</code>"
-            >
-                {{ __('Pill-shaped HH:MM time field. Native time picker is the default; opt into − / value / + step buttons when compact stepping is better for the task.') }}
-            </x-ui.catalog-section>
+            <div class="space-y-4">
+                <x-ui.catalog-section
+                    :title="__('Time Input')"
+                    component="<code>x-ui.input</code> <code>type=&quot;datetime-local&quot;</code>, <code>x-ui.time-input</code>"
+                >
+                    {{ __('Native datetime-local for calendar pickers; pill-shaped time-input for HH:MM. Step buttons on time-input are optional.') }}
+                </x-ui.catalog-section>
 
-            <div class="mt-4 space-y-6" x-data="{ shiftStart: 480, shiftStartHhmm: '08:00',
-                stepTime(f,d){ this.shiftStart=((this.shiftStart+d*5)%1440+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0') },
-                parseTime(f,v){ const p=v.split(':'); const h=+p[0]; const m=+(p[1]||0); if(!isNaN(h)){this.shiftStart=(h*60+m+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0')} } }">
-                <div>
-                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Native time picker (default)') }}</p>
-                    <x-ui.time-input field="shiftStart" />
-                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; /&gt;</p>
+                <x-ui.input
+                    id="ui-reference-datetime"
+                    type="datetime-local"
+                    wire:model.live="dateValue"
+                    :label="__('Datetime')"
+                />
+
+                <div class="space-y-6" x-data="{ shiftStart: 480, shiftStartHhmm: '08:00',
+                    stepTime(f,d){ this.shiftStart=((this.shiftStart+d*5)%1440+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0') },
+                    parseTime(f,v){ const p=v.split(':'); const h=+p[0]; const m=+(p[1]||0); if(!isNaN(h)){this.shiftStart=(h*60+m+1440)%1440; this.shiftStartHhmm=String(Math.floor(this.shiftStart/60)).padStart(2,'0')+':'+String(this.shiftStart%60).padStart(2,'0')} } }">
+                    <div>
+                        <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Time — native picker') }}</p>
+                        <x-ui.time-input field="shiftStart" />
+                    </div>
+                    <div>
+                        <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('Time — with steps') }}</p>
+                        <x-ui.time-input field="shiftStart" :with-steps="true" />
+                    </div>
                 </div>
-                <div>
-                    <p class="text-[10.5px] font-semibold uppercase tracking-widest text-muted mb-3">{{ __('With step buttons') }}</p>
-                    <x-ui.time-input field="shiftStart" :with-steps="true" />
-                    <p class="mt-2 text-xs text-muted font-mono">&lt;x-ui.time-input field=&quot;shiftStart&quot; :with-steps=&quot;true&quot; /&gt;</p>
+            </div>
+        </x-ui.card>
+
+        <x-ui.card>
+            <div class="space-y-4">
+                <x-ui.catalog-section
+                    :title="__('Secret Input')"
+                    component="<code>x-ui.secret-input</code>"
+                >
+                    {!! __('Credentials and integration secrets. <code>:show-reveal-button</code> on loads and reveals saved values; off keeps a fixed mask only.') !!}
+                </x-ui.catalog-section>
+
+                <div class="space-y-8">
+                    @foreach ($secretInputVariants as $variant)
+                        <div class="space-y-3">
+                            <div>
+                                <div class="text-sm font-medium text-ink">{{ __($variant['title']) }}</div>
+                                <p class="mt-1 text-xs text-muted">{!! __($variant['description']) !!}</p>
+                            </div>
+
+                            <x-ui.secret-input
+                                :id="$variant['id']"
+                                :label="__($variant['label'])"
+                                :value="$variant['value']"
+                                :placeholder="$variant['placeholder'] !== '' ? __($variant['placeholder']) : ''"
+                                :help="$variant['help'] !== '' ? __($variant['help']) : ''"
+                                :error="$variant['error']"
+                                :required="$variant['required']"
+                                :has-value="$variant['hasValue']"
+                                :show-reveal-button="$variant['showRevealButton']"
+                                :saved-mask="$variant['savedMask']"
+                            />
+
+                            <p class="text-xs text-muted font-mono break-all">{{ $variant['code'] }}</p>
+                        </div>
+                    @endforeach
                 </div>
             </div>
         </x-ui.card>

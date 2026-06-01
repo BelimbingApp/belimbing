@@ -103,13 +103,14 @@ use App\Base\Settings\Livewire\SettingsForm;
             <x-ui.secret-input
                 id="{{ $id }}"
                 wire:model="values.{{ $formKey }}"
+                value="{{ (string) ($values[$formKey] ?? '') }}"
                 label="{{ __($field['label']) }}"
-                placeholder="{{ __($field['placeholder'] ?? '') }}"
-                :help="__($field['help'])"
+                :placeholder="$this->hasEncryptedValue($field) ? '' : __($field['placeholder'] ?? '')"
+                :help="filled($field['help'] ?? null) ? __($field['help']) : null"
                 :error="$errors->first('values.' . $formKey)"
                 :has-value="$this->hasEncryptedValue($field)"
-                :saved-label="__('Current value:')"
-                :saved-value-preview="$this->encryptedValuePreview($field)"
+                :show-reveal-button="(bool) ($field['show_reveal_button'] ?? false)"
+                :saved-mask="$this->savedSecretMask($field)"
             />
         @else
             <x-ui.input

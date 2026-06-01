@@ -151,3 +151,14 @@ it('pascalToKebab converts PascalCase segments to kebab-case', function (): void
 it('pascalToKebab leaves single-word segments lowercase', function (): void {
     expect(Str::pascalToKebab('Qac'))->toBe('qac');
 });
+
+// ---------------------------------------------------------------------------
+// isUnchangedSecretValue
+// ---------------------------------------------------------------------------
+
+it('isUnchangedSecretValue treats empty, sentinel, and length masks as unchanged', function (): void {
+    expect(Str::isUnchangedSecretValue(''))->toBeTrue()
+        ->and(Str::isUnchangedSecretValue('******'))->toBeTrue()
+        ->and(Str::isUnchangedSecretValue('********************'))->toBeTrue()
+        ->and(Str::isUnchangedSecretValue('sk-live-new-key'))->toBeFalse();
+});

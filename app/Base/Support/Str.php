@@ -3,6 +3,27 @@ namespace App\Base\Support;
 
 final class Str
 {
+    public const DEFAULT_SAVED_SECRET_MASK = '******';
+
+    /**
+     * Whether a submitted secret field value means "keep the stored secret".
+     *
+     * Matches the fixed saved mask (default {@see DEFAULT_SAVED_SECRET_MASK}) and
+     * length-only mask strings produced by x-ui.secret-input.
+     */
+    public static function isUnchangedSecretValue(string $value, string $savedMask = self::DEFAULT_SAVED_SECRET_MASK): bool
+    {
+        $normalized = trim($value);
+
+        if ($normalized === '' || $normalized === $savedMask) {
+            return true;
+        }
+
+        $maskCharacter = mb_substr($savedMask, 0, 1) ?: '*';
+
+        return $normalized === str_repeat($maskCharacter, mb_strlen($normalized));
+    }
+
     /**
      * Mask the middle of a string while preserving its original length.
      *
