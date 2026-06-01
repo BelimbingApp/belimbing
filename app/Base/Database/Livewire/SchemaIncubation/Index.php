@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Livewire\SchemaIncubation;
 
+use App\Base\Database\Livewire\SchemaIncubation\Concerns\ManagesSchemaIncubationSelection;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\MigrationIncubationManager;
@@ -14,6 +15,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use ManagesSchemaIncubationSelection;
     use TogglesSort;
     use WithPagination;
 
@@ -124,11 +126,13 @@ class Index extends Component
 
             if (($detail['state'] ?? 'unknown') === 'infrastructure') {
                 $skipped[] = $tableName.' (infrastructure)';
+
                 continue;
             }
 
             if (($detail['source_declared'] ?? false) === true) {
                 $skipped[] = $tableName.' (already source-declared)';
+
                 continue;
             }
 
@@ -163,6 +167,7 @@ class Index extends Component
 
             if (($detail['source_declared'] ?? false) === true) {
                 $toUpdate[] = $tableName;
+
                 continue;
             }
 
@@ -340,23 +345,5 @@ class Index extends Component
                 'tables' => implode('; ', $skipped),
             ]));
         }
-    }
-
-    private function resetIncubatingSelection(): void
-    {
-        $this->selectedIncubatingTables = [];
-        $this->selectIncubatingPage = false;
-    }
-
-    private function resetSearchSelection(): void
-    {
-        $this->selectedSearchTables = [];
-        $this->selectSearchPage = false;
-    }
-
-    private function resetIncubationPagination(): void
-    {
-        $this->resetPage('incubatingPage');
-        $this->resetPage('searchPage');
     }
 }

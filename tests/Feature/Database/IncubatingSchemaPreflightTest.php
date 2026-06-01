@@ -6,7 +6,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-const INCUBATING_SCHEMA_TEST_DIR = 'extensions/test-vendor/test-mod/Database/Migrations';
+const INCUBATING_SCHEMA_TEST_MODULE_PATH = 'extensions/test-vendor/test-mod';
+const INCUBATING_SCHEMA_TEST_DIR = INCUBATING_SCHEMA_TEST_MODULE_PATH.'/Database/Migrations';
 const INCUBATING_SCHEMA_TEST_FILE = '2099_01_01_000000_create_test_incubating_widgets_table.php';
 const INCUBATING_SCHEMA_TEST_FILE_NAME = '2099_01_01_000000_create_test_incubating_widgets_table';
 const INCUBATING_SCHEMA_TEST_TABLE = 'test_incubating_widgets';
@@ -93,7 +94,7 @@ PHP);
     TableRegistry::query()->create([
         'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
         'module_name' => 'test-mod',
-        'module_path' => 'extensions/test-vendor/test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
         'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
     ]);
 
@@ -144,14 +145,14 @@ PHP);
     TableRegistry::query()->create([
         'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
         'module_name' => 'test-mod',
-        'module_path' => 'extensions/test-vendor/test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
         'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
     ]);
 
     TableRegistry::query()->create([
         'table_name' => $dependentTable,
         'module_name' => 'test-mod',
-        'module_path' => 'extensions/test-vendor/test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
         'migration_file' => $dependentMigrationFile,
     ]);
 
