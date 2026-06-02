@@ -381,6 +381,15 @@ php artisan key:generate
    DB_LOG_QUERIES=true
    ```
 
+4. **On native Windows — exclude the project from Windows Defender.**
+   Defender real-time scanning of every PHP file during page compilation is the
+   dominant cause of multi-second page loads on native Windows (far slower than
+   Linux even on better hardware). The tell-tale symptom: the first visit to each
+   page takes seconds, a refresh is fast, and the slowness returns as you navigate
+   between pages. Add Defender exclusions for the project, FrankenPHP, and the
+   `php.exe`/`frankenphp.exe` processes. See
+   [Native Windows Installation → Performance](../installation/windows.md#performance-important).
+
 ### High CPU Usage
 
 **Problem:** Application using too much CPU

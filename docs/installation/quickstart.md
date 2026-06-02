@@ -176,4 +176,4 @@ docker compose --profile dev exec app php artisan <command>
 
 - [Visual Guide](visual-guide.md) - Installation diagrams
 - [Architecture](../architecture/) - System design
-- [Troubleshooting](troubleshooting.md) - Common issues
+- [Troubleshooting](../guides/troubleshooting.md) - Common issues
