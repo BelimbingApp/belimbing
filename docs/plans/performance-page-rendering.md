@@ -2,54 +2,52 @@
 
 **Status:** Identified
 **Last Updated:** 2026-06-02
-**Sources:** `docs/installation/windows.md` (Performance §); Chrome traces `Trace-20260601T220533` and `Trace-20260602T111445` (Downloads, analysed in session); `resources/core/views/components/layouts/app.blade.php`; `app/Modules/Core/AI/Livewire/Chat.php`; `app/Base/Database/Livewire/DatabaseTables/Index.php`; `app/Modules/Commerce/Marketplace/Livewire/Ebay/Index.php`; existing Livewire concerns `SearchablePaginatedList`, `ResetsPaginationOnSearch`
+**Sources:** `docs/installation/windows.md` (Performance §); Chrome traces `Trace-20260601T220533` and `Trace-20260602T111445` (analysed in session); `resources/core/views/components/layouts/app.blade.php`; `resources/core/views/components/menu/`; `app/Modules/Core/AI/Livewire/Chat.php`; `app/Base/Menu/ServiceProvider.php`; `app/Base/Database/Livewire/DatabaseTables/Index.php`; `app/Modules/Commerce/Marketplace/Livewire/Ebay/Index.php`; Livewire 4.3 features `SupportIslands`, `SupportWireCurrent`, `SupportNavigate` (`@persist`/`livewire:navigated`), `LazyLoading`, `Computed`; related plan `framework-modernization.md`
 **Agents:** claude/opus-4.8
 
 ## Problem Essence
 
-The server-side slowness is solved (Windows Defender file-scanning plus OPcache tuning). What remains is client-side: every `wire:navigate` rebuilds and re-hydrates the **entire** page DOM — including the unchanged app shell and Lara chat — and data-dense pages ship oversized initial HTML (the schema browser is ~1 MB for ~500 elements) that the browser must parse and wire up. `@persist` is used nowhere, lazy rendering is used once, and pagination/result-capping is applied inconsistently. The slow "pockets" are simply the pages that render the most.
+The server-side slowness is solved (Windows Defender file-scanning plus OPcache tuning). What remains is client-side and structural: the page is one monolith. Every `wire:navigate` re-fetches and re-morphs the **entire** body — rebuilding the sidebar and tearing down Lara chat — and data-dense pages ship oversized initial HTML (the schema browser is ~1 MB) that the browser must parse and hydrate. The slow "pockets" are simply the pages that render the most.
 
 ## Desired Outcome
 
-A small set of reusable rendering patterns, applied across classified page sets, so that:
+The application renders as **coordinated Livewire islands**, not a monolith:
 
-- The stable shell — top bar, sidebar, status bar, and Lara chat — persists across navigation and is never rebuilt; chat open/closed state, scroll position, and in-flight streaming continue uninterrupted while the user moves between pages.
-- Every list/table view is bounded by pagination; no render path hydrates an unbounded set of models.
-- Secondary and below-the-fold sections load on demand rather than inflating the initial document.
-- Data-dense rows render only a visible summary, with detail loaded on expand.
+- A **persistent Lara chat** island that survives navigation untouched — open/closed state, scroll, and in-flight streaming continue while the user moves between pages.
+- A **persistent sidebar** island whose structure is not rebuilt per navigation, with active-link state driven live from the URL, and which refreshes only when something real changes (new menu item, pin, permission, company switch).
+- A **swappable main body** island — the only region that re-fetches on navigation — kept lean by pagination, lazy sections, and visible-only detail.
 
-Concretely: initial HTML per page within a budget (target ~150 KB, down from ~1 MB on the worst pages), hydration well under ~150 ms, and navigation that feels instant because only the main content region swaps.
+Targets: navigation feels instant because only the main body changes; the sidebar and chat are hydrated once per hard load, not per navigation; initial HTML per page within a budget (target ~150 KB, down from ~1 MB on the worst pages).
 
 ## Top-Level Components
 
-1. **Persistent App Shell** — the layout chrome (top bar, sidebar, status bar) and the Lara chat live in persisted islands so `wire:navigate` swaps only the main content region.
-2. **Bounded Lists** — a single pagination/search standard, reused everywhere a collection is rendered; no unbounded "load all" in render or stats paths.
-3. **Deferred Sections** — lazy Livewire islands for dashboards' secondary panels, inactive tabs, and below-the-fold widgets.
-4. **Visible-Only Detail** — dense tables render summary rows; per-row and expandable detail load on demand.
-5. **Page-Weight Triage** — a repeatable harness that renders each page component and reports HTML size / row counts, producing the ranked inventory that classifies pages into the sets above and guards against regression.
+1. **Coordinated Islands** — the shell is composed of independently-updating, event-coordinated regions: Lara chat (persisted, stateful), sidebar (persisted structure + live active-state), and main body (swapped on navigation). Built on Livewire 4's `Islands`, `WireCurrent`, `Navigate`/`@persist`, and `LazyLoading` rather than custom plumbing.
+2. **Bounded Lists** *(within the main body)* — one pagination/search standard wherever a collection is rendered; no unbounded model loads in render or stats paths.
+3. **Deferred Sections** *(within the main body)* — lazy islands for secondary panels, inactive tabs, and below-the-fold widgets.
+4. **Visible-Only Detail** *(within the main body)* — dense tables render summary rows; per-row and expandable detail load on demand.
+5. **Page-Weight Triage** — a repeatable harness that renders each page and reports HTML size / row counts, producing the ranked inventory and guarding against regression.
 
 ## Design Decisions
 
-**Persist the shell, swap the content.** Today the whole body re-morphs on every navigation, so the sidebar menu and the always-mounted Lara chat re-hydrate each time even though they did not change. Wrapping the chat and chrome in persisted islands (Livewire's `@persist` for `wire:navigate`) keeps them mounted: their hydration cost is paid once per hard load, not per navigation, and the chat keeps its state and any in-flight streaming as the user navigates. This directly answers the request that Lara chat be independent of the page. Recommended over the heavier alternative of isolating chat in an iframe or a separate SPA root — that also survives a hard browser reload but adds cross-context messaging and a second asset load; revisit only if hard-reload continuity becomes a firm requirement. Hard reload (F5) is handled separately by the chat's existing session restore from local storage, so the live-persist work targets `wire:navigate`, which is the common case.
+**Compose the shell as islands, not a monolith.** `wire:navigate` today morphs the whole body, so the sidebar re-renders and (without persistence) the chat is destroyed on every navigation. Instead: Lara chat lives in a persisted island (Livewire's `@persist`) and is never rebuilt; the sidebar's structure is persisted while its active highlight is driven by `wire:current`, which re-evaluates from the URL on `livewire:navigated` with no server round-trip; only the main body re-fetches per navigation. These are first-class Livewire 4.3 features (`SupportIslands`, `SupportWireCurrent`, `SupportNavigate`) — the framework ships a tested fixture combining `@persist` + `wire:current` for exactly a navbar/sidebar — so this is the intended pattern, not bespoke machinery.
 
-**One pagination standard, everywhere a list renders.** The concerns already exist; the gap is coverage. Treat "a Livewire view that renders a collection without a paginator" as a defect to be fixed, not a judgement call. Equally, any service query that loads all rows to compute a number (dashboard stats, counts) should aggregate in SQL rather than hydrate models — the eBay dashboard and stats currently load every listing to render a capped view.
+**Coordinate by events, not by rebuilding.** Structural changes that must reach a persisted island — a newly added menu item, a pin toggle, a company switch, an impersonation start/stop, a permission change — are delivered as dispatched events the relevant island listens for and refreshes on. This is the answer to "what happens when a menu is added": the active highlight updates live via `wire:current`, and the structure refreshes when its triggering event fires (or on the next full load for deploy-time additions) — no whole-page rebuild and no staleness. The classic islands failure mode is a *missed* coordination event, so the event→island map is part of the Public Contract and is tested, not left implicit.
 
-**Lazy by default for secondary content.** Anything not needed for first meaningful paint — secondary dashboard panels, inactive tab bodies, expensive widgets — becomes a lazy island so it neither inflates the initial HTML nor blocks hydration. Eager rendering is reserved for the primary content the user navigated to see.
+**The sidebar moves from a Blade component to an island.** It is currently `<x-menu.sidebar>`, a Blade component re-rendered by a per-request view composer; it must become an island/Livewire component to update independently. It is on every page, so this is done carefully behind the existing menu cache, preserving today's per-user pins and permission filtering.
 
-**Render only what's visible.** Hidden tab bodies and per-row expanded detail should not exist in the initial DOM; they load on activation. This is the change that turns "1 MB for 500 elements" back into a lean document, because the weight there is embedded detail the user cannot see yet.
+**Lean the main body.** Within the swappable island the established patterns apply: paginate every list (reuse the existing `SearchablePaginatedList` / `ResetsPaginationOnSearch` concerns), lazy-load secondary sections, and render only visible detail. This is where the 1 MB pages are trimmed; the islands work makes navigation cheap, this work makes each page light.
 
-**Measure to target.** Effort goes where weight is. The triage harness classifies pages by rendered size so we apply each pattern to the set that needs it, and so regressions are visible later.
+**Measure to target.** The triage harness classifies pages by rendered size so effort lands where weight is and regressions stay visible.
 
-These follow the project's Deep Modules and Low-Entropy principles: reuse the existing shared concerns rather than per-page bespoke code, and fix the pattern across the set rather than one page at a time.
+These follow the project's Deep-Modules and Strategic-Programming principles: invest in a clean shell once (BLB is a multi-module framework with plurality on the roadmap), and reuse framework primitives and shared concerns rather than per-page bespoke code.
 
 ## Public Contract
 
-Conventions every page is expected to follow once the patterns land:
-
-- The app shell (top bar, sidebar, status bar, Lara chat) renders once and persists across `wire:navigate`; page components render only into the main content region.
-- Every view that renders a list or table paginates through the shared concerns; page size is defined centrally; search resets pagination via `ResetsPaginationOnSearch`.
-- No render path loads an unbounded collection of Eloquent models; counts and rollups use SQL aggregates.
-- Secondary and below-the-fold sections are lazy islands, not eager markup.
+- The shell is three coordinated islands; only the main-body island re-fetches on `wire:navigate`.
+- Lara chat persists across navigation with its state intact.
+- Sidebar active-state is driven by `wire:current`; sidebar structure refreshes only on its coordination events (e.g. `menu-changed`, `pins-changed`, `context-changed`) or a full load — never by a whole-page rebuild.
+- The event→island coordination map is documented and tested; no island depends on a full-page morph for correctness.
+- Within the main body: every list/table paginates via the shared concerns; no render path loads an unbounded collection of models (counts/rollups use SQL aggregates); secondary and below-the-fold sections are lazy; dense detail loads on demand.
 - A per-page initial-HTML budget (target ~150 KB) is the guardrail; the triage harness reports violators.
 
 ## Phases
@@ -58,42 +56,37 @@ Conventions every page is expected to follow once the patterns land:
 
 Goal: replace guesswork with a ranked list of what to fix.
 
-- [ ] Build a repeatable harness that renders each Livewire page component as an authenticated user and reports rendered HTML size, collection/row counts, and embedded-component count
-- [ ] Produce a ranked page-weight inventory and classify each heavy page into a set (shell, unbounded list, eager-secondary, dense-detail)
-- [ ] Record the initial-HTML budget (~150 KB) and the current worst offenders as the baseline to beat
+- [ ] Build a repeatable harness that renders each Livewire page component (authenticated) and reports rendered HTML size, collection/row counts, and embedded-component count
+- [ ] Produce a ranked page-weight inventory; classify each heavy page (unbounded list, eager-secondary, dense-detail)
+- [ ] Record the initial-HTML budget (~150 KB) and the current worst offenders as the baseline
 
-### Phase 2 — Persistent app shell, including Lara chat (priority)
+### Phase 2 — Island shell foundation (priority)
 
-Goal: navigation swaps only main content; the shell and chat are never rebuilt.
+Goal: navigation re-fetches only the main body; sidebar and chat are coordinated islands, never rebuilt.
 
-- [ ] Move the shell chrome and the Lara chat into persisted islands so `wire:navigate` preserves them
-- [ ] Verify chat open/closed state, scroll position, and an in-flight stream survive navigation between several pages
-- [ ] Re-trace to confirm shell + chat hydration is paid once per hard load, not per navigation
+> Note: an interim `#[Lazy]` on the chat (committed earlier) was reverted — it broke `ChatViewTest` by emitting a placeholder. Chat deferral belongs here, delivered together with `@persist` and updated tests, not as a standalone attribute.
 
-### Phase 3 — Bound every list
+- [ ] Persist Lara chat as an independent island (with deferral) so it survives navigation; update `ChatViewTest` for the deferred/persisted behavior; verify open/closed state, scroll, and an in-flight stream survive navigation across several pages
+- [ ] Convert the sidebar to an island (persisted structure) with `wire:current` active-state; verify the highlight updates on navigation and matches today's wildcard route semantics
+- [ ] Define the event→island coordination map (`menu-changed`, `pins-changed`, `context-changed`, impersonation) and wire the dispatchers; verify a newly added menu item, a pin toggle, and a company switch each reflect without a full reload
+- [ ] Re-trace: confirm `wire:navigate` re-fetches only the main body and shell hydration is paid once per hard load
 
-Goal: no page renders or loads an unbounded collection.
+### Phase 3 — Bound every list (main body)
 
 - [ ] From the inventory, add pagination (shared concerns) to list/table views lacking it — the schema browser (`DatabaseTables\Index`) is the first target
 - [ ] Replace "load all models" in stats/dashboard services with SQL aggregates or windowed queries (e.g. eBay `dashboard()` / `stats()`)
 
-### Phase 4 — Defer secondary sections
-
-Goal: initial document carries only primary content.
+### Phase 4 — Defer secondary sections (main body)
 
 - [ ] Convert secondary dashboard panels, inactive tabs, and below-the-fold widgets to lazy islands
 - [ ] Re-measure converted pages against the budget
 
-### Phase 5 — Visible-only detail
-
-Goal: dense pages emit summaries, not hidden detail.
+### Phase 5 — Visible-only detail (main body)
 
 - [ ] For dense tables/detail pages, render summary rows and load per-row/expandable detail on demand
 - [ ] Re-measure the worst offenders (schema browser, eBay) against the budget
 
 ### Phase 6 — Guardrails
-
-Goal: keep the wins from eroding.
 
 - [ ] Document the conventions in a guide and point the relevant `AGENTS.md` at it
 - [ ] Add a lightweight check (test or script, reusing the Phase 1 harness) that flags pages exceeding the HTML budget so regressions surface in review
