@@ -11,10 +11,11 @@ class ServiceProvider extends BaseServiceProvider
      * Register DateTime display services.
      *
      * Binds the DateTimeDisplayService contract to its implementation
-     * as a singleton.
+     * as a request-scoped instance (flushed per request under Octane so the
+     * injected LocaleContext memo never leaks across requests).
      */
     public function register(): void
     {
-        $this->app->singleton(DateTimeDisplayService::class, DateTimeDisplayServiceImpl::class);
+        $this->app->scoped(DateTimeDisplayService::class, DateTimeDisplayServiceImpl::class);
     }
 }

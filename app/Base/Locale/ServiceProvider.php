@@ -24,8 +24,8 @@ class ServiceProvider extends BaseServiceProvider
             NullLicenseeLocaleBootstrapSource::class,
             true,
         );
-        $this->app->singleton(LocaleContext::class, ApplicationLocaleContext::class);
-        $this->app->singleton(NumberDisplayService::class, LocalizedNumberDisplayService::class);
-        $this->app->singleton(CurrencyDisplayService::class, LocalizedCurrencyDisplayService::class);
+        $this->app->scoped(LocaleContext::class, ApplicationLocaleContext::class);
+        $this->app->scoped(NumberDisplayService::class, LocalizedNumberDisplayService::class);
+        $this->app->scoped(CurrencyDisplayService::class, LocalizedCurrencyDisplayService::class);
     }
 }
