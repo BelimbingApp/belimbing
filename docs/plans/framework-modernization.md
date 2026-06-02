@@ -57,7 +57,10 @@ Adopted in **stages**: enabling full `shouldBeStrict()` at once surfaced 133 fai
 
 - [x] Enable `preventLazyLoading` outside production in `AppServiceProvider::configureModels()` — claude/opus-4.8
 - [x] Fix the 3 N+1s it surfaced: `AiRun.calls` (`RunInspectionService`), `ClaimEntitlementUsageEntry.employee` (`ClaimUtilizationReportBuilder`), `AttributeValue.attribute` (`ManagesItemFitments`) — claude/opus-4.8
-- [ ] Enable `preventSilentlyDiscardingAttributes`; fix the ~40 mass-assignment violations
+- [~] Enable `preventSilentlyDiscardingAttributes` — measured ~10 failing tests from 4 root causes; re-enable once the two below are resolved:
+  - [x] `payroll_pay_item_code` missing from `$fillable` on `AttendanceAllowanceRule` and `ClaimType` (the column exists; it was being silently dropped on mass-assign — a real bug) — claude/opus-4.8
+  - [ ] `AiRun.created_at` — tests backdate it via direct `create()`; switch those ~4 test sites to `forceCreate` (timestamps should not enter `$fillable`)
+  - [ ] `Department.name` — `Companies\Departments.php` mass-assigns `name`, but the `departments` table has no `name` column (it lives on `DepartmentType`). Real caller bug; needs a domain decision (drop it, or set it on the type), not a rote fillable add
 - [ ] Make test factories faithful to the schema (start with `User`), then enable `preventAccessingMissingAttributes`; fix the ~196 violations
 
 Test-infra corrections made alongside (low-entropy cleanup surfaced by this work):
