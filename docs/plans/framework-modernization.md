@@ -108,4 +108,4 @@ Goal: trim perceived latency and close the version gap.
 
 - [ ] Use `defer()` for non-critical after-response work where it shortens response time
 - [ ] `composer outdated --direct` (run 2026-06-02): only **`livewire/livewire` 4.3.0 → 4.3.1** is in-policy (a patch within major 4) — apply it when the tree is clean (it republishes assets, so not mid-multi-agent-session). `phpunit` 12 → 13 is a major bump (out of the "within each major" policy; leave on 12.x). Nothing else direct is trailing.
-- [ ] Decide on Pulse / Precognition / Pennant — adopt or explicitly defer each with a recorded reason
+- [x] Decided — **defer all three** (none yet warranted, per the Strategic-Programming "don't carry speculative features" principle): **Pulse** (perf monitoring) is the most justified given the perf focus, but adds a DB-backed ingest + dashboard to carry — adopt if/when continuous perf monitoring becomes a priority (the `PULSE_ENABLED=false` env is already in `phpunit.xml`, so wiring is anticipated). **Precognition** — adopt when a form needs live server-side validation UX. **Pennant** — adopt when feature flags are actually needed. — claude/opus-4.8
