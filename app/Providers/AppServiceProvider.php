@@ -48,24 +48,16 @@ class AppServiceProvider extends ServiceProvider
 
     /**
      * Tighten Eloquent so latent bugs fail loudly in development instead of
-     * degrading silently in production (see docs/plans/framework-modernization.md,
-     * Phase 1):
-     *   - preventLazyLoading (N+1) — ENABLED.
-     *   - preventAccessingMissingAttributes — ENABLED (Department gained a `name`
-     *     accessor; the User factory now carries employee_id/company_id).
-     *   - preventSilentlyDiscardingAttributes — DEFERRED: it surfaced stale
-     *     `payroll_pay_item_code` assignments to AttendanceAllowanceRule/ClaimType,
-     *     whose column the Payroll module intentionally dropped (data moved to
-     *     people_payroll_*_pay_items). Those callers need reconciling first.
+     * degrading silently in production: N+1 lazy loads, accessing attributes
+     * that were never retrieved, and silently discarding non-fillable
+     * mass-assignment. Adopted in stages (see
+     * docs/plans/framework-modernization.md, Phase 1); now fully enabled.
      *
      * Disabled in production so a stray violation cannot take the app down.
      */
     protected function configureModels(): void
     {
-        $enabled = ! $this->app->isProduction();
-
-        Model::preventLazyLoading($enabled);
-        Model::preventAccessingMissingAttributes($enabled);
+        Model::shouldBeStrict(! $this->app->isProduction());
     }
 
     /**

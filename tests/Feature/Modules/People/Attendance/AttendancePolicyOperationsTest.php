@@ -195,7 +195,6 @@ it('simulates policy outcomes and allowance candidates without creating attendan
         'code' => 'NIGHT_ALLOWANCE',
         'name' => 'Night allowance',
         'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
-        'payroll_pay_item_code' => 'night_shift',
         'resolution_method' => AttendanceAllowanceRule::RESOLUTION_SUM,
         'condition_rows' => [
             ['description' => 'Clock out after 20:00', 'amount' => 1, 'predicate' => ['clock_out_after' => '20:00', 'min_worked_minutes' => 240]],
@@ -257,7 +256,6 @@ it('only surfaces shift-scoped allowance rules when the matching shift is simula
         'code' => 'NIGHT_DIFFERENTIAL',
         'name' => 'Night differential',
         'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
-        'payroll_pay_item_code' => 'night_differential',
         'resolution_method' => AttendanceAllowanceRule::RESOLUTION_SUM,
         'condition_rows' => [
             ['description' => 'Always', 'amount' => 5, 'predicate' => []],
@@ -607,7 +605,6 @@ it('lets managers duplicate attendance allowance rules without binding template 
         'code' => 'MEAL',
         'name' => 'Meal allowance',
         'allowance_type' => AttendanceAllowanceRule::TYPE_DAILY,
-        'payroll_pay_item_code' => 'meal_allowance',
         'resolution_method' => AttendanceAllowanceRule::RESOLUTION_SUM,
         'condition_rows' => [
             ['description' => 'Worked time', 'amount' => 10, 'predicate' => ['min_worked_minutes' => 480]],

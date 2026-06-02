@@ -2,26 +2,40 @@
 
 use App\Modules\People\Claim\Models\ClaimRequest;
 use App\Modules\People\Claim\Services\ClaimAccountingExportBuilder;
+use App\Modules\People\Claim\Services\SubmitClaimRequestService;
+use App\Modules\People\Payroll\Models\PayrollClaimTypePayItem;
 
 require_once __DIR__.'/ClaimPolicyEvaluationTest.php';
 
 it('exports one row per claim line with accounting metadata', function () {
     $f = makeClaimFixture();
     $f['type']->update([
-        'payroll_pay_item_code' => 'REIMB_MED',
         'debit_account_code' => '5400',
         'credit_account_code' => '2100',
         'taxability_hint' => 'exempt_medical',
     ]);
+    PayrollClaimTypePayItem::query()->create([
+        'company_id' => $f['type']->company_id,
+        'claim_type_id' => $f['type']->id,
+        'payroll_pay_item_code' => 'REIMB_MED',
+        'effective_from' => '2026-01-01',
+    ]);
 
-    $request = makeClaimWith($f, ClaimRequest::STATUS_APPROVED, requested: 200.00, approved: 150.00);
-    // Copy the accounting fields onto the line (simulating submission's snapshot)
+    $request = app(SubmitClaimRequestService::class)->submit(
+        employee: $f['employee'],
+        assignment: $f['assignment'],
+        assignmentLine: $f['line'],
+        incurredOn: new DateTimeImmutable('2026-06-10'),
+        requestedAmount: 200.00,
+        options: ['attachment_count' => 1],
+    );
+    $request->update([
+        'status' => ClaimRequest::STATUS_APPROVED,
+        'approved_amount' => 150.00,
+    ]);
     $line = $request->lines()->first();
     $line->update([
-        'payroll_pay_item_code' => 'REIMB_MED',
-        'debit_account_code' => '5400',
-        'credit_account_code' => '2100',
-        'attachment_count' => 1,
+        'approved_amount' => 150.00,
     ]);
     $request->load(['employee.department', 'lines.type']);
 

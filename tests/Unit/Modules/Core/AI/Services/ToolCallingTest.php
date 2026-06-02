@@ -341,7 +341,7 @@ describe('BashTool', function () {
     it('returns success message when command produces no output', function () {
         $tool = new BashTool;
 
-        $result = $tool->execute(['command' => 'php -r ""']);
+        $result = $tool->execute(['command' => 'php -r " "']);
 
         expect((string) $result)->toBe('Command completed successfully (no output).');
     });
