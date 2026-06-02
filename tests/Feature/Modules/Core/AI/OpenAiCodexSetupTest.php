@@ -26,6 +26,24 @@ const OAI_CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api';
 const OAI_CODEX_MODELS_ENDPOINT_PATTERN = OAI_CODEX_BACKEND_BASE_URL.'/codex/models*';
 const OAI_CODEX_RECONNECT_HINT = 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.';
 const OAI_CODEX_DEFAULT_MODEL = 'gpt-5.4';
+const OAI_CODEX_MODELS_DEV_PATTERN = 'https://models.dev/*';
+
+// Completing/disconnecting the Codex OAuth flow triggers ModelDiscoveryService,
+// which calls ModelCatalogService::ensureSynced() -> a real GET to
+// https://models.dev/api.json. Fake it suite-wide with a valid (non-empty array)
+// catalog payload so it never escapes to the network. Http::fake calls accumulate,
+// so this coexists with each test's per-endpoint fakes; tests that never reach the
+// catalog sync are unaffected.
+beforeEach(function (): void {
+    Http::fake([
+        OAI_CODEX_MODELS_DEV_PATTERN => Http::response([
+            'openai' => [
+                'name' => 'OpenAI',
+                'models' => [],
+            ],
+        ], 200),
+    ]);
+});
 
 /**
  * @param  array<string, mixed>  $overrides
