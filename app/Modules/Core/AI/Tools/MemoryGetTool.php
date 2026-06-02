@@ -197,7 +197,9 @@ class MemoryGetTool extends AbstractReadOnlyMemoryTool
             return ['error' => 'File not found: '.$path];
         }
 
-        if (! str_starts_with($realFull, $realBase.'/')) {
+        // realpath() returns OS-native separators (backslashes on Windows), so
+        // compare with DIRECTORY_SEPARATOR rather than a hard-coded '/'.
+        if (! str_starts_with($realFull, $realBase.DIRECTORY_SEPARATOR)) {
             return ['error' => 'Invalid path: directory traversal is not allowed.'];
         }
 
