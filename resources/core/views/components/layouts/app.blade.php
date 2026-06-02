@@ -209,9 +209,50 @@
             } catch (e) {
                 console.error('[Lara] Action execution failed:', e); // NOSONAR - intentional error logging in catch block
             }
+        },
+
+        // Move the single persisted chat instance into the active mode target
+        // (or hide it when closed). Lives on the body so it always reads the
+        // current page's refs/state — including after a wire:navigate morph.
+        teleportLaraChat() {
+            const el = document.getElementById('lara-chat-instance');
+            if (! el) return;
+            const isMobile = window.innerWidth < 640;
+            let target = null;
+            if (this.laraChatOpen) {
+                if (isMobile) {
+                    target = this.$refs.laraMobileTarget;
+                } else if (this.laraChatFullscreen) {
+                    target = this.$refs.laraFullscreenTarget;
+                } else if (this.laraChatMode === 'docked') {
+                    target = this.$refs.laraDockTarget;
+                } else {
+                    target = this.$refs.laraOverlayTarget;
+                }
+            }
+            if (target) {
+                if (el.parentNode !== target) target.appendChild(el);
+                el.style.display = '';
+            } else {
+                el.style.display = 'none';
+            }
         }
     }"
-    x-init="initSidebar()"
+    x-init="
+        initSidebar();
+        $watch('laraChatOpen', () => teleportLaraChat());
+        $watch('laraChatMode', () => teleportLaraChat());
+        $watch('laraChatFullscreen', () => teleportLaraChat());
+        $nextTick(() => teleportLaraChat());
+        if (! window.__laraChatNavWired) {
+            window.__laraChatNavWired = true;
+            document.addEventListener('livewire:navigating', () => {
+                const c = document.getElementById('lara-chat-instance');
+                const h = document.getElementById('lara-chat-home');
+                if (c && h && c.parentNode !== h) h.appendChild(c);
+            });
+        }
+    "
     @toggle-sidebar.window="toggleSidebar()"
     @open-agent-chat.window="openLaraChat($event.detail?.prompt ?? null)"
     @close-agent-chat.window="closeLaraChat()"
@@ -340,34 +381,17 @@
             <div class="h-full" x-ref="laraMobileTarget"></div>
         </div>
 
-        {{-- Single Livewire instance — Alpine moves it into the active target --}}
-        <div
-            x-ref="laraChatInstance"
-            x-cloak
-            x-effect="
-                const el = $refs.laraChatInstance;
-                if (!el) return;
-                const isMobile = window.innerWidth < 640;
-                let target;
-                if (isMobile) {
-                    target = $refs.laraMobileTarget;
-                } else if (laraChatFullscreen) {
-                    target = $refs.laraFullscreenTarget;
-                } else if (laraChatMode === 'docked') {
-                    target = $refs.laraDockTarget;
-                } else {
-                    target = $refs.laraOverlayTarget;
-                }
-                if (target && el.parentNode !== target) {
-                    target.appendChild(el);
-                }
-                el.style.display = target && el.parentNode === target ? '' : 'none';
-            "
-            class="h-full"
-            style="display: none;"
-        >
-            <livewire:ai.chat />
+        {{-- Single persisted Lara chat instance. The body's teleportLaraChat()
+             moves #lara-chat-instance into the active mode target; @persist plus
+             parking it back into #lara-chat-home on livewire:navigating keeps the
+             live instance (and its state) alive across wire:navigate. --}}
+        @persist('lara-chat')
+        <div id="lara-chat-home" style="display: contents;">
+            <div id="lara-chat-instance" class="h-full" style="display: none;">
+                <livewire:ai.chat />
+            </div>
         </div>
+        @endpersist
     @endif
 
     {{-- Status Bar --}}
