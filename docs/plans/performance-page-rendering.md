@@ -64,9 +64,12 @@ Goal: replace guesswork with a ranked list of what to fix.
 
 Goal: navigation re-fetches only the main body; sidebar and chat are coordinated islands, never rebuilt.
 
-> Note: an interim `#[Lazy]` on the chat (committed earlier) was reverted — it broke `ChatViewTest` by emitting a placeholder. Chat deferral belongs here, delivered together with `@persist` and updated tests, not as a standalone attribute.
+> Notes / findings:
+> - An interim `#[Lazy]` on the chat was reverted — it broke `ChatViewTest` by emitting a placeholder.
+> - **A bare `@persist` around the chat does NOT work** (verified 2026-06-02 with a Playwright navigation test: after `wire:navigate` the `ai.chat` component count went from 1 → 0, i.e. the chat was *lost*, not preserved). Root cause: the chat is one Livewire instance that Alpine **physically relocates** via `appendChild` (the `x-ref="laraChatInstance"` `x-effect` in `app.blade.php` moves it between the overlay/docked/fullscreen/mobile target `<div>`s). That DOM-move pulls the element out of its `@persist` slot, so the navigate morph can't preserve it.
+> - The blocker is the **docked mode** specifically: it's an inline, drag-resizable `<aside>` in the flex layout flow (it pushes the main content), which is *why* the single instance is teleported into the flow. A persisted element must stay at a fixed declared position, which can't be "in the flex flow" for docked.
 
-- [ ] Persist Lara chat as an independent island (with deferral) so it survives navigation; update `ChatViewTest` for the deferred/persisted behavior; verify open/closed state, scroll, and an in-flight stream survive navigation across several pages
+- [ ] **Refactor the chat positioning first** so persistence is possible: keep the chat in ONE fixed `@persist` container and drive overlay/docked/fullscreen/mobile via CSS (e.g. a layout grid/spacer that reserves the docked width) instead of `appendChild`-teleporting the element. Then add `@persist`, defer initial load, and update `ChatViewTest`. Verify (Playwright) that open/closed state, scroll, and an in-flight stream survive navigation across several pages — the `ai.chat` `wire:id` must be unchanged and single after `wire:navigate`.
 - [ ] Convert the sidebar to an island (persisted structure) with `wire:current` active-state; verify the highlight updates on navigation and matches today's wildcard route semantics
 - [ ] Define the event→island coordination map (`menu-changed`, `pins-changed`, `context-changed`, impersonation) and wire the dispatchers; verify a newly added menu item, a pin toggle, and a company switch each reflect without a full reload
 - [ ] Re-trace: confirm `wire:navigate` re-fetches only the main body and shell hydration is paid once per hard load
