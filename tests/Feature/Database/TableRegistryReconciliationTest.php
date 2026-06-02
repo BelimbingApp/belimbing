@@ -4,7 +4,9 @@ use App\Base\Database\Livewire\DatabaseTables\Index as DatabaseTablesIndex;
 use App\Base\Database\Livewire\DatabaseTables\Show as DatabaseTablesShow;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\TableInspector;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
 const TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH = 'app/Modules/Core/User';
@@ -63,6 +65,76 @@ test('database tables index shows reconciliation notice and omits orphaned rows'
         ->assertSee('Removed orphaned registry entry for ghost_registry_entry because the relation no longer exists.');
 
     expect(TableRegistry::query()->where('table_name', 'ghost_registry_entry')->exists())->toBeFalse();
+});
+
+test('database tables index renders only one bounded page of registered tables', function (): void {
+    $this->actingAs(createAdminUser());
+
+    // Real relations so mount()'s reconciliation does not prune these registry
+    // rows; a shared prefix lets search scope assertions to just these fixtures
+    // regardless of how many baseline tables the seeder created.
+    $created = [];
+
+    try {
+        foreach (range(0, 29) as $n) {
+            $table = sprintf('pagebound_%02d', $n);
+            $created[] = $table;
+
+            Schema::create($table, function ($blueprint): void {
+                $blueprint->id();
+            });
+
+            TableRegistry::query()->create([
+                'table_name' => $table,
+                'module_name' => 'Pagebound',
+                'module_path' => 'app/Pagebound',
+                'migration_file' => $table.'.php',
+            ]);
+        }
+
+        $component = Livewire::test(DatabaseTablesIndex::class)
+            ->set('search', 'pagebound_');
+
+        /** @var LengthAwarePaginator $tables */
+        $tables = $component->viewData('tables');
+
+        // 30 matches, 25-per-page window: total is reported but only the first
+        // page is materialised into the DOM.
+        expect($tables->total())->toBe(30)
+            ->and($tables->perPage())->toBe(25)
+            ->and($tables->lastPage())->toBe(2)
+            ->and($tables->count())->toBe(25);
+
+        // Default sort is table_name asc, so page one is pagebound_00..24.
+        $component->assertSee('pagebound_00')
+            ->assertSee('pagebound_24')
+            ->assertDontSee('pagebound_25')
+            ->assertDontSee('pagebound_29');
+
+        // Page two holds the remainder; page-one rows are no longer rendered.
+        $component->call('gotoPage', 2)
+            ->assertSee('pagebound_25')
+            ->assertSee('pagebound_29')
+            ->assertDontSee('pagebound_00')
+            ->assertDontSee('pagebound_24');
+    } finally {
+        foreach ($created as $table) {
+            Schema::dropIfExists($table);
+        }
+    }
+});
+
+test('database tables index search resets pagination to the first page', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $component = Livewire::test(DatabaseTablesIndex::class)
+        ->call('gotoPage', 2);
+
+    expect($component->viewData('tables')->currentPage())->toBe(2);
+
+    $component->set('search', 'users');
+
+    expect($component->viewData('tables')->currentPage())->toBe(1);
 });
 
 test('database table show redirects to registry when an orphaned entry is requested', function (): void {
