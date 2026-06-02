@@ -2,6 +2,7 @@
 namespace App\Modules\Core\Company\Models;
 
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,6 +44,20 @@ class Department extends Model
             'created_at' => 'datetime',
             'updated_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The department's name, delegated from its department type.
+     *
+     * A real (aliased) `name` attribute on the model — e.g. a query that
+     * selects `company_department_types.name as name` — takes precedence,
+     * since Eloquent only invokes accessors when no matching attribute exists.
+     */
+    protected function name(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): ?string => $this->type?->name,
+        );
     }
 
     /**
