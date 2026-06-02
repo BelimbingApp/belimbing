@@ -98,7 +98,8 @@ Goal: less redundant work, less bespoke form code.
 
 Goal: remove the periodic cache-expiry slow request.
 
-- [ ] Move the menu and other eligible derived cached reads to `Cache::flexible()` (stale-while-revalidate)
+- [x] Menu tree (`MenuBuilder::buildAndCache`) moved from `Cache::remember` (hourly, blocking rebuild on expiry) to `Cache::flexible([3600, 21600])` — serves stale + refreshes after the response. `MenuRegistry` keeps `Cache::forever` (explicitly invalidated, no expiry to smooth). — claude/opus-4.8
+- [ ] Sweep for other eligible derived `Cache::remember` reads (none material found beyond the menu; the only other is a trivial `app_version` warm)
 
 ### Phase 5 — Deferred work & dependency currency
 

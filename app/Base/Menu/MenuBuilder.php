@@ -171,7 +171,11 @@ class MenuBuilder
     {
         $cacheKey = self::CACHE_KEY.($currentRoute ? ".{$currentRoute}" : '');
 
-        return Cache::remember($cacheKey, now()->addHour(), function () use ($items, $currentRoute) {
+        // Stale-while-revalidate: serve the cached tree instantly, and once it
+        // goes stale refresh it in the background (after the response) instead of
+        // blocking a request on the rebuild. Menu changes still invalidate
+        // explicitly via clearCache(); these TTLs are the fallback refresh.
+        return Cache::flexible($cacheKey, [3600, 21600], function () use ($items, $currentRoute) {
             return $this->build($items, $currentRoute);
         });
     }
