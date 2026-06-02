@@ -1,11 +1,11 @@
 <?php
+
 use App\Modules\Core\User\Actions\Logout;
 use App\Modules\Core\User\Controllers\Auth\VerifyEmailController;
 use App\Modules\Core\User\Controllers\PinController;
 use App\Modules\Core\User\Livewire\Auth\ConfirmPassword;
 use App\Modules\Core\User\Livewire\Auth\ForgotPassword;
 use App\Modules\Core\User\Livewire\Auth\Login;
-use App\Modules\Core\User\Livewire\Auth\Register;
 use App\Modules\Core\User\Livewire\Auth\ResetPassword;
 use App\Modules\Core\User\Livewire\Auth\VerifyEmail;
 use App\Modules\Core\User\Livewire\Settings\Appearance;
@@ -20,9 +20,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('login', Login::class)
         ->name('login');
-
-    Route::get('register', Register::class)
-        ->name('register');
 
     Route::get('forgot-password', ForgotPassword::class)
         ->name('password.request');

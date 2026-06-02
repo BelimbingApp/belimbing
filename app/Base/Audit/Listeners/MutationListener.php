@@ -4,6 +4,7 @@ namespace App\Base\Audit\Listeners;
 
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Database\Eloquent\Model;
 
@@ -77,8 +78,8 @@ class MutationListener
 
         $entry = [
             'company_id' => $context->companyId,
-            'actor_type' => $context->actorType,
-            'actor_id' => $context->actorId,
+            'actor_type' => $context->actorType ?? PrincipalType::GUEST->value,
+            'actor_id' => $context->actorId ?? 0,
             'actor_role' => $context->actorRole,
             'ip_address' => $context->ipAddress,
             'url' => $context->url,

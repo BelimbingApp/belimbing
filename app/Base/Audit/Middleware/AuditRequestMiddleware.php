@@ -4,7 +4,9 @@ namespace App\Base\Audit\Middleware;
 
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Authz\Enums\PrincipalType;
 use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -32,7 +34,8 @@ class AuditRequestMiddleware
             return $response;
         }
 
-        if (! $request->user()) {
+        $user = $request->user();
+        if (! $user) {
             return $response;
         }
 
@@ -48,11 +51,12 @@ class AuditRequestMiddleware
 
         $durationMs = round((microtime(true) - $start) * 1000, 2);
         $now = now();
+        $actor = $this->resolveActor($user);
 
         $this->buffer->bufferAction([
-            'company_id' => $this->context->companyId,
-            'actor_type' => $this->context->actorType,
-            'actor_id' => $this->context->actorId,
+            'company_id' => $actor['company_id'],
+            'actor_type' => $actor['type'],
+            'actor_id' => $actor['id'],
             'actor_role' => $this->context->actorRole,
             'ip_address' => $this->context->ipAddress,
             'url' => $this->context->url,
@@ -69,5 +73,37 @@ class AuditRequestMiddleware
         ]);
 
         return $response;
+    }
+
+    /**
+     * @return array{type: string, id: int, company_id: int|null}
+     */
+    private function resolveActor(Authenticatable $user): array
+    {
+        $actorType = $this->context->actorType;
+        $actorId = $this->context->actorId;
+        $companyId = $this->context->companyId;
+
+        if ($actorType === null && method_exists($user, 'principalType')) {
+            $actorType = $user->principalType()->value;
+        }
+
+        if ($actorType === null) {
+            $actorType = PrincipalType::USER->value;
+        }
+
+        if ($actorId === null) {
+            $actorId = (int) $user->getAuthIdentifier();
+        }
+
+        if ($companyId === null && method_exists($user, 'getCompanyId')) {
+            $companyId = $user->getCompanyId();
+        }
+
+        return [
+            'type' => $actorType,
+            'id' => $actorId,
+            'company_id' => $companyId,
+        ];
     }
 }

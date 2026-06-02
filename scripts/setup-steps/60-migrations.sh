@@ -20,7 +20,7 @@
 # so the admin row survives migrate:fresh runs.
 #
 # Prerequisites:
-# - PHP and Composer installed (15-php.sh)
+# - PHP and Composer installed (15-runtime.sh)
 # - Laravel configured with APP_KEY (25-laravel.sh)
 # - Database configured and accessible (40-database.sh)
 
@@ -227,22 +227,41 @@ main() {
         # These are passed as transient env vars to php artisan migrate.
         local company_name_default company_code_default admin_name_default admin_email_default
         company_name_default=$(get_setup_state_var "LICENSEE_COMPANY_NAME" "${company_name:-My Company}")
-        company_name=$(ask_input "Licensee company name" "$company_name_default")
+        if [[ -t 0 ]]; then
+            company_name=$(ask_input "Licensee company name" "$company_name_default")
+        else
+            company_name="$company_name_default"
+        fi
 
         local default_code
         default_code=$(default_company_code_from_name "$company_name")
         company_code_default=$(get_setup_state_var "LICENSEE_COMPANY_CODE" "${company_code:-$default_code}")
-        company_code=$(ask_input "Licensee company code" "$company_code_default")
+        if [[ -t 0 ]]; then
+            company_code=$(ask_input "Licensee company code" "$company_code_default")
+        else
+            company_code="$company_code_default"
+        fi
 
         admin_name_default="${admin_name:-Administrator}"
-        admin_name=$(ask_input "Admin name" "$admin_name_default")
+        if [[ -t 0 ]]; then
+            admin_name=$(ask_input "Admin name" "$admin_name_default")
+        else
+            admin_name="$admin_name_default"
+        fi
 
         admin_email_default="${admin_email:-$(detect_admin_email)}"
-        admin_email=$(ask_input "Admin email" "$admin_email_default")
-        admin_password=$(ask_password "Admin password (min 8 chars)")
+        if [[ -t 0 ]]; then
+            admin_email=$(ask_input "Admin email" "$admin_email_default")
+            admin_password=$(ask_password "Admin password (min 8 chars)")
+        else
+            admin_email="$admin_email_default"
+            admin_password="password"
+        fi
         if [[ -z "$admin_password" ]]; then
             admin_password="password"
             echo -e "  ${YELLOW}ℹ${NC} Using default password: ${CYAN}password${NC}"
+        elif [[ ! -t 0 ]]; then
+            echo -e "  ${YELLOW}ℹ${NC} Non-interactive mode: using default admin password ${CYAN}password${NC}"
         fi
         echo ""
     fi

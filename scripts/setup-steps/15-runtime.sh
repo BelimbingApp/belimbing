@@ -90,6 +90,7 @@ try_install_linux_binary() {
     local tag=$1 arch=$2 tmp_dir=$3
 
     local candidate_urls=(
+        "https://github.com/dunglas/frankenphp/releases/download/${tag}/frankenphp-linux-${arch}-gnu"
         "https://github.com/dunglas/frankenphp/releases/download/${tag}/frankenphp-linux-${arch}"
         "https://github.com/dunglas/frankenphp/releases/download/${tag}/frankenphp-linux-${arch}.tar.gz"
     )
@@ -122,7 +123,7 @@ install_frankenphp_linux() {
     arch=$(linux_binary_arch) || return 1
     tag=$(resolve_frankenphp_tag)
 
-    echo -e "${CYAN}Installing FrankenPHP ${tag} for Linux (${arch})...${NC}"
+    echo -e "${CYAN}Installing FrankenPHP ${tag} for Linux (${arch}, GNU-capable binary)...${NC}"
 
     tmp_dir=$(mktemp -d)
     trap "rm -rf '$tmp_dir'" RETURN
@@ -145,6 +146,29 @@ install_frankenphp_macos() {
     brew install dunglas/frankenphp/frankenphp || brew upgrade dunglas/frankenphp/frankenphp
 }
 
+frankenphp_supports_sqlite_loadable_extensions() {
+    command_exists frankenphp || return 1
+
+    local tmp_dir output supported=false
+    tmp_dir=$(mktemp -d)
+
+    touch "$tmp_dir/blb-empty"
+    printf 'sqlite3.extension_dir=%s\n' "$tmp_dir" > "$tmp_dir/sqlite-loadable-test.ini"
+
+    output=$(PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR:-}:$tmp_dir" frankenphp php-cli -r '
+        $db = new SQLite3(":memory:");
+        @$db->loadExtension("blb-empty");
+        echo error_get_last()["message"] ?? "";
+    ' 2>&1 || true)
+
+    if [[ "$output" != *"Dynamic loading not supported"* && "$output" != *"SQLite Extensions are disabled"* ]]; then
+        supported=true
+    fi
+
+    rm -rf "$tmp_dir"
+    [[ "$supported" = true ]]
+}
+
 setup_frankenphp() {
     local upgrade_requested=$UPGRADE_REQUESTED
 
@@ -165,6 +189,9 @@ setup_frankenphp() {
 
         if version_is_less_than "$existing_semver" "$minimum_version"; then
             echo -e "${YELLOW}⚠${NC} FrankenPHP ${existing_semver} is below the BLB minimum (${minimum_version}) — upgrading..."
+            upgrade_requested=true
+        elif [[ "$(detect_os)" =~ ^(linux|wsl2)$ ]] && ! frankenphp_supports_sqlite_loadable_extensions; then
+            echo -e "${YELLOW}⚠${NC} FrankenPHP ${existing_semver} cannot load SQLite extensions — replacing with GNU-capable binary..."
             upgrade_requested=true
         elif [[ "$upgrade_requested" = false ]]; then
             local latest_tag latest_semver
@@ -227,10 +254,39 @@ check_php_version() {
     check_php_version_meets_minimum "$php_version"
 }
 
+php_cli_supports_composer_flags() {
+    php -d memory_limit=123M -r 'exit(ini_get("memory_limit") === "123M" ? 0 : 1);' >/dev/null 2>&1 || return 1
+    php --version >/dev/null 2>&1 || return 1
+    php -r 'exit(getenv("PHP_BINARY") !== "" ? 0 : 1);' >/dev/null 2>&1 || return 1
+
+    if command_exists composer && ! composer --version 2>/dev/null | grep -q '^Composer '; then
+        return 1
+    fi
+
+    return 0
+}
+
+php_cli_wrapper_needs_refresh() {
+    local php_path
+    php_path=$(command -v php 2>/dev/null || true)
+    [[ -n "$php_path" && -f "$php_path" && -r "$php_path" ]] || return 1
+
+    grep -q 'frankenphp php-cli' "$php_path" 2>/dev/null || return 1
+    grep -q 'resolved_php=.*command -v -- "\$0"' "$php_path" 2>/dev/null && return 1
+
+    return 0
+}
+
 setup_php_cli() {
-    if check_php_version; then
+    if ! php_cli_wrapper_needs_refresh && check_php_version && php_cli_supports_composer_flags; then
         echo -e "${GREEN}✓${NC} PHP CLI: $(php -r "$PHP_VERSION_COMMAND")"
         return 0
+    fi
+
+    if php_cli_wrapper_needs_refresh; then
+        echo -e "${YELLOW}⚠${NC} PHP CLI wrapper is missing BLB runtime metadata — recreating wrapper"
+    elif check_php_version; then
+        echo -e "${YELLOW}⚠${NC} PHP CLI exists but does not accept Composer's PHP flags — recreating wrapper"
     fi
 
     # FrankenPHP bundles PHP — create a thin wrapper so `php` resolves for
@@ -250,13 +306,122 @@ setup_php_cli() {
     local wrapper_path="$wrapper_dir/php"
     local tmp_wrapper
     tmp_wrapper=$(mktemp)
-    printf '#!/bin/sh\nexec frankenphp php-cli "$@"\n' > "$tmp_wrapper"
-    chmod +x "$tmp_wrapper"
+cat > "$tmp_wrapper" <<'EOF'
+#!/usr/bin/env bash
+args=()
+ini_entries=()
+mode=""
+
+if [[ -z "${PHP_BINARY:-}" ]]; then
+    if [[ "$0" = /* ]]; then
+        export PHP_BINARY="$0"
+    else
+        resolved_php=$(command -v -- "$0" 2>/dev/null || command -v php 2>/dev/null || true)
+        [[ -n "$resolved_php" ]] && export PHP_BINARY="$resolved_php"
+    fi
+fi
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --)
+            args+=("$@")
+            break
+            ;;
+        -d|--define)
+            shift
+            if [[ $# -gt 0 ]]; then
+                ini_entries+=("$1")
+                shift
+            fi
+            ;;
+        -d*)
+            ini_entries+=("${1#-d}")
+            shift
+            ;;
+        --define=*)
+            ini_entries+=("${1#--define=}")
+            shift
+            ;;
+        -v|--version)
+            mode="version"
+            shift
+            ;;
+        -m)
+            mode="modules"
+            shift
+            ;;
+        -i|--info)
+            mode="info"
+            shift
+            ;;
+        --ini)
+            mode="ini"
+            shift
+            ;;
+        *)
+            args+=("$@")
+            break
+            ;;
+    esac
+done
+
+if [[ ${#ini_entries[@]} -gt 0 ]]; then
+    ini_dir=$(mktemp -d)
+    trap 'rm -rf "$ini_dir"' EXIT
+
+    for entry in "${ini_entries[@]}"; do
+        [[ -n "$entry" ]] && printf '%s\n' "$entry"
+    done > "$ini_dir/99-blb-cli-flags.ini"
+
+    if [[ -n "${PHP_INI_SCAN_DIR:-}" ]]; then
+        export PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR}:$ini_dir"
+    else
+        export PHP_INI_SCAN_DIR=":$ini_dir"
+    fi
+fi
+
+case "$mode" in
+    version)
+        exec frankenphp php-cli -r 'printf("PHP %s (cli)\n", PHP_VERSION); printf("Zend Engine v%s\n", zend_version());'
+        ;;
+    modules)
+        exec frankenphp php-cli -r '
+            $modules = get_loaded_extensions(false);
+            sort($modules, SORT_NATURAL | SORT_FLAG_CASE);
+            echo "[PHP Modules]\n";
+            foreach ($modules as $module) {
+                echo $module, "\n";
+            }
+            echo "\n[Zend Modules]\n";
+            $zendModules = get_loaded_extensions(true);
+            sort($zendModules, SORT_NATURAL | SORT_FLAG_CASE);
+            foreach ($zendModules as $module) {
+                echo $module, "\n";
+            }
+        '
+        ;;
+    info)
+        exec frankenphp php-cli -r 'phpinfo();'
+        ;;
+    ini)
+        exec frankenphp php-cli -r '
+            printf("Configuration File (php.ini) Path: %s\n", PHP_CONFIG_FILE_PATH);
+            printf("Loaded Configuration File:         %s\n", php_ini_loaded_file() ?: "(none)");
+            printf("Scan for additional .ini files in: %s\n", php_ini_scanned_files() ? dirname(strtok(php_ini_scanned_files(), ",")) : "(none)");
+            printf("Additional .ini files parsed:      %s\n", php_ini_scanned_files() ?: "(none)");
+        '
+        ;;
+esac
+
+exec frankenphp php-cli "${args[@]}"
+EOF
 
     if [[ -w "$wrapper_dir" ]]; then
-        mv "$tmp_wrapper" "$wrapper_path"
+        install -m 0755 "$tmp_wrapper" "$wrapper_path"
+        rm -f "$tmp_wrapper"
     else
-        sudo mv "$tmp_wrapper" "$wrapper_path"
+        sudo install -m 0755 "$tmp_wrapper" "$wrapper_path"
+        rm -f "$tmp_wrapper"
     fi
 
     check_php_version || {
@@ -303,6 +468,7 @@ install_composer() {
     echo -e "${CYAN}Installing Composer...${NC}"
 
     command_exists curl || { echo -e "${RED}✗${NC} curl is required to download Composer" >&2; return 1; }
+    command_exists php || { echo -e "${RED}✗${NC} php is required to install Composer" >&2; return 1; }
 
     local composer_installer
     composer_installer=$(mktemp)
@@ -324,14 +490,50 @@ install_composer() {
         rm -f "$composer_installer"; return 1
     fi
 
-    php "$composer_installer" --install-dir=/usr/local/bin --filename=composer || {
-        echo -e "${YELLOW}Installing to user directory...${NC}"
-        php "$composer_installer" --install-dir="$HOME/.local/bin" --filename=composer || {
+    local install_dir='/usr/local/bin'
+    local can_sudo=false
+    if sudo -n true 2>/dev/null; then
+        can_sudo=true
+    fi
+
+    if [[ ! -w "$install_dir" && "$can_sudo" = false ]]; then
+        install_dir="$HOME/.local/bin"
+        mkdir -p "$install_dir"
+        echo -e "${YELLOW}Installing Composer to user directory:${NC} ${CYAN}${install_dir}${NC}"
+    fi
+
+    local composer_phar="$install_dir/composer.phar"
+    local composer_bin="$install_dir/composer"
+    local php_bin
+    php_bin=$(command -v php)
+
+    if [[ -w "$install_dir" ]]; then
+        php "$composer_installer" --install-dir="$install_dir" --filename=composer.phar || {
             echo -e "${RED}✗${NC} Failed to install Composer" >&2
             rm -f "$composer_installer"; return 1
         }
-        echo -e "${YELLOW}Note:${NC} Add ${CYAN}$HOME/.local/bin${NC} to your PATH"
-    }
+    else
+        sudo php "$composer_installer" --install-dir="$install_dir" --filename=composer.phar || {
+            echo -e "${RED}✗${NC} Failed to install Composer" >&2
+            rm -f "$composer_installer"; return 1
+        }
+    fi
+
+    local tmp_composer
+    tmp_composer=$(mktemp)
+    cat > "$tmp_composer" <<EOF
+#!/usr/bin/env bash
+export PHP_BINARY="$php_bin"
+exec "$php_bin" "$composer_phar" "\$@"
+EOF
+
+    if [[ -w "$install_dir" ]]; then
+        install -m 0755 "$tmp_composer" "$composer_bin"
+        rm -f "$tmp_composer"
+    else
+        sudo install -m 0755 "$tmp_composer" "$composer_bin"
+        rm -f "$tmp_composer"
+    fi
 
     rm -f "$composer_installer"
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Models;
 
 use App\Base\Support\AppPath;
@@ -235,6 +236,20 @@ class SeederRegistry extends Model
     public static function unregister(string $seederClass): void
     {
         self::query()->where('seeder_class', $seederClass)->delete();
+    }
+
+    /**
+     * Mark seeders left running by an interrupted PHP process as retryable.
+     */
+    public static function markInterruptedAsFailed(): int
+    {
+        return self::query()
+            ->where('status', self::STATUS_RUNNING)
+            ->update([
+                'status' => self::STATUS_FAILED,
+                'error_message' => 'Seeder was interrupted before completion and will be retried.',
+                'updated_at' => now(),
+            ]);
     }
 
     /**

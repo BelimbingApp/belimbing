@@ -93,32 +93,76 @@ prompt_for_domains() {
 }
 
 # Generate mkcert certificates for the given domains.
-# Requires mkcert to be installed; skips gracefully if missing.
+# Installs mkcert for local/test where possible; skips gracefully if unavailable.
+should_use_mkcert() {
+    local tls_mode
+    tls_mode=$(get_env_var "TLS_MODE" "")
+
+    [[ "$APP_ENV" = "local" || "$APP_ENV" = "testing" || "$tls_mode" = "mkcert" ]]
+}
+
+ensure_mkcert_available() {
+    if command_exists mkcert; then
+        return 0
+    fi
+
+    if ! should_use_mkcert; then
+        return 1
+    fi
+
+    local os_type
+    os_type=$(detect_os)
+
+    if install_mkcert "$os_type"; then
+        return 0
+    fi
+
+    return 1
+}
+
+trust_mkcert_root() {
+    if ! command_exists mkcert; then
+        return 1
+    fi
+
+    if mkcert -install; then
+        return 0
+    fi
+
+    echo -e "${YELLOW}⚠${NC} mkcert root CA trust installation failed — browser warnings may remain"
+    return 1
+}
+
 ensure_tls_certs() {
     local frontend_domain=$1
     local backend_domain=$2
     local certs_dir="$PROJECT_ROOT/certs"
     mkdir -p "$certs_dir"
 
-    if [[ -f "$certs_dir/${frontend_domain}.pem" ]]; then
-        echo -e "${GREEN}✓${NC} TLS certificates already exist"
+    if ! ensure_mkcert_available; then
+        echo -e "${YELLOW}⚠${NC} mkcert not found — FrankenPHP/Caddy will use an internal CA (browser warnings expected)"
+        echo -e "${CYAN}ℹ${NC} Install mkcert for trusted local HTTPS: ${CYAN}https://github.com/FiloSottile/mkcert${NC}"
         return 0
     fi
 
-    if command_exists mkcert; then
-        echo -e "${CYAN}Generating mkcert certificates...${NC}"
-        mkcert -cert-file "$certs_dir/${frontend_domain}.pem" \
-               -key-file "$certs_dir/${frontend_domain}-key.pem" \
-               "$frontend_domain" "$backend_domain" 2>/dev/null || true
+    trust_mkcert_root || true
 
-        if [[ -f "$certs_dir/${frontend_domain}.pem" ]]; then
-            echo -e "${GREEN}✓${NC} TLS certificates generated (trusted by mkcert)"
-        else
-            echo -e "${YELLOW}⚠${NC} mkcert failed — FrankenPHP will use its internal CA (browser warnings expected)"
-        fi
+    if [[ -f "$certs_dir/${frontend_domain}.pem" ]] && [[ -f "$certs_dir/${frontend_domain}-key.pem" ]]; then
+        echo -e "${GREEN}✓${NC} TLS certificates already exist"
+        update_env_file "TLS_MODE" "mkcert"
+        save_to_setup_state "TLS_MODE" "mkcert"
+        return 0
+    fi
+
+    echo -e "${CYAN}Generating mkcert certificates...${NC}"
+    if mkcert -cert-file "$certs_dir/${frontend_domain}.pem" \
+           -key-file "$certs_dir/${frontend_domain}-key.pem" \
+           "$frontend_domain" "$backend_domain"; then
+        echo -e "${GREEN}✓${NC} TLS certificates generated (trusted by mkcert)"
+        update_env_file "TLS_MODE" "mkcert"
+        save_to_setup_state "TLS_MODE" "mkcert"
     else
-        echo -e "${YELLOW}⚠${NC} mkcert not found — FrankenPHP will use its internal CA (browser warnings expected)"
-        echo -e "${CYAN}ℹ${NC} Install mkcert for trusted local HTTPS: ${CYAN}https://github.com/FiloSottile/mkcert${NC}"
+        echo -e "${YELLOW}⚠${NC} mkcert failed — FrankenPHP/Caddy will use an internal CA (browser warnings expected)"
     fi
     return 0
 }

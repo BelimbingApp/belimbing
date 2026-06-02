@@ -43,10 +43,4 @@
         </div>
     </form>
 
-    @if (Route::has('register'))
-        <div class="space-x-1 rtl:space-x-reverse text-center text-sm text-neutral-600 dark:text-neutral-300">
-            <span>{{ __('Don\'t have an account?') }}</span>
-            <a href="{{ route('register') }}" wire:navigate class="text-primary hover:underline">{{ __('Sign up') }}</a>
-        </div>
-    @endif
 </div>

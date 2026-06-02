@@ -114,7 +114,27 @@ verify_extension() {
     fi
 
     local version_output
-    version_output=$(php -d "sqlite3.extension_dir=$install_dir" -r "\$db = new SQLite3(':memory:'); \$db->loadExtension('$ext_file'); echo \$db->querySingle('SELECT vec_version()');" 2>/dev/null) || return 1
+    version_output=$(SQLITE_VEC_EXTENSION="$ext_file" php -d "sqlite3.extension_dir=$install_dir" -r '
+        $db = new SQLite3(":memory:");
+        $db->enableExceptions(true);
+        $extension = getenv("SQLITE_VEC_EXTENSION");
+
+        if (! is_string($extension) || $extension === "" || ! @$db->loadExtension($extension)) {
+            exit(1);
+        }
+
+        try {
+            $version = $db->querySingle("SELECT vec_version()");
+        } catch (Throwable) {
+            exit(1);
+        }
+
+        if (! is_string($version) || $version === "") {
+            exit(1);
+        }
+
+        echo $version;
+    ' 2>/dev/null) || return 1
 
     if [[ -n "$version_output" ]]; then
         echo "$version_output"

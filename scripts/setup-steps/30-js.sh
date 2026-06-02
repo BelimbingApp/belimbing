@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # scripts/setup-steps/30-js.sh
-# Title: JavaScript Runtime (Bun/Node.js)
-# Purpose: Install and configure Bun or Node.js for Belimbing
+# Title: JavaScript Runtime (Bun)
+# Purpose: Install and configure Bun for Belimbing
 # Usage: ./scripts/setup-steps/30-js.sh [local|staging|production|testing]
 # Can be run standalone or called by main setup.sh
 #
 # This script:
-# - Checks for Bun installation (preferred)
+# - Checks for Bun installation
 # - Installs Bun if selected
-# - Falls back to Node.js/npm if Bun not available
+# - Requires Bun because Belimbing's dev scripts use bun/bunx directly
 # - Verifies JavaScript runtime is available
 
 set -euo pipefail
@@ -291,12 +291,6 @@ install_js_dependencies() {
                 return 1
             }
             ;;
-        node)
-            (cd "$PROJECT_ROOT" && npm install) || {
-                echo -e "${RED}✗${NC} npm install failed" >&2
-                return 1
-            }
-            ;;
         *)
             echo -e "${RED}✗${NC} Unknown runtime: $runtime" >&2
             return 1
@@ -306,10 +300,38 @@ install_js_dependencies() {
     echo -e "${GREEN}✓${NC} JavaScript dependencies installed"
 }
 
+ensure_bunx_available() {
+    if command_exists bunx; then
+        return 0
+    fi
+
+    local bun_path
+    bun_path=$(command -v bun 2>/dev/null || true)
+
+    if [[ -n "$bun_path" ]]; then
+        local bun_dir
+        bun_dir=$(dirname "$bun_path")
+
+        if [[ -w "$bun_dir" ]]; then
+            ln -sf "$bun_path" "$bun_dir/bunx"
+        fi
+    fi
+
+    if command_exists bunx; then
+        return 0
+    fi
+
+    echo -e "${RED}✗${NC} bunx not found after Bun setup" >&2
+    echo -e "  Reinstall Bun or add a bunx shim that points to the Bun binary." >&2
+    return 1
+}
+
 # Handle successful Bun setup/installation
 handle_bun_success() {
     local bun_version
     bun_version=$(get_bun_version)
+    ensure_bunx_available || exit 1
+
     save_to_setup_state "JS_RUNTIME" "bun"
     save_to_setup_state "BUN_VERSION" "$bun_version"
 
@@ -319,107 +341,11 @@ handle_bun_success() {
     exit 0
 }
 
-# Check if Node.js is available (lazy check for fallback only)
-check_node_as_fallback() {
+# Check if Node.js is available so we can explain that Bun is still required.
+check_node_available() {
     if command_exists node && command_exists npm; then
         return 0
     fi
-    return 1
-}
-
-# Handle successful Node.js setup/installation
-handle_node_success() {
-    local node_version npm_version
-    node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-    npm_version=$(npm --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-    save_to_setup_state "JS_RUNTIME" "node"
-    save_to_setup_state "NODE_VERSION" "$node_version"
-    save_to_setup_state "NPM_VERSION" "$npm_version"
-
-    install_js_dependencies node || exit 1
-
-    echo -e "${GREEN}✓ JavaScript runtime setup complete!${NC}"
-    exit 0
-}
-
-# Install Node.js and npm
-install_nodejs() {
-    local os_type
-    os_type=$(detect_os)
-
-    echo -e "${CYAN}Installing Node.js and npm...${NC}"
-    echo ""
-
-    case "$os_type" in
-        macos)
-            if command_exists brew; then
-                echo -e "${CYAN}Installing Node.js via Homebrew...${NC}"
-                brew install node || {
-                    echo -e "${RED}✗${NC} Failed to install Node.js" >&2
-                    return 1
-                }
-            else
-                echo -e "${RED}✗${NC} Homebrew required for Node.js installation on macOS" >&2
-                echo -e "  Install Homebrew: ${CYAN}https://brew.sh${NC}" >&2
-                echo -e "  Or install Node.js manually: ${CYAN}https://nodejs.org${NC}" >&2
-                return 1
-            fi
-            ;;
-        linux|wsl2)
-            if command_exists apt-get; then
-                echo -e "${CYAN}Installing Node.js via apt...${NC}"
-                curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash - || {
-                    echo -e "${YELLOW}Using default repository...${NC}"
-                }
-                sudo apt-get update -qq
-                sudo apt-get install -y -qq nodejs || {
-                    echo -e "${RED}✗${NC} Failed to install Node.js" >&2
-                    return 1
-                }
-            elif command_exists yum; then
-                echo -e "${CYAN}Installing Node.js via yum...${NC}"
-                curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - || {
-                    echo -e "${YELLOW}Using default repository...${NC}"
-                }
-                sudo yum install -y nodejs npm || {
-                    echo -e "${RED}✗${NC} Failed to install Node.js" >&2
-                    return 1
-                }
-            elif command_exists dnf; then
-                echo -e "${CYAN}Installing Node.js via dnf...${NC}"
-                curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash - || {
-                    echo -e "${YELLOW}Using default repository...${NC}"
-                }
-                sudo dnf install -y nodejs npm || {
-                    echo -e "${RED}✗${NC} Failed to install Node.js" >&2
-                    return 1
-                }
-            else
-                echo -e "${RED}✗${NC} Package manager not supported" >&2
-                echo -e "  Please install Node.js manually: ${CYAN}https://nodejs.org${NC}" >&2
-                return 1
-            fi
-            ;;
-        *)
-            echo -e "${RED}✗${NC} OS not supported for auto-install" >&2
-            echo -e "  Please install Node.js manually: ${CYAN}https://nodejs.org${NC}" >&2
-            return 1
-            ;;
-    esac
-
-    # Verify installation
-    if command_exists node && command_exists npm; then
-        local node_version npm_version
-        node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-        npm_version=$(npm --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-        echo ""
-        echo -e "${GREEN}✓${NC} Node.js installed successfully: $node_version"
-        echo -e "${GREEN}✓${NC} npm installed successfully: $npm_version"
-        return 0
-    fi
-
-    echo ""
-    echo -e "${RED}✗${NC} Node.js/npm installation verification failed" >&2
     return 1
 }
 
@@ -479,10 +405,10 @@ main() {
         handle_bun_success
     fi
 
-    # Step 2: Bun not found - offer to install
-    # Check for Node.js only if we need to show it as context or fallback
+    # Step 2: Bun not found - install it. Node/npm alone cannot run this
+    # project's dev workflow because composer.json and package.json invoke bun/bunx.
     local has_node=false
-    if check_node_as_fallback; then
+    if check_node_available; then
         has_node=true
     fi
 
@@ -490,114 +416,31 @@ main() {
         local node_version
         node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
         echo -e "${GREEN}✓${NC} Node.js already installed: $node_version"
-        echo ""
-        echo -e "${YELLOW}ℹ${NC} Note: Bun is the preferred runtime for this project (offers better performance and a built-in package manager)"
+        echo -e "${YELLOW}ℹ${NC} Belimbing still requires Bun for local development scripts"
         echo ""
     else
         echo -e "${YELLOW}ℹ${NC} No JavaScript runtime found"
         echo ""
     fi
 
-    echo -e "${CYAN}Options:${NC}"
-    echo ""
-    echo -e "  ${GREEN}1. Bun (Recommended - Latest: ${latest_bun_version})${NC}"
-    echo -e "     • Faster than Node.js"
-    echo -e "     • Built-in package manager (replaces npm)"
-    echo -e "     • Modern JavaScript runtime"
-    if [[ "$has_node" = true ]]; then
-        echo -e "     • ${YELLOW}Note:${NC} Bun will replace Node.js for this project"
-    fi
-    echo ""
-    echo -e "  ${YELLOW}2. Node.js + npm${NC}"
-    echo -e "     • Traditional JavaScript runtime"
-    echo -e "     • Widely supported"
-    echo -e "     • More established ecosystem"
-    echo -e "     • ${YELLOW}Note:${NC} Bun is preferred and can be installed later"
-    echo ""
-
     if [[ -t 0 ]]; then
-        # Interactive mode
-        local choice
-        choice=$(ask_input "Choose JavaScript runtime (1 for Bun, 2 for Node.js)" "1")
-
-        case "$choice" in
-            1|bun|Bun)
-                if [[ "$has_node" = true ]]; then
-                    local node_version
-                    node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-                    echo -e "${YELLOW}ℹ${NC} Node.js $node_version detected"
-                    echo -e "${CYAN}ℹ${NC} Bun will be used instead of Node.js for this project"
-                    echo -e "${CYAN}ℹ${NC} Node.js will remain installed but won't be used by Belimbing"
-                    echo ""
-                fi
-
-                echo -e "${CYAN}Installing Bun...${NC}"
-                echo ""
-                if install_bun; then
-                    handle_bun_success
-                else
-                    echo -e "${RED}✗${NC} Bun installation failed"
-                    echo ""
-                    # Fallback to Node.js if available
-                    if [[ "$has_node" = true ]]; then
-                        echo -e "${YELLOW}Falling back to Node.js...${NC}"
-                        echo ""
-                        handle_node_success
-                    else
-                        echo -e "${YELLOW}Please install Bun manually:${NC}"
-                        echo -e "  ${CYAN}https://bun.sh${NC}"
-                        exit 1
-                    fi
-                fi
-                ;;
-            2|node|Node.js|npm)
-                if [[ "$has_node" = true ]]; then
-                    # Node.js already installed
-                    handle_node_success
-                else
-                    echo -e "${CYAN}Installing Node.js...${NC}"
-                    echo ""
-                    if install_nodejs; then
-                        handle_node_success
-                    else
-                        echo -e "${RED}✗${NC} Node.js installation failed"
-                        echo ""
-                        echo -e "${YELLOW}Please install Node.js manually:${NC}"
-                        echo -e "  ${CYAN}https://nodejs.org${NC}"
-                        exit 1
-                    fi
-                fi
-                ;;
-            *)
-                echo -e "${RED}✗${NC} Invalid choice" >&2
-                exit 1
-                ;;
-        esac
+        if ! ask_yes_no "Install Bun ${latest_bun_version} for Belimbing?" "y"; then
+            echo -e "${RED}✗${NC} Bun is required for the Belimbing dev workflow" >&2
+            exit 1
+        fi
     else
-        # Non-interactive mode - default to Bun.
-        if [[ "$has_node" = true ]]; then
-            local node_version
-            node_version=$(node --version 2>/dev/null || echo "$UNKNOWN_VERSION")
-            echo -e "${YELLOW}ℹ${NC} Node.js $node_version detected"
-            echo -e "${CYAN}ℹ${NC} Installing Bun (will replace Node.js for this project)...${NC}"
-        else
-            echo -e "${CYAN}Non-interactive mode: Installing Bun (default)...${NC}"
-        fi
-        echo ""
-        if install_bun; then
-            handle_bun_success
-        else
-            echo -e "${YELLOW}Falling back to Node.js...${NC}"
-            echo ""
-            if [[ "$has_node" = true ]]; then
-                handle_node_success
-            elif install_nodejs; then
-                handle_node_success
-            else
-                exit 1
-            fi
-        fi
+        echo -e "${CYAN}Non-interactive mode: installing Bun (required)...${NC}"
     fi
+
+    echo ""
+    if install_bun; then
+        handle_bun_success
+    fi
+
+    echo -e "${RED}✗${NC} Bun installation failed" >&2
+    echo -e "${YELLOW}Please install Bun manually:${NC}" >&2
+    echo -e "  ${CYAN}https://bun.sh${NC}" >&2
+    exit 1
     return 0
 }
 

@@ -39,6 +39,22 @@ main() {
     # Load existing configuration
     load_setup_state
 
+    local frontend_domain
+    frontend_domain=$(get_env_var "FRONTEND_DOMAIN" "")
+    local tls_mode
+    tls_mode=$(get_env_var "TLS_MODE" "")
+    local mkcert_cert="$PROJECT_ROOT/certs/${frontend_domain}.pem"
+    local mkcert_key="$PROJECT_ROOT/certs/${frontend_domain}-key.pem"
+
+    if [[ "$tls_mode" = "mkcert" ]] || [[ -f "$mkcert_cert" && -f "$mkcert_key" ]]; then
+        if command_exists mkcert; then
+            mkcert -install >/dev/null 2>&1 || true
+        fi
+
+        echo -e "${GREEN}✓${NC} mkcert TLS is configured; internal CA trust setup is not needed"
+        return 0
+    fi
+
     echo -e "${CYAN}This step installs the internal CA into the system trust store${NC}"
     echo -e "${CYAN}so browsers stop warning about self-signed certificates.${NC}"
     echo ""

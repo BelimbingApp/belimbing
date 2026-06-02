@@ -67,16 +67,26 @@ create_env_file() {
     fi
     echo ""
 
-    local app_name
-    app_name=$(ask_input "APP_NAME" "$(get_env_var "APP_NAME" "$(detect_app_name)")")
+    local app_name app_name_default
+    app_name_default=$(get_env_var "APP_NAME" "$(detect_app_name)")
+    if [[ -t 0 ]]; then
+        app_name=$(ask_input "APP_NAME" "$app_name_default")
+    else
+        app_name="$app_name_default"
+    fi
 
     update_env_file "APP_NAME" "$app_name"
     update_env_file "APP_ENV" "$APP_ENV"
 
     # APP_DEBUG is auto-derived for local; only prompt for staging/production.
     if [[ "$APP_ENV" != "local" ]]; then
-        local app_debug
-        app_debug=$(ask_input "APP_DEBUG" "$(get_env_var "APP_DEBUG" "$(detect_app_debug)")")
+        local app_debug app_debug_default
+        app_debug_default=$(get_env_var "APP_DEBUG" "$(detect_app_debug)")
+        if [[ -t 0 ]]; then
+            app_debug=$(ask_input "APP_DEBUG" "$app_debug_default")
+        else
+            app_debug="$app_debug_default"
+        fi
         update_env_file "APP_DEBUG" "$app_debug"
     fi
 
@@ -86,13 +96,23 @@ create_env_file() {
     default_frontend=$(echo "$default_domains" | cut -d'|' -f1)
     default_backend=$(echo "$default_domains" | cut -d'|' -f2)
 
-    local frontend_domain
-    frontend_domain=$(ask_input "FRONTEND_DOMAIN" "$(get_env_var "FRONTEND_DOMAIN" "$default_frontend")")
+    local frontend_domain frontend_domain_default
+    frontend_domain_default=$(get_env_var "FRONTEND_DOMAIN" "$default_frontend")
+    if [[ -t 0 ]]; then
+        frontend_domain=$(ask_input "FRONTEND_DOMAIN" "$frontend_domain_default")
+    else
+        frontend_domain="$frontend_domain_default"
+    fi
 
     local derived_backend
     derived_backend=$(derive_backend_domain "$frontend_domain")
-    local backend_domain
-    backend_domain=$(ask_input "BACKEND_DOMAIN" "$(get_env_var "BACKEND_DOMAIN" "$derived_backend")")
+    local backend_domain backend_domain_default
+    backend_domain_default=$(get_env_var "BACKEND_DOMAIN" "$derived_backend")
+    if [[ -t 0 ]]; then
+        backend_domain=$(ask_input "BACKEND_DOMAIN" "$backend_domain_default")
+    else
+        backend_domain="$backend_domain_default"
+    fi
 
     save_domains_to_env "$frontend_domain" "$backend_domain"
 

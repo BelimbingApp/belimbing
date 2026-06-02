@@ -10,6 +10,7 @@ use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Support\Facades\Route;
 
 function createUserWithDuplicateRoleAssignments(): User
 {
@@ -77,3 +78,44 @@ it('snapshots login event actor roles for the event user company without duplica
     expect(AuditAction::query()->where('event', 'auth.login')->value('actor_role'))
         ->toBe('core_admin');
 });
+
+it('falls back to the authenticated request user for HTTP request audit actors', function (): void {
+    $user = createUserWithDuplicateRoleAssignments();
+
+    app()->instance(RequestContext::class, new RequestContext(
+        traceId: '7K9M2F4Q8XDW',
+        ipAddress: '127.0.0.1',
+        url: 'https://test.example.com/audit-request-context',
+        actorType: null,
+        actorId: null,
+        companyId: null,
+        actorRole: null,
+    ));
+
+    Route::middleware('web')->get('/audit-request-context', fn () => 'ok')->name('audit.request-context');
+
+    $this->actingAs($user)
+        ->get('/audit-request-context')
+        ->assertOk();
+
+    flushActorRoleAuditBuffer();
+
+    $action = AuditAction::query()
+        ->where('event', 'http.request')
+        ->where('trace_id', '7K9M2F4Q8XDW')
+        ->latest('id')
+        ->first();
+
+    expect($action)->not->toBeNull();
+    expect($action->actor_type)->toBe(PrincipalType::USER->value);
+    expect($action->actor_id)->toBe($user->id);
+    expect($action->company_id)->toBe($user->company_id);
+});
+
+function flushActorRoleAuditBuffer(): void
+{
+    $buffer = app(AuditBuffer::class);
+    $reflection = new ReflectionClass($buffer);
+    $method = $reflection->getMethod('flush');
+    $method->invoke($buffer);
+}

@@ -117,7 +117,7 @@ can_sudo() {
     sudo -n true 2>/dev/null
 }
 
-# Install mkcert (requires cargo)
+# Install mkcert and browser trust-store helpers where available.
 install_mkcert() {
     local os_type=$1
 
@@ -126,7 +126,7 @@ install_mkcert() {
     case "$os_type" in
         macos)
             if command_exists brew; then
-                brew install mkcert
+                brew install mkcert nss
             else
                 echo -e "${RED}${CROSS_MARK} Homebrew required${NC}"
                 echo -e "  Install mkcert manually or install Homebrew from: https://brew.sh"
@@ -136,17 +136,17 @@ install_mkcert() {
         linux|wsl2)
             if command_exists apt-get; then
                 sudo apt-get update -qq
-                sudo apt-get install -y -qq mkcert || {
+                sudo apt-get install -y -qq mkcert libnss3-tools || {
                     echo -e "${RED}${CROSS_MARK} Failed to install mkcert${NC}"
                     return 1
                 }
             elif command_exists yum; then
-                sudo yum install -y mkcert || {
+                sudo yum install -y mkcert nss-tools || {
                     echo -e "${RED}${CROSS_MARK} Failed to install mkcert${NC}"
                     return 1
                 }
             elif command_exists dnf; then
-                sudo dnf install -y mkcert || {
+                sudo dnf install -y mkcert nss-tools || {
                     echo -e "${RED}${CROSS_MARK} Failed to install mkcert${NC}"
                     return 1
                 }

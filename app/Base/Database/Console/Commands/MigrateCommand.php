@@ -152,6 +152,7 @@ class MigrateCommand extends IlluminateMigrateCommand
         }
 
         SeederRegistry::ensureDiscoveredRegistered();
+        SeederRegistry::markInterruptedAsFailed();
 
         // Query registry for runnable seeders (pending or failed)
         // Order by migration_file to ensure correct execution order

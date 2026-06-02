@@ -76,6 +76,29 @@ it('logs field values on model creation', function (): void {
     expect($mutation->old_values)->toBeNull();
 });
 
+it('stores guest actor metadata for unauthenticated mutations', function (): void {
+    app()->forgetInstance(RequestContext::class);
+    app()->singleton(RequestContext::class, fn () => new RequestContext(
+        traceId: '7K9M2F4Q8XDW',
+        ipAddress: '127.0.0.1',
+        url: 'https://test.example.com/register',
+    ));
+
+    $model = AuditTestModel::query()->create(['name' => 'Guest Created']);
+
+    flushAuditBuffer();
+
+    $mutation = AuditMutation::query()
+        ->where('auditable_type', AuditTestModel::class)
+        ->where('auditable_id', $model->id)
+        ->where('event', 'created')
+        ->first();
+
+    expect($mutation)->not->toBeNull();
+    expect($mutation->actor_type)->toBe(PrincipalType::GUEST->value);
+    expect($mutation->actor_id)->toBe(0);
+});
+
 it('enriches mutation rows with audit subject metadata', function (): void {
     $model = AuditTestModelWithSubject::query()->create(['name' => 'Alice']);
 

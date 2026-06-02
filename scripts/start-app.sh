@@ -39,6 +39,22 @@ PUBLIC_BACKEND_URL=""
 
 BLB_INGRESS_MODE_SHARED='shared'
 
+prepend_path_if_dir() {
+    local dir=$1
+
+    if [[ -d "$dir" ]] && [[ ":$PATH:" != *":$dir:"* ]]; then
+        export PATH="$dir:$PATH"
+    fi
+
+    return 0
+}
+
+bootstrap_tool_paths() {
+    prepend_path_if_dir "$HOME/.local/bin"
+    prepend_path_if_dir "$HOME/.bun/bin"
+    return 0
+}
+
 # Logging function
 log() {
     if [[ -n "$LOG_FILE" ]]; then
@@ -59,19 +75,19 @@ detect_startup_failure_reason() {
     dev_log="$(get_logs_dir "$PROJECT_ROOT")/dev-services.log"
     local reason=""
 
-    if [[ -f "$laravel_log" ]]; then
-        reason=$(tail -n 400 "$laravel_log" | grep -E "\.ERROR:" | tail -n1 || true)
+    if [[ -f "$dev_log" ]]; then
+        reason=$(tail -n 250 "$dev_log" | grep -E "not found|ERROR|Error|Fatal|exception|returned with error code|exited with code|script \"dev:all\" exited" | tail -n1 || true)
         if [[ -n "$reason" ]]; then
-            reason=$(printf '%s' "$reason" | sed -E 's/^\[[^]]+\] [^ ]+\.ERROR: //')
-            reason=$(printf '%s' "$reason" | sed -E 's/ \{"exception".*$//')
             printf '%s\n' "$reason"
             return 0
         fi
     fi
 
-    if [[ -f "$dev_log" ]]; then
-        reason=$(tail -n 250 "$dev_log" | grep -E "ERROR|Fatal|exception|script \"dev:all\" exited" | tail -n1 || true)
+    if [[ -f "$laravel_log" ]]; then
+        reason=$(tail -n 400 "$laravel_log" | grep -E "\.ERROR:" | tail -n1 || true)
         if [[ -n "$reason" ]]; then
+            reason=$(printf '%s' "$reason" | sed -E 's/^\[[^]]+\] [^ ]+\.ERROR: //')
+            reason=$(printf '%s' "$reason" | sed -E 's/ \{"exception".*$//')
             printf '%s\n' "$reason"
             return 0
         fi
@@ -84,24 +100,17 @@ detect_startup_failure_reason() {
 # Check for required dependencies (verification only, no installation)
 check_dependencies() {
     local missing=()
-    local has_bun=false
 
     if ! command -v composer &> /dev/null; then
         missing+=("composer")
     fi
 
-    # Check for bun first (replaces both node and npm)
-    if command -v bun &> /dev/null; then
-        has_bun=true
-        echo -e "${CYAN}ℹ${NC} Using Bun (replaces Node.js and npm)"
-    else
-        # Fall back to node/npm if bun is not available
-        if ! command -v node &> /dev/null; then
-            missing+=("node")
-        fi
-        if ! command -v npm &> /dev/null; then
-            missing+=("npm")
-        fi
+    if ! command -v bun &> /dev/null; then
+        missing+=("bun")
+    fi
+
+    if ! command -v bunx &> /dev/null; then
+        missing+=("bunx")
     fi
 
 
@@ -116,20 +125,16 @@ check_dependencies() {
         echo "" >&2
         echo -e "${CYAN}Or install manually:${NC}" >&2
         if [[ " ${missing[*]} " =~ " composer " ]]; then
-            echo -e "  • PHP/Composer: ${CYAN}./scripts/setup-steps/15-php.sh${NC}" >&2
+            echo -e "  • PHP runtime/Composer: ${CYAN}./scripts/setup-steps/15-runtime.sh${NC}" >&2
         fi
-        if [[ " ${missing[*]} " =~ " npm " ]] || [[ " ${missing[*]} " =~ " node " ]] || [[ " ${missing[*]} " =~ " bun " ]]; then
-            echo -e "  • JavaScript runtime (Bun recommended): ${CYAN}./scripts/setup-steps/30-js.sh${NC}" >&2
+        if [[ " ${missing[*]} " =~ " bun " ]] || [[ " ${missing[*]} " =~ " bunx " ]]; then
+            echo -e "  • JavaScript runtime (Bun): ${CYAN}./scripts/setup-steps/30-js.sh${NC}" >&2
         fi
         log "ERROR: Missing dependencies: ${missing[*]}"
         exit 1
     fi
 
-    if [[ "$has_bun" = true ]]; then
-        echo -e "${GREEN}✓${NC} All dependencies available (using Bun)"
-    else
-        echo -e "${GREEN}✓${NC} All dependencies available (using Node.js/npm)"
-    fi
+    echo -e "${GREEN}✓${NC} All dependencies available (using Bun)"
     return 0
 }
 
@@ -557,6 +562,10 @@ wait_for_service() {
             log "$service_name ready in $(( $(now_epoch_s) - start_ts ))s"
             return 0
         fi
+        if [[ -n "${DEV_PID:-}" ]] && ! kill -0 "$DEV_PID" 2>/dev/null; then
+            echo -e "${RED}✗${NC} $service_name process exited before becoming ready" >&2
+            break
+        fi
         sleep 1
         attempt=$((attempt + 1))
     done
@@ -596,7 +605,11 @@ export_caddy_env() {
         else
             export TLS_DIRECTIVE="tls internal"
             echo -e "${YELLOW}⚠${NC} mkcert certs not found — falling back to internal CA (browser warnings expected)"
-            echo -e "  Run ${CYAN}./scripts/setup-steps/70-domains.sh${NC} to generate mkcert certs"
+            if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]]; then
+                echo -e "  Run ${CYAN}./scripts/setup-steps/70-domains.sh${NC}, then ${CYAN}./scripts/setup-steps/72-caddy-ingress.sh${NC}"
+            else
+                echo -e "  Run ${CYAN}./scripts/setup-steps/70-domains.sh${NC} to generate mkcert certs"
+            fi
         fi
     else
         local tls_mode
@@ -656,6 +669,7 @@ start_services() {
     # Create a separate log file for dev services output
     local dev_log_file
     dev_log_file="$(get_logs_dir "$PROJECT_ROOT")/dev-services.log"
+    : > "$dev_log_file"
 
     # Override CI=1 (set by some IDEs/editors) so laravel-vite-plugin starts the HMR server
     export LARAVEL_BYPASS_ENV_CHECK=1
@@ -760,6 +774,7 @@ print_runtime_summary() {
 # Main orchestration function
 main() {
     cd "$PROJECT_ROOT"
+    bootstrap_tool_paths
     local t0
     t0=$(now_epoch_s)
 

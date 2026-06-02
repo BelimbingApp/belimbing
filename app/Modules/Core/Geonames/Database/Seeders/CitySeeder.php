@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Geonames\Database\Seeders;
 
 use App\Modules\Core\Geonames\Database\Seeders\Concerns\DownloadsGeonamesFile;
@@ -30,56 +31,80 @@ class CitySeeder extends Seeder
         }
 
         $this->command?->info('Parsing cities15000.txt...');
-        $content = File::get($filePath);
-        $lines = explode("\n", $content);
+        $handle = fopen($filePath, 'r');
 
-        $cities = [];
+        if ($handle === false) {
+            $this->command?->error('Failed to open cities15000.txt.');
+
+            return;
+        }
+
+        $chunk = [];
+        $inserted = 0;
         $skipped = 0;
+        $now = now();
 
-        foreach ($lines as $line) {
-            $line = trim($line);
+        try {
+            while (($line = fgets($handle)) !== false) {
+                $line = trim($line);
 
-            if (empty($line)) {
-                continue;
+                if (empty($line)) {
+                    continue;
+                }
+
+                $parts = explode("\t", $line);
+
+                if (count($parts) < 19) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $chunk[] = [
+                    'geoname_id' => $parts[0],
+                    'name' => $parts[1],
+                    'ascii_name' => $parts[2],
+                    'alternate_names' => $parts[3],
+                    'latitude' => $parts[4],
+                    'longitude' => $parts[5],
+                    'country_iso' => $parts[8],
+                    'admin1_code' => $parts[10],
+                    'population' => $parts[14],
+                    'timezone' => $parts[17],
+                    'modification_date' => $parts[18],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+
+                if (count($chunk) >= 500) {
+                    $this->upsertCities($chunk);
+                    $inserted += count($chunk);
+                    $chunk = [];
+                }
             }
 
-            $parts = explode("\t", $line);
-
-            if (count($parts) < 19) {
-                $skipped++;
-
-                continue;
+            if ($chunk !== []) {
+                $this->upsertCities($chunk);
+                $inserted += count($chunk);
             }
-
-            $cities[] = [
-                'geoname_id' => $parts[0],
-                'name' => $parts[1],
-                'ascii_name' => $parts[2],
-                'alternate_names' => $parts[3],
-                'latitude' => $parts[4],
-                'longitude' => $parts[5],
-                'country_iso' => $parts[8],
-                'admin1_code' => $parts[10],
-                'population' => $parts[14],
-                'timezone' => $parts[17],
-                'modification_date' => $parts[18],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
+        } finally {
+            fclose($handle);
         }
 
-        $this->command?->info('Inserting '.count($cities).' cities...');
-        $chunks = array_chunk($cities, 500);
-
-        foreach ($chunks as $chunk) {
-            DB::table('geonames_cities')->upsert(
-                $chunk,
-                ['geoname_id'],
-                ['name', 'ascii_name', 'alternate_names', 'latitude', 'longitude', 'country_iso', 'admin1_code', 'population', 'timezone', 'modification_date', 'updated_at'],
-            );
-        }
-
+        $this->command?->info('Inserted '.$inserted.' cities.');
         $this->command?->info('Done. Skipped: '.$skipped);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $cities
+     */
+    private function upsertCities(array $cities): void
+    {
+        DB::table('geonames_cities')->upsert(
+            $cities,
+            ['geoname_id'],
+            ['name', 'ascii_name', 'alternate_names', 'latitude', 'longitude', 'country_iso', 'admin1_code', 'population', 'timezone', 'modification_date', 'updated_at'],
+        );
     }
 
     /**
