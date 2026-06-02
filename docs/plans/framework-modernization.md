@@ -83,8 +83,9 @@ Evidence: full suite after the change shows **0 `LazyLoadingViolationException`*
 
 Goal: no per-request state leaks across the worker.
 
-- [ ] Review the 25 singleton/bind sites and the static-state class for data held across requests
-- [ ] Confirm the Octane flush listeners cover custom singletons; add explicit resets where a leak is found
+- [x] Audited ~140 singleton bindings + all mutable `static` properties across `app/`. Surface is mostly clean: stateless services, or correctly `scoped` / in the `flush` list / explicitly `clear()`ed (e.g. `AgentExecutionContext` is cleared in `RunAgentTaskJob`'s `finally`). Static-state surface clean (3 props, all request-independent). — claude/opus-4.8
+- [x] **P2 fixed — audit cross-user leak.** `RequestContext` (`Base\Audit`) is a `singleton` built once via `fromRequest()` (actor/IP/URL/company) and injected into `AuditRequestMiddleware`, but was **not** in `config/octane.php`'s `flush` list (its sibling `AuditBuffer` was) — so under the worker every later request's audit records would be stamped with the first request's actor/company. Added `RequestContext::class` to the flush list. — claude/opus-4.8
+- [ ] **P1 (deferred) — locale staleness leak.** `ApplicationLocaleContext` is a `singleton` that memoizes the resolved locale write-once, so the worker freezes the locale for its ~500-request life (an admin changing `ui.locale` busts the settings cache but not the in-memory memo; an early resolve can pin the config default). Just scoping `LocaleContext` is insufficient — `NumberDisplayService` / `CurrencyDisplayService` (Locale provider) and `DateTimeDisplayService` (DateTime provider) inject it as constructor deps in their own `singleton`s and would pin the stale instance. Fix: bind `LocaleContext` + those three display services `scoped` (or reset the memo via an `OperationTerminated` listener), then run `vendor/bin/pest tests/Unit/Base/Locale` + the DateTime display tests. Cross-cutting across two providers — left for a focused pass.
 
 ### Phase 3 — Livewire ergonomics
 

@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Policies\GrantPolicy;
 use App\Base\Authz\Services\DatabaseDecisionLogger;
@@ -156,6 +157,7 @@ return [
 
     'flush' => [
         AuditBuffer::class,
+        RequestContext::class,
         DatabaseDecisionLogger::class,
         GrantPolicy::class,
     ],
