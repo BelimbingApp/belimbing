@@ -829,12 +829,10 @@ it('narrows the list-mode calendar via the filter prose without flipping into fo
     $production = Department::query()->create([
         'company_id' => $company->id,
         'department_type_id' => $productionType->id,
-        'name' => 'Production',
     ]);
     $office = Department::query()->create([
         'company_id' => $company->id,
         'department_type_id' => $officeType->id,
-        'name' => 'Office',
     ]);
 
     Employee::factory()->active()->create([

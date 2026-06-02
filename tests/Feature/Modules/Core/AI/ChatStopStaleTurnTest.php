@@ -73,7 +73,7 @@ function createStopStaleSession(): object
  */
 function createStopStaleTurn(array $overrides): AiRun
 {
-    return AiRun::query()->create(array_merge([
+    return AiRun::query()->forceCreate(array_merge([
         'employee_id' => Employee::LARA_ID,
         'source' => 'chat',
         'execution_mode' => 'interactive',

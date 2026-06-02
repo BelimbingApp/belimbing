@@ -57,11 +57,16 @@ Adopted in **stages**: enabling full `shouldBeStrict()` at once surfaced 133 fai
 
 - [x] Enable `preventLazyLoading` outside production in `AppServiceProvider::configureModels()` — claude/opus-4.8
 - [x] Fix the 3 N+1s it surfaced: `AiRun.calls` (`RunInspectionService`), `ClaimEntitlementUsageEntry.employee` (`ClaimUtilizationReportBuilder`), `AttributeValue.attribute` (`ManagesItemFitments`) — claude/opus-4.8
-- [~] Enable `preventSilentlyDiscardingAttributes` — measured ~10 failing tests from 4 root causes; re-enable once the two below are resolved:
-  - [x] `payroll_pay_item_code` missing from `$fillable` on `AttendanceAllowanceRule` and `ClaimType` (the column exists; it was being silently dropped on mass-assign — a real bug) — claude/opus-4.8
-  - [ ] `AiRun.created_at` — tests backdate it via direct `create()`; switch those ~4 test sites to `forceCreate` (timestamps should not enter `$fillable`)
-  - [ ] `Department.name` — `Companies\Departments.php` mass-assigns `name`, but the `departments` table has no `name` column (it lives on `DepartmentType`). Real caller bug; needs a domain decision (drop it, or set it on the type), not a rote fillable add
-- [ ] Make test factories faithful to the schema (start with `User`), then enable `preventAccessingMissingAttributes`; fix the ~196 violations
+- [x] `AiRun.created_at` mass-assignment — tests backdated it via direct `create()`; switched those sites to `forceCreate` (the `ChatStopStaleTurn` helper, `ChatConcurrentSessionLifecycle` ×6, `ChatConcurrentRunPolicy`). Timestamps stay out of `$fillable`. — claude/opus-4.8
+- [x] `Department.name` mass-assignment in `AttendancePolicyOperationsTest` — removed; `departments` has no `name` column, so the value was always silently dropped (dead, misleading code). — claude/opus-4.8
+- [x] `User` factory faithfulness — added nullable `employee_id`/`company_id` defaults so factory-hydrated users carry the attributes the datetime/timezone path reads; clears the ~196 `User` missing-attribute violations. — claude/opus-4.8
+
+**BLOCKED — two real domain bugs strict mode surfaced.** Enabling `preventSilentlyDiscardingAttributes` and `preventAccessingMissingAttributes` waits on a decision for each (do NOT paper over with a `$fillable` add — that was tried for #2 and converts a silent drop into a hard SQL error, proving the column is absent):
+
+1. **`Department` has no `name` column.** Code (`Companies\Departments.php` joins `company_department_types.name AS name`), a view (`people/attendance/.../rosters-filter-prose.blade.php` reads `$department->name`), and tests all treat `Department->name` as real, but the name lives on `DepartmentType`. Fix: add a `name` accessor on `Department` delegating to `departmentType->name` (eager-loaded to avoid an N+1), or enforce the join everywhere. Blocks `preventAccessingMissingAttributes`.
+2. **`payroll_pay_item_code` silent data loss.** Mass-assigned to `AttendanceAllowanceRule` and `ClaimType` (e.g. `ClaimAccountingExport` updates `claim_types.payroll_pay_item_code`; `AttendancePolicyOperationsTest` creates allowance rules with it) but **those tables have no such column** — it is silently dropped in a payroll-mapping feature. Decision: add the column to these tables (the schema is incubating) if the feature needs it, or remove the assignments. Blocks `preventSilentlyDiscardingAttributes`.
+
+`preventLazyLoading` stays enabled; the other two protections are deferred to those decisions.
 
 Test-infra corrections made alongside (low-entropy cleanup surfaced by this work):
 
@@ -72,7 +77,9 @@ Evidence: full suite after the change shows **0 `LazyLoadingViolationException`*
 
 - [x] **Database-backup cluster (~22)** — root cause: `ext-sodium` not enabled (the app-key encryption requires it, and the backup feature was therefore broken at runtime too). `setup.ps1` and the project `php.ini` enabled curl/openssl/etc. but not sodium; added it (the DLL already ships in the FrankenPHP ext dir). Verified: the Backup slice now passes 32/32 when PHP loads the project ini (the documented native-Windows config via `PHPRC`). — claude/opus-4.8
 - [x] **AI `MemoryGetTool` (5)** — real Windows bug: the scope-containment check compared `realpath()` output against a hard-coded `'/'`, so on Windows (backslash paths) it rejected every path as traversal, breaking memory file-reading entirely. Use `DIRECTORY_SEPARATOR`. — claude/opus-4.8
-- [ ] **OpenAI Codex / model-catalog (3)** — completing/disconnecting the Codex OAuth flow triggers a `ModelCatalogService` sync to `https://models.dev/api.json` that the tests don't fake → real call → `HTTP 0`. Fix needs either a valid faked catalog payload in those 3 tests (or a file-level `beforeEach`), or a review of why disconnect triggers a synchronous external sync. Not yet done.
+- [x] **OpenAI Codex / model-catalog (3)** — completing/disconnecting the Codex OAuth flow triggered a `ModelCatalogService` sync to `https://models.dev/api.json` that the tests didn't fake → real call → `HTTP 0`. Fixed with a file-level `beforeEach` faking `models.dev` with a valid catalog payload (Laravel's `Http::fake` accumulates, so it coexists with the per-test endpoint fakes). — claude/opus-4.8
+
+**Result: full suite is green — 2105 passed, 0 failed, 2 (pre-existing) skips** — with `preventLazyLoading` enabled and the project ini (`PHPRC`, for sodium). The deeper strict protections remain deferred to the two domain decisions above.
 
 ### Phase 2 — Octane state-hygiene audit
 

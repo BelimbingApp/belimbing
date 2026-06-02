@@ -50,10 +50,11 @@ class AppServiceProvider extends ServiceProvider
      * Tighten Eloquent so latent bugs fail loudly in development instead of
      * degrading silently in production. Adopted in stages (see
      * docs/plans/framework-modernization.md, Phase 1):
-     *   1. preventLazyLoading — catches N+1 queries (performance). Enabled.
-     *   2. preventSilentlyDiscardingAttributes — mass-assignment safety. Pending.
-     *   3. preventAccessingMissingAttributes — requires test-factory faithfulness
-     *      to the schema first (~196 surfaced, concentrated in User). Pending.
+     *   1. preventLazyLoading (N+1) — ENABLED.
+     *   2/3. preventSilentlyDiscardingAttributes + preventAccessingMissingAttributes
+     *      — blocked on two real domain bugs they surfaced (Department has no
+     *      `name` column though code/views use it; `payroll_pay_item_code` is
+     *      assigned to tables that lack the column). See the plan, Phase 1.
      *
      * Disabled in production so a stray violation cannot take the app down.
      */

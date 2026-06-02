@@ -85,7 +85,7 @@ it('rejects same-session submit when an active turn already exists', function ()
 
     $session = app(SessionManager::class)->create(Employee::LARA_ID);
 
-    $activeTurn = AiRun::query()->create([
+    $activeTurn = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $session->id,
         'acting_for_user_id' => $user->id,

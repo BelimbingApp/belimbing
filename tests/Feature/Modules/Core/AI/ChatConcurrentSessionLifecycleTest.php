@@ -104,7 +104,7 @@ it('shows active turns from multiple sessions in the session panel model', funct
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $turnA = AiRun::query()->create([
+    $turnA = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
@@ -115,7 +115,7 @@ it('shows active turns from multiple sessions in the session panel model', funct
         'started_at' => now()->subMinutes(5),
     ]);
 
-    $turnB = AiRun::query()->create([
+    $turnB = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
@@ -149,7 +149,7 @@ it('stopping one stale turn does not cancel another active session turn', functi
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $turnToStop = AiRun::query()->create([
+    $turnToStop = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
@@ -160,7 +160,7 @@ it('stopping one stale turn does not cancel another active session turn', functi
         'started_at' => now()->subMinutes(70),
     ]);
 
-    $turnToKeep = AiRun::query()->create([
+    $turnToKeep = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
@@ -195,7 +195,7 @@ it('keeps other session active state when one session reaches terminal status', 
 
     [$sessionA, $sessionB] = createTwoDistinctLaraSessions();
 
-    $completedTurn = AiRun::query()->create([
+    $completedTurn = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionA->id,
         'acting_for_user_id' => $user->id,
@@ -207,7 +207,7 @@ it('keeps other session active state when one session reaches terminal status', 
         'finished_at' => now()->subMinutes(6),
     ]);
 
-    $runningTurn = AiRun::query()->create([
+    $runningTurn = AiRun::query()->forceCreate([
         'employee_id' => Employee::LARA_ID,
         'session_id' => $sessionB->id,
         'acting_for_user_id' => $user->id,
