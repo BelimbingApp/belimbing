@@ -106,5 +106,5 @@ Goal: remove the periodic cache-expiry slow request.
 Goal: trim perceived latency and close the version gap.
 
 - [ ] Use `defer()` for non-critical after-response work where it shortens response time
-- [ ] Run `composer outdated`; update anything trailing to latest minor/patch per policy
+- [ ] `composer outdated --direct` (run 2026-06-02): only **`livewire/livewire` 4.3.0 → 4.3.1** is in-policy (a patch within major 4) — apply it when the tree is clean (it republishes assets, so not mid-multi-agent-session). `phpunit` 12 → 13 is a major bump (out of the "within each major" policy; leave on 12.x). Nothing else direct is trailing.
 - [ ] Decide on Pulse / Precognition / Pennant — adopt or explicitly defer each with a recorded reason
