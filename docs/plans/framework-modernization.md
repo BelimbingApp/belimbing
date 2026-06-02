@@ -71,7 +71,8 @@ Test-infra corrections made alongside (low-entropy cleanup surfaced by this work
 Evidence: full suite after the change shows **0 `LazyLoadingViolationException`** and 2070 passing. The remaining failures were pre-existing/environmental and are being triaged separately:
 
 - [x] **Database-backup cluster (~22)** — root cause: `ext-sodium` not enabled (the app-key encryption requires it, and the backup feature was therefore broken at runtime too). `setup.ps1` and the project `php.ini` enabled curl/openssl/etc. but not sodium; added it (the DLL already ships in the FrankenPHP ext dir). Verified: the Backup slice now passes 32/32 when PHP loads the project ini (the documented native-Windows config via `PHPRC`). — claude/opus-4.8
-- [ ] Remaining (~9): AI memory tool, OpenAI Codex OAuth "HTTP 0", model-catalog sync — still under triage.
+- [x] **AI `MemoryGetTool` (5)** — real Windows bug: the scope-containment check compared `realpath()` output against a hard-coded `'/'`, so on Windows (backslash paths) it rejected every path as traversal, breaking memory file-reading entirely. Use `DIRECTORY_SEPARATOR`. — claude/opus-4.8
+- [ ] **OpenAI Codex / model-catalog (3)** — completing/disconnecting the Codex OAuth flow triggers a `ModelCatalogService` sync to `https://models.dev/api.json` that the tests don't fake → real call → `HTTP 0`. Fix needs either a valid faked catalog payload in those 3 tests (or a file-level `beforeEach`), or a review of why disconnect triggers a synchronous external sync. Not yet done.
 
 ### Phase 2 — Octane state-hygiene audit
 
