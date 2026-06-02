@@ -164,6 +164,13 @@ $env:REQUEST_MAX_EXECUTION_TIME = '0'
 $env:CADDY_SERVER_WORKER_DIRECTIVE = ''
 $env:CADDY_SERVER_WATCH_DIRECTIVES = ''
 
+# Local OPcache/JIT tuning (raises the 10k file cap, enables tracing JIT, more
+# memory). Picked up by FrankenPHP and the queue worker without admin rights.
+$perfIniDir = Join-Path $ProjectRootPath '.php.d'
+if (Test-Path (Join-Path $perfIniDir 'perf.ini')) {
+    $env:PHP_INI_SCAN_DIR = $perfIniDir
+}
+
 New-Item -ItemType Directory -Force -Path $env:CADDY_LOG_DIR | Out-Null
 
 Push-Location $ProjectRootPath

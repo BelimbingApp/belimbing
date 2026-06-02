@@ -29,6 +29,10 @@
 		format console
 	}
 
+	# Compress responses (HTML/JS/CSS/JSON). Caddy skips already-compressed
+	# types and websockets. Biggest benefit for large pages and network access.
+	encode zstd gzip
+
 	# Vite HMR WebSocket (separate Vite process)
 	@vite_ws {
 		path /
@@ -58,6 +62,8 @@
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
 		format console
 	}
+
+	encode zstd gzip
 
 	handle {
 		root * public

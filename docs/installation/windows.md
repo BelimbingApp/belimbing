@@ -196,6 +196,45 @@ Get-Process frankenphp,php,bun -ErrorAction SilentlyContinue
 Stop-Process -Name frankenphp,php,bun -Force -ErrorAction SilentlyContinue
 ```
 
+## Performance (Important)
+
+Native Windows can feel several seconds slower per page than the same app on
+Linux — even on faster hardware. The dominant cause is **Windows Defender
+real-time scanning**.
+
+Rendering a page compiles hundreds of PHP files, and Defender scans every file
+as it is opened, turning a sub-second compile into multiple seconds. Defender and
+the Windows search indexer also keep touching project files, which invalidates
+OPcache and forces the same pages to recompile (and be re-scanned) again and
+again. The result is page loads of several seconds where Linux — even on weaker
+hardware — is well under one second.
+
+The fix is to exclude the development paths from Defender. Keep real-time
+protection enabled for the rest of the system; only the project and runtime are
+excluded. Run in an **Administrator** PowerShell:
+
+```powershell
+# Use your actual project path and FrankenPHP install location
+Add-MpPreference -ExclusionPath "D:\Repo\belimbing"
+Add-MpPreference -ExclusionPath "$HOME\.frankenphp"
+Add-MpPreference -ExclusionProcess "frankenphp.exe"
+Add-MpPreference -ExclusionProcess "php.exe"
+```
+
+In testing this took a cold page load from ~3s down to ~150ms and made native
+Windows competitive with a Linux/WSL2 setup — so WSL2 is not required just for
+performance.
+
+### OPcache tuning
+
+The repository ships OPcache tuning at `.php.d/perf.ini`. It raises
+`opcache.max_accelerated_files` above the ~11k-file codebase (the PHP default of
+10000 is too low and causes compiled files to be evicted), enables tracing JIT,
+and increases OPcache memory. `scripts/start-app.ps1` loads it automatically via
+`PHP_INI_SCAN_DIR`, so no manual step is needed — just restart the launcher after
+editing it. The Defender exclusions above are the larger win; this is
+complementary.
+
 ## HTTPS On Windows
 
 The native Windows launcher uses FrankenPHP/Caddy `tls internal`. This gives
@@ -274,6 +313,15 @@ Use the Windows launcher instead:
 ```powershell
 .\scripts\start-app.ps1
 ```
+
+### Pages take several seconds to load
+
+Windows Defender real-time scanning is scanning every PHP file as it compiles —
+this is the single biggest native-Windows performance problem, and it makes the
+app feel far slower than a Linux box even on better hardware. See
+[Performance](#performance-important) and add the Defender exclusions. A symptom
+that points here specifically: the *first* visit to each page is slow (seconds)
+while a refresh is fast, and the slowness returns as you move between pages.
 
 ### Browser cannot resolve `local.blb.lara`
 
