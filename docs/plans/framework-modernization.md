@@ -68,7 +68,10 @@ Test-infra corrections made alongside (low-entropy cleanup surfaced by this work
 - [x] Cleared leftover dev route/config/view caches — a staleness footgun, and the route cache caused a 128 MB OOM during test bootstrap — claude/opus-4.8
 - [x] Set `memory_limit=512M` in `phpunit.xml` (the default 128 MB OOMs the suite bootstrap) — claude/opus-4.8
 
-Evidence: full suite after the change shows **0 `LazyLoadingViolationException`** and 2070 passing. The 33 remaining failures are pre-existing/environmental (database-backup encryption, AI memory tool, OpenAI Codex OAuth "HTTP 0", model-catalog sync) — unrelated to this work and flagged for separate triage.
+Evidence: full suite after the change shows **0 `LazyLoadingViolationException`** and 2070 passing. The remaining failures were pre-existing/environmental and are being triaged separately:
+
+- [x] **Database-backup cluster (~22)** — root cause: `ext-sodium` not enabled (the app-key encryption requires it, and the backup feature was therefore broken at runtime too). `setup.ps1` and the project `php.ini` enabled curl/openssl/etc. but not sodium; added it (the DLL already ships in the FrankenPHP ext dir). Verified: the Backup slice now passes 32/32 when PHP loads the project ini (the documented native-Windows config via `PHPRC`). — claude/opus-4.8
+- [ ] Remaining (~9): AI memory tool, OpenAI Codex OAuth "HTTP 0", model-catalog sync — still under triage.
 
 ### Phase 2 — Octane state-hygiene audit
 

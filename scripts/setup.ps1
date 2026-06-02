@@ -332,6 +332,7 @@ extension=openssl
 extension=pdo_sqlite
 extension=sqlite3
 extension=zip
+extension=sodium
 memory_limit=512M
 upload_max_filesize=64M
 post_max_size=64M
@@ -342,7 +343,7 @@ variables_order=EGPCS
     Write-Ok "PHP ini: $PhpIniPath"
 
     $missingExtensions = @()
-    foreach ($extension in @('ctype', 'dom', 'fileinfo', 'filter', 'intl', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'tokenizer', 'xml', 'zip')) {
+    foreach ($extension in @('ctype', 'dom', 'fileinfo', 'filter', 'intl', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'sodium', 'tokenizer', 'xml', 'zip')) {
         $loaded = & $script:PhpExe -r "echo extension_loaded('$extension') ? 'yes' : 'no';" 2>$null
         if ($loaded -ne 'yes') {
             $missingExtensions += $extension
