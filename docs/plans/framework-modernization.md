@@ -92,9 +92,10 @@ Goal: no per-request state leaks across the worker.
 
 Goal: less redundant work, less bespoke form code.
 
-- [ ] Adopt `#[Computed]` in components with repeated derived queries (start from the page-weight triage list)
-- [ ] Introduce Form objects for components with non-trivial form state/validation
-- [ ] Apply `#[Reactive]` where nested components currently re-fetch parent data
+**Adopted as a forward convention, not a sweep.** Per this plan's own Design Decisions ("reach for when it helps, not a blanket rewrite… churning working components for idiom alone violates the caution against forced abstractions"), a blind retrofit now would be low-value churn. So:
+
+- [x] **Convention recorded** (see Public Contract): new and touched components use `#[Computed]` for repeated derived data, Form objects for non-trivial form state, and `#[Reactive]` for parent→child data flow. — claude/opus-4.8
+- [ ] Targeted retrofit driven by the **page-weight triage** (page-rendering Phase 1): once that harness ranks the heavy components, apply `#[Computed]`/Form objects to the specific ones with repeated derived queries or large form state (e.g. eBay `Index` loads all listings in both `stats()` and `dashboard()` — a real dedup candidate to share via a computed once the triage confirms it).
 
 ### Phase 4 — Caching modernization
 
