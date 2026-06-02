@@ -1,6 +1,7 @@
 <?php
 namespace App\Providers;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -40,8 +41,25 @@ class AppServiceProvider extends ServiceProvider
             resource_path('core/views/vendor/laravel-exceptions-renderer'),
         );
 
+        $this->configureModels();
         $this->registerQueueMonitoring();
         $this->registerCacheWarming();
+    }
+
+    /**
+     * Tighten Eloquent so latent bugs fail loudly in development instead of
+     * degrading silently in production. Adopted in stages (see
+     * docs/plans/framework-modernization.md, Phase 1):
+     *   1. preventLazyLoading — catches N+1 queries (performance). Enabled.
+     *   2. preventSilentlyDiscardingAttributes — mass-assignment safety. Pending.
+     *   3. preventAccessingMissingAttributes — requires test-factory faithfulness
+     *      to the schema first (~196 surfaced, concentrated in User). Pending.
+     *
+     * Disabled in production so a stray violation cannot take the app down.
+     */
+    protected function configureModels(): void
+    {
+        Model::preventLazyLoading(! $this->app->isProduction());
     }
 
     /**

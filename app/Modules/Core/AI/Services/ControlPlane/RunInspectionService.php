@@ -20,7 +20,7 @@ class RunInspectionService
      */
     public function inspectRun(string $runId): ?RunInspection
     {
-        $run = AiRun::query()->with(['actingForUser', 'employee'])->find($runId);
+        $run = AiRun::query()->with(['actingForUser', 'employee', 'calls'])->find($runId);
 
         if ($run === null) {
             return null;
@@ -41,7 +41,7 @@ class RunInspectionService
     public function inspectSession(int $employeeId, string $sessionId): array
     {
         $runs = AiRun::query()
-            ->with(['actingForUser', 'employee'])
+            ->with(['actingForUser', 'employee', 'calls'])
             ->where('employee_id', $employeeId)
             ->where('session_id', $sessionId)
             ->orderBy('started_at')
@@ -59,7 +59,7 @@ class RunInspectionService
     public function inspectDispatchRun(string $dispatchId): array
     {
         $runs = AiRun::query()
-            ->with(['actingForUser', 'employee'])
+            ->with(['actingForUser', 'employee', 'calls'])
             ->where('dispatch_id', $dispatchId)
             ->orderBy('started_at')
             ->get();

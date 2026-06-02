@@ -20,12 +20,10 @@ use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
-use Livewire\Attributes\Lazy;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
-#[Lazy]
 class Chat extends Component
 {
     use HandlesAttachments;

@@ -153,6 +153,8 @@ trait ManagesItemFitments
     {
         $this->authorizeUpdate();
 
+        $this->item->loadMissing('catalogAttributeValues.attribute');
+
         $properties = [];
         foreach ($this->fitmentAttributeCodes() as $property => $attributeCode) {
             $value = $this->item->catalogAttributeValues
