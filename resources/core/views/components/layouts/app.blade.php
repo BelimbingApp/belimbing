@@ -247,6 +247,23 @@
         if (! window.__laraChatNavWired) {
             window.__laraChatNavWired = true;
             let sidebarScroll = [];
+            // During wire:navigate, Livewire re-initialises Alpine and briefly re-adds
+            // x-cloak to the persisted chrome (sidebar/bars/chat) — including the <aside>
+            // root. Livewire's own injected [x-cloak]{display:none} rule then hides it for
+            // one frame, which reads as a page-wide flash. Strip x-cloak from chrome
+            // outside <main> the instant it reappears (a MutationObserver callback runs as
+            // a microtask, before the next paint), so nothing hides. Gated on
+            // data-alpine-ready (set on alpine:initialized) so the initial-load FOUC guard
+            // still works; page content inside <main> keeps normal hide-until-init.
+            new MutationObserver((muts) => {
+                if (! document.documentElement.hasAttribute('data-alpine-ready')) return;
+                for (const m of muts) {
+                    const el = m.target;
+                    if (el.nodeType === 1 && el.hasAttribute('x-cloak') && ! el.closest('main')) {
+                        el.removeAttribute('x-cloak');
+                    }
+                }
+            }).observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['x-cloak'] });
             // Mark the single best-matching menu link active (data-current), mirroring
             // the old server logic: an exact URL match wins; otherwise the longest
             // segment-prefix wins. This avoids the double-highlight that wire:current's
