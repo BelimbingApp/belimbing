@@ -1,7 +1,7 @@
 # performance-page-rendering
 
-**Status:** Identified
-**Last Updated:** 2026-06-02
+**Status:** In progress — Phases 1, 3, 4, 5, 6 done; Phase 2 chat done, sidebar island designed + deferred
+**Last Updated:** 2026-06-03
 **Sources:** `docs/installation/windows.md` (Performance §); Chrome traces `Trace-20260601T220533` and `Trace-20260602T111445` (analysed in session); `resources/core/views/components/layouts/app.blade.php`; `resources/core/views/components/menu/`; `app/Modules/Core/AI/Livewire/Chat.php`; `app/Base/Menu/ServiceProvider.php`; `app/Base/Database/Livewire/DatabaseTables/Index.php`; `app/Modules/Commerce/Marketplace/Livewire/Ebay/Index.php`; Livewire 4.3 features `SupportIslands`, `SupportWireCurrent`, `SupportNavigate` (`@persist`/`livewire:navigated`), `LazyLoading`, `Computed`; related plan `framework-modernization.md`
 **Agents:** claude/opus-4.8
 
@@ -75,6 +75,19 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 - [ ] Convert the sidebar to an island (persisted structure) with `wire:current` active-state; verify the highlight updates on navigation and matches today's wildcard route semantics
 - [ ] Define the event→island coordination map (`menu-changed`, `pins-changed`, `context-changed`, impersonation) and wire the dispatchers; verify a newly added menu item, a pin toggle, and a company switch each reflect without a full reload
 - [ ] Re-trace: confirm `wire:navigate` re-fetches only the main body and shell hydration is paid once per hard load
+
+> **Design + status (investigated 2026-06-03; deferred to a dedicated, browser-verified effort — claude/opus-4.8).**
+> The current sidebar (`resources/core/views/components/menu/{sidebar,tree,item}.blade.php`) is a Blade component fed by a per-request `View::composer` (`App\Base\Menu\ServiceProvider`), rendered **twice** in `app.blade.php` (desktop drag-resizable `<aside>` at the `lg:` breakpoint + a mobile drawer). What rebuilds it each navigation is the `wire:navigate` body morph re-running the composer — not a code smell, just the monolith morphing.
+>
+> What's already island-like (no change needed): **pins coordinate entirely client-side today** — optimistic Alpine state in `sidebar.blade.php` + `fetch` to `pins.toggle`/`pins.reorder` + a `pins-synced` window event that keeps both instances in sync. So "pins-changed" is effectively already handled; the coordination map shrinks to **company-switch / impersonation / deploy-time menu changes**.
+>
+> The four behaviors that must all be correct *simultaneously, on every page* for the island to be a net win:
+> 1. **`@persist` two instances** (`sidebar-desktop`, `sidebar-mobile`) so the tree isn't re-morphed. Each carries its own Alpine `x-data` (pins, rail, drag state) — must survive the morph intact.
+> 2. **`wire:current` for the active highlight**, replacing the server-computed `$isActive` ternaries in `item.blade.php`. Must reproduce today's **wildcard** active semantics (a section highlights for all its sub-routes), i.e. `wire:current` pattern/`.exact` usage per item depth.
+> 3. **Client-side auto-expand of the active group.** Today `x-data="{ expanded: $hasActiveChild }"` is server-seeded; once persisted it won't re-expand on navigation. Needs JS on `livewire:navigated` that walks from the URL-matching link up to its ancestor `<li>`s and sets `expanded=true` — without collapsing groups the user opened manually.
+> 4. **Staleness coordination** for the persisted tree: on company-switch/impersonation/menu-change, dispatch an event the island listens for to refresh its structure (or fall back to a hard load), since the persisted HTML won't otherwise reflect the new permission-filtered tree.
+>
+> Why deferred rather than shipped here: this is an every-page change whose failure mode (stale highlight, mis-expanded groups, or a frozen tree after a company switch) degrades *all* navigation. Like the chat-persist work above, it needs the iterative Playwright loop (navigate across wildcard routes, toggle a pin, switch company, exercise rail + mobile drawer + drag-reorder) to land safely. The remaining KB/budget wins (Phases 3–6) were independent and lower-risk, so they were completed first; this is the clearly-scoped next focused task.
 
 ### Phase 3 — Bound every list (main body)
 
