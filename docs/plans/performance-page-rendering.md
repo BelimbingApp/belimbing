@@ -80,9 +80,9 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 
 - [x] `admin/system/menu-inspector` (383 KB → ~85 KB): rendered every menu item as a wide, badge-laden row. Already server-filtered, so paginated the in-memory filtered collection (25/page, `LengthAwarePaginator` + `WithPagination`; filters reset to page 1). Regression tests in `MenuInspectorTest`. — claude/opus-4.8
 - [x] `admin/authz/capabilities` (154 KB → 60 KB): same pattern — paginated the in-memory capability list (50/page); search/domain/sort reset to page 1. Regression tests in `CapabilitiesIndexTest`. — claude/opus-4.8
-- [ ] (Schema browser `DatabaseTables\Index` already paginates 25/page — its issue is query count, see Phase 3 query note below, not HTML size.)
-- [ ] Replace "load all models" in stats/dashboard services with SQL aggregates or windowed queries (e.g. eBay `dashboard()` / `stats()`)
-- [ ] Reduce per-table query fan-out on the schema pages (`admin/system/database` 338 q, `database-incubation` 344 q): `IncubatingSchemaTableClassifier::detailsForTables()` calls `detailsForTable()` in a per-table loop (×25) — batch the per-table lookups.
+- [x] (Schema browser `DatabaseTables\Index` already paginates 25/page — its HTML is fine.)
+- [~] **eBay `stats()` — investigated, deferred (needs a persisted column, not an aggregate).** `Ebay\Index::stats()` loads all listings (`Listing::…->get()`) because the seven reconciliation buckets are computed by `EbayListingAuditService::state()` — per-listing domain logic (`isExternallyChanged()`, `isImported()`, `adoptionState()`, comparing item ⇄ draft ⇄ listing), not a column. Converting to SQL aggregates would reimplement reconciliation logic in SQL and risk divergence on a reconciliation dashboard. The trivial counts (total/linked/unlinked) are aggregable, but the state buckets still require the full set, so there is no partial win. Real fix: persist a `reconciliation_state` column (maintained on listing/item change), then the buckets become `groupBy` counts. Left as a dedicated, tested follow-up. — claude/opus-4.8
+- [x] **Schema pages query count — investigated, no safe reduction.** `IncubatingSchemaTableClassifier::detailsForTables()` is already batched (single `whereIn`; `detailsForTable()` runs no queries). The ~338 q come from `TableRegistry::reconcile()` in `mount()` (schema introspection that prunes orphaned registry rows) — correctness-sensitive and admin-only/low-traffic. Not reduced. — claude/opus-4.8
 
 ### Phase 4 — Defer secondary sections (main body)
 
