@@ -9,7 +9,6 @@ use App\Modules\People\Claim\Models\ClaimPolicy;
 use App\Modules\People\Claim\Models\ClaimPolicyBand;
 use App\Modules\People\Claim\Models\ClaimType;
 use App\Modules\People\Claim\Services\ClaimPolicyEvaluationService;
-use DateTimeImmutable;
 
 /**
  * Build a service-year-banded policy:
