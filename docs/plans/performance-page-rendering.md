@@ -99,5 +99,5 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 
 ### Phase 6 — Guardrails
 
-- [ ] Document the conventions in a guide and point the relevant `AGENTS.md` at it
-- [ ] Add a lightweight check (test or script, reusing the Phase 1 harness) that flags pages exceeding the HTML budget so regressions surface in review
+- [x] Documented the conventions in `docs/guides/page-rendering-performance.md` (measure → diagnose → fix table: paginate / `#[Lazy]` islands / `search-url` comboboxes) and pointed `resources/core/views/AGENTS.md` (Performant principle) at it. — claude/opus-4.8
+- [x] Added the ratchet guardrail: `blb:perf:page-weights` gained `--allow=*` (allowlisted pages reported but don't fail `--strict`), and `tests/Feature/System/PageWeightBudgetTest.php` runs it at the 150 KB budget. Allowlist currently `['commerce/catalog']`. A new page over budget fails CI. — claude/opus-4.8

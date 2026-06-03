@@ -27,6 +27,7 @@ class PageWeightAuditCommand extends Command
     protected $signature = 'blb:perf:page-weights
                             {--max-kb= : Flag pages whose rendered HTML exceeds this many KB}
                             {--strict : Exit non-zero if any page exceeds --max-kb (CI guardrail)}
+                            {--allow=* : Page URIs exempted from --strict (known/accepted over-budget pages)}
                             {--limit=40 : Number of rows to print}';
 
     public function handle(): int
@@ -83,9 +84,16 @@ class PageWeightAuditCommand extends Command
         uasort($rendered, static fn (array $a, array $b): int => $b['kb'] <=> $a['kb']);
 
         $maxKb = $this->option('max-kb') !== null ? (float) $this->option('max-kb') : null;
+        $allow = (array) $this->option('allow');
         $overBudget = $maxKb !== null
             ? array_filter($rendered, static fn (array $r): bool => $r['kb'] > $maxKb)
             : [];
+
+        // Pages on the allowlist are reported but do not fail --strict (the ratchet).
+        $unaccountedOverBudget = array_filter(
+            $overBudget,
+            static fn (array $r): bool => ! in_array($r['page'], $allow, true),
+        );
 
         $table = [];
         foreach (array_slice($rendered, 0, (int) $this->option('limit'), true) as $r) {
@@ -101,9 +109,18 @@ class PageWeightAuditCommand extends Command
         ));
 
         if ($maxKb !== null) {
-            $this->components->info(sprintf('%d page(s) over %s KB.', count($overBudget), $maxKb));
+            $this->components->info(sprintf(
+                '%d page(s) over %s KB (%d allowlisted).',
+                count($overBudget),
+                $maxKb,
+                count($overBudget) - count($unaccountedOverBudget),
+            ));
 
-            if ($this->option('strict') && $overBudget !== []) {
+            if ($this->option('strict') && $unaccountedOverBudget !== []) {
+                foreach ($unaccountedOverBudget as $r) {
+                    $this->components->error(sprintf('%s is %s KB, over the %s KB budget.', $r['page'], $r['kb'], $maxKb));
+                }
+
                 return self::FAILURE;
             }
         }
