@@ -199,7 +199,7 @@ class RunDiagnosticService
     public function recentRunsQuery(string $search = ''): Builder
     {
         $query = AiRun::query()
-            ->with(['employee'])
+            ->with(['employee', 'calls'])
             ->orderByDesc('started_at')
             ->orderByDesc('created_at');
 
