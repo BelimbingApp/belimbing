@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
+use App\Modules\Core\AI\Livewire\Providers\CatalogBrowser;
 use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
@@ -132,6 +133,33 @@ test('providers page explains how to activate Lara when no active model is confi
         ->assertSee('Lara stays inactive until one connected provider has an active model available to Agents.')
         ->assertSee('Connect a provider below and enable at least one model. If Lara still needs provisioning afterward, finish it on the')
         ->assertSee('href="'.route('admin.setup.lara').'"', false);
+});
+
+test('provider catalog is a lazy island kept out of the page initial paint', function (): void {
+    $user = createAiProvidersTestUser();
+    $this->actingAs($user);
+
+    // The full-page component must defer the ~100-row models.dev catalog: its
+    // initial HTML carries only the lazy placeholder, not the catalog UI.
+    Livewire::test(Providers::class)
+        ->assertSee('Loading provider catalog')
+        ->assertDontSee('Search providers...');
+});
+
+test('provider catalog island renders the catalog once lazily loaded', function (): void {
+    $user = createAiProvidersTestUser();
+    $this->actingAs($user);
+
+    $component = Livewire::test(CatalogBrowser::class);
+    $component->assertDontSee('Search providers...');
+
+    // Hydrate the lazy island the way Alpine's x-intersect would in the browser.
+    preg_match('/__lazyLoad\(&#039;([^&]+)&#039;\)/', $component->html(), $matches);
+    expect($matches[1] ?? null)->not->toBeNull();
+
+    $component->call('__lazyLoad', $matches[1])
+        ->assertSee('Search providers...')
+        ->assertSee('Connect');
 });
 
 function createAiProvidersTestUser(): User

@@ -37,9 +37,6 @@ class Providers extends Component implements ProvidesLaraPageContext
     /** Which connected provider row is expanded to show models. */
     public ?int $expandedProviderId = null;
 
-    /** Which catalog provider row is expanded to show model details. */
-    public ?string $expandedCatalogProvider = null;
-
     /**
      * Provider-owned advanced settings schema for the edit modal.
      *
@@ -67,24 +64,6 @@ class Providers extends Component implements ProvidesLaraPageContext
     public function toggleProvider(int $providerId): void
     {
         $this->expandedProviderId = $this->expandedProviderId === $providerId ? null : $providerId;
-    }
-
-    /**
-     * Toggle expansion of a catalog provider row.
-     */
-    public function toggleCatalogProvider(string $key): void
-    {
-        $this->expandedCatalogProvider = $this->expandedCatalogProvider === $key ? null : $key;
-    }
-
-    /**
-     * Navigate to the setup page for a single provider.
-     *
-     * @param  string  $key  Provider key to connect
-     */
-    public function connectProvider(string $key): void
-    {
-        $this->redirectRoute('admin.ai.providers.setup', ['providerKey' => $key], navigate: true);
     }
 
     protected function afterOpenEditProvider(AiProvider $provider): void
@@ -196,13 +175,11 @@ class Providers extends Component implements ProvidesLaraPageContext
 
     public function render(): View
     {
-        $catalogService = app(ModelCatalogService::class);
         $companyId = $this->getCompanyId();
 
         // ── Connected providers (top section) ──
         $providers = collect();
         $expandedModels = collect();
-        $connectedNames = [];
 
         if ($companyId !== null) {
             $providers = AiProvider::query()
@@ -211,7 +188,6 @@ class Providers extends Component implements ProvidesLaraPageContext
                 ->orderBy('priority')
                 ->orderBy('display_name')
                 ->get();
-            $connectedNames = AiProvider::query()->forCompany($companyId)->pluck('name')->all();
 
             if ($this->expandedProviderId !== null) {
                 $expandedModels = AiProviderModel::query()
@@ -221,38 +197,10 @@ class Providers extends Component implements ProvidesLaraPageContext
             }
         }
 
-        // ── Provider catalog (bottom section) ──
-        $allProviders = $catalogService->getProviders();
-
-        $catalog = collect($allProviders)
-            ->map(function ($tpl, $key) use ($connectedNames) {
-                $models = is_array($tpl['models'] ?? null) ? $tpl['models'] : [];
-
-                return [
-                    'key' => $key,
-                    'display_name' => $tpl['display_name'] ?? $key,
-                    'description' => $tpl['description'] ?? '',
-                    'base_url' => $tpl['base_url'] ?? '',
-                    'api_key_url' => $tpl['api_key_url'] ?? null,
-                    'auth_type' => $tpl['auth_type'] ?? 'api_key',
-                    'category' => $tpl['category'] ?? ['specialized'],
-                    'region' => $tpl['region'] ?? ['global'],
-                    'model_count' => count($models),
-                    'cost_range' => $this->extractCostRange($models),
-                    'models' => collect($models)->map(fn ($m, $id) => [
-                        'model_id' => is_string($id) ? $id : ($m['id'] ?? ''),
-                        'display_name' => $m['name'] ?? $m['id'] ?? $id,
-                        'context_window' => $m['limit']['context'] ?? null,
-                        'max_tokens' => $m['limit']['output'] ?? null,
-                        'cost' => $m['cost'] ?? [],
-                    ])->values()->all(),
-                    'connected' => in_array($key, $connectedNames, true),
-                ];
-            })
-            ->sortBy('display_name', SORT_NATURAL | SORT_FLAG_CASE)
-            ->values();
-
-        $templates = collect($allProviders)
+        // Templates for the manual-add modal. The full provider catalog (the
+        // "Add a Provider" discovery section) is rendered by the lazy
+        // <livewire:admin.ai.providers.catalog-browser> island instead.
+        $templates = collect(app(ModelCatalogService::class)->getProviders())
             ->map(fn ($t, $key) => ['value' => $key, 'label' => $t['display_name'] ?? $key])
             ->values()
             ->all();
@@ -262,43 +210,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             'expandedModels' => $expandedModels,
             'templateOptions' => $templates,
             'laraActivated' => Employee::laraActivationState() === true,
-            'catalog' => $catalog->all(),
-            'categoryOptions' => $catalog->pluck('category')->flatten()->unique()->sort()->values()->all(),
-            'regionOptions' => $catalog->pluck('region')->flatten()->unique()->sort()->values()->all(),
         ]);
-    }
-
-    /**
-     * Extract a min/max cost range from a provider's model list.
-     *
-     * Scans input and output costs across all models. Returns null when no
-     * costs are available, a single float when min equals max, or an
-     * associative array with 'min' and 'max' keys.
-     *
-     * @param  array<array-key, array<string, mixed>>  $models  Raw model data from catalog
-     * @return float|array{min: float, max: float}|null
-     */
-    private function extractCostRange(array $models): float|array|null
-    {
-        $costs = [];
-
-        foreach ($models as $m) {
-            foreach (['input', 'output'] as $dim) {
-                $c = $m['cost'][$dim] ?? null;
-                if ($c !== null && $c !== '') {
-                    $costs[] = (float) $c;
-                }
-            }
-        }
-
-        if ($costs === []) {
-            return null;
-        }
-
-        $min = min($costs);
-        $max = max($costs);
-
-        return $min === $max ? $min : ['min' => $min, 'max' => $max];
     }
 
     private function getCompanyId(): ?int

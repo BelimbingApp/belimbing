@@ -83,7 +83,8 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 
 ### Phase 4 — Defer secondary sections (main body)
 
-- [ ] Convert secondary dashboard panels, inactive tabs, and below-the-fold widgets to lazy islands
+- [x] **`admin/ai/providers`** (was the #1 offender, 544 KB): extracted the below-the-fold "Add a Provider" catalog (the ~100-row models.dev list) into a `#[Lazy]` child island `App\Modules\Core\AI\Livewire\Providers\CatalogBrowser` with a skeleton `placeholder()`. Initial page HTML **544 KB → ~54 KB** (−90%); the catalog (~476 KB) streams in on `x-intersect` after first paint. Regression tests in `ProvidersUiTest` lock in the deferral + the lazy-loaded content. — claude/opus-4.8
+- [ ] Convert remaining secondary dashboard panels, inactive tabs, and below-the-fold widgets to lazy islands
 - [ ] Re-measure converted pages against the budget
 
 ### Phase 5 — Visible-only detail (main body)
