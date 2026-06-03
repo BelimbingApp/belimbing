@@ -56,9 +56,11 @@ These follow the project's Deep-Modules and Strategic-Programming principles: in
 
 Goal: replace guesswork with a ranked list of what to fix.
 
-- [ ] Build a repeatable harness that renders each Livewire page component (authenticated) and reports rendered HTML size, collection/row counts, and embedded-component count
-- [ ] Produce a ranked page-weight inventory; classify each heavy page (unbounded list, eager-secondary, dense-detail)
-- [ ] Record the initial-HTML budget (~150 KB) and the current worst offenders as the baseline
+- [x] Built `blb:perf:page-weights` (`App\Base\System\Console\Commands\PageWeightAuditCommand`): renders every no-param full-page Livewire component and ranks by HTML KB, query count, and island count. `--max-kb`/`--strict` doubles as the Phase 6 budget guardrail. — claude/opus-4.8
+- [x] Inventory produced (dev DB; real-data weights are higher). Top offenders / classifications:
+  - `admin/ai/providers` **544 KB** (6 q), `admin/system/menu-inspector` **383 KB**, `admin/addresses/create` **255 KB** (a *create form* — suspect a giant embedded country/region list → dense-detail), `admin/authz/capabilities` 154 KB, `commerce/catalog` 152 KB — **oversized DOM** to trim/lazy.
+  - Query-count smells (eager, not N+1 — `preventLazyLoading` is on): `admin/system/database-incubation` **344 q**, `admin/system/database` **338 q**, `people/employees` 59 q, `people/attendance/rosters` 37 q — **chatty renders** to batch/aggregate.
+- [x] Budget set at **~150 KB** initial HTML; 5 pages currently exceed it (`blb:perf:page-weights --max-kb=150`). — claude/opus-4.8
 
 ### Phase 2 — Island shell foundation (priority)
 

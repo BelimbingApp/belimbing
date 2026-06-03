@@ -4,6 +4,7 @@ namespace App\Base\System;
 
 use App\Base\System\Console\Commands\KeyGenerateCommand;
 use App\Base\System\Console\Commands\KeyRotateCommand;
+use App\Base\System\Console\Commands\PageWeightAuditCommand;
 use App\Base\System\Console\Commands\TestCommand;
 use Illuminate\Foundation\Console\KeyGenerateCommand as LaravelKeyGenerateCommand;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -20,6 +21,7 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->commands([
             KeyRotateCommand::class,
+            PageWeightAuditCommand::class,
         ]);
     }
 }
