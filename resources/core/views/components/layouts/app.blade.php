@@ -247,6 +247,7 @@
         if (! window.__laraChatNavWired) {
             window.__laraChatNavWired = true;
             let sidebarScroll = [];
+            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             // Mark the single best-matching menu link active (data-current), mirroring
             // the old server logic: an exact URL match wins; otherwise the longest
             // segment-prefix wins. This avoids the double-highlight that wire:current's
@@ -292,12 +293,24 @@
             // navigate we recompute the active link, expand its ancestor groups
             // (mirroring the old server has_active_child), and restore scroll.
             document.addEventListener('livewire:navigated', () => {
+                const main = document.querySelector('main');
+                // EXPERIMENT: deliberately slow (2s) so the effect is clearly visible.
+                if (main && ! reduceMotion) {
+                    main.style.transition = 'none';
+                    main.style.opacity = '0';
+                    main.style.transform = 'translateY(16px)';
+                }
                 requestAnimationFrame(() => {
                     markActiveMenu();
                     expandActiveGroups();
                     document.querySelectorAll('aside nav').forEach((nav, i) => {
                         if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
                     });
+                    if (main && ! reduceMotion) {
+                        main.style.transition = 'opacity 2000ms ease-out, transform 2000ms ease-out';
+                        main.style.opacity = '1';
+                        main.style.transform = 'translateY(0)';
+                    }
                 });
             });
             markActiveMenu(); // initial hard load
