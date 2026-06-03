@@ -25,7 +25,7 @@
             x-show="sidebarRail"
             x-cloak
             href="{{ $href }}"
-            @if($item->route) wire:navigate wire:current @endif
+            @if($item->route) wire:navigate @endif
             class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle data-[current]:bg-surface-card data-[current]:text-ink"
             aria-label="{{ __($item->label) }}"
             title="{{ $tooltip }}"
@@ -55,7 +55,7 @@
 
             <a
                 href="{{ $href }}"
-                @if($item->route) wire:navigate wire:current @endif
+                @if($item->route) wire:navigate @endif
                 class="truncate flex-1"
                 title="{{ $tooltip }}"
             >{{ __($item->label) }}</a>

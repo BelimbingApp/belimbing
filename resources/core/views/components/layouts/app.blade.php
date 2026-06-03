@@ -247,6 +247,39 @@
         if (! window.__laraChatNavWired) {
             window.__laraChatNavWired = true;
             let sidebarScroll = [];
+            // Mark the single best-matching menu link active (data-current), mirroring
+            // the old server logic: an exact URL match wins; otherwise the longest
+            // segment-prefix wins. This avoids the double-highlight that wire:current's
+            // plain prefix match caused for sibling links like /people/leave and
+            // /people/leave/approvals. CSS styles everything from [data-current].
+            const markActiveMenu = () => {
+                const norm = (path) => (path.replace(/\/+$/, '') || '/');
+                const cur = norm(location.pathname);
+                const links = [...document.querySelectorAll('aside nav a[href]')];
+                let best = -1;
+                const scored = links.map((a) => {
+                    const lp = norm(new URL(a.getAttribute('href'), location.href).pathname);
+                    let score = -1;
+                    if (lp === cur) score = 100000 + lp.length;           // exact wins outright
+                    else if (cur === lp || cur.startsWith(lp + '/')) score = lp.length; // longest prefix
+                    if (score > best) best = score;
+                    return { a, score };
+                });
+                scored.forEach(({ a, score }) => {
+                    if (best >= 0 && score === best) a.setAttribute('data-current', '');
+                    else a.removeAttribute('data-current');
+                });
+            };
+            const expandActiveGroups = () => {
+                document.querySelectorAll('aside [data-current]').forEach((link) => {
+                    let li = link.closest('li');
+                    while (li) {
+                        const data = window.Alpine?.$data(li);
+                        if (data && 'expanded' in data) data.expanded = true;
+                        li = li.parentElement?.closest('li');
+                    }
+                });
+            };
             document.addEventListener('livewire:navigating', () => {
                 const c = document.getElementById('lara-chat-instance');
                 const h = document.getElementById('lara-chat-home');
@@ -255,25 +288,19 @@
                 // inner scroll containers to the top — remember the scroll first.
                 sidebarScroll = [...document.querySelectorAll('aside nav')].map((nav) => nav.scrollTop);
             });
-            // Sidebar island: the persisted menu is not re-rendered on navigation,
-            // so after wire:current marks the active link (data-current) we expand
-            // its ancestor groups client-side to mirror the old server has_active_child,
-            // then restore the scroll position so the menu stays where the user left it.
+            // The persisted menu is not re-rendered on navigation, so after each
+            // navigate we recompute the active link, expand its ancestor groups
+            // (mirroring the old server has_active_child), and restore scroll.
             document.addEventListener('livewire:navigated', () => {
                 requestAnimationFrame(() => {
-                    document.querySelectorAll('aside [data-current]').forEach((link) => {
-                        let li = link.closest('li');
-                        while (li) {
-                            const data = window.Alpine?.$data(li);
-                            if (data && 'expanded' in data) data.expanded = true;
-                            li = li.parentElement?.closest('li');
-                        }
-                    });
+                    markActiveMenu();
+                    expandActiveGroups();
                     document.querySelectorAll('aside nav').forEach((nav, i) => {
                         if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
                     });
                 });
             });
+            markActiveMenu(); // initial hard load
         }
     "
     @toggle-sidebar.window="toggleSidebar()"
