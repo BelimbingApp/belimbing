@@ -78,14 +78,18 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 
 ### Phase 3 — Bound every list (main body)
 
-- [ ] From the inventory, add pagination (shared concerns) to list/table views lacking it — the schema browser (`DatabaseTables\Index`) is the first target
+- [x] `admin/system/menu-inspector` (383 KB → ~85 KB): rendered every menu item as a wide, badge-laden row. Already server-filtered, so paginated the in-memory filtered collection (25/page, `LengthAwarePaginator` + `WithPagination`; filters reset to page 1). Regression tests in `MenuInspectorTest`. — claude/opus-4.8
+- [x] `admin/authz/capabilities` (154 KB → 60 KB): same pattern — paginated the in-memory capability list (50/page); search/domain/sort reset to page 1. Regression tests in `CapabilitiesIndexTest`. — claude/opus-4.8
+- [ ] (Schema browser `DatabaseTables\Index` already paginates 25/page — its issue is query count, see Phase 3 query note below, not HTML size.)
 - [ ] Replace "load all models" in stats/dashboard services with SQL aggregates or windowed queries (e.g. eBay `dashboard()` / `stats()`)
+- [ ] Reduce per-table query fan-out on the schema pages (`admin/system/database` 338 q, `database-incubation` 344 q): `IncubatingSchemaTableClassifier::detailsForTables()` calls `detailsForTable()` in a per-table loop (×25) — batch the per-table lookups.
 
 ### Phase 4 — Defer secondary sections (main body)
 
 - [x] **`admin/ai/providers`** (was the #1 offender, 544 KB): extracted the below-the-fold "Add a Provider" catalog (the ~100-row models.dev list) into a `#[Lazy]` child island `App\Modules\Core\AI\Livewire\Providers\CatalogBrowser` with a skeleton `placeholder()`. Initial page HTML **544 KB → ~54 KB** (−90%); the catalog (~476 KB) streams in on `x-intersect` after first paint. Regression tests in `ProvidersUiTest` lock in the deferral + the lazy-loaded content. — claude/opus-4.8
 - [ ] Convert remaining secondary dashboard panels, inactive tabs, and below-the-fold widgets to lazy islands
 - [ ] Re-measure converted pages against the budget
+- [ ] **`commerce/catalog` (152 KB, ~2 KB over the soft target):** the tab body already renders only the active tab, but all three tab **forms (modals)** — `category-form`, `template-form`, `attribute-form` — are always included, so their option data (categories/templates/attribute-types) is loaded every render regardless of tab. The remaining weight is those always-mounted modals. Fix is to lazy-mount the modals (only render on open); deferred — marginal overage, and a higher-risk change in the Commerce module. Tracked on the budget allowlist.
 
 ### Phase 5 — Visible-only detail (main body)
 
