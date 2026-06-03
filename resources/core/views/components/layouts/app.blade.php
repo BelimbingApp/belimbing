@@ -246,14 +246,19 @@
         $nextTick(() => teleportLaraChat());
         if (! window.__laraChatNavWired) {
             window.__laraChatNavWired = true;
+            let sidebarScroll = [];
             document.addEventListener('livewire:navigating', () => {
                 const c = document.getElementById('lara-chat-instance');
                 const h = document.getElementById('lara-chat-home');
                 if (c && h && c.parentNode !== h) h.appendChild(c);
+                // Persisting moves the sidebar node into the new page, which resets
+                // inner scroll containers to the top — remember the scroll first.
+                sidebarScroll = [...document.querySelectorAll('aside nav')].map((nav) => nav.scrollTop);
             });
             // Sidebar island: the persisted menu is not re-rendered on navigation,
             // so after wire:current marks the active link (data-current) we expand
-            // its ancestor groups client-side to mirror the old server has_active_child.
+            // its ancestor groups client-side to mirror the old server has_active_child,
+            // then restore the scroll position so the menu stays where the user left it.
             document.addEventListener('livewire:navigated', () => {
                 requestAnimationFrame(() => {
                     document.querySelectorAll('aside [data-current]').forEach((link) => {
@@ -263,6 +268,9 @@
                             if (data && 'expanded' in data) data.expanded = true;
                             li = li.parentElement?.closest('li');
                         }
+                    });
+                    document.querySelectorAll('aside nav').forEach((nav, i) => {
+                        if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
                     });
                 });
             });
