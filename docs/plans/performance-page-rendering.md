@@ -1,6 +1,6 @@
 # performance-page-rendering
 
-**Status:** Implemented — Phases 1–6 done (Phase 2 chat + sidebar island both shipped; one residual `commerce/catalog` allowlisted)
+**Status:** Implemented — Phases 1–6 done (Phase 2 chat + sidebar island both shipped; one residual `commerce/catalog` allowlisted). **Open:** residual navigation "page blink" — investigation + theory + next steps logged under Phase 2 ("Navigation-feel follow-ups").
 **Last Updated:** 2026-06-03
 **Sources:** `docs/installation/windows.md` (Performance §); Chrome traces `Trace-20260601T220533` and `Trace-20260602T111445` (analysed in session); `resources/core/views/components/layouts/app.blade.php`; `resources/core/views/components/menu/`; `app/Modules/Core/AI/Livewire/Chat.php`; `app/Base/Menu/ServiceProvider.php`; `app/Base/Database/Livewire/DatabaseTables/Index.php`; `app/Modules/Commerce/Marketplace/Livewire/Ebay/Index.php`; Livewire 4.3 features `SupportIslands`, `SupportWireCurrent`, `SupportNavigate` (`@persist`/`livewire:navigated`), `LazyLoading`, `Computed`; related plan `framework-modernization.md`
 **Agents:** claude/opus-4.8
@@ -88,6 +88,31 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 > 4. **Staleness coordination** for the persisted tree: on company-switch/impersonation/menu-change, dispatch an event the island listens for to refresh its structure (or fall back to a hard load), since the persisted HTML won't otherwise reflect the new permission-filtered tree.
 >
 > Landed safely via the iterative Playwright loop (same approach as the chat-persist work): the every-page failure modes (stale highlight, mis-expanded groups, frozen tree) were each checked against a logged-in admin before shipping.
+
+#### Navigation-feel follow-ups (shipped) and the unresolved "page blink"
+
+After the sidebar island shipped, a user-reported "every menu click feels like a page refresh" drove a series of fixes. **Shipped + browser-verified:**
+
+- **Single active highlight (no double-highlight).** `wire:current`'s default segment-prefix match lit up *both* sibling links when one path prefixes another (e.g. `/people/leave` *and* `/people/leave/approvals` — "Leave" is a route-less container whose children are sibling leaves). `wire:current` can't express "exact wins, else longest prefix", so it was replaced with a small deterministic JS pass (`markActiveMenu` in `app.blade.php`) that scores every menu link and sets `data-current` on only the best match. All active styling flows from `[data-current]` via Tailwind `data-`/`group-has-` variants.
+- **Sidebar scroll preserved across navigation.** `@persist` moves (detaches/re-attaches) the sidebar node during the morph, which resets inner `overflow-y-auto` scroll to the top — so a click on a bottom menu item jumped the menu to the top. Fixed by saving `scrollTop` on `livewire:navigating` and restoring it on `livewire:navigated`.
+- **Top bar + status bar are now persisted islands too.** Measured: both full-width bars were being *replaced* (new DOM nodes, ~13 mutations on the top bar) on every navigation — a full-width flash top and bottom. Both are page-independent, so wrapped each in `@persist`. Now sidebar, top bar, status bar, and chat are all the same DOM node across navigation; only `<main>` changes.
+- **Persisted-chrome `x-cloak` flash removed.** On navigate, Livewire re-inits Alpine and briefly re-adds `x-cloak` to the persisted chrome (including the `<aside>` root); Livewire's *own* injected `[x-cloak]{display:none!important}` (`vendor/livewire/.../FrontendAssets.php`) then hid the whole sidebar for one frame. That injected `!important` rule can't be overridden by scoping our CSS, so a `MutationObserver` strips `x-cloak` from chrome outside `<main>` the instant it reappears (microtask, before paint). Gated on a `data-alpine-ready` flag (set on `alpine:initialized`) so initial-load FOUC protection is intact.
+- **Livewire `wire:navigate` progress bar disabled** (`config/livewire.php` → `navigate.show_progress_bar = false`). A frame-by-frame screencast showed its `#2299dd` bar sweeping the top edge on every navigation — read as a flash on this fast/local app.
+- A short main-body slide/fade was tried (150ms → 2s for visibility) and **removed** — the user found it didn't address the "blink".
+
+**Unresolved: a residual "page blink" on every navigation.** After all of the above the user still perceives a blink. What a CDP screencast (≈28 ms/frame) of a `Companies → Addresses` navigation *ruled out*: no full reload (it's a `fetch`/SPA), **no blank/white frame**, **no chrome flash** (sidebar/top/status bars pixel-identical every frame), and (after the fix) no progress bar. The content swapped cleanly in a single frame.
+
+**Leading theory (to revisit):** the blink is the **single-frame repaint of the entire `<main>` region** that is intrinsic to `wire:navigate` — Livewire morphs the whole content subtree at once, and the eye reads a sudden full-region change as a flash even with no blank frame and no reload. It is page-level SPA navigation, not a surgical single-`div` update.
+
+**Not yet tried — next steps when we return to this:**
+1. **Production build / no Vite dev server.** All testing was against `npm run dev` (Vite HMR injects CSS as `<style>` and adds dev overhead). Run `npm run build` + serve built assets and re-judge — this isolates whether any of the blink is a dev-mode rendering artifact.
+2. **Layout-shift / scrollbar check.** `<main>` is `overflow-y-auto`; if the new page's content height differs, the scrollbar appears/disappears and the layout shifts ~15 px — a reflow that reads as a blink. Try `scrollbar-gutter: stable` on the scroll container and re-judge.
+3. **Higher-fps / true-video capture.** 28 ms/frame can miss a sub-frame (~16 ms) blank; confirm with a real video or `requestVideoFrameCallback`-level capture whether any single blank frame exists.
+4. **Granular islands for the main body.** Livewire 4 islands could update sub-regions of the page instead of swapping all of `<main>`, so navigation within a section repaints less area (closer to "only the changed div updates").
+5. **`document.startViewTransition()` (View Transitions API).** Wire it around the `wire:navigate` swap for a browser-native cross-fade — the canonical way to make a full-region swap read as smooth rather than a blink. (Chrome-only today.)
+6. **Subtle content fade** (~100–150 ms opacity). Previously declined, but every *other* navigation artifact is now gone, so a fade would isolate and soften exactly this content swap. Cheapest lever if (1)–(2) don't explain it.
+
+Working hypothesis going in: this is likely inherent `wire:navigate` behavior, and (5) or (6) is the realistic "fix" (soften, not eliminate). Confirm (1) and (2) first — they're cheap and could reveal a real, removable cause.
 
 ### Phase 3 — Bound every list (main body)
 
