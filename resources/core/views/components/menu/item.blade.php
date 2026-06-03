@@ -2,7 +2,7 @@
 
 <li
     x-data="{ expanded: {{ $hasActiveChild ? 'true' : 'false' }} }"
-    class="relative"
+    class="group/menuitem relative"
 >
     @php
         $iconName = $item->icon ?? 'heroicon-o-squares-2x2';
@@ -25,16 +25,18 @@
             x-show="sidebarRail"
             x-cloak
             href="{{ $href }}"
-            @if($item->route) wire:navigate @endif
-            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isActive ? 'bg-surface-card text-ink' : 'text-link hover:bg-surface-subtle' }}"
+            @if($item->route) wire:navigate wire:current @endif
+            class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle data-[current]:bg-surface-card data-[current]:text-ink"
             aria-label="{{ __($item->label) }}"
             title="{{ $tooltip }}"
         >
             <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
         </a>
 
-        {{-- Link item: expanded variant --}}
-        <div x-show="!sidebarRail" x-cloak class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link {{ $isActive ? 'bg-surface-card text-ink font-medium' : 'hover:bg-surface-subtle font-normal' }}">
+        {{-- Link item: expanded variant. Active state is driven client-side by
+             wire:current (it sets data-current on the matching link), so the
+             persisted sidebar's highlight tracks navigation without a re-render. --}}
+        <div x-show="!sidebarRail" x-cloak class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link font-normal hover:bg-surface-subtle has-[[data-current]]:bg-surface-card has-[[data-current]]:text-ink has-[[data-current]]:font-medium">
             @if(count($children) > 0)
                 <span
                     @click.prevent="expanded = !expanded"
@@ -53,7 +55,7 @@
 
             <a
                 href="{{ $href }}"
-                @if($item->route) wire:navigate @endif
+                @if($item->route) wire:navigate wire:current @endif
                 class="truncate flex-1"
                 title="{{ $tooltip }}"
             >{{ __($item->label) }}</a>
@@ -77,7 +79,7 @@
             x-cloak
             type="button"
             @click="expanded = !expanded"
-            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : ($hasActiveChild ? 'text-ink' : 'text-link hover:bg-surface-subtle') }}"
+            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : 'text-link hover:bg-surface-subtle group-has-[[data-current]]/menuitem:text-ink' }}"
             aria-label="{{ __($item->label) }}"
             title="{{ $tooltip }}"
         >
@@ -89,7 +91,7 @@
             x-show="!sidebarRail"
             x-cloak
             @click="expanded = !expanded"
-            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition text-link {{ $hasActiveChild ? 'font-medium' : 'font-normal hover:bg-surface-subtle' }}"
+            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition text-link font-normal hover:bg-surface-subtle group-has-[[data-current]]/menuitem:font-medium"
             title="{{ $tooltip }}"
         >
             <span class="text-[12px] shrink-0 text-link w-3 text-center" aria-hidden="true">

@@ -251,6 +251,21 @@
                 const h = document.getElementById('lara-chat-home');
                 if (c && h && c.parentNode !== h) h.appendChild(c);
             });
+            // Sidebar island: the persisted menu is not re-rendered on navigation,
+            // so after wire:current marks the active link (data-current) we expand
+            // its ancestor groups client-side to mirror the old server has_active_child.
+            document.addEventListener('livewire:navigated', () => {
+                requestAnimationFrame(() => {
+                    document.querySelectorAll('aside [data-current]').forEach((link) => {
+                        let li = link.closest('li');
+                        while (li) {
+                            const data = window.Alpine?.$data(li);
+                            if (data && 'expanded' in data) data.expanded = true;
+                            li = li.parentElement?.closest('li');
+                        }
+                    });
+                });
+            });
         }
     "
     @toggle-sidebar.window="toggleSidebar()"
@@ -280,7 +295,12 @@
             class="hidden lg:flex shrink-0 relative"
             :style="'width: ' + sidebarWidth + 'px'"
         >
-            <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+            {{-- Sidebar island: @persist keeps the menu DOM across wire:navigate
+                 so only the main body re-renders. Active state tracks the URL via
+                 wire:current; pins already sync client-side. --}}
+            @persist('sidebar-desktop')
+                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+            @endpersist
 
             {{-- Drag handle --}}
             <div
@@ -316,7 +336,9 @@
             class="lg:hidden fixed top-11 bottom-6 left-0 z-40 w-56"
             style="display: none;"
         >
-            <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
+            @persist('sidebar-mobile')
+                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
+            @endpersist
         </div>
 
         <main class="relative flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
