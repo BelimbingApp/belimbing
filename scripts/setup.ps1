@@ -67,6 +67,11 @@ function Write-Ok {
     Write-Output "OK  $Message"
 }
 
+function Write-Warn {
+    param([string] $Message)
+    Write-Warning $Message
+}
+
 function Resolve-FrankenPhpHome {
     if ($env:FRANKENPHP_INSTALL) {
         return $env:FRANKENPHP_INSTALL
@@ -353,6 +358,51 @@ variables_order=EGPCS
         throw "Missing PHP extensions: $($missingExtensions -join ', '). Ensure FrankenPHP is correctly installed in '$frankenPhpHome'."
     }
     Write-Ok "Required PHP extensions are enabled"
+
+    Write-Step "Ensuring command-line PHP can encrypt backups (sodium)"
+    # The verification above and the running app both load the project ini via
+    # PHPRC, which enables sodium. But bare command-line invocations (php artisan
+    # test, php artisan blb:db:backup, scheduled tasks) load FrankenPHP's own
+    # php.ini, which does not enable sodium by default. Without it, app-key
+    # encrypted backups fail with "Required tool not available: ext-sodium". The
+    # php_sodium extension already ships in the extension dir the CLI uses, so a
+    # single line in that ini is enough. We inspect the CLI ini with PHPRC
+    # cleared so we see FrankenPHP's default, not the project ini.
+    $savedPhprc = $env:PHPRC
+    $env:PHPRC = $null
+    $cliIni = (& $script:PhpExe -r "echo (string) php_ini_loaded_file();" 2>$null | Out-String).Trim()
+    $cliHasSodium = ((& $script:PhpExe -r "echo extension_loaded('sodium') ? 'yes' : 'no';" 2>$null | Out-String).Trim() -eq 'yes')
+    $env:PHPRC = $savedPhprc
+
+    if ($cliHasSodium) {
+        Write-Ok "Command-line PHP already has sodium enabled"
+    }
+    elseif (-not $cliIni) {
+        Write-Warn "Command-line PHP loads no php.ini, so sodium cannot be enabled automatically. Run CLI commands with `$env:PHPRC='$PhpConfigDir' (or set it as a user environment variable)."
+    }
+    else {
+        $iniBody = Get-Content -Path $cliIni -Raw -ErrorAction SilentlyContinue
+        if ($iniBody -match '(?m)^\s*extension\s*=\s*sodium\b') {
+            Write-Warn "sodium is declared in $cliIni but not loading; check 'extension_dir' there."
+        }
+        else {
+            try {
+                Add-Content -Path $cliIni -Value "`nextension=sodium" -Encoding ASCII -ErrorAction Stop
+                $env:PHPRC = $null
+                $cliHasSodium = ((& $script:PhpExe -r "echo extension_loaded('sodium') ? 'yes' : 'no';" 2>$null | Out-String).Trim() -eq 'yes')
+                $env:PHPRC = $savedPhprc
+                if ($cliHasSodium) {
+                    Write-Ok "Enabled sodium in command-line PHP ini: $cliIni"
+                }
+                else {
+                    Write-Warn "Added 'extension=sodium' to $cliIni but it is still not loading; verify 'extension_dir' in that file."
+                }
+            }
+            catch {
+                Write-Warn "Could not edit $cliIni (it is likely under Program Files; re-run this script in an elevated PowerShell). To enable manually, run as Administrator: Add-Content '$cliIni' 'extension=sodium'"
+            }
+        }
+    }
 
     Write-Step "Preparing .env and SQLite"
     $envPath = Join-Path $ProjectRootPath '.env'
