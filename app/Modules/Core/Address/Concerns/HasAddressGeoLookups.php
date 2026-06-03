@@ -29,6 +29,37 @@ trait HasAddressGeoLookups
     }
 
     /**
+     * Search countries by name for the combobox (server-side, JSON-API friendly).
+     *
+     * Mirrors {@see searchPostcodesInCountry()} so the country field can use the
+     * combobox's `searchUrl` mode instead of embedding all ~250 options (and
+     * their per-option Alpine markup) into the initial page HTML.
+     *
+     * @param  string  $query  Search query (empty returns the full list)
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function searchCountriesForCombobox(string $query): array
+    {
+        $q = trim($query);
+
+        $builder = Country::query()->select(['iso', 'country']);
+
+        if ($q !== '') {
+            // Portable case-insensitive contains-match: works on both SQLite
+            // (dev/test) and PostgreSQL (production) without relying on ilike.
+            $pattern = '%'.str_replace(['%', '_'], ['\\%', '\\_'], mb_strtolower($q)).'%';
+            $builder->whereRaw('LOWER(country) LIKE ?', [$pattern]);
+        }
+
+        return $builder
+            ->orderBy('country')
+            ->get()
+            ->map(fn (Country $c) => ['value' => $c->iso, 'label' => $c->country])
+            ->values()
+            ->all();
+    }
+
+    /**
      * Load admin1 (state/province) options for a country.
      *
      * Returns an array suitable for the x-ui.combobox component.

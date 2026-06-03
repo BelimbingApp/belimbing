@@ -67,7 +67,7 @@
                         wire:model.live="countryIso"
                         label="{{ __('Country') }}"
                         placeholder="{{ __('Search country...') }}"
-                        :options="$countryOptions"
+                        search-url="{{ route('admin.addresses.countries.search') }}"
                         :error="$errors->first('countryIso')"
                     />
 

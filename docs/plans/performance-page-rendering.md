@@ -95,7 +95,7 @@ Goal: navigation re-fetches only the main body; sidebar and chat are coordinated
 
 - [ ] For dense tables/detail pages, render summary rows and load per-row/expandable detail on demand
 - [ ] Re-measure the worst offenders (schema browser, eBay) against the budget
-- [ ] **Diagnosed target — `admin/addresses/create` (255 KB):** the `x-ui.combobox` `@else` branch server-renders every option as an `<li>` carrying ~10 Alpine bindings each, *and* embeds the same options as a `Js::from` JSON blob — so the ~250-country list ships twice (~175 KB of `<li>`). Fix: drive the country field through the combobox's existing `searchUrl` (client-fetch on open) mode via a small JSON country-search endpoint, so neither the heavy `<li>` list nor the full JSON is in initial HTML. Shared-component change (`resources/core/views/components/ui/combobox.blade.php` is used app-wide) — verify against the combobox's other callers before shipping. — diagnosed by claude/opus-4.8
+- [x] **`admin/addresses/create` (255 KB → 54 KB):** the country `x-ui.combobox` server-rendered all ~250 options as `<li>`s (each ~10 Alpine bindings) *and* embedded them again as a `Js::from` JSON blob. Routed the country field through the combobox's existing `searchUrl` (client-fetch on open) mode via a new `CountrySearchController` + `admin.addresses.countries.search` route + `HasAddressGeoLookups::searchCountriesForCombobox()` (portable `LOWER(...) LIKE`, works on SQLite + Postgres). No shared-component change was needed — `searchUrl` was already supported (the postcode field uses it). Regression tests in `CountrySearchTest`; existing `AddressUiTest` still green. — claude/opus-4.8
 
 ### Phase 6 — Guardrails
 

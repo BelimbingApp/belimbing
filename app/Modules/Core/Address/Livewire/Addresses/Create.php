@@ -30,12 +30,6 @@ class Create extends AbstractAddressForm
 
     public string $verificationStatus = 'unverified';
 
-    public function with(): array
-    {
-        return [
-            'countryOptions' => $this->loadCountryOptionsForCombobox(),
-        ];
-    }
 
     public function store(): void
     {
@@ -89,6 +83,6 @@ class Create extends AbstractAddressForm
 
     public function render(): View
     {
-        return view('livewire.admin.addresses.create', $this->with());
+        return view('livewire.admin.addresses.create');
     }
 }
