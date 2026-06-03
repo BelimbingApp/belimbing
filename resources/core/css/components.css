@@ -22,7 +22,15 @@
 }
 
 @layer base {
-    [x-cloak] {
+    /* x-cloak hides elements until Alpine processes them, preventing FOUC on the
+       initial load. But wire:navigate re-initializes Alpine, which briefly re-adds
+       x-cloak to persisted chrome (sidebar, bars, chat) — a one-frame flash that
+       reads as a page refresh. So only hide x-cloak (a) before Alpine first boots
+       (data-alpine-ready unset → initial load, everywhere), or (b) after boot only
+       for page content inside <main>. Persistent chrome outside <main> is never
+       re-hidden on navigation, so it no longer flashes. */
+    html:not([data-alpine-ready]) [x-cloak],
+    html[data-alpine-ready] main [x-cloak] {
         display: none !important;
     }
 

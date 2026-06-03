@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
 
+// Mark the document once Alpine has finished its first boot. After this, the
+// scoped [x-cloak] rule (resources/core/css/components.css) stops re-hiding the
+// persisted chrome (sidebar/bars/chat) during wire:navigate re-init, which
+// removes the one-frame "flash" on navigation. livewire:navigated is a belt-and-
+// braces fallback in case the initial alpine:initialized event is missed.
+{
+    const markAlpineReady = () => document.documentElement.setAttribute('data-alpine-ready', '')
+    document.addEventListener('alpine:initialized', markAlpineReady)
+    document.addEventListener('livewire:navigated', markAlpineReady)
+}
+
 const blbDateTimeOptions = (format, includeSeconds = false) => {
     const timeOptions = includeSeconds
         ? { hour: '2-digit', minute: '2-digit', second: '2-digit' }
