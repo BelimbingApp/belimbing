@@ -247,7 +247,6 @@
         if (! window.__laraChatNavWired) {
             window.__laraChatNavWired = true;
             let sidebarScroll = [];
-            const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
             // Mark the single best-matching menu link active (data-current), mirroring
             // the old server logic: an exact URL match wins; otherwise the longest
             // segment-prefix wins. This avoids the double-highlight that wire:current's
@@ -292,29 +291,13 @@
             // The persisted menu is not re-rendered on navigation, so after each
             // navigate we recompute the active link, expand its ancestor groups
             // (mirroring the old server has_active_child), and restore scroll.
-            // We also fade the swapped main body back in so navigation reads as a
-            // smooth content update rather than an abrupt repaint. main is hidden
-            // synchronously here (before the browser paints the morphed content, so
-            // there is no blink), the menu/scroll work runs while it is hidden, then
-            // it fades in. Only <main> is touched — the sidebar and chat are untouched.
             document.addEventListener('livewire:navigated', () => {
-                const main = document.querySelector('main');
-                if (main && ! reduceMotion) {
-                    main.style.transition = 'none';
-                    main.style.opacity = '0';
-                    main.style.transform = 'translateY(8px)';
-                }
                 requestAnimationFrame(() => {
                     markActiveMenu();
                     expandActiveGroups();
                     document.querySelectorAll('aside nav').forEach((nav, i) => {
                         if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
                     });
-                    if (main && ! reduceMotion) {
-                        main.style.transition = 'opacity 200ms ease-out, transform 200ms ease-out';
-                        main.style.opacity = '1';
-                        main.style.transform = 'translateY(0)';
-                    }
                 });
             });
             markActiveMenu(); // initial hard load
@@ -337,8 +320,12 @@
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
-    {{-- Top Bar --}}
-    <x-layouts.top-bar />
+    {{-- Top Bar — persisted island: its content is page-independent (logo, company,
+         user, timezone, locale), so keep the same DOM across wire:navigate instead
+         of tearing down and rebuilding the full-width bar (which read as a flash). --}}
+    @persist('top-bar')
+        <x-layouts.top-bar />
+    @endpersist
 
     {{-- Main Layout: Sidebar + Content --}}
     <div class="relative flex flex-1 overflow-hidden">
@@ -468,7 +455,10 @@
         @endpersist
     @endif
 
-    {{-- Status Bar --}}
-    <x-layouts.status-bar />
+    {{-- Status Bar — persisted island (page-independent: locale, environment,
+         impersonation/license notices). Same reasoning as the top bar. --}}
+    @persist('status-bar')
+        <x-layouts.status-bar />
+    @endpersist
 </body>
 </html>
