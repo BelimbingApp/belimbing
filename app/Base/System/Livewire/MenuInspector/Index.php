@@ -7,11 +7,19 @@ use App\Base\Menu\MenuRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use WithPagination;
+
+    /** Rows rendered per page — bounds the diagnostic table's initial HTML. */
+    private const PER_PAGE = 25;
+
     public string $search = '';
 
     public string $sourceFilter = 'all';
@@ -23,6 +31,22 @@ class Index extends Component
         $this->search = '';
         $this->sourceFilter = 'all';
         $this->kindFilter = 'all';
+        $this->resetPage();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedSourceFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedKindFilter(): void
+    {
+        $this->resetPage();
     }
 
     public function render(): View
@@ -71,8 +95,17 @@ class Index extends Component
                 || str_contains(mb_strtolower((string) $row['sourceFile']), $needle);
         })->sortBy('id')->values();
 
+        $page = $this->getPage();
+        $rows = new LengthAwarePaginator(
+            $filtered->forPage($page, self::PER_PAGE)->values(),
+            $filtered->count(),
+            self::PER_PAGE,
+            $page,
+            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'page'],
+        );
+
         return view('livewire.admin.system.menu-inspector.index', [
-            'rows' => $filtered,
+            'rows' => $rows,
             'totalCount' => $items->count(),
             'sources' => $sources,
         ]);

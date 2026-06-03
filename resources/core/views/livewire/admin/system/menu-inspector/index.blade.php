@@ -38,7 +38,7 @@
                 </div>
                 <div class="md:col-span-2 flex items-center justify-end">
                     <span class="text-sm text-muted tabular-nums">
-                        {{ count($rows) }} / {{ $totalCount }}
+                        {{ $rows->total() }} / {{ $totalCount }}
                     </span>
                 </div>
             </div>
@@ -111,6 +111,12 @@
 
 
             </x-ui.table>
+
+            @if ($rows->hasPages())
+                <div class="mt-3">
+                    {{ $rows->links() }}
+                </div>
+            @endif
         </x-ui.card>
     </div>
 </div>
