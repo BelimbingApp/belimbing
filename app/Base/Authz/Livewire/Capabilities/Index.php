@@ -4,12 +4,19 @@ namespace App\Base\Authz\Livewire\Capabilities;
 use App\Base\Authz\Capability\CapabilityKey;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Collection;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Index extends Component
 {
     use TogglesSort;
+    use WithPagination;
+
+    /** Capability rows per page — bounds the reference table's initial HTML. */
+    private const PER_PAGE = 50;
 
     public string $search = '';
 
@@ -18,6 +25,16 @@ class Index extends Component
     public string $sortBy = 'key';
 
     public string $sortDir = 'asc';
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedFilterDomain(): void
+    {
+        $this->resetPage();
+    }
 
     private const SORTABLE = [
         'key' => 'key',
@@ -32,7 +49,7 @@ class Index extends Component
         $this->toggleSort(
             column: $column,
             allowedColumns: self::SORTABLE,
-            resetPage: false,
+            resetPage: true,
         );
     }
 
@@ -109,7 +126,7 @@ class Index extends Component
                 return $collection->filter(fn ($cap) => $cap->domain === $domain);
             });
 
-        $capabilities = $this->sortCapabilities($capabilities);
+        $capabilities = $this->sortCapabilities($capabilities)->values();
 
         $domains = collect($moduleMap)
             ->keys()
@@ -118,8 +135,17 @@ class Index extends Component
             ->sort()
             ->values();
 
+        $page = $this->getPage();
+        $paginatedCapabilities = new LengthAwarePaginator(
+            $capabilities->forPage($page, self::PER_PAGE)->values(),
+            $capabilities->count(),
+            self::PER_PAGE,
+            $page,
+            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'page'],
+        );
+
         return view('livewire.admin.authz.capabilities.index', [
-            'capabilities' => $capabilities,
+            'capabilities' => $paginatedCapabilities,
             'domains' => $domains,
         ]);
     }

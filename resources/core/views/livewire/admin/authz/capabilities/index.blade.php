@@ -76,8 +76,14 @@
                         @endforelse
             </x-ui.table>
 
+            @if ($capabilities->hasPages())
+                <div class="mt-3">
+                    {{ $capabilities->links() }}
+                </div>
+            @endif
+
             <div class="mt-2 text-xs text-muted">
-                {{ trans_choice(':count capability|:count capabilities', $capabilities->count(), ['count' => $capabilities->count()]) }}
+                {{ trans_choice(':count capability|:count capabilities', $capabilities->total(), ['count' => $capabilities->total()]) }}
             </div>
         </x-ui.card>
     </div>
