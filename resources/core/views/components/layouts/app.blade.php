@@ -302,6 +302,7 @@
                 if (main && ! reduceMotion) {
                     main.style.transition = 'none';
                     main.style.opacity = '0';
+                    main.style.transform = 'translateY(8px)';
                 }
                 requestAnimationFrame(() => {
                     markActiveMenu();
@@ -310,8 +311,9 @@
                         if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
                     });
                     if (main && ! reduceMotion) {
-                        main.style.transition = 'opacity 150ms ease-out';
+                        main.style.transition = 'opacity 200ms ease-out, transform 200ms ease-out';
                         main.style.opacity = '1';
+                        main.style.transform = 'translateY(0)';
                     }
                 });
             });
