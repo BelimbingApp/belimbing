@@ -193,7 +193,9 @@ return [
     */
 
     'navigate' => [
-        'show_progress_bar' => true,
+        // Disabled: on this fast/local app the top sweep bar reads as a flash on
+        // every navigation rather than useful feedback. See docs/plans/performance-page-rendering.md.
+        'show_progress_bar' => false,
         'progress_bar_color' => '#2299dd',
     ],
 
