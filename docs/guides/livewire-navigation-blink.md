@@ -5,9 +5,10 @@ instant only if all persistent chrome keeps the same visual state during the
 single frame where Livewire swaps in the next page body and before Alpine has
 finished initializing that new body.
 
-This guide documents the page-blink investigation from Phase 2 of
-`docs/plans/performance-page-rendering.md`, the actual root cause, and the
-rules to follow when changing the shell.
+This guide documents the page-blink investigation from the island-shell work:
+BLB made Lara chat and the sidebar persist across `wire:navigate` so navigation
+only swaps the main body. It covers the actual root cause found after that
+change and the rules to follow when changing the shell.
 
 ## What the user saw
 
