@@ -2,9 +2,6 @@
 
 use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var OpenAiCodexSetup $this */
 $codexAuthState = is_array($this->authState) ? $this->authState : [];
 $codexVerification = is_array($this->verificationResult) ? $this->verificationResult : null;

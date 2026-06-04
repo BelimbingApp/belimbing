@@ -1,8 +1,5 @@
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\AI\Contracts\Orchestration\RuntimeHook;
 use App\Modules\Core\AI\DTO\Orchestration\HookPayload;
 use App\Modules\Core\AI\DTO\Orchestration\HookResult;

@@ -1,8 +1,5 @@
 # Laravel Package Asset Publishing Pattern
 
-<!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Copyright (c) 2026 Ng Kiat Siong -->
-
 **Document Type:** Tutorial
 **Purpose:** Explain how Laravel packages publish migrations, models, seeders, and other assets using the standard publishing pattern
 **Related:** [Database Migrations](../database/MIGRATION_WORKFLOW.md), [Extension Database Migrations](../extensions/database-migrations.md)

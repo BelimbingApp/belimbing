@@ -1,6 +1,3 @@
-# SPDX-License-Identifier: AGPL-3.0-only
-# (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 # Visual Installation Guide
 
 Visual overview of Belimbing installation with decision trees and flow diagrams.

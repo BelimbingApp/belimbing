@@ -386,8 +386,3 @@ Test coverage includes:
 - Company relationships
 - External access queries
 - Email uniqueness validation
-
-## License
-
-SPDX-License-Identifier: AGPL-3.0-only
-Copyright (c) 2026 Ng Kiat Siong

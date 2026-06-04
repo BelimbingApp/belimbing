@@ -1,8 +1,5 @@
 # Pail and Logging Troubleshooting Guide
 
-<!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Copyright (c) 2026 Ng Kiat Siong -->
-
 This guide explains how Laravel Pail works, common issues, and troubleshooting steps based on real-world debugging experiences.
 
 ## Table of Contents

@@ -1,8 +1,5 @@
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
 use App\Modules\Core\User\Models\User;

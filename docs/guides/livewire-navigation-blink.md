@@ -74,22 +74,27 @@ guard could be disabled exactly when the persisted-chrome protection was needed.
 
 The shell now reapplies client-owned visual state during the navigation swap:
 
-- `resources/core/js/app.js`
+- `resources/core/js/shell-navigation.js`
   - `globalThis.__blbAlpineReady` records Alpine readiness in JS, so the state
     survives Livewire's `<html>` attribute replacement.
-  - `globalThis.blbApplyClientHtmlState()` reapplies dark mode from
-    `localStorage`.
-  - `globalThis.blbApplyDesktopSidebarWidth()` reapplies the sidebar wrapper
-    width from `localStorage` using the same persisted `sidebarRail` and
-    `sidebarWidth` values that Alpine uses.
-  - `globalThis.blbPrepareLaraChatForNavigate()` parks the persisted Lara chat
-    instance without moving it visually.
-  - `globalThis.blbApplyLaraChatShellState()` restores Lara chat into the new
-    page's active overlay, docked, fullscreen, or mobile target at swap time.
-  - `globalThis.blbApplyNavigateSwapShellState()` runs all shell-state repairs.
+  - `globalThis.blbShellNavigation.wire()` owns the one-time `wire:navigate`
+    listeners and persisted-chrome `x-cloak` observer.
+  - `globalThis.blbShellNavigation.applyClientHtmlState()` reapplies dark mode
+    from `localStorage`.
+  - `globalThis.blbShellNavigation.applyDesktopSidebarWidth()` reapplies the
+    sidebar wrapper width from `localStorage` using the same persisted
+    `sidebarRail` and `sidebarWidth` values that Alpine uses.
+  - `globalThis.blbShellNavigation.prepareLaraChatForNavigate()` parks the
+    persisted Lara chat instance without moving it visually.
+  - `globalThis.blbShellNavigation.applyLaraChatShellState()` restores Lara chat
+    into the new page's active overlay, docked, fullscreen, or mobile target at
+    swap time.
+  - `globalThis.blbShellNavigation.applyNavigateSwapShellState()` runs all
+    shell-state repairs.
 - `resources/core/views/components/layouts/app.blade.php`
   - the desktop sidebar width wrapper has `data-blb-sidebar-width-shell` so the
     early JS repair can target it directly;
+  - `x-init` wires shell navigation through `window.blbShellNavigation?.wire()`;
   - `livewire:navigating` uses `event.detail.onSwap(...)` to run the shell repair
     before paint;
   - active-menu marking, active-group expansion, and sidebar scroll restoration
@@ -176,7 +181,8 @@ changes each protect a real behavior:
   sidebar tree is persisted and no longer re-rendered on every page;
 - keep the swap-time shell-state repair because it fixes the actual blink.
 
-The useful future cleanup is structural, not a rollback: once this shell code is
-stable, move the large inline navigation/chrome script out of the Blade layout
-into a named JS shell module. Do that as a deliberate refactor with browser
-verification, not during a blink fix.
+The first structural cleanup is complete: the navigation/chrome script lives in
+`resources/core/js/shell-navigation.js`, while the Blade layout keeps only a
+small `window.blbShellNavigation?.wire()` call. Future cleanup should keep this
+boundary: Blade owns shell markup and Alpine state; the JS module owns
+`wire:navigate` shell repair and persisted-chrome coordination.

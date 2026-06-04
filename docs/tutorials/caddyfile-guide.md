@@ -1,8 +1,5 @@
 # Caddyfile Guide for Belimbing
 
-<!-- SPDX-License-Identifier: AGPL-3.0-only -->
-<!-- Copyright (c) 2025 Ng Kiat Siong -->
-
 **Document Type:** Tutorial
 **Purpose:** Explain Caddy and Caddyfile configuration in Belimbing
 **Related:** [Development Setup Guide](../guides/development-setup.md), [Vite's Roles in Development Architecture](./vite-roles.md)

@@ -2,9 +2,6 @@
 
 use App\Base\Database\Livewire\DatabaseTables\Show;
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var Show $this */
 ?>
 

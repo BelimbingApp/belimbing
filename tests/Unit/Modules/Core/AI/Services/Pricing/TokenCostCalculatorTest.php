@@ -1,8 +1,5 @@
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\AI\Services\Pricing\TokenCostCalculator;
 use App\Modules\Core\AI\Values\CallUsage;
 use App\Modules\Core\AI\Values\ResolvedRate;

@@ -415,8 +415,3 @@ Test coverage includes:
 - Relationship temporal validity
 - External access permissions
 - Scopes and queries
-
-## License
-
-SPDX-License-Identifier: AGPL-3.0-only
-Copyright (c) 2026 Ng Kiat Siong

@@ -1,8 +1,5 @@
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Base\Menu\Services\PinMetadataNormalizer;
 
 test('mergeMissingPinIcons matches pin URL path to menu href ignoring query string', function (): void {

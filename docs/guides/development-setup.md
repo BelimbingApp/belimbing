@@ -211,9 +211,6 @@ export default defineConfig({
 ```bash
 #!/bin/bash
 
-# SPDX-License-Identifier: AGPL-3.0-only
-# Copyright (c) 2025 Ng Kiat Siong
-
 set -e
 
 # Colors for output
@@ -287,9 +284,6 @@ Similar to development but:
 
 ```bash
 #!/bin/bash
-
-# SPDX-License-Identifier: AGPL-3.0-only
-# Copyright (c) 2025 Ng Kiat Siong
 
 set -e
 

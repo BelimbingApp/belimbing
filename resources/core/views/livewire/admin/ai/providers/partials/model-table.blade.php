@@ -4,9 +4,6 @@ use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use Illuminate\Support\Collection;
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /**
  * Shared model management table for AI providers.
  *

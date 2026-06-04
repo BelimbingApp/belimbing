@@ -4,9 +4,6 @@ use App\Modules\Core\AI\Enums\LifecycleAction;
 use App\Modules\Core\AI\Livewire\ControlPlane;
 use Illuminate\Support\Number;
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 /** @var ControlPlane $this */
 /** @var array<string, mixed>|null $runView */
 /** @var LifecycleAction|null $selectedLifecycleAction */

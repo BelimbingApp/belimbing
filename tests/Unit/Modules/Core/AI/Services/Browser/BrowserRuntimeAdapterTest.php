@@ -1,8 +1,5 @@
 <?php
 
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 use App\Modules\Core\AI\Models\BrowserSession;
 use App\Modules\Core\AI\Services\Browser\BrowserRuntimeAdapter;

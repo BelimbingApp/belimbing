@@ -1,8 +1,4 @@
 <?php
-
-// SPDX-License-Identifier: AGPL-3.0-only
-// (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
 $messagingChannel = static fn (string $enabledKey, int $rateLimit): array => [
     'enabled' => env($enabledKey, false),
     'rate_limit_per_minute' => $rateLimit,

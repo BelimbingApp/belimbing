@@ -1,7 +1,4 @@
 @php
-    // SPDX-License-Identifier: AGPL-3.0-only
-    // (c) Ng Kiat Siong <kiatsiong.ng@gmail.com>
-
     $tzService = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
     $tzMode = $tzService->currentMode();
     $tzLabel = $tzMode->label();
