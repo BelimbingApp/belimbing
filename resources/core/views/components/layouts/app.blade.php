@@ -3,6 +3,12 @@
 @php
     $laraActivated = auth()->check()
         && \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
+
+    // On wire:navigate the persisted chrome is kept client-side and the freshly
+    // rendered copy is discarded — so re-rendering the sidebar + bars is wasted
+    // work (~40ms/navigation). Skip rendering their content for navigate requests;
+    // the empty @persist markers make the client keep its existing chrome.
+    $skipShellRender = request()->hasHeader('X-Livewire-Navigate');
 @endphp
 
 <!DOCTYPE html>
@@ -34,7 +40,9 @@
          user, timezone, locale), so keep the same DOM across wire:navigate instead
          of tearing down and rebuilding the full-width bar (which read as a flash). --}}
     @persist('top-bar')
-        <x-layouts.top-bar />
+        @unless($skipShellRender)
+            <x-layouts.top-bar />
+        @endunless
     @endpersist
 
     {{-- Main Layout: Sidebar + Content --}}
@@ -49,7 +57,9 @@
                  so only the main body re-renders. Active state tracks the URL via
                  wire:current; pins already sync client-side. --}}
             @persist('sidebar-desktop')
-                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+                @unless($skipShellRender)
+                    <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+                @endunless
             @endpersist
 
             {{-- Drag handle --}}
@@ -87,7 +97,9 @@
             style="display: none;"
         >
             @persist('sidebar-mobile')
-                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
+                @unless($skipShellRender)
+                    <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
+                @endunless
             @endpersist
         </div>
 
@@ -169,7 +181,9 @@
     {{-- Status Bar — persisted island (page-independent: locale, environment,
          impersonation/license notices). Same reasoning as the top bar. --}}
     @persist('status-bar')
-        <x-layouts.status-bar />
+        @unless($skipShellRender)
+            <x-layouts.status-bar />
+        @endunless
     @endpersist
 </body>
 </html>

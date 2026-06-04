@@ -56,6 +56,19 @@ class ServiceProvider extends BaseServiceProvider
                 return;
             }
 
+            // On wire:navigate the persisted sidebar is kept client-side and the
+            // freshly-rendered one is discarded — so building the menu tree (and
+            // rendering the sidebar) is wasted work. Skip it for navigate requests;
+            // the layout renders empty @persist markers and the client keeps its
+            // existing chrome. Full loads (no header) still build the menu.
+            if (request()->hasHeader('X-Livewire-Navigate')) {
+                $view->with('menuTree', []);
+                $view->with('menuItemsFlat', []);
+                $view->with('pins', []);
+
+                return;
+            }
+
             $builder = $this->app->make(MenuBuilder::class);
             $user = auth()->user();
 
