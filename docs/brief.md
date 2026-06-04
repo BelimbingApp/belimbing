@@ -2,17 +2,15 @@
 
 **Document Type:** Project Brief
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
-**Audience:** AI Coding Agents, contributors, potential adopters and adoptees, and stakeholders
-**Specific:** Laravel
-**Last Updated:** 2026-05-19
+**Last Updated:** 2026-06-04
 
 ---
 
 ## Founder's Note
 
-I'm Kiat, an indie developer. Belimbing is where my focus is now.
+I'm Kiat, an indie developer. Belimbing is named after the place where it was borned.
 
-I want it to be a framework that small businesses can run their operations on, and that indie developers can earn a decent living building on — the shops too small for the ERP industry to bother with, and the builders who would otherwise have to take a salaried job to make rent.
+Belimbing is a framework small businesses can run on, developers can build on, and I can play in. Hopefully, it is a place where we find shared resonance.
 
 Belimbing is to serve the unserved.
 
@@ -75,20 +73,6 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 - Focus on business logic, not infrastructure
 - Deliver high value to clients affordably
 - Participate in thriving ecosystem
-
-### For the Community
-
-- Vibrant open-source project with active contributors
-- Protection from commercial exploitation (AGPLv3)
-- Continuous innovation through collective effort
-- High-quality codebase that's a joy to work with
-
-### For the Future
-
-- Changed paradigm: businesses build rather than buy operational systems
-- AI assistance democratizes software development
-- Quality and ownership valued over convenience and speed
-- Community-driven evolution creates lasting value
 
 ---
 
@@ -178,18 +162,16 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 ### What We Optimize For
 
 1. **Performance** over convenient frameworks
-2. **Customizability** over out-of-the-box features
-3. **Quality** over speed to market
-4. **Long-term maintainability** over short-term productivity
-5. **User empowerment** over vendor control
+2. **Quality** over speed to market
+3. **Long-term maintainability** over short-term productivity
+4. **User empowerment** over vendor control
 
 ### What We Accept
 
 1. **Steeper initial learning curve** - AI assistance mitigates this
 2. **Smaller initial ecosystem** - We build what we need with quality
 3. **More initial development effort** - Quality requires investment
-4. **Non-mainstream choices** - Choose based on merit, not popularity
-5. **Longer time to "feature completeness"** - Quality over speed
+4. **Longer time to "feature completeness"** - Quality over speed
 
 ### What We Reject
 
@@ -201,7 +183,6 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 ---
 
 **Document Status:** Living document
-**Last Updated:** 2026-05-19
 **Steward:** Project Founder
 **Review Cycle:** Quarterly, or when strategic questions arise
 
