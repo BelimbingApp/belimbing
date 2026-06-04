@@ -6,7 +6,6 @@ use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Collection;
 
 /**
@@ -16,7 +15,6 @@ use Illuminate\Support\Collection;
 final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
 {
     public function __construct(
-        private readonly Application $app,
         private readonly MenuRegistry $registry,
         private readonly MenuAccessChecker $menuAccessChecker,
         private readonly MenuDiscoveryService $discovery,
@@ -71,18 +69,21 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
 
     private function ensureMenuRegistryIsLoaded(): void
     {
-        if ($this->app->environment('local')) {
-            $this->refreshMenuRegistry(persist: false);
+        // Cache the discovered + validated registry in the cache store keyed by a
+        // config fingerprint. Octane gives each request a fresh container, so the
+        // in-memory singleton can't be reused — but the cache store persists, so
+        // discover()+validate() runs only when a menu config actually changes
+        // (auto-invalidating in both dev and production; no manual cache clear).
+        $fingerprint = $this->discovery->configFingerprint();
 
+        if ($this->registry->loadFromCache($fingerprint)) {
             return;
         }
 
-        if (! $this->registry->loadFromCache()) {
-            $this->refreshMenuRegistry(persist: true);
-        }
+        $this->refreshMenuRegistry(persist: true, fingerprint: $fingerprint);
     }
 
-    private function refreshMenuRegistry(bool $persist): void
+    private function refreshMenuRegistry(bool $persist, ?string $fingerprint = null): void
     {
         $this->registry->registerFromDiscovery($this->discovery->discover());
 
@@ -93,7 +94,7 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
         }
 
         if ($persist) {
-            $this->registry->persist();
+            $this->registry->persist($fingerprint);
         }
     }
 }

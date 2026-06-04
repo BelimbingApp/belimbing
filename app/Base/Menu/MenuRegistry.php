@@ -110,11 +110,14 @@ class MenuRegistry
     /**
      * Load items from cache.
      *
+     * @param  string|null  $fingerprint  Optional source fingerprint; varies the
+     *                                     cache key so the entry self-invalidates
+     *                                     when the menu config files change.
      * @return bool True if loaded from cache, false otherwise
      */
-    public function loadFromCache(): bool
+    public function loadFromCache(?string $fingerprint = null): bool
     {
-        $cached = Cache::get(self::CACHE_KEY);
+        $cached = Cache::get($this->cacheKey($fingerprint));
 
         if ($cached) {
             $this->items = collect($cached)->mapWithKeys(function ($data, $id) {
@@ -130,7 +133,7 @@ class MenuRegistry
     /**
      * Persist items to cache.
      */
-    public function persist(): void
+    public function persist(?string $fingerprint = null): void
     {
         // Convert MenuItem objects to arrays for serialization
         $data = $this->items->map(function (MenuItem $item) {
@@ -148,7 +151,7 @@ class MenuRegistry
             ];
         })->all();
 
-        Cache::forever(self::CACHE_KEY, $data);
+        Cache::forever($this->cacheKey($fingerprint), $data);
     }
 
     /**
@@ -158,5 +161,13 @@ class MenuRegistry
     {
         Cache::forget(self::CACHE_KEY);
         $this->items = collect();
+    }
+
+    /**
+     * Cache key, optionally namespaced by a source fingerprint.
+     */
+    private function cacheKey(?string $fingerprint): string
+    {
+        return $fingerprint === null ? self::CACHE_KEY : self::CACHE_KEY.'.'.$fingerprint;
     }
 }

@@ -47,6 +47,28 @@ class MenuDiscoveryService
     }
 
     /**
+     * Cheap content fingerprint of the menu config files (paths + mtimes).
+     *
+     * Lets the registry cache key vary with the menu sources so the cached tree
+     * is rebuilt automatically when a menu config changes — without re-running
+     * the relatively expensive discover()+validate() on every request.
+     */
+    public function configFingerprint(): string
+    {
+        $parts = [];
+
+        foreach ($this->scanPatterns as $pattern) {
+            foreach (glob(base_path($pattern)) as $file) {
+                $parts[] = $file.':'.@filemtime($file);
+            }
+        }
+
+        sort($parts);
+
+        return substr(md5(implode('|', $parts)), 0, 12);
+    }
+
+    /**
      * Process a single menu file.
      *
      * @param  string  $path  Full path to menu.php file
