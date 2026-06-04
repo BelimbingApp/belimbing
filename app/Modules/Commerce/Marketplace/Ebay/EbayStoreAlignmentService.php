@@ -37,6 +37,7 @@ class EbayStoreAlignmentService
      * @return array{
      *     cleanupQueue: Collection<int, array<string, mixed>>,
      *     qualitySummary: array<string, int>,
+     *     listingStats: array<string, int>,
      *     trustSignals: Collection<int, array<string, mixed>>,
      *     fitmentBatchCandidates: Collection<int, array<string, mixed>>
      * }
@@ -59,7 +60,7 @@ class EbayStoreAlignmentService
             ])
             ->get();
 
-        $salesByListing = $this->salesByListing($companyId);
+        $salesByListing = $this->salesByListing($companyId, $listings->pluck('id')->all());
         $trustSignals = $this->buyerSignals->trustSignals($companyId, $listings);
         $trustSignalsByListing = $trustSignals->groupBy('listing_id');
 
@@ -76,11 +77,12 @@ class EbayStoreAlignmentService
         return [
             'cleanupQueue' => $cleanupQueue->take(12)->values(),
             'qualitySummary' => $this->qualitySummary($cleanupQueue),
+            'listingStats' => $this->audit->stats($listings),
             'trustSignals' => $trustSignals
                 ->sortByDesc('severity_score')
                 ->take(10)
                 ->values(),
-            'fitmentBatchCandidates' => $this->fitmentBatchCandidates($companyId)->take(10)->values(),
+            'fitmentBatchCandidates' => $this->fitmentBatchCandidates($companyId),
         ];
     }
 
@@ -135,22 +137,26 @@ class EbayStoreAlignmentService
     /**
      * @return array<int, array{sale_count: int, last_sold_at: Carbon|null}>
      */
-    private function salesByListing(int $companyId): array
+    private function salesByListing(int $companyId, array $listingIds): array
     {
+        if ($listingIds === []) {
+            return [];
+        }
+
         return Sale::query()
+            ->select('listing_id')
+            ->selectRaw('COUNT(*) as sale_count, MAX(sold_at) as last_sold_at')
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
             ->whereNotNull('listing_id')
-            ->get(['listing_id', 'sold_at'])
+            ->whereIn('listing_id', $listingIds)
             ->groupBy('listing_id')
-            ->map(fn (Collection $sales): array => [
-                'sale_count' => $sales->count(),
-                'last_sold_at' => $sales
-                    ->pluck('sold_at')
-                    ->filter()
-                    ->map(fn ($soldAt): Carbon => $soldAt instanceof Carbon ? $soldAt : Carbon::parse($soldAt))
-                    ->sortDesc()
-                    ->first(),
+            ->get()
+            ->mapWithKeys(fn (Sale $sale): array => [
+                (int) $sale->listing_id => [
+                    'sale_count' => (int) $sale->sale_count,
+                    'last_sold_at' => $sale->last_sold_at !== null ? Carbon::parse($sale->last_sold_at) : null,
+                ],
             ])
             ->all();
     }
@@ -166,19 +172,24 @@ class EbayStoreAlignmentService
             ->whereHas('fitments')
             ->withCount('fitments')
             ->orderBy('sku')
-            ->get()
-            ->groupBy('product_template_id');
+            ->get(['id', 'company_id', 'product_template_id', 'sku'])
+            ->unique('product_template_id')
+            ->keyBy('product_template_id');
+
+        if ($sourceByTemplate->isEmpty()) {
+            return collect();
+        }
 
         return Item::query()
             ->where('company_id', $companyId)
             ->whereNotNull('product_template_id')
+            ->whereIn('product_template_id', $sourceByTemplate->keys())
             ->whereDoesntHave('fitments')
             ->orderBy('sku')
-            ->get()
+            ->limit(10)
+            ->get(['id', 'company_id', 'product_template_id', 'sku', 'title'])
             ->map(function (Item $item) use ($sourceByTemplate): ?array {
-                $source = $sourceByTemplate
-                    ->get($item->product_template_id)
-                    ?->first();
+                $source = $sourceByTemplate->get($item->product_template_id);
 
                 if (! $source instanceof Item) {
                     return null;

@@ -111,3 +111,11 @@ it('returns an empty milestone list and zero rail total for a run with only delt
     expect($view['lifecycle_milestones'])->toBe([])
         ->and($view['lifecycle_rail']['total'])->toBe(0);
 });
+
+it('rebuilds diagnostics after scoped instances are flushed', function (): void {
+    $first = app(RunDiagnosticService::class);
+
+    app()->forgetScopedInstances();
+
+    expect(app(RunDiagnosticService::class))->not->toBe($first);
+});

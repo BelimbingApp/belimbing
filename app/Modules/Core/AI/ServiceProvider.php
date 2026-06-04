@@ -219,7 +219,7 @@ class ServiceProvider extends BaseServiceProvider
 
         // Control plane subsystem
         $this->app->singleton(RunInspectionService::class);
-        $this->app->singleton(RunDiagnosticService::class);
+        $this->app->scoped(RunDiagnosticService::class);
         $this->app->singleton(OperationalTelemetryService::class);
         $this->app->singleton(HealthAndPresenceService::class);
         $this->app->singleton(LifecycleControlService::class);

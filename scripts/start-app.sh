@@ -780,6 +780,7 @@ main() {
 
     # Ensure storage directory structure exists
     ensure_storage_dirs "$PROJECT_ROOT"
+    export_project_php_ini_scan_dir "$PROJECT_ROOT"
 
     # Setup logging
     local log_dir

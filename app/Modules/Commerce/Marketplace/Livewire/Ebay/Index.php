@@ -102,7 +102,7 @@ class Index extends Component
             'token' => $token,
             'listings' => $this->listings($companyId),
             'unlistedItems' => $this->unlistedItems($companyId),
-            'stats' => $this->stats($companyId),
+            'stats' => $this->stats($companyId, $dashboard['listingStats']),
             'recentExchanges' => $this->recentExchanges($companyId),
             'cleanupQueue' => $dashboard['cleanupQueue'],
             'qualitySummary' => $dashboard['qualitySummary'],
@@ -175,16 +175,20 @@ class Index extends Component
             ->paginate(10, ['*'], 'unlistedPage');
     }
 
-    private function stats(int $companyId): array
+    private function stats(int $companyId, array $linkedListingStats): array
     {
-        $listings = Listing::query()
+        $listingBaseQuery = Listing::query()
             ->where('company_id', $companyId)
-            ->where('channel', EbayConfiguration::CHANNEL)
-            ->with(['item', 'draft'])
-            ->get();
+            ->where('channel', EbayConfiguration::CHANNEL);
+
+        $totalListings = (clone $listingBaseQuery)->count();
+        $unlinkedListings = (clone $listingBaseQuery)->whereNull('item_id')->count();
 
         return [
-            ...$this->audit()->stats($listings),
+            ...$linkedListingStats,
+            'totalListings' => $totalListings,
+            'linkedListings' => $totalListings - $unlinkedListings,
+            'unlinkedListings' => $unlinkedListings,
             'unlistedItems' => Item::query()
                 ->where('company_id', $companyId)
                 ->whereNotIn('status', [Item::STATUS_SOLD, Item::STATUS_ARCHIVED])

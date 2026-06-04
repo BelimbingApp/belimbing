@@ -168,6 +168,41 @@ get_laravel_logs_dir() {
     return 0
 }
 
+# Export the project-local PHP scan directory when it exists so FrankenPHP,
+# artisan, and queue workers all pick up shared runtime tuning such as
+# .php.d/perf.ini. A leading path separator preserves PHP's built-in scan
+# directory when no scan directory was already configured.
+export_project_php_ini_scan_dir() {
+    local project_root=$1
+    local raw_ini_dir="$project_root/.php.d"
+    local ini_dir="$raw_ini_dir"
+    local scan_path_separator=':'
+
+    [[ -d "$raw_ini_dir" ]] || return 0
+
+    case "$(uname -s 2>/dev/null || echo 'unknown')" in
+        MINGW*|MSYS*|CYGWIN*)
+            scan_path_separator=';'
+            if command -v cygpath >/dev/null 2>&1; then
+                ini_dir="$(cygpath -w "$raw_ini_dir")"
+            fi
+            ;;
+        *) ;;
+    esac
+
+    case "${scan_path_separator}${PHP_INI_SCAN_DIR:-}${scan_path_separator}" in
+        *"${scan_path_separator}${ini_dir}${scan_path_separator}"*) ;;
+        ::)
+            export PHP_INI_SCAN_DIR="${scan_path_separator}${ini_dir}"
+            ;;
+        *)
+            export PHP_INI_SCAN_DIR="${PHP_INI_SCAN_DIR}${scan_path_separator}${ini_dir}"
+            ;;
+    esac
+
+    return 0
+}
+
 # === Common Initialization for Setup Steps ===
 # Initialize script environment for setup-step scripts
 # Sets up: SETUP_STEPS_DIR, SCRIPTS_DIR, PROJECT_ROOT, and sources all utilities

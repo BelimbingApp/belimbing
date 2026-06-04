@@ -8,8 +8,9 @@ use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
 use App\Base\Authz\Models\DecisionLog;
 use App\Base\Support\TraceId;
-use Illuminate\Contracts\Foundation\Application;
 use Throwable;
+
+use function Illuminate\Support\defer;
 
 /**
  * Buffers decision log entries and flushes them in a single
@@ -23,8 +24,6 @@ class DatabaseDecisionLogger implements DecisionLogger
     private array $pendingLogs = [];
 
     private bool $flushRegistered = false;
-
-    public function __construct(private readonly Application $app) {}
 
     /**
      * Buffer a decision log entry for deferred persistence.
@@ -60,9 +59,7 @@ class DatabaseDecisionLogger implements DecisionLogger
 
         if (! $this->flushRegistered) {
             $this->flushRegistered = true;
-            $this->app->terminating(function (): void {
-                $this->flush();
-            });
+            defer(fn () => $this->flush(), 'authz.decisions.flush')->always();
         }
     }
 
@@ -71,6 +68,8 @@ class DatabaseDecisionLogger implements DecisionLogger
      */
     private function flush(): void
     {
+        $this->flushRegistered = false;
+
         if (empty($this->pendingLogs)) {
             return;
         }

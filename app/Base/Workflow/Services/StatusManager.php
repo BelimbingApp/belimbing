@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Services;
 
 use App\Base\Workflow\Models\StatusConfig;
@@ -30,7 +31,7 @@ class StatusManager
     {
         $cacheKey = self::CACHE_PREFIX.$flow;
 
-        return $this->cache->remember($cacheKey, self::CACHE_TTL, function () use ($flow): Collection {
+        return $this->cache->flexible($cacheKey, [self::CACHE_TTL, self::CACHE_TTL * 6], function () use ($flow): Collection {
             return StatusConfig::query()
                 ->forFlow($flow)
                 ->active()

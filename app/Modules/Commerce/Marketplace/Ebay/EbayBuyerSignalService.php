@@ -15,15 +15,44 @@ class EbayBuyerSignalService
      */
     public function trustSignals(int $companyId, Collection $listings): Collection
     {
+        $listingIds = $listings
+            ->pluck('id')
+            ->filter(fn (mixed $id): bool => $id !== null)
+            ->map(fn (mixed $id): int => (int) $id)
+            ->values()
+            ->all();
+        $externalListingIds = $listings
+            ->pluck('external_listing_id')
+            ->filter(fn (mixed $id): bool => is_string($id) && trim($id) !== '')
+            ->values()
+            ->all();
+
+        if ($listingIds === [] && $externalListingIds === []) {
+            return collect();
+        }
+
         $listingById = $listings->keyBy('id');
         $listingIdByExternalId = $listings
             ->filter(fn (Listing $listing): bool => $listing->external_listing_id !== null)
             ->mapWithKeys(fn (Listing $listing): array => [$listing->external_listing_id => $listing->id]);
+        $lineScope = function ($query) use ($listingIds, $externalListingIds): void {
+            $query->where(function ($query) use ($listingIds, $externalListingIds): void {
+                if ($listingIds !== []) {
+                    $query->whereIn('listing_id', $listingIds);
+                }
+
+                if ($externalListingIds !== []) {
+                    $method = $listingIds === [] ? 'whereIn' : 'orWhereIn';
+                    $query->{$method}('external_listing_id', $externalListingIds);
+                }
+            });
+        };
 
         return Order::query()
             ->where('company_id', $companyId)
             ->where('channel', EbayConfiguration::CHANNEL)
-            ->with('lines')
+            ->whereHas('lines', $lineScope)
+            ->with(['lines' => $lineScope])
             ->get()
             ->flatMap(fn (Order $order): array => $this->trustSignalsForOrder($order, $listingById, $listingIdByExternalId))
             ->values();

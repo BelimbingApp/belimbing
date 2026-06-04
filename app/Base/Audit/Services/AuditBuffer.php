@@ -1,11 +1,13 @@
 <?php
+
 namespace App\Base\Audit\Services;
 
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Models\AuditMutation;
-use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Eloquent\Model;
 use Throwable;
+
+use function Illuminate\Support\defer;
 
 /**
  * Buffers audit entries and flushes them in batch INSERTs
@@ -24,8 +26,6 @@ class AuditBuffer
     private array $pendingActions = [];
 
     private bool $flushRegistered = false;
-
-    public function __construct(private readonly Application $app) {}
 
     /**
      * Buffer a mutation entry for deferred persistence.
@@ -50,7 +50,7 @@ class AuditBuffer
     }
 
     /**
-     * Register the terminating callback once per request.
+     * Register the deferred flush once per request.
      */
     private function ensureFlushRegistered(): void
     {
@@ -59,9 +59,7 @@ class AuditBuffer
         }
 
         $this->flushRegistered = true;
-        $this->app->terminating(function (): void {
-            $this->flush();
-        });
+        defer(fn () => $this->flush(), 'audit.flush')->always();
     }
 
     /**
@@ -69,6 +67,8 @@ class AuditBuffer
      */
     private function flush(): void
     {
+        $this->flushRegistered = false;
+
         $this->flushTable($this->pendingMutations, AuditMutation::class, 'mutation');
         $this->flushTable($this->pendingActions, AuditAction::class, 'action');
     }
