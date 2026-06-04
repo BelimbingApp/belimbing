@@ -21,7 +21,9 @@ test('full-page Livewire components stay within the HTML budget', function (): v
     $this->actingAs(createAdminUser());
 
     $allow = [
-        // ~152 KB: tab-form modals are always mounted. See plan Phase 4.
+        // ~152 KB: aggregate x-ui overhead on the active-tab workbench (no single
+        // hotspot; the create modal already includes only the active form). Marginal
+        // overage on a higher-risk Commerce page. See plan Phase 4.
         'commerce/catalog',
     ];
 
