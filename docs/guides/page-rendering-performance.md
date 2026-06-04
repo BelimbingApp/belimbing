@@ -7,6 +7,9 @@ server renders, so the slow "pockets" are simply the pages that render the most.
 This guide is the convention; the rationale and history live in
 `docs/plans/performance-page-rendering.md`.
 
+For shell/chrome blink during `wire:navigate`, see
+`docs/guides/livewire-navigation-blink.md`.
+
 ## Measure first — `blb:perf:page-weights`
 
 ```bash

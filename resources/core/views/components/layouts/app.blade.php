@@ -244,19 +244,20 @@
         $watch('laraChatMode', () => teleportLaraChat());
         $watch('laraChatFullscreen', () => teleportLaraChat());
         $nextTick(() => teleportLaraChat());
-        if (! window.__laraChatNavWired) {
-            window.__laraChatNavWired = true;
+        if (! window.__blbShellNavigationWired) {
+            window.__blbShellNavigationWired = true;
             let sidebarScroll = [];
             // During wire:navigate, Livewire re-initialises Alpine and briefly re-adds
             // x-cloak to the persisted chrome (sidebar/bars/chat) — including the <aside>
             // root. Livewire's own injected [x-cloak]{display:none} rule then hides it for
             // one frame, which reads as a page-wide flash. Strip x-cloak from chrome
             // outside <main> the instant it reappears (a MutationObserver callback runs as
-            // a microtask, before the next paint), so nothing hides. Gated on
-            // data-alpine-ready (set on alpine:initialized) so the initial-load FOUC guard
-            // still works; page content inside <main> keeps normal hide-until-init.
+            // a microtask, before the next paint), so nothing hides. Gated on a JS
+            // runtime flag (set on alpine:initialized) so initial-load FOUC protection
+            // still works even when Livewire replaces <html> attributes during navigate;
+            // page content inside <main> keeps normal hide-until-init.
             new MutationObserver((muts) => {
-                if (! document.documentElement.hasAttribute('data-alpine-ready')) return;
+                if (! window.__blbAlpineReady) return;
                 for (const m of muts) {
                     const el = m.target;
                     if (el.nodeType === 1 && el.hasAttribute('x-cloak') && ! el.closest('main')) {
@@ -297,26 +298,35 @@
                     }
                 });
             };
-            document.addEventListener('livewire:navigating', () => {
-                const c = document.getElementById('lara-chat-instance');
-                const h = document.getElementById('lara-chat-home');
-                if (c && h && c.parentNode !== h) h.appendChild(c);
+            const restoreSidebarScroll = () => {
+                document.querySelectorAll('aside nav').forEach((nav, i) => {
+                    if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
+                });
+            };
+            const refreshPersistedChrome = () => {
+                window.blbApplyNavigateSwapShellState?.();
+                markActiveMenu();
+                expandActiveGroups();
+                restoreSidebarScroll();
+            };
+            document.addEventListener('livewire:navigating', (event) => {
+                window.blbPrepareLaraChatForNavigate?.();
                 // Persisting moves the sidebar node into the new page, which resets
                 // inner scroll containers to the top — remember the scroll first.
                 sidebarScroll = [...document.querySelectorAll('aside nav')].map((nav) => nav.scrollTop);
+                // Livewire swaps in the new body before Alpine has initialised the new
+                // shell. Reapply client-owned shell state immediately so there is no
+                // one-frame sidebar-width or dark-mode jump before livewire:navigated.
+                event.detail?.onSwap?.(() => refreshPersistedChrome());
             });
             // The persisted menu is not re-rendered on navigation, so after each
             // navigate we recompute the active link, expand its ancestor groups
-            // (mirroring the old server has_active_child), and restore scroll.
+            // (mirroring the old server has_active_child), and restore scroll. This
+            // remains as a fallback for any navigation path that lacks an onSwap hook.
             document.addEventListener('livewire:navigated', () => {
-                requestAnimationFrame(() => {
-                    markActiveMenu();
-                    expandActiveGroups();
-                    document.querySelectorAll('aside nav').forEach((nav, i) => {
-                        if (sidebarScroll[i] != null) nav.scrollTop = sidebarScroll[i];
-                    });
-                });
+                refreshPersistedChrome();
             });
+            window.blbApplyNavigateSwapShellState?.();
             markActiveMenu(); // initial hard load
         }
     "
@@ -348,6 +358,7 @@
     <div class="relative flex flex-1 overflow-hidden">
         {{-- Desktop Sidebar (drag-resizable) --}}
         <div
+            data-blb-sidebar-width-shell
             class="hidden lg:flex shrink-0 relative"
             :style="'width: ' + sidebarWidth + 'px'"
         >
