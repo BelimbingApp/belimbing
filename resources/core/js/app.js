@@ -1,3 +1,4 @@
+import './shell-layout.js'
 import './shell-navigation.js'
 
 const blbDateTimeOptions = (format, includeSeconds = false) => {

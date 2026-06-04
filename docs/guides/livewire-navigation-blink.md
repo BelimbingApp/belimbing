@@ -91,10 +91,15 @@ The shell now reapplies client-owned visual state during the navigation swap:
     swap time.
   - `globalThis.blbShellNavigation.applyNavigateSwapShellState()` runs all
     shell-state repairs.
+- `resources/core/js/shell-layout.js`
+  - `globalThis.blbAppShell()` owns the app-shell Alpine state and actions that
+    were previously inline in the Blade layout: sidebar sizing, Lara chat mode
+    state, dock resizing, hotkey actions, and chat teleporting between targets.
 - `resources/core/views/components/layouts/app.blade.php`
+  - the body passes server-owned activation state into
+    `window.blbAppShell({ laraActivated: ... })`;
   - the desktop sidebar width wrapper has `data-blb-sidebar-width-shell` so the
     early JS repair can target it directly;
-  - `x-init` wires shell navigation through `window.blbShellNavigation?.wire()`;
   - `livewire:navigating` uses `event.detail.onSwap(...)` to run the shell repair
     before paint;
   - active-menu marking, active-group expansion, and sidebar scroll restoration
@@ -181,8 +186,8 @@ changes each protect a real behavior:
   sidebar tree is persisted and no longer re-rendered on every page;
 - keep the swap-time shell-state repair because it fixes the actual blink.
 
-The first structural cleanup is complete: the navigation/chrome script lives in
-`resources/core/js/shell-navigation.js`, while the Blade layout keeps only a
-small `window.blbShellNavigation?.wire()` call. Future cleanup should keep this
-boundary: Blade owns shell markup and Alpine state; the JS module owns
-`wire:navigate` shell repair and persisted-chrome coordination.
+The structural shell cleanup is complete: app-shell Alpine state lives in
+`resources/core/js/shell-layout.js`, and navigation/chrome repair lives in
+`resources/core/js/shell-navigation.js`. Future cleanup should keep this
+boundary: Blade owns server-rendered shell markup and server-provided state;
+the JS modules own client shell behavior and `wire:navigate` coordination.
