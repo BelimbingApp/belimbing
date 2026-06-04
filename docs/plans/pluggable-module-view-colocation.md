@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Last Updated:** 2026-05-25
-**Sources:** `docs/architecture/pluggable-modules.md`, `docs/architecture/file-structure.md`, `docs/architecture/ui-layout.md`, `docs/guides/extensions/licensee-development-guide.md`, user discussion on full-stack module colocation.
+**Sources:** `docs/architecture/pluggable-modules.md`, `docs/architecture/file-structure.md`, `docs/architecture/ui-layout.md`, user discussion on full-stack module colocation.
 **Agents:** Amp/GPT-5
 
 ## Problem Essence

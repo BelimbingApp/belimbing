@@ -29,9 +29,9 @@ git remote add work git@github.com:<your-company-or-org>/belimbing.git
 
 Why this model:
 
-- It matches the existing adopter guidance in [Adopter Separation Strategy](./licensee-development-guide.md).
 - Pull requests to `BelimbingApp/belimbing` work best from a branch in the same fork network.
 - A standalone private mirror is useful for internal work, but cannot be used directly as the PR head for upstream.
+- Private licensee extension work should use the separate workflow in [Private Extension Repositories](extensions/private-extension-repositories.md).
 
 ## Standard Contribution Flow
 

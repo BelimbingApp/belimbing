@@ -7,7 +7,7 @@
 - User context: Ham, BLB early adopter, LA-based one-person eBay car-parts seller (~2,000 active listings), undergoing cancer treatment, on a tight budget. Today uses PhotoRoom (paid SaaS) for background removal and a Windows desktop for writing/photo editing/eBay work. BLB itself is AGPLv3 and the project sponsor (Kiat) is supporting Ham pro bono.
 - Planning discussion: eBay settings are already saved at `commerce/marketplace/ebay/settings`; operators need a user-facing connection test because developer tests are invisible to them.
 - `docs/brief.md` — BLB vision: "serve the unserved," AI-native, DIY-enabling
-- `extensions/README.md`, `docs/guides/licensee-development-guide.md` — framework vs licensee split
+- `extensions/README.md`, `docs/architecture/file-structure.md`, `docs/guides/extensions/private-extension-repositories.md` — framework vs licensee split
 - `docs/plans/lara-task-models.md` — Lara's per-task model selection (`primary`/`recommended`/`manual`); new Lara tasks plug in here
 - `docs/architecture/money.md` — integer minor-unit money convention and shared `Money` value object
 - Existing modules: `app/Modules/Core/{AI,Company,Employee,User,Address,Geonames,Quality}`, `app/Modules/Operation/IT`

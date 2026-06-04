@@ -314,7 +314,8 @@ extensions/
 
 This layout matches the menu discovery glob (`extensions/*/*/Config/menu.php`) and mirrors BLB's internal module structure. Extension modules include only the internals they need. Module-owned views live under `extensions/{owner}/{module}/Views/` and are registered by the module provider; do not create a companion `resources/extensions` tree.
 
-Reference: `docs/guides/licensee-development-guide.md` for the full development model.
+For nested private repository workflow, see
+`docs/guides/extensions/private-extension-repositories.md`.
 
 ---
 

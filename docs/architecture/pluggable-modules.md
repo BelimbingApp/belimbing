@@ -8,7 +8,6 @@
 **Related:**
 - `docs/architecture/file-structure.md` — directory layer convention.
 - `docs/plans/pluggable-module-view-colocation.md` — migration plan for colocating module-owned Blade views with pluggable modules.
-- `docs/guides/extensions/licensee-development-guide.md` — existing extension separation model.
 - `docs/guides/extensions/private-extension-repositories.md` — existing nested-git pattern.
 - `docs/tutorials/people/` — domain crash course; the People domain is the first pluggable case.
 

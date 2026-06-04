@@ -113,4 +113,3 @@ When adding or changing tokens:
 - `docs/architecture/ui-layout.md` — shell and presentation architecture
 - `docs/architecture/file-structure.md` — module and extension organization
 - `docs/plans/pluggable-module-view-colocation.md` — migration plan for module-owned views
-- `docs/guides/extensions/licensee-development-guide.md` — extension placement rules
