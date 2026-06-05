@@ -61,6 +61,12 @@ class ServiceProvider extends BaseServiceProvider
             // rendering the sidebar) is wasted work. Skip it for navigate requests;
             // the layout renders empty @persist markers and the client keeps its
             // existing chrome. Full loads (no header) still build the menu.
+            //
+            // INVARIANT: this assumes the client ALREADY has the persisted chrome,
+            // which holds for app->app navigation. Pages on a non-app layout (the
+            // guest auth layout) must redirect INTO the app with a full page load,
+            // NOT navigate: true — otherwise there is no chrome to keep and the
+            // sidebar/top/status bars render blank. See App\Modules\Core\User\Livewire\Auth.
             if (request()->hasHeader('X-Livewire-Navigate')) {
                 $view->with('menuTree', []);
                 $view->with('menuItemsFlat', []);

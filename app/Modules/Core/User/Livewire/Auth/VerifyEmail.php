@@ -37,7 +37,9 @@ class VerifyEmail extends Component
     public function rendering(View $view): void
     {
         if (Auth::user()->hasVerifiedEmail()) {
-            $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+            // Full page load (not navigate): crossing the guest auth layout into the
+            // app shell, where a wire:navigate morph cannot render the persisted chrome.
+            $this->redirectIntended(default: route('dashboard', absolute: false));
         }
     }
 

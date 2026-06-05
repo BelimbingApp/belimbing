@@ -41,7 +41,10 @@ class Login extends Component
         RateLimiter::clear($this->throttleKey());
         Session::regenerate();
 
-        $this->redirectIntended(default: route('dashboard', absolute: false), navigate: true);
+        // Full page load (not navigate): we're crossing from the guest auth layout
+        // into the app-shell layout, and a wire:navigate morph cannot bring up the
+        // persisted chrome (sidebar/top/status) that doesn't exist on the login page.
+        $this->redirectIntended(default: route('dashboard', absolute: false));
     }
 
     /**
