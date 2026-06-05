@@ -99,11 +99,11 @@ class EbayConnectionTester
             system: EbayConfiguration::CHANNEL,
             operation: 'commerce.marketplace.ebay.connection.test',
             method: 'GET',
-            endpoint: rtrim((string) $config['api_base_url'], '/').'/sell/inventory/v1/inventory_item',
-            protocolOperation: 'GET /sell/inventory/v1/inventory_item',
+            endpoint: rtrim((string) $config['api_base_url'], '/').'/sell/account/v1/payment_policy',
+            protocolOperation: 'GET /sell/account/v1/payment_policy',
             provider: EbayConfiguration::CHANNEL,
             headers: ['Authorization' => 'Bearer '.$accessToken],
-            query: ['limit' => 1],
+            query: ['marketplace_id' => (string) $config['marketplace_id']],
             ownerType: 'company',
             ownerId: $companyId,
             timeoutSeconds: 20,
@@ -126,7 +126,7 @@ class EbayConnectionTester
 
         return new EbayConnectionTestResult(
             status: self::STATUS_HEALTHY,
-            message: __('Belimbing reached eBay successfully. OAuth, selected environment, recommended seller scopes, and the read-only Inventory API are working.'),
+            message: __('Belimbing reached eBay successfully. OAuth, selected environment, recommended seller scopes, and the read-only Account API are working.'),
             testedAt: $testedAt,
             httpStatus: $response->status,
             exchangeId: $response->exchange?->id,
@@ -161,7 +161,7 @@ class EbayConnectionTester
     {
         return match ($status) {
             401 => __('eBay rejected the OAuth token. Reconnect eBay and confirm sandbox/live mode matches the saved credentials.'),
-            403 => __('eBay denied the Inventory API call. Open Advanced OAuth settings, restore the recommended scopes, reconnect eBay, then test again.'),
+            403 => __('eBay denied the Account API call. Open Advanced OAuth settings, restore the recommended scopes, reconnect eBay, then test again.'),
             null => __('Belimbing could not reach eBay. Check network access from the server, then test again.'),
             default => __('eBay returned HTTP :status during the connection test. Open the integration exchange for details, then test again.', ['status' => $status]),
         };

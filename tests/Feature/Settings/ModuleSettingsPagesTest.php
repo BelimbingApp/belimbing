@@ -259,7 +259,7 @@ test('eBay OAuth authorize URL uses the eBay RuName instead of the callback URL'
         ->and($query['redirect_uri'] ?? null)->not()->toBe(route('commerce.marketplace.ebay.oauth.callback'));
 });
 
-test('eBay settings connection test verifies the saved OAuth grant against a safe Inventory API call', function (): void {
+test('eBay settings connection test verifies the saved OAuth grant against a safe Account API call', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
@@ -289,9 +289,9 @@ test('eBay settings connection test verifies the saved OAuth grant against a saf
     );
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
-            'inventoryItems' => [
-                ['sku' => 'test-sku'],
+        'https://api.sandbox.ebay.com/sell/account/v1/payment_policy*' => Http::response([
+            'paymentPolicies' => [
+                ['paymentPolicyId' => 'policy-1', 'name' => 'Default Payments'],
             ],
         ]),
     ]);
@@ -304,9 +304,10 @@ test('eBay settings connection test verifies the saved OAuth grant against a saf
         ->assertSee('Belimbing reached eBay successfully');
 
     expect($settings->get('marketplace.ebay.connection_test_status', scope: $scope))->toBe(EbayConnectionTester::STATUS_HEALTHY)
-        ->and($settings->get('marketplace.ebay.connection_test_message', scope: $scope))->toBe('Belimbing reached eBay successfully. OAuth, selected environment, recommended seller scopes, and the read-only Inventory API are working.');
+        ->and($settings->get('marketplace.ebay.connection_test_message', scope: $scope))->toBe('Belimbing reached eBay successfully. OAuth, selected environment, recommended seller scopes, and the read-only Account API are working.');
 
-    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item')
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/account/v1/payment_policy')
+        && str_contains($request->url(), 'marketplace_id=EBAY_US')
         && $request->hasHeader('Authorization', 'Bearer access-token-connection-test'));
 });
 

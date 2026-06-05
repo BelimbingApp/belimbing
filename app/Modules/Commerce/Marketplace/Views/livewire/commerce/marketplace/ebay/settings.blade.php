@@ -40,7 +40,7 @@ $inventoryLocations = $accountResources->where('kind', AccountResource::KIND_INV
                         </x-ui.badge>
                     </div>
                     <p class="text-sm text-muted">
-                        {{ __('Verify the saved eBay credentials, OAuth grant, selected environment, and read-only Inventory API access before syncing listings or orders.') }}
+                        {{ __('Verify the saved eBay credentials, OAuth grant, selected environment, and read-only Account API access before syncing listings or orders.') }}
                     </p>
 
                     @if ($this->connectionTest['message'] ?? null)
