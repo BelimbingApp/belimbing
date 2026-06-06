@@ -8,9 +8,10 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Livewire\SettingsForm;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
+use App\Modules\Commerce\Marketplace\Ebay\Diagnostics\EbayDiagnosticProbes;
 use App\Modules\Commerce\Marketplace\Ebay\EbayAccountSetupImporter;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
-use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
+use App\Modules\Commerce\Marketplace\Ebay\EbayDiagnosticsService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
@@ -23,15 +24,13 @@ use Throwable;
 class Settings extends SettingsForm
 {
     /**
-     * @var array{status: string|null, message: string|null, tested_at: string|null, http_status: string|null, exchange_id: string|null}
+     * Last persisted diagnostics result (see EbayDiagnosticsResult::toArray()).
+     *
+     * @var array<string, mixed>
      */
-    public array $connectionTest = [
-        'status' => null,
-        'message' => null,
-        'tested_at' => null,
-        'http_status' => null,
-        'exchange_id' => null,
-    ];
+    public array $diagnostics = [];
+
+    public string $diagnosticProbeKey = EbayDiagnosticProbes::DEFAULT_KEY;
 
     public ?string $defaultPaymentPolicyId = null;
 
@@ -50,19 +49,19 @@ class Settings extends SettingsForm
     {
         parent::mount($settings);
 
-        $this->loadConnectionTest($settings);
+        $this->loadDiagnostics($settings);
         $this->loadAccountSetupDefaults($settings);
         $this->loadTemplateCategoryMappings();
     }
 
-    public function testConnection(EbayConnectionTester $tester): void
+    public function runDiagnostics(EbayDiagnosticsService $diagnostics): void
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
             'commerce.marketplace.manage',
         );
 
-        $this->connectionTest = $tester->test($this->companyId())->toArray();
+        $this->diagnostics = $diagnostics->run($this->companyId(), $this->diagnosticProbeKey)->toArray();
     }
 
     public function connect(EbayOAuthService $oauth): mixed
@@ -197,24 +196,34 @@ class Settings extends SettingsForm
             : __('Reconnect eBay');
     }
 
-    public function connectionTestBadgeVariant(): string
+    public function diagnosticsBadgeVariant(): string
     {
-        return match ($this->connectionTest['status']) {
-            EbayConnectionTester::STATUS_HEALTHY => 'success',
-            EbayConnectionTester::STATUS_ATTENTION => 'warning',
-            EbayConnectionTester::STATUS_FAILED => 'danger',
+        return match ($this->diagnostics['status'] ?? null) {
+            EbayDiagnosticsService::STATUS_HEALTHY => 'success',
+            EbayDiagnosticsService::STATUS_ATTENTION => 'warning',
+            EbayDiagnosticsService::STATUS_FAILED => 'danger',
             default => 'default',
         };
     }
 
-    public function connectionTestAlertVariant(): string
+    public function diagnosticsAlertVariant(): string
     {
-        return match ($this->connectionTest['status']) {
-            EbayConnectionTester::STATUS_HEALTHY => 'success',
-            EbayConnectionTester::STATUS_ATTENTION => 'warning',
-            EbayConnectionTester::STATUS_FAILED => 'danger',
+        return match ($this->diagnostics['status'] ?? null) {
+            EbayDiagnosticsService::STATUS_HEALTHY => 'success',
+            EbayDiagnosticsService::STATUS_ATTENTION => 'warning',
+            EbayDiagnosticsService::STATUS_FAILED => 'danger',
             default => 'info',
         };
+    }
+
+    /**
+     * Whether the current actor may open the full integration exchange record.
+     */
+    public function canViewExchanges(): bool
+    {
+        return app(AuthorizationService::class)
+            ->can(Actor::forUser(Auth::user()), 'admin.system.outbound-exchange.list')
+            ->allowed;
     }
 
     public function render(): View
@@ -228,6 +237,9 @@ class Settings extends SettingsForm
             'pageSubtitle' => __($group['description'] ?? 'Operator-editable module settings stored in base_settings.'),
             'accountResources' => $this->accountResources(),
             'productTemplates' => $this->productTemplates(),
+            'environment' => app(EbayConfiguration::class)->forCompany($this->companyId())['environment'] ?? null,
+            'diagnosticProbes' => app(EbayDiagnosticProbes::class)->all(),
+            'canViewExchanges' => $this->canViewExchanges(),
         ]);
     }
 
@@ -236,17 +248,11 @@ class Settings extends SettingsForm
         return 'marketplace_ebay';
     }
 
-    private function loadConnectionTest(SettingsService $settings): void
+    private function loadDiagnostics(SettingsService $settings): void
     {
-        $scope = Scope::company($this->companyId());
+        $stored = $settings->get(EbayDiagnosticsService::SETTINGS_KEY, null, Scope::company($this->companyId()));
 
-        $this->connectionTest = [
-            'status' => $settings->get('marketplace.ebay.connection_test_status', null, $scope),
-            'message' => $settings->get('marketplace.ebay.connection_test_message', null, $scope),
-            'tested_at' => $settings->get('marketplace.ebay.connection_tested_at', null, $scope),
-            'http_status' => $settings->get('marketplace.ebay.connection_test_http_status', null, $scope),
-            'exchange_id' => $settings->get('marketplace.ebay.connection_test_exchange_id', null, $scope),
-        ];
+        $this->diagnostics = is_array($stored) ? $stored : [];
     }
 
     private function loadAccountSetupDefaults(SettingsService $settings): void

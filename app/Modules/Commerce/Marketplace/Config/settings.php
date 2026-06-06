@@ -4,7 +4,7 @@ return [
     'editable' => [
         'marketplace_ebay' => [
             'label' => 'eBay',
-            'description' => 'OAuth app credentials, marketplace defaults, and Sell API scopes for the eBay adapter.',
+            'description' => 'Connect the eBay marketplace channel: app credentials and OAuth scopes, seller defaults, and template category mappings.',
             'help_title' => 'How to configure eBay OAuth',
             'help_intro' => 'You will switch between Belimbing and the eBay Developer Console. First copy the app keys into Belimbing, then open eBay’s <code>User Tokens</code> page to configure the sign-in callback and copy back the generated <code>RuName</code>.',
             'help_steps' => [
@@ -20,7 +20,7 @@ return [
                 'Enter a public HTTPS <code>Privacy Policy URL</code>. eBay requires this for User access tokens because Belimbing will read seller account, listing, and order data. The upstream project policy is <code>https://github.com/belimbingapp/belimbing/blob/main/PRIVACY.md</code>; production installations should publish their own policy if their data practices differ.',
                 'Copy the <code>Belimbing Callback URL</code> from this page into both eBay’s <code>Auth Accepted URL</code> and <code>Auth Declined URL</code> fields. Belimbing owns the callback and will show the right success or declined result.',
                 'Select <code>OAuth</code>, not <code>Auth’n’Auth</code>, then save the eBay sign-in settings.',
-                'Copy the generated <code>RuName</code> back into Belimbing’s <code>Redirect URL name</code> field, save settings, click <code>Connect eBay</code>, approve the requested scopes, then run <code>Test connection</code>.',
+                'Copy the generated <code>RuName</code> back into Belimbing’s <code>Redirect URL name</code> field, save settings, click <code>Connect eBay</code>, approve the requested scopes, then run a diagnostic probe on this page to confirm access.',
             ],
             'fields' => [
                 [
@@ -58,7 +58,7 @@ return [
                         'EBAY_SG' => 'Singapore (EBAY_SG)',
                         'EBAY_MY' => 'Malaysia (EBAY_MY)',
                         'EBAY_PH' => 'Philippines (EBAY_PH)',
-                        'EBAY_MOTORS' => 'eBay Motors (EBAY_MOTORS)',
+                        'EBAY_MOTORS_US' => 'eBay Motors US (EBAY_MOTORS_US)',
                     ],
                     'help' => 'The eBay site where this company sells. Choose the country/site from the list.',
                     'rules' => ['required', 'string', 'max:32'],

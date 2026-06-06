@@ -1,17 +1,23 @@
 <?php
 
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
-use App\Modules\Commerce\Marketplace\Ebay\EbayConnectionTester;
+use App\Modules\Commerce\Marketplace\Ebay\EbayDiagnosticsService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Settings\Livewire\Settings as CommerceSettings;
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Geonames\Models\Country;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -47,7 +53,7 @@ test('eBay settings page renders its setup fields and persists values', function
         ->assertSee('https://github.com/belimbingapp/belimbing/blob/main/PRIVACY.md')
         ->assertSee('Select <code>OAuth</code>, not <code>Auth’n’Auth</code>', false)
         ->assertSee('Connect eBay')
-        ->assertSee('Test connection')
+        ->assertSee('Run diagnostics')
         ->assertSee('Seller setup choices')
         ->assertSee('Refresh from eBay')
         ->assertSee('No eBay setup choices have been imported yet')
@@ -259,7 +265,7 @@ test('eBay OAuth authorize URL uses the eBay RuName instead of the callback URL'
         ->and($query['redirect_uri'] ?? null)->not()->toBe(route('commerce.marketplace.ebay.oauth.callback'));
 });
 
-test('eBay settings connection test verifies the saved OAuth grant against a safe Account API call', function (): void {
+test('eBay settings diagnostics verifies the saved OAuth grant against a safe Account API call', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
@@ -299,19 +305,23 @@ test('eBay settings connection test verifies the saved OAuth grant against a saf
     $this->actingAs($user);
 
     Livewire::test(EbaySettings::class)
-        ->call('testConnection')
-        ->assertSet('connectionTest.status', EbayConnectionTester::STATUS_HEALTHY)
-        ->assertSee('Belimbing reached eBay successfully');
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_HEALTHY)
+        ->assertSee('responded successfully');
 
-    expect($settings->get('marketplace.ebay.connection_test_status', scope: $scope))->toBe(EbayConnectionTester::STATUS_HEALTHY)
-        ->and($settings->get('marketplace.ebay.connection_test_message', scope: $scope))->toBe('Belimbing reached eBay successfully. OAuth, selected environment, recommended seller scopes, and the read-only Account API are working.');
+    $stored = $settings->get(EbayDiagnosticsService::SETTINGS_KEY, scope: $scope);
+
+    expect($stored['status'])->toBe(EbayDiagnosticsService::STATUS_HEALTHY)
+        ->and($stored['probe_key'])->toBe('account_payment_policies')
+        ->and($stored['http_status'])->toBe(200)
+        ->and($stored['message'])->toContain('responded successfully');
 
     Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/account/v1/payment_policy')
         && str_contains($request->url(), 'marketplace_id=EBAY_US')
         && $request->hasHeader('Authorization', 'Bearer access-token-connection-test'));
 });
 
-test('eBay settings connection test explains when OAuth has not been connected yet', function (): void {
+test('eBay settings diagnostics explains when OAuth has not been connected yet', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
@@ -331,14 +341,156 @@ test('eBay settings connection test explains when OAuth has not been connected y
     $this->actingAs($user);
 
     Livewire::test(EbaySettings::class)
-        ->call('testConnection')
-        ->assertSet('connectionTest.status', EbayConnectionTester::STATUS_FAILED)
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_FAILED)
         ->assertSee('OAuth is not connected yet');
 
-    expect($settings->get('marketplace.ebay.connection_test_status', scope: $scope))->toBe(EbayConnectionTester::STATUS_FAILED)
-        ->and($settings->get('marketplace.ebay.connection_test_message', scope: $scope))->toBe('OAuth is not connected yet. Use Connect eBay on this page, approve the requested scopes, then test again.');
+    $stored = $settings->get(EbayDiagnosticsService::SETTINGS_KEY, scope: $scope);
+
+    expect($stored['status'])->toBe(EbayDiagnosticsService::STATUS_FAILED)
+        ->and($stored['message'])->toBe('OAuth is not connected yet. Use Connect eBay on this page, approve the requested scopes, then run diagnostics again.');
 
     Http::assertNothingSent();
+});
+
+/**
+ * Seed a company with saved eBay credentials and a connected OAuth grant.
+ *
+ * @param  list<string>  $scopes
+ */
+function seedConnectedEbay(User $user, array $scopes): void
+{
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+
+    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('marketplace.ebay.client_id', 'client-diagnostics', $scope);
+    $settings->set('marketplace.ebay.client_secret', 'secret-diagnostics', $scope, encrypted: true);
+    $settings->set('marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
+    $settings->set('marketplace.ebay.scopes', $scopes, $scope);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        ['access_token' => 'access-diagnostics', 'refresh_token' => 'refresh-diagnostics', 'expires_in' => 3600],
+        $scopes,
+    );
+}
+
+/**
+ * Create a company user who may manage the marketplace but cannot view exchanges.
+ */
+function createMarketplaceManager(): User
+{
+    $company = Company::factory()->create();
+    $user = User::factory()->create(['company_id' => $company->id]);
+
+    $role = Role::query()->create([
+        'company_id' => $company->id,
+        'code' => 'mkt_manager_'.$company->id,
+        'name' => 'Marketplace Manager',
+        'is_system' => false,
+        'grant_all' => false,
+    ]);
+
+    DB::table('base_authz_role_capabilities')->insert([
+        'role_id' => $role->id,
+        'capability_key' => 'commerce.marketplace.manage',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    return $user;
+}
+
+test('eBay settings diagnostics classifies a business-policy precondition as attention, not failure', function (): void {
+    $user = createAdminUser();
+    seedConnectedEbay($user, [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/account/v1/payment_policy*' => Http::response([
+            'errors' => [[
+                'errorId' => 20403,
+                'domain' => 'API_ACCOUNT',
+                'message' => 'Seller is not opted in to business policies.',
+            ]],
+        ], 400),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_ATTENTION)
+        ->assertSee('account is not ready');
+
+    $stored = app(SettingsService::class)->get(EbayDiagnosticsService::SETTINGS_KEY, scope: Scope::company($user->company_id));
+
+    expect($stored['status'])->toBe(EbayDiagnosticsService::STATUS_ATTENTION)
+        ->and($stored['http_status'])->toBe(400)
+        ->and($stored['response_excerpt'])->toContain('20403')
+        ->and($stored['response_excerpt'])->toContain('API_ACCOUNT');
+});
+
+test('eBay settings diagnostics runs the selected inventory probe against the Inventory API', function (): void {
+    $user = createAdminUser();
+    seedConnectedEbay($user, [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/location*' => Http::response(['locations' => []]),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->set('diagnosticProbeKey', 'inventory_locations')
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_HEALTHY)
+        ->assertSet('diagnostics.probe_key', 'inventory_locations');
+
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request->url(), 'https://api.sandbox.ebay.com/sell/inventory/v1/location')
+        && ! str_contains($request->url(), 'marketplace_id')
+        && str_contains($request->url(), 'limit=1'));
+});
+
+test('eBay settings diagnostics links to the integration exchange for authorized viewers', function (): void {
+    $user = createAdminUser();
+    seedConnectedEbay($user, [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/account/v1/payment_policy*' => Http::response(['paymentPolicies' => []]),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_HEALTHY)
+        ->assertSee('Open exchange');
+});
+
+test('eBay settings diagnostics hides the exchange link from operators without exchange access', function (): void {
+    $user = createMarketplaceManager();
+    seedConnectedEbay($user, [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/account/v1/payment_policy*' => Http::response(['paymentPolicies' => []]),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->call('runDiagnostics')
+        ->assertSet('diagnostics.status', EbayDiagnosticsService::STATUS_HEALTHY)
+        ->assertDontSee('Open exchange');
 });
 
 test('commerce settings page renders only its own group and persists the default currency', function (): void {

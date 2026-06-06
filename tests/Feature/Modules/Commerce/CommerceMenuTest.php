@@ -27,7 +27,7 @@ test('commerce menu is organized around operator jobs instead of implementation 
     expect($items['commerce.settings.general']->parent)->toBe('commerce.settings')
         ->and($items['commerce.settings.general']->label)->toBe('General')
         ->and($items['commerce.marketplace.ebay-setting']->parent)->toBe('commerce.settings')
-        ->and($items['commerce.marketplace.ebay-setting']->label)->toBe('eBay Setup');
+        ->and($items['commerce.marketplace.ebay-setting']->label)->toBe('eBay Settings');
 
     if ($items->has('commerce.ham-auto-parts.setting')) {
         expect($items['commerce.ham-auto-parts.setting']->parent)->toBe('commerce.settings')

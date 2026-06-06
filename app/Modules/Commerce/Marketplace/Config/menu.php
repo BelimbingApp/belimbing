@@ -18,7 +18,7 @@ return [
         ],
         [
             'id' => 'commerce.marketplace.ebay-setting',
-            'label' => 'eBay Setup',
+            'label' => 'eBay Settings',
             'icon' => 'heroicon-o-cog-6-tooth',
             'route' => 'commerce.marketplace.ebay.settings',
             'permission' => 'commerce.marketplace.manage',
