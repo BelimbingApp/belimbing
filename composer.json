@@ -25,10 +25,10 @@
         "ext-tokenizer": "*",
         "ext-xml": "*",
         "ext-zip": "*",
-        "laravel/framework": "^13.12.0",
+        "laravel/framework": "^13.14.0",
         "laravel/octane": "^2.17.4",
         "laravel/tinker": "^3.0.2",
-        "livewire/livewire": "^4.3.0"
+        "livewire/livewire": "^4.3.1"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7.0",
@@ -60,10 +60,6 @@
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
-        ],
-        "post-update-cmd": [
-            "@php artisan vendor:publish --tag=laravel-assets --ansi --force",
-            "@php artisan vendor:publish --tag=livewire:assets --ansi --force"
         ],
         "post-root-package-install": [
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
