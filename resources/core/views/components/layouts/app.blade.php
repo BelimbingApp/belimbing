@@ -36,7 +36,7 @@
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
-    {{-- Top Bar — persisted island: its content is page-independent (logo, company,
+    {{-- Top Bar — persisted region: its content is page-independent (logo, company,
          user, timezone, locale), so keep the same DOM across wire:navigate instead
          of tearing down and rebuilding the full-width bar (which read as a flash). --}}
     @persist('top-bar')
@@ -47,31 +47,45 @@
 
     {{-- Main Layout: Sidebar + Content --}}
     <div class="relative flex flex-1 overflow-hidden">
-        {{-- Desktop Sidebar (drag-resizable) --}}
+        {{-- Desktop Sidebar (drag-resizable).
+             Sidebar persisted region: x-persist on the width column keeps the column DOM
+             (wrapper width + menu tree) across wire:navigate, so only the main
+             body re-renders. The live element is carried over intact, so its
+             already-applied width survives — no morph reset, no client-side width
+             reapplication needed. (x-persist is exactly what @persist expands to;
+             asset injection is already forced by the other @persist regions.)
+             The :style width binding is a REACTIVE effect, which Livewire re-runs
+             on the persisted node after morph, so it keeps tracking the live body
+             scope. Active state tracks the URL via wire:current; pins sync
+             client-side.
+             NOTE: the drag handle is deliberately OUTSIDE the persist (see below)
+             — event listeners are NOT re-attached on the persisted node after a
+             morph, so an in-persist @mousedown would mutate the stale, discarded
+             body scope and break drag-resize after the first navigation. --}}
         <div
             data-blb-sidebar-width-shell
+            x-persist="sidebar-desktop"
             class="hidden lg:flex shrink-0 relative"
             :style="'width: ' + sidebarWidth + 'px'"
         >
-            {{-- Sidebar island: @persist keeps the menu DOM across wire:navigate
-                 so only the main body re-renders. Active state tracks the URL via
-                 wire:current; pins already sync client-side. --}}
-            @persist('sidebar-desktop')
-                @unless($skipShellRender)
-                    <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
-                @endunless
-            @endpersist
+            @unless($skipShellRender)
+                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+            @endunless
+        </div>
 
-            {{-- Drag handle --}}
+        {{-- Drag handle — kept OUTSIDE the persisted column on purpose so its
+             @mousedown listener re-initializes against the fresh body scope on
+             every navigation. Positioned at the column's right edge via a
+             reactive :style (re-evaluated each navigate). --}}
+        <div
+            @mousedown.prevent="startDrag($event)"
+            class="hidden lg:block absolute top-0 bottom-0 w-1 cursor-col-resize z-20 group"
+            :style="'left: ' + (sidebarWidth - 2) + 'px'"
+        >
             <div
-                @mousedown.prevent="startDrag($event)"
-                class="absolute top-0 bottom-0 right-0 w-1 cursor-col-resize z-20 group"
-            >
-                <div
-                    class="w-full h-full transition-colors"
-                    :class="_dragging ? 'bg-accent' : 'group-hover:bg-border-default'"
-                ></div>
-            </div>
+                class="w-full h-full transition-colors"
+                :class="_dragging ? 'bg-accent' : 'group-hover:bg-border-default'"
+            ></div>
         </div>
 
         {{-- Mobile Sidebar Backdrop --}}
@@ -178,7 +192,7 @@
         @endpersist
     @endif
 
-    {{-- Status Bar — persisted island (page-independent: locale, environment,
+    {{-- Status Bar — persisted region (page-independent: locale, environment,
          impersonation/license notices). Same reasoning as the top bar. --}}
     @persist('status-bar')
         @unless($skipShellRender)

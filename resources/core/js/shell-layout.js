@@ -26,10 +26,15 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
 
     init() {
         this.initSidebar()
+        // $watch handlers cover in-page chat toggles (open/mode/fullscreen). The
+        // initial + post-navigate placement is owned by shell-navigation's
+        // applyLaraChatShellState() (which runs pre-paint at wire()/onSwap and
+        // also forces the mode-shell containers visible), so no $nextTick teleport
+        // is needed here — it was only ever a guarded no-op. Verified by probe:
+        // the chat is placed solely by applyLaraChatShellState on load and navigate.
         this.$watch('laraChatOpen', () => this.teleportLaraChat())
         this.$watch('laraChatMode', () => this.teleportLaraChat())
         this.$watch('laraChatFullscreen', () => this.teleportLaraChat())
-        this.$nextTick(() => this.teleportLaraChat())
         globalThis.blbShellNavigation?.wire()
     },
 

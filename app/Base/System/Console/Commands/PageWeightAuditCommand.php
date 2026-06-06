@@ -13,7 +13,7 @@ use Throwable;
 
 /**
  * Page-weight triage: render every full-page Livewire component and rank it by
- * rendered HTML size, query count, and nested-island count.
+ * rendered HTML size, query count, and Livewire-component count (`wire:id` roots).
  *
  * Used to triage client-side render cost (docs/plans/performance-page-rendering.md)
  * and, with --max-kb --strict, as a regression guardrail. Dev-only: it logs in a
@@ -71,11 +71,11 @@ class PageWeightAuditCommand extends Command
                 $rows[$class] = [
                     'kb' => round(strlen($html) / 1024, 1),
                     'queries' => count(DB::getQueryLog()),
-                    'islands' => substr_count($html, 'wire:id'),
+                    'components' => substr_count($html, 'wire:id'),
                     'page' => $route->uri(),
                 ];
             } catch (Throwable $e) {
-                $rows[$class] = ['kb' => null, 'queries' => 0, 'islands' => 0, 'page' => $route->uri()];
+                $rows[$class] = ['kb' => null, 'queries' => 0, 'components' => 0, 'page' => $route->uri()];
             }
             DB::disableQueryLog();
         }
@@ -98,10 +98,10 @@ class PageWeightAuditCommand extends Command
         $table = [];
         foreach (array_slice($rendered, 0, (int) $this->option('limit'), true) as $r) {
             $flag = ($maxKb !== null && $r['kb'] > $maxKb) ? ' ⚠' : '';
-            $table[] = [$r['kb'].$flag, $r['queries'], $r['islands'], $r['page']];
+            $table[] = [$r['kb'].$flag, $r['queries'], $r['components'], $r['page']];
         }
 
-        $this->table(['KB', 'Queries', 'Islands', 'Page'], $table);
+        $this->table(['KB', 'Queries', 'Components', 'Page'], $table);
         $this->components->info(sprintf(
             '%d rendered, %d skipped/errored.',
             count($rendered),
