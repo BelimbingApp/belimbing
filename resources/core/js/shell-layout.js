@@ -217,20 +217,15 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
             return
         }
 
-        const isMobile = window.innerWidth < 640
-        let target = null
-
-        if (this.laraChatOpen) {
-            if (isMobile) {
-                target = this.$refs.laraMobileTarget
-            } else if (this.laraChatFullscreen) {
-                target = this.$refs.laraFullscreenTarget
-            } else if (this.laraChatMode === 'docked') {
-                target = this.$refs.laraDockTarget
-            } else {
-                target = this.$refs.laraOverlayTarget
-            }
-        }
+        // Mode→target decision is shared with shell-navigation's pre-paint repair
+        // so the two placement paths can't drift. Here (in-page toggle) the mode
+        // shells are shown/hidden reactively by x-show; we only move the chat.
+        const targetRef = globalThis.blbShellNavigation?.resolveLaraChatTargetRef({
+            open: this.laraChatOpen,
+            mode: this.laraChatMode,
+            fullscreen: this.laraChatFullscreen,
+        })
+        const target = targetRef ? this.$refs[targetRef] : null
 
         if (target) {
             if (element.parentNode !== target) {

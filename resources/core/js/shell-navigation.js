@@ -69,6 +69,39 @@ const setShellDisplay = (shell, display) => {
     shell.style.display = display
 }
 
+// CSS display each mode shell uses when visible (dock is a flex column).
+const LARA_SHELL_DISPLAY = {
+    laraDockTarget: 'flex',
+    laraOverlayTarget: 'block',
+    laraFullscreenTarget: 'block',
+    laraMobileTarget: 'block',
+}
+
+// Single source of truth for which mode target the chat belongs in, given its
+// open/mode/fullscreen state and the viewport — null means hidden. Shared by the
+// pre-paint navigate repair (applyLaraChatShellState, below) and the in-page
+// Alpine toggle handler (teleportLaraChat in shell-layout.js) so the mode
+// decision can never drift between the two placement paths.
+const resolveLaraChatTargetRef = ({ open, mode, fullscreen }) => {
+    if (!open) {
+        return null
+    }
+
+    if (window.innerWidth < 640) {
+        return 'laraMobileTarget'
+    }
+
+    if (fullscreen) {
+        return 'laraFullscreenTarget'
+    }
+
+    if (mode === 'docked') {
+        return 'laraDockTarget'
+    }
+
+    return 'laraOverlayTarget'
+}
+
 const applyLaraChatShellState = () => {
     const chat = document.getElementById('lara-chat-instance')
 
@@ -81,59 +114,46 @@ const applyLaraChatShellState = () => {
     const fullscreen = (localStorage.getItem('agent-chat-1-fullscreen') ?? '0') === '1'
     const dockWidth = parseInt(localStorage.getItem('agent-chat-1-dock-width')) || 448
 
-    const dockTarget = document.querySelector('[x-ref="laraDockTarget"]')
-    const overlayTarget = document.querySelector('[x-ref="laraOverlayTarget"]')
-    const fullscreenTarget = document.querySelector('[x-ref="laraFullscreenTarget"]')
-    const mobileTarget = document.querySelector('[x-ref="laraMobileTarget"]')
+    const targetRef = resolveLaraChatTargetRef({ open, mode, fullscreen })
 
-    const dockShell = dockTarget?.closest('aside')
-    const overlayShell = overlayTarget?.closest('[x-show]')
-    const fullscreenShell = fullscreenTarget?.closest('[x-show]')
-    const mobileShell = mobileTarget?.closest('[x-show]')
-
-    if (dockShell) {
-        dockShell.style.width = `${dockWidth}px`
+    const targets = {
+        laraDockTarget: document.querySelector('[x-ref="laraDockTarget"]'),
+        laraOverlayTarget: document.querySelector('[x-ref="laraOverlayTarget"]'),
+        laraFullscreenTarget: document.querySelector('[x-ref="laraFullscreenTarget"]'),
+        laraMobileTarget: document.querySelector('[x-ref="laraMobileTarget"]'),
     }
 
-    if (!open) {
-        restoreLaraChatParkingStyle(chat)
-        chat.style.display = 'none'
-        setShellDisplay(dockShell, 'none')
-        setShellDisplay(overlayShell, 'none')
-        setShellDisplay(fullscreenShell, 'none')
-        setShellDisplay(mobileShell, 'none')
-
-        return
+    // The dock target lives inside an <aside>; the others inside an [x-show] box.
+    const shells = {}
+    for (const ref of Object.keys(targets)) {
+        shells[ref] = ref === 'laraDockTarget'
+            ? targets[ref]?.closest('aside')
+            : targets[ref]?.closest('[x-show]')
     }
 
-    let target = overlayTarget
-    let visibleShell = overlayShell
-    let visibleDisplay = 'block'
-
-    if (window.innerWidth < 640) {
-        target = mobileTarget
-        visibleShell = mobileShell
-        visibleDisplay = 'block'
-    } else if (fullscreen) {
-        target = fullscreenTarget
-        visibleShell = fullscreenShell
-        visibleDisplay = 'block'
-    } else if (mode === 'docked') {
-        target = dockTarget
-        visibleShell = dockShell
-        visibleDisplay = 'flex'
+    if (shells.laraDockTarget) {
+        shells.laraDockTarget.style.width = `${dockWidth}px`
     }
 
-    for (const shell of [dockShell, overlayShell, fullscreenShell, mobileShell]) {
+    const visibleShell = targetRef ? shells[targetRef] : null
+
+    for (const shell of Object.values(shells)) {
         if (shell && shell !== visibleShell) {
             setShellDisplay(shell, 'none')
         }
     }
 
-    setShellDisplay(visibleShell, visibleDisplay)
+    if (!targetRef) {
+        restoreLaraChatParkingStyle(chat)
+        chat.style.display = 'none'
 
-    if (target && chat.parentNode !== target) {
-        target.appendChild(chat)
+        return
+    }
+
+    setShellDisplay(visibleShell, LARA_SHELL_DISPLAY[targetRef])
+
+    if (chat.parentNode !== targets[targetRef]) {
+        targets[targetRef].appendChild(chat)
     }
 
     restoreLaraChatParkingStyle(chat)
@@ -265,6 +285,7 @@ globalThis.blbShellNavigation = {
     applyNavigateSwapShellState,
     applyClientHtmlState,
     applyLaraChatShellState,
+    resolveLaraChatTargetRef,
     prepareLaraChatForNavigate,
 }
 
