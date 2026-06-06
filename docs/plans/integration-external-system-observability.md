@@ -2,7 +2,7 @@
 
 **Status:** In Progress — Phases 1–5 complete; Phase 6 remains deferred.
 **Last Updated:** 2026-05-05
-**Sources:** `app/Base/Integration`, `app/Base/AI/Services/ProviderDiscoveryService.php`, `app/Modules/Core/AI/Services/ModelDiscoveryService.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `docs/plans/ai-control-plane-debuggability.md`, `docs/plans/ham/01-ebay-car-parts-operations.md`
+**Sources:** `app/Base/Integration`, `app/Base/AI/Services/ProviderDiscoveryService.php`, `app/Modules/Core/AI/Services/ModelDiscoveryService.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `docs/plans/ai-control-plane-debuggability.md`, `extensions/ham/docs/plans/ham-auto-parts-continuation.md`
 **Agents:** Codex/GPT-5
 
 ## Problem Essence
