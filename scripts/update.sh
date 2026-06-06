@@ -5,9 +5,10 @@
 # Usage:
 #   ./scripts/update.sh
 #
-# Edit composer.json and/or package.json, then run this script. It decides when
-# Composer should update the lockfile versus just install from it, refreshes Bun
-# dependencies, republishes PHP-managed assets, and rebuilds frontend assets.
+# Run this after dependency manifest or lockfile changes, including after
+# pulling remote updates. It uses Composer's lock validation to choose install
+# versus update, refreshes Bun dependencies, republishes PHP-managed assets, and
+# rebuilds frontend assets.
 
 set -euo pipefail
 
@@ -22,39 +23,24 @@ usage() {
     exit 1
 }
 
-is_git_path_modified() {
-    local path=$1
-
-    git -C "$PROJECT_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 1
-
-    if ! git -C "$PROJECT_ROOT" diff --quiet -- "$path"; then
-        return 0
-    fi
-
-    if ! git -C "$PROJECT_ROOT" diff --cached --quiet -- "$path"; then
-        return 0
-    fi
-
-    return 1
-}
-
 should_run_composer_update() {
-    local composer_json="$PROJECT_ROOT/composer.json"
     local composer_lock="$PROJECT_ROOT/composer.lock"
+    local validation_output
 
     if [[ ! -f "$composer_lock" ]]; then
         return 0
     fi
 
-    if [[ "$composer_json" -nt "$composer_lock" ]]; then
+    if validation_output="$(cd "$PROJECT_ROOT" && composer validate --check-lock --no-check-publish 2>&1)"; then
+        return 1
+    fi
+
+    if grep -Eiq 'lock file .* not up to date|lock file is not up to date' <<< "$validation_output"; then
         return 0
     fi
 
-    if is_git_path_modified "composer.json" && ! is_git_path_modified "composer.lock"; then
-        return 0
-    fi
-
-    return 1
+    printf '%s\n' "$validation_output" >&2
+    exit 1
 }
 
 run_composer_refresh() {
