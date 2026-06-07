@@ -1,9 +1,22 @@
 const storedInt = (key, fallback) => parseInt(localStorage.getItem(key)) || fallback
 
+// Rail (icon-only) state lives in a global Alpine store, NOT in blbAppShell's
+// x-data. The desktop sidebar is an x-persist region whose <aside>/<li> carry
+// their own x-data; on wire:navigate the body's blbAppShell is rebuilt as a new
+// component while the persisted sidebar keeps a scope chain pointing at the old,
+// dead one. A store is a page-lifetime singleton untouched by the morph, so the
+// live body and the persisted sidebar always read/write the same `rail` value —
+// otherwise the width updates (a directive on the persist node, re-evaluated by
+// Livewire) but the sidebar's `x-show` stays frozen on the dead scope.
+document.addEventListener('alpine:init', () => {
+    globalThis.Alpine.store('shell', {
+        rail: (localStorage.getItem('sidebarRail') ?? '0') === '1',
+    })
+})
+
 globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     sidebarOpen: false,
     sidebarWidth: storedInt('sidebarWidth', 224),
-    sidebarRail: (localStorage.getItem('sidebarRail') ?? '0') === '1',
     _lastExpandedWidth: storedInt('sidebarWidth', 224),
     _dragging: false,
 
@@ -39,7 +52,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     },
 
     initSidebar() {
-        if (this.sidebarRail) {
+        if (this.$store.shell.rail) {
             this.sidebarWidth = this.RAIL_WIDTH
         }
 
@@ -53,12 +66,12 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
 
     toggleSidebar() {
         if (window.innerWidth >= 1024) {
-            if (this.sidebarRail) {
-                this.sidebarRail = false
+            if (this.$store.shell.rail) {
+                this.$store.shell.rail = false
                 this.sidebarWidth = this._lastExpandedWidth
             } else {
                 this._lastExpandedWidth = this.sidebarWidth
-                this.sidebarRail = true
+                this.$store.shell.rail = true
                 this.sidebarWidth = this.RAIL_WIDTH
             }
 
@@ -81,10 +94,10 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
 
             if (newWidth <= this.COLLAPSE_THRESHOLD) {
                 this.sidebarWidth = this.RAIL_WIDTH
-                this.sidebarRail = true
+                this.$store.shell.rail = true
             } else {
                 this.sidebarWidth = newWidth
-                this.sidebarRail = false
+                this.$store.shell.rail = false
                 this._lastExpandedWidth = newWidth
             }
         }
@@ -104,7 +117,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
 
     _persistSidebar() {
         localStorage.setItem('sidebarWidth', this._lastExpandedWidth)
-        localStorage.setItem('sidebarRail', this.sidebarRail ? '1' : '0')
+        localStorage.setItem('sidebarRail', this.$store.shell.rail ? '1' : '0')
     },
 
     startDockDrag(event) {

@@ -22,7 +22,7 @@
     @if($item->hasRoute())
         {{-- Link item: rail (icon-only) variant --}}
         <a
-            x-show="sidebarRail"
+            x-show="$store.shell.rail"
             x-cloak
             href="{{ $href }}"
             @if($item->route) wire:navigate @endif
@@ -36,7 +36,7 @@
         {{-- Link item: expanded variant. Active state is driven client-side by
              wire:current (it sets data-current on the matching link), so the
              persisted sidebar's highlight tracks navigation without a re-render. --}}
-        <div x-show="!sidebarRail" x-cloak class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link font-normal hover:bg-surface-subtle has-[[data-current]]:bg-surface-card has-[[data-current]]:text-ink has-[[data-current]]:font-medium">
+        <div x-show="!$store.shell.rail" x-cloak class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link font-normal hover:bg-surface-subtle has-[[data-current]]:bg-surface-card has-[[data-current]]:text-ink has-[[data-current]]:font-medium">
             @if(count($children) > 0)
                 <span
                     @click.prevent="expanded = !expanded"
@@ -75,7 +75,7 @@
     @else
         {{-- Container item (no route): rail variant --}}
         <button
-            x-show="sidebarRail"
+            x-show="$store.shell.rail"
             x-cloak
             type="button"
             @click="expanded = !expanded"
@@ -88,7 +88,7 @@
 
         {{-- Container item: expanded variant --}}
         <div
-            x-show="!sidebarRail"
+            x-show="!$store.shell.rail"
             x-cloak
             @click="expanded = !expanded"
             class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition text-link font-normal hover:bg-surface-subtle group-has-[[data-current]]/menuitem:font-medium"
@@ -108,7 +108,7 @@
         <ul
             x-show="expanded"
             x-transition
-            :class="sidebarRail ? 'ml-0 mt-0 space-y-0' : 'ml-3 mt-0 space-y-0'"
+            :class="$store.shell.rail ? 'ml-0 mt-0 space-y-0' : 'ml-3 mt-0 space-y-0'"
         >
             @foreach($children as $child)
                 <x-menu.item

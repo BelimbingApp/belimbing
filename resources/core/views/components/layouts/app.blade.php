@@ -69,7 +69,7 @@
             :style="'width: ' + sidebarWidth + 'px'"
         >
             @unless($skipShellRender)
-                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="sidebarRail" />
+                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="$store.shell.rail" />
             @endunless
         </div>
 
