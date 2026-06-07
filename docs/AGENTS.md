@@ -1,45 +1,46 @@
 # Documentation Guide
 
-## For Agents
+Use this file to decide whether a change needs docs and where those docs belong.
+
+## Read First
 
 | Topic | Read |
 |-------|------|
 | PHP conventions, dev philosophy, coding style | Root `AGENTS.md` |
+| Active plans and implementation tracking | `docs/plans/AGENTS.md` |
+| Architecture docs under `docs/architecture/` | `docs/architecture/AGENTS.md` |
+| Tutorials and crash-course docs under `docs/tutorials/` | `docs/tutorials/AGENTS.md` |
 | Database CLI (`migrate`, `--seed`, `--module`, `--seeder`) | `app/Base/Database/AGENTS.md` |
 | UI / Blade / Tailwind / Alpine | `resources/core/views/AGENTS.md` |
-| AI tool framework (Tool contract, AbstractTool, schema builder) | `docs/Base/AI/tool-framework.md` |
-| Log Viewer (admin/system/logs) | `docs/Base/Log/log-viewer.md` |
-| Table Browser (admin/system/database-tables) | `docs/Base/Database/table-browser.md` |
-| Scratch / temporary work | `docs/scratch/` |
 
-## For Developers & Licensees
+## Place Docs Here
 
-| Topic | Read |
-|-------|------|
-| Project vision & principles | `docs/brief.md` |
-| Architecture specs (layers, database, domain model, broadcasting) | `docs/architecture/` |
-| How-to guides (setup, theming, extensions, trusted HTTPS) | `docs/guides/` |
-| Module documentation (Company, User, Employee, Geonames, Quality) | `docs/modules/` |
-| Tutorials (Caddy, Vite, Livewire, logging) | `docs/tutorials/` |
-| Operational runbooks (database backup, ...) | `docs/runbooks/` |
-| Reference (package evaluation) | `docs/reference/` |
-| Planning (active) | `docs/plans/` (`docs/plans/AGENTS.md`) |
-| Planning (legacy, migrating) | `docs/todo/` (`docs/todo/AGENTS.md`) |
+| If the doc is... | Put it in... |
+|-------------------|--------------|
+| vision or framework principles | `docs/brief.md` |
+| a live plan or implementation tracker | `docs/plans/` |
+| stable architecture or ownership | `docs/architecture/` |
+| contributor workflow | `docs/development/` |
+| installation or first-run setup | `docs/installation/` |
+| task-oriented how-to guidance | `docs/guides/` |
+| module-specific concepts or contracts | `docs/modules/` |
+| tutorial or domain teaching material | `docs/tutorials/` |
+| operations or maintenance procedure | `docs/runbooks/` |
+| reference or evaluation material | `docs/reference/` |
+| temporary notes | `docs/scratch/` |
+| ongoing Lara ideation thread | `docs/ktoh/` |
 
-## Directory Structure
+## Update Docs When
 
-```
-docs/
-├── Base/                  # Framework infrastructure documentation (Base/AI, Base/Database, etc.)
-├── architecture/          # System design specs (layers, database, domain model, broadcasting, Agent)
-├── guides/                # Task-oriented how-to guides
-│   └── extensions/        # Extension development guides (migrations, config)
-├── modules/               # Per-module documentation (overviews, APIs, design decisions)
-├── tutorials/             # Learning-oriented tutorials (Caddy, Vite, Livewire, logging)
-├── runbooks/              # Operational runbooks (database backup, ...)
-├── reference/             # Lookup tables, evaluations
-├── plans/                 # Active planning documents (preferred)
-├── todo/                  # Legacy planning documents (migrating to plans/)
-├── scratch/               # Temporary agent workspace (discard after task)
-└── brief.md               # Project vision & principles
-```
+- a stable contract, boundary, or system shape changes
+- a user, operator, or contributor workflow changes
+- a module gains behavior or ownership rules worth preserving
+- a plan is the active source of truth for the task
+
+Do not add docs just to narrate an obvious code change.
+
+## Rules
+
+- Keep the smallest durable doc that preserves the decision, contract, or workflow.
+- Keep status tracking in `docs/plans/`, not in architecture or guide docs.
+- Prefer links to owning code or sibling docs over duplicated prose.
