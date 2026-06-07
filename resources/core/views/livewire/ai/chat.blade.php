@@ -925,11 +925,21 @@
                             ? elapsedSeconds + 's'
                             : Math.floor(elapsedSeconds / 60) + 'm ' + (elapsedSeconds % 60) + 's'
                     "></span>
+                    @if ($canAccessControlPlane && $selectedSessionTurnTarget)
+                        <a
+                            href="{{ route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
+                            wire:navigate
+                            class="ml-auto inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-0.5 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle transition-colors shrink-0"
+                        >
+                            <x-icon name="heroicon-o-adjustments-horizontal" class="h-3 w-3" />
+                            <span>{{ __('Open in Control Plane') }}</span>
+                        </a>
+                    @endif
                     <button
                         type="button"
                         @click="stopStreaming()"
                         :disabled="stopRequested"
-                        class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shrink-0"
+                        class="@if (! ($canAccessControlPlane && $selectedSessionTurnTarget)) ml-auto @endif inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-border-default bg-surface-card text-muted hover:text-ink hover:border-accent/40 disabled:opacity-60 disabled:cursor-not-allowed transition-colors shrink-0"
                     >
                         <x-icon name="heroicon-o-stop" class="w-3 h-3" />
                         <span x-text="stopRequested ? @js(__('Stopping…')) : @js(__('Stop'))"></span>
@@ -963,16 +973,6 @@
                                 <x-icon name="heroicon-o-plus" class="w-3 h-3" />
                                 <span>{{ __('New session') }}</span>
                             </x-ui.button>
-                            @if ($canAccessControlPlane && $selectedSessionTurnTarget)
-                                <a
-                                    href="{{ route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
-                                    wire:navigate
-                                    class="inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-1 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle"
-                                >
-                                    <x-icon name="heroicon-o-adjustments-horizontal" class="h-3 w-3" />
-                                    <span>{{ __('Open in Control Plane') }}</span>
-                                </a>
-                            @endif
                         </div>
 
                         @if ($sessionUsage && ($sessionUsage['total_prompt_tokens'] > 0 || $sessionUsage['total_completion_tokens'] > 0))
