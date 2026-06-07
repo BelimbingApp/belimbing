@@ -113,7 +113,7 @@ Stop-BelimbingProcess -Name 'Queue worker' -Predicate {
     Test-CommandLineContains $process.CommandLine @(
         'artisan',
         'queue:work',
-        'ai-agent-tasks,ai-background-commands,ai-schedules,default'
+        'ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default'
     )
 }
 

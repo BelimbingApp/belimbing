@@ -8,6 +8,7 @@ use App\Modules\Core\AI\DTO\PageSnapshot;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\RuntimeInvocationContext;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
@@ -105,6 +106,7 @@ class ChatTurnRunner
             $runtimeContext->sessionId,
             allowedToolNames: $runtimeContext->allowedToolNames,
             executionControlsOverride: $runtimeContext->executionControlsOverride,
+            context: RuntimeInvocationContext::forChat(),
         );
 
         foreach ($this->bridge->wrap($turn, $runtimeStream) as $payload) {

@@ -4,6 +4,7 @@ namespace App\Modules\Core\AI\Livewire\Concerns;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Jobs\RunChatTurnJob;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
@@ -105,6 +106,8 @@ trait HandlesStreaming
                 'execution_mode' => 'interactive',
             ],
         ]);
+
+        RunChatTurnJob::dispatch($turn->id);
 
         return [
             'status' => 'started',

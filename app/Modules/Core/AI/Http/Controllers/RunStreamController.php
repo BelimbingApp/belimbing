@@ -1,9 +1,7 @@
 <?php
 namespace App\Modules\Core\AI\Http\Controllers;
 
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Services\ChatTurnRunner;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -21,52 +19,45 @@ class RunStreamController
             return $this->errorStream(403, 'Forbidden');
         }
 
-        if ($turn->source !== 'chat' || $turn->status !== AiRunStatus::Queued) {
-            return $this->errorStream(409, 'Run is not a queued chat run');
+        if ($turn->source !== 'chat') {
+            return $this->errorStream(409, 'Run is not a chat turn');
         }
 
         return response()->stream(function () use ($turn): void {
-            $this->writeTurnStream($turn);
+            $this->writeObservedTurnStream($turn);
         }, 200, $this->streamHeaders());
     }
 
-    private function writeTurnStream(AiRun $turn): void
+    private function writeObservedTurnStream(AiRun $turn): void
     {
         set_time_limit(0);
         ignore_user_abort(true);
 
-        $runner = app(ChatTurnRunner::class);
-        $disconnected = false;
+        $lastSeq = 0;
 
-        try {
-            $runner->run($turn, function (array $payload) use ($turn, &$disconnected): void {
-                if ($disconnected || connection_aborted()) {
-                    if (! $disconnected) {
-                        $turn->requestCancel('Client disconnected');
-                        $disconnected = true;
-                    }
+        while (true) {
+            if (connection_aborted()) {
+                return;
+            }
 
-                    return;
-                }
+            $turn->refresh();
 
-                echo json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
-                $this->flushOutput();
-            });
-        } catch (\Throwable $e) {
-            if (! $disconnected && ! connection_aborted()) {
-                echo json_encode([
-                    'error' => $e->getMessage(),
-                    '_stream_complete' => true,
-                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
+            foreach ($turn->eventsAfter($lastSeq)->get() as $event) {
+                $lastSeq = $event->seq;
+                echo json_encode($event->toSsePayload(), JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
                 $this->flushOutput();
             }
 
-            return;
-        }
+            if ($turn->status->isTerminal()) {
+                if (! connection_aborted()) {
+                    echo json_encode(['_stream_complete' => true], JSON_THROW_ON_ERROR)."\n";
+                    $this->flushOutput();
+                }
 
-        if (! $disconnected && ! connection_aborted()) {
-            echo json_encode(['_stream_complete' => true], JSON_THROW_ON_ERROR)."\n";
-            $this->flushOutput();
+                return;
+            }
+
+            usleep(250_000);
         }
     }
 

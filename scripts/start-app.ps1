@@ -193,7 +193,7 @@ try {
     $processes += Start-BelimbingProcess -Name 'FrankenPHP / Octane' -FilePath $frankenPhpExe -Arguments $frankenPhpArgs
 
     if (-not $NoQueue) {
-        $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @('artisan', 'queue:work', '--queue=ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')
+        $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @('artisan', 'queue:work', '--queue=ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')
     }
 
     if (-not $NoVite) {

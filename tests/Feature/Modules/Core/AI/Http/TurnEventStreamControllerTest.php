@@ -224,4 +224,24 @@ describe('RunEventStreamController', function () {
         expect($response->json('status'))->toBe('running')
             ->and($response->json('cancel_requested_at'))->toBe($turn->refresh()->cancel_requested_at?->toIso8601String());
     });
+
+    it('streams persisted events without marking client observation as cancellation', function () {
+        $fixture = createReplayFixture();
+        $this->actingAs($fixture['user']);
+
+        $turn = createTurnWithReplayEvents($fixture['user']->id);
+
+        $response = $this->get(route('ai.chat.turn.stream', [
+            'runId' => $turn->id,
+        ]));
+
+        $response->assertOk();
+        $content = $response->streamedContent();
+
+        expect($content)->toContain('"event_type":"run.started"')
+            ->and($content)->toContain('"event_type":"run.completed"')
+            ->and($content)->toContain('"_stream_complete":true');
+
+        expect($turn->refresh()->cancel_requested_at)->toBeNull();
+    });
 });

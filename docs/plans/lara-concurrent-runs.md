@@ -1,8 +1,9 @@
 # Lara Concurrent Runs
 
 **Status:** In Progress
-**Last Updated:** 2026-04-15
-**Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`
+**Last Updated:** 2026-06-07
+**Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`, `app/Modules/Core/AI/Http/Controllers/RunStreamController.php`
+**Agents:** Amp/GPT-5
 
 ## Problem Essence
 
@@ -23,6 +24,7 @@ Lara should support concurrent work without losing observability or control. A u
 - `Stop` always targets a specific `turn_id`, never an implicit global "current turn".
 - Page reload resumes all active turns for the current user. The selected session gets the detailed rail; other sessions resume as compact active cards.
 - A turn reaching `completed`, `failed`, or `cancelled` only clears that turn's live state. No other active turn is reset as collateral damage.
+- Browser handoff is durable. The server owns chat-turn execution; browser streams observe `ai_run_events` and a disconnect only closes that observer, not the underlying run.
 
 ## Top-Level Components
 
@@ -120,3 +122,13 @@ Goal: prove the supported concurrency model behaves coherently.
 - [x] Feature test: terminal completion of one turn does not clear another session row's active state or timer.
 - [ ] Manual verification: start turns in two sessions, switch between them, reload the page, and confirm both turns remain observable and controllable.
 - [ ] Manual verification: trigger stale-turn cleanup and confirm session-panel active state converges to the durable terminal state.
+
+### Phase 6 — Make browser handoff independent of the streaming owner
+
+Goal: a Lara run should continue when the originating browser tab closes, navigates, reloads, or is replaced by another browser logged in as the same user.
+
+- [x] Replace direct request-owned execution for interactive chat with a worker-owned execution path, or an equivalent server-owned runner, so the browser does not own run lifetime. {Amp/GPT-5}
+- [x] Treat browser streams as observers of `ai_run_events`; client disconnect should stop only that observer, not the underlying run. {Amp/GPT-5}
+- [x] Keep explicit stop actions as the only normal user cancellation path, still targeting a specific `turn_id`. {Amp/GPT-5}
+- [x] Let another browser attach to an active selected-session turn via replay and polling without needing to reopen the original stream endpoint. {Amp/GPT-5}
+- [x] Add regression coverage for browser-observer handoff: stream persisted events through the observer endpoint and assert observation does not mark cancellation. {Amp/GPT-5}

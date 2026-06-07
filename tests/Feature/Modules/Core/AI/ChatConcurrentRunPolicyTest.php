@@ -2,6 +2,7 @@
 
 use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Jobs\RunChatTurnJob;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -12,6 +13,7 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -156,6 +158,7 @@ it('returns durable timer metadata when starting a new turn', function (): void 
     $fixture = createChatConcurrencyFixture();
     $user = createChatConcurrencyUser($fixture['company']->id);
     $this->actingAs($user);
+    Queue::fake();
 
     $session = app(SessionManager::class)->create(Employee::LARA_ID);
 
@@ -179,4 +182,9 @@ it('returns durable timer metadata when starting a new turn', function (): void 
     expect($messages)->toHaveCount(1)
         ->and($messages[0]->role)->toBe('user')
         ->and($messages[0]->content)->toBe('Start a fresh run');
+
+    Queue::assertPushed(
+        RunChatTurnJob::class,
+        fn (RunChatTurnJob $job): bool => $job->runId === $result['runId'],
+    );
 });
