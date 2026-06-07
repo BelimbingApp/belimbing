@@ -20,7 +20,6 @@ Use this file to decide whether a change needs docs and where those docs belong.
 | vision or framework principles | `docs/brief.md` |
 | a live plan or implementation tracker | `docs/plans/` |
 | stable architecture or ownership | `docs/architecture/` |
-| contributor workflow | `docs/development/` |
 | installation or first-run setup | `docs/installation/` |
 | task-oriented how-to guidance | `docs/guides/` |
 | module-specific concepts or contracts | `docs/modules/` |

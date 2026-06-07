@@ -51,7 +51,7 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 | Architecture (layers, database, modules, AI) | `docs/architecture/` |
 | Migrations, seeding, incubating schema | `app/Base/Database/AGENTS.md` |
 | Active planning | `docs/plans/` (`docs/plans/AGENTS.md`) |
-| Agent onboarding | `docs/development/agent-context.md` |
+| Docs placement and routing | `docs/AGENTS.md` |
 
 ---
 
