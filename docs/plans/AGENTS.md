@@ -2,83 +2,61 @@
 
 ## Purpose
 
-Treat a plan like the **whiteboard** in a live discussion: as the conversation moves, important points are easy to lose—capture them here so everyone (and future you) can see what was agreed and why. Early on the doc holds framing and intent; as the **how** firms up, the same file naturally **becomes the task list** (**Phases** checklists) without starting over elsewhere.
+A plan is the **whiteboard** of a live discussion: capture what's agreed and why so future readers see it. `docs/plans/` is the in-repo single source of truth and the **status surface** (no parallel observability doc). Early on it holds intent; as the *how* firms up it **becomes the task list** (Phases checklists) in place. **Prose only** for design — no code/patches/full-file dumps; describe contracts and behavior in words. Recommendation-driven copy, stable section names, a preamble for quick orientation.
 
-`docs/plans/` is that shared surface for agents and humans. It is also the **status surface**—no parallel observability doc unless operationally necessary. **Prose only** for design (no implementation code, patches, or full-file dumps—describe contracts and behavior in words).
-
-Norms: **in-repo** single source of truth; **recommendation-driven** copy; stable section names (`Problem Essence`, `Phases`, …); **preamble** for quick orientation.
-
-## Workflow and visibility
+## Workflow
 
 1. User opens a discussion (problem, goal, constraint).
-2. Agent records a coherent plan when asked—recommendations and tradeoffs stated plainly, not questionnaires or "Decision Needed" dumps.
-3. User reacts. **Describe the proposed revision in chat first—short, prose, naming affected sections and any follow-on edits—then wait for approval before editing the file.** Trivial mechanical fixes the user already specified (typos, ticks, broken links) are exempt.
-4. **HALT — Mandatory Pause for Review** — After creating or revising a plan, the agent **must stop and wait for explicit user approval** before proceeding to implementation.
-5. User approves implementation; agent implements and verifies locally.
-6. **Do not** commit or push unless the user asks. When asked to commit, add agent as co-author and specify the model used to the commit message.
+2. When asked, the agent records a coherent plan on an md file — recommendations and tradeoffs stated plainly, not questionnaires or "Decision Needed" dumps.
+3. On user reaction, describe the proposed revision in the md file (short prose, naming affected sections + follow-on edits). Exempt: trivial mechanical fixes the user already specified.
+4. **HALT** — wait for explicit approval before implementing.
+5. **Never commit/push unless asked.** When asked, treat that approval as single-use and limited to the already-implemented changes currently under discussion; later work needs a fresh explicit commit/push instruction. Add the agent as co-author with the model used.
 
-Hidden session/tool-only plans are fine as scratch **only** if the same execution truth is **mirrored** into this file. Anyone opening the plan should see design, current phase, done vs. open work (via **Phases** checklists), and what changed.
+Session/tool-only plans are fine as scratch **only** if mirrored here. Anyone opening the plan should see design, current phase, done vs open (checkboxes), and what changed.
 
-## Keeping plans current during implementation
+## Keep plans current
 
-Work that implements or fixes something described in a plan must **update that plan** so the file stays accurate—**not** only the code.
+Work that implements/fixes something in a plan must **update the plan**, not just the code:
+- Tick/adjust checklists (`- [x]` when truly done; suffix completed lines with `{agent}/{model}`; add/split rows on scope change; delete dropped tasks and dead prose).
+- Refresh narrative in prose when reality diverges from Design Decisions / Desired Outcome (no patches/code).
+- Bump **Last Updated** and set **Status** when story/status meaningfully changes.
 
-- **Tick or adjust checklists** — Mark **Phases** items done (`- [x]`) when finished; suffix each completed line with `{agent-name}/{model-code}` so completions stay attributable when multiple agents ship different rows. Add or split rows if scope shifted; remove tasks that were dropped so unchecked lines stay honest.
-- **Refresh narrative when reality diverges** — If the shipped fix differs from **Design Decisions** or **Desired Outcome** (tradeoff, bug revealed a better approach, partial delivery), edit those sections in **prose** so the next reader sees what actually shipped and why. Do not paste patches or full-file code; describe contracts and behavior in words.
-- **Update the preamble** — Bump **Last Updated** when the story or status meaningfully changes; set **Status** (e.g. In Progress → Complete) when the plan is fully delivered or superseded.
-
-Skipping plan updates creates a false source of truth: the checklist and design text should match the repo.
+A stale checklist or design text is a false source of truth.
 
 ## Document shape
 
-**Title:** the **filename** (and path under `docs/plans/`). Optional lone `#` matching the filename if your renderer needs it—no filler “Plan” / “Notes” sections.
+**Title:** the filename/path (optional lone `#` matching it). No filler "Plan"/"Notes" sections.
 
-**Preamble** (substantive plans): compact block with **Status** (e.g. Identified, In Progress, Blocked, Complete, or phase label), **Last Updated** (`YYYY-MM-DD` when narrative or status meaningfully changes), **Sources** (issues, ADRs, parent plans, paths—or `None`), and **Agents** (a summary list of contributors in `{agent-name}/{model-code}` form). Keep this field current as agents participate; it summarizes collaborators.
+**Preamble** (substantive plans): **Status**, **Last Updated** (`YYYY-MM-DD`), **Sources** (issues/ADRs/parent plans/paths, or `None`), **Agents** (`{agent}/{model}` contributors, kept current).
 
-**Body** (order when sections exist; early drafts may stop after the first two):
-
-1. **Problem Essence** (required) — one or two sentences; if fuzzy, design is fuzzy.
-2. **Desired Outcome** (required) — what “done” achieves.
-3. **Top-Level Components** — when responsibilities are nameable; the system, before the rationale.
-4. **Design Decisions** — chosen direction and why (follows the structure above).
-5. **Public Contract** — when the surface/promises are clear enough to state; often firmest once components and decisions exist.
-6. **Phases** — when work can be chunked; may stay thin until the how firms up.
-
-Add later sections only when there is real content—no filler. Flow **intent → system → why → contract → execution**; never open with low-level tasks before (1) and (2). **Reserve `Build Sequence` only** to match an external artifact’s wording; otherwise use **`Phases`** so every plan uses one predictable label.
+**Body** — use a section only when it has real content; flow intent → system → why → contract → execution; never open with low-level tasks:
+1. **Problem Essence** (required) — 1–2 sentences.
+2. **Desired Outcome** (required) — what "done" achieves.
+3. **Top-Level Components** — nameable responsibilities.
+4. **Design Decisions** — chosen direction + why.
+5. **Public Contract** — surface/promises once clear.
+6. **Phases** — chunked work. (Use `Build Sequence` only to match an external artifact's wording; otherwise always `Phases`.)
 
 ## Phases = build sheet
 
-Under `Phase 1`, `Phase 2`, … use markdown tasks for actionable work: `- [ ]` open, `- [x]` done (tick only when truly finished; remove stale unchecked items for merged work). **Checklists are the source of truth** for remaining work. Grouping headings (`Goal`, `Scope`, …) get **no** checkboxes—only lines beneath them.
+Markdown tasks: `- [ ]` open, `- [x]` done (tick only when truly finished; remove stale unchecked items for merged work). **Checklists are the source of truth** for remaining work. Grouping headings get **no** checkboxes.
 
-Refine as you build: split big items, add sub-tasks and new rows when scope sharpens; keep narrative beside the list, not instead of it. Optional per-phase: `Goal`, `Scope`, `Assumptions`, `Risks`, `Evidence` (proof). Avoid a redundant `Progress` subsection.
+Optional per-phase, plain `label:` form (no bold, no checkbox): `Affected pages`, `Goal`, `Scope`, `Assumptions`, `Risks`, `Evidence`.
+- `Affected pages` — routes/URLs to open to verify that result in-browser.
+- `Goal` — the expected result, stated as what a reviewer should observe on the `Affected pages`.
+- `Evidence` — proof (files, tests).
 
-**Progress hygiene:** refresh preamble when status/sources shift; delete abandoned prose and dead checklists; evidence for claims (files, tests). Coupled follow-ups: handle inline; independent work: finish current phase first. Prefer “we should X because Y” and one main path with tradeoffs; attach risks/assumptions to the phase they belong to.
+Refine as you build: split items and add sub-tasks as scope sharpens; keep narrative beside the list; attach risks/assumptions to their phase. Coupled follow-ups inline; independent work finishes the current phase first.
 
-## Filename prefix convention
+## Filenames, splitting, legacy
 
-Prefix plan filenames with the module or subsystem they belong to, so related plans sort together and ownership is obvious at a glance.
-
-When a plan spans multiple modules, use the primary module's prefix. Cross-cutting or project-wide plans (e.g., theming, locale) need no prefix.
-
-## Splitting and migration
-
-Prefer one file until it is hard to use. **Split:** (a) **master**—essence, outcome, components, decisions, contract; (b) **companion** or **per-phase files**—each file a short build sheet with checklists. Large work: e.g. `docs/plans/<topic>/phase-1.md`, …—master indexes them in **Sources** or a phase index; each phase file links back. Name paths predictably.
-
-**Legacy:** new plans live here. Unmigrated work stays under `docs/todo/` per `docs/todo/AGENTS.md`. On move: git history, fix links, optional **Sources** to old path.
+- **Prefix** filenames with the owning module/subsystem (primary module if multi-module); cross-cutting/project-wide plans need no prefix.
+- **Split** only when a file is hard to use: (a) master — essence/outcome/components/decisions/contract; (b) per-phase build sheets with checklists. Master indexes them via Sources/phase index; each phase file links back; predictable paths.
 
 ## Hard Rules
 
-- No questionnaire-style plans.
-- No questionnaire-style prompts in chat while drafting a plan; provide a recommendation-driven proposal directly.
-- No neutral option-padding when a recommendation exists.
-- No observability-only sections that duplicate this doc.
-- No plan kept only in agent session state unless the user explicitly asks to implement without a docs/plans file.
-- No autopush or autocommit.
-- No stale or contradictory content.
-- Do not omit **Last Updated** or **Sources**.
-- Do not leave **Phases** as prose-only when steps are concrete; use checkboxes.
-- No code in the plan.
+No questionnaire plans or chat prompts; no neutral option-padding when a recommendation exists; no observability-only sections duplicating this doc; no plan kept only in session state unless explicitly asked; no autopush/autocommit; no treating a prior commit request as standing permission for later work; no stale/contradictory content; no prose-only Phases when steps are concrete (use checkboxes); no code in the plan.
 
 ## Litmus
 
-Can a reader quickly answer: what problem, what outcome, what design, what’s open vs done (checkboxes), what changed, where to push back, where constraints came from (**Sources**)? If not, fix the doc before piling on detail.
+Can a reader quickly answer: what problem, what outcome, what design, what's open vs done, what changed, where to push back, where constraints came from (**Sources**)? If not, fix the doc first.
