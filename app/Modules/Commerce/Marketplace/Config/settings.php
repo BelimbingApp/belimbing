@@ -79,6 +79,7 @@ return [
                     'type' => 'password',
                     'scope' => 'company',
                     'encrypted' => true,
+                    'show_reveal_button' => true,
                     'help' => 'Paste Cert ID from the same eBay keyset. Focus to replace; saving without changes keeps the saved secret.',
                     'rules' => ['nullable', 'string', 'max:500'],
                 ],

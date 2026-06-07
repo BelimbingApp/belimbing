@@ -226,7 +226,7 @@ test('eBay settings normalizes legacy whitespace scopes into checkbox values', f
     ]);
 });
 
-test('eBay client secret field shows the saved mask when a secret exists', function (): void {
+test('eBay client secret field can reveal the saved Cert ID when configured', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
 
@@ -240,7 +240,8 @@ test('eBay client secret field shows the saved mask when a secret exists', funct
     $this->actingAs($user);
 
     Livewire::test(EbaySettings::class)
-        ->assertSet('values.marketplace__ebay__client_secret', '******');
+        ->assertSet('values.marketplace__ebay__client_secret', 'client-secret-1234567890')
+        ->assertSee('Show secret');
 });
 
 test('eBay OAuth authorize URL uses the eBay RuName instead of the callback URL', function (): void {
