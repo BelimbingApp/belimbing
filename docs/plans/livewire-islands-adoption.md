@@ -1,6 +1,6 @@
 # livewire-islands-adoption
 
-**Status:** In Progress — `@island` API confirmed against 4.3.1; first defer-island shipped + browser-verified (IBP cost chart). Device-flow pilot deprioritized (see Findings).
+**Status:** In Progress — `@island` API confirmed against 4.3.1; IBP executive-dashboard fully islanded (4 charts deferred, browser-verified). Remaining: eBay multi-panel defer (Phase 2), chat (Phase 3), catalog (Phase 4), docs (Phase 5). Device-flow pilot deprioritized (see Findings).
 **Last Updated:** 2026-06-07
 **Sources:** Livewire 4 Islands docs (`.../docs/4.x/islands`), `@island` ref (`.../directive-island`); use-cases/metrics/anti-patterns (`hoceine.com/blog/livewire-islands-architecture`, `desarrollolibre.net/.../islands-in-laravel-livewire-complete-guide-and-use-cases`, `laravel-news.com/everything-we-know-about-livewire-4`); vendor `SupportIslands` (`IslandCompiler`); related `performance-page-rendering.md` (notes `@island` unused; Phase 3 deferred eBay `stats()`); code: `ai/chat.blade.php` (root `wire:poll.2s`, ~1,989 lines), `Providers/{Providers,ProviderSetup,CatalogBrowser}.php` + setup partials, `Marketplace/Livewire/Ebay/Index.php` (`stats()` loads all listings), `ibp/.../ExecutiveDashboard.php` (multi-query `render()`). Livewire 4.3.1.
 **Agents:** claude/opus-4.8
@@ -26,6 +26,8 @@ Scope re-renders/deferral to a region with `@island` where it cuts work or code 
 - Data-into-computed is required per island, with an ordering rule: derive the island's data *after* `@endplaceholder` (e.g. `@php($x = $this->x)`), so the expensive compute does **not** run during the first-paint placeholder render. Proven on the IBP cost chart.
 - Default islands **skip** re-render on a normal action; only `wire:island`-targeted, `always:true`, or in-island `wire:poll` updates them. So any interactive control whose action mutates island state must carry `wire:island` or the island goes stale. This makes the **device-flow pilot riskier than assumed** (its `startDeviceFlow`/"Try Again" buttons would each need `wire:island`), and it can't be browser-verified without live GitHub OAuth — so it is deprioritized as the pilot; the IBP defer island became the de-facto first proof.
 - eBay re-scope: `stats()` draws its expensive reconciliation buckets from a `dashboard()` call (`Index::render` line ~98) that **also feeds four other panels**, so a stats-only defer island would not remove the cost. Deferring eBay properly means islanding all dashboard-derived panels (or lifting `dashboard()` into a shared computed feeding several islands) — larger than first scoped.
+- **Use block `@php … @endphp` inside islands, not the `@php(...)` shorthand** — the island compiler mangles the shorthand to `<?php(` (fatal parse error). Derive island data with the block form after `@endplaceholder`.
+- **Octane/FrankenPHP holds compiled views in the worker** — after editing a Blade/island view, `php artisan octane:reload` (a CLI `view:clear` alone leaves the HTTP worker serving the stale compiled parent + island token, surfacing as a 500 referencing an old island cache file).
 
 ## Design Decisions
 
@@ -61,12 +63,12 @@ Goal: the device-flow status panel refreshes on its own poll while the rest of t
 Affected pages: `commerce/marketplace/ebay` (stats panel); `sbg/ibp/executive-dashboard` (alerts/charts/margin widgets).
 Goal: both pages paint immediately; the stats/widget panels stream in afterward (skeleton → content) with bucket/widget values unchanged.
 
-- [x] `ExecutiveDashboard` cost chart → `@island(defer)` fed by a `costChart()` computed (data derived after `@placeholder`). Browser-verified: cost chart absent from first-paint HTML (placeholder + `wire:init`), trajectory chart stayed inline (scoping correct), island loaded after hydration, 0 console errors. — claude/opus-4.8
-- [ ] `ExecutiveDashboard` remaining widgets (alerts, trajectory, margin) → per-panel defer islands fed by computed.
+- [x] `ExecutiveDashboard` charts (market-spot, trajectory, cost, margin) → each a `@island(defer)` fed by its own computed (`marketSpotChart`/`trajectoryChart`/`costChart`/`marginChart`), data derived with block `@php` after `@placeholder`; `render()` slimmed to non-chart data only. Browser-verified: all 4 charts absent from first-paint HTML (4 defer placeholders + `wire:init`), non-island content ("Monthly Stock Projection") stayed inline, all islands loaded after hydration, 0 console errors. — claude/opus-4.8
+- [ ] (Optional) Alerts panel — cheap (`limit 10`); not worth deferring.
 - [ ] eBay: defer the dashboard-derived panels together (or lift `dashboard()` into a shared computed) — a stats-only island won't drop the cost (see Findings). Cross-link perf-plan Phase 3 (rendering cost, not aggregation).
 - [ ] Measure first-paint gain; tests green.
 
-Evidence: cost-chart defer island — `extensions/sb-group/ibp/Livewire/Dashboard/ExecutiveDashboard.php` (`costChart()` computed), `extensions/.../Views/livewire/dashboard/executive-dashboard.blade.php` (`@island(defer)` + `@placeholder`); verified via Playwright on `sbg/ibp/executive-dashboard` (raw server HTML vs hydrated).
+Evidence: `extensions/sb-group/ibp/Livewire/Dashboard/ExecutiveDashboard.php` (4 chart computeds; slim `render()`), `extensions/.../Views/livewire/dashboard/executive-dashboard.blade.php` (4 `@island(defer)` + `@placeholder`); verified via Playwright on `sbg/ibp/executive-dashboard` (raw server HTML = 4 deferred, vs hydrated = all loaded). Required `octane:reload` to pick up view changes; `@php` block form (not shorthand) inside islands.
 
 ### Phase 3 — Lara chat live-turn island (headline, highest risk)
 
