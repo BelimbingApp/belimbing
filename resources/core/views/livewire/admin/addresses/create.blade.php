@@ -63,11 +63,10 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <x-ui.combobox
+                    <x-ui.country-combobox
+                        id="address-country-iso"
                         wire:model.live="countryIso"
-                        label="{{ __('Country') }}"
-                        placeholder="{{ __('Search country...') }}"
-                        search-url="{{ route('admin.addresses.countries.search') }}"
+                        :label="__('Country')"
                         :error="$errors->first('countryIso')"
                     />
 

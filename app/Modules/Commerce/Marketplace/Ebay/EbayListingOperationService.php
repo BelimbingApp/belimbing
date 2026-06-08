@@ -308,6 +308,10 @@ class EbayListingOperationService
                     'method' => 'DELETE',
                     'path' => self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
                 ],
+                // A delete of already-absent compatibility (e.g. a universal-fit item, or one
+                // that never had a compatibility list) returns 404. That is the desired end
+                // state, not a failure, so tolerate it and treat the delete as a no-op.
+                tolerateStatuses: [404],
             );
 
             return $this->operationResult('compatibility_delete', $response);
@@ -440,12 +444,14 @@ class EbayListingOperationService
     /**
      * @param  array<string, mixed>  $config
      * @param  array{operation: string, method: string, path: string, body?: array<string, mixed>, headers?: array<string, string>}  $request
+     * @param  list<int>  $tolerateStatuses  HTTP statuses to accept as success instead of throwing.
      */
     private function request(
         int $companyId,
         array $config,
         string $accessToken,
         array $request,
+        array $tolerateStatuses = [],
     ): IntegrationResponse {
         $operation = $request['operation'];
         $method = $request['method'];
@@ -470,7 +476,7 @@ class EbayListingOperationService
             ],
         ));
 
-        if ($response->failed()) {
+        if ($response->failed() && ! in_array($response->status, $tolerateStatuses, true)) {
             throw MarketplaceOperationException::requestFailed(
                 EbayConfiguration::CHANNEL,
                 $operation,

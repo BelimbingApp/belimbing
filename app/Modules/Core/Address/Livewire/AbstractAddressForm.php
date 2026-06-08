@@ -1,12 +1,13 @@
 <?php
+
 namespace App\Modules\Core\Address\Livewire;
 
-use App\Modules\Core\Address\Concerns\HasAddressGeoLookups;
+use App\Modules\Core\Geonames\Concerns\HasGeonamesLookups;
 use Livewire\Component;
 
 abstract class AbstractAddressForm extends Component
 {
-    use HasAddressGeoLookups;
+    use HasGeonamesLookups;
 
     public ?string $countryIso = null;
 

@@ -57,6 +57,10 @@
                         <dd class="text-right text-ink">{{ $editableComboboxValue }}</dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Country combobox') }}</dt>
+                        <dd class="text-right text-ink">{{ $countryComboboxValue }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Checkbox') }}</dt>
                         <dd class="text-right text-ink">{{ $checkboxValue ? __('Enabled') : __('Disabled') }}</dd>
                     </div>
@@ -164,6 +168,13 @@
                     :options="$comboboxOptions"
                     :placeholder="__('Select or type a custom label...')"
                     editable
+                />
+
+                <x-ui.country-combobox
+                    id="ui-reference-country-combobox"
+                    wire:model.live="countryComboboxValue"
+                    :label="__('Country combobox')"
+                    :help="__('Single source for country pickers — GeoNames-backed; stores the 2-letter ISO code. Use everywhere a country is chosen.')"
                 />
 
                 <div class="grid gap-4 md:grid-cols-2">

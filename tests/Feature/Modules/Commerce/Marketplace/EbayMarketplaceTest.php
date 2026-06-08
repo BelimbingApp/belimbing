@@ -863,8 +863,68 @@ test('ebay publish creates inventory compatibility offer and listing records', f
 
         $payload = $request->data();
 
-        return ($payload['marketplaceId'] ?? null) === 'EBAY_US'
+        return ($payload['sku'] ?? null) === 'BMW-CALIPER-0001'
+            && ($payload['marketplaceId'] ?? null) === 'EBAY_US'
             && ($payload['categoryId'] ?? null) === '33563';
+    });
+});
+
+test('ebay offer is published to the listing marketplace while policies stay on the account marketplace', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'MOTORS-HEADLIGHT-0001',
+    ]);
+
+    seedReadyEbayListingInputs($item, $user->company_id);
+
+    // eBay Motors parts must be offered on EBAY_MOTORS even though the account
+    // (policy) marketplace is EBAY_US and the taxonomy marketplace is EBAY_MOTORS_US.
+    $item->productTemplate->update([
+        'metadata' => [
+            'marketplace' => [
+                'ebay' => [
+                    'marketplace_id' => 'EBAY_MOTORS_US',
+                    'listing_marketplace_id' => 'EBAY_MOTORS',
+                    'category_tree_id' => '100',
+                    'category_id' => '33563',
+                ],
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*/product_compatibility' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer' => Http::response(['offerId' => 'offer-motors-1'], 201),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer/offer-motors-1/publish' => Http::response(['listingId' => '110000000001'], 200),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->createListing($item->fresh());
+
+    $listing = Listing::query()->where('external_listing_id', '110000000001')->firstOrFail();
+    $draft = ListingDraft::query()->where('item_id', $item->id)->latest('updated_at')->firstOrFail();
+
+    expect($listing->marketplace_id)->toBe('EBAY_MOTORS')
+        ->and($draft->marketplace_id)->toBe('EBAY_MOTORS')
+        ->and($draft->metadata_marketplace_id)->toBe('EBAY_MOTORS_US');
+
+    Http::assertSent(function (Request $request): bool {
+        if ($request->method() !== 'POST' || $request->url() !== 'https://api.sandbox.ebay.com/sell/inventory/v1/offer') {
+            return false;
+        }
+
+        $payload = $request->data();
+
+        return ($payload['sku'] ?? null) === 'MOTORS-HEADLIGHT-0001'
+            && ($payload['marketplaceId'] ?? null) === 'EBAY_MOTORS';
     });
 });
 
@@ -924,6 +984,73 @@ test('ebay revise updates a published offer without republishing', function (): 
         ]);
 
     Http::assertSentCount(3);
+});
+
+test('ebay revise tolerates a 404 when clearing compatibility for a universal-fit item', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'BMW-CALIPER-0004',
+        'status' => Item::STATUS_LISTED,
+    ]);
+
+    seedReadyEbayListingInputs($item, $user->company_id);
+
+    // Make the item universal-fit so revise issues a compatibility DELETE; eBay
+    // returns 404 when there is no compatibility list to remove, which must be
+    // treated as the desired end state rather than a hard failure.
+    $item->fitments()->delete();
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'is_universal' => true,
+        'source' => 'manual',
+        'confidence' => 'manual',
+    ]);
+
+    $listing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => '1122334466',
+        'external_offer_id' => 'offer-revise-universal-1',
+        'external_sku' => 'BMW-CALIPER-0004',
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'BMW rear brake caliper pair',
+        'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
+        'price_amount' => 25000,
+        'currency_code' => 'USD',
+        'listed_at' => now()->subDay(),
+        'last_synced_at' => now()->subDay(),
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*/product_compatibility' => Http::response([
+            'errors' => [['errorId' => 25710, 'message' => 'Not found']],
+        ], 404),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer/offer-revise-universal-1' => Http::response([], 204),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->reviseListing($listing->fresh());
+
+    expect($result['external_offer_id'])->toBe('offer-revise-universal-1')
+        ->and($listing->fresh()->status)->toBe('ACTIVE')
+        ->and(collect($listing->fresh()->raw_payload['operations'] ?? [])->pluck('name')->all())->toBe([
+            'inventory_item_upsert',
+            'compatibility_delete',
+            'offer_update',
+        ]);
 });
 
 test('ebay withdraw ends a published offer and returns the item to ready state', function (): void {

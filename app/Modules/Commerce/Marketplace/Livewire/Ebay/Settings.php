@@ -12,10 +12,14 @@ use App\Modules\Commerce\Marketplace\Ebay\Diagnostics\EbayDiagnosticProbes;
 use App\Modules\Commerce\Marketplace\Ebay\EbayAccountSetupImporter;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayDiagnosticsService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayLocationsService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayPoliciesService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayProgramService;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
+use App\Modules\Core\Geonames\Concerns\HasGeonamesLookups;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -23,6 +27,8 @@ use Throwable;
 
 class Settings extends SettingsForm
 {
+    use HasGeonamesLookups;
+
     /**
      * Last persisted diagnostics result (see EbayDiagnosticsResult::toArray()).
      *
@@ -41,6 +47,40 @@ class Settings extends SettingsForm
     public ?string $defaultMerchantLocationKey = null;
 
     /**
+     * Last-known Business Policies opt-in state (true once confirmed; null when
+     * never checked). Cached in settings so the page can show status without an
+     * API call on every render.
+     */
+    public ?bool $businessPoliciesOptedIn = null;
+
+    /**
+     * Per-action inline feedback shown next to each Account-setup button, keyed
+     * by action (optin|location|policies).
+     *
+     * @var array<string, array{variant: string, message: string}>
+     */
+    public array $setupFeedback = [];
+
+    public string $newLocationKey = 'warehouse';
+
+    public string $newLocationCity = '';
+
+    public string $newLocationState = '';
+
+    public string $newLocationPostal = '';
+
+    public string $newLocationCountry = 'US';
+
+    /**
+     * State/province suggestions for the chosen location country, sourced from
+     * GeoNames admin1 data. The field stays editable so countries without
+     * admin1 coverage still accept a typed value.
+     *
+     * @var array<int, array{value: string, label: string}>
+     */
+    public array $newLocationStateOptions = [];
+
+    /**
      * @var array<int, array{marketplace_id: string|null, category_tree_id: string|null, category_id: string|null}>
      */
     public array $templateCategoryMappings = [];
@@ -52,6 +92,35 @@ class Settings extends SettingsForm
         $this->loadDiagnostics($settings);
         $this->loadAccountSetupDefaults($settings);
         $this->loadTemplateCategoryMappings();
+
+        $optedIn = $settings->get('marketplace.ebay.business_policies_opted_in', null, Scope::company($this->companyId()));
+        $this->businessPoliciesOptedIn = is_bool($optedIn) ? $optedIn : null;
+
+        $this->newLocationStateOptions = $this->locationStateOptions($this->newLocationCountry);
+    }
+
+    /**
+     * Refresh the state/province suggestions whenever the location country
+     * changes, and clear the now-mismatched state so the operator re-picks.
+     */
+    public function updatedNewLocationCountry(mixed $value): void
+    {
+        $this->newLocationState = '';
+        $this->newLocationStateOptions = $this->locationStateOptions(is_string($value) ? $value : null);
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function locationStateOptions(?string $countryIso): array
+    {
+        if (! is_string($countryIso) || trim($countryIso) === '') {
+            return [];
+        }
+
+        // Reuse the shared GeoNames lookup; eBay's stateOrProvince wants the bare
+        // subdivision code (e.g. "CA"), so request the subdivision-code value.
+        return $this->loadAdmin1ForCountry($countryIso, subdivisionCode: true);
     }
 
     public function runDiagnostics(EbayDiagnosticsService $diagnostics): void
@@ -113,6 +182,114 @@ class Settings extends SettingsForm
         $settings->set('marketplace.ebay.default_merchant_location_key', $this->nullableDefault($this->defaultMerchantLocationKey), $scope);
 
         session()->flash('success', __('eBay setup defaults saved.'));
+    }
+
+    /**
+     * Opt the seller in to the eBay Business Policies program. Required before
+     * payment/fulfillment/return policies can be read or created (eBay error
+     * 20403 until this is done).
+     */
+    public function optInToBusinessPolicies(EbayProgramService $programs, EbayAccountSetupImporter $importer, SettingsService $settings): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        try {
+            $optedInNow = $programs->ensureOptedIn($this->companyId(), EbayProgramService::PROGRAM_SELLING_POLICY_MANAGEMENT);
+            $importer->import($this->companyId());
+
+            $settings->set('marketplace.ebay.business_policies_opted_in', true, Scope::company($this->companyId()));
+            $this->businessPoliciesOptedIn = true;
+
+            $this->setupFeedback['optin'] = ['variant' => 'success', 'message' => $optedInNow
+                ? __('Done. Business Policies are now switched on for your eBay account. Next, create your shipping/payment/return policies (or "Create starter policies" below in the sandbox).')
+                : __('Already on. Your eBay account was already opted in — nothing was changed. You can move on to creating a location and policies.')];
+        } catch (Throwable $exception) {
+            $this->setupFeedback['optin'] = ['variant' => 'error', 'message' => __('Could not switch on Business Policies: :message', ['message' => $exception->getMessage()])];
+        }
+    }
+
+    /**
+     * Create an eBay Inventory API merchant location and set it as the default.
+     * A location is required to publish an offer and is not something sellers
+     * usually configure in Seller Hub, so it is created here.
+     */
+    public function createMerchantLocation(EbayLocationsService $locations, EbayAccountSetupImporter $importer, SettingsService $settings): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        $validated = $this->validate([
+            'newLocationKey' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'newLocationCity' => ['required', 'string', 'max:100'],
+            'newLocationState' => ['required', 'string', 'max:100'],
+            'newLocationPostal' => ['required', 'string', 'max:20'],
+            'newLocationCountry' => ['required', 'string', 'size:2'],
+        ]);
+
+        try {
+            $key = $validated['newLocationKey'];
+            $action = $locations->saveLocation(
+                $this->companyId(),
+                $key,
+                $key,
+                [
+                    'country' => strtoupper($validated['newLocationCountry']),
+                    'stateOrProvince' => $validated['newLocationState'],
+                    'city' => $validated['newLocationCity'],
+                    'postalCode' => $validated['newLocationPostal'],
+                ],
+            );
+
+            $importer->import($this->companyId());
+            $settings->set('marketplace.ebay.default_merchant_location_key', $key, Scope::company($this->companyId()));
+            $this->defaultMerchantLocationKey = $key;
+
+            $this->setupFeedback['location'] = ['variant' => 'success', 'message' => $action === 'updated'
+                ? __('Updated the address on eBay for ":key" (:city, :state :postal) and kept it as your default location.', [
+                    'key' => $key, 'city' => $validated['newLocationCity'], 'state' => $validated['newLocationState'], 'postal' => $validated['newLocationPostal'],
+                ])
+                : __('Saved on eBay and set as your default location: ":key" (:city, :state :postal). It now appears under "Default merchant location" below.', [
+                    'key' => $key, 'city' => $validated['newLocationCity'], 'state' => $validated['newLocationState'], 'postal' => $validated['newLocationPostal'],
+                ])];
+        } catch (Throwable $exception) {
+            $this->setupFeedback['location'] = ['variant' => 'error', 'message' => __('Could not save the location on eBay: :message', ['message' => $exception->getMessage()])];
+        }
+    }
+
+    /**
+     * Create simple starter payment/return/fulfillment policies and select them
+     * as defaults. Sandbox/test bootstrap only — real sellers manage policies in
+     * eBay Seller Hub, so this is hidden on the live environment.
+     */
+    public function createStarterPolicies(EbayPoliciesService $policies, EbayAccountSetupImporter $importer, SettingsService $settings): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        try {
+            $ids = $policies->ensureDefaultPolicies($this->companyId());
+            $importer->import($this->companyId());
+
+            $scope = Scope::company($this->companyId());
+            $settings->set('marketplace.ebay.default_payment_policy_id', $ids['payment'], $scope);
+            $settings->set('marketplace.ebay.default_fulfillment_policy_id', $ids['fulfillment'], $scope);
+            $settings->set('marketplace.ebay.default_return_policy_id', $ids['return'], $scope);
+
+            $this->defaultPaymentPolicyId = $ids['payment'];
+            $this->defaultFulfillmentPolicyId = $ids['fulfillment'];
+            $this->defaultReturnPolicyId = $ids['return'];
+
+            $this->setupFeedback['policies'] = ['variant' => 'success', 'message' => __('Three policies are now on your eBay account and selected as your defaults: a payment policy (buyer pays immediately), a return policy (30-day returns, item replaced, you cover return shipping), and a shipping policy (USPS Priority flat $9.99, 2-day handling). To read or change the full details, open eBay Seller Hub → Business Policies.')];
+        } catch (Throwable $exception) {
+            $this->setupFeedback['policies'] = ['variant' => 'error', 'message' => __('Could not create starter policies: :message', ['message' => $exception->getMessage()])];
+        }
     }
 
     public function saveTemplateCategoryMappings(): void

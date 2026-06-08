@@ -47,3 +47,24 @@ test('country search with an empty query returns the full list', function (): vo
 
     expect($labels)->toContain('Malaysia')->toContain('Canada');
 });
+
+test('country search filter mode prepends an empty All countries option', function (): void {
+    makeCountry('MY', 'MYS', '458', 'Malaysia');
+
+    $this->actingAs(createAdminUser());
+
+    $results = collect($this->getJson(route('admin.addresses.countries.search', ['all' => 'Any country']))
+        ->assertOk()
+        ->json());
+
+    // First option is the empty-valued "All countries" sentinel used by the
+    // country-combobox filter mode (e.g. the geonames admin1 page).
+    expect($results->first())->toMatchArray(['value' => '', 'label' => 'Any country']);
+
+    // The sentinel only appears for the unfiltered list, never amid matches.
+    $filtered = collect($this->getJson(route('admin.addresses.countries.search', ['all' => 'Any country', 'q' => 'mal']))
+        ->assertOk()
+        ->json());
+
+    expect($filtered->pluck('value'))->not->toContain('');
+});

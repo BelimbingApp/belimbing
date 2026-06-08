@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Marketplace;
 
+use App\Modules\Commerce\Marketplace\Console\Commands\EbayAccountSetupCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayMetadataRefreshCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayPoliciesCommand;
 use App\Modules\Commerce\Marketplace\Console\Commands\EbayPullCommand;
@@ -45,6 +46,7 @@ class ServiceProvider extends BaseServiceProvider
                 EbayMetadataRefreshCommand::class,
                 EbayPullCommand::class,
                 EbayPoliciesCommand::class,
+                EbayAccountSetupCommand::class,
             ]);
         }
     }

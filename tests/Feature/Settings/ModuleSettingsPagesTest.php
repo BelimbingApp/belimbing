@@ -14,6 +14,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Settings\Livewire\Settings as CommerceSettings;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Http\Client\Request;
@@ -177,6 +178,184 @@ test('eBay settings imports seller setup choices and stores selected defaults', 
         ->and($settings->get('marketplace.ebay.default_fulfillment_policy_id', scope: $scope))->toBe('FUL-1')
         ->and($settings->get('marketplace.ebay.default_return_policy_id', scope: $scope))->toBe('RET-1')
         ->and($settings->get('marketplace.ebay.default_merchant_location_key', scope: $scope))->toBe('california_shop');
+});
+
+test('eBay settings opts in, creates a merchant location, and creates starter policies', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+
+    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('marketplace.ebay.client_id', 'client-acct-actions', $scope);
+    $settings->set('marketplace.ebay.client_secret', 'secret-acct-actions', $scope, encrypted: true);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        ['access_token' => 'access-acct', 'refresh_token' => 'refresh-acct', 'expires_in' => 3600],
+        [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY],
+    );
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        $method = $request->method();
+
+        return match (true) {
+            str_contains($url, '/program/get_opted_in_programs') => Http::response(['programs' => []]),
+            str_contains($url, '/program/opt_in') => Http::response([], 200),
+            $method === 'POST' && str_contains($url, '/payment_policy') => Http::response(['paymentPolicyId' => 'NEW-PAY']),
+            $method === 'POST' && str_contains($url, '/return_policy') => Http::response(['returnPolicyId' => 'NEW-RET']),
+            $method === 'POST' && str_contains($url, '/fulfillment_policy') => Http::response(['fulfillmentPolicyId' => 'NEW-FUL']),
+            str_contains($url, '/payment_policy') => Http::response(['paymentPolicies' => []]),
+            str_contains($url, '/return_policy') => Http::response(['returnPolicies' => []]),
+            str_contains($url, '/fulfillment_policy') => Http::response(['fulfillmentPolicies' => []]),
+            $method === 'POST' && str_contains($url, '/sell/inventory/v1/location/') => Http::response([], 204),
+            str_contains($url, '/sell/inventory/v1/location') => Http::response(['locations' => []]),
+            default => Http::response([], 200),
+        };
+    });
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->call('optInToBusinessPolicies')
+        ->assertHasNoErrors()
+        ->set('newLocationKey', 'california_shop')
+        ->set('newLocationCountry', 'US')
+        ->set('newLocationState', 'CA')
+        ->set('newLocationCity', 'Los Angeles')
+        ->set('newLocationPostal', '90001')
+        ->call('createMerchantLocation')
+        ->assertHasNoErrors()
+        ->assertSee('set as your default location')
+        ->call('createStarterPolicies')
+        ->assertHasNoErrors()
+        ->assertSee('switched on for your eBay account')
+        ->assertSee('Three policies are now on your eBay account');
+
+    expect($settings->get('marketplace.ebay.default_merchant_location_key', scope: $scope))->toBe('california_shop')
+        ->and($settings->get('marketplace.ebay.default_payment_policy_id', scope: $scope))->toBe('NEW-PAY')
+        ->and($settings->get('marketplace.ebay.default_fulfillment_policy_id', scope: $scope))->toBe('NEW-FUL')
+        ->and($settings->get('marketplace.ebay.default_return_policy_id', scope: $scope))->toBe('NEW-RET');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_contains($request->url(), '/program/opt_in')
+        && ($request->data()['programType'] ?? null) === 'SELLING_POLICY_MANAGEMENT');
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/sell/inventory/v1/location/california_shop'));
+});
+
+test('eBay settings updates an existing location address instead of failing or duplicating', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('marketplace.ebay.client_id', 'client-loc-update', $scope);
+    $settings->set('marketplace.ebay.client_secret', 'secret-loc-update', $scope, encrypted: true);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        ['access_token' => 'access-loc', 'refresh_token' => 'refresh-loc', 'expires_in' => 3600],
+        [EBAY_SCOPE_ACCOUNT, EBAY_SCOPE_INVENTORY],
+    );
+
+    Http::fake(function ($request) {
+        $url = $request->url();
+        $method = $request->method();
+
+        return match (true) {
+            str_contains($url, '/update_location_details') => Http::response([], 204),
+            str_contains($url, '/payment_policy') => Http::response(['paymentPolicies' => []]),
+            str_contains($url, '/return_policy') => Http::response(['returnPolicies' => []]),
+            str_contains($url, '/fulfillment_policy') => Http::response(['fulfillmentPolicies' => []]),
+            $method === 'GET' && str_contains($url, '/sell/inventory/v1/location') => Http::response(['locations' => [[
+                'merchantLocationKey' => 'warehouse',
+                'name' => 'Warehouse',
+                'merchantLocationStatus' => 'ENABLED',
+                'location' => ['address' => ['country' => 'US', 'city' => 'Los Angeles', 'postalCode' => '90001']],
+                'locationTypes' => ['WAREHOUSE'],
+            ]]]),
+            default => Http::response([], 200),
+        };
+    });
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->set('newLocationKey', 'warehouse')
+        ->set('newLocationCountry', 'US')
+        ->set('newLocationState', 'CA')
+        ->set('newLocationCity', 'San Diego')
+        ->set('newLocationPostal', '92101')
+        ->call('createMerchantLocation')
+        ->assertHasNoErrors()
+        ->assertSee('Updated the address');
+
+    Http::assertSent(fn ($request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/sell/inventory/v1/location/warehouse/update_location_details')
+        && data_get($request->data(), 'location.address.city') === 'San Diego');
+    Http::assertNotSent(fn ($request): bool => $request->method() === 'POST'
+        && str_ends_with($request->url(), '/sell/inventory/v1/location/warehouse'));
+});
+
+test('eBay settings validates the merchant location form before calling eBay', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    app(SettingsService::class)->set('marketplace.ebay.environment', 'sandbox', $scope);
+    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+
+    Http::fake();
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->set('newLocationKey', 'bad key!')
+        ->set('newLocationCity', '')
+        ->call('createMerchantLocation')
+        ->assertHasErrors(['newLocationKey', 'newLocationCity']);
+
+    Http::assertNothingSent();
+});
+
+test('eBay settings populates location state suggestions from the chosen country and clears them on change', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', Scope::company($user->company_id));
+
+    Admin1::create(['code' => 'US.CA', 'name' => 'California']);
+    Admin1::create(['code' => 'US.NY', 'name' => 'New York']);
+    Admin1::create(['code' => 'CA.BC', 'name' => 'British Columbia']);
+
+    Livewire::test(EbaySettings::class)
+        ->set('newLocationCountry', 'US')
+        ->assertSet('newLocationStateOptions', [
+            ['value' => 'CA', 'label' => 'California'],
+            ['value' => 'NY', 'label' => 'New York'],
+        ])
+        ->set('newLocationState', 'CA')
+        ->set('newLocationCountry', 'CA')
+        ->assertSet('newLocationState', '')
+        ->assertSet('newLocationStateOptions', [
+            ['value' => 'BC', 'label' => 'British Columbia'],
+        ]);
+});
+
+test('eBay settings hides starter policies on the live environment', function (): void {
+    $user = createAdminUser();
+    $scope = Scope::company($user->company_id);
+    app(SettingsService::class)->set('marketplace.ebay.environment', 'live', $scope);
+    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+
+    $this->actingAs($user);
+
+    Livewire::test(EbaySettings::class)
+        ->assertSee('Account setup')
+        ->assertSee('Turn on Business Policies')
+        ->assertSee('Add a shipping location')
+        ->assertSee('Seller Hub')
+        ->assertDontSee('Create starter policies');
 });
 
 test('eBay settings saves template category mappings for readiness', function (): void {

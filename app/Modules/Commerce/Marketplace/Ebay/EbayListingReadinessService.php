@@ -55,9 +55,15 @@ class EbayListingReadinessService
         $sellerMarketplaceId = (string) $config['marketplace_id'];
         $templateMapping = $this->templateMapping($item);
         $metadataMarketplaceId = $templateMapping['marketplace_id'] ?? $sellerMarketplaceId;
+        // The marketplace an offer is published to can differ from both the account
+        // marketplace (where business policies live) and the taxonomy marketplace
+        // (where category metadata lives). eBay Motors parts are the canonical case:
+        // policies are read on EBAY_US, metadata on EBAY_MOTORS_US, but the offer must
+        // be published on EBAY_MOTORS or eBay rejects the category at publish time.
+        $listingMarketplaceId = $templateMapping['listing_marketplace_id'] ?? $sellerMarketplaceId;
         $categoryTreeId = $templateMapping['category_tree_id'] ?? null;
         $categoryId = $templateMapping['category_id'] ?? null;
-        $existingDraft = $this->existingDraft($companyId, $item->id, $sellerMarketplaceId);
+        $existingDraft = $this->existingDraft($companyId, $item->id, $listingMarketplaceId);
         $policyIds = $this->policyIds($companyId);
         $mappedAspects = $this->mappedAspects($item, $metadataMarketplaceId, $categoryId, $categoryTreeId);
         $productReferences = ProductReference::query()
@@ -91,7 +97,7 @@ class EbayListingReadinessService
                 'company_id' => $companyId,
                 'item_id' => $item->id,
                 'channel' => EbayConfiguration::CHANNEL,
-                'marketplace_id' => $sellerMarketplaceId,
+                'marketplace_id' => $listingMarketplaceId,
             ],
             [
                 'metadata_marketplace_id' => $metadataMarketplaceId,
@@ -109,7 +115,8 @@ class EbayListingReadinessService
                     'blockers' => $blockers,
                     'warnings' => $warnings,
                     'facts' => [
-                        'listing_marketplace_id' => $sellerMarketplaceId,
+                        'listing_marketplace_id' => $listingMarketplaceId,
+                        'account_marketplace_id' => $sellerMarketplaceId,
                         'metadata_marketplace_id' => $metadataMarketplaceId,
                         'category_tree_id' => $categoryTreeId,
                         'category_id' => $categoryId,
@@ -136,7 +143,7 @@ class EbayListingReadinessService
     }
 
     /**
-     * @return array{marketplace_id?: string, category_tree_id?: string, category_id?: string}
+     * @return array{marketplace_id?: string, listing_marketplace_id?: string, category_tree_id?: string, category_id?: string}
      */
     private function templateMapping(Item $item): array
     {
@@ -147,6 +154,7 @@ class EbayListingReadinessService
 
         return collect([
             'marketplace_id' => data_get($metadata, 'marketplace.ebay.marketplace_id') ?? ($pluginMapping['marketplace_id'] ?? null),
+            'listing_marketplace_id' => data_get($metadata, 'marketplace.ebay.listing_marketplace_id') ?? ($pluginMapping['listing_marketplace_id'] ?? null),
             'category_tree_id' => data_get($metadata, 'marketplace.ebay.category_tree_id') ?? ($pluginMapping['category_tree_id'] ?? null),
             'category_id' => data_get($metadata, 'marketplace.ebay.category_id') ?? ($pluginMapping['category_id'] ?? null),
         ])

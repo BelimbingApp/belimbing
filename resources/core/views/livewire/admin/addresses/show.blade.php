@@ -43,11 +43,10 @@
                 <x-ui.edit-in-place.text :label="__('Address Line 2')" :value="$address->line2" field="line2" />
                 <x-ui.edit-in-place.text :label="__('Address Line 3')" :value="$address->line3" field="line3" />
                 <div>
-                    <x-ui.combobox
+                    <x-ui.country-combobox
+                        id="show-country-iso"
                         wire:model.live="countryIso"
-                        label="{{ __('Country') }}"
-                        placeholder="{{ __('Search country...') }}"
-                        :options="$countryOptions"
+                        :label="__('Country')"
                     />
                 </div>
                 <div>

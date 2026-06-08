@@ -84,6 +84,7 @@ class EbayListingPayloadBuilder
                     ->all(),
             ],
             'offer' => [
+                'sku' => $draft->external_sku ?? $item->sku,
                 'marketplaceId' => $draft->marketplace_id,
                 'format' => 'FIXED_PRICE',
                 'availableQuantity' => max(0, $item->quantity_on_hand),
