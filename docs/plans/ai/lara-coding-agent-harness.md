@@ -1,6 +1,6 @@
 # ai/lara-coding-agent-harness.md
 
-**Status:** Proposed
+**Status:** In Progress
 **Last Updated:** 2026-06-07
 **Sources:** `docs/architecture/ai/lara.md`, `docs/plans/ai-lara-resident-coding-agent-gap.md`, `docs/plans/lara-concurrent-runs.md`, recent Lara runs `01ktgea1bvcrgc8bw1e0zbmjmv` and `01ktgefwcs7qmc7828bwxfekv6`, Pi coding-agent architecture review from GitHub `earendil-works/pi` (`packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/agent/src/harness/agent-harness.ts`, `packages/agent/src/harness/messages.ts`, `packages/agent/src/harness/compaction/compaction.ts`, `packages/agent/src/harness/skills.ts`, `packages/coding-agent/src/core/system-prompt.ts`, `packages/coding-agent/src/core/tools/{read,bash,edit,write}.ts`)
 **Agents:** Amp/GPT-5
@@ -17,7 +17,7 @@ Lara remains BLB's resident in-product agent, but the first-class design target 
 
 **Minimal coding loop** — A harness-level loop for repository work: localize source, read exact files, patch minimal diff, verify, summarize. The model can still reason freely, but the harness should make this sequence the default path.
 
-**Structured repository tools** — Search, read, edit, and verification tools become the default coding surface. Shell and browser remain available, but as escalation tools with explicit reasons rather than the first path for ordinary repository work.
+**Structured repository tools** — Search, read, edit, and verification tools become the default coding surface. Shell and browser remain available, and tool ordering plus schemas make each tool's role clear without prompt-level nagging.
 
 **Context and tool budgets** — Per-run budgets cap broad search, read volume, shell use, repeated failed edits, and token growth. Budget pressure produces a checkpoint with the current findings and recommended narrowing path rather than silent over-exploration.
 
@@ -63,7 +63,7 @@ Pi is useful because it is small enough to study as a construction pattern. The 
 
 **Prefer general harness policy over task heuristics.** The eBay settings miss is evidence that Lara lacks source localization, edit-surface discipline, and low-blast-radius defaults. The correction belongs in the harness and tool policy, not in page-specific prompt rules.
 
-**Demote shell because coding agents need structured file APIs.** Shell remains necessary for tests, git inspection, generated output, and unusual repository work. It should not be the default way to read files, search code, or edit text because a coding harness needs bounded, typed, resumable, diff-producing operations with predictable context cost.
+**Expose structured file APIs before shell.** Shell remains necessary for tests, git inspection, generated output, and unusual repository work. The harness should not rely on prose telling the model what is “best”; it should expose bounded, typed, resumable, diff-producing file operations first and let the model choose from clear capabilities.
 
 **Use soft checkpoints before hard stops.** Budgets should prevent runaway exploration without making Lara brittle. When a budget is crossed, Lara should summarize what is known, name the uncertainty, and ask for or choose a narrower next step depending on risk.
 
@@ -72,7 +72,7 @@ Pi is useful because it is small enough to study as a construction pattern. The 
 ## Public Contract
 
 - Lara remains the in-product resident agent for BLB coding and operation work.
-- Repository work defaults to structured, bounded tools rather than broad shell exploration.
+- Repository work exposes structured, bounded tools first rather than relying on prompt advice to avoid shell exploration.
 - Browser testing is possible from any page where Lara is present; expected outcomes are observable through Lara chat progress, run status, control-plane run details, and the affected product page when a task changes UI.
 - Lara localizes source ownership before editing and prefers the lowest sufficient blast-radius file.
 - Shared framework component edits require an explicit reason and should not be the default response to a module-specific request.
@@ -88,11 +88,11 @@ Affected pages: Any BLB page with Lara chat available; Control Plane run detail/
 Goal: ordinary coding tasks start with bounded search/read/edit primitives instead of shell output streams.
 Evidence: A browser-started simple coding prompt shows structured repo tools in the run trace before shell; shell appears only for verification or justified escalation.
 
-- [ ] Audit Lara's current default tool allowlist and prompt snippets for repository work.
-- [ ] Promote structured search, read, edit, and targeted verification tools into Lara's default coding surface.
-- [ ] Demote shell/browser to escalation tools for repository work, with prompt guidance that asks for a reason before using them for file search/read/edit.
-- [ ] Add model-facing tool descriptions that include hard output limits, truncation behavior, and exact continuation instructions.
-- [ ] Add tests proving Lara's effective tool list includes structured repo tools for authorized coding users and hides them for unauthorized users.
+- [x] Audit Lara's current default tool allowlist and prompt snippets for repository work. {Amp/GPT-5}
+- [x] Promote structured search, read, and edit tools into Lara's default coding surface, preserve profile ordering when exposing tools to the model, and include symbolic repository-root context in Lara runtime context. {Amp/GPT-5}
+- [x] Expose structured file APIs before shell/browser and keep tool descriptions neutral rather than prescriptive. {Amp/GPT-5}
+- [x] Add model-facing tool descriptions that include hard output limits and exact continuation instructions for bounded repository reads. {Amp/GPT-5}
+- [x] Add tests proving Lara's default interactive surface includes structured repo tools before shell/browser and that authz still filters unauthorized users. {Amp/GPT-5}
 
 ### Phase 2 — Add the minimal coding loop
 

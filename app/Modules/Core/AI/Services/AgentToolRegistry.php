@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Contracts\StreamableTool;
@@ -95,11 +96,7 @@ class AgentToolRegistry
     {
         $definitions = [];
 
-        foreach ($this->tools as $toolName => $tool) {
-            if (! $this->isAllowedByProfile($toolName, $allowedToolNames)) {
-                continue;
-            }
-
+        foreach ($this->toolsForProfile($allowedToolNames) as $tool) {
             if (! $this->currentUserCanUse($tool)) {
                 continue;
             }
@@ -115,6 +112,31 @@ class AgentToolRegistry
         }
 
         return $definitions;
+    }
+
+    /**
+     * Return registered tools in task-profile order when an allowlist is provided.
+     *
+     * @param  list<string>|null  $allowedToolNames
+     * @return list<Tool>
+     */
+    private function toolsForProfile(?array $allowedToolNames): array
+    {
+        if ($allowedToolNames === null) {
+            return array_values($this->tools);
+        }
+
+        $tools = [];
+
+        foreach ($allowedToolNames as $toolName) {
+            $tool = $this->tools[$toolName] ?? null;
+
+            if ($tool !== null) {
+                $tools[] = $tool;
+            }
+        }
+
+        return $tools;
     }
 
     /**

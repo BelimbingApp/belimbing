@@ -40,9 +40,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     public function description(): string
     {
-        return 'Execute a shell command and return its output. '
-            .'Use this for system commands, file operations, package management, git, etc. '
-            .'Commands run from the Belimbing project root directory.';
+        return 'Execute a shell command from the repository core surface and return its output.';
     }
 
     protected function schema(): ToolSchemaBuilder
@@ -50,8 +48,7 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         return ToolSchemaBuilder::make()
             ->string(
                 'command',
-                'The shell command to execute. '
-                    .'Examples: "git status --short", "php artisan route:list", "Get-ChildItem storage".'
+                'The shell command to execute.'
             )->required();
     }
 

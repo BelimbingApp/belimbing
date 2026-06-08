@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -25,9 +26,7 @@ class EditTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Edit Belimbing files or data. Use target "file" to write, append, or replace repository file content, '
-            .'or target "data" to run guarded SQL INSERT, UPDATE, or DELETE statements. File edits can target BLB core '
-            .'or extension surfaces with target_surface.';
+        return 'Edit repository files or database data. File edits are scoped to a selected repository surface; data edits run guarded write statements.';
     }
 
     public function parametersSchema(): array
@@ -94,6 +93,7 @@ class EditTool extends AbstractTool
             'displayName' => 'Edit',
             'summary' => 'Edit repository files or database data.',
             'explanation' => 'Creates and modifies files in BLB core or extension surfaces, and runs guarded data writes. '
+                .'File changes are structured and auditable. '
                 .'This is the broad edit capability for agents; file and data editing are one user-authorized capability.',
             'testExamples' => [
                 [

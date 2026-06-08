@@ -37,6 +37,33 @@ it('reads files from the core surface', function (): void {
         ->and((string) $result)->toContain(REPO_TOOL_TEST_DIR.'/sample.txt');
 });
 
+it('returns bounded file chunks with continuation offsets', function (): void {
+    File::put(base_path(REPO_TOOL_TEST_DIR.'/chunked.txt'), "one\ntwo\nthree\n");
+
+    $first = (new ReadTool)->execute([
+        'target' => 'file',
+        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'target_surface' => 'core',
+        'limit' => 2,
+    ]);
+    $firstPayload = json_decode((string) $first, true, flags: JSON_THROW_ON_ERROR);
+
+    $second = (new ReadTool)->execute([
+        'target' => 'file',
+        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'target_surface' => 'core',
+        'offset' => $firstPayload['next_offset'],
+        'limit' => 2,
+    ]);
+    $secondPayload = json_decode((string) $second, true, flags: JSON_THROW_ON_ERROR);
+
+    expect($firstPayload['content'])->toBe("one\ntwo\n")
+        ->and($firstPayload['has_more'])->toBeTrue()
+        ->and($firstPayload['next_offset'])->toBe(2)
+        ->and($secondPayload['content'])->toBe("three\n")
+        ->and($secondPayload['has_more'])->toBeFalse();
+});
+
 it('blocks extension paths when target surface is core', function (): void {
     $result = (new ReadTool)->execute([
         'target' => 'file',

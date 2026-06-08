@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Services\KnowledgeNavigator;
@@ -33,10 +34,37 @@ class LaraContextProvider
                 'user_id' => $this->authenticatedUserId(),
                 'company_id' => $companyId,
             ],
+            'repository' => $this->repositoryContext(),
             'shell' => $this->shellContext(),
             'modules' => $this->installedModules(),
             'providers' => $this->configuredProviders($companyId),
             'knowledge' => $this->knowledgeContext($query),
+        ];
+    }
+
+    /**
+     * Repository context is the in-product equivalent of launching a CLI coding
+     * agent from the project root.
+     *
+     * @return array{default_surface: string, path_convention: string, surfaces: array{core: array{root: string}, extensions: array{root_patterns: list<string>}}}
+     */
+    private function repositoryContext(): array
+    {
+        return [
+            'default_surface' => 'core',
+            'path_convention' => 'Repository tool file paths are relative to target_surface. The core surface is the project root.',
+            'surfaces' => [
+                'core' => [
+                    'root' => '.',
+                ],
+                'extensions' => [
+                    'root_patterns' => [
+                        'extensions/<slug>',
+                        'extensions/custom/<slug>',
+                        'extensions/vendor/<slug>',
+                    ],
+                ],
+            ],
         ];
     }
 

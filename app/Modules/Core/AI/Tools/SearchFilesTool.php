@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -31,8 +32,7 @@ class SearchFilesTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Search file paths or file contents in BLB core or an extension surface. '
-            .'Excludes generated/dependency directories and secret files.';
+        return 'Search repository paths or file contents within a selected repository surface.';
     }
 
     protected function schema(): ToolSchemaBuilder
@@ -64,7 +64,8 @@ class SearchFilesTool extends AbstractTool
         return [
             'displayName' => 'Search Files',
             'summary' => 'Search repository files.',
-            'explanation' => 'Searches file paths or file contents inside BLB core or a selected extension surface.',
+            'explanation' => 'Searches file paths or file contents inside BLB core or a selected extension surface. '
+                .'Output is bounded and scoped to the selected repository surface.',
             'limits' => [
                 'Searches are scoped to the selected target surface',
                 'Generated and dependency directories are excluded',

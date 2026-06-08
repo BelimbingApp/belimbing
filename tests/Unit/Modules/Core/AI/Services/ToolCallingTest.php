@@ -15,6 +15,7 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
+use App\Modules\Core\AI\Services\ChatTurnRunner;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
@@ -141,6 +142,24 @@ describe('AgentToolRegistry', function () {
         // Only the tool with no capability requirement should be available
         expect($definitions)->toHaveCount(1);
         expect($definitions[0]['function']['name'])->toBe('public');
+    });
+
+    it('preserves task profile tool ordering after registration order and authz filtering', function () {
+        $registry = new AgentToolRegistry(makeAllowAllAuthzService());
+
+        $registry->register(makeSimpleTool('bash'));
+        $registry->register(makeSimpleTool('browser'));
+        $registry->register(makeSimpleTool('read'));
+        $registry->register(makeSimpleTool('search'));
+        $registry->register(makeSimpleTool('edit'));
+        $registry->register(makeSimpleTool('unlisted'));
+
+        $definitions = $registry->toolDefinitionsForCurrentUser(ChatTurnRunner::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES);
+
+        expect(array_map(
+            fn (array $definition): string => $definition['function']['name'],
+            $definitions,
+        ))->toBe(ChatTurnRunner::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES);
     });
 
     it('denies execution for tools the user lacks capability for', function () {

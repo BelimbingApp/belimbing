@@ -39,4 +39,18 @@ describe('contextForCurrentUser', function (): void {
             ->and($context['actor']['company_id'])->toBe(88)
             ->and($context['providers'])->toBe([]);
     });
+
+    it('includes symbolic repository context equivalent to launching a coding agent from the project root', function (): void {
+        $context = $this->service->contextForCurrentUser();
+
+        expect($context['repository'])->not->toHaveKey('project_root')
+            ->and($context['repository']['default_surface'])->toBe('core')
+            ->and($context['repository']['surfaces']['core']['root'])->toBe('.')
+            ->and($context['repository']['surfaces']['extensions']['root_patterns'])->toBe([
+                'extensions/<slug>',
+                'extensions/custom/<slug>',
+                'extensions/vendor/<slug>',
+            ])
+            ->and($context['repository']['path_convention'])->toContain('relative to target_surface');
+    });
 });

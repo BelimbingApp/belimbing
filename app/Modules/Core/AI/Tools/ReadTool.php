@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -25,9 +26,7 @@ class ReadTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Read Belimbing files or data. Use target "file" with file_path for repository files, '
-            .'or target "data" with a read-only SQL query for database data. Files can target BLB core '
-            .'or extension surfaces with target_surface.';
+        return 'Read repository files or database data. File reads are scoped to a selected repository surface and return bounded line chunks with next_offset continuation.';
     }
 
     public function parametersSchema(): array
@@ -54,9 +53,14 @@ class ReadTool extends AbstractTool
                 ],
                 'limit' => [
                     'type' => 'integer',
-                    'description' => 'Maximum data rows to return when target is "data".',
+                    'description' => 'Maximum data rows when target is "data", or maximum file lines when target is "file".',
                     'minimum' => 1,
                     'maximum' => 100,
+                ],
+                'offset' => [
+                    'type' => 'integer',
+                    'description' => 'Zero-based line offset for file reads. Use next_offset from a previous file read to continue.',
+                    'minimum' => 0,
                 ],
             ],
         ];
@@ -83,6 +87,7 @@ class ReadTool extends AbstractTool
             'displayName' => 'Read',
             'summary' => 'Read repository files or database data.',
             'explanation' => 'Reads files from BLB core or extension surfaces and executes guarded read-only SQL queries. '
+                .'File output is bounded and scoped to the selected repository surface. '
                 .'This is the broad read capability for agents; narrower file and data readers are internal implementation details.',
             'testExamples' => [
                 [
@@ -105,6 +110,7 @@ class ReadTool extends AbstractTool
             'limits' => [
                 'File reads stay inside the selected repository surface',
                 'Environment files, dependencies, logs, wire logs, and generated caches are blocked',
+                'File reads return bounded line chunks with next_offset continuation',
                 'Data reads accept SELECT and WITH statements only',
             ],
         ];
@@ -123,6 +129,9 @@ class ReadTool extends AbstractTool
             return (new QueryDataTool)->execute($payload);
         }
 
-        return (new ReadFileTool($this->surfaces))->execute($this->surfaceFilePayload($arguments));
+        return (new ReadFileTool($this->surfaces))->execute([
+            ...$this->surfaceFilePayload($arguments),
+            ...$this->copyPresentKeys($arguments, ['offset', 'limit']),
+        ]);
     }
 }

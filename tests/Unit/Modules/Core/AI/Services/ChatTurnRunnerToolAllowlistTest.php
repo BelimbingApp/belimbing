@@ -2,9 +2,12 @@
 
 use App\Modules\Core\AI\Services\ChatTurnRunner;
 
-it('defines the minimal default interactive agent tool surface', function (): void {
+it('defaults interactive Lara turns to structured repository tools before escalation tools', function (): void {
     expect(ChatTurnRunner::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES)->toBe([
-        'bash',
+        'search',
+        'read',
+        'edit',
         'browser',
+        'bash',
     ]);
 });

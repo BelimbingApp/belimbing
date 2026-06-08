@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -13,9 +14,8 @@ use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
  * File editing tool for coding agents.
  *
  * Provides structured file creation and modification with path safety
- * guardrails. Preferred over BashTool for file operations because it
- * gives cleaner audit trails, avoids shell-quoting issues, and
- * validates paths stay within the project root.
+ * guardrails. Validates paths against repository surfaces and returns
+ * structured execution results for auditing.
  *
  * Supports three operations:
  * - write: Create or overwrite a file with the given content
@@ -33,7 +33,7 @@ class EditFileTool extends AbstractTool
     private const VALID_OPERATIONS = ['write', 'append', 'replace'];
 
     /**
-     * Paths that must never be written to (relative to project root).
+     * Paths that must never be written to (relative to repository surface).
      *
      * @var list<string>
      */
@@ -66,12 +66,7 @@ class EditFileTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Create or modify a file within the Belimbing project. '
-            .'Use operation "write" to create a new file or overwrite an existing one. '
-            .'Use operation "append" to add content to the end of an existing file. '
-            .'Use operation "replace" with old_content and new_content for targeted edits. '
-            .'Provide the file_path relative to the project root. '
-            .'Use target_surface "core" or "extension:<slug>" to enforce repository ownership.';
+        return 'Create or modify a repository file within a selected repository surface.';
     }
 
     public function parametersSchema(): array
@@ -129,7 +124,8 @@ class EditFileTool extends AbstractTool
         return [
             'displayName' => 'Edit File',
             'summary' => 'Create or modify files in the project.',
-            'explanation' => 'Creates or modifies files within the Belimbing project root. '
+            'explanation' => 'Creates or modifies files within the selected repository surface. '
+                .'Changes are structured and auditable. '
                 .'Validates that file paths stay within the project directory and blocks '
                 .'writes to sensitive files (.env, vendor/, node_modules/).',
             'testExamples' => [
@@ -144,7 +140,7 @@ class EditFileTool extends AbstractTool
                 ],
             ],
             'limits' => [
-                'Cannot write outside the project root',
+                'Cannot write outside the selected repository surface',
                 'Cannot modify .env files, vendor/, or node_modules/',
                 'Content limited to '.self::MAX_CONTENT_LENGTH.' characters',
             ],

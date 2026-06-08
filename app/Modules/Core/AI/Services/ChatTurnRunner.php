@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\ChatTurnRuntimeContext;
@@ -32,16 +33,20 @@ class ChatTurnRunner
     ) {}
 
     /**
-     * Minimal default tool surface for interactive agents.
+     * Minimal default coding-agent tool surface for interactive agents.
      *
-     * Authz and tool guardrails still filter execution. This list only avoids
-     * sending duplicate or non-essential tools to the model by default.
+     * Authz and tool guardrails still filter execution. Keep structured
+     * repository tools first so ordinary coding work uses bounded search,
+     * read, and edit operations before escalating to browser or shell.
      *
      * @var list<string>
      */
     public const DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES = [
-        'bash',
+        'search',
+        'read',
+        'edit',
         'browser',
+        'bash',
     ];
 
     /**
@@ -237,5 +242,4 @@ class ChatTurnRunner
 
         return ExecutionPolicy::interactive();
     }
-
 }
