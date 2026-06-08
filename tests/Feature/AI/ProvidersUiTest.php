@@ -15,6 +15,7 @@ use Livewire\Livewire;
 const AI_PROVIDERS_SAVED_KEY = 'sk-test-1234567890abcd';
 const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
 const AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI = 'https://github.com/login/device';
+const AI_PROVIDER_CATALOG_SEARCH_PLACEHOLDER = 'Search providers...';
 
 test('edit provider modal hydrates the api key when one exists', function (): void {
     $user = createAiProvidersTestUser();
@@ -143,7 +144,7 @@ test('provider catalog is a lazy island kept out of the page initial paint', fun
     // initial HTML carries only the lazy placeholder, not the catalog UI.
     Livewire::test(Providers::class)
         ->assertSee('Loading provider catalog')
-        ->assertDontSee('Search providers...');
+        ->assertDontSee(AI_PROVIDER_CATALOG_SEARCH_PLACEHOLDER);
 });
 
 test('provider catalog island renders the catalog once lazily loaded', function (): void {
@@ -151,14 +152,14 @@ test('provider catalog island renders the catalog once lazily loaded', function 
     $this->actingAs($user);
 
     $component = Livewire::test(CatalogBrowser::class);
-    $component->assertDontSee('Search providers...');
+    $component->assertDontSee(AI_PROVIDER_CATALOG_SEARCH_PLACEHOLDER);
 
     // Hydrate the lazy island the way Alpine's x-intersect would in the browser.
     preg_match('/__lazyLoad\(&#039;([^&]+)&#039;\)/', $component->html(), $matches);
     expect($matches[1] ?? null)->not->toBeNull();
 
     $component->call('__lazyLoad', $matches[1])
-        ->assertSee('Search providers...')
+        ->assertSee(AI_PROVIDER_CATALOG_SEARCH_PLACEHOLDER)
         ->assertSee('Connect');
 });
 

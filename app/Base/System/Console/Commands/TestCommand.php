@@ -16,9 +16,7 @@ class TestCommand extends CollisionTestCommand
      */
     protected function binary(): array
     {
-        $command = $this->usingPest()
-            ? ($this->option('parallel') ? ['vendor/pestphp/pest/bin/pest', '--parallel'] : ['vendor/pestphp/pest/bin/pest'])
-            : ($this->option('parallel') ? ['vendor/brianium/paratest/bin/paratest'] : ['vendor/phpunit/phpunit/phpunit']);
+        $command = $this->testRunnerCommand();
 
         $phpBinary = $this->resolvePhpBinary();
 
@@ -27,6 +25,22 @@ class TestCommand extends CollisionTestCommand
         }
 
         return [$phpBinary, ...$command];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function testRunnerCommand(): array
+    {
+        if ($this->usingPest()) {
+            return $this->option('parallel')
+                ? ['vendor/pestphp/pest/bin/pest', '--parallel']
+                : ['vendor/pestphp/pest/bin/pest'];
+        }
+
+        return $this->option('parallel')
+            ? ['vendor/brianium/paratest/bin/paratest']
+            : ['vendor/phpunit/phpunit/phpunit'];
     }
 
     private function resolvePhpBinary(): string

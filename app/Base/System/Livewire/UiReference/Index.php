@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\System\Livewire\UiReference;
 
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -11,6 +12,8 @@ use Livewire\Component;
 class Index extends Component
 {
     use TogglesSort;
+
+    private const SECRET_MASK = '******';
 
     public string $section = 'foundations';
 
@@ -128,7 +131,7 @@ class Index extends Component
                 'value' => '',
                 'hasValue' => false,
                 'showRevealButton' => true,
-                'savedMask' => '******',
+                'savedMask' => self::SECRET_MASK,
                 'placeholder' => 'Enter password or API key',
                 'help' => 'Short guidance below the field.',
                 'error' => null,
@@ -138,12 +141,12 @@ class Index extends Component
                 'id' => 'ui-reference-secret-no-reveal-icon',
                 'title' => 'No reveal icon',
                 'description' => '<code>:show-reveal-button</code> off. Fixed mask only; value never loaded (e.g. WeChat parser token).',
-                'code' => '<x-ui.secret-input :has-value="true" :show-reveal-button="false" saved-mask="******" help="Focus to replace. Saving without changes keeps the current value." />',
+                'code' => '<x-ui.secret-input :has-value="true" :show-reveal-button="false" saved-mask="'.self::SECRET_MASK.'" help="Focus to replace. Saving without changes keeps the current value." />',
                 'label' => 'Parser token',
-                'value' => '******',
+                'value' => self::SECRET_MASK,
                 'hasValue' => true,
                 'showRevealButton' => false,
-                'savedMask' => '******',
+                'savedMask' => self::SECRET_MASK,
                 'placeholder' => '',
                 'help' => 'Leave blank to keep the current parser token.',
                 'error' => null,

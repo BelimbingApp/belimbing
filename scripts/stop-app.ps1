@@ -63,17 +63,17 @@ function Stop-BelimbingProcess {
         [scriptblock] $Predicate
     )
 
-    $matches = @(Get-CimInstance Win32_Process | Where-Object { & $Predicate $_ })
-    if ($matches.Count -eq 0) {
-        Write-Host "$Name is not running." -ForegroundColor DarkGray
+    $matchingProcesses = @(Get-CimInstance Win32_Process | Where-Object { & $Predicate $_ })
+    if ($matchingProcesses.Count -eq 0) {
+        Write-Output "$Name is not running."
         return
     }
 
-    foreach ($match in $matches) {
+    foreach ($match in $matchingProcesses) {
         $target = "$Name (PID $($match.ProcessId))"
         if ($PSCmdlet.ShouldProcess($target, 'Stop process')) {
             Stop-Process -Id $match.ProcessId -Force -ErrorAction SilentlyContinue
-            Write-Host "Stopped $target." -ForegroundColor Green
+            Write-Output "Stopped $target."
         }
     }
 }
@@ -87,7 +87,7 @@ function Stop-BelimbingPortListener {
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
         Select-Object -ExpandProperty OwningProcess -Unique)
     if ($listeners.Count -eq 0) {
-        Write-Host "$Name is not listening on port $Port." -ForegroundColor DarkGray
+        Write-Output "$Name is not listening on port $Port."
         return
     }
 
@@ -95,7 +95,7 @@ function Stop-BelimbingPortListener {
         $target = "$Name (PID $processId, port $Port)"
         if ($PSCmdlet.ShouldProcess($target, 'Stop process')) {
             Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-            Write-Host "Stopped $target." -ForegroundColor Green
+            Write-Output "Stopped $target."
         }
     }
 }
@@ -103,7 +103,7 @@ function Stop-BelimbingPortListener {
 $vitePortValue = Get-EnvValue $envPath 'VITE_PORT' "$VitePort"
 $VitePort = [int] $vitePortValue
 
-Write-Host "Stopping Belimbing processes for $ProjectRootPath..."
+Write-Output "Stopping Belimbing processes for $ProjectRootPath..."
 
 Stop-BelimbingPortListener -Name 'Vite' -Port $VitePort
 

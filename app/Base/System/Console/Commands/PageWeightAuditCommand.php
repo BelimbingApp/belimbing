@@ -3,7 +3,8 @@
 namespace App\Base\System\Console\Commands;
 
 use Illuminate\Console\Command;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Model as EloquentModel;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component as LivewireComponent;
@@ -38,9 +39,7 @@ class PageWeightAuditCommand extends Command
             return self::FAILURE;
         }
 
-        /** @var class-string<Model> $userModel */
-        $userModel = config('auth.providers.users.model');
-        $user = $userModel::query()->whereNotNull('company_id')->first() ?? $userModel::query()->first();
+        $user = $this->renderUser();
 
         if ($user === null) {
             $this->components->error('No user found to render pages as.');
@@ -50,39 +49,8 @@ class PageWeightAuditCommand extends Command
 
         Auth::login($user);
 
-        $rows = [];
-        foreach ($this->getLaravel()['router']->getRoutes() as $route) {
-            if (! in_array('GET', $route->methods(), true)) {
-                continue;
-            }
-            // Skip routes with required parameters — they need model binding we can't synthesize here.
-            if (preg_match('/\{[^?}]+\}/', $route->uri()) === 1) {
-                continue;
-            }
-            $class = explode('@', $route->getActionName())[0];
-            if (! class_exists($class) || ! is_subclass_of($class, LivewireComponent::class) || isset($rows[$class])) {
-                continue;
-            }
-
-            DB::flushQueryLog();
-            DB::enableQueryLog();
-            try {
-                $html = Livewire::test($class)->html();
-                $rows[$class] = [
-                    'kb' => round(strlen($html) / 1024, 1),
-                    'queries' => count(DB::getQueryLog()),
-                    'components' => substr_count($html, 'wire:id'),
-                    'page' => $route->uri(),
-                ];
-            } catch (Throwable $e) {
-                $rows[$class] = ['kb' => null, 'queries' => 0, 'components' => 0, 'page' => $route->uri()];
-            }
-            DB::disableQueryLog();
-        }
-
-        $rendered = array_filter($rows, static fn (array $r): bool => $r['kb'] !== null);
-        uasort($rendered, static fn (array $a, array $b): int => $b['kb'] <=> $a['kb']);
-
+        $rows = $this->pageWeightRows();
+        $rendered = $this->renderedRows($rows);
         $maxKb = $this->option('max-kb') !== null ? (float) $this->option('max-kb') : null;
         $allow = (array) $this->option('allow');
         $overBudget = $maxKb !== null
@@ -95,36 +63,153 @@ class PageWeightAuditCommand extends Command
             static fn (array $r): bool => ! in_array($r['page'], $allow, true),
         );
 
+        $this->writePageWeightTable($rendered, $maxKb);
+        $this->writePageWeightSummary($rows, $rendered, $overBudget, $unaccountedOverBudget, $maxKb);
+
+        return $this->strictExitCode($unaccountedOverBudget);
+    }
+
+    private function renderUser(): ?EloquentModel
+    {
+        /** @var class-string<EloquentModel> $userModel */
+        $userModel = config('auth.providers.users.model');
+
+        return $userModel::query()->whereNotNull('company_id')->first() ?? $userModel::query()->first();
+    }
+
+    /**
+     * @return array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>
+     */
+    private function pageWeightRows(): array
+    {
+        $rows = [];
+
+        foreach ($this->getLaravel()['router']->getRoutes() as $route) {
+            $class = $this->livewireComponentClass($route);
+
+            if ($class === null || isset($rows[$class])) {
+                continue;
+            }
+
+            $rows[$class] = $this->measureRoute($route, $class);
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @return class-string<LivewireComponent>|null
+     */
+    private function livewireComponentClass(Route $route): ?string
+    {
+        if (! in_array('GET', $route->methods(), true)) {
+            return null;
+        }
+
+        if (preg_match('/\{[^?}]+\}/', $route->uri()) === 1) {
+            return null;
+        }
+
+        $class = explode('@', $route->getActionName())[0];
+
+        if (! class_exists($class) || ! is_subclass_of($class, LivewireComponent::class)) {
+            return null;
+        }
+
+        return $class;
+    }
+
+    /**
+     * @param  class-string<LivewireComponent>  $class
+     * @return array{kb: float|null, queries: int, components: int, page: string}
+     */
+    private function measureRoute(Route $route, string $class): array
+    {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+
+        try {
+            $html = Livewire::test($class)->html();
+
+            return [
+                'kb' => round(strlen($html) / 1024, 1),
+                'queries' => count(DB::getQueryLog()),
+                'components' => substr_count($html, 'wire:id'),
+                'page' => $route->uri(),
+            ];
+        } catch (Throwable) {
+            return ['kb' => null, 'queries' => 0, 'components' => 0, 'page' => $route->uri()];
+        } finally {
+            DB::disableQueryLog();
+        }
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>  $rows
+     * @return array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>
+     */
+    private function renderedRows(array $rows): array
+    {
+        $rendered = array_filter($rows, static fn (array $row): bool => $row['kb'] !== null);
+        uasort($rendered, static fn (array $a, array $b): int => $b['kb'] <=> $a['kb']);
+
+        return $rendered;
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $rendered
+     */
+    private function writePageWeightTable(array $rendered, ?float $maxKb): void
+    {
         $table = [];
-        foreach (array_slice($rendered, 0, (int) $this->option('limit'), true) as $r) {
-            $flag = ($maxKb !== null && $r['kb'] > $maxKb) ? ' ⚠' : '';
-            $table[] = [$r['kb'].$flag, $r['queries'], $r['components'], $r['page']];
+
+        foreach (array_slice($rendered, 0, (int) $this->option('limit'), true) as $row) {
+            $flag = ($maxKb !== null && $row['kb'] > $maxKb) ? ' ⚠' : '';
+            $table[] = [$row['kb'].$flag, $row['queries'], $row['components'], $row['page']];
         }
 
         $this->table(['KB', 'Queries', 'Components', 'Page'], $table);
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>  $rows
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $rendered
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $overBudget
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $unaccountedOverBudget
+     */
+    private function writePageWeightSummary(array $rows, array $rendered, array $overBudget, array $unaccountedOverBudget, ?float $maxKb): void
+    {
         $this->components->info(sprintf(
             '%d rendered, %d skipped/errored.',
             count($rendered),
             count($rows) - count($rendered),
         ));
 
-        if ($maxKb !== null) {
-            $this->components->info(sprintf(
-                '%d page(s) over %s KB (%d allowlisted).',
-                count($overBudget),
-                $maxKb,
-                count($overBudget) - count($unaccountedOverBudget),
-            ));
-
-            if ($this->option('strict') && $unaccountedOverBudget !== []) {
-                foreach ($unaccountedOverBudget as $r) {
-                    $this->components->error(sprintf('%s is %s KB, over the %s KB budget.', $r['page'], $r['kb'], $maxKb));
-                }
-
-                return self::FAILURE;
-            }
+        if ($maxKb === null) {
+            return;
         }
 
-        return self::SUCCESS;
+        $this->components->info(sprintf(
+            '%d page(s) over %s KB (%d allowlisted).',
+            count($overBudget),
+            $maxKb,
+            count($overBudget) - count($unaccountedOverBudget),
+        ));
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $unaccountedOverBudget
+     */
+    private function strictExitCode(array $unaccountedOverBudget): int
+    {
+        if (! $this->option('strict') || $unaccountedOverBudget === []) {
+            return self::SUCCESS;
+        }
+
+        foreach ($unaccountedOverBudget as $row) {
+            $this->components->error(sprintf('%s is %s KB, over the %s KB budget.', $row['page'], $row['kb'], $this->option('max-kb')));
+        }
+
+        return self::FAILURE;
     }
 }

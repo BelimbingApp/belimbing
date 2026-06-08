@@ -31,30 +31,7 @@ abstract class SettingsForm extends Component
                 continue;
             }
 
-            $key = $field['key'];
-            $formKey = $this->formKey($key);
-
-            if ($field['encrypted'] ?? false) {
-                $fieldScope = $this->scopeForField($field, $scope);
-
-                if ($this->shouldHydrateEncryptedValue($field)) {
-                    $value = $settings->get($key, '', $fieldScope);
-                } elseif ($settings->has($key, $fieldScope)) {
-                    $value = $this->savedSecretMask($field);
-                } else {
-                    $value = '';
-                }
-
-                $this->values[$formKey] = is_scalar($value) ? (string) $value : '';
-
-                continue;
-            }
-
-            $value = $settings->get($key, $field['default'] ?? '', $this->scopeForField($field, $scope));
-
-            $this->values[$formKey] = ($field['type'] ?? 'text') === 'checkbox-list'
-                ? $this->checkboxListValues($value, $field)
-                : (string) $value;
+            $this->values[$this->formKey($field['key'])] = $this->initialFieldValue($settings, $field, $scope);
         }
     }
 
@@ -68,44 +45,7 @@ abstract class SettingsForm extends Component
                 continue;
             }
 
-            $key = $field['key'];
-            $formKey = $this->formKey($key);
-            $value = $validated['values'][$formKey] ?? null;
-
-            if ($field['encrypted'] ?? false) {
-                $normalized = trim((string) $value);
-
-                if (BlbStr::isUnchangedSecretValue($normalized, $this->savedSecretMask($field))) {
-                    continue;
-                }
-            }
-
-            $value = $this->normalizeValue($value, $field);
-
-            if ($value === null || $value === '' || $value === []) {
-                $settings->forget($key, $this->scopeForField($field, $scope));
-
-                continue;
-            }
-
-            $settings->set(
-                $key,
-                $value,
-                $this->scopeForField($field, $scope),
-                (bool) ($field['encrypted'] ?? false),
-            );
-
-            if ($field['type'] === 'password') {
-                $fieldScope = $this->scopeForField($field, $scope);
-
-                $this->values[$formKey] = $settings->has($key, $fieldScope)
-                    ? ($this->shouldHydrateEncryptedValue($field)
-                        ? (string) $value
-                        : $this->savedSecretMask($field))
-                    : '';
-            }
-
-            $this->resetValidation('values.'.$formKey);
+            $this->saveField($settings, $field, $validated, $scope);
         }
 
         session()->flash('success', __('Settings saved.'));
@@ -235,6 +175,109 @@ abstract class SettingsForm extends Component
         }
 
         return $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     * @return string|list<string>
+     */
+    private function initialFieldValue(SettingsService $settings, array $field, Scope $scope): string|array
+    {
+        if ($field['encrypted'] ?? false) {
+            return $this->initialEncryptedFieldValue($settings, $field, $scope);
+        }
+
+        $value = $settings->get($field['key'], $field['default'] ?? '', $this->scopeForField($field, $scope));
+
+        if (($field['type'] ?? 'text') === 'checkbox-list') {
+            return $this->checkboxListValues($value, $field);
+        }
+
+        return (string) $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function initialEncryptedFieldValue(SettingsService $settings, array $field, Scope $scope): string
+    {
+        $fieldScope = $this->scopeForField($field, $scope);
+
+        if ($this->shouldHydrateEncryptedValue($field)) {
+            $value = $settings->get($field['key'], '', $fieldScope);
+
+            return is_scalar($value) ? (string) $value : '';
+        }
+
+        if ($settings->has($field['key'], $fieldScope)) {
+            return $this->savedSecretMask($field);
+        }
+
+        return '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     * @param  array<string, mixed>  $validated
+     */
+    private function saveField(SettingsService $settings, array $field, array $validated, Scope $scope): void
+    {
+        $key = $field['key'];
+        $formKey = $this->formKey($key);
+        $value = $validated['values'][$formKey] ?? null;
+
+        if ($this->isUnchangedEncryptedField($value, $field)) {
+            return;
+        }
+
+        $value = $this->normalizeValue($value, $field);
+
+        if ($value === null || $value === '' || $value === []) {
+            $settings->forget($key, $this->scopeForField($field, $scope));
+
+            return;
+        }
+
+        $settings->set(
+            $key,
+            $value,
+            $this->scopeForField($field, $scope),
+            (bool) ($field['encrypted'] ?? false),
+        );
+
+        if (($field['type'] ?? null) === 'password') {
+            $this->refreshSavedPasswordValue($settings, $field, $scope, $formKey, $value);
+        }
+
+        $this->resetValidation('values.'.$formKey);
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function isUnchangedEncryptedField(mixed $value, array $field): bool
+    {
+        if (! ($field['encrypted'] ?? false)) {
+            return false;
+        }
+
+        return BlbStr::isUnchangedSecretValue(trim((string) $value), $this->savedSecretMask($field));
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function refreshSavedPasswordValue(SettingsService $settings, array $field, Scope $scope, string $formKey, mixed $value): void
+    {
+        if (! $settings->has($field['key'], $this->scopeForField($field, $scope))) {
+            $this->values[$formKey] = '';
+
+            return;
+        }
+
+        $this->values[$formKey] = $this->shouldHydrateEncryptedValue($field)
+            ? (string) $value
+            : $this->savedSecretMask($field);
     }
 
     private function companyScope(): Scope

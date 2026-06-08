@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 const AUDIT_TEST_TABLE = 'audit_test_models';
 const AUDIT_TEST_EMAIL = 'alice@example.com';
 const AUDIT_REDACTED_VALUE = '[redacted]';
+const AUDIT_TRACE_ID = '7K9M2F4Q8XDW';
 
 beforeEach(function (): void {
     Schema::create(AUDIT_TEST_TABLE, function (Blueprint $table): void {
@@ -27,7 +28,7 @@ beforeEach(function (): void {
     });
 
     app()->singleton(RequestContext::class, fn () => new RequestContext(
-        traceId: '7K9M2F4Q8XDW',
+        traceId: AUDIT_TRACE_ID,
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/test',
         actorType: PrincipalType::USER->value,
@@ -68,7 +69,7 @@ it('logs field values on model creation', function (): void {
     expect($mutation)->not->toBeNull();
     expect($mutation->actor_type)->toBe(PrincipalType::USER->value);
     expect($mutation->actor_id)->toBe(42);
-    expect($mutation->trace_id)->toBe('7K9M2F4Q8XDW');
+    expect($mutation->trace_id)->toBe(AUDIT_TRACE_ID);
 
     $newValues = $mutation->new_values;
     expect($newValues['name'])->toBe('Alice');
@@ -79,7 +80,7 @@ it('logs field values on model creation', function (): void {
 it('stores guest actor metadata for unauthenticated mutations', function (): void {
     app()->forgetInstance(RequestContext::class);
     app()->singleton(RequestContext::class, fn () => new RequestContext(
-        traceId: '7K9M2F4Q8XDW',
+        traceId: AUDIT_TRACE_ID,
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/register',
     ));
