@@ -145,15 +145,22 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         return $this->listingOperations->endListing($listing);
     }
 
+    public function refreshListingDraft(Item $item): ListingDraft
+    {
+        return $this->readiness->refreshForItem($item);
+    }
+
     /**
+     * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $offer
      * @param  array<string, mixed>  $inventoryItem
      */
-    private function upsertOffer(int $companyId, array $offer, array $inventoryItem): Listing
+    private function upsertOffer(array $config, int $companyId, array $offer, array $inventoryItem): Listing
     {
         $sku = (string) ($offer['sku'] ?? $inventoryItem['sku'] ?? '');
         $listingId = $offer['listing']['listingId'] ?? null;
         $externalKey = $listingId ?? (string) ($offer['offerId'] ?? $sku);
+        $webBaseUrl = rtrim((string) $config['web_base_url'], '/');
         $existing = Listing::query()
             ->where('company_id', $companyId)
             ->where('channel', $this->key())
@@ -184,7 +191,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 'drift_summary' => $drift['summary'],
                 'price_amount' => is_string($price) && is_string($currency) ? Money::fromDecimalString($price, $currency)?->minorAmount : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
-                'listing_url' => $listingId !== null ? 'https://www.ebay.com/itm/'.$listingId : null,
+                'listing_url' => $listingId !== null ? $webBaseUrl.'/itm/'.$listingId : null,
                 'last_synced_at' => Carbon::now(),
                 'raw_payload' => [
                     'offer' => $offer,
@@ -290,7 +297,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
 
         foreach ($offerResponse['offers'] ?? [] as $offer) {
             $fetched++;
-            $listing = $this->upsertOffer($companyId, $offer, $inventoryItem);
+            $listing = $this->upsertOffer($config, $companyId, $offer, $inventoryItem);
             $draft = $this->syncImportedListingDraft($listing);
             $this->productReferences->importFromListing($listing, $draft);
             $listing->wasRecentlyCreated ? $created++ : $updated++;

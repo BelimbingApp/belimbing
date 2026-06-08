@@ -33,7 +33,8 @@ class EbayConfiguration
      *     scopes: list<string>,
      *     api_base_url: string,
      *     auth_url: string,
-     *     token_url: string
+     *     token_url: string,
+     *     web_base_url: string
      * }
      */
     public function forCompany(int $companyId): array
@@ -52,6 +53,9 @@ class EbayConfiguration
             'api_base_url' => $environment === 'live' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com',
             'auth_url' => $environment === 'live' ? 'https://auth.ebay.com/oauth2/authorize' : 'https://auth.sandbox.ebay.com/oauth2/authorize',
             'token_url' => $environment === 'live' ? 'https://api.ebay.com/identity/v1/oauth2/token' : 'https://api.sandbox.ebay.com/identity/v1/oauth2/token',
+            // Buyer-facing web host for item pages. Sandbox listings only resolve on
+            // sandbox.ebay.com; linking them to www.ebay.com 404s.
+            'web_base_url' => $environment === 'live' ? 'https://www.ebay.com' : 'https://www.sandbox.ebay.com',
         ];
     }
 
@@ -81,7 +85,8 @@ class EbayConfiguration
      *     scopes: list<string>,
      *     api_base_url: string,
      *     auth_url: string,
-     *     token_url: string
+     *     token_url: string,
+     *     web_base_url: string
      * }
      */
     public function requireApplicationConfigured(int $companyId): array
@@ -94,7 +99,7 @@ class EbayConfiguration
             }
         }
 
-        /** @var array{environment: string, marketplace_id: string, client_id: string, client_secret: string, redirect_uri: string|null, callback_url: string, scopes: list<string>, api_base_url: string, auth_url: string, token_url: string} $config */
+        /** @var array{environment: string, marketplace_id: string, client_id: string, client_secret: string, redirect_uri: string|null, callback_url: string, scopes: list<string>, api_base_url: string, auth_url: string, token_url: string, web_base_url: string} $config */
         return $config;
     }
 

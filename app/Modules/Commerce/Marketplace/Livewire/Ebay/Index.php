@@ -4,18 +4,15 @@ namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
-use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
-use App\Modules\Commerce\Marketplace\Ebay\EbayStoreAlignmentService;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -41,14 +38,23 @@ class Index extends Component
         $this->resetPage('unlistedPage');
     }
 
-    public function pullListings(MarketplaceChannelRegistry $channels): void
+    /**
+     * Pull from eBay: fetch the store's listings and recent orders into Belimbing
+     * in one action (eBay is the remote, Belimbing the local working copy).
+     *
+     * This is fetch-style, not a blind merge: a Belimbing-managed listing that
+     * changed on eBay is flagged as drifted rather than silently overwritten, so
+     * local edits are never clobbered. Sending Belimbing changes the other way
+     * (push) is a deliberate per-listing action, not part of this bulk pull.
+     */
+    public function pullFromEbay(MarketplaceChannelRegistry $channels): void
     {
         $this->authorizeSyncRun();
 
         try {
-            $result = $channels
-                ->channel(EbayConfiguration::CHANNEL)
-                ->pullListings($this->companyId());
+            $channel = $channels->channel(EbayConfiguration::CHANNEL);
+            $listings = $channel->pullListings($this->companyId());
+            $orders = $channel->pullOrders($this->companyId());
         } catch (Throwable $exception) {
             session()->flash('error', $exception->getMessage());
 
@@ -56,37 +62,13 @@ class Index extends Component
         }
 
         session()->flash('success', __(
-            'Pulled :fetched eBay listings (:created created, :updated updated, :linked linked by SKU).',
+            'Pulled from eBay — :listingsFetched listings (:listingsCreated new, :listingsUpdated updated) and :ordersFetched orders (:ordersCreated new).',
             [
-                'fetched' => $result->fetched,
-                'created' => $result->created,
-                'updated' => $result->updated,
-                'linked' => $result->linked,
-            ],
-        ));
-    }
-
-    public function pullOrders(MarketplaceChannelRegistry $channels): void
-    {
-        $this->authorizeSyncRun();
-
-        try {
-            $result = $channels
-                ->channel(EbayConfiguration::CHANNEL)
-                ->pullOrders($this->companyId());
-        } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
-
-            return;
-        }
-
-        session()->flash('success', __(
-            'Pulled :fetched eBay orders (:created created, :updated updated, :linked linked line items).',
-            [
-                'fetched' => $result->fetched,
-                'created' => $result->created,
-                'updated' => $result->updated,
-                'linked' => $result->linked,
+                'listingsFetched' => $listings->fetched,
+                'listingsCreated' => $listings->created,
+                'listingsUpdated' => $listings->updated,
+                'ordersFetched' => $orders->fetched,
+                'ordersCreated' => $orders->created,
             ],
         ));
     }
@@ -94,35 +76,14 @@ class Index extends Component
     public function render(EbayConfiguration $configuration, EbayOAuthService $oauth): View
     {
         $companyId = $this->companyId();
-        $token = $oauth->tokenForCompany($companyId);
-        $dashboard = $this->storeAlignment()->dashboard($companyId);
 
         return view('commerce-marketplace::livewire.commerce.marketplace.ebay.index', [
             'config' => $configuration->forCompany($companyId),
-            'token' => $token,
+            'token' => $oauth->tokenForCompany($companyId),
             'listings' => $this->listings($companyId),
             'unlistedItems' => $this->unlistedItems($companyId),
-            'stats' => $this->stats($companyId, $dashboard['listingStats']),
-            'recentExchanges' => $this->recentExchanges($companyId),
-            'cleanupQueue' => $dashboard['cleanupQueue'],
-            'qualitySummary' => $dashboard['qualitySummary'],
-            'trustSignals' => $dashboard['trustSignals'],
-            'fitmentBatchCandidates' => $dashboard['fitmentBatchCandidates'],
+            'stats' => $this->stats($companyId),
         ]);
-    }
-
-    /**
-     * @return Collection<int, OutboundExchange>
-     */
-    private function recentExchanges(int $companyId): Collection
-    {
-        return OutboundExchange::query()
-            ->where('system', EbayConfiguration::CHANNEL)
-            ->where('owner_type', 'company')
-            ->where('owner_id', $companyId)
-            ->latest('occurred_at')
-            ->limit(5)
-            ->get();
     }
 
     /**
@@ -175,7 +136,7 @@ class Index extends Component
             ->paginate(10, ['*'], 'unlistedPage');
     }
 
-    private function stats(int $companyId, array $linkedListingStats): array
+    private function stats(int $companyId): array
     {
         $listingBaseQuery = Listing::query()
             ->where('company_id', $companyId)
@@ -185,7 +146,6 @@ class Index extends Component
         $unlinkedListings = (clone $listingBaseQuery)->whereNull('item_id')->count();
 
         return [
-            ...$linkedListingStats,
             'totalListings' => $totalListings,
             'linkedListings' => $totalListings - $unlinkedListings,
             'unlinkedListings' => $unlinkedListings,
@@ -259,10 +219,5 @@ class Index extends Component
     private function audit(): EbayListingAuditService
     {
         return app(EbayListingAuditService::class);
-    }
-
-    private function storeAlignment(): EbayStoreAlignmentService
-    {
-        return app(EbayStoreAlignmentService::class);
     }
 }

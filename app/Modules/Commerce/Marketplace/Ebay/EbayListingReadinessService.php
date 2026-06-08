@@ -115,6 +115,7 @@ class EbayListingReadinessService
                     'blockers' => $blockers,
                     'warnings' => $warnings,
                     'facts' => [
+                        'environment' => $config['environment'],
                         'listing_marketplace_id' => $listingMarketplaceId,
                         'account_marketplace_id' => $sellerMarketplaceId,
                         'metadata_marketplace_id' => $metadataMarketplaceId,

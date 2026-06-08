@@ -49,7 +49,9 @@ test('eBay listing readiness records blockers on the durable draft', function ()
         );
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
-        ->assertSee('eBay readiness')
+        ->assertSee('Listing &amp; Channels', false)
+        ->assertSee('eBay')
+        ->assertSee('Blocked')
         ->assertSee('Map this item template to an eBay category');
 });
 

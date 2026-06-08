@@ -520,6 +520,7 @@ class EbayListingOperationService
         $title = $draft->title ?? $item?->title;
         $price = data_get($payload, 'offer.pricingSummary.price.value');
         $currency = data_get($payload, 'offer.pricingSummary.price.currency');
+        $webBaseUrl = rtrim((string) $this->configuration->forCompany($draft->company_id)['web_base_url'], '/');
 
         $listing = Listing::query()->updateOrCreate(
             [
@@ -539,7 +540,7 @@ class EbayListingOperationService
                 'drift_summary' => null,
                 'price_amount' => is_string($price) ? (int) round(((float) $price) * 100) : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
-                'listing_url' => $externalListingId !== null && $externalListingId !== '' ? 'https://www.ebay.com/itm/'.$externalListingId : null,
+                'listing_url' => $externalListingId !== null && $externalListingId !== '' ? $webBaseUrl.'/itm/'.$externalListingId : null,
                 'listed_at' => $publication['listed_at'],
                 'ended_at' => $publication['ended_at'],
                 'last_synced_at' => Carbon::now(),

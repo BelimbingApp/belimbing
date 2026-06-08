@@ -15,16 +15,19 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemFitments;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\InventoryItemService;
-use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
-use App\Modules\Commerce\Marketplace\Ebay\EbayListingReadinessService;
+use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
+use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
+use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Throwable;
 
 class Show extends Component
 {
@@ -42,14 +45,10 @@ class Show extends Component
      */
     public array $photoFiles = [];
 
-    public function refreshEbayReadiness(EbayListingReadinessService $readiness): void
-    {
-        $this->authorizeUpdate();
-
-        $readiness->refreshForItem($this->item);
-        $this->item->refresh();
-        session()->flash('success', __('eBay readiness refreshed.'));
-    }
+    /**
+     * @var list<string>
+     */
+    public array $selectedChannels = [];
 
     public function mount(Item $item): void
     {
@@ -60,6 +59,110 @@ class Show extends Component
         $this->item = $item->load('category', 'productTemplate', 'photos', 'fitments', 'catalogAttributeValues.attribute', 'descriptions.createdByUser');
         $this->catalogCategoryId = $this->item->category_id;
         $this->catalogProductTemplateId = $this->item->product_template_id;
+        $this->selectedChannels = array_keys(app(MarketplaceChannelRegistry::class)->all());
+    }
+
+    public function refreshChannelReadiness(string $channel, MarketplaceChannelRegistry $channels): void
+    {
+        $this->authorizeUpdate();
+
+        $descriptor = $channels->descriptor($channel);
+
+        try {
+            $channels->channel($channel)->refreshListingDraft($this->item->fresh() ?? $this->item);
+        } catch (Throwable $exception) {
+            session()->flash('error', $exception->getMessage());
+
+            return;
+        }
+
+        $this->item->refresh();
+        session()->flash('success', __(':channel readiness refreshed.', ['channel' => $descriptor->label]));
+    }
+
+    public function refreshAllChannelReadiness(MarketplaceChannelRegistry $channels): void
+    {
+        $this->authorizeUpdate();
+
+        $refreshed = 0;
+        $failures = [];
+
+        foreach ($channels->all() as $channel => $descriptor) {
+            try {
+                $channels->channel($channel)->refreshListingDraft($this->item->fresh() ?? $this->item);
+                $refreshed++;
+            } catch (Throwable $exception) {
+                $failures[] = $descriptor->label.': '.$exception->getMessage();
+            }
+        }
+
+        $this->item->refresh();
+
+        if ($failures === []) {
+            session()->flash('success', trans_choice('Refreshed :count channel readiness check.|Refreshed :count channel readiness checks.', $refreshed, ['count' => $refreshed]));
+
+            return;
+        }
+
+        $message = implode(' ', array_slice($failures, 0, 2));
+
+        if ($refreshed > 0) {
+            session()->flash('warning', __('Refreshed :count channel(s), but some checks failed: :message', ['count' => $refreshed, 'message' => $message]));
+
+            return;
+        }
+
+        session()->flash('error', $message);
+    }
+
+    public function pushChannel(string $channel, MarketplaceListingPushService $pushes): void
+    {
+        $this->authorizeMarketplacePush();
+
+        $rows = $this->channelRows(app(MarketplaceChannelRegistry::class));
+        $target = collect($rows)
+            ->first(fn (array $row): bool => $row['key'] === $channel && $row['can_push']);
+
+        if (! $target) {
+            session()->flash('error', __('This channel is not ready to push yet. Refresh readiness and resolve the blockers first.'));
+
+            return;
+        }
+
+        $this->flashPushResult($pushes->push($this->item, [$channel]));
+        $this->item->refresh();
+    }
+
+    public function pushSelectedChannels(MarketplaceListingPushService $pushes): void
+    {
+        $this->authorizeMarketplacePush();
+
+        $channels = $this->readyChannelKeys($this->normalizedSelectedChannels());
+
+        if ($channels === []) {
+            session()->flash('error', __('Select at least one ready channel before pushing.'));
+
+            return;
+        }
+
+        $this->flashPushResult($pushes->push($this->item, $channels));
+        $this->item->refresh();
+    }
+
+    public function pushAllReadyChannels(MarketplaceListingPushService $pushes): void
+    {
+        $this->authorizeMarketplacePush();
+
+        $channels = $this->readyChannelKeys();
+
+        if ($channels === []) {
+            session()->flash('error', __('No registered channel is ready to push yet. Refresh readiness and resolve the blockers first.'));
+
+            return;
+        }
+
+        $this->flashPushResult($pushes->push($this->item, $channels));
+        $this->item->refresh();
     }
 
     public function saveField(string $field, mixed $value): void
@@ -204,6 +307,25 @@ class Show extends Component
             ->allowed;
     }
 
+    public function canPushToMarketplace(): bool
+    {
+        $actor = Actor::forUser(Auth::user());
+        $authorization = app(AuthorizationService::class);
+
+        return $authorization->can($actor, 'commerce.inventory.item.update')->allowed
+            && $authorization->can($actor, 'commerce.marketplace.execute')->allowed;
+    }
+
+    public function listingStatusVariant(?string $status): string
+    {
+        return match (strtoupper((string) $status)) {
+            'ACTIVE', 'PUBLISHED' => 'success',
+            'UNPUBLISHED', 'ENDED' => 'default',
+            'INACTIVE' => 'warning',
+            default => 'default',
+        };
+    }
+
     public function render(): View
     {
         return view('commerce-inventory::livewire.commerce.inventory.items.show', [
@@ -229,7 +351,7 @@ class Show extends Component
                 ->limit(100)
                 ->get(),
             'canBootstrapFitmentFromAttributes' => $this->fitmentAttributeCodes() !== [],
-            'ebayListingDraft' => $this->ebayListingDraft(),
+            'channelRows' => $this->channelRows(app(MarketplaceChannelRegistry::class)),
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
         ]);
     }
@@ -247,13 +369,178 @@ class Show extends Component
         );
     }
 
-    private function ebayListingDraft(): ?ListingDraft
+    private function authorizeMarketplacePush(): void
     {
-        return ListingDraft::query()
+        $this->authorizeUpdate();
+
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.execute',
+        );
+    }
+
+    /**
+     * @return list<array{
+     *     key: string,
+     *     label: string,
+     *     icon: string|null,
+     *     listing: Listing|null,
+     *     draft: ListingDraft|null,
+     *     listed: bool,
+     *     can_push: bool,
+     *     supports_push: bool,
+     *     readiness_status: string,
+     *     readiness_variant: string,
+     *     blockers: list<array<string, mixed>>,
+     *     warnings: list<array<string, mixed>>,
+     *     price_amount: int|null,
+     *     currency_code: string,
+     *     environment: string|null,
+     *     requires_confirmation: bool,
+     *     settings_url: string|null,
+     *     index_url: string|null
+     * }>
+     */
+    private function channelRows(MarketplaceChannelRegistry $channels): array
+    {
+        $descriptors = $channels->all();
+        $keys = array_keys($descriptors);
+
+        if ($keys === []) {
+            return [];
+        }
+
+        $listings = Listing::query()
             ->where('company_id', $this->item->company_id)
             ->where('item_id', $this->item->id)
-            ->where('channel', EbayConfiguration::CHANNEL)
+            ->whereIn('channel', $keys)
             ->latest('updated_at')
-            ->first();
+            ->get()
+            ->groupBy('channel');
+
+        $drafts = ListingDraft::query()
+            ->where('company_id', $this->item->company_id)
+            ->where('item_id', $this->item->id)
+            ->whereIn('channel', $keys)
+            ->latest('updated_at')
+            ->get()
+            ->groupBy('channel');
+
+        return collect($descriptors)
+            ->map(function ($descriptor, string $channel) use ($listings, $drafts): array {
+                $listing = $listings->get($channel)?->first();
+                $draft = $drafts->get($channel)?->first();
+                $readinessStatus = $draft?->readiness_status ?? 'unchecked';
+                $listed = $listing instanceof Listing
+                    && $listing->ended_at === null
+                    && ! in_array(strtoupper((string) $listing->status), ['ENDED', 'UNPUBLISHED'], true);
+                $operation = $listed ? 'revise_listing' : 'create_listing';
+                $supportsPush = $descriptor->supports($operation);
+                $blockers = collect(data_get($draft?->readiness_snapshot, 'blockers', []))
+                    ->filter(fn (mixed $gap): bool => is_array($gap))
+                    ->values()
+                    ->all();
+                $warnings = collect(data_get($draft?->readiness_snapshot, 'warnings', []))
+                    ->filter(fn (mixed $gap): bool => is_array($gap))
+                    ->values()
+                    ->all();
+                $environment = data_get($draft?->readiness_snapshot, 'facts.environment');
+
+                return [
+                    'key' => $channel,
+                    'label' => $descriptor->label,
+                    'icon' => $descriptor->icon,
+                    'listing' => $listing instanceof Listing ? $listing : null,
+                    'draft' => $draft instanceof ListingDraft ? $draft : null,
+                    'listed' => $listed,
+                    'can_push' => $supportsPush && $readinessStatus === 'ready',
+                    'supports_push' => $supportsPush,
+                    'readiness_status' => $readinessStatus,
+                    'readiness_variant' => $this->readinessVariant($readinessStatus),
+                    'blockers' => $blockers,
+                    'warnings' => $warnings,
+                    'price_amount' => $listing?->price_amount ?? $this->item->target_price_amount,
+                    'currency_code' => $listing?->currency_code ?? $this->item->currency_code,
+                    'environment' => is_string($environment) && trim($environment) !== '' ? trim($environment) : null,
+                    'requires_confirmation' => $environment === 'live',
+                    'settings_url' => $this->routeUrl($descriptor->routes['settings'] ?? null),
+                    'index_url' => $this->routeUrl($descriptor->routes['index'] ?? null),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function readinessVariant(string $status): string
+    {
+        return match ($status) {
+            'ready' => 'success',
+            'blocked' => 'warning',
+            default => 'default',
+        };
+    }
+
+    private function routeUrl(mixed $routeName): ?string
+    {
+        return is_string($routeName) && Route::has($routeName) ? route($routeName) : null;
+    }
+
+    /**
+     * @param  list<string>|null  $selected
+     * @return list<string>
+     */
+    private function readyChannelKeys(?array $selected = null): array
+    {
+        $selected = $selected ?? array_keys(app(MarketplaceChannelRegistry::class)->all());
+
+        return collect($this->channelRows(app(MarketplaceChannelRegistry::class)))
+            ->filter(fn (array $row): bool => $row['can_push'] && in_array($row['key'], $selected, true))
+            ->pluck('key')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizedSelectedChannels(): array
+    {
+        return collect($this->selectedChannels)
+            ->map(fn (mixed $channel): string => trim((string) $channel))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  array{results: list<array{channel: string, label: string, operation: string, payload: array<string, mixed>}>, failures: list<array{channel: string, label: string, message: string}>}  $result
+     */
+    private function flashPushResult(array $result): void
+    {
+        $successCount = count($result['results']);
+        $failureCount = count($result['failures']);
+        $failureSummary = collect($result['failures'])
+            ->map(fn (array $failure): string => $failure['label'].': '.$failure['message'])
+            ->take(2)
+            ->implode(' ');
+
+        if ($failureCount === 0) {
+            session()->flash('success', trans_choice('Pushed :count marketplace channel.|Pushed :count marketplace channels.', $successCount, ['count' => $successCount]));
+
+            return;
+        }
+
+        if ($successCount > 0) {
+            session()->flash('warning', __('Pushed :success channel(s), but :failed failed: :message', [
+                'success' => $successCount,
+                'failed' => $failureCount,
+                'message' => $failureSummary,
+            ]));
+
+            return;
+        }
+
+        session()->flash('error', __('Nothing was pushed: :message', ['message' => $failureSummary]));
     }
 }

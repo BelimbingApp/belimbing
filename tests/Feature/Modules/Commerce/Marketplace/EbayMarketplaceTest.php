@@ -216,8 +216,9 @@ test('ebay marketplace page is visible to admins', function (): void {
         ->get(route('commerce.marketplace.ebay.index'))
         ->assertOk()
         ->assertSee('eBay Marketplace')
-        ->assertSee('Set up the eBay connection in')
-        ->assertSee('eBay settings')
+        ->assertSee('Not connected')
+        ->assertSee('Connect your eBay store in Settings')
+        ->assertSee('Set up connection')
         ->assertSee(route('commerce.marketplace.ebay.settings'), false)
         ->assertDontSee('Connect eBay');
 });
@@ -502,7 +503,7 @@ function seedEbayMarketplaceAuditOrder(int $companyId, Item $legacyItem, Listing
     ]);
 }
 
-test('ebay marketplace surfaces imported listing audit states', function (): void {
+test('ebay marketplace lists imported listings and omits the reconciliation dashboard', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -516,27 +517,46 @@ test('ebay marketplace surfaces imported listing audit states', function (): voi
 
     Livewire::actingAs($user)
         ->test(MarketplaceIndex::class)
-        ->assertSee('Store Progress')
-        ->assertSee('Cleanup Queue')
-        ->assertSee('Trust Signals')
-        ->assertSee('Fitment Reuse')
-        ->assertSee('Ready to Adopt')
-        ->assertSee('Missing Fitment')
-        ->assertSee('Conflicting Identifiers')
-        ->assertSee('Legacy Relist Required')
-        ->assertSee('Missing Identifiers')
-        ->assertSee('Externally Changed')
-        ->assertSee('Conflicting IDs')
-        ->assertSee('Relist Required')
-        ->assertSee('Buyer question')
-        ->assertSee('Return / cancellation signal')
-        ->assertSee('Review pricing, title, and fitment for aging stock with no sale yet.')
-        ->assertSee('Copy fitment from FIT-SOURCE-1 (1 entries).')
-        ->assertSee('Linked')
+        // Imported listings appear in the Listings table.
         ->assertSee('Missing fitment rotor')
         ->assertSee('Externally changed headlight')
         ->assertSee('Legacy relist bumper cover')
-        ->assertSee('Conflicting identifiers caliper');
+        ->assertSee('Conflicting identifiers caliper')
+        // Unlinked listings are flagged so they can be turned into inventory.
+        ->assertSee('Not linked')
+        // The speculative reconciliation/quality dashboard is intentionally not built yet
+        // (zero local data means there is nothing to reconcile until pull + adopt happens).
+        ->assertDontSee('Store Progress')
+        ->assertDontSee('Cleanup Queue')
+        ->assertDontSee('Trust Signals')
+        ->assertDontSee('Fitment Reuse')
+        ->assertDontSee('Ready to Adopt');
+});
+
+test('ebay marketplace pull from eBay fetches listings and orders in one action', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany($user->company_id, [
+        'https://api.ebay.com/oauth/api_scope/sell.inventory',
+        'https://api.ebay.com/oauth/api_scope/sell.fulfillment',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response(['total' => 0, 'inventoryItems' => []]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response(['offers' => []]),
+        'https://api.sandbox.ebay.com/sell/fulfillment/v1/order*' => Http::response(['orders' => []]),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(MarketplaceIndex::class)
+        ->call('pullFromEbay')
+        ->assertHasNoErrors()
+        ->assertSee('Pulled from eBay');
+
+    // One operator action pulls both sides of the store: listings and orders.
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/inventory/v1/inventory_item'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/fulfillment/v1/order'));
 });
 
 test('ebay listing pull materializes offers and links by sku', function (): void {
@@ -607,6 +627,7 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         ->and($listing->item_id)->toBe($item->id)
         ->and($listing->price_amount)->toBe(12000)
         ->and($listing->currency_code)->toBe('USD')
+        ->and($listing->listing_url)->toBe('https://www.sandbox.ebay.com/itm/'.EBAY_FIXTURE_LISTING_ID)
         ->and($draft)->not()->toBeNull()
         ->and($draft->management_state)->toBe('imported')
         ->and($draft->status)->toBe('imported')
@@ -818,6 +839,7 @@ test('ebay publish creates inventory compatibility offer and listing records', f
         ->and($result['external_offer_id'])->toBe('offer-publish-1')
         ->and($listing->marketplace_id)->toBe('EBAY_US')
         ->and($listing->status)->toBe('ACTIVE')
+        ->and($listing->listing_url)->toBe('https://www.sandbox.ebay.com/itm/9988776655')
         ->and($listing->management_state)->toBe('belimbing_managed')
         ->and($listing->drift_status)->toBe('in_sync')
         ->and($item->fresh()->status)->toBe(Item::STATUS_LISTED)
@@ -1224,10 +1246,6 @@ test('ebay listing pull marks belimbing-managed listings as drifted when ebay ch
         ->and($listing->drift_summary)->toContain('title')
         ->and($listing->drift_summary)->toContain('price')
         ->and($listing->drift_summary)->toContain('quantity');
-
-    $this->get(route('commerce.marketplace.ebay.index'))
-        ->assertSee('Externally Changed')
-        ->assertSee('Externally changed: title, price, quantity.');
 });
 
 test('ebay order pull materializes sales ledger rows and links inventory', function (): void {
