@@ -23,7 +23,7 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
   - **Larger corrections:** add a plan under `docs/plans/` in this pass; implementation may follow later, but the plan must exist now.
   - **Completeness:** when modifying an artifact, consider its full purpose. Ask "what else belongs here?"
 - **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
-- **Progressive Evolution:** build the best current design, but make schema maturity explicit. Incubating schemas may be rewritten in place; stable schemas evolve through normal Laravel migrations or intentional data ports. Persisted user data (prefs, content, configs) is harder to discard than tables; protect it by default unless an incubating schema is intentionally rebuilt.
+- **Progressive Evolution:** build the best design current knowledge justifies. Refactor, simplify, dedup,  delete, relocate, rename, improve abstractions, and make schema maturity explicit to reduce entropy as understanding improves.
 - **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
 - **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
 
