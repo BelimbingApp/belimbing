@@ -4,6 +4,7 @@ namespace App\Base\System\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component as LivewireComponent;
@@ -38,10 +39,7 @@ class PageWeightAuditCommand extends Command
             return self::FAILURE;
         }
 
-        /** @var class-string<Model> $userModel */
-        $userModel = config('auth.providers.users.model');
-        $user = $userModel::query()->whereNotNull('company_id')->first() ?? $userModel::query()->first();
-
+        $user = $this->pageWeightUser();
         if ($user === null) {
             $this->components->error('No user found to render pages as.');
 
@@ -50,17 +48,42 @@ class PageWeightAuditCommand extends Command
 
         Auth::login($user);
 
+        $rows = $this->collectPageWeights();
+        $rendered = $this->renderedRows($rows);
+        $maxKb = $this->maxKbOption();
+        $overBudget = $this->overBudgetRows($rendered, $maxKb);
+        $unaccountedOverBudget = $this->unaccountedOverBudgetRows($overBudget);
+
+        $this->printWeightTable($rendered, $maxKb);
+        $this->printWeightSummary($rows, $rendered, $maxKb, $overBudget, $unaccountedOverBudget);
+
+        if ($this->option('strict') && $unaccountedOverBudget !== []) {
+            $this->printStrictBudgetFailures($unaccountedOverBudget, $maxKb);
+
+            return self::FAILURE;
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function pageWeightUser(): ?Model
+    {
+        /** @var class-string<Model> $userModel */
+        $userModel = config('auth.providers.users.model');
+
+        return $userModel::query()->whereNotNull('company_id')->first() ?? $userModel::query()->first();
+    }
+
+    /**
+     * @return array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>
+     */
+    private function collectPageWeights(): array
+    {
         $rows = [];
         foreach ($this->getLaravel()['router']->getRoutes() as $route) {
-            if (! in_array('GET', $route->methods(), true)) {
-                continue;
-            }
-            // Skip routes with required parameters — they need model binding we can't synthesize here.
-            if (preg_match('/\{[^?}]+\}/', $route->uri()) === 1) {
-                continue;
-            }
-            $class = explode('@', $route->getActionName())[0];
-            if (! class_exists($class) || ! is_subclass_of($class, LivewireComponent::class) || isset($rows[$class])) {
+            $class = $this->pageComponentClass($route);
+
+            if ($class === null || isset($rows[$class])) {
                 continue;
             }
 
@@ -80,21 +103,79 @@ class PageWeightAuditCommand extends Command
             DB::disableQueryLog();
         }
 
+        return $rows;
+    }
+
+    /**
+     * @return class-string<LivewireComponent>|null
+     */
+    private function pageComponentClass(Route $route): ?string
+    {
+        if (! in_array('GET', $route->methods(), true)) {
+            return null;
+        }
+
+        // Skip routes with required parameters: they need model binding we cannot synthesize here.
+        if (preg_match('/\{[^?}]+\}/', $route->uri()) === 1) {
+            return null;
+        }
+
+        $class = explode('@', $route->getActionName())[0];
+
+        if (! class_exists($class) || ! is_subclass_of($class, LivewireComponent::class)) {
+            return null;
+        }
+
+        return $class;
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>  $rows
+     * @return array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>
+     */
+    private function renderedRows(array $rows): array
+    {
         $rendered = array_filter($rows, static fn (array $r): bool => $r['kb'] !== null);
         uasort($rendered, static fn (array $a, array $b): int => $b['kb'] <=> $a['kb']);
 
-        $maxKb = $this->option('max-kb') !== null ? (float) $this->option('max-kb') : null;
+        return $rendered;
+    }
+
+    private function maxKbOption(): ?float
+    {
+        return $this->option('max-kb') !== null ? (float) $this->option('max-kb') : null;
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $rendered
+     * @return array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>
+     */
+    private function overBudgetRows(array $rendered, ?float $maxKb): array
+    {
+        if ($maxKb === null) {
+            return [];
+        }
+
+        return array_filter($rendered, static fn (array $r): bool => $r['kb'] > $maxKb);
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $overBudget
+     * @return array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>
+     */
+    private function unaccountedOverBudgetRows(array $overBudget): array
+    {
         $allow = (array) $this->option('allow');
-        $overBudget = $maxKb !== null
-            ? array_filter($rendered, static fn (array $r): bool => $r['kb'] > $maxKb)
-            : [];
 
         // Pages on the allowlist are reported but do not fail --strict (the ratchet).
-        $unaccountedOverBudget = array_filter(
-            $overBudget,
-            static fn (array $r): bool => ! in_array($r['page'], $allow, true),
-        );
+        return array_filter($overBudget, static fn (array $r): bool => ! in_array($r['page'], $allow, true));
+    }
 
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $rendered
+     */
+    private function printWeightTable(array $rendered, ?float $maxKb): void
+    {
         $table = [];
         foreach (array_slice($rendered, 0, (int) $this->option('limit'), true) as $r) {
             $flag = ($maxKb !== null && $r['kb'] > $maxKb) ? ' ⚠' : '';
@@ -102,6 +183,21 @@ class PageWeightAuditCommand extends Command
         }
 
         $this->table(['KB', 'Queries', 'Components', 'Page'], $table);
+    }
+
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float|null, queries: int, components: int, page: string}>  $rows
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $rendered
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $overBudget
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $unaccountedOverBudget
+     */
+    private function printWeightSummary(
+        array $rows,
+        array $rendered,
+        ?float $maxKb,
+        array $overBudget,
+        array $unaccountedOverBudget,
+    ): void {
         $this->components->info(sprintf(
             '%d rendered, %d skipped/errored.',
             count($rendered),
@@ -115,16 +211,16 @@ class PageWeightAuditCommand extends Command
                 $maxKb,
                 count($overBudget) - count($unaccountedOverBudget),
             ));
-
-            if ($this->option('strict') && $unaccountedOverBudget !== []) {
-                foreach ($unaccountedOverBudget as $r) {
-                    $this->components->error(sprintf('%s is %s KB, over the %s KB budget.', $r['page'], $r['kb'], $maxKb));
-                }
-
-                return self::FAILURE;
-            }
         }
+    }
 
-        return self::SUCCESS;
+    /**
+     * @param  array<class-string<LivewireComponent>, array{kb: float, queries: int, components: int, page: string}>  $unaccountedOverBudget
+     */
+    private function printStrictBudgetFailures(array $unaccountedOverBudget, ?float $maxKb): void
+    {
+        foreach ($unaccountedOverBudget as $r) {
+            $this->components->error(sprintf('%s is %s KB, over the %s KB budget.', $r['page'], $r['kb'], $maxKb));
+        }
     }
 }

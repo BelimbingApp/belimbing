@@ -1,4 +1,4 @@
-const storedInt = (key, fallback) => parseInt(localStorage.getItem(key)) || fallback
+const storedInt = (key, fallback) => Number.parseInt(localStorage.getItem(key)) || fallback
 
 globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     sidebarOpen: false,
@@ -22,7 +22,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     laraDockWidth: storedInt('agent-chat-1-dock-width', 448),
     _laraDockDragging: false,
     DOCK_MIN: 320,
-    DOCK_MAX: Math.floor(window.innerWidth * 0.6),
+    DOCK_MAX: Math.floor(globalThis.innerWidth * 0.6),
 
     init() {
         this.initSidebar()
@@ -52,7 +52,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     },
 
     toggleSidebar() {
-        if (window.innerWidth >= 1024) {
+        if (globalThis.innerWidth >= 1024) {
             if (this.sidebarRail) {
                 this.sidebarRail = false
                 this.sidebarWidth = this._lastExpandedWidth
@@ -150,7 +150,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
         this.laraPrefillPrompt = prompt
         this.laraChatOpen = true
         localStorage.setItem('agent-chat-1-open', '1')
-        this.$nextTick(() => window.dispatchEvent(new CustomEvent('agent-chat-opened', { detail: { prompt } })))
+        this.$nextTick(() => globalThis.dispatchEvent(new CustomEvent('agent-chat-opened', { detail: { prompt } })))
     },
 
     closeLaraChat() {
@@ -171,7 +171,7 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
         localStorage.setItem('agent-chat-1-open', this.laraChatOpen ? '1' : '0')
 
         if (this.laraChatOpen) {
-            this.$nextTick(() => window.dispatchEvent(new CustomEvent('agent-chat-opened')))
+            this.$nextTick(() => globalThis.dispatchEvent(new CustomEvent('agent-chat-opened')))
         }
     },
 

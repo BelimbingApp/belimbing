@@ -5,7 +5,7 @@ const state = {
 
 const markAlpineReady = () => {
     globalThis.__blbAlpineReady = true
-    document.documentElement.setAttribute('data-alpine-ready', '')
+    document.documentElement.dataset.alpineReady = ''
 }
 
 const applyClientHtmlState = () => {
@@ -87,7 +87,7 @@ const resolveLaraChatTargetRef = ({ open, mode, fullscreen }) => {
         return null
     }
 
-    if (window.innerWidth < 640) {
+    if (globalThis.innerWidth < 640) {
         return 'laraMobileTarget'
     }
 
@@ -112,7 +112,7 @@ const applyLaraChatShellState = () => {
     const open = (localStorage.getItem('agent-chat-1-open') ?? '0') === '1'
     const mode = localStorage.getItem('agent-chat-1-mode') || 'overlay'
     const fullscreen = (localStorage.getItem('agent-chat-1-fullscreen') ?? '0') === '1'
-    const dockWidth = parseInt(localStorage.getItem('agent-chat-1-dock-width')) || 448
+    const dockWidth = Number.parseInt(localStorage.getItem('agent-chat-1-dock-width')) || 448
 
     const targetRef = resolveLaraChatTargetRef({ open, mode, fullscreen })
 
@@ -193,9 +193,9 @@ const markActiveMenu = () => {
 
     scored.forEach(({ a, score }) => {
         if (best >= 0 && score === best) {
-            a.setAttribute('data-current', '')
+            a.dataset.current = ''
         } else {
-            a.removeAttribute('data-current')
+            delete a.dataset.current
         }
     })
 }
