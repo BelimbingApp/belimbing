@@ -11,7 +11,6 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Models\Listing;
-use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
@@ -29,6 +28,10 @@ class Index extends Component
 
     public string $listingFilter = 'all';
 
+    // The table mirrors eBay's active set by default; ended listings are hidden
+    // unless asked for.
+    public bool $includeEnded = false;
+
     // Per-listing quick edit-and-push modal.
     public bool $showListingModal = false;
 
@@ -38,10 +41,20 @@ class Index extends Component
 
     public string $modalPrice = '';
 
-    // Import existing (legacy) eBay listings by listing ID via bulkMigrateListing.
-    public bool $showMigrateModal = false;
+    // Import existing eBay listings: a Trading-API (GetMyeBaySelling) picker.
+    public bool $showImportModal = false;
 
-    public string $migrateListingIds = '';
+    public bool $listingsLoaded = false;
+
+    /**
+     * @var list<array{item_id: string, title: string, sku: string|null, price_amount: int|null, currency_code: string|null, quantity: int|null, listing_type: string|null, view_url: string|null}>
+     */
+    public array $sellerListings = [];
+
+    /**
+     * @var list<string>
+     */
+    public array $selectedImportIds = [];
 
     public function updatedSearch(): void
     {
@@ -53,6 +66,11 @@ class Index extends Component
     {
         $this->resetPage();
         $this->resetPage('unlistedPage');
+    }
+
+    public function updatedIncludeEnded(): void
+    {
+        $this->resetPage();
     }
 
     /**
@@ -136,26 +154,46 @@ class Index extends Component
     }
 
     /**
-     * Pull from eBay: fetch the store's listings and recent orders into Belimbing
-     * in one action (eBay is the remote, Belimbing the local working copy).
+     * Pull from eBay: make Belimbing mirror the eBay store and bring in recent
+     * orders, in one action (eBay is the remote, Belimbing the local working copy).
      *
-     * This is fetch-style, not a blind merge: a Belimbing-managed listing that
-     * changed on eBay is flagged as drifted rather than silently overwritten, so
-     * local edits are never clobbered. Sending Belimbing changes the other way
-     * (push) is a deliberate per-listing action, not part of this bulk pull.
+     * It is fetch-style, not a blind merge: a Belimbing-managed listing that changed
+     * on eBay is flagged as drifted rather than overwritten. Reconciliation against
+     * the live active set (Trading API) adds legacy listings the Inventory pull
+     * cannot see and retires ones no longer active — so the table mirrors eBay.
      */
-    public function pullFromEbay(MarketplaceChannelRegistry $channels): void
+    public function pullFromEbay(EbayMarketplaceChannel $channel): void
     {
         $this->authorizeSyncRun();
 
+        $companyId = $this->companyId();
+
         try {
-            $channel = $channels->channel(EbayConfiguration::CHANNEL);
-            $listings = $channel->pullListings($this->companyId());
-            $orders = $channel->pullOrders($this->companyId());
+            $listings = $channel->pullListings($companyId);
+            $orders = $channel->pullOrders($companyId);
         } catch (Throwable $exception) {
             session()->flash('error', $exception->getMessage());
 
             return;
+        }
+
+        // Mirror the full active set; best-effort so a Trading API hiccup never
+        // breaks the Inventory pull + orders above.
+        $reconcileNote = '';
+
+        try {
+            $reconcile = $channel->reconcileSellerListings($companyId);
+            $reconcileNote = ' '.__('Mirrored :active live listing(s) (:created new, :ended ended).', [
+                'active' => $reconcile->active,
+                'created' => $reconcile->created,
+                'ended' => $reconcile->ended,
+            ]);
+
+            if (! $reconcile->complete) {
+                $reconcileNote .= ' '.__('Partial set — older listings were not retired.');
+            }
+        } catch (Throwable $exception) {
+            $reconcileNote = ' '.__('Listing mirror skipped: :message', ['message' => $exception->getMessage()]);
         }
 
         session()->flash('success', __(
@@ -167,83 +205,99 @@ class Index extends Component
                 'ordersFetched' => $orders->fetched,
                 'ordersCreated' => $orders->created,
             ],
-        ));
+        ).$reconcileNote);
     }
 
-    public function openMigrateModal(): void
+    public function openImportModal(): void
     {
-        $this->migrateListingIds = '';
+        $this->sellerListings = [];
+        $this->selectedImportIds = [];
+        $this->listingsLoaded = false;
         $this->resetValidation();
-        $this->showMigrateModal = true;
+        $this->showImportModal = true;
     }
 
-    public function closeMigrateModal(): void
+    public function closeImportModal(): void
     {
-        $this->showMigrateModal = false;
-        $this->migrateListingIds = '';
+        $this->showImportModal = false;
+        $this->sellerListings = [];
+        $this->selectedImportIds = [];
+        $this->listingsLoaded = false;
         $this->resetValidation();
     }
 
     /**
-     * Adopt existing eBay listings (created in Seller Hub / the legacy Trading API)
-     * into Belimbing by migrating them into the Inventory API, after which they
-     * appear here and become manageable like any pulled listing.
+     * Load the seller's active eBay listings (Trading API GetMyeBaySelling) so the
+     * user can pick which to import — including listings the Inventory-API pull
+     * cannot see.
      */
-    public function migrateLegacyListings(EbayMarketplaceChannel $channel): void
+    public function loadSellerListings(EbayMarketplaceChannel $channel): void
     {
         $this->authorizeSyncRun();
 
-        $listingIds = collect(preg_split('/[\s,]+/', $this->migrateListingIds) ?: [])
-            ->map(fn (string $id): string => trim($id))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($listingIds === []) {
-            $this->addError('migrateListingIds', __('Enter at least one eBay listing ID.'));
-
-            return;
-        }
-
         try {
-            $result = $channel->migrateListings($this->companyId(), $listingIds);
+            $this->sellerListings = $channel->fetchSellerListings($this->companyId());
         } catch (Throwable $exception) {
             session()->flash('error', $exception->getMessage());
 
             return;
         }
 
-        $this->closeMigrateModal();
+        $this->selectedImportIds = [];
+        $this->listingsLoaded = true;
 
-        if ($result->failed > 0 && $result->migrated === 0) {
-            $message = collect($result->failures)
-                ->map(fn (array $failure): string => $failure['listing_id'].': '.$failure['message'])
-                ->take(2)
-                ->implode(' ');
+        if ($this->sellerListings === []) {
+            session()->flash('warning', __('No active eBay listings were found for this account.'));
+        }
+    }
 
-            session()->flash('error', __('No listings were imported: :message', ['message' => $message]));
+    public function toggleSelectAllImports(): void
+    {
+        $allIds = array_map(fn (array $listing): string => $listing['item_id'], $this->sellerListings);
+
+        $this->selectedImportIds = count($this->selectedImportIds) === count($allIds) ? [] : $allIds;
+    }
+
+    /**
+     * Import the ticked listings into Belimbing as listing records (visibility).
+     * They land as legacy listings; adopting them for revise/end is a later step.
+     */
+    public function importSelectedListings(EbayMarketplaceChannel $channel): void
+    {
+        $this->authorizeSyncRun();
+
+        $listingIds = collect($this->selectedImportIds)
+            ->map(fn (mixed $id): string => trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($listingIds === []) {
+            $this->addError('selectedImportIds', __('Select at least one listing to import.'));
 
             return;
         }
 
-        $summary = __(
-            'Imported :migrated of :requested eBay listing(s); :created now show below.',
-            ['migrated' => $result->migrated, 'requested' => $result->requested, 'created' => $result->listingsCreated],
-        );
-
-        if ($result->failed > 0) {
-            $message = collect($result->failures)
-                ->map(fn (array $failure): string => $failure['listing_id'].': '.$failure['message'])
-                ->take(2)
-                ->implode(' ');
-
-            session()->flash('warning', $summary.' '.__(':failed could not be migrated: :message', ['failed' => $result->failed, 'message' => $message]));
+        try {
+            $result = $channel->importSellerListings($this->companyId(), $listingIds);
+        } catch (Throwable $exception) {
+            session()->flash('error', $exception->getMessage());
 
             return;
         }
 
-        session()->flash('success', $summary);
+        $this->closeImportModal();
+
+        session()->flash('success', __(
+            'Imported :fetched eBay listing(s) — :created new, :updated updated, :linked linked to inventory items.',
+            [
+                'fetched' => $result->fetched,
+                'created' => $result->created,
+                'updated' => $result->updated,
+                'linked' => $result->linked,
+            ],
+        ));
     }
 
     public function render(EbayConfiguration $configuration, EbayOAuthService $oauth): View
@@ -282,6 +336,7 @@ class Index extends Component
             })
             ->when($this->listingFilter === 'linked', fn (Builder $query) => $query->whereNotNull('item_id'))
             ->when($this->listingFilter === 'unlinked', fn (Builder $query) => $query->whereNull('item_id'))
+            ->when(! $this->includeEnded, fn (Builder $query) => $query->whereNull('ended_at'))
             ->latest('last_synced_at')
             ->paginate(20);
     }

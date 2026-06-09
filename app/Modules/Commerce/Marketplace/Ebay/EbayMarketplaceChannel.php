@@ -11,6 +11,7 @@ use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\DTO\MarketplaceMigrationResult;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
+use App\Modules\Commerce\Marketplace\DTO\MarketplaceReconcileResult;
 use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
@@ -34,6 +35,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly EbayOrderMapper $orderMapper,
         private readonly MarketplaceAvailabilitySyncService $availability,
         private readonly SettingsService $settings,
+        private readonly EbayTradingService $trading,
     ) {}
 
     public function key(): string
@@ -267,6 +269,173 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             $failed,
             $listingsCreated,
             $failures,
+        );
+    }
+
+    /**
+     * The seller's active eBay listings (via the Trading API), including ones the
+     * Inventory API cannot see, as lightweight summaries for an import picker.
+     *
+     * @return list<array{item_id: string, title: string, sku: string|null, price_amount: int|null, currency_code: string|null, quantity: int|null, listing_type: string|null, view_url: string|null}>
+     */
+    public function fetchSellerListings(int $companyId): array
+    {
+        return $this->trading->fetchActiveListings($companyId)['listings'];
+    }
+
+    /**
+     * Import selected seller listings into Belimbing as listing records, so the
+     * whole store is visible. These come straight from the Trading API and are
+     * legacy (no Inventory-API offer yet) — adopting them for revise/end is the
+     * separate migrateListings step. Linked to an item by SKU when one matches.
+     *
+     * @param  list<string>  $listingIds
+     */
+    public function importSellerListings(int $companyId, array $listingIds): MarketplacePullResult
+    {
+        $listingIds = collect($listingIds)
+            ->map(fn (mixed $id): string => trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($listingIds === []) {
+            return new MarketplacePullResult($this->key(), 0, 0, 0, 0);
+        }
+
+        $config = $this->configuration->forCompany($companyId);
+        $byId = collect($this->trading->fetchActiveListings($companyId)['listings'])->keyBy('item_id');
+
+        $fetched = 0;
+        $created = 0;
+        $updated = 0;
+        $linked = 0;
+
+        foreach ($listingIds as $listingId) {
+            $summary = $byId->get($listingId);
+
+            if (! is_array($summary)) {
+                continue;
+            }
+
+            $fetched++;
+            $listing = $this->upsertSellerListing($config, $companyId, $summary);
+            $listing->wasRecentlyCreated ? $created++ : $updated++;
+
+            if ($listing->item_id !== null) {
+                $linked++;
+            }
+        }
+
+        return new MarketplacePullResult($this->key(), $fetched, $created, $updated, $linked);
+    }
+
+    /**
+     * Make the local listing cache mirror eBay's live active set: upsert every
+     * active listing (creating legacy ones the Inventory pull cannot see), and
+     * soft-end local listings that are no longer active on eBay. Ending only runs
+     * when the full active set was read, so a partial fetch never retires listings.
+     */
+    public function reconcileSellerListings(int $companyId): MarketplaceReconcileResult
+    {
+        $config = $this->configuration->forCompany($companyId);
+
+        // Read the whole active set (bounded high enough for the documented ceiling
+        // of well under 10k listings); `complete` gates the ending pass.
+        $active = $this->trading->fetchActiveListings($companyId, maxPages: 50);
+        $summaries = $active['listings'];
+        $complete = $active['complete'];
+
+        $created = 0;
+        $refreshed = 0;
+        $activeIds = [];
+
+        foreach ($summaries as $summary) {
+            $activeIds[] = $summary['item_id'];
+            $listing = $this->upsertSellerListing($config, $companyId, $summary);
+            $listing->wasRecentlyCreated ? $created++ : $refreshed++;
+        }
+
+        $ended = 0;
+
+        if ($complete) {
+            $stale = Listing::query()
+                ->where('company_id', $companyId)
+                ->where('channel', $this->key())
+                ->whereNotNull('external_listing_id')
+                ->whereNull('ended_at')
+                ->whereNotIn('status', ['ENDED', 'UNPUBLISHED'])
+                ->when($activeIds !== [], fn ($query) => $query->whereNotIn('external_listing_id', $activeIds))
+                ->get();
+
+            foreach ($stale as $listing) {
+                $listing->update([
+                    'status' => 'ENDED',
+                    'ended_at' => Carbon::now(),
+                    'last_synced_at' => Carbon::now(),
+                ]);
+                $ended++;
+            }
+        }
+
+        return new MarketplaceReconcileResult($this->key(), count($summaries), $created, $refreshed, $ended, $complete);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array{item_id: string, title: string, sku: string|null, price_amount: int|null, currency_code: string|null, quantity: int|null, listing_type: string|null, view_url: string|null}  $summary
+     */
+    private function upsertSellerListing(array $config, int $companyId, array $summary): Listing
+    {
+        $sku = $summary['sku'];
+        $item = is_string($sku) && $sku !== ''
+            ? Item::query()->where('company_id', $companyId)->where('sku', strtoupper($sku))->first()
+            : null;
+
+        $existing = Listing::query()
+            ->where('company_id', $companyId)
+            ->where('channel', $this->key())
+            ->where('external_listing_id', $summary['item_id'])
+            ->first();
+
+        // Never clobber content we manage: a Belimbing-managed listing is only
+        // marked freshly seen here (its content + drift are owned by push/pull).
+        if ($existing instanceof Listing && $existing->isBelimbingManaged()) {
+            $existing->forceFill(['last_synced_at' => Carbon::now()])->save();
+
+            return $existing;
+        }
+
+        $webBaseUrl = rtrim((string) $config['web_base_url'], '/');
+
+        return Listing::query()->updateOrCreate(
+            [
+                'company_id' => $companyId,
+                'channel' => $this->key(),
+                'external_listing_id' => $summary['item_id'],
+            ],
+            [
+                'item_id' => $item?->id ?? $existing?->item_id,
+                'external_sku' => is_string($sku) && $sku !== '' ? strtoupper($sku) : $existing?->external_sku,
+                'marketplace_id' => $config['marketplace_id'] ?? $existing?->marketplace_id,
+                'title' => $summary['title'] !== '' ? $summary['title'] : $existing?->title,
+                'status' => 'ACTIVE',
+                'management_state' => $existing?->management_state ?? Listing::MANAGEMENT_IMPORTED,
+                'drift_status' => $existing?->drift_status ?? Listing::DRIFT_UNKNOWN,
+                'price_amount' => $summary['price_amount'],
+                'currency_code' => $summary['currency_code'],
+                // Build the buyer URL from our environment host + the canonical /itm/{id},
+                // exactly like pulled/published listings. eBay's ViewItemURL is captured in
+                // raw_payload for reference but not trusted for linking (its host is wrong
+                // in sandbox — an eBay-side quirk, correct in production).
+                'listing_url' => $webBaseUrl.'/itm/'.$summary['item_id'],
+                'last_synced_at' => Carbon::now(),
+                'raw_payload' => [
+                    ...($existing?->raw_payload ?? []),
+                    'trading_item' => $summary,
+                ],
+            ],
         );
     }
 

@@ -13,6 +13,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayTradingService;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index as MarketplaceIndex;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
@@ -541,6 +542,7 @@ test('ebay marketplace pull from eBay fetches listings and orders in one action'
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response(['total' => 0, 'inventoryItems' => []]),
         'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response(['offers' => []]),
         'https://api.sandbox.ebay.com/sell/fulfillment/v1/order*' => Http::response(['orders' => []]),
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingEmptyXml(), 200, ['Content-Type' => 'text/xml']),
     ]);
 
     Livewire::actingAs($user)
@@ -549,8 +551,10 @@ test('ebay marketplace pull from eBay fetches listings and orders in one action'
         ->assertHasNoErrors()
         ->assertSee('Pulled from eBay');
 
-    // One operator action pulls both sides of the store: listings and orders.
+    // One operator action covers the store: Inventory listings, the live active-set
+    // mirror (Trading API), and orders.
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/inventory/v1/inventory_item'));
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/ws/api.dll'));
     Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/sell/fulfillment/v1/order'));
 });
 
@@ -837,7 +841,110 @@ test('ebay bulk migrate surfaces an eBay system error without crashing', functio
         ->and($result->failures[0]['message'])->toContain('system error');
 });
 
-test('ebay marketplace page imports existing listings by id', function (): void {
+function ebayMyEbaySellingXml(): string
+{
+    return <<<'XML'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+      <Ack>Success</Ack>
+      <ActiveList>
+        <PaginationResult><TotalNumberOfPages>1</TotalNumberOfPages></PaginationResult>
+        <ItemArray>
+          <Item>
+            <ItemID>110589612524</ItemID>
+            <Title>Used OEM headlight assembly</Title>
+            <SKU>HAM-HEADLIGHT-0001</SKU>
+            <Quantity>3</Quantity>
+            <SellingStatus>
+              <CurrentPrice currencyID="USD">120.00</CurrentPrice>
+              <QuantitySold>1</QuantitySold>
+            </SellingStatus>
+            <ListingType>FixedPriceItem</ListingType>
+            <!-- eBay sandbox returns a production-host ViewItemURL; we must not trust it. -->
+            <ListingDetails><ViewItemURL>https://www.ebay.com/itm/2008-Honda-Civic-Headlight/110589612524</ViewItemURL></ListingDetails>
+          </Item>
+        </ItemArray>
+      </ActiveList>
+    </GetMyeBaySellingResponse>
+    XML;
+}
+
+function ebayMyEbaySellingEmptyXml(int $totalPages = 0): string
+{
+    return <<<XML
+    <?xml version="1.0" encoding="UTF-8"?>
+    <GetMyeBaySellingResponse xmlns="urn:ebay:apis:eBLBaseComponents">
+      <Ack>Success</Ack>
+      <ActiveList>
+        <PaginationResult><TotalNumberOfPages>{$totalPages}</TotalNumberOfPages></PaginationResult>
+        <ItemArray></ItemArray>
+      </ActiveList>
+    </GetMyeBaySellingResponse>
+    XML;
+}
+
+test('ebay trading fetch reports an incomplete read when more pages remain', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    // Two pages exist but only one is read: the result must be flagged incomplete
+    // so reconciliation never retires listings off a partial view.
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingEmptyXml(2), 200, ['Content-Type' => 'text/xml']),
+    ]);
+
+    $complete = app(EbayTradingService::class)
+        ->fetchActiveListings($user->company_id, maxPages: 1);
+
+    expect($complete['complete'])->toBeFalse();
+});
+
+test('ebay reconcile mirrors the active set and ends listings no longer live', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    // A local listing that is no longer active on eBay; should be retired.
+    Listing::factory()->create([
+        'company_id' => $user->company_id,
+        'channel' => 'ebay',
+        'external_listing_id' => 'GONE-9001',
+        'status' => 'ACTIVE',
+        'management_state' => Listing::MANAGEMENT_IMPORTED,
+        'ended_at' => null,
+    ]);
+
+    // eBay's live active set contains one listing (110589612524), fully read.
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingXml(), 200, ['Content-Type' => 'text/xml']),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->reconcileSellerListings($user->company_id);
+
+    expect($result->active)->toBe(1)
+        ->and($result->created)->toBe(1)
+        ->and($result->ended)->toBe(1)
+        ->and($result->complete)->toBeTrue();
+
+    $gone = Listing::query()->where('external_listing_id', 'GONE-9001')->first();
+    $live = Listing::query()->where('external_listing_id', '110589612524')->first();
+
+    expect($gone->status)->toBe('ENDED')
+        ->and($gone->ended_at)->not()->toBeNull()
+        ->and($live)->not()->toBeNull()
+        ->and($live->ended_at)->toBeNull();
+});
+
+test('ebay trading fetch returns active listings from GetMyeBaySelling', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -847,36 +954,79 @@ test('ebay marketplace page imports existing listings by id', function (): void 
     );
 
     Http::fake([
-        'https://api.sandbox.ebay.com/sell/inventory/v1/bulk_migrate_listing' => Http::response([
-            'responses' => [
-                [
-                    'statusCode' => 200,
-                    'listingId' => '110589612524',
-                    'inventoryItems' => [['sku' => 'MIGRATED-0001']],
-                ],
-            ],
-        ]),
-        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/MIGRATED-0001*' => Http::response([
-            'product' => ['title' => 'Migrated headlight assembly'],
-        ]),
-        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
-            'offers' => [
-                [
-                    'offerId' => 'offer-mig-1',
-                    'sku' => 'MIGRATED-0001',
-                    'marketplaceId' => 'EBAY_US',
-                    'status' => 'PUBLISHED',
-                    'listing' => ['listingId' => '110589612524', 'listingStatus' => 'ACTIVE'],
-                    'pricingSummary' => ['price' => ['currency' => 'USD', 'value' => '120.00']],
-                ],
-            ],
-        ]),
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingXml(), 200, ['Content-Type' => 'text/xml']),
+    ]);
+
+    $listings = app(EbayMarketplaceChannel::class)->fetchSellerListings($user->company_id);
+
+    expect($listings)->toHaveCount(1)
+        ->and($listings[0]['item_id'])->toBe('110589612524')
+        ->and($listings[0]['title'])->toBe('Used OEM headlight assembly')
+        ->and($listings[0]['sku'])->toBe('HAM-HEADLIGHT-0001')
+        ->and($listings[0]['price_amount'])->toBe(12000)
+        ->and($listings[0]['currency_code'])->toBe('USD')
+        ->and($listings[0]['quantity'])->toBe(2);
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/ws/api.dll')
+        && $request->hasHeader('X-EBAY-API-CALL-NAME', 'GetMyeBaySelling')
+        && $request->hasHeader('X-EBAY-API-IAF-TOKEN'));
+});
+
+test('ebay trading import creates listing records linked by sku', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'HAM-HEADLIGHT-0001',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingXml(), 200, ['Content-Type' => 'text/xml']),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->importSellerListings($user->company_id, ['110589612524']);
+
+    expect($result->fetched)->toBe(1)
+        ->and($result->created)->toBe(1)
+        ->and($result->linked)->toBe(1);
+
+    $listing = Listing::query()->where('external_listing_id', '110589612524')->first();
+
+    expect($listing)->not()->toBeNull()
+        ->and($listing->item_id)->toBe($item->id)
+        ->and($listing->title)->toBe('Used OEM headlight assembly')
+        ->and($listing->external_sku)->toBe('HAM-HEADLIGHT-0001')
+        ->and($listing->price_amount)->toBe(12000)
+        ->and($listing->external_offer_id)->toBeNull()
+        // Built from our environment host, not eBay's (sandbox-wrong) ViewItemURL.
+        ->and($listing->listing_url)->toBe('https://www.sandbox.ebay.com/itm/110589612524');
+});
+
+test('ebay marketplace page loads and imports listings via the picker', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingXml(), 200, ['Content-Type' => 'text/xml']),
     ]);
 
     Livewire::test(MarketplaceIndex::class)
-        ->call('openMigrateModal')
-        ->set('migrateListingIds', '110589612524')
-        ->call('migrateLegacyListings')
+        ->call('openImportModal')
+        ->call('loadSellerListings')
+        ->assertSet('listingsLoaded', true)
+        ->set('selectedImportIds', ['110589612524'])
+        ->call('importSelectedListings')
         ->assertHasNoErrors();
 
     expect(Listing::query()
@@ -885,7 +1035,7 @@ test('ebay marketplace page imports existing listings by id', function (): void 
         ->exists())->toBeTrue();
 });
 
-test('ebay marketplace import requires at least one listing id', function (): void {
+test('ebay marketplace import requires a selected listing', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -895,9 +1045,9 @@ test('ebay marketplace import requires at least one listing id', function (): vo
     );
 
     Livewire::test(MarketplaceIndex::class)
-        ->set('migrateListingIds', '   ')
-        ->call('migrateLegacyListings')
-        ->assertHasErrors('migrateListingIds');
+        ->set('listingsLoaded', true)
+        ->call('importSelectedListings')
+        ->assertHasErrors('selectedImportIds');
 });
 
 test('ebay listing pull refreshes existing belimbing-managed draft linkage and product references', function (): void {
