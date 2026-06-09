@@ -219,8 +219,8 @@ final readonly class RunInspection
         }
 
         return [
-            $provider !== '' ? $provider : 'unknown',
-            $model !== '' ? $model : 'unknown',
+            $provider ?: 'unknown',
+            $model ?: 'unknown',
         ];
     }
 
