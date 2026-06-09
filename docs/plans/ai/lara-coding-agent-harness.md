@@ -148,6 +148,7 @@ Affected pages: Any BLB page with Lara chat available across multiple browser se
 Goal: “Continue” resumes the task's cognitive state, not just the transcript.
 Evidence: Start a task in one browser, interrupt after localization or patching, continue from another browser, and observe the same phase/candidate/edit/verification state before Lara proceeds.
 
+- [x] Allow the stream endpoint to claim and execute a queued chat turn inline when no queue worker has picked it up, so users are not stranded in `waiting_for_worker`. {Amp/GPT-5}
 - [ ] Define a compact task-state payload on or alongside `AiRun` / session metadata.
 - [ ] Persist current task, phase, target surface, candidate files, ruled-out files, selected plan, diff summary, verification status, and budget counters.
 - [ ] Update continuation prompts to load and summarize this task state before taking new action.

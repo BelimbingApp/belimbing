@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Jobs;
 
 use App\Modules\Core\AI\Models\AiRun;
@@ -8,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -44,6 +46,10 @@ class RunChatTurnJob implements ShouldQueue
             return;
         }
 
+        if ($this->isOwnedByStreamInline($turn)) {
+            return;
+        }
+
         if ($turn->acting_for_user_id !== null) {
             Auth::loginUsingId($turn->acting_for_user_id);
         }
@@ -53,5 +59,20 @@ class RunChatTurnJob implements ShouldQueue
         } finally {
             Auth::logout();
         }
+    }
+
+    private function isOwnedByStreamInline(AiRun $turn): bool
+    {
+        if (data_get($turn->runtime_meta, 'execution_owner') !== 'stream_inline') {
+            return false;
+        }
+
+        $claimedAt = data_get($turn->runtime_meta, 'execution_owner_claimed_at');
+
+        if (! is_string($claimedAt)) {
+            return true;
+        }
+
+        return now()->diffInMinutes(Carbon::parse($claimedAt)) < 10;
     }
 }
