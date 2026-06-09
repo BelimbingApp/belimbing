@@ -61,6 +61,7 @@
             query: '',
             activeValue: null,
             editingValue: null,
+            pendingClear: false,
             searchTimeout: null,
             editable: {{ $editable ? 'true' : 'false' }},
             searchMethod: {{ $searchMethod ? "'".addslashes($searchMethod)."'" : 'null' }},
@@ -121,6 +122,7 @@
                     this.editingValue = this.selectedValue === null || this.selectedValue === ''
                         ? null
                         : String(this.selectedValue)
+                    this.pendingClear = false
                 }
 
                 this.open = true
@@ -131,7 +133,11 @@
 
             closeList(commit = true) {
                 if (!commit) {
+                    this.pendingClear = false
                     this.selectedValue = this.editingValue
+                } else if (this.pendingClear) {
+                    this.pendingClear = false
+                    this.selectedValue = null
                 } else if (this.editable) {
                     const trimmed = this.query.trim()
                     if (trimmed) {
@@ -147,16 +153,17 @@
             },
 
             clear() {
-                this.selectedValue = null
-                this.editingValue = null
+                this.pendingClear = true
                 this.query = ''
                 this.open = false
+                this.activeValue = null
                 this.$nextTick(() => this.$refs.input?.focus())
             },
 
             selectOpt(value, label) {
                 this.selectedValue = value
                 this.editingValue = value
+                this.pendingClear = false
                 this.query = label
                 this.open = false
                 this.activeValue = null
@@ -204,7 +211,10 @@
                         }
                     }
                 } else if (e.key === 'Escape') {
-                    if (this.open) { e.preventDefault(); this.closeList(false) }
+                    if (this.open || this.pendingClear || this.query !== (this.selectedOption?.label ?? '') || this.selectedValue !== this.editingValue) {
+                        e.preventDefault()
+                        this.closeList(false)
+                    }
                 }
             },
 
@@ -215,8 +225,8 @@
                 }
             },
         }"
-        @click.outside="closeList()"
-        @focusout="requestAnimationFrame(() => { if (open && !$el.contains(document.activeElement)) closeList() })"
+        @click.outside="if (open || pendingClear) closeList()"
+        @focusout="requestAnimationFrame(() => { if ((open || pendingClear) && !$el.contains(document.activeElement)) closeList() })"
         class="relative"
     >
         <div class="relative">

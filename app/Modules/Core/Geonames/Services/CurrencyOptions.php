@@ -2,7 +2,9 @@
 
 namespace App\Modules\Core\Geonames\Services;
 
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Geonames\Models\Country;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -12,6 +14,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class CurrencyOptions
 {
+    private const array FALLBACK_PRIORITY_CODES = ['USD', 'EUR'];
+
     /**
      * Currency code => human label, e.g. ['USD' => 'United States Dollar (USD)'].
      *
@@ -45,10 +49,62 @@ class CurrencyOptions
      */
     public function options(): array
     {
-        return collect($this->map())
+        return collect($this->orderedMap($this->map()))
             ->map(fn (string $label, string $code): array => ['value' => $code, 'label' => $label])
             ->values()
             ->all();
+    }
+
+    /**
+     * @param  array<string, string>  $map
+     * @return array<string, string>
+     */
+    private function orderedMap(array $map): array
+    {
+        $ordered = [];
+        $remaining = $map;
+
+        foreach ($this->preferredCodes() as $code) {
+            if (! array_key_exists($code, $remaining)) {
+                continue;
+            }
+
+            $ordered[$code] = $remaining[$code];
+            unset($remaining[$code]);
+        }
+
+        return [...$ordered, ...$remaining];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function preferredCodes(): array
+    {
+        $companyCurrencyCode = $this->currentCompanyCurrencyCode();
+
+        return array_values(array_unique(array_filter([
+            $companyCurrencyCode,
+            ...self::FALLBACK_PRIORITY_CODES,
+        ], fn (mixed $code): bool => is_string($code) && $code !== '')));
+    }
+
+    private function currentCompanyCurrencyCode(): ?string
+    {
+        $companyId = Auth::user()?->company_id;
+
+        if (! is_int($companyId) && ! ctype_digit((string) $companyId)) {
+            return null;
+        }
+
+        try {
+            $company = Company::query()->find((int) $companyId);
+            $currencyCode = strtoupper((string) ($company?->primaryAddress()?->country?->currency_code ?? ''));
+
+            return $currencyCode !== '' ? $currencyCode : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
