@@ -34,6 +34,7 @@ $iconPaths = [
     'heroicon-o-arrows-pointing-in' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5 5.25 5.25'],
     'heroicon-o-arrows-pointing-out' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15'],
     'heroicon-o-arrow-up-tray' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5'],
+    'mdi-import' => ['viewBox' => '0 0 24 24', 'fill' => 'currentColor', 'path' => 'M14,12L10,8V11H2V13H10V16M20,18V6C20,4.89 19.1,4 18,4H6A2,2 0 0,0 4,6V9H6V6H18V18H6V15H4V18A2,2 0 0,0 6,20H18A2,2 0 0,0 20,18Z'],
     'heroicon-o-arrow-trending-up' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941'],
     'heroicon-o-arrow-down' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M12 4.5v15m0 0 6-6m-6 6-6-6'],
     'heroicon-o-arrow-down-tray' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M3 16.5V18.75C3 19.9926 4.00736 21 5.25 21H18.75C19.9926 21 21 19.9926 21 18.75V16.5M16.5 12L12 16.5M12 16.5L7.5 12M12 16.5V3'],

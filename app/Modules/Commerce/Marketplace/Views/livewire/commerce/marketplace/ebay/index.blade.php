@@ -61,7 +61,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                         </x-ui.button>
 
                         <x-ui.button type="button" variant="ghost" wire:click="openImportModal" title="{{ __('Pick from your eBay store — including listings the normal pull cannot see') }}">
-                            <x-icon name="heroicon-o-arrow-up-on-square-stack" class="h-4 w-4" />
+                            <x-icon name="mdi-import" class="h-4 w-4" />
                             {{ __('Import existing listings') }}
                         </x-ui.button>
                     @else
