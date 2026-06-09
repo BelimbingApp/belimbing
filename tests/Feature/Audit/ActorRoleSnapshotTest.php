@@ -12,6 +12,8 @@ use App\Modules\Core\User\Models\User;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Support\Facades\Route;
 
+const AUDIT_ROLE_SNAPSHOT_TRACE_ID = '7K9M2F4Q8XDW';
+
 function createUserWithDuplicateRoleAssignments(): User
 {
     setupAuthzRoles();
@@ -59,7 +61,7 @@ it('snapshots login event actor roles for the event user company without duplica
     $user = createUserWithDuplicateRoleAssignments();
 
     app()->instance(RequestContext::class, new RequestContext(
-        traceId: '7K9M2F4Q8XDW',
+        traceId: AUDIT_ROLE_SNAPSHOT_TRACE_ID,
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/login',
         actorType: null,
@@ -83,7 +85,7 @@ it('falls back to the authenticated request user for HTTP request audit actors',
     $user = createUserWithDuplicateRoleAssignments();
 
     app()->instance(RequestContext::class, new RequestContext(
-        traceId: '7K9M2F4Q8XDW',
+        traceId: AUDIT_ROLE_SNAPSHOT_TRACE_ID,
         ipAddress: '127.0.0.1',
         url: 'https://test.example.com/audit-request-context',
         actorType: null,
@@ -102,7 +104,7 @@ it('falls back to the authenticated request user for HTTP request audit actors',
 
     $action = AuditAction::query()
         ->where('event', 'http.request')
-        ->where('trace_id', '7K9M2F4Q8XDW')
+        ->where('trace_id', AUDIT_ROLE_SNAPSHOT_TRACE_ID)
         ->latest('id')
         ->first();
 

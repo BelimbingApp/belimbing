@@ -25,7 +25,7 @@ $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir '..')).Path
 function Write-Step {
     param([Parameter(Mandatory = $true)][string] $Message)
 
-    Write-Host $Message -ForegroundColor Cyan
+    Write-Output $Message
 }
 
 function Assert-CommandAvailable {
