@@ -20,75 +20,73 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             </x-slot>
         </x-ui.page-header>
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        {{-- Action feedback surfaces as a fixed top-right toast so it is visible no
+             matter where on the page the action was triggered (e.g. the Push button
+             low in the channels card). Success/warning self-dismiss; errors persist. --}}
+        <x-ui.flash-stack>
+            @if (session('success'))
+                <div
+                    wire:key="flash-success-{{ md5((string) session('success')) }}"
+                    x-data="{ show: true }"
+                    x-init="setTimeout(() => show = false, 5000)"
+                    x-show="show"
+                    x-transition.opacity.scale.duration.200ms
+                >
+                    <x-ui.flash variant="success">{{ session('success') }}</x-ui.flash>
+                </div>
+            @endif
 
-        @if (session('warning'))
-            <x-ui.alert variant="warning">{{ session('warning') }}</x-ui.alert>
-        @endif
+            @if (session('warning'))
+                <div
+                    wire:key="flash-warning-{{ md5((string) session('warning')) }}"
+                    x-data="{ show: true }"
+                    x-init="setTimeout(() => show = false, 7000)"
+                    x-show="show"
+                    x-transition.opacity.scale.duration.200ms
+                >
+                    <x-ui.flash variant="warning">{{ session('warning') }}</x-ui.flash>
+                </div>
+            @endif
 
-        @if (session('error'))
-            <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
-        @endif
+            @if (session('error'))
+                <div wire:key="flash-error-{{ md5((string) session('error')) }}" x-data x-transition.opacity.scale.duration.200ms>
+                    <x-ui.flash variant="error">{{ session('error') }}</x-ui.flash>
+                </div>
+            @endif
+        </x-ui.flash-stack>
 
         @php
             $readyChannelCount = collect($channelRows)->where('can_push', true)->count();
             $listedChannelCount = collect($channelRows)->where('listed', true)->count();
             $blockedChannelCount = collect($channelRows)->where('readiness_status', 'blocked')->count();
-            $livePushConfirmation = collect($channelRows)->contains('requires_confirmation', true)
-                ? __('This will write to a live marketplace channel. Continue?')
-                : null;
-            $itemSections = [
-                ['href' => '#listing-channels', 'label' => __('Listing & Channels')],
-                ['href' => '#item-facts', 'label' => __('Details')],
-                ['href' => '#fitment', 'label' => __('Fitment')],
-                ['href' => '#photos', 'label' => __('Media')],
-                ['href' => '#attributes', 'label' => __('Identifiers')],
-            ];
         @endphp
 
         <x-ui.card>
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <div class="rounded-2xl border border-border-default bg-surface-subtle p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Item status') }}</p>
-                    <div class="mt-2 flex items-center gap-2">
-                        <x-ui.badge :variant="$this->statusVariant($item->status)">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
-                        <span class="text-sm text-muted">{{ $item->created_at?->diffForHumans() }}</span>
-                    </div>
+            <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</span>
+                    <x-ui.badge :variant="$this->statusVariant($item->status)">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
                 </div>
 
-                <div class="rounded-2xl border border-border-default bg-surface-subtle p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Availability') }}</p>
-                    <p class="mt-2 text-2xl font-medium tracking-tight text-ink tabular-nums">{{ $item->quantity_on_hand }}</p>
-                    <p class="text-xs text-muted">{{ __('Inventory remains the quantity source of truth.') }}</p>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Qty') }}</span>
+                    <span class="text-sm font-medium text-ink tabular-nums">{{ $item->quantity_on_hand }}</span>
                 </div>
 
-                <div class="rounded-2xl border border-border-default bg-surface-subtle p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Target price') }}</p>
-                    <p class="mt-2 text-2xl font-medium tracking-tight text-ink tabular-nums">{{ $this->formatMoney($item->target_price_amount, $item->currency_code) }}</p>
-                    <p class="text-xs text-muted">{{ __('Default listing price before channel-specific rules.') }}</p>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Target price') }}</span>
+                    <span class="text-sm font-medium text-ink tabular-nums">{{ $this->formatMoney($item->target_price_amount, $item->currency_code) }}</span>
                 </div>
 
-                <div class="rounded-2xl border border-border-default bg-surface-subtle p-4">
-                    <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Channels') }}</p>
-                    <div class="mt-2 flex flex-wrap items-center gap-2">
-                        <x-ui.badge variant="accent">{{ __('Listed: :count', ['count' => $listedChannelCount]) }}</x-ui.badge>
-                        <x-ui.badge :variant="$readyChannelCount > 0 ? 'success' : 'default'">{{ __('Ready: :count', ['count' => $readyChannelCount]) }}</x-ui.badge>
-                        @if ($blockedChannelCount > 0)
-                            <x-ui.badge variant="warning">{{ __('Blocked: :count', ['count' => $blockedChannelCount]) }}</x-ui.badge>
-                        @endif
-                    </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Channels') }}</span>
+                    <x-ui.badge variant="accent">{{ __('Listed :count', ['count' => $listedChannelCount]) }}</x-ui.badge>
+                    <x-ui.badge :variant="$readyChannelCount > 0 ? 'success' : 'default'">{{ __('Ready :count', ['count' => $readyChannelCount]) }}</x-ui.badge>
+                    @if ($blockedChannelCount > 0)
+                        <x-ui.badge variant="warning">{{ __('Blocked :count', ['count' => $blockedChannelCount]) }}</x-ui.badge>
+                    @endif
                 </div>
             </div>
-
-            <nav class="mt-4 flex flex-wrap items-center gap-2 border-t border-border-default pt-4" aria-label="{{ __('Item sections') }}">
-                @foreach ($itemSections as $section)
-                    <x-ui.button variant="ghost" size="sm" as="a" href="{{ $section['href'] }}">
-                        {{ $section['label'] }}
-                    </x-ui.button>
-                @endforeach
-            </nav>
         </x-ui.card>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -186,21 +184,31 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 :error="$errors->first('target_price_amount')"
                             />
 
-                            <x-ui.edit-in-place.text
+                            <x-ui.currency-combobox
+                                id="inventory-item-show-currency"
+                                wire:model.live="currencyCode"
                                 :label="__('Currency')"
-                                :value="$item->currency_code"
-                                field="currency_code"
-                                save-method="saveField"
-                                maxlength="3"
-                                monospace
-                                :help="__('Applies to this item cost and target price. Snapshotted so later defaults do not rewrite history.')"
-                                :error="$errors->first('currency_code')"
+                                required
+                                :error="$errors->first('currencyCode')"
                             />
 
                             <div>
                                 <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Created') }}</dt>
                                 <dd class="text-sm text-ink" title="{{ $item->created_at?->format('Y-m-d H:i:s') }}">{{ $item->created_at?->diffForHumans() }}</dd>
                             </div>
+                        </dl>
+
+                        <dl class="mt-4 border-t border-border-default pt-4">
+                            <x-ui.edit-in-place.textarea
+                                :label="__('Listing description')"
+                                :value="$item->description"
+                                field="description"
+                                save-method="saveField"
+                                :empty="__('No listing description yet.')"
+                                rows="6"
+                                :help="__('Buyer-facing copy. This is the marketplace listing body (the eBay “See full item description”) and is pushed to each channel. Pulling from a channel fills it in.')"
+                                :error="$errors->first('description')"
+                            />
                         </dl>
 
                         <dl class="mt-4 border-t border-border-default pt-4">
@@ -235,6 +243,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Created') }}</dt>
                                 <dd class="mt-1 text-sm text-ink" title="{{ $item->created_at?->format('Y-m-d H:i:s') }}">{{ $item->created_at?->diffForHumans() }}</dd>
                             </div>
+                        </dl>
+
+                        <dl class="mt-4 border-t border-border-default pt-4">
+                            <dt class="mb-1 text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Listing description') }}</dt>
+                            <dd class="text-sm text-ink whitespace-pre-wrap">{{ $item->description ?: __('No listing description yet.') }}</dd>
                         </dl>
 
                         <dl class="mt-4 border-t border-border-default pt-4">
@@ -306,6 +319,32 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <dd class="mt-1 text-sm text-ink">{{ $item->productTemplate?->name ?? __('No template') }}</dd>
                             </div>
                         </dl>
+                    @endif
+
+                    @if ($this->ebayCategorySettingsUrl())
+                        @php
+                            $ebayCategory = $this->ebayCategoryMapping();
+                        @endphp
+                        <div class="mt-4 border-t border-border-default pt-4">
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('eBay category') }}</p>
+
+                            @if ($item->productTemplate === null)
+                                <p class="mt-1 text-sm text-muted">{{ __('Assign a template above — the eBay category is mapped per template.') }}</p>
+                            @elseif ($ebayCategory)
+                                <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink">
+                                    <x-ui.badge variant="success">{{ __('Mapped') }}</x-ui.badge>
+                                    <span class="font-mono">{{ $ebayCategory['category_id'] }}{{ $ebayCategory['category_tree_id'] ? ' · '.__('tree :tree', ['tree' => $ebayCategory['category_tree_id']]) : '' }}</span>
+                                    <a href="{{ $this->ebayCategorySettingsUrl() }}" class="font-medium text-accent hover:underline" wire:navigate>{{ __('Change') }}</a>
+                                </div>
+                            @else
+                                <p class="mt-1 text-sm text-muted">
+                                    {{ __('“:template” is not mapped to an eBay category yet.', ['template' => $item->productTemplate->name]) }}
+                                    <a href="{{ $this->ebayCategorySettingsUrl() }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ __('Map it in eBay settings → Categories') }}</a>
+                                </p>
+                            @endif
+
+                            <p class="mt-1 text-xs text-muted">{{ __('Set per template, so every item of this type shares the same eBay category.') }}</p>
+                        </div>
                     @endif
                 </x-ui.card>
 
@@ -482,180 +521,30 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         </div>
                     @endif
                 </x-ui.card>
-
-                <x-ui.card id="descriptions">
-                    <div x-data="{ helpOpen: false }">
-                        <div class="mb-3 flex items-center justify-between gap-3">
-                            <div class="flex items-center gap-2">
-                                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing Descriptions') }}</h2>
-                                <x-ui.help @click="helpOpen = !helpOpen" ::aria-expanded="helpOpen" />
-                            </div>
-                            <x-ui.badge>{{ $item->descriptions->count() }}</x-ui.badge>
-                        </div>
-
-                        <div
-                            x-cloak
-                            x-show="helpOpen"
-                            x-transition:enter="transition-all ease-out duration-200 motion-reduce:duration-0"
-                            x-transition:enter-start="max-h-0 opacity-0"
-                            x-transition:enter-end="max-h-96 opacity-100"
-                            x-transition:leave="transition-all ease-in duration-150 motion-reduce:duration-0"
-                            x-transition:leave-start="max-h-96 opacity-100"
-                            x-transition:leave-end="max-h-0 opacity-0"
-                            class="mb-3 overflow-hidden rounded-2xl border border-border-default bg-surface-card text-sm text-muted shadow-sm"
-                            @click="helpOpen = false"
-                            role="note"
-                            aria-label="{{ __('Click to dismiss') }}"
-                        >
-                            <div class="p-4 space-y-2">
-                                <p>{{ __('Buyer-facing copy intended for a marketplace listing (not internal notes).') }}</p>
-                                <p>{{ __('Each time you add a description, it is saved as a new version (v1, v2, …) so older drafts remain visible.') }}</p>
-                                <p>{{ __('Accept marks the one version approved to use right now (only one can be accepted at a time).') }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    @if ($item->descriptions->isEmpty())
-                        <p class="text-sm text-muted">{{ __('No listing copy versions yet.') }}</p>
-                    @else
-                        <div class="space-y-4">
-                            @foreach ($item->descriptions as $description)
-                                <div wire:key="item-description-{{ $description->id }}" class="border-b border-border-default pb-4 last:border-0 last:pb-0">
-                                    <div class="flex flex-col gap-3">
-                                        <div class="flex flex-wrap items-center justify-between gap-3">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <x-ui.badge>{{ __('v:version', ['version' => $description->version]) }}</x-ui.badge>
-                                                @if ($description->is_accepted)
-                                                    <x-ui.badge variant="success">{{ __('Accepted') }}</x-ui.badge>
-                                                @endif
-                                            </div>
-
-                                            @if ($this->canEdit())
-                                                <div class="flex items-center gap-2">
-                                                    @if (! $description->is_accepted)
-                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptDescription({{ $description->id }})">
-                                                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                            {{ __('Accept') }}
-                                                        </x-ui.button>
-                                                    @endif
-
-                                                    <x-ui.button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        wire:click="deleteDescription({{ $description->id }})"
-                                                        wire:confirm="{{ __('Delete this version?') }}"
-                                                        aria-label="{{ __('Delete version') }}"
-                                                        title="{{ __('Delete') }}"
-                                                    >
-                                                        <x-icon name="heroicon-o-trash" class="h-4 w-4" />
-                                                    </x-ui.button>
-                                                </div>
-                                            @endif
-                                        </div>
-
-                                        @if ($this->canEdit())
-                                            <div class="space-y-2">
-                                                <x-ui.edit-in-place.text
-                                                    :value="$description->title"
-                                                    field="{{ 'descriptions.' . $description->id . '.title' }}"
-                                                    save-method="saveDescriptionField"
-                                                    :empty="__('Untitled')"
-                                                    :error="$errors->first('descriptions.' . $description->id . '.title')"
-                                                />
-
-                                                <x-ui.edit-in-place.textarea
-                                                    :value="$description->body"
-                                                    field="{{ 'descriptions.' . $description->id . '.body' }}"
-                                                    save-method="saveDescriptionField"
-                                                    rows="6"
-                                                    :empty="__('Empty description')"
-                                                    :error="$errors->first('descriptions.' . $description->id . '.body')"
-                                                />
-                                            </div>
-                                        @else
-                                            <div>
-                                                <h3 class="text-sm font-medium text-ink">{{ $description->title }}</h3>
-                                                <p class="mt-2 whitespace-pre-wrap text-sm text-muted">{{ $description->body }}</p>
-                                            </div>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-
-                    @if ($this->canEdit())
-                        <form wire:submit="addDescription" class="mt-4 space-y-4 border-t border-border-default pt-4">
-                            <x-ui.input
-                                id="item-description-title"
-                                wire:model="descriptionTitle"
-                                label="{{ __('Title') }}"
-                                required
-                                :help="__('Short label for this description version.')"
-                                :error="$errors->first('descriptionTitle')"
-                            />
-
-                            <x-ui.textarea
-                                id="item-description-body"
-                                wire:model="descriptionBody"
-                                label="{{ __('Body') }}"
-                                rows="6"
-                                required
-                                :help="__('Buyer-facing listing copy. Each saved draft becomes a new version.')"
-                                :error="$errors->first('descriptionBody')"
-                            />
-
-                            <x-ui.button type="submit" variant="primary">
-                                <x-icon name="heroicon-o-document-plus" class="h-4 w-4" />
-                                {{ __('Add Version') }}
-                            </x-ui.button>
-                        </form>
-                    @endif
-                </x-ui.card>
             </div>
 
             <div class="space-y-6">
-                <x-ui.card id="listing-channels">
-                    <div class="mb-4 flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                        <div>
-                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing & Channels') }}</h2>
-                            <p class="mt-1 text-sm text-muted">{{ __('Push this item to every registered marketplace from one place. Readiness is checked per channel; blocked channels cannot be pushed.') }}</p>
+                <x-ui.card id="listing-channels" x-data="{ helpOpen: false }">
+                    <div class="mb-4 flex items-center gap-2">
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing & Channels') }}</h2>
+                        <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
+                    </div>
+
+                    <div
+                        x-cloak
+                        x-show="helpOpen"
+                        x-transition
+                        class="mb-4 overflow-hidden rounded-2xl border border-border-default bg-surface-card text-sm text-muted shadow-sm"
+                        @click="helpOpen = false"
+                        role="note"
+                        aria-label="{{ __('Click to dismiss') }}"
+                    >
+                        <div class="space-y-2 p-4">
+                            <p>{{ __('Publish or update this one item on each marketplace — this is the push side of the workflow.') }}</p>
+                            <p>{{ __('Pulling listings and orders in from a marketplace happens on that channel’s own page. Here you push this item out, one channel at a time, once it is ready.') }}</p>
+                            <p><span class="font-medium text-ink">{{ __('Recheck') }}</span> — {{ __('re-runs that channel’s readiness check (category, price, fitment, photos, policies). An item can only be listed once its check passes.') }}</p>
+                            <p><span class="font-medium text-ink">{{ __('List / Push') }}</span> — {{ __('List publishes this item as a new listing; Push updates the existing listing with the item’s current data. Live channels confirm before writing.') }}</p>
                         </div>
-
-                        @if ($this->canEdit())
-                            <div class="flex flex-wrap gap-2">
-                                <x-ui.button type="button" variant="outline" size="sm" wire:click="refreshAllChannelReadiness" wire:loading.attr="disabled" wire:target="refreshAllChannelReadiness">
-                                    <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                                    <span wire:loading.remove wire:target="refreshAllChannelReadiness">{{ __('Refresh checks') }}</span>
-                                    <span wire:loading wire:target="refreshAllChannelReadiness">{{ __('Checking…') }}</span>
-                                </x-ui.button>
-
-                                @if ($this->canPushToMarketplace())
-                                    @if ($livePushConfirmation)
-                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="pushSelectedChannels" wire:loading.attr="disabled" wire:target="pushSelectedChannels" :disabled="$readyChannelCount === 0" wire:confirm="{{ $livePushConfirmation }}">
-                                            <x-icon name="heroicon-o-paper-airplane" class="h-4 w-4" />
-                                            {{ __('Push selected') }}
-                                        </x-ui.button>
-
-                                        <x-ui.button type="button" variant="primary" size="sm" wire:click="pushAllReadyChannels" wire:loading.attr="disabled" wire:target="pushAllReadyChannels" :disabled="$readyChannelCount === 0" wire:confirm="{{ $livePushConfirmation }}">
-                                            <x-icon name="heroicon-o-rocket-launch" class="h-4 w-4" />
-                                            {{ __('Push all ready') }}
-                                        </x-ui.button>
-                                    @else
-                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="pushSelectedChannels" wire:loading.attr="disabled" wire:target="pushSelectedChannels" :disabled="$readyChannelCount === 0">
-                                            <x-icon name="heroicon-o-paper-airplane" class="h-4 w-4" />
-                                            {{ __('Push selected') }}
-                                        </x-ui.button>
-
-                                        <x-ui.button type="button" variant="primary" size="sm" wire:click="pushAllReadyChannels" wire:loading.attr="disabled" wire:target="pushAllReadyChannels" :disabled="$readyChannelCount === 0">
-                                            <x-icon name="heroicon-o-rocket-launch" class="h-4 w-4" />
-                                            {{ __('Push all ready') }}
-                                        </x-ui.button>
-                                    @endif
-                                @endif
-                            </div>
-                        @endif
                     </div>
 
                     @if (! $this->canPushToMarketplace())
@@ -674,56 +563,45 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     'item_facts' => ['label' => __('Edit details'), 'href' => '#item-facts'],
                                     'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
                                     'photos' => ['label' => __('Edit media'), 'href' => '#photos'],
-                                    'descriptions' => ['label' => __('Edit copy'), 'href' => '#descriptions'],
                                     'attributes' => ['label' => __('Edit identifiers'), 'href' => '#attributes'],
-                                    'settings' => ['label' => __('Open channel settings'), 'href' => $row['settings_url']],
+                                    'settings' => ['label' => __('Open channel settings'), 'href' => $row['settings_url'] ? $row['settings_url'].'#defaults' : null],
+                                    'ebay_categories' => ['label' => __('Map eBay category'), 'href' => $row['settings_url'] ? $row['settings_url'].'#categories' : null],
                                 ];
                                 $firstGaps = collect($row['blockers'])->take(3);
+
+                                // One badge answers "where is this listing?" instead of three
+                                // overlapping ones (Listed + Ready + ACTIVE). A live, active
+                                // listing reads "Listed"; an ended/withdrawn one shows its eBay
+                                // status; an unpublished item shows its push-readiness instead.
+                                if ($row['listed']) {
+                                    $stateLabel = __('Listed');
+                                    $stateVariant = 'success';
+                                } elseif ($listing) {
+                                    $stateLabel = Illuminate\Support\Str::headline($listing->status ?? 'unknown');
+                                    $stateVariant = $this->listingStatusVariant($listing->status);
+                                } else {
+                                    $stateLabel = Illuminate\Support\Str::headline($row['readiness_status']);
+                                    $stateVariant = $row['readiness_variant'];
+                                }
                             @endphp
 
                             <div wire:key="item-channel-{{ $row['key'] }}" class="rounded-2xl border border-border-default bg-surface-subtle p-3">
                                 <div class="flex items-start justify-between gap-3">
-                                    <div class="flex min-w-0 items-start gap-3">
-                                        <x-ui.checkbox
-                                            id="item-channel-select-{{ $row['key'] }}"
-                                            wire:model.live="selectedChannels"
-                                            value="{{ $row['key'] }}"
-                                            aria-label="{{ __('Select :channel', ['channel' => $row['label']]) }}"
-                                            :disabled="! $row['can_push'] || ! $this->canPushToMarketplace()"
-                                        />
-
-                                        @if ($row['icon'])
-                                            <x-icon name="{{ $row['icon'] }}" class="mt-0.5 h-4 w-4 text-muted" />
-                                        @endif
-
-                                        <div class="min-w-0">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <p class="text-sm font-medium text-ink">{{ $row['label'] }}</p>
-                                                <x-ui.badge :variant="$row['listed'] ? 'success' : 'default'">
-                                                    {{ $row['listed'] ? __('Listed') : __('Not listed') }}
-                                                </x-ui.badge>
-                                                @if ($row['environment'])
-                                                    <x-ui.badge :variant="$row['environment'] === 'live' ? 'warning' : 'default'">{{ __(Illuminate\Support\Str::headline($row['environment'])) }}</x-ui.badge>
-                                                @endif
-                                            </div>
-
-                                            <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
-                                                <x-ui.badge :variant="$row['readiness_variant']">{{ __(Illuminate\Support\Str::headline($row['readiness_status'])) }}</x-ui.badge>
-                                                @if ($listing)
-                                                    <x-ui.badge :variant="$this->listingStatusVariant($listing->status)">{{ __(Illuminate\Support\Str::headline($listing->status ?? 'unknown')) }}</x-ui.badge>
-                                                @endif
-                                                @if ($row['warnings'] !== [])
-                                                    <x-ui.badge variant="warning">{{ trans_choice(':count warning|:count warnings', count($row['warnings']), ['count' => count($row['warnings'])]) }}</x-ui.badge>
-                                                @endif
-                                            </div>
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-sm font-medium text-ink">{{ $row['label'] }}</p>
+                                            @if ($row['environment'])
+                                                <x-ui.badge :variant="$row['environment'] === 'live' ? 'warning' : 'default'">{{ __(Illuminate\Support\Str::headline($row['environment'])) }}</x-ui.badge>
+                                            @endif
+                                            <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }}</x-ui.badge>
                                         </div>
                                     </div>
 
                                     <div class="flex shrink-0 flex-col items-end gap-2">
                                         @if ($this->canEdit())
-                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="refreshChannelReadiness('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="refreshChannelReadiness('{{ $row['key'] }}')">
+                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="refreshChannelReadiness('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="refreshChannelReadiness('{{ $row['key'] }}')" title="{{ __('Re-run the readiness check on this channel only') }}">
                                                 <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                                                {{ __('Check') }}
+                                                {{ __('Recheck') }}
                                             </x-ui.button>
                                         @endif
 
@@ -744,69 +622,116 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 </div>
 
                                 <div class="mt-3 border-t border-border-default pt-3 text-xs text-muted">
-                                    <div>
+                                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
                                         @if ($listing?->listing_url)
-                                            <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" class="font-medium text-accent hover:underline">{{ $listing->external_listing_id ?? __('Open listing') }}</a>
+                                            <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" class="inline-flex items-center gap-1 font-medium text-accent hover:underline">
+                                                <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
+                                                {{ __('Listing page') }}
+                                            </a>
                                         @elseif ($listing?->external_listing_id)
                                             <span class="font-mono">{{ $listing->external_listing_id }}</span>
-                                        @else
-                                            {{ __('Will use target price: :price', ['price' => $this->formatMoney($row['price_amount'], $row['currency_code'])]) }}
+                                        @endif
+
+                                        @if ($row['index_url'])
+                                            <a href="{{ $row['index_url'] }}" class="inline-flex items-center gap-1 font-medium text-accent hover:underline" wire:navigate>
+                                                <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
+                                                {{ __('Channel page') }}
+                                            </a>
                                         @endif
                                     </div>
 
+                                    @unless ($listing?->listing_url || $listing?->external_listing_id)
+                                        <p class="mt-1">{{ __('Will use target price: :price', ['price' => $this->formatMoney($row['price_amount'], $row['currency_code'])]) }}</p>
+                                    @endunless
+
                                     @if ($draft)
-                                        <p class="mt-1 text-xs text-muted">{{ __('Checked :time', ['time' => $draft->metadata_checked_at?->diffForHumans() ?? __('never')]) }}</p>
+                                        <p class="mt-1">{{ __('Checked :time', ['time' => $draft->metadata_checked_at?->diffForHumans() ?? __('never')]) }}</p>
                                     @else
-                                        <p class="mt-1 text-xs text-muted">{{ __('Run checks before the first push.') }}</p>
+                                        <p class="mt-1">{{ __('Run checks before the first push.') }}</p>
                                     @endif
 
                                     @if ($row['blockers'] !== [])
-                                        <ul class="mt-2 space-y-1 text-xs text-muted">
-                                            @foreach ($firstGaps as $gap)
-                                                <li class="flex gap-1.5">
-                                                    <span class="text-status-danger">•</span>
-                                                    <span>
-                                                        {{ $gap['label'] ?? __('Readiness blocker') }}
-                                                        @if (isset($gap['action'], $gapLinks[$gap['action']]) && $gapLinks[$gap['action']]['href'])
-                                                            @if ($gap['action'] === 'settings')
-                                                                <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ $gapLinks[$gap['action']]['label'] }}</a>
-                                                            @else
-                                                                <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline">{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                        <div class="mt-2">
+                                            <p class="font-medium text-status-danger">{{ trans_choice(':count blocker|:count blockers', count($row['blockers']), ['count' => count($row['blockers'])]) }}</p>
+                                            <ul class="mt-1 space-y-1">
+                                                @foreach ($firstGaps as $gap)
+                                                    <li class="flex gap-1.5">
+                                                        <span class="text-status-danger">•</span>
+                                                        <span>
+                                                            {{ $gap['label'] ?? __('Readiness blocker') }}
+                                                            @if (isset($gap['action'], $gapLinks[$gap['action']]) && $gapLinks[$gap['action']]['href'])
+                                                                @if ($gap['action'] === 'settings')
+                                                                    <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                                @else
+                                                                    <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline">{{ $gapLinks[$gap['action']]['label'] }}</a>
+                                                                @endif
                                                             @endif
-                                                        @endif
-                                                    </span>
-                                                </li>
-                                            @endforeach
-                                        </ul>
+                                                        </span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
                                     @elseif ($row['readiness_status'] === 'ready')
-                                        <p class="mt-2 text-xs text-muted">{{ __('Ready to publish or revise.') }}</p>
+                                        <p class="mt-2">{{ __('Ready to publish or revise.') }}</p>
                                     @endif
 
-                                    @if ($row['index_url'])
-                                        <a href="{{ $row['index_url'] }}" class="mt-2 inline-flex font-medium text-accent hover:underline" wire:navigate>{{ __('Open channel page') }}</a>
+                                    @if ($row['warnings'] !== [])
+                                        <div class="mt-2">
+                                            <p class="font-medium text-status-warning">{{ trans_choice(':count warning|:count warnings', count($row['warnings']), ['count' => count($row['warnings'])]) }}</p>
+                                            <ul class="mt-1 space-y-1">
+                                                @foreach ($row['warnings'] as $warning)
+                                                    <li class="flex gap-1.5">
+                                                        <span class="text-status-warning">•</span>
+                                                        <span>
+                                                            {{ $warning['label'] ?? __('Listing warning') }}
+                                                            @if (isset($warning['action'], $gapLinks[$warning['action']]) && $gapLinks[$warning['action']]['href'])
+                                                                @if ($warning['action'] === 'settings')
+                                                                    <a href="{{ $gapLinks[$warning['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ $gapLinks[$warning['action']]['label'] }}</a>
+                                                                @else
+                                                                    <a href="{{ $gapLinks[$warning['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline">{{ $gapLinks[$warning['action']]['label'] }}</a>
+                                                                @endif
+                                                            @endif
+                                                        </span>
+                                                    </li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
                                     @endif
                                 </div>
                             </div>
                         @endforeach
                         </div>
                     @endif
-
-                    <p class="mt-3 text-xs text-muted">{{ __('Pull happens on each channel page. Push happens here, per item, after every selected channel is ready.') }}</p>
                 </x-ui.card>
 
                 @foreach ($extensionReadinessPanels as $panel)
-                    <x-ui.card id="extension-readiness-{{ Illuminate\Support\Str::slug($panel['id']) }}" wire:key="extension-readiness-{{ $panel['id'] }}">
-                        <div class="mb-3 flex items-start justify-between gap-3">
+                    @php
+                        $attentionEntries = collect($panel['entries'])->whereIn('severity', ['blocker', 'warning', 'suggestion']);
+                        $attentionCount = $attentionEntries->count();
+                        $panelHasBlocker = $attentionEntries->contains('severity', 'blocker');
+                    @endphp
+                    <x-ui.card id="extension-readiness-{{ Illuminate\Support\Str::slug($panel['id']) }}" wire:key="extension-readiness-{{ $panel['id'] }}" x-data="{ open: {{ $panelHasBlocker ? 'true' : 'false' }} }">
+                        {{-- Collapsed by default so this supplementary checklist does not compete
+                             with the source cards it links to. It auto-opens when a blocker needs
+                             action; each entry deep-links to the exact field to fix. --}}
+                        <button type="button" @click="open = ! open" x-bind:aria-expanded="open.toString()" class="flex w-full items-start justify-between gap-3 text-left">
                             <div>
                                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __($panel['label']) }}</h2>
                                 @if ($panel['description'])
                                     <p class="mt-1 text-sm text-muted">{{ __($panel['description']) }}</p>
                                 @endif
                             </div>
-                            <x-ui.badge>{{ count($panel['entries']) }}</x-ui.badge>
-                        </div>
+                            <div class="flex shrink-0 items-center gap-2">
+                                @if ($attentionCount > 0)
+                                    <x-ui.badge :variant="$panelHasBlocker ? 'danger' : 'warning'">{{ __(':count to improve', ['count' => $attentionCount]) }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="success">{{ __('All clear') }}</x-ui.badge>
+                                @endif
+                                <x-icon name="heroicon-o-chevron-down" class="h-4 w-4 text-muted transition-transform" ::class="open && 'rotate-180'" />
+                            </div>
+                        </button>
 
-                        <div class="space-y-2">
+                        <div x-show="open" x-cloak x-transition class="mt-3 space-y-2">
                             @foreach ($panel['entries'] as $entry)
                                 @php($entryVariant = match ($entry['severity']) {
                                     'success' => 'success',
@@ -819,7 +744,6 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
                                     'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
                                     'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
-                                    'descriptions' => ['label' => __('Edit descriptions'), 'href' => '#descriptions'],
                                     'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
                                 ])
 

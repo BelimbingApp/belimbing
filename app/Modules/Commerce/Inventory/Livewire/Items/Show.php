@@ -10,13 +10,14 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemAttributes;
 use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemCatalogFit;
-use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemDescriptions;
 use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemFitments;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\InventoryItemService;
+use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
+use App\Modules\Commerce\Marketplace\Services\MarketplaceAvailabilitySyncService;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
@@ -33,7 +34,6 @@ class Show extends Component
 {
     use ManagesItemAttributes;
     use ManagesItemCatalogFit;
-    use ManagesItemDescriptions;
     use ManagesItemFitments;
     use SavesValidatedFields;
     use WithFileUploads;
@@ -45,10 +45,7 @@ class Show extends Component
      */
     public array $photoFiles = [];
 
-    /**
-     * @var list<string>
-     */
-    public array $selectedChannels = [];
+    public ?string $currencyCode = '';
 
     public function mount(Item $item): void
     {
@@ -56,10 +53,32 @@ class Show extends Component
             abort(404);
         }
 
-        $this->item = $item->load('category', 'productTemplate', 'photos', 'fitments', 'catalogAttributeValues.attribute', 'descriptions.createdByUser');
+        $this->item = $item->load('category', 'productTemplate', 'photos', 'fitments', 'catalogAttributeValues.attribute');
         $this->catalogCategoryId = $this->item->category_id;
         $this->catalogProductTemplateId = $this->item->product_template_id;
-        $this->selectedChannels = array_keys(app(MarketplaceChannelRegistry::class)->all());
+        $this->currencyCode = (string) $this->item->currency_code;
+    }
+
+    /**
+     * Currency uses the shared GeoNames-backed combobox (same as the create form),
+     * so it saves on selection rather than through the edit-in-place affordance.
+     */
+    public function updatedCurrencyCode(?string $value): void
+    {
+        if ($value === null || trim($value) === '') {
+            return;
+        }
+
+        $this->authorizeUpdate();
+
+        $validated = validator(
+            ['currency_code' => strtoupper(trim($value))],
+            ['currency_code' => ['required', 'string', 'size:3']],
+        )->validate();
+
+        $this->item->update(['currency_code' => $validated['currency_code']]);
+        $this->item->refresh();
+        $this->currencyCode = (string) $this->item->currency_code;
     }
 
     public function refreshChannelReadiness(string $channel, MarketplaceChannelRegistry $channels): void
@@ -80,41 +99,6 @@ class Show extends Component
         session()->flash('success', __(':channel readiness refreshed.', ['channel' => $descriptor->label]));
     }
 
-    public function refreshAllChannelReadiness(MarketplaceChannelRegistry $channels): void
-    {
-        $this->authorizeUpdate();
-
-        $refreshed = 0;
-        $failures = [];
-
-        foreach ($channels->all() as $channel => $descriptor) {
-            try {
-                $channels->channel($channel)->refreshListingDraft($this->item->fresh() ?? $this->item);
-                $refreshed++;
-            } catch (Throwable $exception) {
-                $failures[] = $descriptor->label.': '.$exception->getMessage();
-            }
-        }
-
-        $this->item->refresh();
-
-        if ($failures === []) {
-            session()->flash('success', trans_choice('Refreshed :count channel readiness check.|Refreshed :count channel readiness checks.', $refreshed, ['count' => $refreshed]));
-
-            return;
-        }
-
-        $message = implode(' ', array_slice($failures, 0, 2));
-
-        if ($refreshed > 0) {
-            session()->flash('warning', __('Refreshed :count channel(s), but some checks failed: :message', ['count' => $refreshed, 'message' => $message]));
-
-            return;
-        }
-
-        session()->flash('error', $message);
-    }
-
     public function pushChannel(string $channel, MarketplaceListingPushService $pushes): void
     {
         $this->authorizeMarketplacePush();
@@ -133,39 +117,7 @@ class Show extends Component
         $this->item->refresh();
     }
 
-    public function pushSelectedChannels(MarketplaceListingPushService $pushes): void
-    {
-        $this->authorizeMarketplacePush();
-
-        $channels = $this->readyChannelKeys($this->normalizedSelectedChannels());
-
-        if ($channels === []) {
-            session()->flash('error', __('Select at least one ready channel before pushing.'));
-
-            return;
-        }
-
-        $this->flashPushResult($pushes->push($this->item, $channels));
-        $this->item->refresh();
-    }
-
-    public function pushAllReadyChannels(MarketplaceListingPushService $pushes): void
-    {
-        $this->authorizeMarketplacePush();
-
-        $channels = $this->readyChannelKeys();
-
-        if ($channels === []) {
-            session()->flash('error', __('No registered channel is ready to push yet. Refresh readiness and resolve the blockers first.'));
-
-            return;
-        }
-
-        $this->flashPushResult($pushes->push($this->item, $channels));
-        $this->item->refresh();
-    }
-
-    public function saveField(string $field, mixed $value): void
+    public function saveField(string $field, mixed $value, MarketplaceAvailabilitySyncService $availability): void
     {
         $this->authorizeUpdate();
 
@@ -176,6 +128,8 @@ class Show extends Component
         if ($field === 'storage_location' && trim((string) $value) === '') {
             $value = null;
         }
+
+        $previousQuantity = (int) $this->item->quantity_on_hand;
 
         $this->saveValidatedField(
             $this->item,
@@ -194,10 +148,64 @@ class Show extends Component
                 if ($field === 'notes' && trim((string) $validatedValue) === '') {
                     $model->notes = null;
                 }
+
+                if ($field === 'description' && trim((string) $validatedValue) === '') {
+                    $model->description = null;
+                }
             },
         );
 
         $this->item->refresh();
+
+        // Inventory is the source of truth for availability: a quantity change
+        // (including a sale that drops it to 0) propagates to every channel
+        // listing so the same stock cannot be sold twice.
+        if ($field === 'quantity_on_hand' && (int) $this->item->quantity_on_hand !== $previousQuantity) {
+            $this->flashAvailabilityResult($availability->syncItem($this->item));
+        }
+    }
+
+    /**
+     * @param  array{available: int, ended: list<array<string, mixed>>, revised: list<array<string, mixed>>, skipped: list<array<string, mixed>>, failures: list<array{label: string, message: string}>}  $result
+     */
+    private function flashAvailabilityResult(array $result): void
+    {
+        $touched = count($result['ended']) + count($result['revised']);
+        $failureCount = count($result['failures']);
+        $skippedCount = count($result['skipped']);
+
+        if ($touched === 0 && $failureCount === 0 && $skippedCount === 0) {
+            return;
+        }
+
+        $skippedNote = $skippedCount > 0
+            ? ' '.trans_choice(':count listing needs attention to avoid overselling.|:count listings need attention to avoid overselling.', $skippedCount, ['count' => $skippedCount])
+            : '';
+
+        if ($failureCount > 0) {
+            $message = collect($result['failures'])
+                ->map(fn (array $failure): string => $failure['label'].': '.$failure['message'])
+                ->take(2)
+                ->implode(' ');
+
+            session()->flash('warning', __('Availability sync failed on :count channel(s): :message', ['count' => $failureCount, 'message' => $message]).$skippedNote);
+
+            return;
+        }
+
+        if ($touched === 0) {
+            session()->flash('warning', trim($skippedNote));
+
+            return;
+        }
+
+        if ($result['available'] === 0) {
+            session()->flash('success', trans_choice('Out of stock — ended the listing on :count channel.|Out of stock — ended the listing on :count channels.', count($result['ended']), ['count' => count($result['ended'])]).$skippedNote);
+
+            return;
+        }
+
+        session()->flash('success', trans_choice('Synced availability to :count channel.|Synced availability to :count channels.', $touched, ['count' => $touched]).$skippedNote);
     }
 
     public function uploadPhotos(InventoryItemService $items): void
@@ -275,6 +283,7 @@ class Show extends Component
                     ->ignore($this->item),
             ],
             'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:20000'],
             'quantity_on_hand' => ['required', 'integer', 'min:0', 'max:999999'],
             'storage_location' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string', 'max:5000'],
@@ -324,6 +333,50 @@ class Show extends Component
             'INACTIVE' => 'warning',
             default => 'default',
         };
+    }
+
+    /**
+     * The eBay category this item inherits from its product template, if the
+     * template has been mapped (item metadata first, then a plugin default).
+     * Drives the Catalog Fit card hint so the mapping is discoverable where the
+     * template is chosen, not only behind a settings-page link.
+     *
+     * @return array{category_id: string, category_tree_id: string|null}|null
+     */
+    public function ebayCategoryMapping(): ?array
+    {
+        $template = $this->item->productTemplate;
+
+        if ($template === null) {
+            return null;
+        }
+
+        $metadata = $template->metadata ?? [];
+        $categoryId = data_get($metadata, 'marketplace.ebay.category_id');
+        $categoryTreeId = data_get($metadata, 'marketplace.ebay.category_tree_id');
+
+        if (! is_string($categoryId) || trim($categoryId) === '') {
+            $pluginMapping = app(CommercePluginRegistry::class)
+                ->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
+            $categoryId = $pluginMapping['category_id'] ?? null;
+            $categoryTreeId = $pluginMapping['category_tree_id'] ?? $categoryTreeId;
+        }
+
+        if (! is_string($categoryId) || trim($categoryId) === '') {
+            return null;
+        }
+
+        return [
+            'category_id' => trim($categoryId),
+            'category_tree_id' => is_string($categoryTreeId) && trim($categoryTreeId) !== '' ? trim($categoryTreeId) : null,
+        ];
+    }
+
+    public function ebayCategorySettingsUrl(): ?string
+    {
+        return Route::has('commerce.marketplace.ebay.settings')
+            ? route('commerce.marketplace.ebay.settings').'#categories'
+            : null;
     }
 
     public function render(): View
@@ -483,34 +536,6 @@ class Show extends Component
     private function routeUrl(mixed $routeName): ?string
     {
         return is_string($routeName) && Route::has($routeName) ? route($routeName) : null;
-    }
-
-    /**
-     * @param  list<string>|null  $selected
-     * @return list<string>
-     */
-    private function readyChannelKeys(?array $selected = null): array
-    {
-        $selected = $selected ?? array_keys(app(MarketplaceChannelRegistry::class)->all());
-
-        return collect($this->channelRows(app(MarketplaceChannelRegistry::class)))
-            ->filter(fn (array $row): bool => $row['can_push'] && in_array($row['key'], $selected, true))
-            ->pluck('key')
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function normalizedSelectedChannels(): array
-    {
-        return collect($this->selectedChannels)
-            ->map(fn (mixed $channel): string => trim((string) $channel))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
     }
 
     /**

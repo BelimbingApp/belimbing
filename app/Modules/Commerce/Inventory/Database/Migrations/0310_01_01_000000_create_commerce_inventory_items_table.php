@@ -22,6 +22,9 @@ return new class extends Migration
             $table->string('sku');
             $table->string('status')->default('draft')->index();
             $table->string('title');
+            // Buyer-facing listing description (the marketplace "See full item description").
+            // Single source of truth, edited on the item and pushed to each channel.
+            $table->text('description')->nullable();
             $table->unsignedInteger('quantity_on_hand')->default(1);
             $table->string('storage_location')->nullable();
             $table->text('notes')->nullable();

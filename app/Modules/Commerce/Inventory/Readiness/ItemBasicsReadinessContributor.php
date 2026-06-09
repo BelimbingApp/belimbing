@@ -17,7 +17,7 @@ class ItemBasicsReadinessContributor implements CommerceReadinessContributor
      */
     public function readinessForItem(Item $item): array
     {
-        $item->loadMissing('category', 'productTemplate', 'photos', 'descriptions');
+        $item->loadMissing('category', 'productTemplate', 'photos');
 
         return [
             $this->catalogEntry($item),
@@ -119,13 +119,13 @@ class ItemBasicsReadinessContributor implements CommerceReadinessContributor
     /** @return array{code: string, severity: 'success'|'blocker'|'warning'|'suggestion', label: string, description?: string, action?: string} */
     private function descriptionEntry(Item $item): array
     {
-        if ($item->descriptions->isNotEmpty()) {
+        if (filled($item->description)) {
             return [
                 'code' => 'commerce.inventory.description.present',
                 'severity' => 'success',
                 'label' => 'Listing copy exists',
-                'description' => 'At least one buyer-facing description draft is available.',
-                'action' => 'descriptions',
+                'description' => 'A buyer-facing listing description is set.',
+                'action' => 'item_facts',
             ];
         }
 
@@ -134,7 +134,7 @@ class ItemBasicsReadinessContributor implements CommerceReadinessContributor
             'severity' => 'suggestion',
             'label' => 'Add listing copy',
             'description' => 'Write buyer-facing description text before publishing.',
-            'action' => 'descriptions',
+            'action' => 'item_facts',
         ];
     }
 }

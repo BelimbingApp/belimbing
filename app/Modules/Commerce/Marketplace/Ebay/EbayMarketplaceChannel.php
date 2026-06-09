@@ -5,17 +5,24 @@ namespace App\Modules\Commerce\Marketplace\Ebay;
 use App\Base\Foundation\ValueObjects\Money;
 use App\Base\Integration\Services\IntegrationGateway;
 use App\Base\Integration\Services\IntegrationRequest;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
+use App\Modules\Commerce\Marketplace\DTO\MarketplaceMigrationResult;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
 use App\Modules\Commerce\Marketplace\Exceptions\MarketplaceOperationException;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
+use App\Modules\Commerce\Marketplace\Services\MarketplaceAvailabilitySyncService;
 use App\Modules\Commerce\Sales\Services\SalesOrderMaterializer;
 use Illuminate\Support\Carbon;
 
 class EbayMarketplaceChannel implements MarketplaceChannel
 {
+    /** eBay UTC timestamp format used by the Fulfillment API date filters. */
+    private const EBAY_DATE_FORMAT = 'Y-m-d\TH:i:s.v\Z';
+
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayOAuthService $oauth,
@@ -25,6 +32,8 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         private readonly EbayListingOperationService $listingOperations,
         private readonly EbayListingReadinessService $readiness,
         private readonly EbayOrderMapper $orderMapper,
+        private readonly MarketplaceAvailabilitySyncService $availability,
+        private readonly SettingsService $settings,
     ) {}
 
     public function key(): string
@@ -88,12 +97,16 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         $config = $this->configuration->forCompany($companyId);
         $accessToken = $this->oauth->accessToken($companyId);
 
+        $scope = Scope::company($companyId);
+        $pullStartedAt = Carbon::now();
+
         $fetched = 0;
         $created = 0;
         $updated = 0;
         $linked = 0;
         $offset = 0;
         $limit = 100;
+        $affectedItemIds = [];
 
         do {
             $response = $this->ebayGet(
@@ -102,10 +115,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 accessToken: $accessToken,
                 operation: 'orders.pull',
                 path: '/sell/fulfillment/v1/order',
-                query: [
-                    'limit' => $limit,
-                    'offset' => $offset,
-                ],
+                query: $this->orderPullQuery($scope, $limit, $offset),
             );
 
             $orders = $response['orders'] ?? [];
@@ -115,11 +125,28 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 $result = $this->salesOrders->materialize($companyId, $this->orderMapper->orderData($this->key(), $orderPayload));
                 $result->created ? $created++ : $updated++;
                 $linked += $result->linkedCount;
+
+                foreach ($result->affectedItemIds as $itemId) {
+                    $affectedItemIds[$itemId] = true;
+                }
             }
 
             $total = (int) ($response['total'] ?? count($orders));
             $offset += $limit;
         } while ($offset < $total);
+
+        // A pulled sale decremented inventory; reconcile the item's other channel
+        // listings so a one-off cannot stay sellable elsewhere.
+        foreach (array_keys($affectedItemIds) as $itemId) {
+            $item = Item::query()->find($itemId);
+
+            if ($item !== null) {
+                $this->availability->syncItem($item);
+            }
+        }
+
+        // Advance the incremental watermark only after a clean pass.
+        $this->settings->set('marketplace.ebay.orders_synced_through', $pullStartedAt->clone()->utc()->format(self::EBAY_DATE_FORMAT), $scope);
 
         return new MarketplacePullResult(
             $this->key(),
@@ -128,6 +155,154 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             $updated,
             $linked,
         );
+    }
+
+    /**
+     * Adopt existing eBay listings created outside the Inventory API (the legacy
+     * Trading API / Seller Hub) by migrating them into Inventory-API inventory
+     * items + offers via bulkMigrateListing. Once migrated, the normal pull sees
+     * them and they become manageable (revise / end / availability sync) like any
+     * other listing. Per-listing failures are reported, not fatal.
+     *
+     * @param  list<string>  $listingIds
+     */
+    public function migrateListings(int $companyId, array $listingIds): MarketplaceMigrationResult
+    {
+        $listingIds = collect($listingIds)
+            ->map(fn (mixed $id): string => trim((string) $id))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($listingIds === []) {
+            return new MarketplaceMigrationResult($this->key(), 0, 0, 0, 0);
+        }
+
+        $config = $this->configuration->forCompany($companyId);
+        $accessToken = $this->oauth->accessToken($companyId);
+        $marketplaceId = (string) $config['marketplace_id'];
+
+        $migrated = 0;
+        $failed = 0;
+        $failures = [];
+        $skus = [];
+
+        // eBay caps bulkMigrateListing at 5 listings per request.
+        foreach (array_chunk($listingIds, 5) as $chunk) {
+            $response = $this->ebayPost(
+                config: $config,
+                companyId: $companyId,
+                accessToken: $accessToken,
+                operation: 'listings.migrate',
+                path: '/sell/inventory/v1/bulk_migrate_listing',
+                body: ['requests' => array_map(fn (string $id): array => ['listingId' => $id], $chunk)],
+                // eBay reports per-listing eligibility and even its own system errors
+                // (errorId 25001 — common in sandbox) as a body, sometimes with a 4xx/5xx
+                // status. Treat those as a reported failure for this batch rather than an
+                // opaque crash; genuine transport/auth errors (401/403) still throw.
+                tolerateStatuses: [207, 400, 422, 500, 503],
+            );
+
+            $entries = $response['responses'] ?? null;
+
+            // No per-listing breakdown means a request-level failure (e.g. an eBay
+            // system error): attribute it to every listing we asked about.
+            if (! is_array($entries)) {
+                $message = $this->migrationErrorMessage($response);
+
+                foreach ($chunk as $listingId) {
+                    $failed++;
+                    $failures[] = ['listing_id' => $listingId, 'message' => $message];
+                }
+
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                $statusCode = (int) ($entry['statusCode'] ?? 0);
+                $listingId = (string) ($entry['listingId'] ?? '');
+
+                if ($statusCode >= 200 && $statusCode < 300) {
+                    $migrated++;
+
+                    foreach ($entry['inventoryItems'] ?? [] as $inventoryItem) {
+                        $sku = trim((string) ($inventoryItem['sku'] ?? ''));
+
+                        if ($sku !== '') {
+                            $skus[$sku] = true;
+                        }
+                    }
+                } else {
+                    $failed++;
+                    $failures[] = ['listing_id' => $listingId, 'message' => $this->migrationErrorMessage($entry)];
+                }
+            }
+        }
+
+        // Pull each freshly-migrated inventory item (item + offers) into our listings.
+        $listingsCreated = 0;
+        foreach (array_keys($skus) as $sku) {
+            $inventoryItem = $this->ebayGet(
+                config: $config,
+                companyId: $companyId,
+                accessToken: $accessToken,
+                operation: 'listings.inventory_item.pull',
+                path: '/sell/inventory/v1/inventory_item/'.rawurlencode($sku),
+                headers: ['X-EBAY-C-MARKETPLACE-ID' => $marketplaceId],
+                tolerateStatuses: [404],
+            );
+
+            // The single-item GET does not echo the SKU (it is the path key); restore it.
+            $inventoryItem['sku'] = $sku;
+
+            $delta = $this->processInventoryItemOffers($config, $companyId, $accessToken, $inventoryItem, $marketplaceId);
+            $listingsCreated += $delta['created'] + $delta['updated'];
+        }
+
+        return new MarketplaceMigrationResult(
+            $this->key(),
+            count($listingIds),
+            $migrated,
+            $failed,
+            $listingsCreated,
+            $failures,
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $entry
+     */
+    private function migrationErrorMessage(array $entry): string
+    {
+        $errors = $entry['errors'] ?? [];
+        $first = is_array($errors) ? ($errors[0] ?? null) : null;
+        $message = is_array($first) ? ($first['message'] ?? $first['longMessage'] ?? null) : null;
+
+        return is_string($message) && trim($message) !== ''
+            ? trim($message)
+            : (string) __('eBay could not migrate this listing — it may be ineligible for the Inventory API.');
+    }
+
+    /**
+     * Build the getOrders query. After the first pull this is incremental: only
+     * orders modified since the stored watermark (less a small overlap that the
+     * idempotent ingest dedupes) are fetched.
+     *
+     * @return array<string, mixed>
+     */
+    private function orderPullQuery(Scope $scope, int $limit, int $offset): array
+    {
+        $query = ['limit' => $limit, 'offset' => $offset];
+
+        $watermark = $this->settings->get('marketplace.ebay.orders_synced_through', null, $scope);
+
+        if (is_string($watermark) && trim($watermark) !== '') {
+            $since = Carbon::parse($watermark)->subMinutes(5)->utc()->format(self::EBAY_DATE_FORMAT);
+            $query['filter'] = 'lastmodifieddate:['.$since.'..]';
+        }
+
+        return $query;
     }
 
     public function createListing(Item $item): array
@@ -288,6 +463,10 @@ class EbayMarketplaceChannel implements MarketplaceChannel
                 'marketplace_id' => $marketplaceId,
             ],
             headers: ['X-EBAY-C-MARKETPLACE-ID' => $marketplaceId],
+            // eBay returns 404 ("no offers for the SKU") for an inventory item that
+            // has no Inventory-API offer (e.g. a legacy listing). That is a normal
+            // empty result, not a failure — skip the SKU instead of aborting the pull.
+            tolerateStatuses: [404],
         );
 
         $fetched = 0;
@@ -318,6 +497,11 @@ class EbayMarketplaceChannel implements MarketplaceChannel
             return null;
         }
 
+        // Bring the live listing's body into the editable Listing Descriptions card so
+        // the seller can see and edit what buyers actually read (the eBay "See full item
+        // description"), and so a later push re-sends it instead of blanking it.
+        $this->importListingDescription($listing, $item);
+
         $draft = $this->readiness->refreshForItem($item->fresh());
         $listingAspects = $this->listingAspectValues($listing);
 
@@ -334,6 +518,22 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         ]);
 
         return $draft->fresh();
+    }
+
+    /**
+     * Seed the item's listing description from the live listing the first time we
+     * import it. Idempotent: only runs when the item has no description yet, so it
+     * never overwrites copy the seller has since edited locally.
+     */
+    private function importListingDescription(Listing $listing, Item $item): void
+    {
+        $body = $listing->marketplaceDescriptionBody();
+
+        if ($body === null || (is_string($item->description) && trim($item->description) !== '')) {
+            return;
+        }
+
+        $item->forceFill(['description' => $body])->save();
     }
 
     /**
@@ -411,6 +611,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
      * @param  array<string, mixed>  $config
      * @param  array<string, mixed>  $query
      * @param  array<string, string>  $headers
+     * @param  list<int>  $tolerateStatuses  HTTP statuses to treat as an empty result instead of failing.
      * @return array<string, mixed>
      */
     private function ebayGet(
@@ -421,6 +622,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         string $path,
         array $query = [],
         array $headers = [],
+        array $tolerateStatuses = [],
     ): array {
         $response = $this->integration->send(new IntegrationRequest(
             system: EbayConfiguration::CHANNEL,
@@ -439,6 +641,58 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         ));
 
         if ($response->failed()) {
+            if (in_array($response->status, $tolerateStatuses, true)) {
+                return [];
+            }
+
+            throw MarketplaceOperationException::requestFailed(
+                $this->key(),
+                $operation,
+                $response->status,
+                $response->exchange?->id,
+            );
+        }
+
+        $json = $response->json();
+
+        return is_array($json) ? $json : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $body
+     * @param  list<int>  $tolerateStatuses  Non-2xx statuses whose response body should be returned for inspection instead of throwing.
+     * @return array<string, mixed>
+     */
+    private function ebayPost(
+        array $config,
+        int $companyId,
+        string $accessToken,
+        string $operation,
+        string $path,
+        array $body,
+        array $tolerateStatuses = [],
+    ): array {
+        $response = $this->integration->send(new IntegrationRequest(
+            system: EbayConfiguration::CHANNEL,
+            operation: 'commerce.marketplace.ebay.'.$operation,
+            method: 'POST',
+            endpoint: rtrim((string) $config['api_base_url'], '/').$path,
+            protocolOperation: 'POST '.$path,
+            provider: EbayConfiguration::CHANNEL,
+            headers: [
+                'Authorization' => 'Bearer '.$accessToken,
+                'Content-Language' => 'en-US',
+            ],
+            body: $body,
+            ownerType: 'company',
+            ownerId: $companyId,
+            timeoutSeconds: 30,
+            retryTimes: 1,
+            metadata: ['marketplace_id' => $config['marketplace_id'] ?? null],
+        ));
+
+        if ($response->failed() && ! in_array($response->status, $tolerateStatuses, true)) {
             throw MarketplaceOperationException::requestFailed(
                 $this->key(),
                 $operation,

@@ -111,6 +111,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.select` | Select dropdowns with label + error |
 | `x-ui.segmented-control` | Compact mutually exclusive choices where all options stay visible |
 | `x-ui.combobox` | Searchable select/lookup inputs |
+| `x-ui.country-combobox` | Single-source country picker (GeoNames-backed; stores 2-letter ISO code) |
+| `x-ui.currency-combobox` | Single-source currency picker (GeoNames-backed; stores 3-letter code) |
 | `x-ui.textarea` | Multi-line text inputs with label + error |
 | `x-ui.search-input` | Search fields with magnifying-glass icon |
 | `x-ui.checkbox` | Checkbox inputs |

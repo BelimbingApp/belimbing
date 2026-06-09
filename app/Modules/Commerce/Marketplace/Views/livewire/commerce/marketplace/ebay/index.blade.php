@@ -62,6 +62,11 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <span wire:loading.remove wire:target="pullFromEbay">{{ __('Pull from eBay') }}</span>
                             <span wire:loading wire:target="pullFromEbay">{{ __('Pulling…') }}</span>
                         </x-ui.button>
+
+                        <x-ui.button type="button" variant="ghost" wire:click="openMigrateModal" title="{{ __('Adopt listings created in Seller Hub / the legacy API by eBay listing ID') }}">
+                            <x-icon name="heroicon-o-arrow-up-on-square-stack" class="h-4 w-4" />
+                            {{ __('Import existing listings') }}
+                        </x-ui.button>
                     @else
                         <x-ui.button variant="primary" as="a" href="{{ route('commerce.marketplace.ebay.settings') }}" wire:navigate>
                             <x-icon name="heroicon-o-cog-6-tooth" class="h-4 w-4" />
@@ -110,6 +115,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                 <x-ui.th>{{ __('Status') }}</x-ui.th>
                                 <x-ui.th align="right">{{ __('Price') }}</x-ui.th>
                                 <x-ui.th>{{ __('Synced') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
                             </tr>
                         </x-slot>
 
@@ -159,10 +165,18 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $listing->last_synced_at?->diffForHumans() ?? __('Never') }}
                                 </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                                    @if ($listing->item)
+                                        <x-ui.button type="button" size="sm" variant="outline" wire:click="openListingModal({{ $listing->id }})">
+                                            <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
+                                            {{ __('Edit & push') }}
+                                        </x-ui.button>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">
                                     {{ $stats['totalListings'] === 0
                                         ? __('No listings yet. Use “Pull from eBay” above to import your eBay store.')
                                         : __('No listings match your search.') }}
@@ -242,5 +256,58 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                 </x-ui.card>
             </x-ui.tab>
         </x-ui.tabs>
+
+        {{-- Per-listing quick edit-and-push. Title/price are the item's canonical
+             content; quantity is inventory-driven and shown read-only. --}}
+        <x-ui.modal wire:model="showListingModal">
+            <div class="space-y-4">
+                <div>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Edit & push listing') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Update the listing content and push it to eBay. Quantity is managed by inventory and synced automatically.') }}</p>
+                </div>
+
+                <x-ui.input id="ebay-modal-title" wire:model="modalTitle" :label="__('Title')" :error="$errors->first('modalTitle')" />
+                <x-ui.input id="ebay-modal-price" wire:model="modalPrice" :label="__('Price')" inputmode="decimal" :error="$errors->first('modalPrice')" />
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" wire:click="closeListingModal">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" wire:click="saveAndPushListing" wire:loading.attr="disabled" wire:target="saveAndPushListing">
+                        <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                        <span wire:loading.remove wire:target="saveAndPushListing">{{ __('Save & push to eBay') }}</span>
+                        <span wire:loading wire:target="saveAndPushListing">{{ __('Pushing…') }}</span>
+                    </x-ui.button>
+                </div>
+            </div>
+        </x-ui.modal>
+
+        {{-- Adopt existing eBay listings (Seller Hub / legacy Trading API) by ID.
+             Migrates them into the Inventory API so they appear and become manageable. --}}
+        <x-ui.modal wire:model="showMigrateModal">
+            <div class="space-y-4">
+                <div>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Import existing eBay listings') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Listings created in Seller Hub or before connecting Belimbing are not visible to a normal pull. Paste their eBay listing IDs to adopt them into the Inventory API — then they appear below and can be revised, ended, and stock-synced.') }}</p>
+                </div>
+
+                <x-ui.textarea
+                    id="ebay-migrate-listing-ids"
+                    wire:model="migrateListingIds"
+                    :label="__('eBay listing IDs')"
+                    rows="4"
+                    :placeholder="__('110589612524, 110589612525')"
+                    :help="__('One per line or comma-separated. Find the ID in the listing URL (…/itm/THIS_NUMBER).')"
+                    :error="$errors->first('migrateListingIds')"
+                />
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" wire:click="closeMigrateModal">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" wire:click="migrateLegacyListings" wire:loading.attr="disabled" wire:target="migrateLegacyListings">
+                        <x-icon name="heroicon-o-arrow-up-on-square-stack" class="h-4 w-4" />
+                        <span wire:loading.remove wire:target="migrateLegacyListings">{{ __('Import listings') }}</span>
+                        <span wire:loading wire:target="migrateLegacyListings">{{ __('Importing…') }}</span>
+                    </x-ui.button>
+                </div>
+            </div>
+        </x-ui.modal>
     </div>
 </div>

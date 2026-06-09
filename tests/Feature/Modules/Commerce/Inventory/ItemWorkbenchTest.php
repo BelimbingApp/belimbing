@@ -6,7 +6,6 @@ use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
 use App\Modules\Commerce\Catalog\Models\Category;
-use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Create;
 use App\Modules\Commerce\Inventory\Livewire\Items\Index;
@@ -546,7 +545,7 @@ test('inventory list shows fitment coverage and supports fitment count sorting',
         ->assertSeeInOrder([$withoutFitment->sku, $withFitment->sku]);
 });
 
-test('item detail page can edit catalog attributes and description versions', function (): void {
+test('item detail page can edit catalog attributes and the listing description', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -563,30 +562,54 @@ test('item detail page can edit catalog attributes and description versions', fu
         ->set('selectedAttributeId', $attribute->id)
         ->set('attributeValue', '33151-SNA-A01')
         ->call('saveAttributeValue')
-        ->set('descriptionTitle', '2008 Honda Civic Driver Side Headlight')
-        ->set('descriptionBody', 'Used OEM driver side headlight with light scuffing.')
-        ->call('addDescription')
+        ->call('saveField', 'description', 'Used OEM driver side headlight with light scuffing.')
         ->assertHasNoErrors();
 
     $value = AttributeValue::query()
         ->where('item_id', $item->id)
         ->where('attribute_id', $attribute->id)
         ->first();
-    $description = CatalogDescription::query()
-        ->where('item_id', $item->id)
-        ->first();
 
     expect($value)
         ->not()->toBeNull()
         ->and($value->display_value)->toBe('33151-SNA-A01')
-        ->and($description)->not()->toBeNull()
-        ->and($description->version)->toBe(1);
+        ->and($item->fresh()->description)->toBe('Used OEM driver side headlight with light scuffing.');
+});
 
-    Livewire::test(Show::class, ['item' => $item->fresh()])
-        ->call('acceptDescription', $description->id)
+test('item detail page saves the currency from the combobox selection', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'currency_code' => 'MYR',
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('currencyCode', 'usd')
         ->assertHasNoErrors();
 
-    expect($description->fresh()->is_accepted)->toBeTrue();
+    expect($item->fresh()->currency_code)->toBe('USD');
+});
+
+test('item detail page allows clearing the currency combobox before selecting another currency', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'currency_code' => 'MYR',
+    ]);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->set('currencyCode', null)
+        ->assertHasNoErrors()
+        ->assertSet('currencyCode', null)
+        ->set('currencyCode', 'usd')
+        ->assertHasNoErrors()
+        ->assertSet('currencyCode', 'USD');
+
+    expect($item->fresh()->currency_code)->toBe('USD');
 });
 
 test('item detail page assigns catalog fit and filters applicable attributes', function (): void {

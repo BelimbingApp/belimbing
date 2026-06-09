@@ -184,4 +184,17 @@ class Listing extends Model
 
         return self::ADOPTION_UNKNOWN;
     }
+
+    /**
+     * The buyer-facing listing body as it currently stands on the marketplace.
+     * Imported listings carry it under inventory_item; Belimbing-managed listings
+     * keep a copy in the published contract. Returns null when neither is present.
+     */
+    public function marketplaceDescriptionBody(): ?string
+    {
+        $body = data_get($this->raw_payload, 'inventory_item.product.description')
+            ?? data_get($this->raw_payload, 'publish_contract.inventory_item.product.description');
+
+        return is_string($body) && trim($body) !== '' ? $body : null;
+    }
 }

@@ -43,6 +43,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
         $schedule->command('blb:ai:turns:sweep-stale')->everyFiveMinutes();
         $schedule->command('blb:ai:pricing:refresh')->dailyAt('02:30')->withoutOverlapping();
+
+        // Marketplace order-pull backstop: webhooks deliver sales in near real time,
+        // but this incremental, idempotent poll catches anything a webhook missed.
+        // Cadence is config-tunable (cron expression); defaults to every 15 minutes.
+        $schedule->command('commerce:marketplace:ebay:pull --orders')
+            ->cron((string) config('commerce-marketplace.order_poll_cron', '*/15 * * * *'))
+            ->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (BlbException $exception): void {

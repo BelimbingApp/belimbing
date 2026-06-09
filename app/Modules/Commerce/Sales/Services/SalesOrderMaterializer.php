@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\Services;
 
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -41,14 +42,40 @@ class SalesOrderMaterializer
             $order->save();
 
             $linkedCount = 0;
+            $affectedItemIds = [];
 
             foreach ($data->lines as $lineData) {
                 $line = $this->materializeLine($companyId, $order, $data, $lineData);
-                $this->materializeSale($companyId, $order, $line, $data, $lineData);
+                $sale = $this->materializeSale($companyId, $order, $line, $data, $lineData);
 
-                if ($line->item_id !== null) {
-                    $linkedCount++;
-                    $line->item?->forceFill(['status' => Item::STATUS_SOLD])->save();
+                if ($line->item_id === null || $line->item === null) {
+                    continue;
+                }
+
+                $linkedCount++;
+
+                // Apply the sale to inventory exactly once — on first ingest of this
+                // sale line. Re-pulls and the webhook backstop find the sale already
+                // present and never double-decrement.
+                if ($sale->wasRecentlyCreated) {
+                    $item = $line->item;
+                    $item->quantity_on_hand = max(0, (int) $item->quantity_on_hand - max(1, (int) $line->quantity));
+
+                    // Sold out → mark SOLD and end the listing that sold so availability
+                    // sync reconciles the *other* channels, not this one. A multi-quantity
+                    // item stays listed; the sync revises it to the remaining quantity.
+                    if ($item->quantity_on_hand === 0) {
+                        $item->status = Item::STATUS_SOLD;
+
+                        if ($line->listing !== null && $line->listing->ended_at === null) {
+                            $line->listing->forceFill([
+                                'ended_at' => $data->paidAt ?? $data->orderedAt ?? Carbon::now(),
+                            ])->save();
+                        }
+                    }
+
+                    $item->save();
+                    $affectedItemIds[$item->id] = true;
                 }
             }
 
@@ -57,6 +84,7 @@ class SalesOrderMaterializer
                 $created,
                 count($data->lines),
                 $linkedCount,
+                array_keys($affectedItemIds),
             );
         });
     }

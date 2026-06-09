@@ -4,7 +4,6 @@ use App\Modules\Commerce\Catalog\Livewire\Index;
 use App\Modules\Commerce\Catalog\Models\Attribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
 use App\Modules\Commerce\Catalog\Models\Category;
-use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Models\Item;
 use Livewire\Livewire;
@@ -40,16 +39,7 @@ test('catalog primitives can describe an inventory item', function (): void {
         'display_value' => '33151-SNA-A01',
     ]);
 
-    $description = Description::factory()->create([
-        'item_id' => $item->id,
-        'version' => 1,
-        'title' => '2008 Honda Civic Driver Side Headlight',
-        'body' => 'Used OEM driver side headlight with light scuffing.',
-        'is_accepted' => true,
-    ]);
-
     expect($item->catalogAttributeValues()->first()->is($value))->toBeTrue()
-        ->and($item->descriptions()->first()->is($description))->toBeTrue()
         ->and($template->attributes()->first()->is($attribute))->toBeTrue()
         ->and($category->productTemplates()->first()->is($template))->toBeTrue();
 });

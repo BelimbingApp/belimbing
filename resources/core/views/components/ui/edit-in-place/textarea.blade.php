@@ -15,6 +15,7 @@
 @endphp
 
 <dl
+    wire:key="eip-textarea-{{ $field ?? $attributes->get('id') ?? 'field' }}"
     {{ $attributes->except('id') }}
     x-data="{ editing: false, helpOpen: false, val: @js((string) $value), original: @js((string) $value) }"
 >

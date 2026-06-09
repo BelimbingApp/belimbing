@@ -47,7 +47,6 @@ class EbayListingReadinessService
             'photos.mediaAsset',
             'fitments',
             'catalogAttributeValues.attribute',
-            'descriptions',
         ]);
 
         $companyId = $item->company_id;

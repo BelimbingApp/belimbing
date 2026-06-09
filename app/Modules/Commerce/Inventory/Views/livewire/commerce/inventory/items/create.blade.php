@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Modules\Commerce\Inventory\Livewire\Items\Create $this */
+
+use App\Modules\Commerce\Inventory\Livewire\Items\Create;
+
+/** @var Create $this */
 ?>
 
 <div>
@@ -145,14 +148,11 @@
                         :error="$errors->first('targetPriceAmount')"
                     />
 
-                    <x-ui.input
+                    <x-ui.currency-combobox
                         id="inventory-item-currency-code"
                         wire:model="currencyCode"
-                        label="{{ __('Currency') }}"
-                        type="text"
-                        maxlength="3"
+                        :label="__('Currency')"
                         required
-                        :help="__('Applies to this item cost and target price. Snapshotted so later defaults do not rewrite history.')"
                         :error="$errors->first('currencyCode')"
                     />
                 </div>

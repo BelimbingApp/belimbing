@@ -6,7 +6,6 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
-use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemFitment;
@@ -202,11 +201,7 @@ function seedReadyEbayListingInputs(Item $item, int $companyId): void
         'sort_order' => 1,
     ]);
 
-    CatalogDescription::factory()->create([
-        'item_id' => $item->id,
-        'body' => 'Used BMW rear brake caliper pair.',
-        'is_accepted' => true,
-    ]);
+    $item->update(['description' => 'Used BMW rear brake caliper pair.']);
 }
 
 test('ebay marketplace page is visible to admins', function (): void {
@@ -645,6 +640,266 @@ test('ebay listing pull materializes offers and links by sku', function (): void
         && $request->hasHeader('X-EBAY-C-MARKETPLACE-ID', 'EBAY_US'));
 });
 
+test('ebay listing pull imports the live description onto the item', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    // A freshly linked item with no copy yet: the pull should seed it from eBay.
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'DESC-IMPORT-0001',
+        'description' => null,
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
+            'total' => 1,
+            'inventoryItems' => [
+                [
+                    'sku' => 'DESC-IMPORT-0001',
+                    'product' => [
+                        'title' => 'Used OEM headlight assembly',
+                        'description' => 'Tested and functional. Buyer confirms fitment by part number.',
+                    ],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'offers' => [
+                [
+                    'offerId' => 'offer-desc-1',
+                    'sku' => 'DESC-IMPORT-0001',
+                    'marketplaceId' => 'EBAY_US',
+                    'status' => 'PUBLISHED',
+                    'listing' => ['listingId' => '9988776655', 'listingStatus' => 'ACTIVE'],
+                    'pricingSummary' => ['price' => ['currency' => 'USD', 'value' => '120.00']],
+                ],
+            ],
+        ]),
+    ]);
+
+    app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
+
+    expect($item->fresh()->description)->toBe('Tested and functional. Buyer confirms fitment by part number.');
+});
+
+test('ebay listing pull tolerates a 404 when a sku has no offers', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'NO-OFFER-0001',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item*' => Http::response([
+            'total' => 1,
+            'inventoryItems' => [
+                ['sku' => 'NO-OFFER-0001', 'product' => ['title' => 'Legacy listing without an Inventory API offer']],
+            ],
+        ]),
+        // eBay answers getOffers-by-SKU with 404 when the item has no offer.
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'errors' => [['errorId' => 25713, 'message' => 'There are no offers for the SKU.']],
+        ], 404),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->pullListings($user->company_id);
+
+    expect($result->fetched)->toBe(0)
+        ->and($result->created)->toBe(0)
+        ->and(Listing::query()->where('company_id', $user->company_id)->count())->toBe(0);
+});
+
+test('ebay bulk migrate adopts a legacy listing into the inventory api', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/bulk_migrate_listing' => Http::response([
+            'responses' => [
+                [
+                    'statusCode' => 200,
+                    'listingId' => '110589612524',
+                    'marketplaceId' => 'EBAY_US',
+                    'inventoryItems' => [['sku' => 'MIGRATED-0001']],
+                    'offers' => [['offerId' => 'offer-mig-1', 'marketplaceId' => 'EBAY_US']],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/MIGRATED-0001*' => Http::response([
+            'product' => ['title' => 'Migrated headlight assembly'],
+            'availability' => ['shipToLocationAvailability' => ['quantity' => 1]],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'offers' => [
+                [
+                    'offerId' => 'offer-mig-1',
+                    'sku' => 'MIGRATED-0001',
+                    'marketplaceId' => 'EBAY_US',
+                    'status' => 'PUBLISHED',
+                    'listing' => ['listingId' => '110589612524', 'listingStatus' => 'ACTIVE'],
+                    'pricingSummary' => ['price' => ['currency' => 'USD', 'value' => '120.00']],
+                ],
+            ],
+        ]),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->migrateListings($user->company_id, ['110589612524']);
+
+    expect($result->requested)->toBe(1)
+        ->and($result->migrated)->toBe(1)
+        ->and($result->failed)->toBe(0)
+        ->and($result->listingsCreated)->toBe(1);
+
+    $listing = Listing::query()
+        ->where('company_id', $user->company_id)
+        ->where('external_listing_id', '110589612524')
+        ->first();
+
+    expect($listing)->not()->toBeNull()
+        ->and($listing->external_offer_id)->toBe('offer-mig-1');
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
+        && str_contains($request->url(), '/sell/inventory/v1/bulk_migrate_listing')
+        && ($request->data()['requests'][0]['listingId'] ?? null) === '110589612524');
+});
+
+test('ebay bulk migrate reports a listing eBay refuses to migrate', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/bulk_migrate_listing' => Http::response([
+            'responses' => [
+                [
+                    'statusCode' => 400,
+                    'listingId' => '999',
+                    'errors' => [['errorId' => 25001, 'message' => 'Listing is not eligible for migration.']],
+                ],
+            ],
+        ]),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->migrateListings($user->company_id, ['999']);
+
+    expect($result->migrated)->toBe(0)
+        ->and($result->failed)->toBe(1)
+        ->and($result->failures[0]['listing_id'])->toBe('999')
+        ->and($result->failures[0]['message'])->toContain('not eligible');
+
+    expect(Listing::query()->where('company_id', $user->company_id)->count())->toBe(0);
+});
+
+test('ebay bulk migrate surfaces an eBay system error without crashing', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    // eBay sandbox commonly answers bulkMigrateListing with a top-level 500/25001.
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/bulk_migrate_listing' => Http::response([
+            'errors' => [['errorId' => 25001, 'domain' => 'API_INVENTORY', 'message' => 'A system error has occurred.']],
+        ], 500),
+    ]);
+
+    $result = app(EbayMarketplaceChannel::class)->migrateListings($user->company_id, ['110589612524']);
+
+    expect($result->requested)->toBe(1)
+        ->and($result->migrated)->toBe(0)
+        ->and($result->failed)->toBe(1)
+        ->and($result->failures[0]['listing_id'])->toBe('110589612524')
+        ->and($result->failures[0]['message'])->toContain('system error');
+});
+
+test('ebay marketplace page imports existing listings by id', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/bulk_migrate_listing' => Http::response([
+            'responses' => [
+                [
+                    'statusCode' => 200,
+                    'listingId' => '110589612524',
+                    'inventoryItems' => [['sku' => 'MIGRATED-0001']],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/MIGRATED-0001*' => Http::response([
+            'product' => ['title' => 'Migrated headlight assembly'],
+        ]),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer*' => Http::response([
+            'offers' => [
+                [
+                    'offerId' => 'offer-mig-1',
+                    'sku' => 'MIGRATED-0001',
+                    'marketplaceId' => 'EBAY_US',
+                    'status' => 'PUBLISHED',
+                    'listing' => ['listingId' => '110589612524', 'listingStatus' => 'ACTIVE'],
+                    'pricingSummary' => ['price' => ['currency' => 'USD', 'value' => '120.00']],
+                ],
+            ],
+        ]),
+    ]);
+
+    Livewire::test(MarketplaceIndex::class)
+        ->call('openMigrateModal')
+        ->set('migrateListingIds', '110589612524')
+        ->call('migrateLegacyListings')
+        ->assertHasNoErrors();
+
+    expect(Listing::query()
+        ->where('company_id', $user->company_id)
+        ->where('external_listing_id', '110589612524')
+        ->exists())->toBeTrue();
+});
+
+test('ebay marketplace import requires at least one listing id', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    configureEbayMarketplaceForCompany(
+        $user->company_id,
+        ['https://api.ebay.com/oauth/api_scope/sell.inventory'],
+    );
+
+    Livewire::test(MarketplaceIndex::class)
+        ->set('migrateListingIds', '   ')
+        ->call('migrateLegacyListings')
+        ->assertHasErrors('migrateListingIds');
+});
+
 test('ebay listing pull refreshes existing belimbing-managed draft linkage and product references', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
@@ -872,9 +1127,9 @@ test('ebay publish creates inventory compatibility offer and listing records', f
         $payload = $request->data();
 
         return ($payload['compatibleProducts'][0]['compatibilityProperties'] ?? null) === [
-            ['name' => 'year', 'value' => '2011'],
-            ['name' => 'make', 'value' => 'BMW'],
-            ['name' => 'model', 'value' => '135i'],
+            ['name' => 'Year', 'value' => '2011'],
+            ['name' => 'Make', 'value' => 'BMW'],
+            ['name' => 'Model', 'value' => '135i'],
         ];
     });
 
@@ -1356,4 +1611,123 @@ test('ebay order pull materializes sales ledger rows and links inventory', funct
         ->and(Order::query()->count())->toBe(1)
         ->and(OrderLine::query()->count())->toBe(1)
         ->and(Sale::query()->count())->toBe(1);
+});
+
+test('ebay order pull decrements inventory once and never again on re-pull', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    configureEbayMarketplaceForCompany($user->company_id, ['https://api.ebay.com/oauth/api_scope/sell.fulfillment']);
+
+    // Two on hand: selling one leaves one — and the item stays listed.
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'DECREMENT-SKU-1',
+        'status' => Item::STATUS_LISTED,
+        'quantity_on_hand' => 2,
+    ]);
+
+    Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'DECREMENT-LISTING-1',
+        'external_offer_id' => 'decrement-offer-1',
+        'external_sku' => 'DECREMENT-SKU-1',
+        'marketplace_id' => 'EBAY_US',
+        'title' => 'Two in stock',
+        'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
+        'price_amount' => 5000,
+        'currency_code' => 'USD',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/fulfillment/v1/order*' => Http::response([
+            'total' => 1,
+            'orders' => [[
+                'orderId' => 'ORD-DECREMENT-1',
+                'creationDate' => '2026-05-01T10:00:00.000Z',
+                'lastModifiedDate' => '2026-05-01T10:00:00.000Z',
+                'orderPaymentStatus' => 'PAID',
+                'lineItems' => [[
+                    'lineItemId' => '5001',
+                    'legacyItemId' => 'DECREMENT-LISTING-1',
+                    'sku' => 'DECREMENT-SKU-1',
+                    'title' => 'Two in stock',
+                    'quantity' => 1,
+                    'lineItemCost' => ['currency' => 'USD', 'value' => '50.00'],
+                    'total' => ['currency' => 'USD', 'value' => '50.00'],
+                ]],
+            ]],
+        ]),
+    ]);
+
+    app(EbayMarketplaceChannel::class)->pullOrders($user->company_id);
+    expect($item->refresh()->quantity_on_hand)->toBe(1)
+        ->and($item->status)->not()->toBe(Item::STATUS_SOLD); // still in stock
+
+    // Re-pull must not decrement again (idempotent on the already-ingested sale line).
+    app(EbayMarketplaceChannel::class)->pullOrders($user->company_id);
+    expect($item->refresh()->quantity_on_hand)->toBe(1);
+});
+
+test('listings page edit-and-push modal saves item content and revises the listing', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    configureEbayMarketplaceForCompany($user->company_id, ['https://api.ebay.com/oauth/api_scope/sell.inventory']);
+
+    $item = Item::factory()->create([
+        'company_id' => $user->company_id,
+        'sku' => 'MODAL-SKU-1',
+        'status' => Item::STATUS_LISTED,
+    ]);
+    seedReadyEbayListingInputs($item, $user->company_id);
+    $item->fitments()->delete();
+    ItemFitment::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'is_universal' => true,
+        'source' => 'manual',
+        'confidence' => 'manual',
+    ]);
+
+    $listing = Listing::query()->create([
+        'company_id' => $user->company_id,
+        'item_id' => $item->id,
+        'channel' => EbayConfiguration::CHANNEL,
+        'external_listing_id' => 'MODAL-LISTING-1',
+        'external_offer_id' => 'modal-offer-1',
+        'external_sku' => 'MODAL-SKU-1',
+        'marketplace_id' => 'EBAY_US',
+        'title' => $item->fresh()->title,
+        'status' => 'ACTIVE',
+        'management_state' => 'belimbing_managed',
+        'drift_status' => 'in_sync',
+        'price_amount' => 25000,
+        'currency_code' => 'USD',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*/product_compatibility' => Http::response([], 404),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer/modal-offer-1' => Http::response([], 204),
+    ]);
+
+    Livewire::actingAs($user)
+        ->test(MarketplaceIndex::class)
+        ->call('openListingModal', $listing->id)
+        ->assertSet('showListingModal', true)
+        ->set('modalTitle', 'Revised Title')
+        ->set('modalPrice', '99.99')
+        ->call('saveAndPushListing')
+        ->assertHasNoErrors()
+        ->assertSet('showListingModal', false);
+
+    expect($item->refresh()->title)->toBe('Revised Title')
+        ->and($item->target_price_amount)->toBe(9999);
+
+    Http::assertSent(fn (Request $request): bool => $request->method() === 'PUT'
+        && str_ends_with($request->url(), '/sell/inventory/v1/offer/modal-offer-1'));
 });

@@ -177,6 +177,12 @@
                     :help="__('Single source for country pickers — GeoNames-backed; stores the 2-letter ISO code. Use everywhere a country is chosen.')"
                 />
 
+                <x-ui.currency-combobox
+                    id="ui-reference-currency-combobox"
+                    wire:model.live="currencyComboboxValue"
+                    :label="__('Currency combobox')"
+                />
+
                 <div class="grid gap-4 md:grid-cols-2">
                     <div class="space-y-1">
                         <div class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Checkbox') }}</div>

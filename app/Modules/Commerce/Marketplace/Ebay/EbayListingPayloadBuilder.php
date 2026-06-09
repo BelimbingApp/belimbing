@@ -2,7 +2,6 @@
 
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
-use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Inventory\Models\ItemFitment;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
@@ -24,8 +23,8 @@ class EbayListingPayloadBuilder
         $draft->loadMissing([
             'item.photos.mediaAsset',
             'item.fitments',
-            'item.descriptions',
             'item.catalogAttributeValues.attribute',
+            'listing',
         ]);
 
         $item = $draft->item;
@@ -34,7 +33,12 @@ class EbayListingPayloadBuilder
             return [];
         }
 
-        $description = $item->descriptions->firstWhere('is_accepted', true);
+        // The item is the single source of truth for the listing description.
+        // Fall back to whatever the marketplace already shows so a revise never
+        // blanks the live body when the item description has not been filled in.
+        $descriptionBody = is_string($item->description) && trim($item->description) !== ''
+            ? $item->description
+            : $draft->listing?->marketplaceDescriptionBody();
         $photoUrls = $this->publicPhotoUrls($draft);
         $productReference = ProductReference::query()
             ->where('company_id', $draft->company_id)
@@ -53,7 +57,7 @@ class EbayListingPayloadBuilder
             'inventory_item' => [
                 'product' => array_filter([
                     'title' => $draft->title ?? $item->title,
-                    'description' => $description instanceof Description ? $description->body : null,
+                    'description' => $descriptionBody,
                     'aspects' => $productAspects,
                     'imageUrls' => $photoUrls,
                     ...$productIdentifiers,
@@ -71,8 +75,12 @@ class EbayListingPayloadBuilder
                     ->reject(fn (ItemFitment $fitment): bool => $fitment->is_universal)
                     ->map(fn (ItemFitment $fitment): array => [
                         'compatibilityProperties' => collect($fitment->compatibility_properties ?? [])
+                            // eBay matches these names against the category's compatibility
+                            // properties metadata (Year, Make, Model, Trim, Engine). Keep the
+                            // stored casing — lowercasing them stops eBay from recognising the
+                            // fields, so the fitment silently fails to apply on the listing.
                             ->map(fn (mixed $value, mixed $name): ?array => is_string($name) && is_scalar($value) && trim((string) $value) !== ''
-                                ? ['name' => strtolower(trim($name)), 'value' => trim((string) $value)]
+                                ? ['name' => trim($name), 'value' => trim((string) $value)]
                                 : null)
                             ->filter()
                             ->values()
@@ -89,7 +97,7 @@ class EbayListingPayloadBuilder
                 'format' => 'FIXED_PRICE',
                 'availableQuantity' => max(0, $item->quantity_on_hand),
                 'categoryId' => $draft->category_id,
-                'listingDescription' => $description instanceof Description ? $description->body : null,
+                'listingDescription' => $descriptionBody,
                 'pricingSummary' => [
                     'price' => [
                         'value' => number_format(((int) $item->target_price_amount) / 100, 2, '.', ''),

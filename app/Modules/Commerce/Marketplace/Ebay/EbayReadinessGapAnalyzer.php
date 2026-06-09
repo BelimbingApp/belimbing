@@ -72,7 +72,7 @@ class EbayReadinessGapAnalyzer
     private function addItemReadinessGaps(Item $item, ?string $categoryId, array &$blockers, array &$warnings): void
     {
         if ($categoryId === null) {
-            $blockers[] = $this->gap('category', __('Map this item template to an eBay category.'), 'settings');
+            $blockers[] = $this->gap('category', __('Map this item’s template to an eBay category on the Categories tab.'), 'ebay_categories');
         }
 
         if ($item->target_price_amount === null || $item->target_price_amount <= 0) {
@@ -93,8 +93,8 @@ class EbayReadinessGapAnalyzer
             $blockers[] = $this->gap('publish_safe_photos', __('Use public HTTPS photo URLs before publishing to eBay.'), 'photos');
         }
 
-        if (! $item->descriptions->contains('is_accepted', true)) {
-            $warnings[] = $this->gap('description', __('Accept a listing description before publishing.'), 'descriptions');
+        if (blank($item->description)) {
+            $warnings[] = $this->gap('description', __('Add a listing description before publishing.'), 'item_facts');
         }
 
         if ($item->photos->count() > 0 && $item->photos->count() < 3) {

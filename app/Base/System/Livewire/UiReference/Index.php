@@ -33,6 +33,8 @@ class Index extends Component
 
     public string $countryComboboxValue = 'US';
 
+    public string $currencyComboboxValue = 'USD';
+
     public string $dateValue = '2026-04-23T10:30';
 
     public bool $checkboxValue = true;
