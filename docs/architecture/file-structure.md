@@ -10,11 +10,12 @@
 ## Overview
 
 This document defines the file structure that supports Belimbing's core principles:
+- **Pluggable Modules** - Each module is independently pluggable (nested-git checkout and/or composer package)
+- **Extension Modules** - Licensee-owned extension modules grouped under one nested-git repo
 - **Customizable Framework** - Deep extension system with hooks across the stack
 - **Git-Native Workflow** - Development → Staging → Production branches
 - **AI-Native Architecture** - AI integration points throughout
 - **Quality-Obsessed** - Deep modules with simple interfaces
-- **Extension Management** - Registry, validation, runtime safety
 
 ---
 
