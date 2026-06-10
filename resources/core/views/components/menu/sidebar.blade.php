@@ -1,4 +1,4 @@
-@props(['menuTree', 'menuItemsFlat' => [], 'pins' => []])
+@props(['menuTree', 'menuItemsFlat' => [], 'pins' => [], 'honorRail' => true])
 
 @php
     $defaultRailPinIcon = 'heroicon-o-squares-2x2';
@@ -34,6 +34,16 @@
         pins: @js($pins),
         _dragIdx: null,
         _dropIdx: null,
+
+        {{-- Rail (icon-only) is a desktop-column affordance driven by the global
+             shell store. The mobile drawer has a fixed width with room for labels,
+             so it opts out (honorRail=false) and always renders expanded. Reading
+             a scoped `rail` here (instead of $store.shell.rail directly) lets the
+             whole menu tree resolve it up the Alpine scope chain. --}}
+        honorRail: @js($honorRail),
+        get rail() {
+            return this.honorRail ? this.$store.shell.rail : false;
+        },
 
         _normalizeUrl(url) {
             try {
@@ -177,15 +187,15 @@
     {{-- Pinned section (above divider) --}}
     <template x-if="pins.length > 0">
         <div class="px-0.5 py-0.5 bg-surface-pinned rounded-sm">
-            <div x-show="!$store.shell.rail" x-cloak class="px-1 pt-0.5 pb-px">
+            <div x-show="!rail" x-cloak class="px-1 pt-0.5 pb-px">
                 <span class="text-[10px] uppercase tracking-wider text-muted font-medium select-none">{{ __('Pinned') }}</span>
             </div>
             <template x-for="(pin, idx) in pins" :key="'pinned-' + (pin.id ?? pin.url)">
                     <div
-                        :draggable="!$store.shell.rail"
-                        @dragstart="!$store.shell.rail && pinDragStart(idx, $event)"
-                        @dragover.prevent="!$store.shell.rail && pinDragOver(idx, $event)"
-                        @drop.prevent="!$store.shell.rail && pinDrop(idx)"
+                        :draggable="!rail"
+                        @dragstart="!rail && pinDragStart(idx, $event)"
+                        @dragover.prevent="!rail && pinDragOver(idx, $event)"
+                        @drop.prevent="!rail && pinDrop(idx)"
                         @dragend="pinDragEnd()"
                         :class="{
                             'opacity-40': _dragIdx === idx,
@@ -194,7 +204,7 @@
                     >
                         {{-- Rail view: icon only (using the menu item's icon) --}}
                         <a
-                            x-show="$store.shell.rail"
+                            x-show="rail"
                             x-cloak
                             :href="pin.url"
                             wire:navigate
@@ -208,10 +218,10 @@
 
                         {{-- Expanded view: drag handle + label + unpin button --}}
                         <div
-                            x-show="!$store.shell.rail"
+                            x-show="!rail"
                             x-cloak
                             class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link hover:bg-surface-subtle font-normal"
-                            :class="{ 'cursor-grab': !$store.shell.rail, 'cursor-grabbing': _dragIdx === idx }"
+                            :class="{ 'cursor-grab': !rail, 'cursor-grabbing': _dragIdx === idx }"
                         >
                             {{-- Drag grip (visible on hover) --}}
                             <span
@@ -253,7 +263,7 @@
     <div class="px-0.5 py-0.5 border-t border-border-default space-y-0">
         {{-- Expanded view --}}
         <div
-            x-show="!$store.shell.rail"
+            x-show="!rail"
             x-cloak
             class="flex items-center gap-2 w-full px-1 py-0.5 rounded-none text-sm transition text-link font-normal hover:bg-surface-subtle"
         >
@@ -292,7 +302,7 @@
 
         {{-- Rail (icon-only) view --}}
         <div
-            x-show="$store.shell.rail"
+            x-show="rail"
             x-cloak
             class="flex items-center justify-center w-full px-1 py-0.5 rounded-none text-sm transition text-link font-normal hover:bg-surface-subtle"
         >

@@ -69,7 +69,7 @@
             :style="'width: ' + sidebarWidth + 'px'"
         >
             @unless($skipShellRender)
-                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" x-bind:data-rail="$store.shell.rail" />
+                <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
             @endunless
         </div>
 
@@ -112,7 +112,9 @@
         >
             @persist('sidebar-mobile')
                 @unless($skipShellRender)
-                    <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" />
+                    {{-- Mobile drawer has a fixed width with room for labels — never
+                         the icon-only rail, even if the desktop column was collapsed. --}}
+                    <x-menu.sidebar :menuTree="$menuTree" :menuItemsFlat="$menuItemsFlat ?? []" :pins="$pins ?? []" :honorRail="false" />
                 @endunless
             @endpersist
         </div>
