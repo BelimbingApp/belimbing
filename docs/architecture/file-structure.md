@@ -3,14 +3,14 @@
 **Document Type:** Architecture Specification
 **Purpose:** Define the file and directory structure for Belimbing framework
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-05-25
+**Last Updated:** 2026-06-10
 
 ---
 
 ## Overview
 
 This document defines the file structure that supports Belimbing's core principles:
-- **Customizable Framework** - Deep extension system with hooks at every layer
+- **Customizable Framework** - Deep extension system with hooks across the stack
 - **Git-Native Workflow** - Development → Staging → Production branches
 - **AI-Native Architecture** - AI integration points throughout
 - **Quality-Obsessed** - Deep modules with simple interfaces
@@ -18,28 +18,42 @@ This document defines the file structure that supports Belimbing's core principl
 
 ---
 
-## Directory Layer Convention
+## Directory Structure
 
-BLB uses a layered directory naming convention to define architectural boundaries within `app/`. Layers are numbered from the root, and labeling stops at the **Module** boundary—everything within a module is considered module internals. For non-Core domains, module internals include module-owned Blade views.
+The main repo hosts Belimbing's required core. Pluggable capability uses two distribution shapes: each non-Core domain module on its own, or licensee modules grouped under one nested-git repo.
 
-### Layer Hierarchy
+**Required — main repo**
 
+```text
+app/Base/{Module}/...                        # Framework infrastructure (shallow)
+app/Modules/Core/{Module}/...                # Application Core — integrated business foundations
 ```
-app/Base/{Module}/...                        # Framework infrastructure modules (shallow)
-app/Modules/{Domain}/{Module}/...            # Application modules grouped by domain
+
+**Pluggable — one module at a time**
+
+```text
+app/Modules/{Domain}/{Module}/...            # Commerce, Operation, People, … — each module is independently pluggable (nested-git checkout and/or composer package)
 ```
 
-**Key Principle:** Stop labeling at the Module boundary. Subdirectories within a module are implementation details, not architectural layers. In pluggable domains, a module is a full-stack ownership unit.
+**Extension — licensee nested-git repo**
+
+```text
+extensions/{licensee}/{Module}/...           # `{licensee}` is one nested-git repository; modules inside it version together under that licensee
+```
+
+The **Module** directory is the full-stack ownership boundary: code, database artifacts, config, routes, tests, and any module-owned views or assets below that directory are module internals.
 
 ### Term Definitions
-
 | Term | Meaning | Examples |
 |------|---------|----------|
-| **`app/Base/`** | Framework-owned infrastructure. Shallow — no domain grouping. | `Database`, `AI`, `Cache`, `Queue` |
+| **`app/Base/`** | Required framework-owned infrastructure. Shallow — no domain grouping. Not pluggable. | `Database`, `AI`, `Cache`, `Queue` |
 | **`app/Modules/`** | Application-owned code, grouped by domain. | (the directory itself) |
-| **Domain** | A business domain under `app/Modules`. It groups modules by business area. | `Core`, `Commerce`, `Operation`, `People` |
+| **`app/Modules/Core/`** | Required application Core — integrated business foundations that ship with Belimbing. Not pluggable. Shared shell UI may still live in `resources/core`. | `Company`, `User`, `Geonames`, `Employee`, `Workflow` |
+| **Domain** | A business domain under `app/Modules`. It groups modules by business area. `Core` is required in the main repo; modules in other domains are individually pluggable. | `Core`, `Commerce`, `Operation`, `People` |
+| **Licensee repo** | A nested-git checkout at `extensions/{licensee}/`. It owns one or more extension modules under that path. | `extensions/sb-group/`, `extensions/ham/` |
+| **Extension module** | A module inside a licensee repo. It mirrors the internal module structure so code, views, config, and tests stay colocated. | `extensions/sb-group/QAC`, `extensions/ham/auto-parts` |
 | **Module** | The ownership boundary for a cohesive capability. Labeling stops here; everything below the module directory is module internals. | `Database`, `AI`, `Geonames`, `Inventory`, `IT`, `Attendance` |
-| **Entity** | A domain object or relation owned by a module. Entities appear in models, tables, routes, UI features, factories, and seeders, but they are not architectural layers. | `Country`, `Part`, `Ticket`, `Role` |
+| **Entity** | A domain object or relation owned by a module. Entities appear in models, tables, routes, UI features, factories, and seeders, but they are not ownership boundaries. | `Country`, `Part`, `Ticket`, `Role` |
 
 > **Note on "domain":** used here in the general business-area sense, not in the strict Domain-Driven Design sense. Modules within a domain are cohesive capabilities, not formally enforced bounded contexts. Where the DDD mapping helps: Domain ≈ DDD *subdomain*; Module ≈ DDD *bounded context*.
 
@@ -47,11 +61,12 @@ app/Modules/{Domain}/{Module}/...            # Application modules grouped by do
 
 | Path | Shape | Notes |
 |------|-------|-------|
-| `app/Base/Database` | `Base/Module` | Base module; no domain |
-| `app/Base/AI` | `Base/Module` | Base module; no domain |
-| `app/Modules/Core/Geonames` | `Modules/Domain/Module` | Core domain module |
-| `app/Modules/Commerce/Inventory` | `Modules/Domain/Module` | Commerce domain module |
-| `app/Modules/People/Attendance` | `Modules/Domain/Module` | People domain module |
+| `app/Base/Database` | `Base/Module` | Required Base module; no domain |
+| `app/Base/AI` | `Base/Module` | Required Base module; no domain |
+| `app/Modules/Core/Geonames` | `Modules/Core/Module` | Required Core module |
+| `app/Modules/Commerce/Inventory` | `Modules/Domain/Module` | Pluggable domain module (nested-git and/or composer) |
+| `app/Modules/People/Attendance` | `Modules/Domain/Module` | Pluggable domain module (nested-git and/or composer) |
+| `extensions/sb-group/QAC` | `extensions/licensee/Module` | Extension module inside licensee nested-git repo |
 
 ### Module directory and config file naming
 
@@ -90,10 +105,10 @@ belimbing/
 │   ├── schemas/            # Schema definitions (for extensions)
 │   └── scripts/            # Database scripts (config updates, etc.)
 │
-├── extensions/             # Extension packages: {owner}/{module}
-│   └── sb-group/           # Example private nested repo owner
-│       ├── qac/            # Extension module
-│       └── ibp/            # Extension module
+├── extensions/             # Extension packages: {licensee}/{Module}
+│   └── sb-group/           # Example private nested repo licensee
+│       ├── QAC/            # Extension module
+│       └── IBP/            # Extension module
 │
 ├── resources/               # Framework frontend resources
 │   ├── core/               # Framework CSS, JS, Blade views
@@ -143,13 +158,13 @@ belimbing/
 
 ## Core Application Structure (`app/`)
 
-The `app/` directory has two roots: `Base/` for framework infrastructure and `Modules/` for application code. See [Directory Layer Convention](#directory-layer-convention) for the full hierarchy.
+The `app/` directory has two roots: `Base/` for framework infrastructure and `Modules/` for application code. See [Directory Structure](#directory-structure) for the canonical path shapes and distribution model.
 
 ### `app/Base/` - Framework Infrastructure
 
-**Layer Pattern:** `app/Base/{Module}/` — subdirectories are modules (e.g., `Database`, `Events`, `Security`).
+**Path shape:** `app/Base/{Module}/` — subdirectories are modules (e.g., `Database`, `Events`, `Security`).
 
-The Base layer provides framework infrastructure, extension points, and core abstractions. Modules here are foundational and cannot depend on `app/Modules/`.
+`app/Base/` provides framework infrastructure, extension points, and core abstractions. Modules here are foundational and cannot depend on `app/Modules/`.
 
 ```
 app/Base/
@@ -206,7 +221,7 @@ app/Base/
 
 ### `app/Modules/` - Application Modules
 
-**Layer Pattern:** `app/Modules/{Domain}/{Module}/` — domains (`Core`, `Commerce`, `Operation`, `People`) contain modules. `People` anchors HR-domain modules (Attendance, Leave, Claim, Payroll, Settings); it should not own the canonical Employee module, which lives in `Core` because employee records can belong to any company.
+**Path shape:** `app/Modules/{Domain}/{Module}/` — domains (`Core`, `Commerce`, `Operation`, `People`) contain modules. `People` anchors HR-domain modules (Attendance, Leave, Claim, Payroll, Settings); it should not own the canonical Employee module, which lives in `Core` because employee records can belong to any company.
 
 **Module naming:** use a singular PascalCase capability/domain name for new module directories (`Claim`, `Leave`, `Payroll`, `Employee`) even when the user-facing menu label or route path is plural (`Claims`, `people/claims`). Use plural module directory names only when the domain term is inherently plural or an established aggregate surface already uses it (`Settings`, the People-facing `Employees` workbench).
 
@@ -246,7 +261,7 @@ app/Modules/
 
 **Module Structure Template (for `app/Modules/{Domain}/{Module}/`):**
 
-All subdirectories within a module are **module internals** — they are not assigned layer numbers.
+All subdirectories within a module are **module internals** — they are not assigned additional ownership labels.
 
 ```
 app/Modules/{Domain}/{Module}/
@@ -282,12 +297,12 @@ tokens and JavaScript remain in `resources/core`.
 
 ## Extension Structure (`extensions/`)
 
-All extensions — licensee or third-party — follow the same two-level layout: `extensions/{owner}/{module}/`. The `{owner}` is the licensee name or vendor name.
+Extensions follow the same two-level layout: `extensions/{licensee}/{Module}/`. The `{licensee}` segment names the licensee-owned extension namespace.
 
 ```
 extensions/
 ├── {licensee}/                # Licensee-owned extensions (e.g. sb-group)
-│   ├── qac/                   # One module
+│   ├── QAC/                   # One module
 │   │   ├── Config/
 │   │   │   ├── menu.php       # Menu items (auto-discovered)
 │   │   │   ├── authz.php
@@ -304,15 +319,11 @@ extensions/
 │   │   ├── Assets/             # Optional, reviewed host build entry points only
 │   │   ├── Tests/
 │   │   └── ServiceProvider.php
-│   └── ibp/                   # Another module (scales to many)
+│   └── IBP/                   # Another module (scales to many)
 │       └── ...
-│
-└── {vendor}/                  # Third-party vendor extensions (same structure)
-    └── {module}/
-        └── [same structure]
 ```
 
-This layout matches the menu discovery glob (`extensions/*/*/Config/menu.php`) and mirrors BLB's internal module structure. Extension modules include only the internals they need. Module-owned views live under `extensions/{owner}/{module}/Views/` and are registered by the module provider; do not create a companion `resources/extensions` tree.
+This layout matches the menu discovery glob (`extensions/*/*/Config/menu.php`) and mirrors BLB's internal module structure. Extension modules include only the internals they need. Module-owned views live under `extensions/{licensee}/{Module}/Views/` and are registered by the module provider; do not create a companion `resources/extensions` tree.
 
 For nested private repository workflow, see
 `docs/guides/extensions/private-extension-repositories.md`.
@@ -428,7 +439,7 @@ tests/
 
 ## Framework Frontend Structure (`resources/`)
 
-Resources under `resources/core/` are framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for pluggable domains do not belong here; they live under `app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/`.
+Resources under `resources/core/` are framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for pluggable domains do not belong here; they live under `app/Modules/{Domain}/{Module}/Views/` or `extensions/{licensee}/{Module}/Views/`.
 
 ```
 resources/core/
@@ -539,7 +550,7 @@ Hooks available at:
 
 ## Extension Development Workflow
 
-1. **Development**: Create extension in `extensions/{owner}/{module}/`
+1. **Development**: Create extension in `extensions/{licensee}/{Module}/`
 2. **Validation**: Run pre-installation validation
 3. **Testing**: Write and run tests
 4. **Installation**: Install via admin panel

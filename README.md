@@ -27,8 +27,6 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 **Workflow engine** — Status lifecycle management with configurable statuses, guarded transitions, full history tracking, and kanban column mapping. Any business module can plug into the workflow system for auditable state machines.
 
-**Layered module architecture** — Three layers: Base (framework infrastructure — AI, Authz, Workflow, Database, Settings, and 10 more), Core (governance modules — Company, User, Employee, AI, Geonames, Address, Workflow), and Business (domain modules — IT). Each layer has clear boundaries and discovery-driven registration.
-
 **Plugin and extension system** — Modular architecture with discovery-driven registration and per-module `composer.json` manifests. An admin dashboard lists installed plugins with dependency health and surfaces available extensions from the BelimbingApp catalog with copyable install commands. Extension developer guides live at `docs/guides/extensions/`.
 
 **Authorization system** — Capability-based RBAC with delegation constraints, principal types for both humans and agents, policy engine, and middleware. The same system that governs human users governs AI agents — no separate permission model.
