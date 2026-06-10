@@ -96,13 +96,7 @@ abstract class SettingsForm extends Component
             );
 
             if ($field['type'] === 'password') {
-                $fieldScope = $this->scopeForField($field, $scope);
-
-                $this->values[$formKey] = $settings->has($key, $fieldScope)
-                    ? ($this->shouldHydrateEncryptedValue($field)
-                        ? (string) $value
-                        : $this->savedSecretMask($field))
-                    : '';
+                $this->values[$formKey] = $this->passwordFieldDisplayValue($settings, $field, $scope, $value);
             }
 
             $this->resetValidation('values.'.$formKey);
@@ -153,6 +147,24 @@ abstract class SettingsForm extends Component
         }
 
         return (bool) ($field['show_reveal_button'] ?? false);
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function passwordFieldDisplayValue(SettingsService $settings, array $field, Scope $scope, mixed $value): string
+    {
+        $fieldScope = $this->scopeForField($field, $scope);
+
+        if (! $settings->has($field['key'], $fieldScope)) {
+            return '';
+        }
+
+        if ($this->shouldHydrateEncryptedValue($field)) {
+            return (string) $value;
+        }
+
+        return $this->savedSecretMask($field);
     }
 
     public function render(): View
