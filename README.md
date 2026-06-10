@@ -37,15 +37,28 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 ### Prerequisites
 
-- Linux (Ubuntu 22.04+, Debian 12+) or WSL2
+- Linux, MacOS, or Windows
 - 2 GB RAM, 10 GB disk, internet connection
 
 ### Quick Install
 
+Setup will take about an hour.
+
+The easiest way to get started is with an AI Agent prompt:
+```text
+Clone https://github.com/BelimbingApp/belimbing.git into a directory called belimbing.
+Run ./scripts/setup.sh or ps1 to install the dependencies and configure the environment.
+```
+
+Manual installation:
 ```bash
 git clone https://github.com/BelimbingApp/belimbing.git
 cd belimbing
+# The setup script is idempotent, so you can run it multiple times.
+# Linux or MacOS:
 ./scripts/setup.sh
+# Windows:
+./scripts/setup.ps1
 ```
 
 ## Documentation
