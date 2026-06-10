@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\System\Livewire\UiReference;
 
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -29,6 +30,10 @@ class Index extends Component
     public string $comboboxValue = 'review';
 
     public string $editableComboboxValue = 'Custom label';
+
+    public string $countryComboboxValue = 'US';
+
+    public string $currencyComboboxValue = 'USD';
 
     public string $dateValue = '2026-04-23T10:30';
 

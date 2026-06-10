@@ -4,7 +4,6 @@ namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
 use App\Modules\Commerce\Catalog\Models\Category;
-use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Database\Factories\ItemFactory;
 use App\Modules\Commerce\Marketplace\Models\Listing;
@@ -26,6 +25,7 @@ use Illuminate\Support\Carbon;
  * @property string $sku
  * @property string $status
  * @property string $title
+ * @property string|null $description
  * @property int $quantity_on_hand
  * @property string|null $storage_location
  * @property string|null $notes
@@ -40,7 +40,6 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ItemPhoto> $photos
  * @property-read Collection<int, ItemFitment> $fitments
  * @property-read Collection<int, AttributeValue> $catalogAttributeValues
- * @property-read Collection<int, Description> $descriptions
  * @property-read Collection<int, Listing> $marketplaceListings
  */
 class Item extends Model
@@ -69,6 +68,7 @@ class Item extends Model
         'sku',
         'status',
         'title',
+        'description',
         'quantity_on_hand',
         'storage_location',
         'notes',
@@ -139,14 +139,6 @@ class Item extends Model
     public function catalogAttributeValues(): HasMany
     {
         return $this->hasMany(AttributeValue::class, 'item_id');
-    }
-
-    /**
-     * @return HasMany<Description, $this>
-     */
-    public function descriptions(): HasMany
-    {
-        return $this->hasMany(Description::class, 'item_id')->orderByDesc('version');
     }
 
     /**

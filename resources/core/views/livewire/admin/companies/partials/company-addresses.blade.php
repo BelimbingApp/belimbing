@@ -220,11 +220,10 @@
                 <x-ui.input id="company-address-line3" wire:model="line3" label="{{ __('Address Line 3') }}" type="text" placeholder="{{ __('Additional detail (optional)') }}" :error="$errors->first('line3')" />
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <x-ui.combobox
+                    <x-ui.country-combobox
+                        id="company-address-country-iso"
                         wire:model.live="countryIso"
-                        label="{{ __('Country') }}"
-                        placeholder="{{ __('Search country...') }}"
-                        :options="$countries->map(fn($c) => ['value' => $c->iso, 'label' => $c->country])->all()"
+                        :label="__('Country')"
                         :error="$errors->first('countryIso')"
                     />
 

@@ -23,6 +23,7 @@ class EbayMarketplaceChannelProvider implements MarketplaceChannelProvider
             ],
             routes: [
                 'index' => 'commerce.marketplace.ebay.index',
+                'settings' => 'commerce.marketplace.ebay.settings',
                 'oauth_callback' => 'commerce.marketplace.ebay.oauth.callback',
             ],
             settingsGroup: 'marketplace_ebay',

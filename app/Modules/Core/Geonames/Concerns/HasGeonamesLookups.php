@@ -1,32 +1,28 @@
 <?php
-namespace App\Modules\Core\Address\Concerns;
+
+namespace App\Modules\Core\Geonames\Concerns;
 
 use App\Modules\Core\Geonames\Jobs\ImportPostcodes;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\City;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\Geonames\Models\Postcode;
+use Illuminate\Support\Str;
 
-trait HasAddressGeoLookups
+/**
+ * Shared GeoNames lookups for country / state / postcode / city pickers.
+ *
+ * This is generic geo-data access (it only touches the GeoNames models), so it
+ * lives in the GeoNames module and is reused across domains — address forms,
+ * company profiles, and marketplace seller locations all consume it. Kept as a
+ * trait because the consumers are Livewire components and `__invoke`
+ * controllers that cannot constructor-inject a service cleanly.
+ */
+trait HasGeonamesLookups
 {
     private const POSTCODE_SEARCH_LIMIT = 10;
 
     private const CITY_SEARCH_LIMIT = 15;
-
-    /**
-     * Load country options for combobox (ISO + name).
-     *
-     * @return array<int, array{value: string, label: string}>
-     */
-    public function loadCountryOptionsForCombobox(): array
-    {
-        return Country::query()
-            ->orderBy('country')
-            ->get(['iso', 'country'])
-            ->map(fn ($c) => ['value' => $c->iso, 'label' => $c->country])
-            ->values()
-            ->all();
-    }
 
     /**
      * Search countries by name for the combobox (server-side, JSON-API friendly).
@@ -62,12 +58,16 @@ trait HasAddressGeoLookups
     /**
      * Load admin1 (state/province) options for a country.
      *
-     * Returns an array suitable for the x-ui.combobox component.
+     * Returns an array suitable for the x-ui.combobox component. By default the
+     * option value is the full GeoNames admin1 code (e.g. "US.CA"), which is
+     * what address records store. Pass $subdivisionCode to get just the
+     * subdivision part (e.g. "CA") for systems that want the bare state code,
+     * such as eBay's `stateOrProvince` field.
      *
      * @param  string  $countryIso  Two-letter ISO country code
      * @return array<int, array{value: string, label: string}>
      */
-    public function loadAdmin1ForCountry(string $countryIso): array
+    public function loadAdmin1ForCountry(string $countryIso, bool $subdivisionCode = false): array
     {
         $iso = strtoupper($countryIso);
 
@@ -75,7 +75,10 @@ trait HasAddressGeoLookups
             ->forCountry($iso)
             ->orderBy('name')
             ->get(['code', 'name'])
-            ->map(fn (Admin1 $a) => ['value' => $a->code, 'label' => $a->name])
+            ->map(fn (Admin1 $a) => [
+                'value' => $subdivisionCode ? Str::afterLast((string) $a->code, '.') : $a->code,
+                'label' => $a->name,
+            ])
             ->values()
             ->all();
 
@@ -92,15 +95,16 @@ trait HasAddressGeoLookups
             ->distinct()
             ->orderBy('admin1Code')
             ->get()
-            ->map(function (Postcode $postcode) use ($iso): ?array {
-                $code = $iso.'.'.((string) $postcode->admin1Code);
+            ->map(function (Postcode $postcode) use ($iso, $subdivisionCode): ?array {
+                $rawCode = (string) $postcode->admin1Code;
+                $code = $iso.'.'.$rawCode;
                 if (! Admin1::query()->where('code', $code)->exists()) {
                     return null;
                 }
 
                 return [
-                    'value' => $code,
-                    'label' => (string) $postcode->admin1Code,
+                    'value' => $subdivisionCode ? $rawCode : $code,
+                    'label' => $rawCode,
                 ];
             })
             ->filter()

@@ -8,8 +8,21 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 <div>
     <x-slot name="title">{{ __('eBay Marketplace') }}</x-slot>
 
+    @php
+        // One eBay account; auto parts list under eBay Motors. Show a friendly name, not the raw enum.
+        $marketplaceLabel = match ($config['marketplace_id']) {
+            'EBAY_US' => __('United States'),
+            'EBAY_MOTORS', 'EBAY_MOTORS_US' => __('eBay Motors'),
+            default => $config['marketplace_id'],
+        };
+        $ebayTabs = [
+            ['id' => 'listings', 'label' => __('Listings').' ('.$stats['totalListings'].')', 'icon' => 'heroicon-o-tag'],
+            ['id' => 'unlisted', 'label' => __('Ready to list').' ('.$stats['unlistedItems'].')', 'icon' => 'heroicon-o-plus-circle'],
+        ];
+    @endphp
+
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('eBay Marketplace')" :subtitle="__('Official Sell API connection, listing/order sync, and reconciliation against Commerce inventory.')">
+        <x-ui.page-header :title="__('eBay Marketplace')" :subtitle="__('Sync your eBay store into Belimbing, then list inventory and keep it in step.')">
             <x-slot name="actions">
                 <x-ui.button variant="ghost" as="a" href="{{ route('commerce.marketplace.ebay.settings') }}" wire:navigate>
                     <x-icon name="heroicon-o-cog-6-tooth" class="h-4 w-4" />
@@ -26,10 +39,10 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
             <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
         @endif
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-4">
-            <x-ui.card>
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Connection') }}</h2>
+        {{-- Connection + sync: one status line, the sync actions, and what they do. --}}
+        <x-ui.card>
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-2 text-sm">
                     @if ($token)
                         <x-ui.badge variant="{{ $token->isExpired() ? 'warning' : 'success' }}">
                             {{ $token->isExpired() ? __('Refresh needed') : __('Connected') }}
@@ -37,332 +50,83 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                     @else
                         <x-ui.badge>{{ __('Not connected') }}</x-ui.badge>
                     @endif
+                    <span class="text-muted">{{ __('eBay') }} · <span class="font-medium text-ink">{{ $marketplaceLabel }}</span></span>
                 </div>
 
-                <dl class="space-y-3">
-                    <div>
-                        <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Environment') }}</dt>
-                        <dd class="mt-1 text-sm text-ink">{{ __(Illuminate\Support\Str::headline($config['environment'])) }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Marketplace') }}</dt>
-                        <dd class="mt-1 font-mono text-sm text-ink">{{ $config['marketplace_id'] }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[11px] font-semibold text-muted uppercase tracking-wider">{{ __('Token expiry') }}</dt>
-                        <dd class="mt-1 text-sm text-ink">{{ $token?->expires_at?->diffForHumans() ?? __('No token') }}</dd>
-                    </div>
-                </dl>
+                <div class="flex flex-wrap items-center gap-2">
+                    @if ($token)
+                        <x-ui.button type="button" variant="outline" wire:click="pullFromEbay" wire:loading.attr="disabled" wire:target="pullFromEbay">
+                            <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="pullFromEbay">{{ __('Pull from eBay') }}</span>
+                            <span wire:loading wire:target="pullFromEbay">{{ __('Pulling…') }}</span>
+                        </x-ui.button>
 
-                @unless ($token)
-                    <div class="mt-5 rounded-lg border border-border-default bg-surface-subtle/70 p-3 text-sm text-muted">
-                        {{ __('Set up the eBay connection in') }}
-                        <a href="{{ route('commerce.marketplace.ebay.settings') }}" class="font-medium text-accent hover:underline" wire:navigate>
-                            {{ __('eBay settings') }}</a>{{ __(', then return here to pull listings and orders.') }}
-                    </div>
-                @endunless
-
-                <div class="mt-5 flex flex-wrap gap-2">
-                    <x-ui.button type="button" variant="outline" wire:click="pullListings" wire:loading.attr="disabled">
-                        <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                        {{ __('Pull Listings') }}
-                    </x-ui.button>
-                    <x-ui.button type="button" variant="outline" wire:click="pullOrders" wire:loading.attr="disabled">
-                        <x-icon name="heroicon-o-shopping-bag" class="h-4 w-4" />
-                        {{ __('Pull Orders') }}
-                    </x-ui.button>
+                        <x-ui.button type="button" variant="ghost" wire:click="openImportModal" title="{{ __('Pick from your eBay store — including listings the normal pull cannot see') }}">
+                            <x-icon name="mdi-import" class="h-4 w-4" />
+                            {{ __('Import existing listings') }}
+                        </x-ui.button>
+                    @else
+                        <x-ui.button variant="primary" as="a" href="{{ route('commerce.marketplace.ebay.settings') }}" wire:navigate>
+                            <x-icon name="heroicon-o-cog-6-tooth" class="h-4 w-4" />
+                            {{ __('Set up connection') }}
+                        </x-ui.button>
+                    @endif
                 </div>
+            </div>
 
-                @if($recentExchanges->isNotEmpty())
-                    <div class="mt-5 border-t border-border-default pt-4">
-                        <div class="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Recent Exchanges') }}</div>
-                        <div class="space-y-1.5">
-                            @foreach($recentExchanges as $exchange)
-                                <a href="{{ route('admin.integration.outbound-exchanges.show', $exchange) }}" class="flex items-center justify-between gap-3 text-xs text-accent hover:underline" wire:navigate>
-                                    <span class="truncate">{{ $exchange->operation }}</span>
-                                    <span class="font-mono">{{ $exchange->response_status ?? $exchange->outcome }}</span>
-                                </a>
-                            @endforeach
-                        </div>
-                    </div>
+            <p class="mt-3 text-xs text-muted">
+                @if ($token)
+                    {{ __('eBay is the remote, Belimbing your working copy. Pull from eBay brings your live listings and recent sales in — changed listings are flagged, never overwritten. Sending changes the other way (push) happens per item when you list or update.') }}
+                @else
+                    {{ __('Connect your eBay store in Settings, then pull your listings and orders here.') }}
                 @endif
-            </x-ui.card>
-
-            <x-ui.card class="xl:col-span-3">
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Synced') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['totalListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Linked') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['linkedListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Unlinked') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['unlinkedListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Externally Changed') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['externallyChangedListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Ready to Adopt') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['readyToAdoptListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Fitment') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingFitmentListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Conflicting IDs') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['conflictingIdentifierListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Relist Required') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['legacyRelistRequiredListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Missing Identifiers') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['missingIdentifierListings'] }}</div>
-                    </div>
-                    <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Not Listed') }}</div>
-                        <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $stats['unlistedItems'] }}</div>
-                    </div>
-                </div>
-            </x-ui.card>
-        </div>
-
-        <x-ui.card>
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Store Progress') }}</h2>
-                <x-ui.badge>{{ $stats['linkedListings'] }}</x-ui.badge>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
-                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Improved') }}</div>
-                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['improved'] }}</div>
-                </div>
-                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Unchanged') }}</div>
-                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['unchanged'] }}</div>
-                </div>
-                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Regressed') }}</div>
-                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['regressed'] }}</div>
-                </div>
-                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Strong') }}</div>
-                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['strong'] }}</div>
-                </div>
-                <div class="rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3">
-                    <div class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Needs Work') }}</div>
-                    <div class="mt-1 text-2xl font-semibold text-ink tabular-nums">{{ $qualitySummary['needs_work'] }}</div>
-                </div>
-            </div>
+            </p>
         </x-ui.card>
 
-        <x-ui.card>
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Cleanup Queue') }}</h2>
-                <x-ui.badge>{{ $cleanupQueue->count() }}</x-ui.badge>
-            </div>
-
-            <x-ui.table container="flush" :caption="__('Cleanup queue')">
-
-
-                <x-slot name="head">
-                        <tr>
-                            <x-ui.th>{{ __('Priority') }}</x-ui.th>
-                            <x-ui.th>{{ __('Listing / Item') }}</x-ui.th>
-                            <x-ui.th>{{ __('Import Audit') }}</x-ui.th>
-                            <x-ui.th>{{ __('Quality') }}</x-ui.th>
-                            <x-ui.th>{{ __('Recommendations') }}</x-ui.th>
-                            <x-ui.th>{{ __('Performance') }}</x-ui.th>
-                        </tr>
-                    </x-slot>
-
-                        @forelse ($cleanupQueue as $row)
-                            @php($listing = $row['listing'])
-                            <tr>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    <div class="flex flex-col gap-2">
-                                        <x-ui.badge :variant="$row['state_variant']">{{ $row['state_label'] }}</x-ui.badge>
-                                        <div class="font-mono text-xs text-muted">{{ __('Impact :score', ['score' => $row['impact_score']]) }}</div>
-                                    </div>
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    <div class="font-mono text-xs text-muted">{{ $listing->external_sku ?? __('No SKU') }}</div>
-                                    <div class="mt-1 text-sm font-medium text-ink">{{ $listing->title ?? $listing->external_listing_id }}</div>
-                                    @if ($listing->item)
-                                        <a href="{{ route('commerce.inventory.items.show', $listing->item) }}" class="mt-1 inline-block font-mono text-xs text-accent hover:underline" wire:navigate>
-                                            {{ $listing->item->sku }}
-                                        </a>
-                                    @endif
-                                    @if ($row['issues'] !== [])
-                                        <div class="mt-2 space-y-1">
-                                            @foreach ($row['issues'] as $issue)
-                                                <div class="text-xs text-muted">{{ $issue }}</div>
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    <div class="flex flex-wrap gap-2">
-                                        @foreach ($row['import_audit'] as $audit)
-                                            <x-ui.badge :variant="$audit['variant']">
-                                                {{ $audit['label'] }}: {{ $audit['value'] }}
-                                            </x-ui.badge>
-                                        @endforeach
-                                    </div>
-                                    @if ($row['specific_alignment'] !== [])
-                                        <div class="mt-2 space-y-1">
-                                            @foreach (collect($row['specific_alignment'])->where('status', 'conflict')->take(2) as $alignment)
-                                                <div class="text-xs text-status-danger">{{ $alignment['label'] }}: {{ $alignment['summary'] }}</div>
-                                            @endforeach
-                                        </div>
-                                    @endif
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <x-ui.badge :variant="$row['current_quality']['variant']">
-                                            {{ $row['current_quality']['label'] }}
-                                        </x-ui.badge>
-                                        <span class="font-mono text-xs text-muted">{{ __('Now :score', ['score' => $row['current_quality']['score']]) }}</span>
-                                    </div>
-                                    <div class="mt-2 text-xs text-muted">
-                                        {{ __('Imported baseline :score', ['score' => $row['baseline_quality']['score']]) }}
-                                    </div>
-                                    <div class="mt-1 text-xs {{ $row['quality_delta'] >= 0 ? 'text-status-success' : 'text-status-danger' }}">
-                                        {{ __('Delta :delta', ['delta' => $row['quality_delta'] >= 0 ? '+' . $row['quality_delta'] : $row['quality_delta']]) }}
-                                    </div>
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    @if ($row['recommendations'] !== [])
-                                        <div class="space-y-1.5">
-                                            @foreach ($row['recommendations'] as $recommendation)
-                                                <div class="text-xs text-ink">{{ $recommendation }}</div>
-                                            @endforeach
-                                        </div>
-                                    @else
-                                        <div class="text-xs text-muted">{{ __('No immediate cleanup recommendation.') }}</div>
-                                    @endif
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y align-top">
-                                    <div class="space-y-1 text-xs text-muted">
-                                        <div>{{ __('Sales: :count', ['count' => $row['performance']['sale_count']]) }}</div>
-                                        <div>{{ __('Last sold: :value', ['value' => $row['performance']['last_sold_at']?->diffForHumans() ?? __('Never')]) }}</div>
-                                        <div>{{ __('Inventory age: :days days', ['days' => $row['performance']['inventory_age_days'] ?? 0]) }}</div>
-                                        @if ($row['performance']['listed_age_days'] !== null)
-                                            <div>{{ __('Listed age: :days days', ['days' => $row['performance']['listed_age_days']]) }}</div>
-                                        @endif
-                                        @if ($row['performance']['buyer_signal_count'] > 0)
-                                            <div class="text-status-danger">{{ __('Buyer signals: :count', ['count' => $row['performance']['buyer_signal_count']]) }}</div>
-                                        @endif
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No cleanup queue rows yet.') }}</td>
-                            </tr>
-                        @endforelse
-
-
-            </x-ui.table>
-        </x-ui.card>
-
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <x-ui.card>
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Trust Signals') }}</h2>
-                    <x-ui.badge>{{ $trustSignals->count() }}</x-ui.badge>
-                </div>
-
-                <div class="space-y-3">
-                    @forelse ($trustSignals as $signal)
-                        <div class="border-b border-border-default pb-3 last:border-0 last:pb-0">
-                            <div class="flex items-center gap-2">
-                                <x-ui.badge :variant="$signal['severity']">{{ $signal['label'] }}</x-ui.badge>
-                                <span class="text-xs text-muted">{{ $signal['ordered_at']?->diffForHumans() ?? __('Unknown date') }}</span>
-                            </div>
-                            <div class="mt-2 text-sm font-medium text-ink">{{ $signal['listing_title'] }}</div>
-                            <div class="mt-1 text-xs text-muted">{{ $signal['detail'] }}</div>
-                            @if ($signal['buyer'])
-                                <div class="mt-1 text-xs text-muted">{{ __('Buyer: :buyer', ['buyer' => $signal['buyer']]) }}</div>
-                            @endif
+        <x-ui.tabs :tabs="$ebayTabs" default="listings">
+            {{-- Listings: your eBay store as Belimbing sees it. Unlinked rows still need a Belimbing item. --}}
+            <x-ui.tab id="listings">
+                <x-ui.card>
+                    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay Listings') }}</h2>
+                            <x-ui.badge>{{ $listings->total() }}</x-ui.badge>
+                            <span class="text-xs text-muted">{{ __('Mirrors your eBay active listings after a pull.') }}</span>
                         </div>
-                    @empty
-                        <div class="text-sm text-muted">{{ __('No buyer-question or return signals are currently linked to eBay listings.') }}</div>
-                    @endforelse
-                </div>
-            </x-ui.card>
-
-            <x-ui.card>
-                <div class="mb-4 flex items-center justify-between gap-3">
-                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment Reuse') }}</h2>
-                    <x-ui.badge>{{ $fitmentBatchCandidates->count() }}</x-ui.badge>
-                </div>
-
-                <div class="space-y-3">
-                    @forelse ($fitmentBatchCandidates as $candidate)
-                        <div class="border-b border-border-default pb-3 last:border-0 last:pb-0">
-                            <a href="{{ route('commerce.inventory.items.show', $candidate['target_item']) }}" class="font-mono text-sm text-accent hover:underline" wire:navigate>
-                                {{ $candidate['target_item']->sku }}
-                            </a>
-                            <div class="mt-1 text-sm text-ink">{{ $candidate['target_item']->title }}</div>
-                            <div class="mt-1 text-xs text-muted">
-                                {{ __('Copy fitment from :sku (:count entries).', ['sku' => $candidate['source_item']->sku, 'count' => $candidate['fitment_count']]) }}
+                        <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <x-ui.checkbox
+                                id="ebay-include-ended"
+                                wire:model.live="includeEnded"
+                                :label="__('Show ended')"
+                            />
+                            <div class="grid w-full gap-3 sm:grid-cols-[1fr_200px] lg:w-auto lg:grid-cols-[320px_200px]">
+                                <x-ui.search-input
+                                    wire:model.live.debounce.300ms="search"
+                                    placeholder="{{ __('Search by SKU, title, or listing ID...') }}"
+                                />
+                                <x-ui.select wire:model.live="listingFilter">
+                                    <option value="all">{{ __('All') }}</option>
+                                    <option value="linked">{{ __('Linked to inventory') }}</option>
+                                    <option value="unlinked">{{ __('Not linked yet') }}</option>
+                                </x-ui.select>
                             </div>
                         </div>
-                    @empty
-                        <div class="text-sm text-muted">{{ __('No same-template fitment reuse candidates are waiting right now.') }}</div>
-                    @endforelse
-                </div>
-            </x-ui.card>
-        </div>
+                    </div>
 
-        <x-ui.card>
-            <div class="mb-4 grid gap-3 lg:grid-cols-[1fr_220px] lg:items-end">
-                <x-ui.search-input
-                    wire:model.live.debounce.300ms="search"
-                    placeholder="{{ __('Search listings or inventory by SKU, title, listing ID, or status...') }}"
-                />
-                <x-ui.select wire:model.live="listingFilter" :label="__('Listing Filter')">
-                    <option value="all">{{ __('All Listings') }}</option>
-                    <option value="linked">{{ __('Linked Only') }}</option>
-                    <option value="unlinked">{{ __('Unlinked Only') }}</option>
-                </x-ui.select>
-            </div>
-
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Synced eBay Listings') }}</h2>
-                <x-ui.badge>{{ $listings->total() }}</x-ui.badge>
-            </div>
-
-            <x-ui.table container="flush" :caption="__('Synced eBay listings')">
-
-
-                <x-slot name="head">
-                        <tr>
-                            <x-ui.th>{{ __('Reconciliation') }}</x-ui.th>
-                            <x-ui.th>{{ __('eBay Listing') }}</x-ui.th>
-                            <x-ui.th>{{ __('Belimbing Item') }}</x-ui.th>
-                            <x-ui.th>{{ __('Status') }}</x-ui.th>
-                            <x-ui.th align="right">{{ __('Price') }}</x-ui.th>
-                            <x-ui.th>{{ __('Synced') }}</x-ui.th>
-                        </tr>
-                    </x-slot>
+                    <x-ui.table container="flush" :caption="__('Your eBay listings')">
+                        <x-slot name="head">
+                            <tr>
+                                <x-ui.th>{{ __('eBay Listing') }}</x-ui.th>
+                                <x-ui.th>{{ __('Belimbing Item') }}</x-ui.th>
+                                <x-ui.th>{{ __('Status') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Price') }}</x-ui.th>
+                                <x-ui.th>{{ __('Synced') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
+                            </tr>
+                        </x-slot>
 
                         @forelse ($listings as $listing)
                             <tr wire:key="ebay-listing-{{ $listing->id }}">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <x-ui.badge :variant="$this->reconciliationVariant($listing)">
-                                        {{ $this->reconciliationLabel($listing) }}
-                                    </x-ui.badge>
-                                </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     <div class="font-mono text-xs text-muted">{{ $listing->external_sku ?? __('No SKU') }}</div>
                                     <div class="mt-1 text-sm font-medium text-ink">
@@ -371,15 +135,12 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                                 {{ $listing->title ?? $listing->external_listing_id }}
                                             </a>
                                         @else
-                                            {{ $listing->title ?? $listing->external_offer_id ?? __('Unpublished offer') }}
+                                            {{ $listing->title ?? $listing->external_listing_id ?? $listing->external_offer_id ?? __('Unpublished offer') }}
                                         @endif
                                     </div>
                                     <div class="mt-1 text-xs text-muted">
                                         {{ $listing->external_listing_id ?? $listing->external_offer_id ?? __('No external ID') }}
                                     </div>
-                                    @if ($listing->drift_summary)
-                                        <div class="mt-1 text-xs text-status-danger">{{ $listing->drift_summary }}</div>
-                                    @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y">
                                     @if ($listing->item)
@@ -388,66 +149,73 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                         </a>
                                         <div class="mt-1 max-w-sm truncate text-xs text-muted">{{ $listing->item->title }}</div>
                                     @else
-                                        <span class="text-sm text-muted">{{ __('No linked item') }}</span>
+                                        <x-ui.badge variant="warning">{{ __('Not linked') }}</x-ui.badge>
+                                        <div class="mt-1 text-xs text-muted">{{ __('Create a Belimbing item for this listing.') }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <x-ui.badge :variant="$this->listingStatusVariant($listing->status)">
-                                            {{ __(Illuminate\Support\Str::headline($listing->status ?? 'unknown')) }}
-                                        </x-ui.badge>
-                                        <x-ui.badge :variant="$this->managementStateVariant($listing->management_state)">
-                                            {{ __(Illuminate\Support\Str::headline(str_replace('_', ' ', $listing->management_state))) }}
-                                        </x-ui.badge>
-                                        @if ($listing->item)
-                                            <x-ui.badge :variant="$this->itemStatusVariant($listing->item->status)">
-                                                {{ __(Illuminate\Support\Str::headline($listing->item->status)) }}
-                                            </x-ui.badge>
-                                        @endif
-                                    </div>
+                                    <x-ui.badge :variant="$this->listingStatusVariant($listing->status)">
+                                        {{ __(Illuminate\Support\Str::headline($listing->status ?? 'unknown')) }}
+                                    </x-ui.badge>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm text-ink tabular-nums">
-                                    <div>{{ $this->formatMoney($listing->price_amount, $listing->currency_code) }}</div>
-                                    @if ($listing->item?->target_price_amount !== null)
-                                        <div class="mt-1 text-xs text-muted">{{ __('Belimbing: :price', ['price' => $this->formatMoney($listing->item->target_price_amount, $listing->item->currency_code)]) }}</div>
-                                    @endif
+                                    {{ $this->formatMoney($listing->price_amount, $listing->currency_code) }}
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $listing->last_synced_at?->diffForHumans() ?? __('Never') }}
                                 </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                                    @if ($listing->item)
+                                        <x-ui.button type="button" size="sm" variant="outline" wire:click="openListingModal({{ $listing->id }})">
+                                            <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
+                                            {{ __('Edit & push') }}
+                                        </x-ui.button>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No eBay listings have been synced yet.') }}</td>
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                                    {{ $stats['totalListings'] === 0
+                                        ? __('No listings yet. Use “Pull from eBay” above to import your eBay store.')
+                                        : __('No listings match your search.') }}
+                                </td>
                             </tr>
                         @endforelse
+                    </x-ui.table>
 
+                    <div class="mt-4">
+                        {{ $listings->links() }}
+                    </div>
+                </x-ui.card>
+            </x-ui.tab>
 
-            </x-ui.table>
+            {{-- Ready to list: Belimbing inventory that is not on eBay yet — the next things to list. --}}
+            <x-ui.tab id="unlisted">
+                <x-ui.card>
+                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Ready to List') }}</h2>
+                            <x-ui.badge>{{ $unlistedItems->total() }}</x-ui.badge>
+                        </div>
+                        <div class="w-full sm:w-80">
+                            <x-ui.search-input
+                                wire:model.live.debounce.300ms="search"
+                                placeholder="{{ __('Search inventory by SKU, title, or status...') }}"
+                            />
+                        </div>
+                    </div>
 
-            <div class="mt-4">
-                {{ $listings->links() }}
-            </div>
-        </x-ui.card>
-
-        <x-ui.card>
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Inventory Not Listed on eBay') }}</h2>
-                <x-ui.badge>{{ $unlistedItems->total() }}</x-ui.badge>
-            </div>
-
-            <x-ui.table container="flush" :caption="__('Inventory not listed on eBay')">
-
-
-                <x-slot name="head">
-                        <tr>
-                            <x-ui.th>{{ __('SKU') }}</x-ui.th>
-                            <x-ui.th>{{ __('Item') }}</x-ui.th>
-                            <x-ui.th>{{ __('Status') }}</x-ui.th>
-                            <x-ui.th align="right">{{ __('Target Price') }}</x-ui.th>
-                            <x-ui.th>{{ __('Created') }}</x-ui.th>
-                        </tr>
-                    </x-slot>
+                    <x-ui.table container="flush" :caption="__('Inventory ready to list on eBay')">
+                        <x-slot name="head">
+                            <tr>
+                                <x-ui.th>{{ __('SKU') }}</x-ui.th>
+                                <x-ui.th>{{ __('Item') }}</x-ui.th>
+                                <x-ui.th>{{ __('Status') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Target Price') }}</x-ui.th>
+                                <x-ui.th>{{ __('Added') }}</x-ui.th>
+                            </tr>
+                        </x-slot>
 
                         @forelse ($unlistedItems as $item)
                             <tr wire:key="ebay-unlisted-item-{{ $item->id }}">
@@ -476,16 +244,104 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No active Belimbing inventory is missing from eBay.') }}</td>
+                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('Nothing waiting — all active inventory is already on eBay.') }}</td>
                             </tr>
                         @endforelse
+                    </x-ui.table>
 
+                    <div class="mt-4">
+                        {{ $unlistedItems->links() }}
+                    </div>
+                </x-ui.card>
+            </x-ui.tab>
+        </x-ui.tabs>
 
-            </x-ui.table>
+        {{-- Per-listing quick edit-and-push. Title/price are the item's canonical
+             content; quantity is inventory-driven and shown read-only. --}}
+        <x-ui.modal wire:model="showListingModal">
+            <div class="space-y-4">
+                <div>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Edit & push listing') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Update the listing content and push it to eBay. Quantity is managed by inventory and synced automatically.') }}</p>
+                </div>
 
-            <div class="mt-4">
-                {{ $unlistedItems->links() }}
+                <x-ui.input id="ebay-modal-title" wire:model="modalTitle" :label="__('Title')" :error="$errors->first('modalTitle')" />
+                <x-ui.input id="ebay-modal-price" wire:model="modalPrice" :label="__('Price')" inputmode="decimal" :error="$errors->first('modalPrice')" />
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" wire:click="closeListingModal">{{ __('Cancel') }}</x-ui.button>
+                    <x-ui.button type="button" variant="primary" wire:click="saveAndPushListing" wire:loading.attr="disabled" wire:target="saveAndPushListing">
+                        <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
+                        <span wire:loading.remove wire:target="saveAndPushListing">{{ __('Save & push to eBay') }}</span>
+                        <span wire:loading wire:target="saveAndPushListing">{{ __('Pushing…') }}</span>
+                    </x-ui.button>
+                </div>
             </div>
-        </x-ui.card>
+        </x-ui.modal>
+
+        {{-- Import existing eBay listings: read the seller's store via the Trading
+             API (GetMyeBaySelling) and pick which to bring in — including listings
+             the Inventory-API pull cannot see. --}}
+        <x-ui.modal wire:model="showImportModal">
+            <div class="space-y-4">
+                <div>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Import existing eBay listings') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Load your live eBay store and pick which listings to import — including ones created in Seller Hub that a normal pull cannot see.') }}</p>
+                </div>
+
+                @if (! $listingsLoaded)
+                    <div class="rounded-2xl border border-dashed border-border-default bg-surface-subtle p-6 text-center">
+                        <x-ui.button type="button" variant="primary" wire:click="loadSellerListings" wire:loading.attr="disabled" wire:target="loadSellerListings">
+                            <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="loadSellerListings">{{ __('Load my eBay listings') }}</span>
+                            <span wire:loading wire:target="loadSellerListings">{{ __('Loading…') }}</span>
+                        </x-ui.button>
+                    </div>
+                @elseif ($sellerListings === [])
+                    <x-ui.alert variant="info">{{ __('No active eBay listings were found for this account.') }}</x-ui.alert>
+                @else
+                    <div class="flex items-center justify-between">
+                        <button type="button" class="text-sm font-medium text-accent hover:underline" wire:click="toggleSelectAllImports">
+                            {{ count($selectedImportIds) === count($sellerListings) ? __('Clear all') : __('Select all') }}
+                        </button>
+                        <span class="text-xs text-muted">{{ trans_choice(':count selected|:count selected', count($selectedImportIds), ['count' => count($selectedImportIds)]) }}</span>
+                    </div>
+
+                    @error('selectedImportIds') <p class="text-sm text-status-danger">{{ $message }}</p> @enderror
+
+                    <div class="max-h-80 space-y-2 overflow-y-auto pr-1">
+                        @foreach ($sellerListings as $listing)
+                            <label wire:key="seller-listing-{{ $listing['item_id'] }}" class="flex cursor-pointer items-start gap-3 rounded-2xl border border-border-default bg-surface-subtle p-3 hover:bg-surface-card">
+                                <x-ui.checkbox
+                                    wire:model.live="selectedImportIds"
+                                    value="{{ $listing['item_id'] }}"
+                                    aria-label="{{ __('Select listing :id', ['id' => $listing['item_id']]) }}"
+                                />
+                                <div class="min-w-0 flex-1">
+                                    <p class="truncate text-sm font-medium text-ink">{{ $listing['title'] ?: __('Untitled listing') }}</p>
+                                    <p class="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted">
+                                        <span class="font-mono">{{ $listing['item_id'] }}</span>
+                                        @if ($listing['sku']) <span>{{ __('SKU :sku', ['sku' => $listing['sku']]) }}</span> @endif
+                                        @if ($listing['price_amount'] !== null) <span class="tabular-nums">{{ $this->formatMoney($listing['price_amount'], $listing['currency_code'] ?? 'USD') }}</span> @endif
+                                        @if ($listing['quantity'] !== null) <span class="tabular-nums">{{ __('Qty :qty', ['qty' => $listing['quantity']]) }}</span> @endif
+                                    </p>
+                                </div>
+                            </label>
+                        @endforeach
+                    </div>
+                @endif
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                    <x-ui.button type="button" variant="ghost" wire:click="closeImportModal">{{ __('Cancel') }}</x-ui.button>
+                    @if ($listingsLoaded && $sellerListings !== [])
+                        <x-ui.button type="button" variant="primary" wire:click="importSelectedListings" wire:loading.attr="disabled" wire:target="importSelectedListings" :disabled="$selectedImportIds === []">
+                            <x-icon name="mdi-import" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="importSelectedListings">{{ __('Import selected') }}</span>
+                            <span wire:loading wire:target="importSelectedListings">{{ __('Importing…') }}</span>
+                        </x-ui.button>
+                    @endif
+                </div>
+            </div>
+        </x-ui.modal>
     </div>
 </div>

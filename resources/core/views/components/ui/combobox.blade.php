@@ -60,6 +60,8 @@
             open: false,
             query: '',
             activeValue: null,
+            editingValue: null,
+            pendingClear: false,
             searchTimeout: null,
             editable: {{ $editable ? 'true' : 'false' }},
             searchMethod: {{ $searchMethod ? "'".addslashes($searchMethod)."'" : 'null' }},
@@ -116,14 +118,27 @@
             },
 
             openList() {
+                if (!this.open) {
+                    this.editingValue = this.selectedValue === null || this.selectedValue === ''
+                        ? null
+                        : String(this.selectedValue)
+                    this.pendingClear = false
+                }
+
                 this.open = true
                 if (this.searchUrl) this.fetchOptions()
                 this.activeValue = this.filtered.length ? this.filtered[0].value : null
                 this.$nextTick(() => this.scrollActive())
             },
 
-            closeList() {
-                if (this.editable) {
+            closeList(commit = true) {
+                if (!commit) {
+                    this.pendingClear = false
+                    this.selectedValue = this.editingValue
+                } else if (this.pendingClear) {
+                    this.pendingClear = false
+                    this.selectedValue = null
+                } else if (this.editable) {
                     const trimmed = this.query.trim()
                     if (trimmed) {
                         const match = this.options.find(o => o.label === trimmed || o.value === trimmed)
@@ -138,16 +153,20 @@
             },
 
             clear() {
-                this.selectedValue = null
+                this.pendingClear = true
                 this.query = ''
                 this.open = false
+                this.activeValue = null
                 this.$nextTick(() => this.$refs.input?.focus())
             },
 
             selectOpt(value, label) {
                 this.selectedValue = value
+                this.editingValue = value
+                this.pendingClear = false
                 this.query = label
                 this.open = false
+                this.activeValue = null
             },
 
             matchesFilter(label) {
@@ -192,7 +211,10 @@
                         }
                     }
                 } else if (e.key === 'Escape') {
-                    if (this.open) { e.preventDefault(); this.closeList() }
+                    if (this.open || this.pendingClear || this.query !== (this.selectedOption?.label ?? '') || this.selectedValue !== this.editingValue) {
+                        e.preventDefault()
+                        this.closeList(false)
+                    }
                 }
             },
 
@@ -203,8 +225,8 @@
                 }
             },
         }"
-        @click.outside="closeList()"
-        @focusout="setTimeout(() => { if (open && !$el.contains(document.activeElement)) closeList() }, 150)"
+        @click.outside="if (open || pendingClear) closeList()"
+        @focusout="requestAnimationFrame(() => { if ((open || pendingClear) && !$el.contains(document.activeElement)) closeList() })"
         class="relative"
     >
         <div class="relative">
@@ -249,8 +271,13 @@
         <div
             x-cloak
             x-show="open"
-            x-transition.opacity.duration.150ms
-            class="combobox-dropdown absolute z-50 mt-1 w-full rounded-2xl border border-border-input bg-surface-card shadow-sm"
+            x-transition:enter="transform-gpu transition duration-150 ease-out"
+            x-transition:enter-start="opacity-0 -translate-y-1 scale-y-95"
+            x-transition:enter-end="opacity-100 translate-y-0 scale-y-100"
+            x-transition:leave="transform-gpu transition duration-100 ease-in"
+            x-transition:leave-start="opacity-100 translate-y-0 scale-y-100"
+            x-transition:leave-end="opacity-0 -translate-y-1 scale-y-95"
+            class="combobox-dropdown absolute z-50 mt-1 w-full origin-top rounded-2xl border border-border-input bg-surface-card shadow-sm"
         >
             <ul
                 x-ref="listbox"

@@ -6,7 +6,6 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
-use App\Modules\Commerce\Catalog\Models\Description as CatalogDescription;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -49,8 +48,10 @@ test('eBay listing readiness records blockers on the durable draft', function ()
         );
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
-        ->assertSee('eBay readiness')
-        ->assertSee('Map this item template to an eBay category');
+        ->assertSee('Listing &amp; Channels', false)
+        ->assertSee('eBay')
+        ->assertSee('Blocked')
+        ->assertSee('eBay category on the Categories tab');
 });
 
 test('eBay listing readiness uses plugin template mapping defaults', function (): void {
@@ -205,10 +206,7 @@ function seedMappedEbayReadinessItem(int $companyId): Item
         'media_asset_id' => $asset->id,
         'sort_order' => 1,
     ]);
-    CatalogDescription::factory()->create([
-        'item_id' => $item->id,
-        'is_accepted' => true,
-    ]);
+    $item->update(['description' => 'Used part in good working condition.']);
 
     return $item;
 }
@@ -357,11 +355,7 @@ test('eBay listing payload builder prepares inventory offer compatibility and pu
         'target_price_amount' => 25000,
         'currency_code' => 'USD',
     ]);
-    CatalogDescription::factory()->create([
-        'item_id' => $item->id,
-        'body' => 'Used BMW rear brake caliper pair.',
-        'is_accepted' => true,
-    ]);
+    $item->update(['description' => 'Used BMW rear brake caliper pair.']);
     $asset = MediaAsset::query()->create([
         'disk' => 'local',
         'storage_key' => 'testing/caliper.jpg',
@@ -408,9 +402,9 @@ test('eBay listing payload builder prepares inventory offer compatibility and pu
         ->and($payload['inventory_item']['availability']['shipToLocationAvailability']['quantity'])->toBe(2)
         ->and($payload['inventory_item']['condition'])->toBe('Used')
         ->and($payload['compatibility']['applications'][0]['compatibilityProperties'])->toBe([
-            ['name' => 'year', 'value' => '2011'],
-            ['name' => 'make', 'value' => 'BMW'],
-            ['name' => 'model', 'value' => '135i'],
+            ['name' => 'Year', 'value' => '2011'],
+            ['name' => 'Make', 'value' => 'BMW'],
+            ['name' => 'Model', 'value' => '135i'],
         ])
         ->and($payload['offer']['pricingSummary']['price'])->toBe(['value' => '250.00', 'currency' => 'USD'])
         ->and($payload['offer']['marketplaceId'])->toBe('EBAY_US')

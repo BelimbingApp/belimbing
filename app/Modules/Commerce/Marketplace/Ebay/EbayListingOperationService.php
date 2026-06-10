@@ -308,6 +308,10 @@ class EbayListingOperationService
                     'method' => 'DELETE',
                     'path' => self::INVENTORY_ITEM_PATH.rawurlencode($sku).'/product_compatibility',
                 ],
+                // A delete of already-absent compatibility (e.g. a universal-fit item, or one
+                // that never had a compatibility list) returns 404. That is the desired end
+                // state, not a failure, so tolerate it and treat the delete as a no-op.
+                tolerateStatuses: [404],
             );
 
             return $this->operationResult('compatibility_delete', $response);
@@ -440,12 +444,14 @@ class EbayListingOperationService
     /**
      * @param  array<string, mixed>  $config
      * @param  array{operation: string, method: string, path: string, body?: array<string, mixed>, headers?: array<string, string>}  $request
+     * @param  list<int>  $tolerateStatuses  HTTP statuses to accept as success instead of throwing.
      */
     private function request(
         int $companyId,
         array $config,
         string $accessToken,
         array $request,
+        array $tolerateStatuses = [],
     ): IntegrationResponse {
         $operation = $request['operation'];
         $method = $request['method'];
@@ -470,7 +476,7 @@ class EbayListingOperationService
             ],
         ));
 
-        if ($response->failed()) {
+        if ($response->failed() && ! in_array($response->status, $tolerateStatuses, true)) {
             throw MarketplaceOperationException::requestFailed(
                 EbayConfiguration::CHANNEL,
                 $operation,
@@ -514,6 +520,7 @@ class EbayListingOperationService
         $title = $draft->title ?? $item?->title;
         $price = data_get($payload, 'offer.pricingSummary.price.value');
         $currency = data_get($payload, 'offer.pricingSummary.price.currency');
+        $webBaseUrl = rtrim((string) $this->configuration->forCompany($draft->company_id)['web_base_url'], '/');
 
         $listing = Listing::query()->updateOrCreate(
             [
@@ -533,7 +540,7 @@ class EbayListingOperationService
                 'drift_summary' => null,
                 'price_amount' => is_string($price) ? (int) round(((float) $price) * 100) : null,
                 'currency_code' => is_string($currency) ? strtoupper($currency) : null,
-                'listing_url' => $externalListingId !== null && $externalListingId !== '' ? 'https://www.ebay.com/itm/'.$externalListingId : null,
+                'listing_url' => $externalListingId !== null && $externalListingId !== '' ? $webBaseUrl.'/itm/'.$externalListingId : null,
                 'listed_at' => $publication['listed_at'],
                 'ended_at' => $publication['ended_at'],
                 'last_synced_at' => Carbon::now(),

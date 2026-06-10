@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
-use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Database\Eloquent\Collection;
 
 /** @var Settings $this */
@@ -231,6 +231,132 @@ $ebaySettingsTabs = [
 
             {{-- 2. Seller defaults: imported policies and locations --}}
             <x-ui.tab id="defaults">
+                {{-- Account setup: one-time, operator-visible eBay account preparation. --}}
+                <x-ui.card class="mb-6">
+                    <div class="space-y-6">
+                        <div class="min-w-0 space-y-2">
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Account setup') }}</h2>
+                            <p class="text-sm text-muted">
+                                {{ __('Three one-time steps eBay needs before you can list anything — do them top to bottom. Each step talks to your connected eBay account and shows the result right here. All are safe to run again.') }}
+                            </p>
+                        </div>
+
+                        @php $policiesExist = $paymentPolicies->isNotEmpty() || $returnPolicies->isNotEmpty() || $fulfillmentPolicies->isNotEmpty(); @endphp
+
+                        {{-- Step 1 — Turn on Business Policies --}}
+                        <div class="space-y-3 border-t border-line pt-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-sm font-medium text-ink">{{ __('Step 1 — Turn on Business Policies') }}</h3>
+                                @if ($businessPoliciesOptedIn === true || $policiesExist)
+                                    <x-ui.badge variant="success">{{ __('On') }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="warning">{{ __('Not set up yet') }}</x-ui.badge>
+                                @endif
+                            </div>
+                            <p class="text-xs text-muted">
+                                {{ __('"Business Policies" is an eBay setting that lets you reuse shipping, payment, and return rules across listings. It must be on before Steps 2 and 3 will work. The button switches it on at eBay (or confirms it is already on) — it creates nothing, and clicking it again does no harm.') }}
+                            </p>
+                            <div>
+                                <x-ui.button type="button" variant="primary" wire:click="optInToBusinessPolicies" wire:loading.attr="disabled" wire:target="optInToBusinessPolicies">
+                                    <x-icon name="heroicon-o-check-badge" class="h-4 w-4" />
+                                    <span wire:loading.remove wire:target="optInToBusinessPolicies">{{ ($businessPoliciesOptedIn === true || $policiesExist) ? __('Re-check Business Policies') : __('Turn on Business Policies') }}</span>
+                                    <span wire:loading wire:target="optInToBusinessPolicies">{{ __('Working…') }}</span>
+                                </x-ui.button>
+                            </div>
+                            @if (! empty($setupFeedback['optin']))
+                                <x-ui.alert :variant="$setupFeedback['optin']['variant']">{{ $setupFeedback['optin']['message'] }}</x-ui.alert>
+                            @endif
+                        </div>
+
+                        {{-- Step 2 — Shipping location --}}
+                        <div class="space-y-3 border-t border-line pt-4">
+                            <h3 class="text-sm font-medium text-ink">{{ __('Step 2 — Add a shipping location') }}</h3>
+                            <p class="text-xs text-muted">
+                                {{ __('eBay needs a warehouse address to ship from before any item can be listed. The button saves this address to your eBay account and makes it your default. You can change the address later — if you move, just edit it here and save again. (The name/key is a permanent label and can\'t be renamed.)') }}
+                            </p>
+                            @if ($inventoryLocations->isNotEmpty())
+                                <p class="text-xs text-muted">
+                                    <span class="font-medium text-ink">{{ __('Already on your eBay account:') }}</span>
+                                    @foreach ($inventoryLocations as $loc)<span class="font-mono">{{ $loc->external_id }}</span>{{ $loc->status ? ' ('.$loc->status.')' : '' }}@unless ($loop->last), @endunless @endforeach
+                                </p>
+                            @else
+                                <p class="text-xs text-muted">{{ __('No shipping location on your eBay account yet.') }}</p>
+                            @endif
+                            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                <x-ui.input id="ebay-new-location-key" wire:model="newLocationKey" :label="__('Name/key')" :help="__('A short label, e.g. warehouse')" />
+                                <x-ui.country-combobox id="ebay-new-location-country" wire:model.live="newLocationCountry" :label="__('Country')" />
+                                <x-ui.combobox
+                                    id="ebay-new-location-state"
+                                    wire:model="newLocationState"
+                                    wire:key="ebay-state-{{ $newLocationCountry }}"
+                                    :label="__('State')"
+                                    :placeholder="__('Select or type')"
+                                    :options="$newLocationStateOptions"
+                                    editable
+                                    :hint="$newLocationStateOptions === [] ? __('No states on file for this country — type it in.') : null"
+                                />
+                                <x-ui.input id="ebay-new-location-postal" wire:model="newLocationPostal" :label="__('Postal code')" />
+                                <x-ui.input id="ebay-new-location-city" wire:model="newLocationCity" :label="__('City')" />
+                            </div>
+                            <div>
+                                <x-ui.button type="button" variant="primary" wire:click="createMerchantLocation" wire:loading.attr="disabled" wire:target="createMerchantLocation">
+                                    <x-icon name="heroicon-o-map-pin" class="h-4 w-4" />
+                                    <span wire:loading.remove wire:target="createMerchantLocation">{{ __('Save location at eBay') }}</span>
+                                    <span wire:loading wire:target="createMerchantLocation">{{ __('Saving…') }}</span>
+                                </x-ui.button>
+                            </div>
+                            @if (! empty($setupFeedback['location']))
+                                <x-ui.alert :variant="$setupFeedback['location']['variant']">{{ $setupFeedback['location']['message'] }}</x-ui.alert>
+                            @endif
+                        </div>
+
+                        {{-- Step 3 — Policies --}}
+                        <div class="space-y-3 border-t border-line pt-4">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h3 class="text-sm font-medium text-ink">{{ __('Step 3 — Set up your policies') }}</h3>
+                                @if ($environment !== 'live')
+                                    <x-ui.badge variant="warning">{{ __('Sandbox') }}</x-ui.badge>
+                                @endif
+                            </div>
+
+                            @if ($policiesExist)
+                                <div class="rounded-md border border-line p-3 text-xs text-muted">
+                                    <p class="font-medium text-ink">{{ __('Policies on your eBay account:') }}</p>
+                                    <ul class="mt-1 space-y-0.5">
+                                        <li>{{ __('Payment:') }} {{ $paymentPolicies->pluck('name')->filter()->join(', ') ?: '—' }}</li>
+                                        <li>{{ __('Shipping:') }} {{ $fulfillmentPolicies->pluck('name')->filter()->join(', ') ?: '—' }}</li>
+                                        <li>{{ __('Returns:') }} {{ $returnPolicies->pluck('name')->filter()->join(', ') ?: '—' }}</li>
+                                    </ul>
+                                    <p class="mt-2">{{ __('To read or change the full rules of any policy, open eBay Seller Hub → Business Policies.') }}</p>
+                                </div>
+                            @else
+                                <p class="text-xs text-muted">{{ __('No policies on your eBay account yet.') }}</p>
+                            @endif
+
+                            @if ($environment !== 'live')
+                                <p class="text-xs text-muted">
+                                    {{ __('For testing, the button creates one of each policy you are missing — payment (buyer pays immediately), returns (30-day, item replaced, you pay return shipping), and shipping (USPS Priority flat $9.99, 2-day handling) — and selects them as your defaults below.') }}
+                                </p>
+                                <div>
+                                    <x-ui.button type="button" variant="primary" wire:click="createStarterPolicies" wire:loading.attr="disabled" wire:target="createStarterPolicies">
+                                        <x-icon name="heroicon-o-document-plus" class="h-4 w-4" />
+                                        <span wire:loading.remove wire:target="createStarterPolicies">{{ __('Create starter policies') }}</span>
+                                        <span wire:loading wire:target="createStarterPolicies">{{ __('Creating…') }}</span>
+                                    </x-ui.button>
+                                </div>
+                            @else
+                                <p class="text-xs text-muted">
+                                    {{ __('On your live account, create and edit policies in eBay Seller Hub → Business Policies, then use "Refresh from eBay" below to pull them in and choose your defaults.') }}
+                                </p>
+                            @endif
+
+                            @if (! empty($setupFeedback['policies']))
+                                <x-ui.alert :variant="$setupFeedback['policies']['variant']">{{ $setupFeedback['policies']['message'] }}</x-ui.alert>
+                            @endif
+                        </div>
+                    </div>
+                </x-ui.card>
+
                 <x-ui.card>
                     <div class="space-y-5">
                         <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

@@ -63,6 +63,49 @@ class DevInventoryItemSeeder extends DevSeeder
                 'unit_cost_amount' => 4500,
                 'target_price_amount' => 12900,
             ],
+            // Used auto-parts examples (relocated from the old listing seed). They are
+            // inventory items ready to push; real eBay listings appear only after a push
+            // or a pull, so the eBay Listings page mirrors the actual eBay store.
+            [
+                'sku' => 'DEMO-SKU-2001',
+                'status' => Item::STATUS_READY,
+                'title' => '1998 Toyota Corolla side mirror — left',
+                'notes' => 'Used OEM left side mirror. Tested, intact glass, minor housing scuffs.',
+                'unit_cost_amount' => 2500,
+                'target_price_amount' => 5500,
+            ],
+            [
+                'sku' => 'DEMO-SKU-2002',
+                'status' => Item::STATUS_READY,
+                'title' => 'Mazda RX-7 FD3S front grille',
+                'notes' => 'Used front grille for FD3S. Some age marks; mounting tabs intact.',
+                'unit_cost_amount' => 9000,
+                'target_price_amount' => 17500,
+            ],
+            [
+                'sku' => 'DEMO-SKU-2003',
+                'status' => Item::STATUS_READY,
+                'title' => 'Honda Civic EK9 OEM tail lamp',
+                'notes' => 'Genuine EK9 tail lamp, right side. No cracks, seals good.',
+                'unit_cost_amount' => 5000,
+                'target_price_amount' => 9800,
+            ],
+            [
+                'sku' => 'DEMO-SKU-2004',
+                'status' => Item::STATUS_READY,
+                'title' => 'Nissan Skyline R34 brake caliper',
+                'notes' => 'Front brake caliper, rebuilt. Bench-tested, no leaks.',
+                'unit_cost_amount' => 18000,
+                'target_price_amount' => 32000,
+            ],
+            [
+                'sku' => 'DEMO-SKU-2005',
+                'status' => Item::STATUS_DRAFT,
+                'title' => 'Suzuki Swift radiator hose set',
+                'notes' => 'Upper and lower hoses. New old stock.',
+                'unit_cost_amount' => 1800,
+                'target_price_amount' => 4200,
+            ],
         ];
     }
 }

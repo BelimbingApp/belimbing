@@ -1,12 +1,15 @@
 <?php
 
-use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Jobs\RunChatTurnJob;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Services\ChatTurnRunner;
 use App\Modules\Core\AI\Services\RunEventPublisher;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Facades\Auth;
 
 const REPLAY_TEST_SESSION = 'sess_replay_test';
 const REPLAY_TEST_RUN = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
@@ -243,5 +246,80 @@ describe('RunEventStreamController', function () {
             ->and($content)->toContain('"_stream_complete":true');
 
         expect($turn->refresh()->cancel_requested_at)->toBeNull();
+    });
+
+    it('executes a queued chat turn inline when the stream opens before a worker claims it', function () {
+        $fixture = createReplayFixture();
+        $this->actingAs($fixture['user']);
+
+        $turn = AiRun::query()->create([
+            'employee_id' => Employee::LARA_ID,
+            'source' => 'chat',
+            'execution_mode' => 'interactive',
+            'session_id' => REPLAY_TEST_SESSION,
+            'acting_for_user_id' => $fixture['user']->id,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
+        ]);
+
+        $runner = Mockery::mock(ChatTurnRunner::class);
+        $runner->shouldReceive('run')
+            ->once()
+            ->with(
+                Mockery::on(fn (AiRun $claimedTurn): bool => $claimedTurn->id === $turn->id
+                    && data_get($claimedTurn->runtime_meta, 'execution_owner') === 'stream_inline'),
+                Mockery::type('callable'),
+            )
+            ->andReturnUsing(function (AiRun $claimedTurn, callable $onEvent): void {
+                $onEvent([
+                    'event_type' => 'run.started',
+                    'run_id' => $claimedTurn->id,
+                    'seq' => 1,
+                ]);
+
+                $claimedTurn->forceFill([
+                    'status' => AiRunStatus::Succeeded,
+                    'current_phase' => RunPhase::Finalizing,
+                    'finished_at' => now(),
+                ])->save();
+            });
+        $this->app->instance(ChatTurnRunner::class, $runner);
+
+        $response = $this->get(route('ai.chat.turn.stream', [
+            'runId' => $turn->id,
+        ]));
+
+        $response->assertOk();
+
+        expect($response->streamedContent())
+            ->toContain('"event_type":"run.started"')
+            ->toContain('"_stream_complete":true')
+            ->and(data_get($turn->refresh()->runtime_meta, 'execution_owner'))->toBe('stream_inline');
+    });
+
+    it('does not execute a queued job already claimed by stream inline execution', function () {
+        $fixture = createReplayFixture();
+        Auth::login($fixture['user']);
+
+        $turn = AiRun::query()->create([
+            'employee_id' => Employee::LARA_ID,
+            'source' => 'chat',
+            'execution_mode' => 'interactive',
+            'session_id' => REPLAY_TEST_SESSION,
+            'acting_for_user_id' => $fixture['user']->id,
+            'status' => AiRunStatus::Queued,
+            'current_phase' => RunPhase::WaitingForWorker,
+            'runtime_meta' => [
+                'execution_owner' => 'stream_inline',
+                'execution_owner_claimed_at' => now()->toIso8601String(),
+            ],
+        ]);
+
+        $runner = Mockery::mock(ChatTurnRunner::class);
+        $runner->shouldNotReceive('run');
+
+        (new RunChatTurnJob($turn->id))->handle($runner);
+
+        expect($turn->refresh()->status)->toBe(AiRunStatus::Queued);
     });
 });

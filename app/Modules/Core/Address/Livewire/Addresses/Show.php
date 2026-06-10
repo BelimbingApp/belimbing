@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -270,7 +271,6 @@ class Show extends AbstractAddressForm
 
         return [
             'linkedEntities' => $entities,
-            'countryOptions' => $this->loadCountryOptionsForCombobox(),
         ];
     }
 

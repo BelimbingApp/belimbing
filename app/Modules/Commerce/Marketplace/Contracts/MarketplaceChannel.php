@@ -1,9 +1,11 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Contracts;
 
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\DTO\MarketplacePullResult;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 
 interface MarketplaceChannel
 {
@@ -27,4 +29,6 @@ interface MarketplaceChannel
      * @return array<string, mixed>
      */
     public function endListing(Listing $listing): array;
+
+    public function refreshListingDraft(Item $item): ListingDraft;
 }

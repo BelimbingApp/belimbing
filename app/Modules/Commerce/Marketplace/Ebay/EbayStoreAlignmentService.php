@@ -2,7 +2,6 @@
 
 namespace App\Modules\Commerce\Marketplace\Ebay;
 
-use App\Modules\Commerce\Catalog\Models\Description;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
@@ -54,7 +53,6 @@ class EbayStoreAlignmentService
             ->with([
                 'item.photos.mediaAsset',
                 'item.fitments',
-                'item.descriptions',
                 'item.marketplaceListings',
                 'draft',
             ])
@@ -497,12 +495,7 @@ class EbayStoreAlignmentService
             return '';
         }
 
-        /** @var Description|null $description */
-        $description = $item->descriptions
-            ->first(fn (Description $description): bool => $description->is_accepted)
-            ?? $item->descriptions->first();
-
-        return trim((string) $description?->body);
+        return trim((string) $item->description);
     }
 
     private function alignmentStatus(Collection $valueSets): string

@@ -1,13 +1,14 @@
 <?php
+
 namespace App\Modules\Core\Address\Http\Controllers;
 
-use App\Modules\Core\Address\Concerns\HasAddressGeoLookups;
+use App\Modules\Core\Geonames\Concerns\HasGeonamesLookups;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CitySearchController
 {
-    use HasAddressGeoLookups;
+    use HasGeonamesLookups;
 
     /**
      * Search cities for combobox (JSON API, no Livewire — avoids DOM morph / focus loss).
