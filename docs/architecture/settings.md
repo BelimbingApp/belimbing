@@ -282,4 +282,4 @@ Modules that want tenant-specific overrides simply call `Settings::get()` instea
 
 - **`docs/architecture/database.md`** — Migration registry (register `0100_01_13_*` prefix)
 - **`docs/architecture/authorization.md`** — AuthZ capability pattern
-- **`docs/architecture/file-structure.md`** — Base module placement conventions
+- **`docs/architecture/module-system.md`** — Base module placement conventions

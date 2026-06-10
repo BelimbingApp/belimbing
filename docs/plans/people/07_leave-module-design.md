@@ -14,7 +14,7 @@
 - `app/Modules/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` — neutral pay-input contract through which approved unpaid leave and leave-encashment payouts feed payroll
 - `app/Modules/Core/Employee/` — canonical employee identity, supervisor/reporting line, employment dates that drive entitlement accrual and approval routing
 - Malaysia Employment Act 1955 (as amended Act A1651, in force 2023-01-01) — statutory minima for annual leave, sick leave, hospitalization leave, maternity leave (98 days), paternity leave (7 days), and gazetted public holidays
-- `docs/architecture/file-structure.md` — module placement; `docs/plans/AGENTS.md` — plan conventions
+- `docs/architecture/module-system.md` — module placement; `docs/plans/AGENTS.md` — plan conventions
 **Agents:** amp/claude-haiku-4.5, copilot/gpt-5.4
 
 ## Problem Essence

@@ -3,7 +3,7 @@
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
-use App\Base\Workflow\Models\StatusHistory;
+use App\Modules\Core\AI\Contracts\AgentTaskContextContributor;
 use App\Modules\Core\AI\DTO\PromptPackage;
 use App\Modules\Core\AI\DTO\PromptSection;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
@@ -15,7 +15,6 @@ use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\Workspace\PromptPackageFactory;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceValidator;
-use App\Modules\Operation\IT\Models\Ticket;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -29,14 +28,13 @@ class AgentTaskPromptFactory
     private const GENERIC_SYSTEM_PROMPT_RELATIVE_PATH = 'Modules/Core/AI/Resources/agent-task/system_prompt.md';
 
     /**
-     * Maximum number of recent timeline entries to include in ticket context.
+     * @param  iterable<AgentTaskContextContributor>  $contextContributors  Entity context contributors tagged by owning modules
      */
-    private const MAX_TIMELINE_ENTRIES = 10;
-
     public function __construct(
         private readonly WorkspaceResolver $workspaceResolver,
         private readonly WorkspaceValidator $workspaceValidator,
         private readonly PromptPackageFactory $packageFactory,
+        private readonly iterable $contextContributors = [],
     ) {}
 
     /**
@@ -127,43 +125,17 @@ class AgentTaskPromptFactory
     {
         $sections = [];
 
-        if ($entity instanceof Ticket) {
-            $sections[] = $this->ticketSection($entity);
+        if ($entity !== null) {
+            foreach ($this->contextContributors as $contributor) {
+                if ($contributor->supports($entity)) {
+                    $sections[] = $contributor->section($entity);
+                }
+            }
         }
 
         $sections[] = $this->dispatchSection($dispatch);
 
         return $sections;
-    }
-
-    private function ticketSection(Ticket $ticket): PromptSection
-    {
-        $context = [
-            'ticket_id' => $ticket->id,
-            'title' => $ticket->title,
-            'status' => $ticket->status,
-            'priority' => $ticket->priority,
-            'category' => $ticket->category,
-            'description' => $ticket->description,
-            'reporter' => $ticket->reporter?->displayName(),
-            'assignee' => $ticket->assignee?->displayName(),
-        ];
-
-        $timeline = $this->recentTimeline($ticket);
-
-        if ($timeline !== []) {
-            $context['recent_timeline'] = $timeline;
-        }
-
-        $encoded = json_encode($context, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-
-        return new PromptSection(
-            label: 'ticket_context',
-            content: "Ticket context (JSON):\n".$encoded,
-            type: PromptSectionType::Operational,
-            order: 0,
-            source: 'agent_task_ticket_context',
-        );
     }
 
     private function dispatchSection(OperationDispatch $dispatch): PromptSection
@@ -196,28 +168,5 @@ class AgentTaskPromptFactory
         }
 
         return trim($content);
-    }
-
-    /**
-     * @return list<array{status: string, comment: string|null, comment_tag: string|null, actor_id: int, transitioned_at: string}>
-     */
-    private function recentTimeline(Ticket $ticket): array
-    {
-        return StatusHistory::query()
-            ->where('flow', 'it_ticket')
-            ->where('flow_id', $ticket->id)
-            ->orderByDesc('transitioned_at')
-            ->limit(self::MAX_TIMELINE_ENTRIES)
-            ->get()
-            ->map(fn (StatusHistory $entry): array => [
-                'status' => $entry->status,
-                'comment' => $entry->comment,
-                'comment_tag' => $entry->comment_tag,
-                'actor_id' => $entry->actor_id,
-                'transitioned_at' => $entry->transitioned_at?->toIso8601String() ?? '',
-            ])
-            ->reverse()
-            ->values()
-            ->all();
     }
 }

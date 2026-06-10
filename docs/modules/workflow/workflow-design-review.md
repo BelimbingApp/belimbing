@@ -9,7 +9,7 @@
   - `app/Base/Database/AGENTS.md`
   - `docs/architecture/database.md`
   - `docs/architecture/authorization.md`
-  - `docs/architecture/file-structure.md`
+  - `docs/architecture/module-system.md`
 
 ## Summary
 

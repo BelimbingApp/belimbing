@@ -215,4 +215,4 @@ When adding a module, choose the owner first, reserve the next `MM_DD` that pres
 ## 7. Related Documentation
 
 -   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
--   **docs/architecture/file-structure.md** — Full project directory layout.
+-   **docs/architecture/module-system.md** — Full project directory layout.

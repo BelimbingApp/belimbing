@@ -42,10 +42,10 @@ class KnowledgeNavigator
                 'keywords' => ['database', 'migration', 'seeder', 'schema'],
             ],
             [
-                'title' => 'File structure',
-                'path' => 'docs/architecture/file-structure.md',
-                'summary' => 'Module-first placement rules and framework directory conventions.',
-                'keywords' => ['file structure', 'module', 'placement', 'directory'],
+                'title' => 'Module system',
+                'path' => 'docs/architecture/module-system.md',
+                'summary' => 'Module-first placement rules, nested-git distribution, slots, and discovery contracts.',
+                'keywords' => ['file structure', 'module', 'placement', 'directory', 'nested git', 'slot', 'discovery'],
             ],
             [
                 'title' => 'Company module overview',

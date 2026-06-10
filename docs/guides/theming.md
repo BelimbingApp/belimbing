@@ -111,5 +111,5 @@ When adding or changing tokens:
 ## Related Documents
 
 - `docs/architecture/ui-layout.md` — shell and presentation architecture
-- `docs/architecture/file-structure.md` — module and extension organization
+- `docs/architecture/module-system.md` — module and extension organization
 - `docs/plans/pluggable-module-view-colocation.md` — migration plan for module-owned views

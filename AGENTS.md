@@ -39,7 +39,7 @@ Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of
 - **Throw domain exceptions** at module boundaries, not generic `RuntimeException`/`Exception`, when the failure belongs to a named subsystem.
 
 ## 5. Module-First Placement
-Verify placement against `docs/architecture/file-structure.md` before creating module assets (config, migrations, seeders, views, tests). When in doubt, stop and check first.
+Verify placement against `docs/architecture/module-system.md` before creating module assets (config, migrations, seeders, views, tests). When in doubt, stop and check first.
 
 - **Base and Core are framework-owned.** Shared application shell, reusable Blade components, and framework-wide tokens live under `resources/core`.
 - **Pluggable domains are full-stack modules.** For non-Core domains (`People`, `Commerce`, `Operation`, future `Finance`, `Sales`, `Procurement`, etc.) and `extensions/{owner}/{module}`, keep module-owned Blade views under the module root in `Views/`; do not scatter them under `resources/`.

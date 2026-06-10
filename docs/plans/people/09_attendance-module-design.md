@@ -29,7 +29,7 @@
 - `app/Modules/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` - neutral payroll-input surface for overtime earnings, attendance allowances, lateness deductions, unpaid absence deductions, and one-off time adjustments.
 - `app/Modules/People/Attendance/Events/AttendanceOvertimeApproved.php` and `app/Modules/People/Payroll/Listeners/RecordAttendanceOvertimeContribution.php` - the shipped overtime event/listener seam that replaced direct Attendance → Payroll imports.
 - `docs/architecture/database.md` - reserves migration prefix `0320_01_15_*` for People Attendance with dependencies on Company, Employee, User, Settings, Payroll, and Workflow.
-- `docs/architecture/file-structure.md` - module placement and singular PascalCase module directory convention.
+- `docs/architecture/module-system.md` - module placement and singular PascalCase module directory convention.
 - `docs/plans/AGENTS.md` - plan conventions.
 **Agents:** codex/gpt-5, amp/gpt-5.5-medium
 

@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Foundation\Providers;
 
 use App\Base\Support\AppPath;
+use App\Base\Support\Str;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 
@@ -105,14 +107,7 @@ class ProviderRegistry
         $relativePath = str_replace($basePath, '', self::normalizePathSeparators($path));
 
         $segments = explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath));
-        $classSegments = array_map(
-            static fn (string $segment): string => str_replace(
-                ' ',
-                '',
-                ucwords(str_replace('-', ' ', $segment))
-            ),
-            $segments
-        );
+        $classSegments = array_map(Str::kebabToPascal(...), $segments);
 
         return 'Extensions\\'.implode('\\', $classSegments);
     }

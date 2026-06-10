@@ -22,6 +22,7 @@ use App\Modules\Core\AI\Console\Commands\PricingSnapshotRefreshCommand;
 use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
+use App\Modules\Core\AI\Contracts\AgentTaskContextContributor;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -113,7 +114,6 @@ use App\Modules\Core\AI\Tools\ReadTool;
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
 use App\Modules\Core\AI\Tools\SearchTool;
 use App\Modules\Core\AI\Tools\SystemInfoTool;
-use App\Modules\Core\AI\Tools\TicketUpdateTool;
 use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
@@ -165,7 +165,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(MemoryCompactor::class);
         $this->app->singleton(MemoryHealthService::class);
         $this->app->singleton(LaraPromptFactory::class);
-        $this->app->singleton(AgentTaskPromptFactory::class);
+        $this->app->singleton(AgentTaskPromptFactory::class, fn (Application $app): AgentTaskPromptFactory => new AgentTaskPromptFactory(
+            $app->make(WorkspaceResolver::class),
+            $app->make(WorkspaceValidator::class),
+            $app->make(PromptPackageFactory::class),
+            $app->tagged(AgentTaskContextContributor::CONTAINER_TAG),
+        ));
         $this->app->singleton(AgentExecutionContext::class);
         $this->app->scoped(RuntimeSessionContext::class);
 
@@ -369,11 +374,16 @@ class ServiceProvider extends BaseServiceProvider
             $app->make(ScheduleTaskTool::class),
             $app->make(SearchTool::class),
             new SystemInfoTool,
-            $app->make(TicketUpdateTool::class),
             $app->make(WebFetchTool::class),
             $app->make(AgentListTool::class),
             new WriteJsTool,
         ];
+
+        // Tools owned by other modules register through the container tag so
+        // Core/AI never imports domain classes.
+        foreach ($app->tagged(Tool::CONTAINER_TAG) as $taggedTool) {
+            $always[] = $taggedTool;
+        }
 
         $memorySearchTool = MemorySearchTool::createIfAvailable();
 

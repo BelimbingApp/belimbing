@@ -58,20 +58,18 @@ point. Prefer shared `resources/core` tokens and components whenever possible.
 
 ## Parent Repository Guard
 
-Add these entries to the parent repository's local exclude file:
+The framework's committed `.gitignore` ignores everything under `extensions/`
+except the README:
 
-```bash
-cat >> .git/info/exclude <<'EOF'
-
-# Private licensee extension repositories.
-/extensions/ham/
-/extensions/sb-group/
-EOF
+```gitignore
+/extensions/*
+!/extensions/README.md
 ```
 
-Use `.git/info/exclude` rather than the committed `.gitignore` when the ignore
-is specific to one private implementation. This keeps the public framework repo
-neutral.
+Because the rule is committed, every clone is protected from day one: `git add`
+in the parent repo can never stage private extension files (only a deliberate
+`git add -f` could). The blanket pattern also keeps licensee names out of the
+public repository. No per-machine `.git/info/exclude` entries are needed.
 
 ## Create the Private Extension Repo
 
@@ -163,12 +161,6 @@ cd extensions/sb-group
 git status
 git commit -m "SBG extension change"
 git push origin main
-```
-
-Before every framework commit, verify that no private extension paths are staged:
-
-```bash
-git diff --cached --name-only | rg '^extensions/(ham|sb-group)/' && exit 1 || true
 ```
 
 ## What Belongs Where

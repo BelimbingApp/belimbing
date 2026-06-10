@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Last Updated:** 2026-05-07
-**Sources:** `docs/plans/menu-system-cleanup.md`, `docs/plans/module-layer1-operation.md`, `docs/architecture/file-structure.md`, `docs/architecture/database.md`, `docs/Base/Database/migration-registry.md`, `app/Modules/People/Config/menu.php`, `app/Modules/Core/Employee/`, `app/Modules/Operation/Quality/`, `app/Modules/Operation/IT/`, `extensions/sb-group/qac/`
+**Sources:** `docs/plans/menu-system-cleanup.md`, `docs/plans/module-layer1-operation.md`, `docs/architecture/module-system.md`, `docs/architecture/database.md`, `docs/Base/Database/migration-registry.md`, `app/Modules/People/Config/menu.php`, `app/Modules/Core/Employee/`, `app/Modules/Operation/Quality/`, `app/Modules/Operation/IT/`, `extensions/sb-group/qac/`
 **Agents:** codex/gpt-5.5-medium, claude-sonnet-4-6
 
 ## Problem Essence
@@ -66,7 +66,7 @@ Navigation and permission IDs remain menu-domain based:
 - [x] Search and record all references to `App\Modules\Core\Employee`, `app/Modules/Core/Employee`, and Employee module docs. codex/gpt-5
 - [x] Search and record all references to `App\Modules\Core\Quality`, `app/Modules/Core/Quality`, and Quality module docs. codex/gpt-5
 - [x] Confirm provider auto-discovery still discovers one-level domain anchors and two-level leaf modules after the moves. codex/gpt-5
-- [x] Confirm no code depends on `Operation` becoming plural; document that `Operation` remains the canonical domain in `docs/architecture/file-structure.md`. codex/gpt-5
+- [x] Confirm no code depends on `Operation` becoming plural; document that `Operation` remains the canonical domain in `docs/architecture/module-system.md`. codex/gpt-5
 
 ### Phase 2 — Keep Employee in Core
 
@@ -86,7 +86,7 @@ Navigation and permission IDs remain menu-domain based:
 
 ### Phase 4 — Documentation cleanup
 
-- [x] Update `docs/architecture/file-structure.md` so Employee appears under Core and People appears only as a navigation/domain anchor. codex/gpt-5
+- [x] Update `docs/architecture/module-system.md` so Employee appears under Core and People appears only as a navigation/domain anchor. codex/gpt-5
 - [x] Update database architecture and migration registry docs for Employee `0200_01_09_*` and Quality `0300_01_03_*`. codex/gpt-5
 - [x] Update `docs/modules/quality.md` and SB Group QAC docs with the Operation Quality prefix. codex/gpt-5
 - [x] Final search confirms no stale People-owned Employee references or `0200_01_25` Quality prefix remain in active docs/code. codex/gpt-5

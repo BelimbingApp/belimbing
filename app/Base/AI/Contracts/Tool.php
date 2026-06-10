@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Contracts;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -18,6 +19,12 @@ use App\Base\AI\Tools\ToolResult;
  */
 interface Tool
 {
+    /**
+     * Container tag under which modules register additional tools.
+     * The Core AI provider merges tagged tools into the always-on set.
+     */
+    public const CONTAINER_TAG = 'blb.ai.tools';
+
     /**
      * Unique tool name (used as the function name in OpenAI tool calling).
      */

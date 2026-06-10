@@ -1,12 +1,12 @@
 <?php
 
-use App\Base\Authz\Enums\PrincipalType;
-use App\Base\Authz\Models\PrincipalRole;
-use App\Base\Authz\Models\Role;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\ToolResult;
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\RelationshipType;
 use App\Modules\Core\User\Models\User;
@@ -16,7 +16,7 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
-    ->in('Feature', '../extensions/*/*/Tests/Feature');
+    ->in('Feature', '../app/Modules/*/Tests/Feature', '../app/Modules/*/*/Tests/Feature', '../extensions/*/*/Tests/Feature');
 
 /**
  * Seed configured system roles and their capabilities for feature tests.

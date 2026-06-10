@@ -383,4 +383,4 @@ return new class extends Migration {
 
 - [Database Migration Guidelines](../../../app/Base/Database/AGENTS.md) - Core migration standards
 - [Extension Configuration Overrides](./config-overrides.md) - Config management
-- [Extension Structure](../../architecture/file-structure.md) - Overall extension architecture
+- [Extension Structure](../../architecture/module-system.md) - Overall extension architecture

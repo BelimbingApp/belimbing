@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Support;
 
 final class Str
@@ -221,5 +222,20 @@ final class Str
     public static function pascalToKebab(string $value): string
     {
         return strtolower((string) preg_replace('/(?<!^)[A-Z]/', '-$0', $value));
+    }
+
+    /**
+     * Convert a kebab-case string to PascalCase.
+     *
+     * Example:
+     * - input:  'sb-group'
+     * - output: 'SbGroup'
+     *
+     * Inverse of pascalToKebab(); used to map extension directory names back
+     * to namespace segments.
+     */
+    public static function kebabToPascal(string $value): string
+    {
+        return str_replace(' ', '', ucwords(str_replace('-', ' ', $value)));
     }
 }

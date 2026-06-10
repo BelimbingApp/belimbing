@@ -7,7 +7,7 @@
 - `docs/plans/people/04_pdf-generation-strategy.md` — PDF rendering infrastructure (complete); supplies `RenderPdfJob`, `PdfRenderer`, `PdfPostProcessor`, and the artifact contract that Phases 5 and 9 consume
 - `docs/architecture/pdf-rendering.md` — renderer surface, template convention, concurrency model, escape hatches
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 i-Payroll parity benchmark
-- `docs/architecture/file-structure.md` — module placement and extension boundaries
+- `docs/architecture/module-system.md` — module placement and extension boundaries
 - KWSP/EPF employer mandatory contribution guidance — https://www.kwsp.gov.my/en/employer/responsibilities/mandatory-contribution
 - KWSP/EPF non-Malaysian employee contribution guidance — https://www.kwsp.gov.my/en/employer/responsibilities/non-malaysian-citizen-employees
 - LHDN/IRBM MTD payment guidance — https://www.hasil.gov.my/en/employers/mtd-payment/

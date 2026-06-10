@@ -6,7 +6,7 @@
 **Audience:** BLB framework team, licensee developers, future plugin contributors.
 **Last Updated:** 2026-05-25
 **Related:**
-- `docs/architecture/file-structure.md` — directory layer convention.
+- `docs/architecture/module-system.md` — directory layer convention.
 - `docs/plans/pluggable-module-view-colocation.md` — migration plan for colocating module-owned Blade views with pluggable modules.
 - `docs/guides/extensions/private-extension-repositories.md` — existing nested-git pattern.
 - `docs/tutorials/people/` — domain crash course; the People domain is the first pluggable case.
@@ -43,7 +43,7 @@ The model is what Laravel, Django, and Rails do at their best: the reference is 
 
 ## 3. Architectural Layers
 
-The layer convention from `docs/architecture/file-structure.md` stays. Plug-ability rules apply per layer.
+The layer convention from `docs/architecture/module-system.md` stays. Plug-ability rules apply per layer.
 
 | Layer | Path | Plug-ability | Distribution |
 |---|---|---|---|

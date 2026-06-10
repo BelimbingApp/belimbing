@@ -13,7 +13,7 @@
 - `app/Modules/People/Payroll/Models/PayrollInput.php` — existing neutral payroll input surface with `TYPE_REIMBURSEMENT`, `source_type`, and `source_id` for claim-to-payroll handoff.
 - `app/Modules/People/Settings/Models/PeopleReferenceEntry.php` — existing typed reference data, including organization, demographic, bank, statutory-office, medical-provider, and training-provider categories.
 - `docs/plans/people/sbg_claim_ref/` — SBG iPayroll claim setup screenshots and exports for claim category, claim type, claim group, claim entitlement, and claim client/max-limit setup.
-- `docs/architecture/file-structure.md` — module placement; `docs/plans/AGENTS.md` — plan conventions.
+- `docs/architecture/module-system.md` — module placement; `docs/plans/AGENTS.md` — plan conventions.
 **Agents:** amp/gpt-5.1-codex, amp/claude-opus-4-7, claude-code/claude-opus-4-7
 
 ## Problem Essence
