@@ -67,7 +67,7 @@ A fresh framework clone runs with Base + Core. Optional domains can be installed
 - **Disabled:** the distribution remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
 - **Uninstalled:** the distribution is removed. Persistent data is retained unless the operator explicitly chooses cleanup.
 
-This separates code composition from durable database state: removing code is not the same decision as deleting data.
+This separates code composition from durable database state: removing code is not the same decision as deleting data. Unclaimed database state — whether kept by an uninstall or left by schema drift during development — is listed and cleaned up under **Administration → System → Database → Database Residue**, which compares the database against what the code on disk claims (migration-created tables, declared settings).
 
 ---
 

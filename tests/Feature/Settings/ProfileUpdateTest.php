@@ -49,6 +49,7 @@ test('user can delete their account', function () {
 
     $response = Livewire::test(DeleteUserForm::class)
         ->set('password', 'password')
+        ->set('confirmText', DeleteUserForm::CONFIRM_PHRASE)
         ->call('deleteUser');
 
     $response
@@ -59,6 +60,19 @@ test('user can delete their account', function () {
     expect(auth()->check())->toBeFalse();
 });
 
+test('account deletion is refused without the typed acknowledgment', function () {
+    $user = User::factory()->create();
+
+    $this->actingAs($user);
+
+    Livewire::test(DeleteUserForm::class)
+        ->set('password', 'password')
+        ->call('deleteUser')
+        ->assertHasErrors('confirmText');
+
+    expect($user->fresh())->not->toBeNull();
+});
+
 test('correct password must be provided to delete account', function () {
     $user = User::factory()->create();
 
@@ -66,6 +80,7 @@ test('correct password must be provided to delete account', function () {
 
     $response = Livewire::test(DeleteUserForm::class)
         ->set('password', 'wrong-password')
+        ->set('confirmText', DeleteUserForm::CONFIRM_PHRASE)
         ->call('deleteUser');
 
     $response->assertHasErrors(['password']);

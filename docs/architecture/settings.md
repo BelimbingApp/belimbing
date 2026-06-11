@@ -179,9 +179,14 @@ app/Base/Settings/
 
 Layer: **Base** (`app/Base/Settings`) — framework infrastructure, no business logic dependency.
 
----
+### 5.1 Module Declarations (`Config/settings.php`)
 
-## 6. Caching Strategy
+Every module can ship its own `Config/settings.php`, discovered at boot from `app/Base/*/`, `app/Modules/*/*/`, and `extensions/*/*/`. Two top-level keys:
+
+- **`editable`** — groups of operator-editable fields rendered by the generic settings UI. Each field declares `key`, `label`, `type`, `scope`, validation rules, etc.
+- **`runtime`** — keys the module writes through `SettingsService` at runtime without an editable field (sync cursors, OAuth tokens, diagnostics). Entries are exact keys or `prefix.*` wildcards, e.g. `'commerce.marketplace.ebay.*'`.
+
+Both kinds count as *claims*: the Database Residue screen (`admin/system/database-residue`) flags any `base_settings` key no installed module declares. A runtime key written without a declaration will be misreported as orphaned residue — declare the namespace when introducing one.
 
 Every resolved value is cached to avoid per-request DB hits.
 

@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Settings\Models\Setting;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
@@ -190,8 +191,8 @@ class DomainInstaller
             fn (string $file): string => basename($file, '.php'),
             $migrationFiles,
         );
-        $settingKeys = DomainResidueScanner::settingKeysDeclaredIn(
-            glob($path.'/*/Config/settings.php') ?: [],
+        $settingKeys = $this->settingKeysInDatabase(
+            DomainResidueScanner::settingKeysDeclaredIn(glob($path.'/*/Config/settings.php') ?: []),
         );
 
         if (! File::deleteDirectory($path)) {
@@ -231,6 +232,25 @@ class DomainInstaller
             'dirty' => trim($status->output()) !== '',
             'unpushed' => (int) trim($unpushed->output()),
         ];
+    }
+
+    /**
+     * Expand a declaration list (exact keys and `prefix.*` wildcards) into
+     * the keys actually present in the settings table. Must run before the
+     * checkout is deleted — afterwards nothing remembers the wildcards.
+     *
+     * @param  list<string>  $declarations
+     * @return list<string>
+     */
+    private function settingKeysInDatabase(array $declarations): array
+    {
+        return Setting::query()
+            ->select('key')
+            ->distinct()
+            ->pluck('key')
+            ->filter(fn (string $key): bool => DomainResidueScanner::settingKeyIsDeclared($key, $declarations))
+            ->values()
+            ->all();
     }
 
     private function assertInstalled(string $domain): void

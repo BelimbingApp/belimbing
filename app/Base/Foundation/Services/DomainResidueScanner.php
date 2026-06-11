@@ -186,7 +186,7 @@ class DomainResidueScanner
             ->groupBy('key')
             ->orderBy('key')
             ->get()
-            ->reject(fn (Setting $row): bool => isset($declared[$row->key]))
+            ->reject(fn (Setting $row): bool => self::settingKeyIsDeclared($row->key, $declared))
             ->map(fn (Setting $row): array => [
                 'key' => $row->key,
                 'rows' => (int) $row->getAttribute('row_count'),
@@ -208,6 +208,12 @@ class DomainResidueScanner
     /**
      * Table names the given migration files create.
      *
+     * Matches `Schema::create('name', …)` plus the migration-helper
+     * convention `->create*Table('name', …)` (e.g. a trait that builds
+     * several structurally identical tables). Table-creating helpers must
+     * take the table name as a string literal, or the claim is invisible
+     * here and the table is misreported as residue.
+     *
      * @param  list<string>  $files
      * @return list<string>
      */
@@ -218,7 +224,7 @@ class DomainResidueScanner
         foreach ($files as $file) {
             $contents = (string) file_get_contents($file);
 
-            if (preg_match_all("/Schema::create\\(\\s*['\"]([A-Za-z0-9_]+)['\"]/", $contents, $matches)) {
+            if (preg_match_all("/(?:Schema::create|->create[A-Za-z0-9_]*Table)\\(\\s*['\"]([A-Za-z0-9_]+)['\"]/", $contents, $matches)) {
                 foreach ($matches[1] as $table) {
                     $tables[] = $table;
                 }
@@ -229,10 +235,16 @@ class DomainResidueScanner
     }
 
     /**
-     * Setting keys the given Config/settings.php files declare.
+     * Setting keys the given Config/settings.php files declare — both
+     * editable form fields and runtime claims.
+     *
+     * Modules write operational state (sync cursors, OAuth tokens,
+     * diagnostics) through SettingsService without an editable field.
+     * Those keys are claimed via a top-level `runtime` list in the same
+     * Config/settings.php: exact keys, or `prefix.*` wildcards.
      *
      * @param  list<string>  $files
-     * @return list<string>
+     * @return list<string> Exact keys and `prefix.*` wildcard entries
      */
     public static function settingKeysDeclaredIn(array $files): array
     {
@@ -252,9 +264,35 @@ class DomainResidueScanner
                     }
                 }
             }
+
+            foreach ((array) ($config['runtime'] ?? []) as $entry) {
+                if (is_string($entry) && $entry !== '') {
+                    $keys[] = $entry;
+                }
+            }
         }
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * Whether a settings key is covered by a declaration list.
+     *
+     * @param  list<string>  $declarations  Exact keys and `prefix.*` wildcards
+     */
+    public static function settingKeyIsDeclared(string $key, array $declarations): bool
+    {
+        foreach ($declarations as $declaration) {
+            if (str_ends_with($declaration, '.*')) {
+                if (str_starts_with($key, substr($declaration, 0, -1))) {
+                    return true;
+                }
+            } elseif ($key === $declaration) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -272,14 +310,14 @@ class DomainResidueScanner
     }
 
     /**
-     * Declared settings keys from every Config/settings.php on disk,
-     * keyed for O(1) lookup.
+     * Declared settings keys (exact and `prefix.*` wildcards) from every
+     * Config/settings.php on disk.
      *
      * Reads the files directly rather than the merged settings config:
      * the merge excludes disabled domains, but a disabled domain still
      * claims its settings — only deleting the code orphans them.
      *
-     * @return array<string, true>
+     * @return list<string>
      */
     private function declaredSettingKeys(): array
     {
@@ -289,6 +327,6 @@ class DomainResidueScanner
             glob(base_path('extensions/*/*/Config/settings.php')) ?: [],
         );
 
-        return array_fill_keys(self::settingKeysDeclaredIn($files), true);
+        return self::settingKeysDeclaredIn($files);
     }
 }

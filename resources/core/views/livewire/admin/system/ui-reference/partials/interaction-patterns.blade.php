@@ -133,4 +133,39 @@
             </div>
         </div>
     </x-ui.card>
+
+    <x-ui.card>
+        <div class="space-y-4">
+            <x-ui.catalog-section
+                :title="__('Destructive-Action Acknowledgment')"
+                component="<code>x-ui.acknowledge-input</code>"
+            >
+                {{ __('Use this pattern for permanent, irreversible actions (dropping tables, uninstalling a domain, deleting an account). The user types a phrase that states the consequence; the danger button does not exist on the page until the phrase matches and a target is selected. No browser confirm dialog on top — the typed phrase is the confirmation.') }}
+            </x-ui.catalog-section>
+
+            <div class="grid gap-3 md:grid-cols-3">
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Phrase States the Consequence') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('THIS CANNOT BE UNDONE, or a command phrase like "uninstall commerce" — never a magic word. Expose the phrase as a class constant on the Livewire component.') }}</p>
+                </div>
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Buttons Appear Only When Armed') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('Bind with wire:model.live and render the danger button only when the phrase matches and the action has selected targets. The button label states scope and permanence: "Permanently drop 2 table(s)".') }}</p>
+                </div>
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Server Re-Checks') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('The action method re-validates the phrase and adds an error on mismatch — hiding the button is UX, not security. Live examples: Database Residue, Domains uninstall, Profile delete account.') }}</p>
+                </div>
+            </div>
+
+            <div class="max-w-md rounded-2xl border border-status-danger-border bg-status-danger-subtle p-4">
+                <x-ui.acknowledge-input
+                    id="ui-ref-acknowledge-demo"
+                    :phrase="'THIS CANNOT BE UNDONE'"
+                    :label="__('Acknowledgment')"
+                    :help="__('Demo only — nothing is wired to this input.')"
+                />
+            </div>
+        </div>
+    </x-ui.card>
 </div>

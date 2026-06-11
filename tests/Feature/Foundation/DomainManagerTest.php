@@ -1,11 +1,8 @@
 <?php
 
 use App\Base\Foundation\Livewire\DomainManager;
-use App\Base\Foundation\Services\DomainResidueScanner;
 use App\Base\Foundation\Services\DomainState;
-use App\Base\Settings\Models\Setting;
 use App\Modules\Core\User\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
@@ -15,135 +12,19 @@ afterEach(function (): void {
     File::deleteDirectory(app_path('Modules/ZzManaged'));
 });
 
-function createDomainResidueFixture(): void
-{
-    // An orphan table no discovered migration claims, with one row.
-    Schema::create('zz_orphan_domain_table', function ($table): void {
-        $table->id();
-    });
-    DB::table('zz_orphan_domain_table')->insert(['id' => 1]);
-
-    // A ledger row whose migration file does not exist anywhere.
-    DB::table('migrations')->insert([
-        'migration' => '2099_01_01_000000_create_zz_orphan_domain_table',
-        'batch' => 999,
-    ]);
-
-    // A setting key no discovered Config/settings.php declares.
-    Setting::query()->create([
-        'key' => 'zz_removed_domain.option',
-        'value' => 'leftover',
-        'scope_type' => null,
-        'scope_id' => null,
-    ]);
-}
-
-it('renders the domains page with installed domains and residue for admins', function (): void {
+it('renders the domains page with installed domains and a residue pointer', function (): void {
     $this->actingAs(createAdminUser());
-
-    createDomainResidueFixture();
 
     $this->get(route('admin.system.domains.index'))
         ->assertOk()
-        ->assertSee('Database residue')
-        ->assertSee('zz_orphan_domain_table')
-        ->assertSee('2099_01_01_000000_create_zz_orphan_domain_table')
-        ->assertSee('zz_removed_domain.option');
+        ->assertSee('Installed domains')
+        ->assertSee(route('admin.system.database-residue.index'));
 });
 
 it('denies the page to users without the view capability', function (): void {
     $this->actingAs(User::factory()->create());
 
     $this->get(route('admin.system.domains.index'))->assertForbidden();
-});
-
-it('does not flag claimed tables, present migrations, or declared settings as residue', function (): void {
-    $report = app(DomainResidueScanner::class)->scan();
-
-    $orphanTables = array_column($report['orphanTables'], 'table');
-
-    // base_settings is created by a discovered Base migration; users by Core.
-    expect($orphanTables)->not->toContain('base_settings')
-        ->and($orphanTables)->not->toContain('users');
-
-    // Every ledger row in a freshly-migrated test DB has its file present.
-    expect($report['orphanLedger'])->toBe([]);
-});
-
-it('drops selected orphan tables and prunes their ledger rows after typed confirmation', function (): void {
-    $this->actingAs(createAdminUser());
-
-    createDomainResidueFixture();
-
-    Livewire::test(DomainManager::class)
-        ->set('selectedTables', ['zz_orphan_domain_table'])
-        ->set('confirmText', 'DELETE')
-        ->call('dropSelectedTables')
-        ->assertHasNoErrors();
-
-    expect(Schema::hasTable('zz_orphan_domain_table'))->toBeFalse();
-
-    Livewire::test(DomainManager::class)
-        ->set('selectedLedger', ['2099_01_01_000000_create_zz_orphan_domain_table'])
-        ->set('confirmText', 'DELETE')
-        ->call('pruneSelectedLedger')
-        ->assertHasNoErrors();
-
-    expect(
-        DB::table('migrations')->where('migration', '2099_01_01_000000_create_zz_orphan_domain_table')->exists()
-    )->toBeFalse();
-});
-
-it('deletes selected orphan settings across scopes after typed confirmation', function (): void {
-    $this->actingAs(createAdminUser());
-
-    createDomainResidueFixture();
-
-    Livewire::test(DomainManager::class)
-        ->set('selectedSettings', ['zz_removed_domain.option'])
-        ->set('confirmText', 'DELETE')
-        ->call('deleteSelectedSettings')
-        ->assertHasNoErrors();
-
-    expect(Setting::query()->where('key', 'zz_removed_domain.option')->exists())->toBeFalse();
-});
-
-it('refuses cleanup without the typed confirmation', function (): void {
-    $this->actingAs(createAdminUser());
-
-    createDomainResidueFixture();
-
-    Livewire::test(DomainManager::class)
-        ->set('selectedTables', ['zz_orphan_domain_table'])
-        ->set('confirmText', 'delete me')
-        ->call('dropSelectedTables')
-        ->assertHasErrors('confirmText');
-
-    expect(Schema::hasTable('zz_orphan_domain_table'))->toBeTrue();
-});
-
-it('never drops a claimed table even when explicitly requested', function (): void {
-    $this->actingAs(createAdminUser());
-
-    $result = app(DomainResidueScanner::class)->dropTables(['base_settings']);
-
-    expect($result['dropped'])->toBe([])
-        ->and($result['skipped'])->toBe(['base_settings'])
-        ->and(Schema::hasTable('base_settings'))->toBeTrue();
-});
-
-it('blocks cleanup actions for users without the manage capability', function (): void {
-    $this->actingAs(User::factory()->create());
-
-    createDomainResidueFixture();
-
-    Livewire::test(DomainManager::class)
-        ->set('selectedTables', ['zz_orphan_domain_table'])
-        ->set('confirmText', 'DELETE')
-        ->call('dropSelectedTables')
-        ->assertForbidden();
-
-    expect(Schema::hasTable('zz_orphan_domain_table'))->toBeTrue();
 });
 
 it('shows catalog domains without a checkout as available to install', function (): void {

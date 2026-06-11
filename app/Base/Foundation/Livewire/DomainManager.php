@@ -5,7 +5,6 @@ namespace App\Base\Foundation\Livewire;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Services\DomainInstaller;
-use App\Base\Foundation\Services\DomainResidueScanner;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -20,8 +19,8 @@ use Livewire\Component;
  * "uninstall commerce and drop all tables" also removes the domain's
  * tables, migration-ledger rows, and settings.
  *
- * The residue section cleans up database leftovers from code that was
- * removed outside this screen; its actions are armed by typing DELETE.
+ * Database state kept by an uninstall is cleaned up later on the
+ * Database Residue screen (admin/system/database-residue).
  */
 class DomainManager extends Component
 {
@@ -34,20 +33,6 @@ class DomainManager extends Component
      * GitHub-style typed confirmation for uninstall.
      */
     public string $uninstallPhrase = '';
-
-    /** @var list<string> */
-    public array $selectedTables = [];
-
-    /** @var list<string> */
-    public array $selectedLedger = [];
-
-    /** @var list<string> */
-    public array $selectedSettings = [];
-
-    /**
-     * Typed confirmation required before residue cleanup.
-     */
-    public string $confirmText = '';
 
     public function install(string $domain, DomainInstaller $installer): void
     {
@@ -124,69 +109,22 @@ class DomainManager extends Component
         $result = $installer->uninstall($domain, $dropTables);
 
         session()->flash('success', $dropTables
-            ? __(':domain uninstalled. :tables table(s) dropped, :ledger ledger row(s) pruned, :settings setting row(s) deleted.', [
+            ? __(':domain uninstalled. :tables table(s) dropped, :ledger migration record(s) removed, :settings setting row(s) deleted.', [
                 'domain' => $domain,
                 'tables' => count($result['droppedTables']),
                 'ledger' => $result['prunedLedger'],
                 'settings' => $result['deletedSettings'],
             ])
-            : __(':domain uninstalled. Its database state was kept; reinstalling adopts it again.', ['domain' => $domain]));
+            : __(':domain uninstalled. Its database state was kept; reinstalling adopts it again, or clean it up under Database Residue.', ['domain' => $domain]));
 
         $this->redirectRoute('admin.system.domains.index');
     }
 
-    public function dropSelectedTables(DomainResidueScanner $scanner): void
-    {
-        $this->authorizeManage();
-
-        if (! $this->confirmed()) {
-            return;
-        }
-
-        $result = $scanner->dropTables($this->selectedTables);
-
-        $this->reset('selectedTables', 'confirmText');
-
-        session()->flash('success', __(':n table(s) dropped.', ['n' => count($result['dropped'])])
-            .(count($result['skipped']) > 0 ? ' '.__(':n skipped (no longer orphaned).', ['n' => count($result['skipped'])]) : ''));
-    }
-
-    public function pruneSelectedLedger(DomainResidueScanner $scanner): void
-    {
-        $this->authorizeManage();
-
-        if (! $this->confirmed()) {
-            return;
-        }
-
-        $deleted = $scanner->pruneLedger($this->selectedLedger);
-
-        $this->reset('selectedLedger', 'confirmText');
-
-        session()->flash('success', __(':n migration ledger row(s) removed.', ['n' => $deleted]));
-    }
-
-    public function deleteSelectedSettings(DomainResidueScanner $scanner): void
-    {
-        $this->authorizeManage();
-
-        if (! $this->confirmed()) {
-            return;
-        }
-
-        $deleted = $scanner->deleteSettings($this->selectedSettings);
-
-        $this->reset('selectedSettings', 'confirmText');
-
-        session()->flash('success', __(':n setting row(s) deleted.', ['n' => $deleted]));
-    }
-
-    public function render(DomainResidueScanner $scanner, DomainInstaller $installer): View
+    public function render(DomainInstaller $installer): View
     {
         return view('livewire.base.foundation.domain-manager', [
             'available' => $installer->available(),
             'installed' => $installer->installed(),
-            'residue' => $scanner->scan(),
             'canManage' => $this->canManage(),
         ]);
     }
@@ -210,17 +148,6 @@ class DomainManager extends Component
         if (! $this->canManage()) {
             abort(403);
         }
-    }
-
-    private function confirmed(): bool
-    {
-        if ($this->confirmText === 'DELETE') {
-            return true;
-        }
-
-        $this->addError('confirmText', __('Type DELETE to confirm.'));
-
-        return false;
     }
 
     private function canManage(): bool

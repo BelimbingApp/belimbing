@@ -113,16 +113,11 @@
                                     'dropPhrase' => '"uninstall '.$phraseName.' and drop all tables"',
                                 ]) }}
                             </p>
-                            <input
-                                type="text"
+                            <x-ui.acknowledge-input
+                                :phrase="'uninstall '.$phraseName"
                                 wire:model="uninstallPhrase"
                                 wire:keydown.enter="uninstall"
-                                placeholder="uninstall {{ $phraseName }}"
-                                class="w-full rounded border-border-default bg-surface-card text-sm"
                             />
-                            @error('uninstallPhrase')
-                                <div class="text-xs text-status-danger">{{ $message }}</div>
-                            @enderror
                             <div class="flex gap-2">
                                 <x-ui.button size="sm" variant="danger" wire:click="uninstall">
                                     {{ __('Uninstall') }}
@@ -142,90 +137,8 @@
         </div>
     </section>
 
-    <section class="space-y-2">
-        <h2 class="text-lg font-semibold text-ink">{{ __('Database residue') }}</h2>
-        <p class="text-sm text-muted">{{ __('Anything no installed module claims — typically left by an uninstall that kept the database. Residue is safe to keep; reinstalling the domain adopts it again.') }}</p>
-
-        @if (count($residue['orphanTables']) === 0 && count($residue['orphanLedger']) === 0 && count($residue['orphanSettings']) === 0)
-            <x-ui.alert variant="success">
-                {{ __('No residue found. Every table, migration entry, and setting belongs to installed code.') }}
-            </x-ui.alert>
-        @else
-            @if (count($residue['orphanTables']) > 0)
-                <x-ui.card>
-                    <h3 class="font-medium text-ink">{{ __('Orphaned tables (:n)', ['n' => count($residue['orphanTables'])]) }}</h3>
-                    <div class="mt-2 space-y-1">
-                        @foreach ($residue['orphanTables'] as $orphan)
-                            <label class="flex items-center gap-2 text-sm" wire:key="table-{{ $orphan['table'] }}">
-                                <input type="checkbox" wire:model="selectedTables" value="{{ $orphan['table'] }}" @disabled(! $canManage) class="rounded border-border-default" />
-                                <code>{{ $orphan['table'] }}</code>
-                                <span class="text-xs text-muted">{{ __(':n row(s)', ['n' => $orphan['rows']]) }}</span>
-                            </label>
-                        @endforeach
-                    </div>
-                    @if ($canManage)
-                        <x-ui.button variant="danger" size="sm" class="mt-3" wire:click="dropSelectedTables" wire:confirm="{{ __('Drop the selected tables permanently? Their data cannot be recovered.') }}">
-                            {{ __('Drop selected tables') }}
-                        </x-ui.button>
-                    @endif
-                </x-ui.card>
-            @endif
-
-            @if (count($residue['orphanLedger']) > 0)
-                <x-ui.card>
-                    <h3 class="font-medium text-ink">{{ __('Stale migration ledger rows (:n)', ['n' => count($residue['orphanLedger'])]) }}</h3>
-                    <p class="text-xs text-muted">{{ __('Ledger entries whose migration file is gone. Harmless to keep; prune them once their tables are dropped.') }}</p>
-                    <div class="mt-2 space-y-1">
-                        @foreach ($residue['orphanLedger'] as $migration)
-                            <label class="flex items-center gap-2 text-sm" wire:key="ledger-{{ $migration }}">
-                                <input type="checkbox" wire:model="selectedLedger" value="{{ $migration }}" @disabled(! $canManage) class="rounded border-border-default" />
-                                <code class="text-xs">{{ $migration }}</code>
-                            </label>
-                        @endforeach
-                    </div>
-                    @if ($canManage)
-                        <x-ui.button variant="danger" size="sm" class="mt-3" wire:click="pruneSelectedLedger" wire:confirm="{{ __('Remove the selected ledger rows?') }}">
-                            {{ __('Prune selected rows') }}
-                        </x-ui.button>
-                    @endif
-                </x-ui.card>
-            @endif
-
-            @if (count($residue['orphanSettings']) > 0)
-                <x-ui.card>
-                    <h3 class="font-medium text-ink">{{ __('Orphaned settings (:n keys)', ['n' => count($residue['orphanSettings'])]) }}</h3>
-                    <p class="text-xs text-muted">{{ __('Setting keys no installed module declares. Deleting removes the key across all scopes (global, company, employee).') }}</p>
-                    <div class="mt-2 space-y-1">
-                        @foreach ($residue['orphanSettings'] as $orphan)
-                            <label class="flex items-center gap-2 text-sm" wire:key="setting-{{ $orphan['key'] }}">
-                                <input type="checkbox" wire:model="selectedSettings" value="{{ $orphan['key'] }}" @disabled(! $canManage) class="rounded border-border-default" />
-                                <code>{{ $orphan['key'] }}</code>
-                                <span class="text-xs text-muted">{{ __(':n row(s)', ['n' => $orphan['rows']]) }}</span>
-                            </label>
-                        @endforeach
-                    </div>
-                    @if ($canManage)
-                        <x-ui.button variant="danger" size="sm" class="mt-3" wire:click="deleteSelectedSettings" wire:confirm="{{ __('Delete the selected settings across all scopes?') }}">
-                            {{ __('Delete selected settings') }}
-                        </x-ui.button>
-                    @endif
-                </x-ui.card>
-            @endif
-
-            @if ($canManage)
-                <x-ui.card>
-                    <label class="block text-sm font-medium text-ink" for="confirm-text">{{ __('Confirmation') }}</label>
-                    <p class="text-xs text-muted">{{ __('Type DELETE to arm the buttons above. Cleanup is permanent.') }}</p>
-                    <input id="confirm-text" type="text" wire:model="confirmText" placeholder="DELETE" class="mt-2 w-48 rounded border-border-default bg-surface-card text-sm" />
-                    @error('confirmText')
-                        <div class="mt-1 text-xs text-status-danger">{{ $message }}</div>
-                    @enderror
-                </x-ui.card>
-            @else
-                <div class="rounded-2xl border border-border-default bg-surface-subtle px-4 py-3 text-sm text-muted">
-                    {{ __('You can view residue but need the domains manage capability to clean it up.') }}
-                </div>
-            @endif
-        @endif
-    </section>
+    <p class="text-xs text-muted">
+        {{ __('Database state kept by an uninstall — and any other unclaimed tables or settings — is listed under') }}
+        <a href="{{ route('admin.system.database-residue.index') }}" class="text-accent hover:underline" wire:navigate>{{ __('Database Residue') }}</a>.
+    </p>
 </div>

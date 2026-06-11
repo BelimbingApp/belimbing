@@ -1,4 +1,5 @@
 <?php
+
 return [
     'items' => [
         [
@@ -31,6 +32,14 @@ return [
             'icon' => 'heroicon-o-archive-box',
             'route' => 'admin.system.database-backups.index',
             'permission' => 'admin.system.database-backup.list',
+            'parent' => 'admin.system.database',
+        ],
+        [
+            'id' => 'admin.system.database-residue',
+            'label' => 'Database Residue',
+            'icon' => 'heroicon-o-trash',
+            'route' => 'admin.system.database-residue.index',
+            'permission' => 'admin.system.database-residue.view',
             'parent' => 'admin.system.database',
         ],
     ],

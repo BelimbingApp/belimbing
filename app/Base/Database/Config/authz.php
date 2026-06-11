@@ -1,4 +1,5 @@
 <?php
+
 return [
     'capabilities' => [
         'admin.system.database-table.list',
@@ -11,5 +12,10 @@ return [
         'admin.system.database-backup.create',
         'admin.system.database-backup.delete',
         'admin.system.database-backup.manage',
+
+        // Database residue admin UI (admin/system/database-residue).
+        // manage gates the destructive cleanup of unclaimed DB state.
+        'admin.system.database-residue.view',
+        'admin.system.database-residue.manage',
     ],
 ];
