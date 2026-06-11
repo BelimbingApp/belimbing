@@ -92,6 +92,7 @@ Evidence: A browser-started simple coding prompt shows structured repo tools in 
 - [x] Promote structured search, read, and edit tools into Lara's default coding surface, preserve profile ordering when exposing tools to the model, and include symbolic repository-root context in Lara runtime context. {Amp/GPT-5}
 - [x] Expose structured file APIs before shell/browser and keep tool descriptions neutral rather than prescriptive. {Amp/GPT-5}
 - [x] Add model-facing tool descriptions that include hard output limits and exact continuation instructions for bounded repository reads. {Amp/GPT-5}
+- [x] Return structured edit results with file path, operation, byte counts, changed/created flags, replacement count, and capped diff preview so Lara and operators can inspect edits without extra shell work. {Amp/GPT-5}
 - [x] Add tests proving Lara's default interactive surface includes structured repo tools before shell/browser and that authz still filters unauthorized users. {Amp/GPT-5}
 
 ### Phase 2 — Add the minimal coding loop

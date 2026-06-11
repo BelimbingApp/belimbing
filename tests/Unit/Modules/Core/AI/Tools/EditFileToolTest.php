@@ -25,6 +25,15 @@ afterEach(function () {
     File::deleteDirectory(base_path(EDIT_FILE_TOOL_EXTENSION_DIRECTORY));
 });
 
+function decodeEditFileToolResult(mixed $result): array
+{
+    $decoded = json_decode((string) $result, true);
+
+    expect($decoded)->toBeArray();
+
+    return $decoded;
+}
+
 it('creates files under a new parent directory', function () {
     $result = $this->tool->execute([
         'file_path' => EDIT_FILE_TOOL_TEST_FILE,
@@ -32,9 +41,40 @@ it('creates files under a new parent directory', function () {
         'operation' => 'write',
     ]);
 
-    expect((string) $result)->toContain('Created '.EDIT_FILE_TOOL_TEST_FILE)
+    $payload = decodeEditFileToolResult($result);
+
+    expect($payload['summary'])->toContain('Created '.EDIT_FILE_TOOL_TEST_FILE)
+        ->and($payload['target_surface'])->toBe('core')
+        ->and($payload['file_path'])->toBe(EDIT_FILE_TOOL_TEST_FILE)
+        ->and($payload['operation'])->toBe('write')
+        ->and($payload['created'])->toBeTrue()
+        ->and($payload['changed'])->toBeTrue()
+        ->and($payload['bytes_written'])->toBe(11)
+        ->and($payload['diff_preview'])->toContain('+++ after/'.EDIT_FILE_TOOL_TEST_FILE)
+        ->and($payload['diff_preview'])->toContain('+hello world')
+        ->and($payload['diff_truncated'])->toBeFalse()
         ->and(is_file(base_path(EDIT_FILE_TOOL_TEST_FILE)))->toBeTrue()
         ->and(file_get_contents(base_path(EDIT_FILE_TOOL_TEST_FILE)))->toBe('hello world');
+});
+
+it('returns structured append metadata with appended content preview', function () {
+    File::put(base_path(EDIT_FILE_TOOL_TEST_FILE), "one\n");
+
+    $result = $this->tool->execute([
+        'file_path' => EDIT_FILE_TOOL_TEST_FILE,
+        'content' => 'two',
+        'operation' => 'append',
+    ]);
+
+    $payload = decodeEditFileToolResult($result);
+
+    expect($payload['summary'])->toContain('Appended 3 bytes')
+        ->and($payload['operation'])->toBe('append')
+        ->and($payload['created'])->toBeFalse()
+        ->and($payload['changed'])->toBeTrue()
+        ->and($payload['diff_preview'])->toContain('@@ added content @@')
+        ->and($payload['diff_preview'])->toContain('+two')
+        ->and(file_get_contents(base_path(EDIT_FILE_TOOL_TEST_FILE)))->toBe("one\ntwo");
 });
 
 it('returns an error when writing to a directory path', function () {
@@ -73,8 +113,34 @@ it('performs targeted replacement edits', function () {
         'new_content' => "TWO\n",
     ]);
 
-    expect((string) $result)->toContain('targeted replacement')
+    $payload = decodeEditFileToolResult($result);
+
+    expect($payload['summary'])->toContain('targeted replacement')
+        ->and($payload['operation'])->toBe('replace')
+        ->and($payload['created'])->toBeFalse()
+        ->and($payload['changed'])->toBeTrue()
+        ->and($payload['replacement_count'])->toBe(1)
+        ->and($payload['diff_preview'])->toContain('@@ targeted replacement @@')
+        ->and($payload['diff_preview'])->toContain('-two')
+        ->and($payload['diff_preview'])->toContain('+TWO')
         ->and(file_get_contents(base_path(EDIT_FILE_TOOL_TEST_FILE)))->toBe("one\nTWO\nthree\n");
+});
+
+it('caps large edit previews', function () {
+    $content = str_repeat('large-preview-line'.PHP_EOL, 1200);
+
+    $result = $this->tool->execute([
+        'file_path' => EDIT_FILE_TOOL_TEST_FILE,
+        'content' => $content,
+        'operation' => 'write',
+    ]);
+
+    $payload = decodeEditFileToolResult($result);
+
+    expect($payload['diff_truncated'])->toBeTrue()
+        ->and(strlen($payload['diff_preview']))->toBeGreaterThan(12000)
+        ->and(strlen($payload['diff_preview']))->toBeLessThan(12100)
+        ->and($payload['diff_preview'])->toContain('diff preview truncated');
 });
 
 it('blocks extension paths when target surface is core', function () {
@@ -97,6 +163,10 @@ it('writes inside selected extension surface', function () {
         'target_surface' => 'extension:edit-file-test',
     ]);
 
-    expect((string) $result)->toContain('extensions/custom/edit-file-test/sample.txt')
+    $payload = decodeEditFileToolResult($result);
+
+    expect($payload['target_surface'])->toBe('extension:edit-file-test')
+        ->and($payload['file_path'])->toBe('extensions/custom/edit-file-test/sample.txt')
+        ->and($payload['summary'])->toContain('extensions/custom/edit-file-test/sample.txt')
         ->and(file_get_contents(base_path(EDIT_FILE_TOOL_EXTENSION_DIRECTORY.'/sample.txt')))->toBe('extension owned');
 });
