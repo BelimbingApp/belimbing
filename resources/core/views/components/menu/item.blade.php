@@ -36,7 +36,11 @@
         {{-- Link item: expanded variant. Active state is driven client-side by
              wire:current (it sets data-current on the matching link), so the
              persisted sidebar's highlight tracks navigation without a re-render. --}}
-        <div x-show="!rail" x-cloak class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link font-normal hover:bg-surface-subtle has-[[data-current]]:bg-surface-card has-[[data-current]]:text-ink has-[[data-current]]:font-medium">
+        <div
+            x-show="!rail"
+            x-cloak
+            class="group flex items-center w-full px-1 py-px text-sm rounded-none transition text-link hover:bg-surface-subtle has-[[data-current]]:bg-surface-card has-[[data-current]]:text-ink"
+        >
             @if(count($children) > 0)
                 <span
                     @click.prevent="expanded = !expanded"
@@ -56,7 +60,7 @@
             <a
                 href="{{ $href }}"
                 @if($item->route) wire:navigate @endif
-                class="truncate flex-1"
+                class="truncate flex-1 {{ $isActive || $hasActiveChild ? 'font-bold text-ink' : 'font-normal text-link' }}"
                 title="{{ $tooltip }}"
             >{{ __($item->label) }}</a>
 
@@ -91,7 +95,7 @@
             x-show="!rail"
             x-cloak
             @click="expanded = !expanded"
-            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition text-link font-normal hover:bg-surface-subtle group-has-[[data-current]]/menuitem:font-medium"
+            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition hover:bg-surface-subtle {{ $isActive || $hasActiveChild ? 'font-bold text-ink' : 'font-normal text-link' }}"
             title="{{ $tooltip }}"
         >
             <span class="text-[12px] shrink-0 text-link w-3 text-center" aria-hidden="true">
