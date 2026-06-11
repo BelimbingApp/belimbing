@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Concerns;
 
 /**
@@ -26,6 +27,11 @@ trait ExtractsModuleProvenance
 
         // Pattern: .../app/Base/{Module}/Database/Migrations/{file}
         if (preg_match('#app/Base/[^/]+#', $normalized, $matches)) {
+            return $matches[0];
+        }
+
+        // Pattern: .../extensions/{owner}/{module}/Database/Migrations/{file}
+        if (preg_match('#extensions/[^/]+/[^/]+#', $normalized, $matches)) {
             return $matches[0];
         }
 

@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-05-18
+**Last Updated:** 2026-06-11
 
 ## Overview
 
@@ -18,7 +18,7 @@ To manage this complexity, the framework enforces:
 
 ## 1. Migration Architecture
 
-Migrations are **auto-discovered** from Base and Module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
+Migrations are **auto-discovered** from Base, application module, and extension module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
 
 This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
@@ -200,7 +200,7 @@ Extensions use real calendar years. The MM_DD can be the actual date or a module
 
 **Location:** `extensions/{vendor}/{module}/Database/Migrations/`
 
-**Discovery:** Loaded via extension service providers (not `ModuleMigrationServiceProvider`)
+**Discovery:** Loaded by BLB's Base database migration commands using the same `Database/Migrations/` path contract as Base and application-domain modules.
 
 | Owner | Module | Example Prefix |
 |--------|--------|----------------|

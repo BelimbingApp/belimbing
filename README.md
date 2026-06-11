@@ -29,7 +29,7 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 **Base and Core modules** — Required framework infrastructure and integrated business foundations live in the main repo under `app/Base/{Module}/` and `app/Modules/Core/{Module}/`.
 
-**Plugin and extension system** — Modular architecture with discovery-driven registration and per-module `composer.json` manifests. An admin dashboard lists installed plugins with dependency health and surfaces available extensions from the BelimbingApp catalog with copyable install commands. Extension developer guides live at `docs/guides/extensions/`.
+**Domain, plugin, and extension system** — Base and Core ship in the main repo; non-Core domains are installable distributions managed from Administration → System → Domains; licensee extensions live under `extensions/{licensee}/{module}`. Nested git is the current default distribution model, while the module contracts remain compatible with future Composer/package installation. Providers, routes, menus, settings, migrations, tests, views, and manifests integrate through the module-system discovery contracts, with installed-module dependency health surfaced in the admin plugin dashboard.
 
 **Authorization system** — Capability-based RBAC with delegation constraints, principal types for both humans and agents, policy engine, and middleware. The same system that governs human users governs AI agents — no separate permission model.
 
@@ -42,7 +42,7 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 ### Quick Install
 
-Setup will take about an hour.
+Setup will take about an hour. A fresh framework clone starts with Base and Core. Optional domains can be installed later from Administration → System → Domains or by mounting the relevant domain distribution at `app/Modules/{Domain}`.
 
 The easiest way to get started is with an AI Agent prompt:
 ```text
@@ -67,7 +67,8 @@ cd belimbing
 |-------|------|
 | Project vision & principles | [docs/brief.md](./docs/brief.md) |
 | Privacy policy | [PRIVACY.md](./PRIVACY.md) |
-| Architecture & directory conventions | [docs/architecture/](./docs/architecture/) |
+| Module system, architecture & directory conventions | [docs/architecture/module-system.md](./docs/architecture/module-system.md) |
+| Other architecture docs | [docs/architecture/](./docs/architecture/) |
 | Development environment setup | [docs/guides/development-setup.md](./docs/guides/development-setup.md) |
 | Guides (theming, extensions) | [docs/guides/](./docs/guides/) |
 | Module documentation | [docs/modules/](./docs/modules/) |

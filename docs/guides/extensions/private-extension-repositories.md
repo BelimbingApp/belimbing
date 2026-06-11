@@ -126,8 +126,8 @@ php artisan route:clear
 ```
 
 If routes are missing, confirm the file is named `web.php` or `api.php` inside
-`Routes/`. If migrations are missing, confirm the provider is discovered and the
-provider calls `loadMigrationsFrom(__DIR__.'/Database/Migrations')`; see
+`Routes/`. If migrations are missing, confirm the files live under
+`Database/Migrations/` and follow Laravel's migration filename convention; see
 `docs/guides/extensions/database-migrations.md` for migration-specific
 troubleshooting.
 

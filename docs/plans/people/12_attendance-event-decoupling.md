@@ -4,7 +4,7 @@
 **Last Updated:** 2026-05-16
 **Owners:** unassigned. See [Distribution Notes](#distribution-notes) for per-phase pickup guidance.
 **Sources:**
-- `docs/architecture/pluggable-modules.md` — defines the pluggable seam: source modules emit events, plugins listen, no source-module imports of plugin classes. Especially §5 (communication contracts), §6 (Payroll as the first plugin), §9 Phase 1 (in-tree work before extraction).
+- `docs/architecture/module-system.md` — defines the pluggable seam: source modules emit events, plugins listen, no source-module imports of plugin classes.
 - `docs/plans/people/10_payroll-intake-dependency-inversion.md` — landed `PayrollContributionIntake` and `PayrollContributionPayload`. The intake stays; this plan moves it behind a listener so producers stop importing it.
 - `docs/plans/people/11_attendance-shift-and-allowance-coverage.md` — Allowance rules now scope to shift template; relevant because this plan changes how the rule's payroll mapping is stored.
 - `app/Modules/People/Attendance/Services/AttendanceOvertimeService.php` — the one producer-side intake caller in Attendance today.
@@ -18,7 +18,7 @@
 
 ## Problem Essence
 
-The pluggable-modules architecture (`docs/architecture/pluggable-modules.md`) requires that Attendance functions on a deployment where the Payroll plugin is absent. Today Attendance:
+The module-system architecture (`docs/architecture/module-system.md`) requires that Attendance functions on a deployment where the Payroll plugin is absent. Today Attendance:
 
 1. **Imports Payroll classes.** `AttendanceOvertimeService` injects `PayrollContributionIntake` and references `PayrollContributionPayload` / `PayrollContributionOutcome`. Removing `app/Modules/People/Payroll/` from disk fails autoload.
 2. **Stores payroll concepts on Attendance rows.** `AttendanceAllowanceRule.payroll_pay_item_code` is a string column. The pay-item taxonomy is owned by Payroll; this field is a payroll concept living on an attendance record.

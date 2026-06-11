@@ -5,7 +5,7 @@
 **Owners:** claud/opus-4.7
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` — canonical pattern. This plan adopts plan 12's design decisions (events first, producer-domain payloads, intake stays as listener's internal write path, architectural test as boundary guard).
-- `docs/architecture/pluggable-modules.md` — pluggable-modules architecture.
+- `docs/architecture/module-system.md` — module-system architecture.
 - `app/Modules/People/Leave/Services/LeavePayrollHandoffService.php` — leave-applied handoff that calls intake.
 - `app/Modules/People/Leave/Services/LeaveEncashmentService.php` — encashment handoff that calls intake.
 - `app/Modules/People/Leave/Models/LeaveType.php` — owns `interacts_with_payroll`, `payroll_pay_item_code`.

@@ -1,10 +1,10 @@
 # Module System
 
 **Document Type:** Architecture Specification
-**Purpose:** Define Belimbing's module system — directory layout, nested-git distribution, variation (adapters and slots), and discovery contracts
+**Scope:** Belimbing's module system — directory layout, distribution model, lifecycle, variation (adapters and slots), and discovery contracts
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-06-10
-**Related:** `docs/architecture/pluggable-modules.md` — vision and phasing for full-stack downstream plugins (events, manifests); this document is the structural/mechanical contract it builds on.
+**Last Updated:** 2026-06-11
+**Related:** `docs/brief.md`, `docs/architecture/database.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ---
 
@@ -13,71 +13,30 @@
 This document defines the module system that supports Belimbing's core principles:
 
 - **Modules as Ownership Boundaries** — the module directory owns its full stack; everything below it is module internals
-- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain repos (each non-Core domain is a nested-git checkout), extension modules (present or absent per deployment), and swappable slots (one of N variant repos fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` never plug — they are the framework
-- **Extension Modules** — licensee-owned extension modules grouped under one nested-git repo per licensee
-- **Discovery by Convention** — the framework finds providers, migrations, menus, routes, settings, views, and tests through path globs; a module that satisfies the [discovery contracts](#discovery-contracts) is fully integrated, with no registration step
+- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain distributions, extension modules, and swappable slots (one of N variants fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` never plug — they are the framework
+- **Extension Modules** — licensee-owned extension modules grouped under one licensee distribution
+- **Discovery by Convention** — provider discovery is glob-based; artifact discovery is path-contract based per artifact. A module that satisfies the relevant [discovery contracts](#discovery-contracts) is integrated with no central registration step
 - **Quality-Obsessed** — deep modules with simple interfaces
 
 ---
 
 ## Directory Structure
 
-The main repo tracks Belimbing's required core — `app/Base`, `app/Modules/Core`, and the framework directories. Every non-Core domain is a nested-git checkout. A module path is in one of four states:
+The module boundary is the filesystem path plus its discovery contract. The current default distribution is nested git; Composer/package installation remains valid if it preserves the same path, namespace, and artifact contracts.
 
-**Required — main repo**
+| Layer | Path shape | Distribution | Notes |
+|------|------------|--------------|-------|
+| Base | `app/Base/{Module}/` | Main repo | Framework infrastructure. Shallow; no domain grouping. Not pluggable. |
+| Core | `app/Modules/Core/{Module}/` | Main repo | Required business foundations. Not pluggable. |
+| Domain | `app/Modules/{Domain}/{Module}/` | One installable distribution per non-Core domain | Domain-level `Config/` and `Tests/` may sit beside modules. A module can later become a slot. |
+| Slot | `app/Modules/{Domain}/{Module}/` | One selected variant distribution | Same path and namespace as the slot contract; only the provider distribution changes. |
+| Extension | `extensions/{licensee}/{module}/` | One licensee distribution containing one or more modules | Licensee and module path segments use kebab-case and map to `Extensions\{Licensee}\{Module}`. |
 
-```text
-app/Base/{Module}/...                        # Framework infrastructure (shallow)
-app/Modules/Core/{Module}/...                # Application Core — integrated business foundations
-```
+The **module** directory is the full-stack ownership boundary: code, database artifacts, config, routes, tests, and module-owned views or assets below it are module internals. A directory containing `ServiceProvider.php` at one of the module path shapes is provider-discoverable; other peer directories are inert to provider discovery.
 
-**Domain — nested-git repo**
+An **entity** is not an ownership boundary. It is a domain object or relation owned by a module and may appear in models, tables, routes, UI features, factories, and seeders.
 
-```text
-app/Modules/{Domain}/...                     # Commerce, Operation, People, … — one nested repo per domain; its modules (and the domain Config/ and Tests/) version together
-```
-
-**Slot — variant nested-git repo**
-
-```text
-app/Modules/{Domain}/{Module}/...            # Same path, ignored by the domain repo; one of N variant repos fills it per deployment
-```
-
-**Extension — licensee nested-git repo**
-
-```text
-extensions/{licensee}/{module}/...           # `{licensee}` is one nested-git repository; modules inside it version together under that licensee
-```
-
-The **Module** directory is the full-stack ownership boundary: code, database artifacts, config, routes, tests, and any module-owned views or assets below that directory are module internals.
-
-**The module rule:** a second-level directory containing a `ServiceProvider.php` is a module. Other directories at the same level are inert to provider discovery — domains may own a `Config/` directory (menu anchors), and licensee repos may carry non-module directories such as `docs/` or `scripts/`.
-
-### Term Definitions
-
-| Term | Meaning | Examples |
-|------|---------|----------|
-| **`app/Base/`** | Required framework-owned infrastructure. Shallow — no domain grouping. Not pluggable. | `Database`, `AI`, `Menu`, `Settings` |
-| **`app/Modules/`** | Application-owned code, grouped by domain. | (the directory itself) |
-| **`app/Modules/Core/`** | Required application Core — integrated business foundations that ship with Belimbing. Not pluggable. Shared shell UI may still live in `resources/core`. | `Company`, `User`, `Geonames`, `Employee` |
-| **Domain** | A business domain under `app/Modules`. It groups modules by business area. `Core` is required in the main repo; every other domain is one nested-git repo whose modules version together. A module inside a domain repo can still be carved out as a slot. | `Core`, `Commerce`, `Operation`, `People` |
-| **Licensee repo** | A nested-git checkout at `extensions/{licensee}/`. It owns one or more extension modules under that path. | `extensions/sb-group/`, `extensions/ham/` |
-| **Extension module** | A module inside a licensee repo. It mirrors the internal module structure so code, views, config, and tests stay colocated. | `extensions/sb-group/qac`, `extensions/ham/auto-parts` |
-| **Module** | The ownership boundary for a cohesive capability. Labeling stops here; everything below the module directory is module internals. | `Database`, `Geonames`, `Inventory`, `IT`, `Attendance` |
-| **Entity** | A domain object or relation owned by a module. Entities appear in models, tables, routes, UI features, factories, and seeders, but they are not ownership boundaries. | `Country`, `Part`, `Ticket`, `Role` |
-
-> **Note on "domain":** used here in the general business-area sense, not in the strict Domain-Driven Design sense. Modules within a domain are cohesive capabilities, not formally enforced bounded contexts. Where the DDD mapping helps: Domain ≈ DDD *subdomain*; Module ≈ DDD *bounded context*.
-
-### Path Examples
-
-| Path | Shape | Notes |
-|------|-------|-------|
-| `app/Base/Database` | `Base/Module` | Required Base module; no domain |
-| `app/Base/AI` | `Base/Module` | Required Base module; no domain |
-| `app/Modules/Core/Geonames` | `Modules/Core/Module` | Required Core module |
-| `app/Modules/Commerce/Inventory` | `Modules/Domain/Module` | Module inside the Commerce domain repo (nested-git) |
-| `app/Modules/People/Attendance` | `Modules/Domain/Module` | Module inside the People domain repo (nested-git) |
-| `extensions/sb-group/qac` | `extensions/licensee/module` | Extension module inside licensee nested-git repo (kebab-case) |
+> **Note on "domain":** this document uses domain in the business-area sense, not strict DDD. Where the DDD mapping helps: Domain ≈ DDD *subdomain*; Module ≈ DDD *bounded context*.
 
 ### Naming Conventions
 
@@ -88,43 +47,35 @@ The **Module** directory is the full-stack ownership boundary: code, database ar
 
 ---
 
-## Nested-Git Distribution
+## Distribution Model
 
-Every nested unit — a domain repo, a licensee extension repo, or a slot variant — is its own git repository checked out *inside* the framework working tree. This is plain nested git, not git submodules.
+Current BLB deployments use plain nested git for non-Core domains, licensee extensions, and slot variants. The framework repo tracks `Base` and `Core`; each installed distribution keeps its own history while presenting the path and discovery contract from [Directory Structure](#directory-structure).
 
-How the two repositories coexist:
+Nested git is a distribution mechanism, not the architectural boundary. A future Composer-installed module is valid if it presents the same module identity, namespace, views/assets/config/tests, and discovery surface without moving module-owned internals into global framework directories.
 
-- Each `.git` directory is independent. The nested repo tracks its own files and never reads the outer repo's `.gitignore`; the outer repo's ignore rules only control what the *outer* repo sees.
-- The outer repo cannot track files inside a nested checkout anyway — git records at most a bare "gitlink" pointer, which is broken noise without submodule config. The ignore rule below prevents that from ever being staged.
-- Developing framework and extension code in one working tree therefore works with no special tooling: run `git` commands at the repo root for framework changes, and inside `extensions/{licensee}/` for extension changes.
+Repo boundaries follow swappability: a single module is carved out of its domain distribution only when its path becomes a [slot](#module-variation-adapters-and-slots) — its first real variant arrives. Do not pre-extract slots. When a module becomes a slot, the original domain distribution stops owning that path and the chosen variant fills the same path; discovery stays unchanged because the namespace and path stay identical.
 
-**Guard rules (committed in `.gitignore`):**
-
-```gitignore
-/extensions/*
-!/extensions/README.md
-
-/app/Modules/*
-!/app/Modules/Core
-```
-
-The blanket rules ship with every clone, keep nested-repo code (private licensee extensions, domain repos) out of the framework repo, and avoid naming licensees publicly. Do not use per-machine `.git/info/exclude` entries for this.
-
-**Repo boundaries:** the framework repo tracks `Base` and `Core`; each non-Core domain is one nested repo whose modules version together (cross-module changes within a domain stay atomic). Below that, repo boundaries follow swappability: a single module is carved out of its domain repo only when its path becomes a [slot](#module-variation-adapters-and-slots) — its first real variant arrives. Do not pre-extract slots.
-
-**How to extract a slot from a domain repo:** in a single domain-repo commit, remove the module's files from the index and add an ignore line for its path (e.g. `/Payroll/` in the People repo's `.gitignore`); push the files to the variant's new repository (`git subtree split --prefix=Payroll` inside the domain repo produces a branch carrying just that module's history); then clone the chosen variant back into the same path. Discovery picks the module up again immediately — nothing else changes, because the namespace and path stay identical.
-
-**Mounting on another machine:** clone the framework repo, then clone each nested repo into its path — for a slot, the variant chosen for that deployment. There is no registration step; the [discovery contracts](#discovery-contracts) do the rest.
+Deployment composition is the set of installed distributions and their versions. Today that is recorded by Git remotes/branches/tags/commits and deployment automation; a future Composer path should preserve the same module identity and discovery behavior.
 
 For the full private-repo workflow (creating the repo, remotes, daily commands), see `docs/guides/extensions/private-extension-repositories.md`.
+
+### Domain Lifecycle
+
+A fresh framework clone runs with Base + Core. Optional domains can be installed, disabled, or uninstalled from **Administration → System → Domains** or by equivalent deployment automation.
+
+- **Installed:** the domain distribution is present and participates in discovery.
+- **Disabled:** the distribution remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
+- **Uninstalled:** the distribution is removed. Persistent data is retained unless the operator explicitly chooses cleanup.
+
+This separates code composition from durable database state: removing code is not the same decision as deleting data.
 
 ---
 
 ## Module Variation: Adapters and Slots
 
-Deployments differ — Malaysian payroll follows EPF/SOCSO/PCB rules, a Malaysian commerce deployment sells through Shopee and Lazada. Replaceability is a **contract problem first and a git problem second**: before anything moves between repos, the variation point needs a defined seam. There are two mechanisms; choose per module.
+Deployments differ — Malaysian payroll follows EPF/SOCSO/PCB rules, a Malaysian commerce deployment sells through Shopee and Lazada. Replaceability is a **contract problem first and a distribution problem second**: before anything moves between distributions, the variation point needs a defined seam. There are two mechanisms; choose per module.
 
-> **A note on "pluggable":** earlier versions of this document promised "independently pluggable modules." That phrase conflated two different promises — *removability* (a deployment has the code or doesn't; exercised by domain repos and extension modules) and *replaceability* (a deployment chooses among implementations; exercised by slots). This document keeps the mechanics that make both possible everywhere (discovery contracts, contract-only dependencies) but does not claim per-module replaceability until a real variant converts that module into a slot. A module inside a domain repo is *potentially* swappable; domains, slots, and extensions are what *actually* plug.
+> **A note on "pluggable":** earlier versions of this document promised "independently pluggable modules." That phrase conflated two different promises — *removability* (a deployment has the code or doesn't; exercised by domain distributions and extension modules) and *replaceability* (a deployment chooses among implementations; exercised by slots). This document keeps the mechanics that make both possible everywhere (discovery contracts, contract-only dependencies) but does not claim per-module replaceability until a real variant converts that module into a slot. A module inside a domain distribution is *potentially* swappable; domains, slots, and extensions are what *actually* plug.
 
 ### Mechanism 1 — Contract + adapters (the default)
 
@@ -143,214 +94,71 @@ Use when variants diverge in lifecycle, consumers, or regulatory burden (see [Pr
 
 Slot rules:
 
-1. **Fixed identity.** Every variant mounts at the same path (`app/Modules/People/Payroll/`), declares the same namespace (`App\Modules\People\Payroll\`), and carries the same manifest id (`extra.blb.module: people/payroll`). Variants differ only by git remote (`blb-people-payroll`, `blb-people-payroll-my`). Dependents' imports and `requires-modules` declarations never change.
+1. **Fixed identity.** Every variant mounts at the same path (`app/Modules/People/Payroll/`), declares the same namespace (`App\Modules\People\Payroll\`), and carries the same manifest id (`extra.blb.module: people/payroll`). Variants differ by distribution identity/version (Git remote today, package identity later). Dependents' imports and `requires-modules` declarations never change.
 2. **Contract-only dependencies.** Other modules may consume the slot's events, call its service contracts, and link its routes — they must never query its tables or import classes outside its contract surface. This is what makes the swap invisible to the rest of the system.
-3. **All-repo.** A slot path is permanently ignored by the main repo and always filled by a nested-git checkout; the default implementation is itself a variant repo. A slot is never a tracked default that some deployments overlay — that would require per-machine exclude rules.
+3. **Variant-owned path.** A slot path is not owned by the parent domain distribution; it is always supplied by the selected variant distribution. The default implementation is itself a variant. A slot is never a tracked default that some deployments overlay.
 4. **Deploy-time choice.** Each variant owns its migrations and tables. Picking a variant is a deployment decision; switching variants on a live database is a data-migration project, not a toggle.
-5. **Documented surface.** Before a second variant exists, document the slot's public surface: events published and consumed, service contracts implemented, menu and route surface provided. That document is what lets another team build a variant without reading the default's source.
+5. **Documented surface.** Before a second variant exists, document the slot's public surface: events published and consumed, service contracts implemented, menu and route surface provided. Keep that contract in `docs/modules/` or in the slot distribution's own module docs and link it from the owning domain docs. The goal is that another team can build a variant without reading the default implementation.
 
 ### Choosing between them
 
-Prefer adapters — they keep one engine maintained instead of N. Convert a module into a slot only when a real whole-module variant arrives, using the [extraction procedure](#nested-git-distribution). The boundary that matters is the swappable seam, not the domain: `People/Payroll` may become a slot while `People/Settings` — which nothing replaces — stays tracked in the main repo beside it.
+Prefer adapters — they keep one engine maintained instead of N. Convert a module into a slot only when a real whole-module variant arrives, using the [distribution model](#distribution-model). The boundary that matters is the swappable seam, not the domain: `People/Payroll` may become a slot while `People/Settings` — which nothing replaces — stays in the domain distribution beside it.
+
+---
+
+## Module Communication Contracts
+
+Use the smallest public surface that keeps module internals hidden:
+
+- **Events for published facts.** When one module produces a fact another module may consume, publish a producer-domain event. Payloads use the producer's language; do not leak consumer-specific concepts into the producer. If Payroll consumes an Attendance allowance, the Attendance event carries attendance facts such as employee, date, rule, and amount — not a payroll pay-item code.
+- **Service contracts for direct calls.** When another module must ask for state or invoke behavior synchronously, depend on a contract owned by the provider of that behavior, not on its models, tables, or internal services.
+- **No listener means no failure.** A source module must keep working when no consumer is installed. Missing consumers mean no listener runs; they do not make the producer invalid.
+- **Public payloads are stable API.** Once shipped, event fields and service contract meanings may be added to but not silently removed or renamed. Breaking changes require a versioned event/contract and a migration path for consumers.
 
 ---
 
 ## Discovery Contracts
 
-These path globs are the pluggability contract: a module that satisfies them is fully integrated. Any new discovery mechanism must be path-glob based across all three roots, or it breaks the model.
+These path contracts are the pluggability contract: a module that satisfies the artifact contracts relevant to it is integrated without central registration. New artifact discovery should be path-based across every root that supports that artifact; exceptions must be explicit here. Provider order is deterministic for bootstrapping and override seams, not a substitute for module independence.
 
 | What | Patterns | Discovered by |
 |------|----------|---------------|
 | Service providers | `app/Base/*/ServiceProvider.php` · `app/Modules/*/*/ServiceProvider.php` · `extensions/*/*/ServiceProvider.php` | `App\Base\Foundation\Providers\ProviderRegistry` (order: priority → Base → Modules → extensions → app) |
-| Migrations | `app/Base/*/Database/Migrations` · `app/Modules/*/*/Database/Migrations` · `database/migrations` · `extensions/*/*/Database/Migrations` | `App\Base\Database` services |
+| Migrations | `app/Base/*/Database/Migrations` · `app/Modules/*/*/Database/Migrations` · `database/migrations` · `extensions/*/*/Database/Migrations` | `App\Base\Database` migration commands |
 | Menus | `Config/menu.php` under `app/Base/*`, `app/Modules/*` (domain anchors), `app/Modules/*/*`, `extensions/*`, `extensions/*/*` | `App\Base\Menu\Services\MenuDiscoveryService` |
 | Routes | `app/Base/*/Routes` · `app/Modules/*/*/Routes` · `extensions/*/*/Routes` | `App\Base\Routing\RouteDiscoveryService` |
 | Settings | `Config/settings.php` under `app/Base/*`, `app/Modules/*/*`, `extensions/*/*` | `App\Base\Settings\ServiceProvider` |
-| Authz | `Config/authz.php` under `app/Base/*`, `app/Modules/*/*` — **not** extensions; extension capabilities register through the framework-supported authz path | `App\Base\Authz\ServiceProvider` |
+| Authz | `Config/authz.php` under `app/Base/*`, `app/Modules/*/*` — **not** extensions | `App\Base\Authz\ServiceProvider`; extensions merge their own authz config from their discovered provider when they need capabilities |
 | Views | Not glob-discovered — each module provider calls `loadViewsFrom(__DIR__.'/Views', '<namespace>')` | module `ServiceProvider` |
 | Tailwind classes | `@source` entries in `resources/app.css`: `./core/views`, `../app/Modules/*/*/Views`, `../extensions/*/*/Views` | Vite/Tailwind build |
 | Blade hot reload | `resources/core/views/**` · `app/Modules/*/*/Views/**` · `extensions/*/*/Views/**` | `vite.config.js` |
 | Tests | testsuites `Modules` (`app/Modules/*/Tests`, `app/Modules/*/*/Tests`) and `Extensions` (`extensions/*/*/Tests`) | `phpunit.xml` + `tests/Pest.php` |
-| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader` |
+| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader`; surfaced by the plugin dashboard for installed-module metadata and dependency health |
 
 ---
 
-## Root Structure
+## Module Internals
 
-```
-belimbing/
-├── app/                     # Application code
-│   ├── Base/                # Framework infrastructure modules
-│   ├── Modules/             # Core/ tracked here; other domains are nested-git repos
-│   └── Providers/           # App-level providers (AppServiceProvider)
-│
-├── bootstrap/
-│   ├── app.php              # Application configuration (middleware, exceptions)
-│   └── providers.php        # ProviderRegistry::resolve() — provider discovery entry
-│
-├── config/                  # Laravel bootstrap config only (app, database, cache, …)
-│                            # Module config lives in each module's Config/
-│
-├── database/
-│   ├── migrations/          # Laravel built-in migrations only (cache, jobs, …)
-│   └── seeders/             # Global DatabaseSeeder
-│
-├── extensions/              # Licensee nested-git repos: {licensee}/{module}
-│
-├── resources/
-│   ├── core/                # Framework-owned shared presentation (see below)
-│   └── app.css              # Vite CSS entry point
-│
-├── routes/                  # web.php, console.php, channels.php
-│                            # Module routes live in each module's Routes/
-│
-├── scripts/                 # Setup, start/stop, and maintenance scripts
-├── storage/                 # Logs, cache, sessions, app storage
-├── tests/                   # Framework-level test suite (see Testing Structure)
-├── docs/                    # Architecture docs, guides, module docs
-└── public/                  # Web root
-```
+All module roots use the same internal vocabulary. A module includes only the directories it needs.
 
----
+| Internal path | Contract |
+|---------------|----------|
+| `ServiceProvider.php` | Marks the directory as a module and registers behavior not covered by scanners. |
+| `Database/Migrations/` | Schema owned by the module; centrally loaded by BLB migration commands. Laravel core tables stay in `database/migrations/`. |
+| `Database/Seeders/`, `Database/Factories/` | Module data fixtures and factories; see `app/Base/Database/AGENTS.md` for seeding rules. |
+| `Config/` | Module config. Files are lowercase and are either discovered by a framework scanner or merged by the module provider. |
+| `Routes/` | Module web/API routes; discovered by the routing service. |
+| `Views/` | Module-owned Blade views; registered by the module provider. Non-Core domains and extensions do not create companion `resources/*` trees. |
+| `Assets/` | Optional module-owned frontend source. It is never auto-injected; the host build must explicitly import reviewed entry points. |
+| `Models/`, `Services/`, `Livewire/`, `Events/`, `Listeners/`, `Hooks/`, `Controllers/` | Module implementation internals. |
+| `Tests/` | Module-owned tests that travel with the module. |
+| `composer.json` | Optional `extra.blb` manifest for module identity, role, version, dependencies, and published/consumed events. |
 
-## Core Application Structure (`app/`)
+`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the plugin dashboard. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
 
-### `app/Base/` — Framework Infrastructure
+Module manifests are metadata for installed-module UI and dependency-health warnings. They should remain compatible with future Composer distribution, but they do not replace Composer's PHP dependency resolution or provider independence.
 
-**Path shape:** `app/Base/{Module}/` — subdirectories are modules.
-
-`app/Base/` provides framework infrastructure, extension points, and core abstractions. Modules here are foundational and cannot depend on `app/Modules/`.
-
-Current Base modules: `AI`, `Audit`, `Authz`, `Cache`, `Database`, `DateTime`, `Foundation`, `Integration`, `Livewire`, `Locale`, `Log`, `Media`, `Menu`, `Pdf`, `Queue`, `Routing`, `Schedule`, `Session`, `Settings`, `Support`, `System`, `Workflow`.
-
-`Foundation` carries the cross-cutting plumbing: `ProviderRegistry` (provider discovery), `ExtensionAutoloader` (the `Extensions\` namespace), and `ModuleManifest` (parsed `extra.blb` manifests for the plugin catalog).
-
-### `app/Modules/` — Application Modules
-
-**Path shape:** `app/Modules/{Domain}/{Module}/` — domains contain modules; a domain may also own `Config/` (menu anchor) and `Tests/` (domain-spanning tests) directories. Each non-Core domain directory is the root of its own nested-git repo. `People` anchors HR-domain modules (Attendance, Leave, Claim, Payroll, Settings); it should not own the canonical Employee module, which lives in `Core` because employee records can belong to any company.
-
-```
-app/Modules/
-├── Core/                    # Required business foundations (main repo)
-│   ├── AI/                  # AI application surfaces
-│   ├── Address/
-│   ├── Company/
-│   ├── Employee/            # Employment records for any company
-│   ├── Geonames/
-│   └── User/
-│
-├── Commerce/                # Nested-git domain repo
-│   ├── Config/              # Domain menu anchor
-│   ├── Catalog/
-│   ├── Inventory/
-│   ├── Marketplace/
-│   ├── Plugins/             # Commerce plugin seams
-│   ├── Sales/
-│   └── Settings/
-│
-├── Operation/               # Nested-git domain repo
-│   ├── Config/
-│   ├── IT/
-│   └── Quality/             # NCR / SCAR / CAPA workflows
-│
-└── People/                  # Nested-git domain repo
-    ├── Config/
-    ├── Attendance/  Benefits/  Claim/  Employees/  Leave/
-    ├── Payroll/  Performance/  Recruitment/  Settings/  Training/
-```
-
-Each module is a self-contained capability and includes only the internals it needs. Outside `app/Modules/Core`, new module-owned Blade views belong under the module's `Views/` directory so the module can become a nested-git checkout without leaving UI behind in `resources/`.
-
-**Module Structure Template (for `app/Modules/{Domain}/{Module}/`):**
-
-All subdirectories within a module are **module internals** — they are not assigned additional ownership labels.
-
-```
-app/Modules/{Domain}/{Module}/
-├── Database/                 # Module internals: database layer
-│   ├── Migrations/           # Module migrations (auto-discovered)
-│   ├── Seeders/              # Production seeders (reference/config data)
-│   │   └── Dev/              # Development seeders (Dev* prefix, fake test data)
-│   └── Factories/            # Module factories
-├── Models/                   # Eloquent models
-├── Services/                 # Business logic
-├── Controllers/              # HTTP controllers
-├── Livewire/                 # Livewire component classes
-├── Events/                   # Events
-├── Listeners/                # Event listeners
-├── Hooks/                    # Extension hooks
-├── Routes/                   # Routes (web.php / api.php, auto-discovered)
-├── Views/                    # Views (registered by the module provider)
-├── Assets/                   # Optional module-owned frontend source
-├── Config/                   # Config files (PascalCase dir; filenames lowercase)
-├── Tests/                    # Module tests (auto-discovered; Feature/ gets the app TestCase)
-├── ServiceProvider.php       # Makes the directory a module
-└── composer.json             # Optional module manifest (extra.blb block)
-```
-
-For `app/Modules/Core/{Module}`, framework-wide or shared UI may still live in
-`resources/core`. For every other domain, `Views/` is the default home for
-module-owned Blade templates. Shared components promoted out of a module belong
-in `resources/core/views/components/`.
-
-`Assets/` is optional and only for module-owned frontend source that cannot be
-expressed through shared components, Tailwind tokens, Livewire, or small Alpine
-expressions in Blade. `Assets/css` and `Assets/js` are not auto-injected; the
-host app must explicitly add or import reviewed entry points. Framework-wide
-tokens and JavaScript remain in `resources/core`.
-
-**Module manifests:** a module may carry a `composer.json` whose `extra.blb`
-block declares its identity, role, version, and module dependencies
-(`requires-modules`, `optional-modules`, published/consumed events). The
-manifest is metadata for the plugin catalog — it does nothing by itself, and
-distribution remains nested-git.
-
----
-
-## Extension Structure (`extensions/`)
-
-Extensions follow the same two-level layout with kebab-case directories: `extensions/{licensee}/{module}/`. The `{licensee}` segment names the licensee-owned extension namespace and is the root of that licensee's nested-git repo.
-
-```
-extensions/
-├── {licensee}/                # Licensee nested-git repo (e.g. sb-group)
-│   ├── qac/                   # One module → Extensions\SbGroup\Qac\
-│   │   ├── Config/
-│   │   │   ├── menu.php       # Menu items (auto-discovered)
-│   │   │   ├── settings.php   # Settings (auto-discovered)
-│   │   │   └── qac.php        # Module config (lowercase)
-│   │   ├── Database/
-│   │   │   ├── Migrations/
-│   │   │   └── Seeders/
-│   │   ├── Livewire/
-│   │   ├── Models/
-│   │   ├── Services/
-│   │   ├── Routes/
-│   │   │   └── web.php
-│   │   ├── Views/
-│   │   ├── Assets/            # Optional, reviewed host build entry points only
-│   │   ├── Tests/
-│   │   └── ServiceProvider.php
-│   ├── ibp/                   # Another module (scales to many)
-│   └── docs/                  # Non-module dirs are allowed and ignored by discovery
-```
-
-Extension modules include only the internals they need. Module-owned views live under `extensions/{licensee}/{module}/Views/` and are registered by the module provider; do not create a companion `resources/extensions` tree.
-
-For nested private repository workflow, see
-`docs/guides/extensions/private-extension-repositories.md`.
-
----
-
-## Database Structure (`database/`)
-
-```
-database/
-├── migrations/               # Laravel built-in migrations only (cache, jobs, etc.)
-└── seeders/                  # Global DatabaseSeeder
-```
-
-All module migrations are auto-discovered from `{Module}/Database/Migrations/` across `app/Base`, `app/Modules`, and `extensions` (see [Discovery Contracts](#discovery-contracts)).
+Extension providers remain the integration point for extension behavior not covered by framework scanners, such as module config, views, commands, schedules, and extension authz. Extension migrations are not provider boilerplate: they are discovered by the Base database layer from `Database/Migrations/`. For private nested-git workflow, see `docs/guides/extensions/private-extension-repositories.md`.
 
 ---
 
@@ -358,72 +166,19 @@ All module migrations are auto-discovered from `{Module}/Database/Migrations/` a
 
 Module-owned tests live inside the module; the root `tests/` tree hosts framework-level and cross-module tests.
 
-```
-tests/                        # Framework-level suite
-├── Unit/                     # testsuite "Unit"
-├── Feature/                  # testsuite "Feature"
-├── Support/                  # Shared fixtures and helpers
-├── Pest.php                  # Pest configuration (binds TestCase to Feature dirs)
-├── TestCase.php
-└── TestingBaselineSeeder.php
-
-app/Modules/{Domain}/{Module}/Tests/    # testsuite "Modules"
-extensions/{licensee}/{module}/Tests/   # testsuite "Extensions"
-```
-
-- Tests for a specific module belong in that module's `Tests/` directory so they travel with the module. `Tests/Feature/` files automatically get the application `TestCase` and `RefreshDatabase` via `tests/Pest.php`.
+- Tests for a specific module belong in that module's `Tests/` directory so they travel with the module. `Tests/Feature/` files receive the application `TestCase` and `RefreshDatabase` via `tests/Pest.php`.
 - Tests that span a whole domain (e.g. the domain menu shape) live in the domain-level `Tests/` directory (`app/Modules/Commerce/Tests/`).
-- The root `tests/Unit/Modules` and `tests/Feature/Modules` trees contain Core module tests only; non-Core domain tests live in their domain repos.
+- The root `tests/Unit/Modules` and `tests/Feature/Modules` trees contain Core module tests only; non-Core domain tests live in their domain distributions.
+- PHPUnit and Pest discover module and extension tests from the path contracts in [Discovery Contracts](#discovery-contracts).
 - Test policy and assertion-strength guidance: `tests/AGENTS.md`.
 
 ---
 
 ## Framework Frontend Structure (`resources/`)
 
-Resources under `resources/core/` are framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for non-Core domains do not belong here; they live under `app/Modules/{Domain}/{Module}/Views/` or `extensions/{licensee}/{module}/Views/`.
+`resources/core/` is framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for non-Core domains and extensions live in the owning module's `Views/` directory, not under `resources/core/views`.
 
-```
-resources/core/
-├── views/
-│   ├── layouts/             # Layout templates
-│   │   ├── app.blade.php
-│   │   └── auth.blade.php
-│   │
-│   ├── livewire/            # Core/shared Livewire view templates
-│   │   ├── admin/           # Administration menu items
-│   │   │   ├── addresses/
-│   │   │   ├── ai/
-│   │   │   ├── authz/
-│   │   │   ├── companies/
-│   │   │   ├── geonames/
-│   │   │   ├── roles/
-│   │   │   ├── setup/
-│   │   │   ├── system/
-│   │   │   ├── users/
-│   │   │   └── workflows/
-│   │   ├── auth/            # Guest authentication flow
-│   │   ├── people/          # Core-owned people workbench views only
-│   │   └── profile/         # Current user's own settings
-│   │
-│   └── components/          # Blade components
-│       ├── menu/            # Sidebar navigation components
-│       └── ui/              # Reusable UI primitives (x-ui.*)
-│
-├── css/
-│   ├── tokens.css           # Design tokens (colors, spacing)
-│   └── components.css       # Component-level styles
-│
-└── js/                      # JavaScript assets
-```
-
-The Vite CSS entry point is `resources/app.css`; it imports the framework token
-and component styles from `resources/core/css/` and scans Core, module, and
-extension view paths for Tailwind classes.
-
-Non-Core views should not live under `resources/core/views`. If one appears,
-move it to its owning module root; new People, Commerce, Operation, Finance,
-Sales, Procurement, and extension screens start in module-owned `Views/`
-directories.
+Shared components promoted out of a module belong under `resources/core/views/components/`. The Vite entry point (`resources/app.css`) imports framework tokens/components and scans Core, module, and extension view paths for Tailwind classes.
 
 ---
 
@@ -467,17 +222,13 @@ A lightweight scope flag (`purpose`, `kind`, etc.) is acceptable only when the v
 
 ### 2. Discovery Over Registration
 
-A module declares nothing centrally. Dropping a conforming directory into a discovery root is the entire installation; removing it is the entire uninstall. Consequences:
+A module declares nothing centrally. Placing a conforming distribution in a discovery root installs its code surface; disabling or removing it changes discovery immediately. Persistent state cleanup is a separate lifecycle decision, not a side effect of provider discovery. Consequences:
 
-- Every framework mechanism that consumes module artifacts must discover them through the [contract globs](#discovery-contracts) across all three roots (`app/Base`, `app/Modules`, `extensions`).
-- Provider load order is part of the contract: priority → Base → Modules → extensions → app providers, alphabetical within each group.
+- Every framework mechanism that consumes module artifacts must use the [discovery contracts](#discovery-contracts) for each artifact and every root where that artifact is supported (`app/Base`, `app/Modules`, `extensions`).
+- Provider load order is part of the contract: priority → Base → Modules → extensions → app providers, alphabetical within each group. Treat this as deterministic bootstrapping and override order, not as permission to create hidden provider-order dependencies.
 
 ### 3. Single Source of Truth
 
-- Code: git repositories (main repo plus nested repos)
+- Code: versioned distributions (main repo plus installed domains, slots, and extensions)
 - Runtime settings: database (`base_settings`)
 - Environment: only bootstrap values
-
----
-
-**Related Documents:** `docs/brief.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`

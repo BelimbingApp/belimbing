@@ -22,7 +22,7 @@ For extension authoring rules, use:
 Migrations register their seeders via `RegistersSeeders`:
 
 ```php
-use App\Base\Database\RegistersSeeders;
+use App\Base\Database\Concerns\RegistersSeeders;
 
 return new class extends Migration
 {
@@ -42,7 +42,7 @@ return new class extends Migration
 };
 ```
 
-Seeders under `app/Base/*/Database/Seeders/` and `app/Modules/*/*/Database/Seeders/` are also auto-discovered on `--seed` even without `registerSeeder()`. Plain `migrate` (no `--seed`) never runs seeders.
+Seeders under `app/Base/*/Database/Seeders/` and `app/Modules/*/*/Database/Seeders/` are also auto-discovered on `--seed` even without `registerSeeder()`. Extension seeders that should run with the migration flow should be registered from an extension migration with `RegistersSeeders`. Plain `migrate` (no `--seed`) never runs seeders.
 
 ```bash
 # Run all pending seeders

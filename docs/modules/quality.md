@@ -14,12 +14,12 @@ The Operation Quality module provides industry-standard **NCR / CAPA / SCAR** qu
 
 | Model | Table | Purpose |
 |-------|-------|---------|
-| `Ncr` | `quality_ncrs` | Nonconformance Report — a logged quality issue |
-| `Capa` | `quality_capas` | Corrective Action / Preventive Action — the resolution work package (child of NCR) |
-| `Scar` | `quality_scars` | Supplier Corrective Action Request — supplier-facing workflow |
-| `QualityEvidence` | `quality_evidence` | Typed evidence attachments (polymorphic) |
-| `QualityEvent` | `quality_events` | Non-transition domain events |
-| `QualityActionItem` | `quality_action_items` | Tracked action items with owners and deadlines |
+| `Ncr` | `operation_quality_ncrs` | Nonconformance Report — a logged quality issue |
+| `Capa` | `operation_quality_capas` | Corrective Action / Preventive Action — the resolution work package (child of NCR) |
+| `Scar` | `operation_quality_scars` | Supplier Corrective Action Request — supplier-facing workflow |
+| `QualityEvidence` | `operation_quality_evidence` | Typed evidence attachments (polymorphic) |
+| `QualityEvent` | `operation_quality_events` | Non-transition domain events |
+| `QualityActionItem` | `operation_quality_action_items` | Tracked action items with owners and deadlines |
 
 ### Key Relationships
 

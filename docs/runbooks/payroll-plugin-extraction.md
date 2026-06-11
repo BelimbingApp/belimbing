@@ -148,7 +148,7 @@ Document the new clone step:
 
 - `README.md` — add a section "Setting up Payroll" that explains the nested clone.
 - `CONTRIBUTING.md` — describe the dual-PR workflow when a change spans main + plugin.
-- `docs/architecture/pluggable-modules.md` — update §7 "Physical Structure" to show the actual layout now in production.
+- `docs/architecture/module-system.md` — update the distribution model to show the actual layout now in production.
 
 ### Step 8 — update CI
 
@@ -215,6 +215,6 @@ When `blb-payroll-my` is mature enough to publish to Packagist (or a private Sat
 
 ## See also
 
-- `docs/architecture/pluggable-modules.md` — the architecture spec this runbook executes.
+- `docs/architecture/module-system.md` — the architecture spec this runbook executes.
 - `docs/guides/extensions/private-extension-repositories.md` — the existing nested-git pattern (used by `extensions/{licensee}/`) that Payroll extraction is modelled on.
 - `docs/plans/people/12_attendance-event-decoupling.md` through `17_claim-pay-item-mapping.md` — the prerequisite decoupling work.

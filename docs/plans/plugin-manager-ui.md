@@ -3,7 +3,7 @@
 **Status:** Phases 1–3 complete (2026-05-16). Phase 4 (topic tagging + cross-references) is the only remaining work and is mostly operator-side.
 **Last Updated:** 2026-05-16
 **Sources:**
-- `docs/architecture/pluggable-modules.md` — the pluggable-modules spec this UI surfaces.
+- `docs/architecture/module-system.md` — the module-system spec this UI surfaces.
 - `app/Base/Foundation/ModuleManifest/ModuleManifestReader.php` — already produces the data the dashboard needs.
 - `docs/plans/people/12_attendance-event-decoupling.md` Phase 5 — established the `extra.blb` manifest schema.
 - `docs/runbooks/payroll-plugin-extraction.md` — the operator-facing companion for the install commands the catalog will surface.
@@ -113,7 +113,7 @@ Neither tab triggers any code execution from outside the local repo. No backgrou
 **Scope**
 
 - [ ] Tag the existing BelimbingApp repos with the `blb-plugin` topic so the catalog finds them. (Operator-side GitHub action; no code change.)
-- [ ] Update `docs/architecture/pluggable-modules.md` §8 to point at the dashboard as the canonical place to inspect the loaded module graph.
+- [ ] Update `docs/architecture/module-system.md` to point at the dashboard as the canonical place to inspect the loaded module graph.
 - [ ] Update `docs/runbooks/payroll-plugin-extraction.md` to mention that post-extraction operators can verify the extracted plugin in the dashboard.
 - [ ] Add a short page under `docs/guides/` describing how to use the dashboard.
 

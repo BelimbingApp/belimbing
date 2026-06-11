@@ -4,7 +4,7 @@ This guide explains how extensions can create and manage database tables in the 
 
 ## Overview
 
-Extensions can create their own database tables by placing migration files in their `Database/Migrations/` directory and loading them through a Service Provider. This allows extensions to have their own database schema while maintaining proper namespace isolation.
+Extensions can create their own database tables by placing migration files in their `Database/Migrations/` directory. BLB's Base database layer discovers extension migrations from that path, so extension providers do not need to register migration paths.
 
 ## Extension Structure
 
@@ -24,7 +24,7 @@ extensions/
 │       ├── Services/
 │       ├── Routes/
 │       │   └── web.php
-│       └── ServiceProvider.php  # Module root, loads migrations
+│       └── ServiceProvider.php  # Module root
 │
 └── another-vendor/
     └── analytics/
@@ -128,7 +128,15 @@ Schema::create('sbg_quality_audit_assignments', function (Blueprint $table) {
 });
 ```
 
-## Loading Migrations via Service Provider
+## Migration Discovery
+
+Extension migrations are discovered automatically from:
+
+```text
+extensions/{owner}/{module}/Database/Migrations/
+```
+
+The extension still needs `ServiceProvider.php` for provider discovery and any module-owned services, config, commands, views, or authz integration, but migrations do not need `loadMigrationsFrom()`.
 
 ### Step 1: Create Service Provider
 
@@ -156,10 +164,7 @@ class ServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Load migrations from extension directory
-        $this->loadMigrationsFrom(
-            __DIR__ . '/Database/Migrations'
-        );
+        // Register views, commands, schedules, or other module behavior here.
     }
 }
 ```
@@ -175,7 +180,7 @@ If your extension is not being discovered, verify that:
 
 ## Running Migrations
 
-Once your Service Provider is discovered, Laravel will automatically include your extension migrations when you run:
+Once your migration files are in `Database/Migrations/`, BLB will automatically include your extension migrations when you run:
 
 ```bash
 php artisan migrate
@@ -312,7 +317,7 @@ class ServiceProvider extends BaseServiceProvider
 {
     public function boot(): void
     {
-        $this->loadMigrationsFrom(__DIR__ . '/Database/Migrations');
+        // No migration registration is required.
     }
 }
 ```
@@ -355,11 +360,10 @@ return new class extends Migration {
 **Problem**: `php artisan migrate` doesn't find extension migrations.
 
 **Solutions**:
-1. Verify `ServiceProvider.php` exists at `extensions/{owner}/{module}/ServiceProvider.php`
-2. Check that `loadMigrationsFrom()` path is correct (should be `__DIR__ . '/Database/Migrations'`)
-3. Ensure `ProviderRegistry::resolve()` is scanning extensions (check `bootstrap/providers.php`)
+1. Verify the migration file is under `extensions/{owner}/{module}/Database/Migrations/`
+2. Verify migration file follows Laravel naming convention (`YYYY_MM_DD_HHMMSS_description.php`)
+3. Ensure BLB's database migration commands are active for your environment
 4. Clear config cache: `php artisan config:clear`
-5. Verify migration file follows Laravel naming convention (`YYYY_MM_DD_HHMMSS_description.php`)
 
 ### Table Name Conflicts
 

@@ -6,7 +6,7 @@
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` — canonical pattern.
 - `docs/plans/people/13_leave-event-decoupling.md` — sibling Leave plan.
-- `docs/architecture/pluggable-modules.md`.
+- `docs/architecture/module-system.md`.
 - `app/Modules/People/Claim/Services/ClaimPayrollHandoffService.php` — queue + reverse paths that call intake.
 - `app/Modules/People/Claim/Models/ClaimType.php`, `ClaimLine.php` — own `payroll_pay_item_code`, `payroll_eligible`.
 

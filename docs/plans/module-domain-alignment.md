@@ -37,7 +37,7 @@ Employee is not inherently a licensee-only people module. It is the system-of-re
 
 Quality owns NCR/SCAR/CAPA operational workflows. The `operations.quality.*` menu IDs reflect real ownership, and the module now lives under `app/Modules/Operation/Quality` with `App\Modules\Operation\Quality`.
 
-Quality table names stay `quality_*`, and workflow flow codes stay `quality_ncr` and `quality_scar`. Those names describe the bounded domain and do not need an additional `operation_` prefix.
+Workflow flow codes stay `quality_ncr` and `quality_scar`. Table names were originally kept as `quality_*`, but that decision was superseded on 2026-06-11: the tables now follow the `{domain}_{module}_{entity}` convention as `operation_quality_*` (see `docs/architecture/database.md`).
 
 ### D4: Align migration bands with ownership
 
@@ -82,7 +82,7 @@ Navigation and permission IDs remain menu-domain based:
 - [x] Rename PHP namespaces from `App\Modules\Core\Quality` to `App\Modules\Operation\Quality`. codex/gpt-5
 - [x] Update route imports, Livewire view docblocks, tests, extensions, and module docs. codex/gpt-5
 - [x] Rename Quality migrations from `0200_01_25_*` to `0300_01_03_*`. codex/gpt-5
-- [x] Keep `quality_*` table names and `quality_ncr` / `quality_scar` workflow flow codes. codex/gpt-5
+- [x] Keep `quality_*` table names and `quality_ncr` / `quality_scar` workflow flow codes. codex/gpt-5 *(table names later renamed to `operation_quality_*` on 2026-06-11 per the database naming convention)*
 
 ### Phase 4 — Documentation cleanup
 
