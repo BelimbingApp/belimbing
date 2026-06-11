@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\User\Livewire\Settings;
 
+use App\Base\Foundation\Services\LandingPageResolver;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -15,18 +17,24 @@ class Profile extends Component
     public string $email = '';
 
     /**
+     * Menu item id to land on after login; empty string means the default.
+     */
+    public string $landingMenuId = '';
+
+    /**
      * Mount the component.
      */
     public function mount(): void
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
+        $this->landingMenuId = (string) (Auth::user()->prefsArray()[LandingPageResolver::PREF_KEY] ?? '');
     }
 
     /**
      * Update the profile information for the currently authenticated user.
      */
-    public function updateProfileInformation(): void
+    public function updateProfileInformation(LandingPageResolver $landing): void
     {
         $user = Auth::user();
 
@@ -41,9 +49,30 @@ class Profile extends Component
                 'max:255',
                 Rule::unique(User::class)->ignore($user->id),
             ],
+
+            'landingMenuId' => [
+                'nullable',
+                'string',
+                Rule::in(['', ...array_keys($landing->optionsFor($user))]),
+            ],
         ]);
 
-        $user->fill($validated);
+        // Read prefs before fill(): prefsArray() may refresh a partially
+        // hydrated instance, which would discard pending attribute changes.
+        $prefs = $user->prefsArray();
+
+        $user->fill([
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+        ]);
+
+        if ($this->landingMenuId === '') {
+            unset($prefs[LandingPageResolver::PREF_KEY]);
+        } else {
+            $prefs[LandingPageResolver::PREF_KEY] = $this->landingMenuId;
+        }
+
+        $user->prefs = $prefs === [] ? null : $prefs;
 
         if ($user->isDirty('email')) {
             $user->email_verified_at = null;
@@ -52,6 +81,24 @@ class Profile extends Component
         $user->save();
 
         $this->dispatch('profile-updated', name: $user->name);
+    }
+
+    /**
+     * Landing-page choices: every navigable menu item visible to the user.
+     *
+     * @return array<string, string> Menu item id => label
+     */
+    private function landingOptions(): array
+    {
+        $options = [];
+
+        foreach (app(LandingPageResolver::class)->optionsFor(Auth::user()) as $id => $item) {
+            $options[$id] = $item['label'];
+        }
+
+        asort($options);
+
+        return $options;
     }
 
     /**
@@ -74,6 +121,8 @@ class Profile extends Component
 
     public function render(): View
     {
-        return view('livewire.profile.profile');
+        return view('livewire.profile.profile', [
+            'landingOptions' => $this->landingOptions(),
+        ]);
     }
 }

@@ -180,7 +180,7 @@ abstract class SettingsForm extends Component
     }
 
     /**
-     * Settings group key (e.g. 'marketplace_ebay'). Must match an entry in
+     * Settings group key (e.g. 'commerce_marketplace_ebay'). Must match an entry in
      * `config('settings.editable')`.
      */
     abstract protected function group(): string;

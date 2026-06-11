@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\User\Models;
 
 use App\Base\Authz\Enums\PrincipalType;
@@ -55,6 +56,23 @@ class User extends Authenticatable implements CompanyScoped
             'password' => 'hashed',
             'prefs' => 'array',
         ];
+    }
+
+    /**
+     * Prefs as an array, reloading the model when this instance was hydrated
+     * without the prefs column (e.g. Livewire's auth re-resolution) — reading
+     * it directly would trip strict attribute mode, and writing prefs back
+     * from a partial instance would silently wipe the stored value.
+     *
+     * @return array<string, mixed>
+     */
+    public function prefsArray(): array
+    {
+        if (! array_key_exists('prefs', $this->getAttributes()) && $this->exists) {
+            $this->refresh();
+        }
+
+        return is_array($this->prefs) ? $this->prefs : [];
     }
 
     /**

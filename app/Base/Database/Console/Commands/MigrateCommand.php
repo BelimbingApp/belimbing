@@ -9,6 +9,7 @@ use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
 use Illuminate\Console\Command;
@@ -321,7 +322,7 @@ class MigrateCommand extends IlluminateMigrateCommand
         ];
 
         foreach ($patterns as $pattern) {
-            foreach (glob($pattern) as $file) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 $class = AppPath::toClass($file);
 
                 if ($class !== null && class_exists($class) && is_subclass_of($class, DevSeeder::class)) {

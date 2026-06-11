@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Settings;
 
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Services\DatabaseSettingsService;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
@@ -42,11 +44,11 @@ class ServiceProvider extends BaseServiceProvider
      */
     private function discoverSettingsConfigFiles(): array
     {
-        $files = array_merge(
+        $files = DomainState::filterPaths(array_merge(
             glob(app_path('Base/*/Config/settings.php')) ?: [],
             glob(app_path('Modules/*/*/Config/settings.php')) ?: [],
             glob(base_path('extensions/*/*/Config/settings.php')) ?: [],
-        );
+        ));
 
         sort($files);
 

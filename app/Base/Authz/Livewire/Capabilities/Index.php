@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Base\Authz\Livewire\Capabilities;
 
 use App\Base\Authz\Capability\CapabilityKey;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Foundation\Services\DomainState;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
@@ -67,7 +69,7 @@ class Index extends Component
         ];
 
         foreach ($patterns as $pattern) {
-            foreach (glob($pattern) ?: [] as $file) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 $moduleConfig = require $file;
                 $moduleName = $this->extractModuleName($file);
 

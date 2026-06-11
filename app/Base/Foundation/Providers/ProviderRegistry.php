@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Providers;
 
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
 use App\Base\Support\Str;
 use Illuminate\Support\ServiceProvider;
@@ -39,7 +40,7 @@ class ProviderRegistry
      */
     public static function discoverModuleProviders(): array
     {
-        $paths = glob(app_path('Modules/*/*/ServiceProvider.php')) ?: [];
+        $paths = DomainState::filterPaths(glob(app_path('Modules/*/*/ServiceProvider.php')) ?: []);
 
         sort($paths);
 

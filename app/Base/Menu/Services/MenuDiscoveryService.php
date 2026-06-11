@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Menu\Services;
 
+use App\Base\Foundation\Services\DomainState;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -36,7 +38,7 @@ class MenuDiscoveryService
         $items = collect();
 
         foreach ($this->scanPatterns as $pattern) {
-            $files = glob(base_path($pattern));
+            $files = DomainState::filterPaths(glob(base_path($pattern)) ?: []);
 
             foreach ($files as $file) {
                 $this->processFile($file, $items);
@@ -58,7 +60,7 @@ class MenuDiscoveryService
         $parts = [];
 
         foreach ($this->scanPatterns as $pattern) {
-            foreach (glob(base_path($pattern)) as $file) {
+            foreach (DomainState::filterPaths(glob(base_path($pattern)) ?: []) as $file) {
                 $parts[] = $file.':'.@filemtime($file);
             }
         }

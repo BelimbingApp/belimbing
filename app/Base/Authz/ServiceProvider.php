@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz;
 
 use App\Base\Authz\Capability\CapabilityCatalog;
@@ -15,6 +16,7 @@ use App\Base\Authz\Services\AuthorizationEngine;
 use App\Base\Authz\Services\AuthzMenuAccessChecker;
 use App\Base\Authz\Services\DatabaseDecisionLogger;
 use App\Base\Authz\Services\ImpersonationManager;
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Support\Facades\Gate;
@@ -112,7 +114,7 @@ class ServiceProvider extends BaseServiceProvider
         ];
 
         foreach ($patterns as $pattern) {
-            foreach (glob($pattern) ?: [] as $file) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 $this->mergeAuthzConfigFile($file, $basePath, $config);
             }
         }

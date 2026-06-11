@@ -1,0 +1,238 @@
+<?php
+
+namespace App\Base\Foundation\Livewire;
+
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Services\DomainInstaller;
+use App\Base\Foundation\Services\DomainResidueScanner;
+use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
+use Livewire\Component;
+
+/**
+ * Admin domain-manager screen (admin/system/domains).
+ *
+ * A fresh install ships Base + Core only; this screen is where an operator
+ * installs official domains (clone + migrate), disables or re-enables an
+ * installed domain, and uninstalls one — GitHub-style: typing
+ * "uninstall commerce" deletes the checkout but keeps every table, while
+ * "uninstall commerce and drop all tables" also removes the domain's
+ * tables, migration-ledger rows, and settings.
+ *
+ * The residue section cleans up database leftovers from code that was
+ * removed outside this screen; its actions are armed by typing DELETE.
+ */
+class DomainManager extends Component
+{
+    /**
+     * Domain whose uninstall confirmation panel is open.
+     */
+    public ?string $uninstallTarget = null;
+
+    /**
+     * GitHub-style typed confirmation for uninstall.
+     */
+    public string $uninstallPhrase = '';
+
+    /** @var list<string> */
+    public array $selectedTables = [];
+
+    /** @var list<string> */
+    public array $selectedLedger = [];
+
+    /** @var list<string> */
+    public array $selectedSettings = [];
+
+    /**
+     * Typed confirmation required before residue cleanup.
+     */
+    public string $confirmText = '';
+
+    public function install(string $domain, DomainInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        // Clone + migrate outlive a default PHP execution window.
+        set_time_limit(0);
+
+        $result = $installer->install($domain);
+
+        session()->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? __(':domain installed. Its menus and routes are live from the next page load.', ['domain' => $domain])
+            : __(':domain install failed.', ['domain' => $domain]));
+        session()->flash('command-log', $result['log']);
+
+        $this->redirectRoute('admin.system.domains.index');
+    }
+
+    public function disable(string $domain, DomainInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        $installer->disable($domain);
+
+        session()->flash('success', __(':domain disabled. Its code stays on disk and its data stays claimed; discovery skips it from the next page load.', ['domain' => $domain]));
+
+        $this->redirectRoute('admin.system.domains.index');
+    }
+
+    public function enable(string $domain, DomainInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        $installer->enable($domain);
+
+        session()->flash('success', __(':domain enabled.', ['domain' => $domain]));
+
+        $this->redirectRoute('admin.system.domains.index');
+    }
+
+    public function openUninstall(string $domain): void
+    {
+        $this->authorizeManage();
+
+        $this->uninstallTarget = $domain;
+        $this->uninstallPhrase = '';
+        $this->resetErrorBag('uninstallPhrase');
+    }
+
+    public function cancelUninstall(): void
+    {
+        $this->reset('uninstallTarget', 'uninstallPhrase');
+        $this->resetErrorBag('uninstallPhrase');
+    }
+
+    public function uninstall(DomainInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        $domain = $this->uninstallTarget;
+
+        if ($domain === null) {
+            return;
+        }
+
+        $dropTables = $this->parseUninstallPhrase($domain);
+
+        if ($dropTables === null) {
+            $this->addError('uninstallPhrase', __('Type the exact phrase to confirm.'));
+
+            return;
+        }
+
+        $result = $installer->uninstall($domain, $dropTables);
+
+        session()->flash('success', $dropTables
+            ? __(':domain uninstalled. :tables table(s) dropped, :ledger ledger row(s) pruned, :settings setting row(s) deleted.', [
+                'domain' => $domain,
+                'tables' => count($result['droppedTables']),
+                'ledger' => $result['prunedLedger'],
+                'settings' => $result['deletedSettings'],
+            ])
+            : __(':domain uninstalled. Its database state was kept; reinstalling adopts it again.', ['domain' => $domain]));
+
+        $this->redirectRoute('admin.system.domains.index');
+    }
+
+    public function dropSelectedTables(DomainResidueScanner $scanner): void
+    {
+        $this->authorizeManage();
+
+        if (! $this->confirmed()) {
+            return;
+        }
+
+        $result = $scanner->dropTables($this->selectedTables);
+
+        $this->reset('selectedTables', 'confirmText');
+
+        session()->flash('success', __(':n table(s) dropped.', ['n' => count($result['dropped'])])
+            .(count($result['skipped']) > 0 ? ' '.__(':n skipped (no longer orphaned).', ['n' => count($result['skipped'])]) : ''));
+    }
+
+    public function pruneSelectedLedger(DomainResidueScanner $scanner): void
+    {
+        $this->authorizeManage();
+
+        if (! $this->confirmed()) {
+            return;
+        }
+
+        $deleted = $scanner->pruneLedger($this->selectedLedger);
+
+        $this->reset('selectedLedger', 'confirmText');
+
+        session()->flash('success', __(':n migration ledger row(s) removed.', ['n' => $deleted]));
+    }
+
+    public function deleteSelectedSettings(DomainResidueScanner $scanner): void
+    {
+        $this->authorizeManage();
+
+        if (! $this->confirmed()) {
+            return;
+        }
+
+        $deleted = $scanner->deleteSettings($this->selectedSettings);
+
+        $this->reset('selectedSettings', 'confirmText');
+
+        session()->flash('success', __(':n setting row(s) deleted.', ['n' => $deleted]));
+    }
+
+    public function render(DomainResidueScanner $scanner, DomainInstaller $installer): View
+    {
+        return view('livewire.base.foundation.domain-manager', [
+            'available' => $installer->available(),
+            'installed' => $installer->installed(),
+            'residue' => $scanner->scan(),
+            'canManage' => $this->canManage(),
+        ]);
+    }
+
+    /**
+     * Map the typed phrase to the uninstall mode; null means no match.
+     */
+    private function parseUninstallPhrase(string $domain): ?bool
+    {
+        $name = strtolower($domain);
+
+        return match (trim($this->uninstallPhrase)) {
+            "uninstall {$name}" => false,
+            "uninstall {$name} and drop all tables" => true,
+            default => null,
+        };
+    }
+
+    private function authorizeManage(): void
+    {
+        if (! $this->canManage()) {
+            abort(403);
+        }
+    }
+
+    private function confirmed(): bool
+    {
+        if ($this->confirmText === 'DELETE') {
+            return true;
+        }
+
+        $this->addError('confirmText', __('Type DELETE to confirm.'));
+
+        return false;
+    }
+
+    private function canManage(): bool
+    {
+        $user = Auth::user();
+
+        if ($user === null) {
+            return false;
+        }
+
+        return app(AuthorizationService::class)
+            ->can(Actor::forUser($user), 'admin.system.domains.manage')
+            ->allowed;
+    }
+}

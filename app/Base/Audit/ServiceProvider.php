@@ -12,6 +12,7 @@ use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Foundation\Services\DomainState;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
@@ -125,7 +126,7 @@ class ServiceProvider extends BaseServiceProvider
         ];
 
         foreach ($patterns as $pattern) {
-            foreach (glob($pattern) ?: [] as $file) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 if (realpath($file) === $basePath) {
                     continue;
                 }

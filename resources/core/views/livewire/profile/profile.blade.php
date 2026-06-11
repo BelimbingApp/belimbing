@@ -27,6 +27,18 @@
                 @endif
             </div>
 
+            <x-ui.select
+                id="profile-landing"
+                wire:model="landingMenuId"
+                :label="__('Landing page')"
+                :help="__('The first page you see after logging in.')"
+            >
+                <option value="">{{ __('Default') }}</option>
+                @foreach ($landingOptions as $id => $label)
+                    <option value="{{ $id }}">{{ $label }}</option>
+                @endforeach
+            </x-ui.select>
+
             <div class="flex items-center gap-4">
                 <div class="flex items-center justify-end">
                     <x-ui.button type="submit" variant="primary" class="w-full" data-test="update-profile-button">

@@ -2,6 +2,7 @@
 
 namespace App\Base\Livewire;
 
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
 use App\Base\Support\Str as BlbStr;
 use Livewire\Component;
@@ -37,7 +38,7 @@ class ComponentDiscoveryService
         $components = [];
 
         foreach ($this->scanPatterns as $pattern) {
-            $directories = glob(base_path($pattern), GLOB_ONLYDIR);
+            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
 
             foreach ($directories as $directory) {
                 $this->scanDirectory($directory, $components);

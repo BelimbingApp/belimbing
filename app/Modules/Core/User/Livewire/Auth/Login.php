@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\User\Livewire\Auth;
 
+use App\Base\Foundation\Services\LandingPageResolver;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -44,7 +46,7 @@ class Login extends Component
         // Full page load (not navigate): we're crossing from the guest auth layout
         // into the app-shell layout, and a wire:navigate morph cannot bring up the
         // persisted chrome (sidebar/top/status) that doesn't exist on the login page.
-        $this->redirectIntended(default: route('dashboard', absolute: false));
+        $this->redirectIntended(default: app(LandingPageResolver::class)->urlFor(Auth::user()));
     }
 
     /**

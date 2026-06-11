@@ -12,6 +12,8 @@ use App\Modules\Core\Company\Models\RelationshipType;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -174,6 +176,103 @@ final class StubTool implements Tool
 
         return ($this->execute)($arguments);
     }
+}
+
+/**
+ * Create a throwaway fake domain checkout under app/Modules.
+ *
+ * The checkout carries one Sample module with a runnable migration that
+ * claims a table, a settings declaration, and (optionally) a discoverable
+ * ServiceProvider, a menu file, or a git repo. Callers must delete the
+ * directory before the test ends (the path is gitignored either way).
+ *
+ * @param  array{withProvider?: bool, withMenu?: bool, withGit?: bool}  $options
+ * @return string Absolute path of the created domain directory
+ */
+function createFakeDomainCheckout(string $domain, string $table, string $settingKey, array $options = []): string
+{
+    $base = app_path('Modules/'.$domain);
+    $module = $base.'/Sample';
+
+    File::ensureDirectoryExists($module.'/Database/Migrations');
+    File::ensureDirectoryExists($module.'/Config');
+
+    file_put_contents(
+        $module.'/Database/Migrations/2099_01_01_000000_create_'.$table.'_table.php',
+        <<<PHP
+        <?php
+        use Illuminate\Database\Migrations\Migration;
+        use Illuminate\Database\Schema\Blueprint;
+        use Illuminate\Support\Facades\Schema;
+
+        return new class extends Migration
+        {
+            public function up(): void
+            {
+                Schema::create('{$table}', function (Blueprint \$table): void {
+                    \$table->id();
+                });
+            }
+
+            public function down(): void
+            {
+                Schema::dropIfExists('{$table}');
+            }
+        };
+        PHP,
+    );
+
+    file_put_contents(
+        $module.'/Config/settings.php',
+        <<<PHP
+        <?php
+        return [
+            'editable' => [
+                'zz_fake' => [
+                    'label' => 'Fake',
+                    'fields' => [
+                        ['key' => '{$settingKey}', 'label' => 'Option', 'type' => 'text'],
+                    ],
+                ],
+            ],
+        ];
+        PHP,
+    );
+
+    if ($options['withProvider'] ?? false) {
+        file_put_contents(
+            $module.'/ServiceProvider.php',
+            <<<PHP
+            <?php
+
+            namespace App\Modules\\{$domain}\Sample;
+
+            use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+
+            class ServiceProvider extends BaseServiceProvider {}
+            PHP,
+        );
+    }
+
+    if ($options['withMenu'] ?? false) {
+        file_put_contents(
+            $module.'/Config/menu.php',
+            <<<'PHP'
+            <?php
+            return [
+                'items' => [
+                    ['id' => 'zz-fake-domain-root', 'label' => 'Fake Domain'],
+                ],
+            ];
+            PHP,
+        );
+    }
+
+    if ($options['withGit'] ?? false) {
+        Process::path($base)->run(['git', 'init', '-q']);
+    }
+
+    return $base;
 }
 
 /**

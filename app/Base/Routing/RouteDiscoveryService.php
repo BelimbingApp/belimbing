@@ -1,5 +1,8 @@
 <?php
+
 namespace App\Base\Routing;
+
+use App\Base\Foundation\Services\DomainState;
 
 class RouteDiscoveryService
 {
@@ -24,7 +27,7 @@ class RouteDiscoveryService
         $routes = [];
 
         foreach ($this->scanPatterns as $pattern) {
-            $directories = glob(base_path($pattern), GLOB_ONLYDIR);
+            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
 
             foreach ($directories as $directory) {
                 foreach (['web', 'api'] as $type) {
