@@ -35,18 +35,20 @@
         :error="$errors->first('providerBaseUrl')"
     />
 
-    <x-ui.secret-input
-        id="new-provider-api-key"
-        wire:model="providerApiKey"
-        value="{{ $providerApiKey }}"
-        label="{{ __('API Key') }}"
-        :required="!$isEditingProvider"
-        :placeholder="($isEditingProvider && ! $providerHasStoredApiKey) ? __('Enter API key') : ''"
-        :help="$isEditingProvider ? __('Focus to replace. Saving without changes keeps the current key.') : ''"
-        :error="$errors->first('providerApiKey')"
-        :has-value="$isEditingProvider && $providerHasStoredApiKey"
-        :show-reveal-button="$isEditingProvider && $providerHasStoredApiKey"
-    />
+    <div wire:key="provider-api-key-{{ $isEditingProvider ? 'edit-'.$editingProviderId : 'create' }}-{{ $providerHasStoredApiKey ? 'stored' : 'empty' }}">
+        <x-ui.secret-input
+            id="provider-api-key-{{ $isEditingProvider ? 'edit-'.$editingProviderId : 'create' }}"
+            wire:model="providerApiKey"
+            value="{{ $providerApiKey }}"
+            label="{{ __('API Key') }}"
+            :required="!$isEditingProvider"
+            :placeholder="($isEditingProvider && ! $providerHasStoredApiKey) ? __('Enter API key') : ''"
+            :help="$isEditingProvider ? __('Focus to replace. Saving without changes keeps the current key.') : ''"
+            :error="$errors->first('providerApiKey')"
+            :has-value="$isEditingProvider && $providerHasStoredApiKey"
+            :show-reveal-button="$isEditingProvider && $providerHasStoredApiKey"
+        />
+    </div>
 
     <x-ui.checkbox id="provider-is-active" wire:model="providerIsActive" label="{{ __('Active') }}" />
 

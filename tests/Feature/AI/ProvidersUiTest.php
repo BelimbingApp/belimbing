@@ -17,6 +17,7 @@ const PROVIDER_CATALOG_SEARCH_PLACEHOLDER = 'Search providers...';
 const AI_PROVIDERS_SAVED_KEY = 'sk-test-1234567890abcd';
 const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
 const AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI = 'https://github.com/login/device';
+const AI_PROVIDERS_VISIBLE_TEST_KEY = 'visible-provider-key-123';
 
 test('edit provider modal hydrates the api key when one exists', function (): void {
     $user = createAiProvidersTestUser();
@@ -28,6 +29,20 @@ test('edit provider modal hydrates the api key when one exists', function (): vo
         ->call('openEditProvider', $provider->id)
         ->assertSee('Focus to replace')
         ->assertSet('providerApiKey', AI_PROVIDERS_SAVED_KEY);
+});
+
+test('edit provider api key field remounts with the stored key available for reveal', function (): void {
+    $user = createAiProvidersTestUser();
+    $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_VISIBLE_TEST_KEY);
+
+    $this->actingAs($user);
+
+    Livewire::test(Providers::class)
+        ->call('openCreateProvider')
+        ->call('openEditProvider', $provider->id)
+        ->assertSee('wire:key="provider-api-key-edit-'.$provider->id.'-stored"', false)
+        ->assertSee('id="provider-api-key-edit-'.$provider->id.'"', false)
+        ->assertSee("pendingSecret: '".AI_PROVIDERS_VISIBLE_TEST_KEY."'", false);
 });
 
 test('edit provider modal stays empty when no api key is saved', function (): void {

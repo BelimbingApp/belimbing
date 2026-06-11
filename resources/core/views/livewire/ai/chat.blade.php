@@ -468,12 +468,38 @@
                                         <button
                                             type="button"
                                             wire:click="generateSessionTitle('{{ $session->id }}')"
-                                            class="text-muted hover:text-accent transition-colors p-0.5 shrink-0"
+                                            wire:loading.attr="disabled"
+                                            wire:target="generateSessionTitle('{{ $session->id }}')"
+                                            class="text-muted hover:text-accent disabled:opacity-60 disabled:cursor-wait transition-colors p-0.5 shrink-0"
                                             title="{{ __('Suggest a title') }}"
                                             aria-label="{{ __('Suggest a title') }}"
                                         >
-                                            <x-icon name="heroicon-o-sparkles" class="w-3.5 h-3.5" />
+                                            <span wire:loading.remove wire:target="generateSessionTitle('{{ $session->id }}')">
+                                                <x-icon name="heroicon-o-sparkles" class="w-3.5 h-3.5" />
+                                            </span>
+                                            <span wire:loading wire:target="generateSessionTitle('{{ $session->id }}')">
+                                                <x-icon name="heroicon-o-arrow-path" class="w-3.5 h-3.5 animate-spin" />
+                                            </span>
                                         </button>
+                                    </div>
+                                    <div class="text-[10px] leading-snug" role="status" aria-live="polite">
+                                        <span
+                                            wire:loading
+                                            wire:target="generateSessionTitle('{{ $session->id }}')"
+                                            class="text-muted"
+                                        >
+                                            {{ __('Suggesting title…') }}
+                                        </span>
+                                        @if ($titleSuggestionSessionId === $session->id && $titleSuggestionMessage !== null)
+                                            <span @class([
+                                                'text-accent' => $titleSuggestionTone === 'success',
+                                                'text-muted' => $titleSuggestionTone === 'info',
+                                                'text-warning' => $titleSuggestionTone === 'warning',
+                                                'text-danger' => $titleSuggestionTone === 'error',
+                                            ])>
+                                                {{ $titleSuggestionMessage }}
+                                            </span>
+                                        @endif
                                     </div>
                                     <div class="flex items-center gap-1">
                                         <button type="button" wire:click="saveTitle" class="text-[10px] text-accent hover:underline">{{ __('Save') }}</button>

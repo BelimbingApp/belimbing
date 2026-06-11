@@ -1,11 +1,16 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\MessageManager;
-use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\Runtime\SimpleTaskExecutor;
+use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Str;
+use Throwable;
 
 /**
  * Handles chat session CRUD, title management, and search.
@@ -201,39 +206,114 @@ trait ManagesChatSessions
      */
     public function generateSessionTitle(string $sessionId): void
     {
+        $this->clearTitleSuggestionFeedback($sessionId);
+
         if (! $this->isAgentActivated()) {
+            $this->showTitleSuggestionFeedback($sessionId, __('Lara is not activated.'), 'error');
+
             return;
         }
 
-        $messages = app(MessageManager::class)->read($this->employeeId, $sessionId);
-        if ($messages === []) {
-            return;
-        }
-
-        $title = app(SimpleTaskExecutor::class)->execute(
-            employeeId: $this->employeeId,
-            taskKey: 'titling',
-            messages: $messages,
-            systemPrompt: 'Generate a concise 3–6 word title summarizing this conversation. Reply with only the title, no quotes or punctuation.',
-            maxOutputTokens: 20,
-            timeout: 15,
-            sessionId: $sessionId,
+        $messages = $this->messagesForTitleSuggestion(
+            app(MessageManager::class)->read($this->employeeId, $sessionId),
         );
 
+        if ($messages === []) {
+            $this->showTitleSuggestionFeedback($sessionId, __('Send a message before suggesting a title.'), 'warning');
+
+            return;
+        }
+
+        try {
+            $title = app(SimpleTaskExecutor::class)->execute(
+                employeeId: $this->employeeId,
+                taskKey: 'titling',
+                messages: $messages,
+                systemPrompt: 'Generate a concise 3–6 word title for the user\'s requested work. Use the concrete task, target file, page, or feature from the user messages. Ignore assistant status updates, verification text, tool output, and implementation details. If later user messages correct or refine the task, title the refined task. Reply with only the title, no quotes or punctuation.',
+                maxOutputTokens: 20,
+                timeout: 15,
+                sessionId: $sessionId,
+            );
+        } catch (Throwable $e) {
+            report($e);
+            $this->showTitleSuggestionFeedback($sessionId, __('Could not suggest a title. Try again later.'), 'error');
+
+            return;
+        }
+
         if ($title === null) {
+            $this->showTitleSuggestionFeedback($sessionId, $this->titleSuggestionFailureMessage($sessionId), 'error');
+
             return;
         }
 
         $title = trim($title, '"\'');
         if ($title === '') {
+            $this->showTitleSuggestionFeedback($sessionId, __('Could not suggest a title. Try again later.'), 'error');
+
             return;
         }
 
         app(SessionManager::class)->updateTitle($this->employeeId, $sessionId, $title);
+        $this->showTitleSuggestionFeedback($sessionId, __('Title updated.'), 'success');
 
         if ($this->editingSessionId === $sessionId) {
             $this->editingTitle = $title;
         }
+    }
+
+    /**
+     * Keep titling focused on user intent instead of Lara's final progress update.
+     *
+     * @param  list<Message>  $messages
+     * @return list<Message>
+     */
+    private function messagesForTitleSuggestion(array $messages): array
+    {
+        $userMessages = array_values(array_filter(
+            $messages,
+            fn ($message): bool => $message->role === 'user' && trim($message->content) !== '',
+        ));
+
+        return array_map(function ($message) {
+            return new Message(
+                role: 'user',
+                content: Str::limit($message->content, 1000, '…'),
+                timestamp: $message->timestamp,
+            );
+        }, array_slice($userMessages, -8));
+    }
+
+    private function titleSuggestionFailureMessage(string $sessionId): string
+    {
+        $run = AiRun::query()
+            ->where('employee_id', $this->employeeId)
+            ->where('session_id', $sessionId)
+            ->where('source', 'simple_task')
+            ->latest('created_at')
+            ->first();
+
+        $model = is_string($run?->model) && $run->model !== '' ? $run->model : __('The title model');
+
+        return match ($run?->error_type) {
+            'rate_limit' => __(':model is rate limited or overloaded. Try again later.', ['model' => $model]),
+            'config_error' => __('No title model is configured for Lara.'),
+            default => __('Could not suggest a title. Try again later.'),
+        };
+    }
+
+    private function clearTitleSuggestionFeedback(string $sessionId): void
+    {
+        $this->titleSuggestionSessionId = $sessionId;
+        $this->titleSuggestionMessage = null;
+        $this->titleSuggestionTone = 'info';
+    }
+
+    private function showTitleSuggestionFeedback(string $sessionId, string $message, string $tone): void
+    {
+        $this->titleSuggestionSessionId = $sessionId;
+        $this->titleSuggestionMessage = $message;
+        $this->titleSuggestionTone = $tone;
     }
 
     /**

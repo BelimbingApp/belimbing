@@ -242,3 +242,89 @@ it('records a titling run, outbound exchange, and wire logs when wire logging is
         ->toContain('llm.response_body')
         ->toContain('llm.complete');
 });
+
+it('titles the user request instead of Lara status updates', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    Http::fake([
+        'stream-provider.example.test/chat/completions' => Http::response([
+            'choices' => [
+                ['message' => ['role' => 'assistant', 'content' => 'Add Import Listings Icon']],
+            ],
+            'usage' => ['prompt_tokens' => 12, 'completion_tokens' => 4, 'total_tokens' => 16],
+        ]),
+    ]);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    app(MessageManager::class)->appendUserMessage(Employee::LARA_ID, $session->id, 'Add missing icon for the Import existing listings button.');
+    app(MessageManager::class)->appendAssistantMessage(Employee::LARA_ID, $session->id, 'I have verified that there are no other references to heroicon-o-arrow-up-on-square.');
+
+    Livewire::test(Chat::class)->call('generateSessionTitle', $session->id);
+
+    $exchange = OutboundExchange::query()
+        ->where('system', 'ai')
+        ->where('operation', 'ai.llm.chat')
+        ->latest('occurred_at')
+        ->first();
+
+    expect($exchange)->not->toBeNull();
+
+    $messages = $exchange->request_body['value']['messages'];
+    $messageText = collect($messages)->pluck('content')->implode("\n");
+
+    expect($messageText)
+        ->toContain('Add missing icon for the Import existing listings button.')
+        ->not->toContain('I have verified that there are no other references');
+
+    $updatedSession = app(SessionManager::class)->get(Employee::LARA_ID, $session->id);
+    expect($updatedSession?->title)->toBe('Add Import Listings Icon');
+});
+
+it('shows feedback while suggesting a session title', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    $html = Livewire::test(Chat::class)
+        ->call('startEditingTitle', $session->id)
+        ->html();
+
+    expect($html)
+        ->toContain('wire:target="generateSessionTitle')
+        ->toContain('Suggesting title…');
+});
+
+it('reports when a title cannot be suggested', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    Http::fake([
+        'stream-provider.example.test/chat/completions' => Http::response([
+            'error' => ['message' => 'The engine is currently overloaded.'],
+        ], 429),
+    ]);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+    app(MessageManager::class)->appendUserMessage(Employee::LARA_ID, $session->id, 'Summarize this chat.');
+
+    Livewire::test(Chat::class)
+        ->call('generateSessionTitle', $session->id)
+        ->assertSet('titleSuggestionSessionId', $session->id)
+        ->assertSet('titleSuggestionTone', 'error')
+        ->assertSet('titleSuggestionMessage', CHAT_VIEW_TEST_MODEL.' is rate limited or overloaded. Try again later.');
+});
+
+it('reports that a conversation needs messages before suggesting a title', function (): void {
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    Livewire::test(Chat::class)
+        ->call('generateSessionTitle', $session->id)
+        ->assertSet('titleSuggestionSessionId', $session->id)
+        ->assertSet('titleSuggestionTone', 'warning')
+        ->assertSet('titleSuggestionMessage', 'Send a message before suggesting a title.');
+});

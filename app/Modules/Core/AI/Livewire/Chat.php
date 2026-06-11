@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
@@ -68,6 +69,12 @@ class Chat extends Component
     public ?string $editingSessionId = null;
 
     public string $editingTitle = '';
+
+    public ?string $titleSuggestionSessionId = null;
+
+    public ?string $titleSuggestionMessage = null;
+
+    public string $titleSuggestionTone = 'info';
 
     /** @var list<TemporaryUploadedFile> */
     public array $attachments = [];
