@@ -84,16 +84,17 @@ $formatCents = static fn (?int $cents): string => $cents !== null
     {{-- Tokens and timing --}}
     <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (prompt)') }}</span>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Input Tokens') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">
                 {{ isset($run['tokens']['prompt']) ? number_format((int) $run['tokens']['prompt']) : '—' }}
-                @if(! empty($run['tokens']['cached_input']))
-                    <span class="text-muted text-xs">({{ __(':n cached', ['n' => number_format((int) $run['tokens']['cached_input'])]) }})</span>
-                @endif
             </p>
         </div>
         <div>
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Tokens (completion)') }}</span>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Cached Tokens') }}</span>
+            <p class="text-sm text-ink mt-1 tabular-nums">{{ isset($run['tokens']['cached_input']) ? number_format((int) $run['tokens']['cached_input']) : '—' }}</p>
+        </div>
+        <div>
+            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Output Tokens') }}</span>
             <p class="text-sm text-ink mt-1 tabular-nums">
                 {{ isset($run['tokens']['completion']) ? number_format((int) $run['tokens']['completion']) : '—' }}
                 @if(! empty($run['tokens']['reasoning']))
@@ -139,9 +140,9 @@ $formatCents = static fn (?int $cents): string => $cents !== null
                         <tr>
                             <x-ui.th>#</x-ui.th>
                             <x-ui.th>{{ __('Model') }}</x-ui.th>
-                            <x-ui.th align="right">{{ __('Prompt') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Input') }}</x-ui.th>
                             <x-ui.th align="right">{{ __('Cached') }}</x-ui.th>
-                            <x-ui.th align="right">{{ __('Completion') }}</x-ui.th>
+                            <x-ui.th align="right">{{ __('Output') }}</x-ui.th>
                             <x-ui.th align="right">{{ __('Reasoning') }}</x-ui.th>
                             <x-ui.th align="right">{{ __('Total') }}</x-ui.th>
                             <x-ui.th align="right">{{ __('Cost') }}</x-ui.th>

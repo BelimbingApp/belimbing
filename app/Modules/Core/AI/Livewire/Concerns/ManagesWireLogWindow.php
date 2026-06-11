@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
@@ -60,6 +61,15 @@ trait ManagesWireLogWindow
         $this->wireLogOffset = $startEntry - 1;
         $this->syncWireLogStartEntry();
         $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
+    }
+
+    public function focusWireLogEntry(int $entryNumber): void
+    {
+        $entryNumber = max(1, $entryNumber);
+        $this->wireLogOffset = $entryNumber - 1;
+        $this->syncWireLogStartEntry();
+        $this->notifyWireLogWindowChanged(scrollWireLogPanelIntoView: true);
+        $this->dispatch('wire-log-focus-entry', entryNumber: $entryNumber);
     }
 
     protected function resetWireLogWindow(): void

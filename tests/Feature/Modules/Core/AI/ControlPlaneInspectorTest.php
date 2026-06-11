@@ -97,8 +97,7 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
     $response->assertOk()
         ->assertSee('Wire Log')
         ->assertSee('Showing entries 1-45 of 45 retained wire-log entries.')
-        ->assertSee('This run retained')
-        ->assertSee('Large entries can be opened raw in a separate tab without loading them into the inspector response.')
+        ->assertSee('retained. Click entries to drill down; oversized payloads open raw in a new tab.')
         ->assertSee('llm.response_body')
         ->assertSee('#1')
         ->assertSee('{"raw_body":"')
@@ -239,7 +238,23 @@ it('treats the retired tab=timeline query as the Run Inspector and surfaces life
         ->assertSet('activeTab', 'inspector')
         ->assertSet('inspectRunId', CONTROL_PLANE_TIMELINE_RUN_ID)
         ->assertSee('Lifecycle milestones')
+        ->assertSee('focusWireLogEntry(1)', false)
+        ->assertSee('Open wire-log entry #1')
         ->assertSee('Run Started');
+});
+
+it('focuses the wire-log window on a lifecycle milestone entry', function (): void {
+    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    Employee::provisionLara();
+
+    $user = createAdminUser();
+
+    Livewire::actingAs($user)
+        ->test(ControlPlane::class)
+        ->call('focusWireLogEntry', 75)
+        ->assertSet('wireLogOffset', 74)
+        ->assertSet('wireLogStartEntry', '75')
+        ->assertDispatched('wire-log-focus-entry', entryNumber: 75);
 });
 
 const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';

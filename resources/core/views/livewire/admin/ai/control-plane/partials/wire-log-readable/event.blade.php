@@ -10,7 +10,7 @@ $payloadPretty = $event['payload_pretty'] ?? '';
     id="wire-log-entry-{{ $entryNumber }}"
     class="rounded-xl border border-border-default/60 bg-surface-subtle/40"
 >
-    <summary class="flex cursor-pointer flex-wrap items-start justify-between gap-2 p-3 text-sm text-ink">
+    <summary class="flex cursor-pointer flex-wrap items-start justify-between gap-2 p-2 text-sm text-ink" title="{{ __('Click to drill into this wire-log event') }}">
         <div class="flex min-w-0 flex-wrap items-center gap-2">
             <x-ui.badge :variant="$event['severity'] ?? 'default'">{{ $event['label'] }}</x-ui.badge>
             <span class="font-mono text-[11px] text-muted">#{{ $entryNumber }}</span>
@@ -21,7 +21,7 @@ $payloadPretty = $event['payload_pretty'] ?? '';
 
     @php($details = $event['details'] ?? [])
     @if (! empty($details))
-        <dl class="mx-3 grid gap-x-3 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-4">
+        <dl class="mx-2 grid gap-x-3 gap-y-1 text-[11px] sm:grid-cols-2 lg:grid-cols-4">
             @foreach ($details as $key => $value)
                 @if ($value !== null && $value !== '' && ! is_array($value))
                     <div class="flex min-w-0 items-baseline gap-1.5">
@@ -53,6 +53,6 @@ $payloadPretty = $event['payload_pretty'] ?? '';
             </a>
         </div>
     @else
-        <pre class="mx-3 mb-3 overflow-x-auto rounded-lg bg-surface-card p-2 text-[11px] text-muted">{{ $payloadPretty !== '' ? $payloadPretty : '{}' }}</pre>
+        <pre class="mx-2 mb-2 overflow-x-auto rounded-lg bg-surface-card p-2 text-[11px] text-muted">{{ $payloadPretty !== '' ? $payloadPretty : '{}' }}</pre>
     @endif
 </details>

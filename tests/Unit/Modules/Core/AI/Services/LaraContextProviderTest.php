@@ -45,6 +45,17 @@ describe('contextForCurrentUser', function (): void {
 
         expect($context['repository'])->not->toHaveKey('project_root')
             ->and($context['repository']['default_surface'])->toBe('core')
+            ->and($context['repository']['coding_loop']['phases'])->toBe([
+                'localize_source',
+                'focused_read',
+                'edit_plan',
+                'patch',
+                'verify',
+                'summarize',
+            ])
+            ->and($context['repository']['coding_loop']['source_localization'])->toContain('source-of-truth')
+            ->and($context['repository']['coding_loop']['edit_plan'])->toContain('target files')
+            ->and($context['repository']['coding_loop']['post_edit_validation'])->toContain('verification')
             ->and($context['repository']['surfaces']['core']['root'])->toBe('.')
             ->and($context['repository']['surfaces']['extensions']['root_patterns'])->toBe([
                 'extensions/<slug>',

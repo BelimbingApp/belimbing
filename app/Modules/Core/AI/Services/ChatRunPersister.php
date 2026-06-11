@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\ToolUseEntry;
@@ -428,6 +429,18 @@ class ChatRunPersister
 
         if (is_int($run->latency_ms)) {
             $meta['latency_ms'] = $run->latency_ms;
+        }
+
+        $tokens = [
+            'input' => $run->prompt_tokens,
+            'cached' => $run->cached_input_tokens,
+            'output' => $run->completion_tokens,
+            'reasoning' => $run->reasoning_tokens,
+            'total' => $run->total_tokens,
+        ];
+
+        if (array_filter($tokens, static fn ($value): bool => $value !== null) !== []) {
+            $meta['tokens'] = $tokens;
         }
 
         return $meta;

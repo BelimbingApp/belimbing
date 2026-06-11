@@ -1,7 +1,7 @@
 # ai/lara-coding-agent-harness.md
 
 **Status:** In Progress
-**Last Updated:** 2026-06-07
+**Last Updated:** 2026-06-11
 **Sources:** `docs/architecture/ai/lara.md`, `docs/plans/ai-lara-resident-coding-agent-gap.md`, `docs/plans/lara-concurrent-runs.md`, recent Lara runs `01ktgea1bvcrgc8bw1e0zbmjmv` and `01ktgefwcs7qmc7828bwxfekv6`, Pi coding-agent architecture review from GitHub `earendil-works/pi` (`packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/agent/src/harness/agent-harness.ts`, `packages/agent/src/harness/messages.ts`, `packages/agent/src/harness/compaction/compaction.ts`, `packages/agent/src/harness/skills.ts`, `packages/coding-agent/src/core/system-prompt.ts`, `packages/coding-agent/src/core/tools/{read,bash,edit,write}.ts`)
 **Agents:** Amp/GPT-5
 
@@ -100,11 +100,13 @@ Affected pages: Any BLB page with Lara chat available; Control Plane run detail/
 Goal: Lara follows a general localize → read → patch → verify → summarize loop for repository changes.
 Evidence: Run traces expose the current phase and show source localization before edits unless the user supplied an exact file.
 
-- [ ] Define the repository-work phase model: localization, focused read, edit plan, patch, verification, summary.
-- [ ] Add harness guidance or runtime state so Lara records the current phase and expected next action.
-- [ ] Require source localization before broad file reads or edits unless the user named an exact file.
-- [ ] Require an edit plan that names target files and why they are the source of truth before applying changes.
-- [ ] Add post-edit diff validation that compares touched files against the edit plan and flags unexpected shared/core files.
+- [x] Define the repository-work phase model: localization, focused read, edit plan, patch, verification, summary. {Amp/GPT-5}
+- [x] Add model-facing harness context so Lara sees the expected phase order and next-action contract during repository work. {Amp/GPT-5}
+- [x] Publish the source-localization rule: localize ownership before broad file reads or edits unless the user named an exact file. {Amp/GPT-5}
+- [x] Publish the edit-plan rule: name target files and why they are the source of truth before applying changes. {Amp/GPT-5}
+- [x] Publish the post-edit validation rule: compare touched files with the edit plan, verify narrowly, and report unverified risk. {Amp/GPT-5}
+- [ ] Enforce the phase model in runtime state/events so the control plane can show the current phase independent of model prose.
+- [ ] Add mechanical post-edit diff validation that flags unexpected shared/core files against the edit plan.
 
 ### Phase 3 — Add context and tool budgets
 

@@ -86,7 +86,7 @@ $rawLine = $fragment['raw_line'] ?? '';
         @click="open = !open"
         class="group inline-flex items-center gap-1 rounded-full border border-border-default/60 bg-surface-card px-2 py-0.5 text-[11px] text-left hover:border-accent/40"
         :class="open ? 'border-accent/60 bg-surface-subtle' : ''"
-        title="{{ __('Show payload for #:n', ['n' => $entryNumber]) }} {{ $fragment['at'] ?? '' }}"
+        title="{{ __('Click to drill into payload for #:n', ['n' => $entryNumber]) }} {{ $fragment['at'] ?? '' }}"
     >
         <span class="font-mono text-muted/70 group-hover:text-accent">#{{ $entryNumber }}</span>
         <x-ui.badge :variant="$variant">{{ $prefix }}</x-ui.badge>
@@ -112,7 +112,7 @@ $rawLine = $fragment['raw_line'] ?? '';
             class="mt-1 inline-flex items-center gap-1 text-accent hover:underline"
         >
             <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3" />
-            {{ __('Open raw entry') }}
+            {{ __('Open raw') }}
         </a>
     </div>
 </div>

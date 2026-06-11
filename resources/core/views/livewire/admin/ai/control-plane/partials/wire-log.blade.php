@@ -91,12 +91,12 @@ $lifecycleRail = $lifecycleRail ?? null;
         </x-ui.alert>
     @else
         <div
-            class="sticky top-0 z-10 -mx-card-inner rounded-2xl border border-border-default bg-surface-subtle/95 px-card-inner py-card-inner shadow-sm backdrop-blur"
+            class="sticky top-0 z-10 -mx-card-inner rounded-xl border border-border-default bg-surface-subtle/95 px-3 py-2 shadow-sm backdrop-blur"
             @click="document.getElementById('wire-log-panel')?.scrollIntoView({ block: 'start' })"
         >
             {{-- z-10 keeps the pin above scrolling entries; translucent bg still hints at content underneath. --}}
-            <div class="space-y-3">
-                <div class="cursor-pointer space-y-1 text-xs text-muted">
+            <div class="space-y-2">
+                <div class="cursor-pointer text-xs text-muted sm:flex sm:items-center sm:justify-between sm:gap-3">
                     <p class="font-medium text-ink">
                         {{ __('Showing entries :start-:end of :total retained wire-log entries.', [
                             'start' => $summary['range_start'] ?? 0,
@@ -107,22 +107,19 @@ $lifecycleRail = $lifecycleRail ?? null;
                             <x-icon name="heroicon-m-information-circle" class="inline size-3.5" />
                         </span>
                     </p>
-                    <p>
-                        {{ __('This run retained :size on disk.', ['size' => \Illuminate\Support\Number::fileSize($summary['footprint_bytes'] ?? 0)]) }}
-                    </p>
-                    <p>
-                        {{ __('Large entries can be opened raw in a separate tab without loading them into the inspector response.') }}
+                    <p class="mt-1 sm:mt-0">
+                        {{ __(':size retained. Click entries to drill down; oversized payloads open raw in a new tab.', ['size' => \Illuminate\Support\Number::fileSize($summary['footprint_bytes'] ?? 0)]) }}
                     </p>
                 </div>
 
-                <div class="flex flex-wrap items-end gap-3" @click.stop>
+                <div class="flex flex-wrap items-end gap-2" @click.stop>
                     <div class="flex items-end">
-                        <div class="flex rounded-lg bg-surface-card p-1 shadow-sm ring-1 ring-border-default/50">
+                        <div class="flex rounded-lg bg-surface-card p-0.5 shadow-sm ring-1 ring-border-default/50">
                             <button
                                 type="button"
                                 @click="setMode('readable')"
                                 :class="mode === 'readable' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
-                                class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+                                class="rounded-md px-2 py-1 text-xs font-medium transition-all"
                             >
                                 {{ __('Readable') }}
                             </button>
@@ -130,14 +127,14 @@ $lifecycleRail = $lifecycleRail ?? null;
                                 type="button"
                                 @click="setMode('raw')"
                                 :class="mode === 'raw' ? 'bg-surface-subtle text-ink shadow-sm ring-1 ring-border-default/50' : 'text-muted hover:text-ink'"
-                                class="rounded-md px-3 py-1.5 text-xs font-medium transition-all"
+                                class="rounded-md px-2 py-1 text-xs font-medium transition-all"
                             >
-                                {{ __('Raw Entries') }}
+                                {{ __('Raw') }}
                             </button>
                         </div>
                     </div>
 
-                    <div x-show="mode === 'raw'" x-cloak class="w-[8rem] shrink-0">
+                    <div x-show="mode === 'raw'" x-cloak class="w-[7rem] shrink-0">
                         <x-ui.select id="wire-log-limit-raw" wire:model.live="wireLogLimit" :label="__('Entries')">
                             @foreach ([100, 250, 500, 1000] as $limitOption)
                                 <option value="{{ $limitOption }}">{{ $limitOption }}</option>
@@ -145,7 +142,7 @@ $lifecycleRail = $lifecycleRail ?? null;
                         </x-ui.select>
                     </div>
 
-                    <div x-show="mode === 'readable'" x-cloak class="w-[10rem] shrink-0">
+                    <div x-show="mode === 'readable'" x-cloak class="w-[8rem] shrink-0">
                         <x-ui.select id="wire-log-limit-readable" wire:model.live="wireLogLimit" :label="__('Entries')">
                             @foreach ([500, 1000, 1500, 2000] as $limitOption)
                                 <option value="{{ $limitOption }}">{{ $limitOption }}</option>
@@ -153,11 +150,11 @@ $lifecycleRail = $lifecycleRail ?? null;
                         </x-ui.select>
                     </div>
 
-                    <div class="w-[10rem] shrink-0 sm:w-[12rem]">
+                    <div class="w-[8rem] shrink-0">
                         <x-ui.input
                             id="wire-log-start-entry"
                             wire:model.defer="wireLogStartEntry"
-                            :label="__('Start At')"
+                            :label="__('Start')"
                             type="number"
                             min="1"
                             max="{{ max(1, (int) ($summary['total_entries'] ?? count($entries))) }}"

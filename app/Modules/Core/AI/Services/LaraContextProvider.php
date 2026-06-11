@@ -53,6 +53,12 @@ class LaraContextProvider
         return [
             'default_surface' => 'core',
             'path_convention' => 'Repository tool file paths are relative to target_surface. The core surface is the project root.',
+            'coding_loop' => [
+                'phases' => ['localize_source', 'focused_read', 'edit_plan', 'patch', 'verify', 'summarize'],
+                'source_localization' => 'Before editing, identify the source-of-truth file or small candidate set. If the user named an exact file, localize to that file first.',
+                'edit_plan' => 'Before patching, name target files and why each is the source of truth. Prefer the lowest sufficient blast radius.',
+                'post_edit_validation' => 'After editing, inspect the resulting diff or changed-file summary, run the narrowest useful verification, and report any unverified risk.',
+            ],
             'surfaces' => [
                 'core' => [
                     'root' => '.',

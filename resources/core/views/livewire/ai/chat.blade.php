@@ -638,7 +638,7 @@
                         @php
                             $messageProvider = $message->getMetaString('provider_name') ?? $message->getMetaString('llm.provider');
                             $messageModel = $message->getMetaString('model') ?? $message->getMetaString('llm.model');
-                            $messageTokens = $message->getMetaInt('tokens');
+                            $messageTokens = $message->getMeta('tokens');
                             $messageLatencyMs = $message->getMetaInt('latency_ms');
                             $messageTimeoutSeconds = $message->getMetaInt('timeout_seconds');
                             $messageRetryAttempts = $message->getMetaInt('retry_attempts');

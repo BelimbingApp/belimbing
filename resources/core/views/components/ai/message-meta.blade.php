@@ -47,8 +47,13 @@
             ->allowed;
     }
 
-    $promptTokens = $tokens['prompt'] ?? null;
-    $completionTokens = $tokens['completion'] ?? null;
+    $inputTokens = is_array($tokens) ? ($tokens['input'] ?? $tokens['prompt'] ?? null) : null;
+    $cachedTokens = is_array($tokens) ? ($tokens['cached'] ?? $tokens['cached_input'] ?? null) : null;
+    $outputTokens = is_array($tokens) ? ($tokens['output'] ?? $tokens['completion'] ?? null) : null;
+    $reasoningTokens = is_array($tokens) ? ($tokens['reasoning'] ?? null) : null;
+    $totalTokens = is_array($tokens)
+        ? ($tokens['total'] ?? ((is_numeric($inputTokens) || is_numeric($outputTokens)) ? ((int) ($inputTokens ?? 0) + (int) ($outputTokens ?? 0)) : null))
+        : (is_numeric($tokens) ? (int) $tokens : null);
     $durationLabel = null;
 
     if (is_numeric($latencyMs) && $latencyMs >= 0) {
@@ -73,7 +78,7 @@
     }
 @endphp
 
-<div x-data="{ tooltipOpen: false }" class="relative mt-1 inline-flex max-w-full text-[10px]">
+<div x-data="{ tooltipOpen: false, copiedRunId: false }" class="relative mt-1 inline-flex max-w-full text-[10px]">
     <span
         class="{{ $toneClasses }} inline-flex max-w-full items-center gap-1 rounded-md tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-0"
     >
@@ -129,7 +134,7 @@
                     @if ($runDetailsTitleId !== null)
                         aria-labelledby="{{ $runDetailsTitleId }}"
                     @endif
-                    class="absolute bottom-full left-0 z-30 m-0 mb-1 flex w-46 flex-col rounded-xl border border-border-default bg-surface-card p-2.5 text-[11px] text-ink shadow-lg"
+                    class="absolute bottom-full left-0 z-30 m-0 mb-1 flex w-56 flex-col rounded-xl border border-border-default bg-surface-card p-2.5 text-[11px] text-ink shadow-lg"
                 >
                     <div
                         @if ($runDetailsTitleId !== null)
@@ -138,16 +143,27 @@
                         class="mb-1.5 flex items-center justify-between gap-2"
                     >
                         <span class="font-medium text-muted whitespace-nowrap">{{ __('Run ID') }}</span>
-                        @if ($controlPlaneUrl !== null)
+                        <div class="flex min-w-0 flex-1 items-center justify-end gap-1">
+                            @if ($controlPlaneUrl !== null)
+                                <button
+                                    type="button"
+                                    @click.stop="popoverOpen = false; window.location.href = @js($controlPlaneUrl)"
+                                    class="min-w-0 truncate text-right font-mono text-accent hover:underline"
+                                    title="{{ $runIdLabel }}"
+                                >{{ $runIdLabel }}</button>
+                            @else
+                                <span class="min-w-0 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
+                            @endif
                             <button
                                 type="button"
-                                @click.stop="popoverOpen = false; window.location.href = @js($controlPlaneUrl)"
-                                class="min-w-0 flex-1 truncate text-right font-mono text-accent hover:underline"
-                                title="{{ $runIdLabel }}"
-                            >{{ $runIdLabel }}</button>
-                        @else
-                            <span class="min-w-0 flex-1 truncate text-right font-mono" title="{{ $runIdLabel }}">{{ $runIdLabel }}</span>
-                        @endif
+                                @click.stop="navigator.clipboard?.writeText(@js($runIdLabel)); copiedRunId = true; setTimeout(() => copiedRunId = false, 1200)"
+                                class="shrink-0 rounded-md p-0.5 text-muted hover:bg-surface-subtle hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                                :title="copiedRunId ? @js(__('Copied')) : @js(__('Copy run ID'))"
+                                :aria-label="copiedRunId ? @js(__('Copied')) : @js(__('Copy run ID'))"
+                            >
+                                <x-icon name="heroicon-o-clipboard-document-list" class="size-3.5" />
+                            </button>
+                        </div>
                     </div>
                     <div class="space-y-1.5">
 
@@ -158,10 +174,34 @@
                             </div>
                         @endif
 
-                        @if ($promptTokens !== null || $completionTokens !== null)
+                        @if ($inputTokens !== null || $cachedTokens !== null || $outputTokens !== null || $totalTokens !== null)
+                            @if ($inputTokens !== null)
+                                <div class="flex justify-between">
+                                    <span class="text-muted">{{ __('Input Tokens') }}</span>
+                                    <span class="tabular-nums">{{ number_format((int) $inputTokens) }}</span>
+                                </div>
+                            @endif
+                            @if ($cachedTokens !== null)
+                                <div class="flex justify-between">
+                                    <span class="text-muted">{{ __('Cached Tokens') }}</span>
+                                    <span class="tabular-nums">{{ number_format((int) $cachedTokens) }}</span>
+                                </div>
+                            @endif
+                            @if ($outputTokens !== null)
+                                <div class="flex justify-between">
+                                    <span class="text-muted">{{ __('Output Tokens') }}</span>
+                                    <span class="tabular-nums">{{ number_format((int) $outputTokens) }}</span>
+                                </div>
+                            @endif
+                            @if ($reasoningTokens !== null)
+                                <div class="flex justify-between">
+                                    <span class="text-muted">{{ __('Reasoning Tokens') }}</span>
+                                    <span class="tabular-nums">{{ number_format((int) $reasoningTokens) }}</span>
+                                </div>
+                            @endif
                             <div class="flex justify-between">
-                                <span class="text-muted">{{ __('Tokens') }}</span>
-                                <span class="tabular-nums">{{ number_format($promptTokens ?? 0) }} → {{ number_format($completionTokens ?? 0) }}</span>
+                                <span class="text-muted">{{ __('Total Tokens') }}</span>
+                                <span class="tabular-nums">{{ $totalTokens !== null ? number_format((int) $totalTokens) : '—' }}</span>
                             </div>
                         @endif
 
