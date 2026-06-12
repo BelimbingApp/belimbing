@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
+use App\Modules\Core\AI\DTO\PageContext;
+use App\Modules\Core\AI\DTO\PageSnapshot;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
 use App\Modules\Core\AI\Enums\RunPhase;
@@ -10,8 +13,8 @@ use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\LaraOrchestrationService;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\PageContextResolver;
-use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\RunEventPublisher;
+use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
 
 /**
@@ -309,35 +312,54 @@ trait HandlesStreaming
      * not the user's page. We resolve here (on the real page request) and embed
      * the result in the turn's runtime_meta so the runner can hydrate context.
      *
-     * @return array{consent: string, context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
+     * @return array{context: array<string, mixed>|null, snapshot: array<string, mixed>|null}|null
      */
     private function resolvePageContextForDispatch(): ?array
     {
-        $consentLevel = $this->pageAwareness ?? 'page';
-
-        if ($consentLevel === 'off') {
-            return null;
-        }
-
         $resolver = app(PageContextResolver::class);
         $context = $resolver->resolveFromUrl($this->pageUrl);
 
         if ($context === null) {
+            $this->activePageSnapshot = null;
+
             return null;
         }
 
         $payload = [
-            'consent' => $consentLevel,
             'context' => $context->toArray(),
             'snapshot' => null,
         ];
 
-        if ($consentLevel === 'full') {
-            $snapshot = $resolver->resolveSnapshotFromUrl($this->pageUrl);
-            $payload['snapshot'] = $snapshot?->toArray();
-        }
+        $snapshot = $resolver->resolveSnapshotFromUrl($this->pageUrl);
+        $payload['snapshot'] = $this->validatedActivePageSnapshot($context)
+            ?? $snapshot?->toArray();
 
         return $payload;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function validatedActivePageSnapshot(PageContext $context): ?array
+    {
+        if (! is_array($this->activePageSnapshot)) {
+            return null;
+        }
+
+        try {
+            $snapshot = [
+                ...$this->activePageSnapshot,
+                'page' => $context->toArray(),
+            ];
+
+            PageSnapshot::fromArray($snapshot);
+
+            return $snapshot;
+        } catch (\Throwable) {
+            return null;
+        } finally {
+            $this->activePageSnapshot = null;
+        }
     }
 
     /**
@@ -433,5 +455,4 @@ trait HandlesStreaming
             $this->dispatch('agent-chat-focus-composer');
         }
     }
-
 }

@@ -7,6 +7,7 @@ it('defaults interactive Lara turns to structured repository tools before escala
         'search',
         'read',
         'edit',
+        'active_page_snapshot',
         'browser',
         'bash',
     ]);

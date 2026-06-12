@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\DTO\PageContext;
@@ -18,8 +19,6 @@ class PageContextHolder
     private ?PageContext $context = null;
 
     private ?PageSnapshot $snapshot = null;
-
-    private string $consentLevel = 'page';
 
     public function setContext(PageContext $context): void
     {
@@ -41,31 +40,19 @@ class PageContextHolder
         return $this->snapshot;
     }
 
-    public function setConsentLevel(string $level): void
-    {
-        if (in_array($level, ['off', 'page', 'full'], true)) {
-            $this->consentLevel = $level;
-        }
-    }
-
-    public function getConsentLevel(): string
-    {
-        return $this->consentLevel;
-    }
-
     /**
-     * Whether page context is available (not null and not consent-off).
+     * Whether page context is available.
      */
     public function hasContext(): bool
     {
-        return $this->context !== null && $this->consentLevel !== 'off';
+        return $this->context !== null;
     }
 
     /**
-     * Whether the full snapshot is available and consented.
+     * Whether a page snapshot is available.
      */
     public function hasSnapshot(): bool
     {
-        return $this->snapshot !== null && $this->consentLevel === 'full';
+        return $this->snapshot !== null;
     }
 }

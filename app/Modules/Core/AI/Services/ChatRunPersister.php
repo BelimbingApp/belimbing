@@ -431,6 +431,11 @@ class ChatRunPersister
             $meta['latency_ms'] = $run->latency_ms;
         }
 
+        $aiActiveDurationMs = $this->aiActiveDurationMs($run);
+        if ($aiActiveDurationMs !== null) {
+            $meta['ai_active_duration_ms'] = $aiActiveDurationMs;
+        }
+
         $tokens = [
             'input' => $run->prompt_tokens,
             'cached' => $run->cached_input_tokens,
@@ -444,5 +449,25 @@ class ChatRunPersister
         }
 
         return $meta;
+    }
+
+    private function aiActiveDurationMs(AiRun $run): ?int
+    {
+        $firstCall = $run->calls()
+            ->whereNotNull('started_at')
+            ->reorder()
+            ->orderBy('started_at')
+            ->first(['started_at']);
+        $lastCall = $run->calls()
+            ->whereNotNull('finished_at')
+            ->reorder()
+            ->orderByDesc('finished_at')
+            ->first(['finished_at']);
+
+        if ($firstCall?->started_at === null || $lastCall?->finished_at === null) {
+            return null;
+        }
+
+        return max(0, (int) $firstCall->started_at->diffInMilliseconds($lastCall->finished_at));
     }
 }

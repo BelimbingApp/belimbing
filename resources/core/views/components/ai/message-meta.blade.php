@@ -6,6 +6,7 @@
     'tone' => 'muted',
     'tokens' => null,
     'latencyMs' => null,
+    'aiActiveDurationMs' => null,
     'timeoutSeconds' => null,
     'retryAttempts' => null,
     'errorType' => null,
@@ -56,8 +57,11 @@
         : (is_numeric($tokens) ? (int) $tokens : null);
     $durationLabel = null;
 
-    if (is_numeric($latencyMs) && $latencyMs >= 0) {
-        $latencySeconds = $latencyMs / 1000;
+    $displayDurationMs = is_numeric($aiActiveDurationMs) && $aiActiveDurationMs >= 0 ? $aiActiveDurationMs : $latencyMs;
+    $durationLabelText = is_numeric($aiActiveDurationMs) && $aiActiveDurationMs >= 0 ? __('AI Active') : __('Latency');
+
+    if (is_numeric($displayDurationMs) && $displayDurationMs >= 0) {
+        $latencySeconds = $displayDurationMs / 1000;
 
         if ($latencySeconds >= 60) {
             $minutes = intdiv((int) floor($latencySeconds), 60);
@@ -205,11 +209,11 @@
                             </div>
                         @endif
 
-                        @if ($latencyMs !== null)
+                        @if ($displayDurationMs !== null)
                             <div class="flex justify-between">
-                                <span class="text-muted">{{ __('Latency') }}</span>
+                                <span class="text-muted">{{ $durationLabelText }}</span>
                                 <span class="tabular-nums">
-                                    {{ number_format($latencyMs / 1000, 1) }}s
+                                    {{ number_format($displayDurationMs / 1000, 1) }}s
                                     @if ($timeoutSeconds !== null)
                                         <span class="text-muted">/ {{ $timeoutSeconds }}s</span>
                                     @endif

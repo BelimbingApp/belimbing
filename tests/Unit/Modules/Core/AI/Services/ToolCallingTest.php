@@ -152,6 +152,7 @@ describe('AgentToolRegistry', function () {
         $registry->register(makeSimpleTool('read'));
         $registry->register(makeSimpleTool('search'));
         $registry->register(makeSimpleTool('edit'));
+        $registry->register(makeSimpleTool('active_page_snapshot'));
         $registry->register(makeSimpleTool('unlisted'));
 
         $definitions = $registry->toolDefinitionsForCurrentUser(ChatTurnRunner::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES);

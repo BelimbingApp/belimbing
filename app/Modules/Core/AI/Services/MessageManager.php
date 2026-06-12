@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\Support\File as BlbFile;
@@ -457,6 +458,7 @@ class MessageManager
                 'model' => $run->model ?? 'unknown',
             ],
             'latency_ms' => $run->latency_ms,
+            'ai_active_duration_ms' => $this->aiActiveDurationMs($run),
             'tokens' => [
                 'prompt' => $run->prompt_tokens,
                 'completion' => $run->completion_tokens,
@@ -515,6 +517,30 @@ class MessageManager
             $persisted['latency_ms'] = $meta['latency_ms'];
         }
 
+        if (is_int($meta['ai_active_duration_ms'] ?? null)) {
+            $persisted['ai_active_duration_ms'] = $meta['ai_active_duration_ms'];
+        }
+
         return $persisted;
+    }
+
+    private function aiActiveDurationMs(AiRun $run): ?int
+    {
+        $firstCall = $run->calls()
+            ->whereNotNull('started_at')
+            ->reorder()
+            ->orderBy('started_at')
+            ->first(['started_at']);
+        $lastCall = $run->calls()
+            ->whereNotNull('finished_at')
+            ->reorder()
+            ->orderByDesc('finished_at')
+            ->first(['finished_at']);
+
+        if ($firstCall?->started_at === null || $lastCall?->finished_at === null) {
+            return null;
+        }
+
+        return max(0, (int) $firstCall->started_at->diffInMilliseconds($lastCall->finished_at));
     }
 }

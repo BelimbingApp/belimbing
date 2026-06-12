@@ -9,7 +9,6 @@
     x-data="{
         sessionsOpen: false,
         sessionWidth: parseInt(localStorage.getItem('agent-chat-session-width')) || 224,
-        pageAwareness: localStorage.getItem('blb-lara-page-awareness') || 'page',
         _draftKey: 'blb-lara-draft-{{ auth()->id() }}',
         _sessionDragging: false,
         activeTurnSummaries: @js($activeTurnsBySession ?? []),
@@ -151,13 +150,6 @@
             poll();
         },
 
-        cyclePageAwareness() {
-            const levels = ['off', 'page', 'full'];
-            const idx = levels.indexOf(this.pageAwareness);
-            this.pageAwareness = levels[(idx + 1) % levels.length];
-            localStorage.setItem('blb-lara-page-awareness', this.pageAwareness);
-        },
-
         startSessionDrag(e) {
             this._sessionDragging = true;
             const startX = e.clientX;
@@ -197,7 +189,6 @@
             document.removeEventListener('livewire:navigated', syncPageUrl);
             window.__laraPageUrlCleanup = null;
         };
-        $watch('pageAwareness', v => $wire.set('pageAwareness', v));
         $watch('$wire.selectedSessionId', v => {
             if (v) {
                 localStorage.setItem('blb-lara-session', v);
@@ -281,28 +272,6 @@
         </div>
 
         <div class="flex items-center gap-1">
-            {{-- Page awareness toggle --}}
-            <button
-                type="button"
-                x-on:click="cyclePageAwareness()"
-                class="text-muted hover:text-ink transition-colors p-0.5"
-                :title="pageAwareness === 'off'
-                    ? '{{ __('Page awareness: off') }}'
-                    : (pageAwareness === 'page'
-                        ? '{{ __('Page awareness: page info') }}'
-                        : '{{ __('Page awareness: full snapshot') }}')"
-                :aria-label="pageAwareness === 'off'
-                    ? '{{ __('Page awareness off — click to enable') }}'
-                    : (pageAwareness === 'page'
-                        ? '{{ __('Page awareness: page info — click for full') }}'
-                        : '{{ __('Page awareness: full snapshot — click to disable') }}')"
-            >
-                <x-icon name="heroicon-o-eye-slash" class="w-4 h-4" x-show="pageAwareness === 'off'" x-cloak />
-                <x-icon name="heroicon-o-eye" class="w-4 h-4" x-show="pageAwareness === 'page'" x-cloak
-                    ::class="'text-muted hover:text-ink'" />
-                <x-icon name="heroicon-o-eye" class="w-4 h-4 text-accent" x-show="pageAwareness === 'full'" x-cloak />
-            </button>
-
             {{-- Keyboard shortcuts cheatsheet --}}
             <div x-data="{ shortcutsOpen: false, _mod: navigator.platform?.includes('Mac') ? '⌘' : 'Ctrl' }" class="relative">
                 <x-ui.help
@@ -646,6 +615,7 @@
                             $messageModel = $message->getMetaString('model') ?? $message->getMetaString('llm.model');
                             $messageTokens = $message->getMeta('tokens');
                             $messageLatencyMs = $message->getMetaInt('latency_ms');
+                            $messageAiActiveDurationMs = $message->getMetaInt('ai_active_duration_ms');
                             $messageTimeoutSeconds = $message->getMetaInt('timeout_seconds');
                             $messageRetryAttempts = $message->getMetaInt('retry_attempts');
                             $messageErrorType = $message->getMetaString('error_type');
@@ -742,6 +712,7 @@
                                 :markdown="$markdown"
                                 :tokens="$messageTokens"
                                 :latency-ms="$messageLatencyMs"
+                                :ai-active-duration-ms="$messageAiActiveDurationMs"
                                 :timeout-seconds="$messageTimeoutSeconds"
                                 :retry-attempts="$messageRetryAttempts"
                                 :run-status="$messageRunStatus"
@@ -1039,6 +1010,98 @@
 
 @script
 <script>
+    window.blbCollectLaraActivePageSnapshot = () => {
+        const isInLara = (element) => element.closest?.('#lara-chat-instance, #lara-chat-home');
+        const text = (value, max = 240) => (value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+        const labelFor = (element) => {
+            const id = element.getAttribute('id');
+            const label = id ? document.querySelector(`label[for="${CSS.escape(id)}"]`) : null;
+
+            return text(
+                element.getAttribute('name')
+                    || element.getAttribute('aria-label')
+                    || label?.textContent
+                    || element.getAttribute('placeholder')
+                    || id
+                    || element.getAttribute('wire:model')
+                    || element.getAttribute('wire:model.live')
+                    || element.tagName.toLowerCase()
+            );
+        };
+        const isSensitive = (element, name) => {
+            const haystack = [
+                element.getAttribute('type'),
+                element.getAttribute('autocomplete'),
+                name,
+                element.getAttribute('id'),
+                element.getAttribute('aria-label'),
+                element.getAttribute('placeholder'),
+            ].join(' ').toLowerCase();
+
+            return /password|secret|token|api[_ -]?key|credential|private|cert|client[_ -]?id/.test(haystack);
+        };
+        const valueFor = (element) => {
+            if (element instanceof HTMLInputElement && ['checkbox', 'radio'].includes(element.type)) {
+                return element.checked;
+            }
+
+            if (element instanceof HTMLSelectElement) {
+                return Array.from(element.selectedOptions).map(option => text(option.textContent || option.value, 120)).join(', ');
+            }
+
+            return text(element.value ?? element.textContent ?? '', 500);
+        };
+        const fieldsFor = (container) => Array.from(container.querySelectorAll('input, select, textarea'))
+            .filter(element => !isInLara(element) && !element.disabled && element.type !== 'hidden')
+            .slice(0, 80)
+            .map((element) => {
+                const name = labelFor(element);
+                const masked = isSensitive(element, name);
+
+                return {
+                    name,
+                    type: element.getAttribute('type') || element.tagName.toLowerCase(),
+                    value: masked ? null : valueFor(element),
+                    masked,
+                };
+            })
+            .filter(field => field.name);
+        const forms = Array.from(document.querySelectorAll('form, [wire\\:submit], [data-lara-form]'))
+            .filter(element => !isInLara(element))
+            .slice(0, 12)
+            .map((element, index) => ({
+                id: text(element.getAttribute('id') || element.getAttribute('name') || element.getAttribute('aria-label') || `form-${index + 1}`, 80),
+                fields: fieldsFor(element),
+            }))
+            .filter(form => form.fields.length > 0);
+        const looseFields = fieldsFor(document.body);
+
+        if (forms.length === 0 && looseFields.length > 0) {
+            forms.push({ id: 'page-fields', fields: looseFields });
+        }
+
+        return {
+            forms,
+            tables: Array.from(document.querySelectorAll('table'))
+                .filter(element => !isInLara(element))
+                .slice(0, 8)
+                .map((table, index) => ({
+                    id: text(table.getAttribute('id') || table.getAttribute('aria-label') || `table-${index + 1}`, 80),
+                    columns: Array.from(table.querySelectorAll('thead th, thead td')).slice(0, 24).map(cell => text(cell.textContent, 80)).filter(Boolean),
+                    total_rows: table.querySelectorAll('tbody tr').length,
+                })),
+            modals: Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"]'))
+                .filter(element => !isInLara(element))
+                .slice(0, 8)
+                .map((element, index) => ({
+                    id: text(element.getAttribute('id') || element.getAttribute('aria-label') || `modal-${index + 1}`, 80),
+                    title: text(element.querySelector('h1, h2, h3, [data-modal-title]')?.textContent || element.getAttribute('aria-label'), 120),
+                    open: true,
+                })),
+            focused_element: document.activeElement && !isInLara(document.activeElement) ? labelFor(document.activeElement) : null,
+        };
+    };
+
     Alpine.data('agentChatComposer', () => ({
         draftKey: 'blb-lara-draft-{{ auth()->id() }}',
 
@@ -1053,6 +1116,10 @@
             });
 
             await this.$wire.set('pageUrl', window.location.href);
+            await this.$wire.set(
+                'activePageSnapshot',
+                window.blbCollectLaraActivePageSnapshot(),
+            );
 
             try {
                 const result = await this.$wire.prepareStreamingRun();

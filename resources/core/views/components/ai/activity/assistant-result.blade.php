@@ -7,6 +7,7 @@
     'markdown',
     'tokens' => null,
     'latencyMs' => null,
+    'aiActiveDurationMs' => null,
     'timeoutSeconds' => null,
     'retryAttempts' => null,
     'runStatus' => null,
@@ -31,6 +32,7 @@
             :runId="$runId"
             :tokens="$tokens"
             :latencyMs="$latencyMs"
+            :aiActiveDurationMs="$aiActiveDurationMs"
             :timeoutSeconds="$timeoutSeconds"
             :retryAttempts="$retryAttempts"
             :runStatus="$runStatus"

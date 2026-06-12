@@ -32,15 +32,7 @@ describe('tool metadata', function () {
     });
 });
 
-describe('consent enforcement', function () {
-    it('returns disabled message when consent is off', function () {
-        $this->holder->setConsentLevel('off');
-
-        $result = (string) $this->tool->execute([]);
-
-        expect($result)->toContain('disabled by the user');
-    });
-
+describe('snapshot availability', function () {
     it('returns no-context message when no page is set', function () {
         $result = (string) $this->tool->execute([]);
 
@@ -60,7 +52,7 @@ describe('consent enforcement', function () {
 });
 
 describe('snapshot output', function () {
-    it('returns JSON snapshot when consent is full and snapshot is available', function () {
+    it('returns JSON snapshot when a snapshot is available', function () {
         $ctx = new PageContext(route: SNAP_TOOL_ROUTE, url: SNAP_TOOL_URL, title: 'Test');
         $snapshot = new PageSnapshot(
             pageContext: $ctx,
@@ -69,7 +61,6 @@ describe('snapshot output', function () {
             ])],
         );
 
-        $this->holder->setConsentLevel('full');
         $this->holder->setContext($ctx);
         $this->holder->setSnapshot($snapshot);
 

@@ -62,10 +62,15 @@ class Chat extends Component
 
     public ?string $selectedModel = null;
 
-    public string $pageAwareness = 'page';
-
     /** Current page URL sent by the client (window.location.href). */
     public string $pageUrl = '';
+
+    /**
+     * Client-captured snapshot of the user's visible page at submit time.
+     *
+     * @var array<string, mixed>|null
+     */
+    public ?array $activePageSnapshot = null;
 
     public ?string $editingSessionId = null;
 

@@ -1,9 +1,10 @@
 <?php
 
 use App\Modules\Core\AI\DTO\Message;
-use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
+use App\Modules\Core\AI\Models\AiRunCall;
 use App\Modules\Core\AI\Services\ChatRunPersister;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\RunEventPublisher;
@@ -68,6 +69,22 @@ function populateHappyPathEvents(AiRun $turn, RunEventPublisher $pub): void
     $pub->usageUpdated($turn, ['prompt_tokens' => 100, 'completion_tokens' => 50]);
     $pub->outputBlockCommitted($turn, 'markdown', MAT_ASSISTANT_OUTPUT);
     $pub->turnCompleted($turn, ['run_id' => MAT_TEST_RUN_ID, 'elapsed_ms' => 1200]);
+
+    AiRunCall::query()->create([
+        'run_id' => $turn->id,
+        'attempt_index' => 0,
+        'latency_ms' => 1500,
+        'started_at' => now()->subSeconds(9),
+        'finished_at' => now()->subSeconds(7),
+    ]);
+
+    AiRunCall::query()->create([
+        'run_id' => $turn->id,
+        'attempt_index' => 1,
+        'latency_ms' => 3000,
+        'started_at' => now()->subSeconds(4),
+        'finished_at' => now(),
+    ]);
 }
 
 /**
@@ -126,7 +143,9 @@ function expectMaterializerHappyPathAppendMocks(MockInterface $mm, AiRun $turn):
             MAT_ASSISTANT_OUTPUT,
             MAT_TEST_RUN_ID,
             Mockery::on(fn ($meta) => ($meta['tokens']['prompt_tokens'] ?? null) === 100
-                && ($meta['tokens']['completion_tokens'] ?? null) === 50),
+                && ($meta['tokens']['completion_tokens'] ?? null) === 50
+                && ($meta['ai_active_duration_ms'] ?? null) >= 8000
+                && ($meta['ai_active_duration_ms'] ?? null) <= 10000),
         )
         ->andReturn(new Message(
             role: 'assistant',

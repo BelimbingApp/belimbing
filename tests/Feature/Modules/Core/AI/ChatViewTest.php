@@ -5,6 +5,7 @@ use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Jobs\RunChatTurnJob;
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
@@ -18,6 +19,7 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
@@ -108,6 +110,36 @@ it('renders empty-session quick prompts for the active page url', function (): v
     Livewire::test(Chat::class)
         ->set('pageUrl', route('admin.employees.index'))
         ->assertSee('Create employee');
+});
+
+it('stores a client-captured active page snapshot by default', function (): void {
+    Queue::fake();
+    $user = createChatViewFixture();
+    test()->actingAs($user);
+
+    Livewire::test(Chat::class)
+        ->set('pageUrl', route('admin.employees.index'))
+        ->set('activePageSnapshot', [
+            'forms' => [[
+                'id' => 'page-fields',
+                'fields' => [[
+                    'name' => 'search',
+                    'type' => 'search',
+                    'value' => 'Alice',
+                ]],
+            ]],
+        ])
+        ->set('messageInput', 'What is on this page?')
+        ->call('prepareStreamingRun');
+
+    Queue::assertPushed(RunChatTurnJob::class);
+
+    $turn = AiRun::query()->latest('created_at')->firstOrFail();
+    $snapshot = data_get($turn->runtime_meta, 'page_context.snapshot');
+
+    expect($snapshot['page']['route'])->toBe('admin.employees.index')
+        ->and($snapshot['forms'][0]['fields'][0]['name'])->toBe('search')
+        ->and($snapshot['forms'][0]['fields'][0]['value'])->toBe('Alice');
 });
 
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {

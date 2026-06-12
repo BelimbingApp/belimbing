@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -31,7 +32,7 @@ class ActivePageSnapshotTool extends AbstractTool
 
     public function description(): string
     {
-        return 'Get a detailed snapshot of the user\'s current Belimbing page, including form fields (with values), table columns, modal state, and validation errors. Use this when you need to understand the page state beyond the basic metadata in the system prompt — for example, to diagnose why save is disabled, inspect form values, or describe table contents.';
+        return 'Get a detailed snapshot of the user\'s current Belimbing page, including visible form fields, table columns, modal state, and validation errors when available. Use this when you need to understand the page state beyond the basic metadata in the system prompt — for example, to diagnose why save is disabled, inspect form values, or describe table contents.';
     }
 
     protected function schema(): ?ToolSchemaBuilder
@@ -59,21 +60,16 @@ class ActivePageSnapshotTool extends AbstractTool
         return [
             'displayName' => 'Active Page Snapshot',
             'summary' => 'Inspect the user\'s current page for forms, tables, modals, and validation state.',
-            'explanation' => 'Returns a structured JSON snapshot of the user\'s active Belimbing page. Includes form field values (sensitive fields are masked), table metadata, modal state, and validation errors. Only available when the page implements the snapshot contract and the user has consented to full page awareness.',
+            'explanation' => 'Returns a structured JSON snapshot of the user\'s active Belimbing page. Includes visible form field values, table metadata, modal state, and validation errors when available. Sensitive fields are masked.',
             'limits' => [
-                'Only available on pages that implement ProvidesLaraPageSnapshot',
-                'Sensitive fields are masked server-side via #[LaraVisible]',
-                'Requires user consent at "full" level',
+                'Uses a bounded snapshot captured from the user\'s current tab, or a richer component-provided snapshot when available',
+                'Sensitive fields are masked by the page snapshot source',
             ],
         ];
     }
 
     protected function handle(array $arguments): ToolResult
     {
-        if ($this->holder->getConsentLevel() === 'off') {
-            return ToolResult::success('Page awareness is disabled by the user. You cannot inspect the active page.');
-        }
-
         if (! $this->holder->hasSnapshot()) {
             $context = $this->holder->getContext();
 

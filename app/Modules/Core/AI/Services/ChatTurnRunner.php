@@ -45,6 +45,7 @@ class ChatTurnRunner
         'search',
         'read',
         'edit',
+        'active_page_snapshot',
         'browser',
         'bash',
     ];
@@ -183,7 +184,6 @@ class ChatTurnRunner
         }
 
         $holder = app(PageContextHolder::class);
-        $holder->setConsentLevel($pageContext['consent'] ?? 'page');
 
         if (isset($pageContext['context']) && is_array($pageContext['context'])) {
             $holder->setContext(PageContext::fromArray($pageContext['context']));
