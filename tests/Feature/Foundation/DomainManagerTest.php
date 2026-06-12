@@ -8,9 +8,34 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
+const DOMAIN_MANAGER_FIXTURE_DOMAIN = 'ZzManaged';
+const DOMAIN_MANAGER_FIXTURE_REPO = 'https://example.test/zz.git';
+const DOMAIN_MANAGER_FIXTURE_DESCRIPTION = 'Fixture description.';
+const DOMAIN_MANAGER_FIXTURE_TABLE = 'zz_managed_table';
+const DOMAIN_MANAGER_FIXTURE_SETTING = 'zz_managed.option';
+
 afterEach(function (): void {
-    File::deleteDirectory(app_path('Modules/ZzManaged'));
+    File::deleteDirectory(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN));
 });
+
+function configureManagedDomainCatalog(): void
+{
+    config(['domains.catalog' => [
+        DOMAIN_MANAGER_FIXTURE_DOMAIN => [
+            'repo' => DOMAIN_MANAGER_FIXTURE_REPO,
+            'description' => DOMAIN_MANAGER_FIXTURE_DESCRIPTION,
+        ],
+    ]]);
+}
+
+function createManagedDomainCheckout(): void
+{
+    createFakeDomainCheckout(
+        DOMAIN_MANAGER_FIXTURE_DOMAIN,
+        DOMAIN_MANAGER_FIXTURE_TABLE,
+        DOMAIN_MANAGER_FIXTURE_SETTING,
+    );
+}
 
 it('renders the domains page with installed domains and a residue pointer', function (): void {
     $this->actingAs(createAdminUser());
@@ -30,110 +55,104 @@ it('denies the page to users without the view capability', function (): void {
 it('shows catalog domains without a checkout as available to install', function (): void {
     $this->actingAs(createAdminUser());
 
-    config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
-    ]]);
+    configureManagedDomainCatalog();
 
     Livewire::test(DomainManager::class)
         ->assertSee('Available domains')
-        ->assertSee('ZzManaged')
-        ->assertSee('Fixture description.');
+        ->assertSee(DOMAIN_MANAGER_FIXTURE_DOMAIN)
+        ->assertSee(DOMAIN_MANAGER_FIXTURE_DESCRIPTION);
 });
 
 it('installs an available domain and redirects back', function (): void {
     $this->actingAs(createAdminUser());
 
-    config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
-    ]]);
+    configureManagedDomainCatalog();
 
     Process::fake();
 
     Livewire::test(DomainManager::class)
-        ->call('install', 'ZzManaged')
+        ->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertRedirect(route('admin.system.domains.index'));
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', 'https://example.test/zz.git', app_path('Modules/ZzManaged')]);
+    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)]);
 });
 
 it('disables and re-enables an installed domain', function (): void {
     $this->actingAs(createAdminUser());
 
-    createFakeDomainCheckout('ZzManaged', 'zz_managed_table', 'zz_managed.option');
+    createManagedDomainCheckout();
 
     Livewire::test(DomainManager::class)
-        ->call('disable', 'ZzManaged')
+        ->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(DomainState::isDisabled('ZzManaged'))->toBeTrue();
+    expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeTrue();
 
     Livewire::test(DomainManager::class)
-        ->call('enable', 'ZzManaged')
+        ->call('enable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(DomainState::isDisabled('ZzManaged'))->toBeFalse();
+    expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeFalse();
 });
 
 it('refuses to uninstall without the exact typed phrase', function (): void {
     $this->actingAs(createAdminUser());
 
-    createFakeDomainCheckout('ZzManaged', 'zz_managed_table', 'zz_managed.option');
+    createManagedDomainCheckout();
 
     Livewire::test(DomainManager::class)
-        ->call('openUninstall', 'ZzManaged')
+        ->call('openUninstall', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->set('uninstallPhrase', 'uninstall zzmanaged please')
         ->call('uninstall')
         ->assertHasErrors('uninstallPhrase');
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeTrue();
+    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeTrue();
 });
 
 it('uninstalls keeping the database when the keep phrase is typed', function (): void {
     $this->actingAs(createAdminUser());
 
-    createFakeDomainCheckout('ZzManaged', 'zz_managed_table', 'zz_managed.option');
-    Schema::create('zz_managed_table', fn ($table) => $table->id());
+    createManagedDomainCheckout();
+    Schema::create(DOMAIN_MANAGER_FIXTURE_TABLE, fn ($table) => $table->id());
 
     Livewire::test(DomainManager::class)
-        ->call('openUninstall', 'ZzManaged')
+        ->call('openUninstall', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->set('uninstallPhrase', 'uninstall zzmanaged')
         ->call('uninstall')
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeFalse()
-        ->and(Schema::hasTable('zz_managed_table'))->toBeTrue();
+    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeFalse()
+        ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeTrue();
 });
 
 it('uninstalls and drops tables when the drop phrase is typed', function (): void {
     $this->actingAs(createAdminUser());
 
-    createFakeDomainCheckout('ZzManaged', 'zz_managed_table', 'zz_managed.option');
-    Schema::create('zz_managed_table', fn ($table) => $table->id());
+    createManagedDomainCheckout();
+    Schema::create(DOMAIN_MANAGER_FIXTURE_TABLE, fn ($table) => $table->id());
 
     Livewire::test(DomainManager::class)
-        ->call('openUninstall', 'ZzManaged')
+        ->call('openUninstall', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->set('uninstallPhrase', 'uninstall zzmanaged and drop all tables')
         ->call('uninstall')
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeFalse()
-        ->and(Schema::hasTable('zz_managed_table'))->toBeFalse();
+    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeFalse()
+        ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeFalse();
 });
 
 it('blocks install, disable, and uninstall for users without the manage capability', function (): void {
     $this->actingAs(User::factory()->create());
 
-    config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
-    ]]);
+    configureManagedDomainCatalog();
 
     Process::fake();
 
-    Livewire::test(DomainManager::class)->call('install', 'ZzManaged')->assertForbidden();
-    Livewire::test(DomainManager::class)->call('disable', 'ZzManaged')->assertForbidden();
-    Livewire::test(DomainManager::class)->call('openUninstall', 'ZzManaged')->assertForbidden();
+    Livewire::test(DomainManager::class)->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)->assertForbidden();
+    Livewire::test(DomainManager::class)->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)->assertForbidden();
+    Livewire::test(DomainManager::class)->call('openUninstall', DOMAIN_MANAGER_FIXTURE_DOMAIN)->assertForbidden();
 
     // Rendering legitimately runs `git status` on installed checkouts; what
     // must never have run without the manage capability is the clone.

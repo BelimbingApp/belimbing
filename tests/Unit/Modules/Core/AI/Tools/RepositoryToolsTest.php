@@ -9,6 +9,7 @@ uses(TestCase::class);
 
 const REPO_TOOL_TEST_DIR = 'tmp/testing/repo-tools';
 const REPO_TOOL_EXTENSION_DIR = 'extensions/custom/acme-test';
+const REPO_TOOL_CHUNKED_FILE = REPO_TOOL_TEST_DIR.'/chunked.txt';
 
 beforeEach(function (): void {
     $this->repoToolNeedle = 'repo_tool_'.str()->random(16);
@@ -38,11 +39,11 @@ it('reads files from the core surface', function (): void {
 });
 
 it('returns bounded file chunks with continuation offsets', function (): void {
-    File::put(base_path(REPO_TOOL_TEST_DIR.'/chunked.txt'), "one\ntwo\nthree\n");
+    File::put(base_path(REPO_TOOL_CHUNKED_FILE), "one\ntwo\nthree\n");
 
     $first = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'file_path' => REPO_TOOL_CHUNKED_FILE,
         'target_surface' => 'core',
         'limit' => 2,
     ]);
@@ -50,7 +51,7 @@ it('returns bounded file chunks with continuation offsets', function (): void {
 
     $second = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'file_path' => REPO_TOOL_CHUNKED_FILE,
         'target_surface' => 'core',
         'offset' => $firstPayload['next_offset'],
         'limit' => 2,

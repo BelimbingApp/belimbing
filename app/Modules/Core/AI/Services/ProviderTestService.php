@@ -102,7 +102,7 @@ final readonly class ProviderTestService
 
         if (isset($response['runtime_error'])) {
             /** @var AiRuntimeError $runtimeError */
-            $runtimeError = $this->normalizeProviderError($providerName, $response['runtime_error']);
+            $runtimeError = $this->normalizeProviderError($response['runtime_error']);
 
             // Empty content on a minimal test prompt is acceptable — it proves
             // connectivity. The model reached us and returned a valid response
@@ -176,7 +176,7 @@ final readonly class ProviderTestService
         Log::log($level, 'AI provider test completed', $context);
     }
 
-    private function normalizeProviderError(string $providerName, AiRuntimeError $error): AiRuntimeError
+    private function normalizeProviderError(AiRuntimeError $error): AiRuntimeError
     {
         return $error;
     }
