@@ -2,6 +2,8 @@
 
 use App\Modules\Core\Geonames\Models\Country;
 
+const COUNTRY_SEARCH_ALL_LABEL = 'Any country';
+
 function makeCountry(string $iso, string $iso3, string $isoNum, string $name): Country
 {
     return Country::query()->create([
@@ -53,16 +55,16 @@ test('country search filter mode prepends an empty All countries option', functi
 
     $this->actingAs(createAdminUser());
 
-    $results = collect($this->getJson(route('admin.addresses.countries.search', ['all' => 'Any country']))
+    $results = collect($this->getJson(route('admin.addresses.countries.search', ['all' => COUNTRY_SEARCH_ALL_LABEL]))
         ->assertOk()
         ->json());
 
     // First option is the empty-valued "All countries" sentinel used by the
     // country-combobox filter mode (e.g. the geonames admin1 page).
-    expect($results->first())->toMatchArray(['value' => '', 'label' => 'Any country']);
+    expect($results->first())->toMatchArray(['value' => '', 'label' => COUNTRY_SEARCH_ALL_LABEL]);
 
     // The sentinel only appears for the unfiltered list, never amid matches.
-    $filtered = collect($this->getJson(route('admin.addresses.countries.search', ['all' => 'Any country', 'q' => 'mal']))
+    $filtered = collect($this->getJson(route('admin.addresses.countries.search', ['all' => COUNTRY_SEARCH_ALL_LABEL, 'q' => 'mal']))
         ->assertOk()
         ->json());
 

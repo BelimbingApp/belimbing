@@ -9,6 +9,11 @@ uses(TestCase::class);
 
 const REPO_TOOL_TEST_DIR = 'tmp/testing/repo-tools';
 const REPO_TOOL_EXTENSION_DIR = 'extensions/custom/acme-test';
+const REPO_TOOL_CHUNKED_FILE = REPO_TOOL_TEST_DIR.'/chunked.txt';
+const REPO_TOOL_STORAGE_DIR = 'storage';
+const REPO_TOOL_STORAGE_APP_DIR = 'app';
+const REPO_TOOL_WIRE_LOG_DIR = REPO_TOOL_STORAGE_DIR.'/'.REPO_TOOL_STORAGE_APP_DIR.'/ai/wire-logs';
+const REPO_TOOL_WIRE_LOG_FILE = REPO_TOOL_WIRE_LOG_DIR.'/run_test.jsonl';
 
 beforeEach(function (): void {
     $this->repoToolNeedle = 'repo_tool_'.str()->random(16);
@@ -23,7 +28,7 @@ beforeEach(function (): void {
 afterEach(function (): void {
     File::deleteDirectory(base_path(REPO_TOOL_TEST_DIR));
     File::deleteDirectory(base_path(REPO_TOOL_EXTENSION_DIR));
-    File::delete(base_path('storage/app/ai/wire-logs/run_test.jsonl'));
+    File::delete(base_path(REPO_TOOL_WIRE_LOG_FILE));
 });
 
 it('reads files from the core surface', function (): void {
@@ -38,11 +43,11 @@ it('reads files from the core surface', function (): void {
 });
 
 it('returns bounded file chunks with continuation offsets', function (): void {
-    File::put(base_path(REPO_TOOL_TEST_DIR.'/chunked.txt'), "one\ntwo\nthree\n");
+    File::put(base_path(REPO_TOOL_CHUNKED_FILE), "one\ntwo\nthree\n");
 
     $first = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'file_path' => REPO_TOOL_CHUNKED_FILE,
         'target_surface' => 'core',
         'limit' => 2,
     ]);
@@ -50,7 +55,7 @@ it('returns bounded file chunks with continuation offsets', function (): void {
 
     $second = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => REPO_TOOL_TEST_DIR.'/chunked.txt',
+        'file_path' => REPO_TOOL_CHUNKED_FILE,
         'target_surface' => 'core',
         'offset' => $firstPayload['next_offset'],
         'limit' => 2,
@@ -99,8 +104,8 @@ it('searches file contents within a surface', function (): void {
 });
 
 it('excludes AI wire logs from repository search', function (): void {
-    File::ensureDirectoryExists(base_path('storage/app/ai/wire-logs'));
-    File::put(base_path('storage/app/ai/wire-logs/run_test.jsonl'), $this->repoToolNeedle);
+    File::ensureDirectoryExists(base_path(REPO_TOOL_WIRE_LOG_DIR));
+    File::put(base_path(REPO_TOOL_WIRE_LOG_FILE), $this->repoToolNeedle);
 
     $result = (new SearchTool)->execute([
         'query' => $this->repoToolNeedle,
@@ -110,19 +115,19 @@ it('excludes AI wire logs from repository search', function (): void {
     ]);
 
     expect((string) $result)->toContain(REPO_TOOL_TEST_DIR.'/sample.txt')
-        ->and((string) $result)->not->toContain('storage/app/ai/wire-logs/run_test.jsonl');
+        ->and((string) $result)->not->toContain(REPO_TOOL_WIRE_LOG_FILE);
 });
 
 it('blocks reading AI wire logs', function (): void {
-    File::ensureDirectoryExists(base_path('storage/app/ai/wire-logs'));
-    File::put(base_path('storage/app/ai/wire-logs/run_test.jsonl'), $this->repoToolNeedle);
+    File::ensureDirectoryExists(base_path(REPO_TOOL_WIRE_LOG_DIR));
+    File::put(base_path(REPO_TOOL_WIRE_LOG_FILE), $this->repoToolNeedle);
 
     $result = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => 'storage/app/ai/wire-logs/run_test.jsonl',
+        'file_path' => REPO_TOOL_WIRE_LOG_FILE,
         'target_surface' => 'core',
     ]);
 
     expect((string) $result)->toContain('Error')
-        ->and((string) $result)->toContain('storage/app/ai/wire-logs/');
+        ->and((string) $result)->toContain(REPO_TOOL_WIRE_LOG_DIR.'/');
 });

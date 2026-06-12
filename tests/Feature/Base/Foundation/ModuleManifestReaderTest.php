@@ -2,6 +2,12 @@
 
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 
+beforeEach(function (): void {
+    if (! is_dir(base_path('app/Modules/People'))) {
+        $this->markTestSkipped('People domain is not installed.');
+    }
+});
+
 it('reads extra.blb metadata from People sub-module composer.json files', function (): void {
     $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
 

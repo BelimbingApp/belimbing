@@ -8,8 +8,13 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 
+const DOMAIN_INSTALLER_FIXTURE_PATH = 'Modules/ZzInstallable';
+const DOMAIN_INSTALLER_FIXTURE_DESCRIPTION = 'Fixture domain.';
+const DOMAIN_INSTALLER_FIXTURE_REPO = 'https://example.test/zz.git';
+const DOMAIN_INSTALLER_MIGRATION = '2099_01_01_000000_create_zz_install_table_table';
+
 afterEach(function (): void {
-    File::deleteDirectory(app_path('Modules/ZzInstallable'));
+    File::deleteDirectory(app_path(DOMAIN_INSTALLER_FIXTURE_PATH));
 });
 
 function domainInstaller(): DomainInstaller
@@ -19,7 +24,7 @@ function domainInstaller(): DomainInstaller
 
 it('lists catalog entries without a checkout as available', function (): void {
     config(['domains.catalog' => [
-        'ZzInstallable' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture domain.'],
+        'ZzInstallable' => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
     ]]);
 
     expect(domainInstaller()->available())->toHaveKey('ZzInstallable');
@@ -31,7 +36,7 @@ it('lists catalog entries without a checkout as available', function (): void {
 
 it('installs by cloning the catalog repo and migrating in a subprocess', function (): void {
     config(['domains.catalog' => [
-        'ZzInstallable' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture domain.'],
+        'ZzInstallable' => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
     ]]);
 
     Process::fake();
@@ -41,7 +46,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
 
     expect($result['ok'])->toBeTrue();
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', 'https://example.test/zz.git', app_path('Modules/ZzInstallable')]);
+    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, app_path(DOMAIN_INSTALLER_FIXTURE_PATH)]);
     Process::assertRan(fn ($process): bool => $process->command === [PHP_BINARY, 'artisan', 'migrate', '--force']);
 
     // A stale disabled flag from a previous uninstall must not mute the new checkout.
@@ -50,7 +55,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
 
 it('rejects installing unknown or already-installed domains', function (): void {
     config(['domains.catalog' => [
-        'ZzInstallable' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture domain.'],
+        'ZzInstallable' => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
     ]]);
 
     expect(fn () => domainInstaller()->install('ZzNotInCatalog'))
@@ -81,17 +86,17 @@ it('uninstall deletes the checkout but keeps database state by default', functio
 
     Schema::create('zz_install_table', fn ($table) => $table->id());
     DB::table('migrations')->insert([
-        'migration' => '2099_01_01_000000_create_zz_install_table_table',
+        'migration' => DOMAIN_INSTALLER_MIGRATION,
         'batch' => 999,
     ]);
     Setting::query()->create(['key' => 'zz_install.option', 'value' => 'kept', 'scope_type' => null, 'scope_id' => null]);
 
     $result = domainInstaller()->uninstall('ZzInstallable', dropTables: false);
 
-    expect(is_dir(app_path('Modules/ZzInstallable')))->toBeFalse()
+    expect(is_dir(app_path(DOMAIN_INSTALLER_FIXTURE_PATH)))->toBeFalse()
         ->and($result['droppedTables'])->toBe([])
         ->and(Schema::hasTable('zz_install_table'))->toBeTrue()
-        ->and(DB::table('migrations')->where('migration', '2099_01_01_000000_create_zz_install_table_table')->exists())->toBeTrue()
+        ->and(DB::table('migrations')->where('migration', DOMAIN_INSTALLER_MIGRATION)->exists())->toBeTrue()
         ->and(Setting::query()->where('key', 'zz_install.option')->exists())->toBeTrue();
 });
 
@@ -100,7 +105,7 @@ it('uninstall with drop removes the tables, ledger rows, and settings the domain
 
     Schema::create('zz_install_table', fn ($table) => $table->id());
     DB::table('migrations')->insert([
-        'migration' => '2099_01_01_000000_create_zz_install_table_table',
+        'migration' => DOMAIN_INSTALLER_MIGRATION,
         'batch' => 999,
     ]);
     Setting::query()->create(['key' => 'zz_install.option', 'value' => 'gone', 'scope_type' => null, 'scope_id' => null]);
@@ -111,7 +116,7 @@ it('uninstall with drop removes the tables, ledger rows, and settings the domain
         ->and($result['prunedLedger'])->toBe(1)
         ->and($result['deletedSettings'])->toBe(1)
         ->and(Schema::hasTable('zz_install_table'))->toBeFalse()
-        ->and(DB::table('migrations')->where('migration', '2099_01_01_000000_create_zz_install_table_table')->exists())->toBeFalse()
+        ->and(DB::table('migrations')->where('migration', DOMAIN_INSTALLER_MIGRATION)->exists())->toBeFalse()
         ->and(Setting::query()->where('key', 'zz_install.option')->exists())->toBeFalse();
 });
 
@@ -120,7 +125,7 @@ it('uninstall with drop never touches a table another module still claims', func
 
     // The fixture domain also (wrongly) declares the framework's users table.
     file_put_contents(
-        app_path('Modules/ZzInstallable/Sample/Database/Migrations/2099_01_01_000001_create_users_table.php'),
+        app_path(DOMAIN_INSTALLER_FIXTURE_PATH.'/Sample/Database/Migrations/2099_01_01_000001_create_users_table.php'),
         "<?php\n// Schema::create('users', ...) — claim collides with Core.\nuse Illuminate\\Database\\Migrations\\Migration;\nreturn new class extends Migration {\n    public function up(): void { \\Illuminate\\Support\\Facades\\Schema::create('users', fn (\$t) => \$t->id()); }\n};",
     );
 

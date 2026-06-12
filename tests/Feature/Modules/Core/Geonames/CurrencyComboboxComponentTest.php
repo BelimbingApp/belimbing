@@ -5,49 +5,27 @@ use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Blade;
 
+function createCurrencyCountry(string $iso, string $iso3, string $isoNumeric, string $country, string $continent, string $currencyCode, string $currencyName): void
+{
+    Country::query()->create([
+        'iso' => $iso,
+        'iso3' => $iso3,
+        'iso_numeric' => $isoNumeric,
+        'country' => $country,
+        'continent' => $continent,
+        'currency_code' => $currencyCode,
+        'currency_name' => $currencyName,
+    ]);
+}
+
 it('prioritizes the current company currency, then usd and eur, in the currency combobox', function (): void {
     $user = createAdminUser();
     Auth::login($user);
 
-    Country::query()->create([
-        'iso' => 'MY',
-        'iso3' => 'MYS',
-        'iso_numeric' => '458',
-        'country' => 'Malaysia',
-        'continent' => 'AS',
-        'currency_code' => 'MYR',
-        'currency_name' => 'Ringgit',
-    ]);
-
-    Country::query()->create([
-        'iso' => 'US',
-        'iso3' => 'USA',
-        'iso_numeric' => '840',
-        'country' => 'United States',
-        'continent' => 'NA',
-        'currency_code' => 'USD',
-        'currency_name' => 'Dollar',
-    ]);
-
-    Country::query()->create([
-        'iso' => 'DE',
-        'iso3' => 'DEU',
-        'iso_numeric' => '276',
-        'country' => 'Germany',
-        'continent' => 'EU',
-        'currency_code' => 'EUR',
-        'currency_name' => 'Euro',
-    ]);
-
-    Country::query()->create([
-        'iso' => 'AU',
-        'iso3' => 'AUS',
-        'iso_numeric' => '036',
-        'country' => 'Australia',
-        'continent' => 'OC',
-        'currency_code' => 'AUD',
-        'currency_name' => 'Dollar',
-    ]);
+    createCurrencyCountry('MY', 'MYS', '458', 'Malaysia', 'AS', 'MYR', 'Ringgit');
+    createCurrencyCountry('US', 'USA', '840', 'United States', 'NA', 'USD', 'Dollar');
+    createCurrencyCountry('DE', 'DEU', '276', 'Germany', 'EU', 'EUR', 'Euro');
+    createCurrencyCountry('AU', 'AUS', '036', 'Australia', 'OC', 'AUD', 'Dollar');
 
     $address = Address::factory()->create(['country_iso' => 'MY']);
 

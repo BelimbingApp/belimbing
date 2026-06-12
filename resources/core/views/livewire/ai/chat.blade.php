@@ -482,7 +482,7 @@
                                             </span>
                                         </button>
                                     </div>
-                                    <div class="text-[10px] leading-snug" role="status" aria-live="polite">
+                                    <output class="text-[10px] leading-snug" aria-live="polite">
                                         <span
                                             wire:loading
                                             wire:target="generateSessionTitle('{{ $session->id }}')"
@@ -500,7 +500,7 @@
                                                 {{ $titleSuggestionMessage }}
                                             </span>
                                         @endif
-                                    </div>
+                                    </output>
                                     <div class="flex items-center gap-1">
                                         <button type="button" wire:click="saveTitle" class="text-[10px] text-accent hover:underline">{{ __('Save') }}</button>
                                         <span class="text-[10px] text-muted">·</span>
