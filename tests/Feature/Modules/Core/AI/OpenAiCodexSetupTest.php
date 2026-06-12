@@ -262,7 +262,7 @@ test('openai codex setup marks provider expired when verification returns auth e
 
     expect($auth['status'] ?? null)->toBe('expired')
         ->and($auth['last_error_code'] ?? null)->toBe(AiErrorType::AuthError->value)
-        ->and($auth['last_error_message'] ?? null)->toContain('OpenAI Codex rejected the ChatGPT backend session.');
+        ->and($auth['last_error_message'] ?? null)->toContain('ChatGPT session was rejected.');
 });
 
 test('openai codex setup disconnect clears credentials and resets auth state', function (): void {

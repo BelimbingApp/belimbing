@@ -6,10 +6,13 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_PATH = 'Modules/People';
+const DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_SKIP = 'People domain not installed';
+
 beforeEach(function (): void {
     setupAuthzRoles();
     $this->app['env'] = 'local';
-});
+})->skip(fn (): bool => ! is_dir(app_path(DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_PATH)), DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_SKIP);
 
 test('schema incubation index can add selected tables to source incubation', function (): void {
     $this->actingAs(createAdminUser());
@@ -29,7 +32,7 @@ test('schema incubation index can add selected tables to source incubation', fun
     } finally {
         file_put_contents($migrationPath, $original);
     }
-});
+})->skip(fn (): bool => ! is_dir(app_path(DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_PATH)), DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_SKIP);
 
 test('schema incubation index can remove selected tables from source incubation', function (): void {
     $this->actingAs(createAdminUser());
@@ -47,7 +50,7 @@ test('schema incubation index can remove selected tables from source incubation'
     } finally {
         file_put_contents($migrationPath, $original);
     }
-});
+})->skip(fn (): bool => ! is_dir(app_path(DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_PATH)), DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_SKIP);
 
 test('schema incubation index can filter currently incubating tables by table name', function (): void {
     $this->actingAs(createAdminUser());
@@ -56,7 +59,7 @@ test('schema incubation index can filter currently incubating tables by table na
         ->set('incubatingSearch', 'leave_type')
         ->assertSee('people_leave_types')
         ->assertDontSee('people_leave_policies');
-});
+})->skip(fn (): bool => ! is_dir(app_path(DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_PATH)), DATABASE_TABLES_INCUBATION_PEOPLE_DOMAIN_SKIP);
 
 test('schema incubation index can filter currently incubating tables by module', function (): void {
     $this->actingAs(createAdminUser());

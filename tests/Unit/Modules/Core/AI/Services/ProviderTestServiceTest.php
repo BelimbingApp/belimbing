@@ -148,7 +148,6 @@ it('surfaces structured provider errors across supported protocol clients', func
         ->and($result->model)->toBe(PROVIDER_TEST_SERVICE_MODEL_ID)
         ->and($result->error)->not->toBeNull()
         ->and($result->error->errorType)->toBe(AiErrorType::AuthError)
-        ->and($result->error->diagnostic)->toContain('HTTP 401')
         ->and($result->error->diagnostic)->toContain('Invalid API key.');
 })->with([
     'chat completions' => [

@@ -7,7 +7,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     setupAuthzRoles();
-});
+})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
 
 test('admin sees the plugin manager page with installed module cards', function (): void {
     $this->actingAs(createAdminUser());
@@ -20,7 +20,7 @@ test('admin sees the plugin manager page with installed module cards', function 
         ->assertSee('people/payroll')
         ->assertSee('people/leave')
         ->assertSee('people/claim');
-});
+})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
 
 test('the dashboard reports unmet required dependencies when Core has no manifest', function (): void {
     // Today Core/Employee and Core/Company do not ship composer.json

@@ -36,7 +36,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
             'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
             'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
         );
-});
+})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
 
 it('finds no unmet People-internal requirements when the full People domain is loaded', function (): void {
     $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
@@ -53,4 +53,4 @@ it('finds no unmet People-internal requirements when the full People domain is l
     ));
 
     expect($peopleUnmet)->toBe([]);
-});
+})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
