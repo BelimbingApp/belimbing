@@ -33,6 +33,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'authz' => AuthorizeCapability::class,
         ]);
 
+        // Marketplace webhooks are called by external servers (eBay) that
+        // cannot carry a CSRF token; the handlers authenticate by signature
+        // or shared verification token instead.
+        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+
         // Add database connection recovery middleware to web group
         $middleware->web(append: [
             DatabaseConnectionRecovery::class,

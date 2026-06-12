@@ -1,7 +1,9 @@
 <?php
+
 use App\Base\System\Enums\UiReferenceSection;
 use App\Base\System\Http\Controllers\TestTransportStreamController;
 use App\Base\System\Livewire\Info\Index;
+use App\Base\System\Livewire\IntegrationParameters\Index as IntegrationParametersIndex;
 use App\Base\System\Livewire\Localization\Index as LocalizationIndex;
 use App\Base\System\Livewire\MenuInspector\Index as MenuInspectorIndex;
 use App\Base\System\Livewire\TestTransport\Index as TestTransportIndex;
@@ -15,6 +17,10 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/system/localization', LocalizationIndex::class)
         ->middleware('authz:admin.system.localization.manage')
         ->name('admin.system.localization.index');
+
+    Route::get('admin/system/integration-parameters', IntegrationParametersIndex::class)
+        ->middleware('authz:admin.system.integration-parameters.manage')
+        ->name('admin.system.integration-parameters.index');
 
     Route::get('admin/system/test-transport', TestTransportIndex::class)
         ->middleware('authz:admin.system.test-transport.view')
