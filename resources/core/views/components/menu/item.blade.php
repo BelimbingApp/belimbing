@@ -60,7 +60,7 @@
             <a
                 href="{{ $href }}"
                 @if($item->route) wire:navigate @endif
-                class="truncate flex-1 {{ $isActive || $hasActiveChild ? 'font-bold text-ink' : 'font-normal text-link' }}"
+                class="truncate flex-1 {{ $isActive || $hasActiveChild ? 'text-accent' : 'font-normal text-link' }}"
                 title="{{ $tooltip }}"
             >{{ __($item->label) }}</a>
 
@@ -95,7 +95,7 @@
             x-show="!rail"
             x-cloak
             @click="expanded = !expanded"
-            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition hover:bg-surface-subtle {{ $isActive || $hasActiveChild ? 'font-bold text-ink' : 'font-normal text-link' }}"
+            class="flex items-center gap-0.5 w-full px-1 py-px text-sm rounded-none cursor-pointer transition hover:bg-surface-subtle {{ $isActive || $hasActiveChild ? 'text-accent' : 'font-normal text-link' }}"
             title="{{ $tooltip }}"
         >
             <span class="text-[12px] shrink-0 text-link w-3 text-center" aria-hidden="true">

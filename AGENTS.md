@@ -25,6 +25,7 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
 - **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
 - **Progressive Evolution:** build the best design current knowledge justifies. Refactor, simplify, dedup,  delete, relocate, rename, improve abstractions, and make schema maturity explicit to reduce entropy as understanding improves.
 - **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
+- **Exceptional Experience:** Treat UX and UI quality as first-class architecture; every interface must honor `DESIGN.md`.
 - **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
 
 ## 3. Plan Docs
