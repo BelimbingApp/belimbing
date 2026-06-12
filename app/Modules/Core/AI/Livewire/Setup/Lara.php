@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Setup;
 
 use App\Base\Support\File as BlbFile;
@@ -6,7 +7,10 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\ConfigResolver;
+use App\Modules\Core\AI\Services\LaraInteractiveToolSet;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
+use App\Modules\Core\AI\Services\ToolMetadataRegistry;
+use App\Modules\Core\AI\Services\ToolReadinessService;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -152,6 +156,14 @@ class Lara extends Component
         }
     }
 
+    public function toggleExtraTool(string $toolName): void
+    {
+        $toolSet = app(LaraInteractiveToolSet::class);
+        $toolSet->setExtraToolEnabled($toolName, ! in_array($toolName, $toolSet->extraToolNames(), true));
+
+        Session::flash('success', __('Lara interactive tools updated.'));
+    }
+
     /**
      * Preview the assembled prompt: prompt-content slots concatenated in load
      * order, with the current draft substituted for the slot being edited.
@@ -229,6 +241,7 @@ class Lara extends Component
         }
 
         $taskSummaries = $laraActivated ? $this->buildTaskSummaries($resolver) : [];
+        $toolRows = $laraExists ? $this->buildInteractiveToolRows() : ['enabled' => [], 'available' => []];
 
         return view('livewire.admin.setup.lara', [
             'licenseeExists' => $licenseeExists,
@@ -238,6 +251,8 @@ class Lara extends Component
             'slots' => $slots,
             'workspacePath' => $manifest?->workspacePath,
             'taskSummaries' => $taskSummaries,
+            'enabledToolRows' => $toolRows['enabled'],
+            'availableToolRows' => $toolRows['available'],
         ]);
     }
 
@@ -316,6 +331,67 @@ class Lara extends Component
                 ];
             })
             ->all();
+    }
+
+    /**
+     * @return array{enabled: list<array<string, mixed>>, available: list<array<string, mixed>>}
+     */
+    private function buildInteractiveToolRows(): array
+    {
+        $toolSet = app(LaraInteractiveToolSet::class);
+        $metadataRegistry = app(ToolMetadataRegistry::class);
+        $readinessService = app(ToolReadinessService::class);
+        $enabledExtraNames = $toolSet->extraToolNames();
+        $defaultRows = array_map(
+            fn (string $toolName): array => $this->toolRow($toolName, $metadataRegistry, $readinessService, true, true),
+            $toolSet->defaultToolNames(),
+        );
+        $enabledExtraRows = array_map(
+            fn (string $toolName): array => $this->toolRow($toolName, $metadataRegistry, $readinessService, true, false),
+            $enabledExtraNames,
+        );
+        $availableExtraNames = array_values(array_filter(
+            $toolSet->candidateExtraToolNames(),
+            fn (string $toolName): bool => ! in_array($toolName, $enabledExtraNames, true),
+        ));
+
+        return [
+            'enabled' => [...$defaultRows, ...$enabledExtraRows],
+            'available' => array_map(
+                fn (string $toolName): array => $this->toolRow(
+                    $toolName,
+                    $metadataRegistry,
+                    $readinessService,
+                    false,
+                    false,
+                ),
+                $availableExtraNames,
+            ),
+        ];
+    }
+
+    private function toolRow(
+        string $toolName,
+        ToolMetadataRegistry $metadataRegistry,
+        ToolReadinessService $readinessService,
+        bool $enabled,
+        bool $isDefault,
+    ): array {
+        $metadata = $metadataRegistry->get($toolName);
+        $readiness = $readinessService->readiness($toolName);
+
+        return [
+            'name' => $toolName,
+            'displayName' => $metadata?->displayName ?? $toolName,
+            'summary' => $metadata?->summary ?? '',
+            'category' => $metadata?->category->label() ?? __('Unknown'),
+            'riskLabel' => $metadata?->riskClass->label() ?? __('Unknown'),
+            'riskColor' => $metadata?->riskClass->color() ?? 'default',
+            'readinessLabel' => $readiness->label(),
+            'readinessColor' => $readiness->color(),
+            'enabled' => $enabled,
+            'isDefault' => $isDefault,
+        ];
     }
 
     private function readSlotContent(WorkspaceManifest $manifest, WorkspaceFileSlot $slot): string

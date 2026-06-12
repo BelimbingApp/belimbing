@@ -55,6 +55,93 @@
                 @endif
             </x-ui.card>
 
+            {{-- Interactive tool surface --}}
+            <x-ui.card>
+                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between mb-4">
+                    <div>
+                        <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Interactive Tools') }}</h3>
+                        <p class="text-xs text-muted mt-1">{{ __('Tools Lara can use from the in-page chat. Defaults are fixed; additional tools are opt-in.') }}</p>
+                    </div>
+                    <x-ui.button variant="ghost" size="sm" href="{{ route('admin.ai.tools') }}" wire:navigate>
+                        {{ __('Open Tool Catalog') }}
+                    </x-ui.button>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+                    <div class="rounded-2xl border border-border-default bg-surface-subtle/30 p-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <p class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Enabled in Lara Chat') }}</p>
+                            <x-ui.badge variant="success">{{ trans_choice(':count tool|:count tools', count($enabledToolRows), ['count' => count($enabledToolRows)]) }}</x-ui.badge>
+                        </div>
+                        <div class="space-y-3">
+                            @foreach ($enabledToolRows as $tool)
+                                <div wire:key="lara-enabled-tool-{{ $tool['name'] }}" class="rounded-xl border border-border-default/70 bg-surface-card p-3">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-sm font-medium text-ink" title="{{ $tool['name'] }}">{{ $tool['displayName'] }}</span>
+                                                <x-ui.badge variant="{{ $tool['isDefault'] ? 'info' : 'accent' }}">{{ $tool['isDefault'] ? __('Default') : __('Added') }}</x-ui.badge>
+                                                <x-ui.badge variant="{{ $tool['readinessColor'] }}">{{ $tool['readinessLabel'] }}</x-ui.badge>
+                                            </div>
+                                            @if ($tool['summary'] !== '')
+                                                <p class="text-xs text-muted mt-1">{{ $tool['summary'] }}</p>
+                                            @endif
+                                        </div>
+
+                                        @unless ($tool['isDefault'])
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-x-mark"
+                                                :label="__('Remove :tool from Lara Chat', ['tool' => $tool['displayName']])"
+                                                :title="__('Remove')"
+                                                wire:click="toggleExtraTool('{{ $tool['name'] }}')"
+                                            />
+                                        @endunless
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                        <div class="flex items-center justify-between gap-3 mb-3">
+                            <p class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Available to Add') }}</p>
+                            <span class="text-xs text-muted">{{ __('Optional tools beyond the default set.') }}</span>
+                        </div>
+
+                        @if ($availableToolRows === [])
+                            <p class="text-xs text-muted">{{ __('No optional tools are available to add.') }}</p>
+                        @else
+                            <div class="space-y-3">
+                                @foreach ($availableToolRows as $tool)
+                                    <div wire:key="lara-available-tool-{{ $tool['name'] }}" class="rounded-xl border border-border-default/70 bg-surface-subtle/20 p-3">
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <span class="text-sm font-medium text-ink" title="{{ $tool['name'] }}">{{ $tool['displayName'] }}</span>
+                                                    <x-ui.badge variant="{{ $tool['riskColor'] }}">{{ $tool['riskLabel'] }}</x-ui.badge>
+                                                    <x-ui.badge variant="{{ $tool['readinessColor'] }}">{{ $tool['readinessLabel'] }}</x-ui.badge>
+                                                </div>
+                                                @if ($tool['summary'] !== '')
+                                                    <p class="text-xs text-muted mt-1">{{ $tool['summary'] }}</p>
+                                                @endif
+                                            </div>
+                                            <x-ui.button
+                                                variant="ghost"
+                                                size="sm"
+                                                wire:click="toggleExtraTool('{{ $tool['name'] }}')"
+                                            >
+                                                <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                                {{ __('Add') }}
+                                            </x-ui.button>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </div>
+            </x-ui.card>
+
             {{-- Harness inspector --}}
             <x-ui.card>
                 <div class="flex items-baseline justify-between mb-3">

@@ -30,6 +30,7 @@ class ChatTurnRunner
         private readonly RunStreamBridge $bridge,
         private readonly RunEventPublisher $turnPublisher,
         private readonly SessionManager $sessionManager,
+        private readonly LaraInteractiveToolSet $interactiveToolSet,
     ) {}
 
     /**
@@ -37,7 +38,7 @@ class ChatTurnRunner
      *
      * Authz and tool guardrails still filter execution. Keep structured
      * repository tools first so ordinary coding work uses bounded search,
-     * read, and edit operations before escalating to browser or shell.
+     * read, edit, and the user's active page snapshot before escalating to shell.
      *
      * @var list<string>
      */
@@ -46,7 +47,6 @@ class ChatTurnRunner
         'read',
         'edit',
         'active_page_snapshot',
-        'browser',
         'bash',
     ];
 
@@ -81,7 +81,7 @@ class ChatTurnRunner
             modelOverride: $modelOverride,
             policy: $this->resolveExecutionPolicy($turn),
             promptMeta: $promptMeta,
-            allowedToolNames: self::DEFAULT_INTERACTIVE_AGENT_TOOL_NAMES,
+            allowedToolNames: $this->interactiveToolSet->enabledToolNames(),
             executionControlsOverride: $this->sessionManager->getExecutionControlsOverride($employeeId, $sessionId),
         );
 
