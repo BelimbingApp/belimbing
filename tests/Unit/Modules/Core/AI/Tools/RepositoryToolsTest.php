@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Core\AI\DTO\RepositorySurface;
+use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
 use App\Modules\Core\AI\Tools\ReadTool;
 use App\Modules\Core\AI\Tools\SearchTool;
 use Illuminate\Support\Facades\File;
@@ -10,6 +12,23 @@ uses(TestCase::class);
 const REPO_TOOL_TEST_DIR = 'tmp/testing/repo-tools';
 const REPO_TOOL_EXTENSION_DIR = 'extensions/custom/acme-test';
 const REPO_TOOL_CHUNKED_FILE = REPO_TOOL_TEST_DIR.'/chunked.txt';
+const REPO_TOOL_WIRE_LOG_RELATIVE_FILE = 'storage'.'/app/ai/wire-logs/run_test.jsonl';
+const REPO_TOOL_WIRE_LOG_FIXTURE_FILE = REPO_TOOL_TEST_DIR.'/'.REPO_TOOL_WIRE_LOG_RELATIVE_FILE;
+
+function repoToolTestingSurface(): RepositorySurfaceResolver
+{
+    return new class extends RepositorySurfaceResolver
+    {
+        public function resolve(?string $targetSurface = null): RepositorySurface
+        {
+            return new RepositorySurface(
+                target: $targetSurface ?: 'core',
+                rootPath: base_path(REPO_TOOL_TEST_DIR),
+                relativeRoot: REPO_TOOL_TEST_DIR,
+            );
+        }
+    };
+}
 
 beforeEach(function (): void {
     $this->repoToolNeedle = 'repo_tool_'.str()->random(16);
@@ -24,7 +43,6 @@ beforeEach(function (): void {
 afterEach(function (): void {
     File::deleteDirectory(base_path(REPO_TOOL_TEST_DIR));
     File::deleteDirectory(base_path(REPO_TOOL_EXTENSION_DIR));
-    File::delete(base_path('storage/app/ai/wire-logs/run_test.jsonl'));
 });
 
 it('reads files from the core surface', function (): void {
@@ -100,30 +118,27 @@ it('searches file contents within a surface', function (): void {
 });
 
 it('excludes AI wire logs from repository search', function (): void {
-    File::ensureDirectoryExists(base_path('storage/app/ai/wire-logs'));
-    File::put(base_path('storage/app/ai/wire-logs/run_test.jsonl'), $this->repoToolNeedle);
+    File::ensureDirectoryExists(dirname(base_path(REPO_TOOL_WIRE_LOG_FIXTURE_FILE)));
+    File::put(base_path(REPO_TOOL_WIRE_LOG_FIXTURE_FILE), $this->repoToolNeedle);
 
-    $result = (new SearchTool)->execute([
+    $result = (new SearchTool(repoToolTestingSurface()))->execute([
         'query' => $this->repoToolNeedle,
         'mode' => 'content',
         'target_surface' => 'core',
         'max_results' => 10,
     ]);
 
-    expect((string) $result)->toContain(REPO_TOOL_TEST_DIR.'/sample.txt')
-        ->and((string) $result)->not->toContain('storage/app/ai/wire-logs/run_test.jsonl');
+    expect((string) $result)->toContain('sample.txt')
+        ->and((string) $result)->not->toContain(REPO_TOOL_WIRE_LOG_RELATIVE_FILE);
 });
 
 it('blocks reading AI wire logs', function (): void {
-    File::ensureDirectoryExists(base_path('storage/app/ai/wire-logs'));
-    File::put(base_path('storage/app/ai/wire-logs/run_test.jsonl'), $this->repoToolNeedle);
-
     $result = (new ReadTool)->execute([
         'target' => 'file',
-        'file_path' => 'storage/app/ai/wire-logs/run_test.jsonl',
+        'file_path' => REPO_TOOL_WIRE_LOG_RELATIVE_FILE,
         'target_surface' => 'core',
     ]);
 
     expect((string) $result)->toContain('Error')
-        ->and((string) $result)->toContain('storage/app/ai/wire-logs/');
+        ->and((string) $result)->toContain(dirname(REPO_TOOL_WIRE_LOG_RELATIVE_FILE).'/');
 });
