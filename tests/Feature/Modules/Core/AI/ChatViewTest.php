@@ -102,6 +102,14 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('clearSummary($event.detail.sessionId, $event.detail?.runId || null)');
 });
 
+it('renders empty-session quick prompts for the active page url', function (): void {
+    test()->actingAs(createChatViewFixture());
+
+    Livewire::test(Chat::class)
+        ->set('pageUrl', route('admin.employees.index'))
+        ->assertSee('Create employee');
+});
+
 it('polls the chat view while the selected Lara session has pending delegated work', function (): void {
     $user = createChatViewFixture();
     test()->actingAs($user);
@@ -313,7 +321,7 @@ it('reports when a title cannot be suggested', function (): void {
         ->call('generateSessionTitle', $session->id)
         ->assertSet('titleSuggestionSessionId', $session->id)
         ->assertSet('titleSuggestionTone', 'error')
-        ->assertSet('titleSuggestionMessage', CHAT_VIEW_TEST_MODEL.' is rate limited or overloaded. Try again later.');
+        ->assertSet('titleSuggestionMessage', 'The engine is currently overloaded.');
 });
 
 it('reports that a conversation needs messages before suggesting a title', function (): void {

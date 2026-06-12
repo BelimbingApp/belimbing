@@ -293,10 +293,11 @@ trait ManagesChatSessions
             ->latest('created_at')
             ->first();
 
-        $model = is_string($run?->model) && $run->model !== '' ? $run->model : __('The title model');
+        if (is_string($run?->error_message) && trim($run->error_message) !== '') {
+            return $run->error_message;
+        }
 
         return match ($run?->error_type) {
-            'rate_limit' => __(':model is rate limited or overloaded. Try again later.', ['model' => $model]),
             'config_error' => __('No title model is configured for Lara.'),
             default => __('Could not suggest a title. Try again later.'),
         };

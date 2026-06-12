@@ -189,7 +189,14 @@
             $wire.set('selectedSessionId', savedSession);
         }
         $nextTick(() => $refs.agentComposer?.focus());
-        $wire.set('pageUrl', window.location.href);
+        window.__laraPageUrlCleanup?.();
+        const syncPageUrl = () => $wire.set('pageUrl', window.location.href);
+        syncPageUrl();
+        document.addEventListener('livewire:navigated', syncPageUrl);
+        window.__laraPageUrlCleanup = () => {
+            document.removeEventListener('livewire:navigated', syncPageUrl);
+            window.__laraPageUrlCleanup = null;
+        };
         $watch('pageAwareness', v => $wire.set('pageAwareness', v));
         $watch('$wire.selectedSessionId', v => {
             if (v) {
@@ -221,7 +228,6 @@
             $data.startSummaryPolling();
         }
     "
-    @navigate.window="$wire.set('pageUrl', window.location.href)"
     @agent-chat-response-ready.window="if ($event.detail?.sessionId) clearSummary($event.detail.sessionId, $event.detail?.runId || null)"
     @agent-chat-focus-composer.window="$nextTick(() => $refs.agentComposer?.focus())"
     @agent-chat-opened.window="if ($event.detail?.prompt) { $wire.set('messageInput', $event.detail.prompt); $nextTick(() => $refs.agentComposer?.focus()); }"
@@ -745,16 +751,16 @@
                     @empty
                         <div x-show="!pendingMessage" class="h-full flex flex-col items-center justify-center gap-4">
                             <p class="text-sm text-muted">{{ __('Send a message to start chatting with :name.', ['name' => $agentIdentity['name']]) }}</p>
-                            @if (count($quickActions) > 0)
+                            @if (count($quickPrompts) > 0)
                                 <div class="flex flex-wrap justify-center gap-2 max-w-sm">
-                                    @foreach ($quickActions as $action)
+                                    @foreach ($quickPrompts as $prompt)
                                         <button
                                             type="button"
-                                            x-on:click="$dispatch('open-agent-chat', { prompt: '{{ str_replace("'", "\\'", $action['prompt']) }}' })"
+                                            x-on:click="$dispatch('open-agent-chat', { prompt: '{{ str_replace("'", "\\'", $prompt['prompt']) }}' })"
                                             class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border-default bg-surface-card text-xs text-muted hover:text-ink hover:border-accent/40 hover:bg-surface-subtle transition-all duration-200"
                                         >
-                                            <x-icon :name="$action['icon']" class="w-3.5 h-3.5" />
-                                            <span>{{ $action['label'] }}</span>
+                                            <x-icon :name="$prompt['icon']" class="w-3.5 h-3.5" />
+                                            <span>{{ $prompt['label'] }}</span>
                                         </button>
                                     @endforeach
                                 </div>

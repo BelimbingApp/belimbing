@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
@@ -328,14 +329,12 @@ final class LlmResponsesDecoder
     private static function responseFailureEvent(array $data, int $startTime): array
     {
         $error = $data['response']['error'] ?? $data['error'] ?? null;
-        $message = is_array($error)
-            ? (string) ($error['message'] ?? self::UNKNOWN_ERROR)
-            : self::UNKNOWN_ERROR;
+        $message = self::providerEventErrorMessage($error);
         $latencyMs = LlmClientSupport::latencyMs($startTime);
 
         return [
             'type' => 'error',
-            'runtime_error' => AiRuntimeError::fromType(
+            'runtime_error' => AiRuntimeError::fromProviderFailure(
                 AiErrorType::ServerError,
                 $message,
                 latencyMs: $latencyMs,
@@ -350,18 +349,36 @@ final class LlmResponsesDecoder
      */
     private static function responseErrorEvent(array $data, int $startTime): array
     {
-        $code = (string) ($data['code'] ?? self::UNKNOWN_ERROR);
         $message = (string) ($data['message'] ?? $data['code'] ?? self::UNKNOWN_ERROR);
         $latencyMs = LlmClientSupport::latencyMs($startTime);
 
         return [
             'type' => 'error',
-            'runtime_error' => AiRuntimeError::fromType(
+            'runtime_error' => AiRuntimeError::fromProviderFailure(
                 AiErrorType::ServerError,
-                "Error code {$code}: {$message}",
+                $message,
                 latencyMs: $latencyMs,
             ),
             'latency_ms' => $latencyMs,
         ];
+    }
+
+    private static function providerEventErrorMessage(mixed $error): string
+    {
+        if (is_array($error)) {
+            $message = $error['message'] ?? null;
+
+            if (is_string($message) && trim($message) !== '') {
+                return $message;
+            }
+
+            $code = $error['code'] ?? null;
+
+            if (is_string($code) && trim($code) !== '') {
+                return $code;
+            }
+        }
+
+        return self::UNKNOWN_ERROR;
     }
 }

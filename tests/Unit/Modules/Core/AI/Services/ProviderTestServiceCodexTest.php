@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
-test('ProviderTestService rewrites Codex transport rejections into reconnect guidance and structured logs', function (): void {
+test('ProviderTestService preserves Codex transport provider messages and adds structured logs', function (): void {
     $config = [
         'provider_name' => 'openai-codex',
         'model' => 'gpt-5.4-nano',
@@ -46,9 +46,9 @@ test('ProviderTestService rewrites Codex transport rejections into reconnect gui
         ->once()
         ->with(Mockery::type(ChatRequest::class))
         ->andReturn([
-            'runtime_error' => AiRuntimeError::fromType(
+            'runtime_error' => AiRuntimeError::fromProviderFailure(
                 AiErrorType::BadRequest,
-                'HTTP 400: missing chatgpt-account-id',
+                'missing chatgpt-account-id',
             ),
         ]);
 
@@ -59,8 +59,8 @@ test('ProviderTestService rewrites Codex transport rejections into reconnect gui
 
     expect($result->connected)->toBeFalse()
         ->and($result->error)->not->toBeNull()
-        ->and($result->error->userMessage)->toBe('OpenAI Codex rejected the ChatGPT backend session.')
-        ->and($result->error->hint)->toBe('Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.');
+        ->and($result->error->userMessage)->toBe('missing chatgpt-account-id')
+        ->and($result->error->hint)->toBeNull();
 
     Log::shouldHaveReceived('log')
         ->once()
@@ -74,7 +74,7 @@ test('ProviderTestService rewrites Codex transport rejections into reconnect gui
         });
 });
 
-test('ProviderTestService surfaces unsupported Codex models as a model-selection problem', function (): void {
+test('ProviderTestService preserves unsupported Codex model provider messages', function (): void {
     $config = [
         'provider_name' => 'openai-codex',
         'model' => 'gpt-5.1-codex-mini',
@@ -106,9 +106,9 @@ test('ProviderTestService surfaces unsupported Codex models as a model-selection
         ->once()
         ->with(Mockery::type(ChatRequest::class))
         ->andReturn([
-            'runtime_error' => AiRuntimeError::fromType(
+            'runtime_error' => AiRuntimeError::fromProviderFailure(
                 AiErrorType::BadRequest,
-                'HTTP 400: {"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}',
+                '{"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}',
             ),
         ]);
 
@@ -119,8 +119,8 @@ test('ProviderTestService surfaces unsupported Codex models as a model-selection
 
     expect($result->connected)->toBeFalse()
         ->and($result->error)->not->toBeNull()
-        ->and($result->error->userMessage)->toBe('This OpenAI Codex model is not available for ChatGPT-backed Codex accounts.')
-        ->and($result->error->hint)->toBe('Sync models and switch to a supported Codex model such as gpt-5.4, gpt-5.4-mini, or gpt-5.2.');
+        ->and($result->error->userMessage)->toBe('{"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}')
+        ->and($result->error->hint)->toBeNull();
 
     Log::shouldHaveReceived('log')
         ->once()

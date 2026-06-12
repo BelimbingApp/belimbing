@@ -711,7 +711,7 @@ describe('LlmClient tool calling responses api handling', function () {
         });
     });
 
-    it('composes user message from label and provider diagnostic for bad requests', function () {
+    it('passes provider error messages through without categorizing the user message', function () {
         Http::fake([
             '*/responses' => Http::response([
                 'error' => [
@@ -733,9 +733,35 @@ describe('LlmClient tool calling responses api handling', function () {
             ->toHaveKey('runtime_error')
             ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::BadRequest)
-            ->and($result['runtime_error']->userMessage)->toStartWith(AiErrorType::BadRequest->userMessage())
-            ->and($result['runtime_error']->userMessage)->toContain("Unsupported parameter: 'temperature'")
+            ->and($result['runtime_error']->userMessage)->toBe("Unsupported parameter: 'temperature' is not supported with this model.")
+            ->and($result['runtime_error']->diagnostic)->toBe("Unsupported parameter: 'temperature' is not supported with this model.")
             ->and($result['runtime_error']->hint)->toContain("Unsupported parameter: 'temperature'");
+    });
+
+    it('uses provider error code as the user message when message is missing', function () {
+        Http::fake([
+            '*/responses' => Http::response([
+                'error' => [
+                    'code' => 'engine_overloaded',
+                ],
+            ], 429),
+        ]);
+
+        $client = new LlmClient;
+        $result = $client->chat(new ChatRequest(
+            TEST_API_BASE_URL,
+            'test-key',
+            'gpt-5.4',
+            [['role' => 'user', 'content' => 'Hello']],
+            apiType: AiApiType::OpenAiResponses,
+        ));
+
+        expect($result)
+            ->toHaveKey('runtime_error')
+            ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+            ->and($result['runtime_error']->errorType)->toBe(AiErrorType::RateLimit)
+            ->and($result['runtime_error']->userMessage)->toBe('engine_overloaded')
+            ->and($result['runtime_error']->diagnostic)->toBe('engine_overloaded');
     });
 });
 

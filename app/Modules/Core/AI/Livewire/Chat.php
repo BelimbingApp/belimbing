@@ -16,7 +16,8 @@ use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\MessageManager;
 use App\Modules\Core\AI\Services\OperationsDispatchService;
-use App\Modules\Core\AI\Services\QuickActionRegistry;
+use App\Modules\Core\AI\Services\PageContextResolver;
+use App\Modules\Core\AI\Services\QuickPromptRegistry;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -168,7 +169,7 @@ class Chat extends Component
 
         $canAttach = $this->canAttachFiles();
 
-        $quickActions = $this->quickActions($agentActivated, $messages);
+        $quickPrompts = $this->quickPrompts($agentActivated, $messages);
 
         $settingsUrl = $this->settingsUrl();
         $selectedSessionActiveTurn = $this->selectedSessionId !== null
@@ -194,7 +195,7 @@ class Chat extends Component
             'sessionUsage' => $sessionUsage,
             'hasPendingDelegations' => $hasPendingDelegations,
             'markdown' => $markdown,
-            'quickActions' => $quickActions,
+            'quickPrompts' => $quickPrompts,
             'activeTurnsBySession' => $activeTurnsBySession,
             'selectedSessionActiveTurn' => $selectedSessionActiveTurn,
             'activeTurnCount' => $activeTurnCount,
@@ -345,13 +346,19 @@ class Chat extends Component
      * @param  list<Message>  $messages
      * @return list<array<string, mixed>>
      */
-    private function quickActions(bool $agentActivated, array $messages): array
+    private function quickPrompts(bool $agentActivated, array $messages): array
     {
         if (! $agentActivated || $messages !== []) {
             return [];
         }
 
-        return app(QuickActionRegistry::class)->forRoute(request()->route()?->getName());
+        $routeName = null;
+
+        if ($this->pageUrl !== '') {
+            $routeName = app(PageContextResolver::class)->resolveFromUrl($this->pageUrl)?->route;
+        }
+
+        return app(QuickPromptRegistry::class)->forRoute($routeName ?? request()->route()?->getName());
     }
 
     /**

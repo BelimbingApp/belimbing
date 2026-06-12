@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\DTO;
 
 use App\Base\AI\Enums\AiErrorType;
@@ -62,6 +63,30 @@ final readonly class AiRuntimeError
             errorType: $type,
             userMessage: null,
             diagnostic: $diagnostic,
+            hint: $hint,
+            httpStatus: $httpStatus,
+            latencyMs: $latencyMs,
+        );
+    }
+
+    /**
+     * Create an error for an HTTP response from an AI provider.
+     *
+     * The user-facing message is the provider's own message/code/body. The
+     * classified type is retained only for retry policy, logs, and control-plane
+     * filtering; it must not rewrite the provider wording shown to users.
+     */
+    public static function fromProviderFailure(
+        AiErrorType $type,
+        string $providerMessage,
+        ?string $hint = null,
+        ?int $httpStatus = null,
+        int $latencyMs = 0,
+    ): self {
+        return new self(
+            errorType: $type,
+            userMessage: $providerMessage,
+            diagnostic: $providerMessage,
             hint: $hint,
             httpStatus: $httpStatus,
             latencyMs: $latencyMs,
