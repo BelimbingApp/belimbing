@@ -13,9 +13,10 @@ const DOMAIN_MANAGER_FIXTURE_REPO = 'https://example.test/zz.git';
 const DOMAIN_MANAGER_FIXTURE_DESCRIPTION = 'Fixture description.';
 const DOMAIN_MANAGER_FIXTURE_TABLE = 'zz_managed_table';
 const DOMAIN_MANAGER_FIXTURE_SETTING = 'zz_managed.option';
+const DOMAIN_MANAGER_FIXTURE_PATH = 'Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN;
 
 afterEach(function (): void {
-    File::deleteDirectory(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN));
+    File::deleteDirectory(app_path(DOMAIN_MANAGER_FIXTURE_PATH));
 });
 
 function configureManagedDomainCatalog(): void
@@ -74,7 +75,7 @@ it('installs an available domain and redirects back', function (): void {
         ->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertRedirect(route('admin.system.domains.index'));
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)]);
+    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 });
 
 it('disables and re-enables an installed domain', function (): void {
@@ -106,7 +107,7 @@ it('refuses to uninstall without the exact typed phrase', function (): void {
         ->call('uninstall')
         ->assertHasErrors('uninstallPhrase');
 
-    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeTrue();
+    expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeTrue();
 });
 
 it('uninstalls keeping the database when the keep phrase is typed', function (): void {
@@ -122,7 +123,7 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeFalse()
+    expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeTrue();
 });
 
@@ -139,7 +140,7 @@ it('uninstalls and drops tables when the drop phrase is typed', function (): voi
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN)))->toBeFalse()
+    expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeFalse();
 });
 
