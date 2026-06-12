@@ -7,6 +7,10 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     setupAuthzRoles();
+
+    if (! is_dir(base_path('app/Modules/People'))) {
+        $this->markTestSkipped('People domain is not installed.');
+    }
 });
 
 test('admin sees the plugin manager page with installed module cards', function (): void {

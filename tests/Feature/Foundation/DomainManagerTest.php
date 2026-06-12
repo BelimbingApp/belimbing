@@ -8,9 +8,18 @@ use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
+const DOMAIN_MANAGER_FIXTURE_PATH = 'Modules/ZzManaged';
+const DOMAIN_MANAGER_FIXTURE_DESCRIPTION = 'Fixture description.';
+const DOMAIN_MANAGER_FIXTURE_REPO = 'https://example.test/zz.git';
+
 afterEach(function (): void {
-    File::deleteDirectory(app_path('Modules/ZzManaged'));
+    File::deleteDirectory(app_path(DOMAIN_MANAGER_FIXTURE_PATH));
 });
+
+function expectManagedDomainCheckout(bool $exists): void
+{
+    expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBe($exists);
+}
 
 it('renders the domains page with installed domains and a residue pointer', function (): void {
     $this->actingAs(createAdminUser());
@@ -31,20 +40,20 @@ it('shows catalog domains without a checkout as available to install', function 
     $this->actingAs(createAdminUser());
 
     config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
+        'ZzManaged' => ['repo' => DOMAIN_MANAGER_FIXTURE_REPO, 'description' => DOMAIN_MANAGER_FIXTURE_DESCRIPTION],
     ]]);
 
     Livewire::test(DomainManager::class)
         ->assertSee('Available domains')
         ->assertSee('ZzManaged')
-        ->assertSee('Fixture description.');
+        ->assertSee(DOMAIN_MANAGER_FIXTURE_DESCRIPTION);
 });
 
 it('installs an available domain and redirects back', function (): void {
     $this->actingAs(createAdminUser());
 
     config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
+        'ZzManaged' => ['repo' => DOMAIN_MANAGER_FIXTURE_REPO, 'description' => DOMAIN_MANAGER_FIXTURE_DESCRIPTION],
     ]]);
 
     Process::fake();
@@ -53,7 +62,7 @@ it('installs an available domain and redirects back', function (): void {
         ->call('install', 'ZzManaged')
         ->assertRedirect(route('admin.system.domains.index'));
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', 'https://example.test/zz.git', app_path('Modules/ZzManaged')]);
+    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 });
 
 it('disables and re-enables an installed domain', function (): void {
@@ -85,7 +94,7 @@ it('refuses to uninstall without the exact typed phrase', function (): void {
         ->call('uninstall')
         ->assertHasErrors('uninstallPhrase');
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeTrue();
+    expectManagedDomainCheckout(true);
 });
 
 it('uninstalls keeping the database when the keep phrase is typed', function (): void {
@@ -101,8 +110,8 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeFalse()
-        ->and(Schema::hasTable('zz_managed_table'))->toBeTrue();
+    expectManagedDomainCheckout(false);
+    expect(Schema::hasTable('zz_managed_table'))->toBeTrue();
 });
 
 it('uninstalls and drops tables when the drop phrase is typed', function (): void {
@@ -118,15 +127,15 @@ it('uninstalls and drops tables when the drop phrase is typed', function (): voi
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.domains.index'));
 
-    expect(is_dir(app_path('Modules/ZzManaged')))->toBeFalse()
-        ->and(Schema::hasTable('zz_managed_table'))->toBeFalse();
+    expectManagedDomainCheckout(false);
+    expect(Schema::hasTable('zz_managed_table'))->toBeFalse();
 });
 
 it('blocks install, disable, and uninstall for users without the manage capability', function (): void {
     $this->actingAs(User::factory()->create());
 
     config(['domains.catalog' => [
-        'ZzManaged' => ['repo' => 'https://example.test/zz.git', 'description' => 'Fixture description.'],
+        'ZzManaged' => ['repo' => DOMAIN_MANAGER_FIXTURE_REPO, 'description' => DOMAIN_MANAGER_FIXTURE_DESCRIPTION],
     ]]);
 
     Process::fake();

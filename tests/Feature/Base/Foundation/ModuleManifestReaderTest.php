@@ -2,8 +2,16 @@
 
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 
+const MODULE_MANIFEST_PEOPLE_PATH = 'app/Modules/People';
+
+beforeEach(function (): void {
+    if (! is_dir(base_path(MODULE_MANIFEST_PEOPLE_PATH))) {
+        $this->markTestSkipped('People domain is not installed.');
+    }
+});
+
 it('reads extra.blb metadata from People sub-module composer.json files', function (): void {
-    $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
+    $reader = new ModuleManifestReader([base_path(MODULE_MANIFEST_PEOPLE_PATH)]);
 
     $manifests = $reader->all();
 
@@ -39,7 +47,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
 });
 
 it('finds no unmet People-internal requirements when the full People domain is loaded', function (): void {
-    $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
+    $reader = new ModuleManifestReader([base_path(MODULE_MANIFEST_PEOPLE_PATH)]);
 
     $manifests = $reader->all();
     $unmet = $reader->verifyRequiredModules($manifests);

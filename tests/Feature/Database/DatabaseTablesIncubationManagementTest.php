@@ -2,6 +2,7 @@
 
 use App\Base\Database\Livewire\SchemaIncubation\Index as SchemaIncubationIndex;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\TestCase;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -10,6 +11,13 @@ beforeEach(function (): void {
     setupAuthzRoles();
     $this->app['env'] = 'local';
 });
+
+function skipDatabaseIncubationPeopleDomainWhenMissing(TestCase $test): void
+{
+    if (! is_dir(app_path('Modules/People'))) {
+        $test->markTestSkipped('People domain is not installed.');
+    }
+}
 
 test('schema incubation index can add selected tables to source incubation', function (): void {
     $this->actingAs(createAdminUser());
@@ -32,6 +40,8 @@ test('schema incubation index can add selected tables to source incubation', fun
 });
 
 test('schema incubation index can remove selected tables from source incubation', function (): void {
+    skipDatabaseIncubationPeopleDomainWhenMissing($this);
+
     $this->actingAs(createAdminUser());
 
     $migrationPath = app_path('Modules/People/Leave/Database/Migrations/0320_02_01_000000_create_people_leave_core_tables.php');
@@ -50,6 +60,8 @@ test('schema incubation index can remove selected tables from source incubation'
 });
 
 test('schema incubation index can filter currently incubating tables by table name', function (): void {
+    skipDatabaseIncubationPeopleDomainWhenMissing($this);
+
     $this->actingAs(createAdminUser());
 
     Livewire::test(SchemaIncubationIndex::class)
@@ -59,6 +71,8 @@ test('schema incubation index can filter currently incubating tables by table na
 });
 
 test('schema incubation index can filter currently incubating tables by module', function (): void {
+    skipDatabaseIncubationPeopleDomainWhenMissing($this);
+
     $this->actingAs(createAdminUser());
 
     Livewire::test(SchemaIncubationIndex::class)
@@ -68,6 +82,8 @@ test('schema incubation index can filter currently incubating tables by module',
 });
 
 test('schema incubation page select checkbox only selects filtered incubating tables', function (): void {
+    skipDatabaseIncubationPeopleDomainWhenMissing($this);
+
     $this->actingAs(createAdminUser());
 
     Livewire::test(SchemaIncubationIndex::class)

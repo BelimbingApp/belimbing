@@ -204,7 +204,9 @@ describe('RunEventStreamController', function () {
         expect($json)->toHaveKey('created_at');
         expect($json)->toHaveKey('cancel_requested_at', null);
     });
+});
 
+describe('RunEventStreamController streaming', function () {
     it('exposes pending cancellation timestamp while a turn is still active', function () {
         $fixture = createReplayFixture();
         $this->actingAs($fixture['user']);

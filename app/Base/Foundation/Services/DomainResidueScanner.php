@@ -222,16 +222,26 @@ class DomainResidueScanner
         $tables = [];
 
         foreach ($files as $file) {
-            $contents = (string) file_get_contents($file);
-
-            if (preg_match_all("/(?:Schema::create|->create[A-Za-z0-9_]*Table)\\(\\s*['\"]([A-Za-z0-9_]+)['\"]/", $contents, $matches)) {
-                foreach ($matches[1] as $table) {
-                    $tables[] = $table;
-                }
+            foreach (self::tablesCreatedInFile($file) as $table) {
+                $tables[] = $table;
             }
         }
 
         return array_values(array_unique($tables));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function tablesCreatedInFile(string $file): array
+    {
+        $contents = (string) file_get_contents($file);
+
+        if (! preg_match_all("/(?:Schema::create|->create\\w*Table)\\(\\s*['\"](\\w+)['\"]/", $contents, $matches)) {
+            return [];
+        }
+
+        return $matches[1];
     }
 
     /**
