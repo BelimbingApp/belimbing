@@ -50,6 +50,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('commerce:marketplace:ebay:pull --orders')
             ->cron((string) config('commerce-marketplace.order_poll_cron', '*/15 * * * *'))
             ->withoutOverlapping();
+
+        // Cached eBay category rules (aspects, conditions, compatibility) stay
+        // current without a manual refresh button: mapping saves refresh their
+        // own category immediately; this nightly sweep covers everything mapped.
+        $schedule->command('commerce:marketplace:ebay:metadata-refresh')
+            ->cron((string) config('commerce-marketplace.metadata_refresh_cron', '0 3 * * *'))
+            ->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (BlbException $exception): void {

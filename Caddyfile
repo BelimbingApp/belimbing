@@ -11,6 +11,13 @@
 	}
 
 	frankenphp {
+		# Item photo upload allows 12 files x 10 MB (Livewire posts them in one
+		# request). PHP's defaults (2M/8M) silently rejected phone photos before
+		# application validation could explain why; keep PHP's ceiling above the
+		# app's so the validator message is the one users see.
+		php_ini upload_max_filesize 12M
+		php_ini post_max_size 130M
+
 		worker {
 			file {$APP_PUBLIC_PATH}/frankenphp-worker.php
 			{$CADDY_SERVER_WORKER_DIRECTIVE}

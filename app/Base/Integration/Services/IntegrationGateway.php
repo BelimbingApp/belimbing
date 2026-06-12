@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Services;
 
 use App\Base\Integration\Models\OutboundExchange;
@@ -239,6 +240,18 @@ class IntegrationGateway
     {
         if ($payload === null || $payload === '') {
             return null;
+        }
+
+        // Raw binary bodies (e.g. marketplace picture uploads) cannot live in a
+        // JSON column — json_encode fails and the exchange row becomes
+        // unwritable, which would fail the call after it already succeeded
+        // remotely. Record the shape, not the bytes.
+        if (is_string($payload) && ! mb_check_encoding($payload, 'UTF-8')) {
+            return [
+                'payload' => ['kind' => 'binary'],
+                'truncated' => true,
+                'original_bytes' => strlen($payload),
+            ];
         }
 
         $normalized = $this->normalizePayload($payload);

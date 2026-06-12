@@ -1,8 +1,18 @@
 @import 'tailwindcss';
 
 @source './core/views';
-@source '../app/Modules/*/*/Views';
-@source '../extensions/*/*/Views';
+/* Domains and extensions are nested git repos ignored by the parent
+   .gitignore, and Tailwind's scanner honors that ignore when expanding a
+   glob star — `Modules/*` silently matched nothing for them. Each ignored
+   root must be spelled out; stars below it work. Add a line when adding a
+   domain or extension. */
+@source '../app/Modules/Core/*/Views';
+@source '../app/Modules/Commerce/*/Views';
+@source '../app/Modules/Operation/*/Views';
+@source '../app/Modules/People/*/Views';
+@source '../extensions/custom/*/Views';
+@source '../extensions/ham/*/Views';
+@source '../extensions/sb-group/*/Views';
 @source '../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 
 @custom-variant dark (&:where(.dark, .dark *));
