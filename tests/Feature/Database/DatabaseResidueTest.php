@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
+const DATABASE_RESIDUE_ORPHAN_MIGRATION = '2099_01_01_000000_create_zz_orphan_residue_table';
+const DATABASE_RESIDUE_CONFIRMATION = 'THIS CANNOT BE UNDONE';
+const DATABASE_RESIDUE_DROP_LABEL = 'Permanently drop';
+
 function createDatabaseResidueFixture(): void
 {
     // An orphan table no discovered migration claims, with one row.
@@ -18,7 +22,7 @@ function createDatabaseResidueFixture(): void
 
     // A ledger row whose migration file does not exist anywhere.
     DB::table('migrations')->insert([
-        'migration' => '2099_01_01_000000_create_zz_orphan_residue_table',
+        'migration' => DATABASE_RESIDUE_ORPHAN_MIGRATION,
         'batch' => 999,
     ]);
 
@@ -40,7 +44,7 @@ it('renders the residue page with orphaned tables, ledger rows, and settings', f
         ->assertOk()
         ->assertSee('Database Residue')
         ->assertSee('zz_orphan_residue_table')
-        ->assertSee('2099_01_01_000000_create_zz_orphan_residue_table')
+        ->assertSee(DATABASE_RESIDUE_ORPHAN_MIGRATION)
         ->assertSee('zz_removed_module.option');
 });
 
@@ -97,20 +101,20 @@ it('drops selected orphan tables and prunes their ledger rows after typed confir
 
     Livewire::test(ResidueIndex::class)
         ->set('selectedTables', ['zz_orphan_residue_table'])
-        ->set('confirmText', 'THIS CANNOT BE UNDONE')
+        ->set('confirmText', DATABASE_RESIDUE_CONFIRMATION)
         ->call('dropSelectedTables')
         ->assertHasNoErrors();
 
     expect(Schema::hasTable('zz_orphan_residue_table'))->toBeFalse();
 
     Livewire::test(ResidueIndex::class)
-        ->set('selectedLedger', ['2099_01_01_000000_create_zz_orphan_residue_table'])
-        ->set('confirmText', 'THIS CANNOT BE UNDONE')
+        ->set('selectedLedger', [DATABASE_RESIDUE_ORPHAN_MIGRATION])
+        ->set('confirmText', DATABASE_RESIDUE_CONFIRMATION)
         ->call('pruneSelectedLedger')
         ->assertHasNoErrors();
 
     expect(
-        DB::table('migrations')->where('migration', '2099_01_01_000000_create_zz_orphan_residue_table')->exists()
+        DB::table('migrations')->where('migration', DATABASE_RESIDUE_ORPHAN_MIGRATION)->exists()
     )->toBeFalse();
 });
 
@@ -121,7 +125,7 @@ it('deletes selected orphan settings across scopes after typed confirmation', fu
 
     Livewire::test(ResidueIndex::class)
         ->set('selectedSettings', ['zz_removed_module.option'])
-        ->set('confirmText', 'THIS CANNOT BE UNDONE')
+        ->set('confirmText', DATABASE_RESIDUE_CONFIRMATION)
         ->call('deleteSelectedSettings')
         ->assertHasNoErrors();
 
@@ -134,15 +138,15 @@ it('reveals action buttons only when items are selected and the acknowledgment i
     createDatabaseResidueFixture();
 
     $component = Livewire::test(ResidueIndex::class)
-        ->assertDontSee('Permanently drop');
+        ->assertDontSee(DATABASE_RESIDUE_DROP_LABEL);
 
     // Selection alone is not enough.
     $component->set('selectedTables', ['zz_orphan_residue_table'])
-        ->assertDontSee('Permanently drop');
+        ->assertDontSee(DATABASE_RESIDUE_DROP_LABEL);
 
     // The typed acknowledgment arms only cards with selections.
-    $component->set('confirmText', 'THIS CANNOT BE UNDONE')
-        ->assertSee('Permanently drop')
+    $component->set('confirmText', DATABASE_RESIDUE_CONFIRMATION)
+        ->assertSee(DATABASE_RESIDUE_DROP_LABEL)
         ->assertDontSee('Permanently delete');
 });
 
@@ -177,7 +181,7 @@ it('blocks cleanup actions for users without the manage capability', function ()
 
     Livewire::test(ResidueIndex::class)
         ->set('selectedTables', ['zz_orphan_residue_table'])
-        ->set('confirmText', 'THIS CANNOT BE UNDONE')
+        ->set('confirmText', DATABASE_RESIDUE_CONFIRMATION)
         ->call('dropSelectedTables')
         ->assertForbidden();
 

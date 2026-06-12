@@ -23,6 +23,7 @@ const LLM_TOOL_CALLING_GREETING = 'Hello!';
 const LLM_TOOL_CALLING_MOONSHOT_MODEL = 'moonshotai/kimi-k2.5';
 const LLM_TOOL_CALLING_WEATHER_TOOL_DESCRIPTION = 'Look up weather by city.';
 const LLM_SSE_CONTENT_TYPE = 'text/event-stream';
+const LLM_UNSUPPORTED_TEMPERATURE_ERROR = "Unsupported parameter: 'temperature' is not supported with this model.";
 
 function fakeChatCompletionText(string $text = 'Hi'): void
 {
@@ -715,7 +716,7 @@ describe('LlmClient tool calling responses api handling', function () {
         Http::fake([
             '*/responses' => Http::response([
                 'error' => [
-                    'message' => "Unsupported parameter: 'temperature' is not supported with this model.",
+                    'message' => LLM_UNSUPPORTED_TEMPERATURE_ERROR,
                 ],
             ], 400),
         ]);
@@ -733,8 +734,8 @@ describe('LlmClient tool calling responses api handling', function () {
             ->toHaveKey('runtime_error')
             ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
             ->and($result['runtime_error']->errorType)->toBe(AiErrorType::BadRequest)
-            ->and($result['runtime_error']->userMessage)->toBe("Unsupported parameter: 'temperature' is not supported with this model.")
-            ->and($result['runtime_error']->diagnostic)->toBe("Unsupported parameter: 'temperature' is not supported with this model.")
+            ->and($result['runtime_error']->userMessage)->toBe(LLM_UNSUPPORTED_TEMPERATURE_ERROR)
+            ->and($result['runtime_error']->diagnostic)->toBe(LLM_UNSUPPORTED_TEMPERATURE_ERROR)
             ->and($result['runtime_error']->hint)->toContain("Unsupported parameter: 'temperature'");
     });
 

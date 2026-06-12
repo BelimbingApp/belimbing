@@ -264,17 +264,17 @@ class EditFileTool extends AbstractTool
 
         $verb = $existed ? 'Updated' : 'Created';
 
-        return $this->editResult(
-            targetSurface: $targetSurface,
-            filePath: $filePath,
-            operation: 'write',
-            summary: "{$verb} {$filePath} ({$bytesWritten} bytes).",
-            bytesWritten: $bytesWritten,
-            before: $before,
-            after: $content,
-            created: ! $existed,
-            changed: $before !== $content,
-        );
+        return EditFileResultFormatter::format([
+            'target_surface' => $targetSurface,
+            'file_path' => $filePath,
+            'operation' => 'write',
+            'summary' => "{$verb} {$filePath} ({$bytesWritten} bytes).",
+            'bytes_written' => $bytesWritten,
+            'before' => $before,
+            'after' => $content,
+            'created' => ! $existed,
+            'changed' => $before !== $content,
+        ]);
     }
 
     /**
@@ -310,18 +310,18 @@ class EditFileTool extends AbstractTool
             );
         }
 
-        return $this->editResult(
-            targetSurface: $targetSurface,
-            filePath: $filePath,
-            operation: 'append',
-            summary: "Appended {$bytesWritten} bytes to {$filePath}.",
-            bytesWritten: $bytesWritten,
-            before: $before,
-            after: $before.$content,
-            created: false,
-            changed: $content !== '',
-            diffBody: $this->addedLinesPreview($content),
-        );
+        return EditFileResultFormatter::format([
+            'target_surface' => $targetSurface,
+            'file_path' => $filePath,
+            'operation' => 'append',
+            'summary' => "Appended {$bytesWritten} bytes to {$filePath}.",
+            'bytes_written' => $bytesWritten,
+            'before' => $before,
+            'after' => $before.$content,
+            'created' => false,
+            'changed' => $content !== '',
+            'diff_body' => EditFileResultFormatter::addedLinesPreview($content),
+        ]);
     }
 
     /**
@@ -373,112 +373,19 @@ class EditFileTool extends AbstractTool
             return ToolResult::error("Failed to update \"{$filePath}\".", 'file_write_failed');
         }
 
-        return $this->editResult(
-            targetSurface: $targetSurface,
-            filePath: $filePath,
-            operation: 'replace',
-            summary: "Updated {$filePath} with one targeted replacement ({$bytesWritten} bytes).",
-            bytesWritten: $bytesWritten,
-            before: $current,
-            after: $updated,
-            created: false,
-            changed: $current !== $updated,
-            replacementCount: 1,
-            diffBody: $this->replacementPreview($oldContent, $newContent),
-        );
-    }
-
-    private function editResult(
-        string $targetSurface,
-        string $filePath,
-        string $operation,
-        string $summary,
-        int $bytesWritten,
-        ?string $before,
-        string $after,
-        bool $created,
-        bool $changed,
-        ?int $replacementCount = null,
-        ?string $diffBody = null,
-    ): ToolResult {
-        [$diffPreview, $diffTruncated] = $this->cappedDiffPreview(
-            $filePath,
-            $before,
-            $after,
-            $diffBody,
-        );
-
-        $payload = [
+        return EditFileResultFormatter::format([
             'target_surface' => $targetSurface,
             'file_path' => $filePath,
-            'operation' => $operation,
-            'created' => $created,
-            'changed' => $changed,
+            'operation' => 'replace',
+            'summary' => "Updated {$filePath} with one targeted replacement ({$bytesWritten} bytes).",
             'bytes_written' => $bytesWritten,
-            'summary' => $summary,
-            'diff_preview' => $diffPreview,
-            'diff_truncated' => $diffTruncated,
-        ];
-
-        if ($replacementCount !== null) {
-            $payload['replacement_count'] = $replacementCount;
-        }
-
-        $encoded = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-        if (! is_string($encoded)) {
-            return ToolResult::success($summary);
-        }
-
-        return ToolResult::success($encoded);
-    }
-
-    /**
-     * @return array{0: string, 1: bool}
-     */
-    private function cappedDiffPreview(string $filePath, ?string $before, string $after, ?string $diffBody): array
-    {
-        $body = $diffBody ?? ($before === null
-            ? $this->addedLinesPreview($after)
-            : $this->beforeAfterPreview($before, $after));
-        $preview = "--- before/{$filePath}\n+++ after/{$filePath}\n".$body;
-
-        if (strlen($preview) <= self::MAX_DIFF_PREVIEW_BYTES) {
-            return [$preview, false];
-        }
-
-        return [substr($preview, 0, self::MAX_DIFF_PREVIEW_BYTES)."\n... diff preview truncated ...", true];
-    }
-
-    private function replacementPreview(string $oldContent, string $newContent): string
-    {
-        return "@@ targeted replacement @@\n"
-            .$this->prefixLines('-', $oldContent)
-            .$this->prefixLines('+', $newContent);
-    }
-
-    private function addedLinesPreview(string $content): string
-    {
-        return "@@ added content @@\n".$this->prefixLines('+', $content);
-    }
-
-    private function beforeAfterPreview(string $before, string $after): string
-    {
-        return "@@ previous content @@\n"
-            .$this->prefixLines('-', $before)
-            ."@@ new content @@\n"
-            .$this->prefixLines('+', $after);
-    }
-
-    private function prefixLines(string $prefix, string $content): string
-    {
-        if ($content === '') {
-            return $prefix."\n";
-        }
-
-        return collect(preg_split('/\R/', $content) ?: [])
-            ->map(fn (string $line): string => $prefix.$line)
-            ->implode("\n")."\n";
+            'before' => $current,
+            'after' => $updated,
+            'created' => false,
+            'changed' => $current !== $updated,
+            'replacement_count' => 1,
+            'diff_body' => EditFileResultFormatter::replacementPreview($oldContent, $newContent),
+        ]);
     }
 
     private function ensureDirectoryExists(string $directory): bool

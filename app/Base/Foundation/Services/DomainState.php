@@ -157,6 +157,10 @@ class DomainState
 
     private static function statePath(): string
     {
-        return self::$statePathOverride ?? storage_path(self::STATE_FILE);
+        if (self::$statePathOverride !== null) {
+            return self::$statePathOverride;
+        }
+
+        return storage_path(self::STATE_FILE);
     }
 }

@@ -51,32 +51,32 @@ class QuickPromptRegistry
     {
         return [
             'admin.ai.providers' => [
-                ['label' => __('Sync models'), 'prompt' => 'Sync all provider models', 'icon' => 'heroicon-o-arrow-path'],
-                ['label' => __('Add provider'), 'prompt' => 'Help me set up a new AI provider', 'icon' => 'heroicon-o-plus'],
-                ['label' => __('Compare providers'), 'prompt' => 'Compare my configured AI providers', 'icon' => 'heroicon-o-scale'],
+                $this->prompt(__('Sync models'), 'Sync all provider models', 'heroicon-o-arrow-path'),
+                $this->prompt(__('Add provider'), 'Help me set up a new AI provider', 'heroicon-o-plus'),
+                $this->prompt(__('Compare providers'), 'Compare my configured AI providers', 'heroicon-o-scale'),
             ],
             'admin.ai.task-models' => [
-                ['label' => __('Recommend models'), 'prompt' => 'Recommend models for Lara\'s tasks', 'icon' => 'heroicon-o-sparkles'],
-                ['label' => __('Model info'), 'prompt' => '/models', 'icon' => 'heroicon-o-cpu-chip'],
+                $this->prompt(__('Recommend models'), 'Recommend models for Lara\'s tasks', 'heroicon-o-sparkles'),
+                $this->prompt(__('Model info'), '/models', 'heroicon-o-cpu-chip'),
             ],
             'admin.ai.tools' => [
-                ['label' => __('List tools'), 'prompt' => 'List all available tools and their capabilities', 'icon' => 'heroicon-o-wrench-screwdriver'],
+                $this->prompt(__('List tools'), 'List all available tools and their capabilities', 'heroicon-o-wrench-screwdriver'),
             ],
             'admin.setup.lara' => [
-                ['label' => __('Check status'), 'prompt' => 'Show me Lara\'s current configuration status', 'icon' => 'heroicon-o-signal'],
-                ['label' => __('Guide: setup'), 'prompt' => '/guide lara setup', 'icon' => 'heroicon-o-book-open'],
+                $this->prompt(__('Check status'), 'Show me Lara\'s current configuration status', 'heroicon-o-signal'),
+                $this->prompt(__('Guide: setup'), '/guide lara setup', 'heroicon-o-book-open'),
             ],
             'admin.employees.index' => [
-                ['label' => __('Create employee'), 'prompt' => 'Help me create a new employee', 'icon' => 'heroicon-o-user-plus'],
+                $this->prompt(__('Create employee'), 'Help me create a new employee', 'heroicon-o-user-plus'),
             ],
             'admin.roles.index' => [
-                ['label' => __('Role overview'), 'prompt' => 'Explain the roles and capabilities system', 'icon' => 'heroicon-o-shield-check'],
+                $this->prompt(__('Role overview'), 'Explain the roles and capabilities system', 'heroicon-o-shield-check'),
             ],
             'admin.companies.index' => [
-                ['label' => __('Company setup'), 'prompt' => 'Help me configure the company settings', 'icon' => 'heroicon-o-building-office'],
+                $this->prompt(__('Company setup'), 'Help me configure the company settings', 'heroicon-o-building-office'),
             ],
             'admin.system.logs' => [
-                ['label' => __('Recent errors'), 'prompt' => 'Are there any recent errors I should know about?', 'icon' => 'heroicon-o-exclamation-triangle'],
+                $this->prompt(__('Recent errors'), 'Are there any recent errors I should know about?', 'heroicon-o-exclamation-triangle'),
             ],
         ];
     }
@@ -90,12 +90,24 @@ class QuickPromptRegistry
     {
         return [
             'admin.ai.' => [
-                ['label' => __('AI overview'), 'prompt' => 'Give me an overview of the AI module', 'icon' => 'heroicon-o-sparkles'],
-                ['label' => __('Model info'), 'prompt' => '/models', 'icon' => 'heroicon-o-cpu-chip'],
+                $this->prompt(__('AI overview'), 'Give me an overview of the AI module', 'heroicon-o-sparkles'),
+                $this->prompt(__('Model info'), '/models', 'heroicon-o-cpu-chip'),
             ],
             'admin.employees.' => [
-                ['label' => __('Employee help'), 'prompt' => 'How do I manage employees in Belimbing?', 'icon' => 'heroicon-o-users'],
+                $this->prompt(__('Employee help'), 'How do I manage employees in Belimbing?', 'heroicon-o-users'),
             ],
+        ];
+    }
+
+    /**
+     * @return array{label: string, prompt: string, icon: string}
+     */
+    private function prompt(string $label, string $prompt, string $icon): array
+    {
+        return [
+            'label' => $label,
+            'prompt' => $prompt,
+            'icon' => $icon,
         ];
     }
 }

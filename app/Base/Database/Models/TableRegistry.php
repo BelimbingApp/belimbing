@@ -233,7 +233,7 @@ class TableRegistry extends Model
         // Match Schema::create('table_name', ...) plus the migration-helper
         // convention ->create*Table('table_name', ...) — helpers must take
         // the table name as a string literal to stay discoverable.
-        if (! preg_match_all('/(?:Schema::create|->create[A-Za-z0-9_]*Table)\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches)) {
+        if (! preg_match_all('/(?:Schema::create|->create\w*Table)\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches)) {
             return [];
         }
 
