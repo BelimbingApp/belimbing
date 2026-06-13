@@ -6,10 +6,10 @@
   before staging or pushing anything below it.
 - Do not force-add ignored `extensions/*` paths from the parent framework repo.
 - Fix nested remotes inside the nested repo, not the parent checkout.
+- Fresh install example: [Private Extension Repositories](../docs/guides/extensions/private-extension-repositories.md).
 
 ## Layout
 
 - Owner/module path segments use kebab-case.
 - Module-owned Blade views live in `Views/`; do not create
   `resources/extensions/{owner}/`.
-
