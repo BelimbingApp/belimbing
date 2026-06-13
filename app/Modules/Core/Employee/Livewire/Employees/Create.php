@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\DecodesJsonFields;
@@ -56,10 +57,9 @@ class Create extends Component
             $validated['userId'] = null;
         }
 
-        Employee::query()->create([
+        $employee = Employee::query()->create([
             'company_id' => $validated['companyId'],
             'department_id' => $validated['departmentId'],
-            'user_id' => $validated['userId'],
             'supervisor_id' => $validated['supervisorId'],
             'employee_number' => $validated['employeeNumber'],
             'full_name' => $validated['fullName'],
@@ -74,6 +74,13 @@ class Create extends Component
             'employment_end' => $validated['employmentEnd'],
             'metadata' => $this->decodeJsonField($validated['metadataJson'] ?? null),
         ]);
+
+        if ($validated['userId'] !== null) {
+            User::query()
+                ->whereKey($validated['userId'])
+                ->whereNull('employee_id')
+                ->update(['employee_id' => $employee->id]);
+        }
 
         Session::flash('success', __('Employee created successfully.'));
 
@@ -121,8 +128,9 @@ class Create extends Component
                 ->get(['id', 'full_name', 'company_id']),
             'employeeTypes' => EmployeeType::query()->global()->orderBy('code')->get(['id', 'code', 'label', 'is_system']),
             'users' => User::query()
+                ->whereNull('employee_id')
                 ->orderBy('name')
-                ->get(['id', 'name']),
+                ->get(['id', 'name', 'employee_id']),
         ]);
     }
 }

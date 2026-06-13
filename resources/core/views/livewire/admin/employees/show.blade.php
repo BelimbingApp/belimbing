@@ -111,7 +111,7 @@
                     <x-ui.edit-in-place.select
                         id="employee-user"
                         :label="__('User')"
-                        :value="$employee->user_id"
+                        :value="$employee->user?->id"
                         save-method="saveUser"
                         save-value="val ? parseInt(val, 10) : null"
                     >

@@ -9,7 +9,7 @@ The Employee module manages:
 - **Employment Records**: Official employment relationships between individuals and companies
 - **Organizational Structure**: Department placement and reporting hierarchy
 - **HR Data**: Employee numbers, job titles, contact information, employment periods
-- **System Access Linkage**: Optional link to User accounts for system access
+- **System Access Linkage**: Optional User account link via `users.employee_id`
 
 ## Models
 
@@ -20,7 +20,7 @@ The main employee model representing employment relationships.
 **Key Features:**
 - Company-scoped employment records
 - Department placement and reporting structure
-- Optional link to User account (nullable `user_id`)
+- Optional linked User account via `users.employee_id`
 - Employee type classification (full-time, part-time, contractor, intern)
 - Employment status tracking (pending, probation, active, inactive, terminated)
 - Flexible metadata for additional HR data
@@ -34,7 +34,6 @@ use App\Modules\Core\Employee\Models\Employee;
 $employee = Employee::create([
     'company_id' => $company->id,
     'department_id' => $department->id,
-    'user_id' => $user->id,  // Link to user account
     'supervisor_id' => $manager->id,  // Reports to manager
     'employee_number' => 'EMP-001',
     'full_name' => 'John Richard Doe',
@@ -47,10 +46,11 @@ $employee = Employee::create([
     'employment_start' => '2026-01-15',
 ]);
 
+$user->update(['employee_id' => $employee->id]);  // Link user account
+
 // Create an employee WITHOUT system access (e.g., hourly worker)
 $employee = Employee::create([
     'company_id' => $company->id,
-    'user_id' => null,  // No system access
     'employee_number' => 'EMP-002',
     'full_name' => 'Jane Smith',
     'email' => 'jane.smith@company.com',
@@ -81,7 +81,6 @@ $activeEmployees = Employee::query()->active()->get();
 | id | integer | Primary key (auto-increment) |
 | company_id | unsignedBigInteger | Company where employed (required) |
 | department_id | unsignedBigInteger | Department placement (nullable) |
-| user_id | unsignedBigInteger | Optional link to User account (nullable) |
 | supervisor_id | unsignedBigInteger | Reports to (self-referential, nullable) |
 | employee_number | string | Unique employee number per company |
 | full_name | string | Official/legal name (Passport/ID) |
@@ -100,7 +99,6 @@ $activeEmployees = Employee::query()->active()->get();
 **Indexes:**
 - `company_id` (foreign key to companies)
 - `department_id` (foreign key to departments)
-- `user_id` (indexed, foreign key to users)
 - `supervisor_id` (indexed, self-referential foreign key)
 - `employee_number` (indexed)
 - `employee_type` (indexed)
@@ -111,7 +109,6 @@ $activeEmployees = Employee::query()->active()->get();
 **Foreign Keys:**
 - `company_id` → `companies.id` (cascade on delete)
 - `department_id` → `departments.id` (null on delete)
-- `user_id` → `users.id` (null on delete)
 - `supervisor_id` → `employees.id` (null on delete, self-referential)
 
 ## Relationships
@@ -140,11 +137,11 @@ $department->employees;  // HasMany (not explicitly defined in Department model)
 
 ### User
 
-**Employee optionally belongs to User:**
+**Employee optionally has one User:**
 
 ```php
-$employee->user;  // BelongsTo (nullable)
-// User.hasMany(Employee) not yet implemented
+$employee->user;  // HasOne through users.employee_id (nullable)
+$user->employee;  // BelongsTo Employee (nullable)
 ```
 
 **Why nullable?**
@@ -217,7 +214,6 @@ $user = User::create([
 // Then create employee record
 $employee = Employee::create([
     'company_id' => $company->id,
-    'user_id' => $user->id,  // Link to user
     'employee_number' => 'EMP-001',
     'full_name' => 'John Richard Doe',
     'short_name' => 'John',
@@ -225,6 +221,8 @@ $employee = Employee::create([
     'status' => 'active',
     'employment_start' => now(),
 ]);
+
+$user->update(['employee_id' => $employee->id]);
 ```
 
 ### Creating Employee WITHOUT System Access
@@ -233,7 +231,6 @@ $employee = Employee::create([
 // Employee only (no user account)
 $employee = Employee::create([
     'company_id' => $company->id,
-    'user_id' => null,  // No system access
     'employee_number' => 'EMP-002',
     'full_name' => 'Jane Smith',
     'email' => 'jane.smith@company.com',  // For HR communication
@@ -260,13 +257,13 @@ $employee = Employee::query()
 
 // Get employees with system access
 $usersWithAccess = Employee::query()
-    ->whereNotNull('user_id')
+    ->whereHas('user')
     ->with('user')
     ->get();
 
 // Get employees without system access
 $noAccess = Employee::query()
-    ->whereNull('user_id')
+    ->doesntHave('user')
     ->get();
 ```
 
@@ -299,13 +296,14 @@ $employee = Employee::factory()->for($company)->create();
 // Create employee with user account
 $employee = Employee::factory()
     ->for($company)
-    ->for($user)
     ->create();
+
+$user->update(['employee_id' => $employee->id]);
 
 // Create employee without user account
 $employee = Employee::factory()
     ->for($company)
-    ->create(['user_id' => null]);
+    ->create();
 ```
 
 ## Architecture Notes

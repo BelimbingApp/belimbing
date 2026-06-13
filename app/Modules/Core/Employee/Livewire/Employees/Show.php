@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -145,7 +146,11 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
         $this->employee->employee_type = $type;
         if ($type === 'agent') {
-            $this->employee->user_id = null;
+            User::query()
+                ->where('employee_id', $this->employee->id)
+                ->update(['employee_id' => null]);
+
+            $this->employee->unsetRelation('user');
         }
         $this->employee->save();
     }
@@ -166,8 +171,29 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveUser(?int $userId): void
     {
-        $this->employee->user_id = $userId ?: null;
-        $this->employee->save();
+        User::query()
+            ->where('employee_id', $this->employee->id)
+            ->when($userId !== null, fn ($query) => $query->whereKeyNot($userId))
+            ->update(['employee_id' => null]);
+
+        if ($userId !== null) {
+            $user = User::query()
+                ->whereKey($userId)
+                ->where(function ($query): void {
+                    $query->whereNull('employee_id')
+                        ->orWhere('employee_id', $this->employee->id);
+                })
+                ->first();
+
+            if (! $user) {
+                $this->employee->load('user');
+
+                return;
+            }
+
+            $user->update(['employee_id' => $this->employee->id]);
+        }
+
         $this->employee->load('user');
     }
 
@@ -269,8 +295,12 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
                 ->get(['id', 'full_name']),
             'employeeTypes' => EmployeeType::query()->global()->orderBy('code')->get(['id', 'code', 'label']),
             'users' => User::query()
+                ->where(function ($query): void {
+                    $query->whereNull('employee_id')
+                        ->orWhere('employee_id', $this->employee->id);
+                })
                 ->orderBy('name')
-                ->get(['id', 'name']),
+                ->get(['id', 'name', 'employee_id']),
             'availableSubordinates' => Employee::query()
                 ->where('company_id', $this->employee->company_id)
                 ->where('id', '!=', $this->employee->id)
