@@ -65,7 +65,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (BlbException $exception): void {
-            Log::error('BLB framework exception', [
+            Log::error('BLB platform exception', [
                 'exception' => $exception::class,
                 'reason_code' => $exception->reasonCode->value,
                 'context' => $exception->context,
@@ -94,7 +94,7 @@ return Application::configure(basePath: dirname(__DIR__))
             $payload = [
                 'message' => $debug
                     ? $exception->getMessage()
-                    : __('An internal framework error occurred.'),
+                    : __('An internal Belimbing error occurred.'),
                 'reason_code' => $exception->reasonCode->value,
             ];
 

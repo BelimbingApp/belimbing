@@ -4,7 +4,7 @@ namespace App\Base\AI\Services;
 class KnowledgeNavigator
 {
     /**
-     * Curated Belimbing references Lara can use to navigate the framework knowledge base.
+     * Curated Belimbing references Lara can use to navigate the platform knowledge base.
      *
      * @return list<array{title: string, path: string, summary: string, keywords: list<string>}>
      */
@@ -14,8 +14,8 @@ class KnowledgeNavigator
             [
                 'title' => 'Belimbing architecture overview',
                 'path' => 'docs/brief.md',
-                'summary' => 'Belimbing principles, framework boundaries, and strategic direction.',
-                'keywords' => ['architecture', 'overview', 'framework', 'principles'],
+                'summary' => 'Belimbing principles, platform boundaries, and strategic direction.',
+                'keywords' => ['architecture', 'overview', 'platform', 'principles'],
             ],
             [
                 'title' => 'Lara system Agent',

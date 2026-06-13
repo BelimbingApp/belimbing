@@ -4,7 +4,7 @@ This guide is for adopters and contributors who want to submit changes to Belimb
 
 ## Before You Start
 
-1. Read [Project Vision](../brief.md) to understand the framework direction.
+1. Read [Project Vision](../brief.md) to understand the platform direction.
 2. Review architecture conventions in [Architecture](../architecture/).
 3. Agree to the [Contributor License Agreement](../../CLA.md).
 

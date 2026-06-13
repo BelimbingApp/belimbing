@@ -10,7 +10,7 @@
 
 I'm Kiat, an indie developer. Belimbing is named after the place where it was borned.
 
-Belimbing is a framework small businesses can run on, developers can build on, and I can play in. Hopefully, it is a place where we find shared resonance.
+Belimbing is an application platform small businesses can run on, developers can build on, and I can play in. Hopefully, it is a place where we find shared resonance.
 
 Belimbing is to serve the unserved.
 
@@ -18,10 +18,10 @@ Belimbing is to serve the unserved.
 
 ## Executive Summary
 
-Belimbing is a **general business framework** designed to democratize enterprise-grade capabilities for businesses. Business software is expensive, often inflexible, and carries vendor lock-in — Belimbing is an open-source, AI-native framework that empowers businesses to build, customize, and own their operational systems, removing the SMB digitization bottleneck so it is practical to ship production-grade systems without hiring a large software team.
+Belimbing is a **general application platform** designed to democratize enterprise-grade capabilities for businesses. Business software is expensive, often inflexible, and carries vendor lock-in — Belimbing is an open-source, AI-native platform that empowers businesses to build, customize, and own their operational systems, removing the SMB digitization bottleneck so it is practical to ship production-grade systems without hiring a large software team.
 
 **What Belimbing Is:**
-- A **framework** for building customizable business processes (ERP, CRM, HR, logistics, or custom processes)
+- An **application platform** for building customizable business processes (ERP, CRM, HR, logistics, or custom processes)
 - **Not** chasing speed to market at the expense of quality
 - **DIY-enabling** — the codebase embeds conventions, module boundaries, and in-repo agent guidance so coding agents produce higher-quality changes
 
@@ -69,7 +69,7 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 
 ### For Independent Developers
 
-- Build solutions efficiently on proven framework
+- Build solutions efficiently on a proven platform
 - Focus on business logic, not infrastructure
 - Deliver high value to clients affordably
 - Participate in thriving ecosystem

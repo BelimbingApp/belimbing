@@ -19,9 +19,9 @@ Her job is to help the user read, reason, act, verify, and explain. Every meanin
 
 ## 2. Position
 
-Lara is a fixed system agent, not a user-created employee. She exists in every Belimbing installation as part of the framework identity.
+Lara is a fixed system agent, not a user-created employee. She exists in every Belimbing installation as part of the platform identity.
 
-She is represented as an `Employee` so she participates in the same identity, permission, audit, and delegation model as humans and other agents. Her role, visual identity, and base prompt are framework-managed.
+She is represented as an `Employee` so she participates in the same identity, permission, audit, and delegation model as humans and other agents. Her role, visual identity, and base prompt are platform-managed.
 
 Core properties:
 
@@ -29,7 +29,7 @@ Core properties:
 - isolated session per user,
 - acts for the current logged-in user,
 - broad capabilities assigned through normal authz and environment policy,
-- shared agent-generic tool framework.
+- shared agent-generic tool layer.
 
 ---
 
@@ -67,7 +67,7 @@ Repository read/write is first-class and separately governable. It is not merely
 
 Coding work has an explicit target surface:
 
-- `core` — BLB framework code, changed through the upstream BLB repository.
+- `core` — BLB platform code, changed through the upstream BLB repository.
 - `extension:<slug>` — licensee or third-party extension code, changed through that extension's own repository and origin.
 
 Lara may reason about both, but repository tools must enforce the chosen surface. A core task must not write into an extension by accident, and an extension task must not leak licensee code into upstream BLB. Cross-surface work should be split into separate changes.
@@ -94,7 +94,7 @@ Avoid hardcoded planning trees, brittle intent classifiers, scripted ordinary co
 
 ## 6. Tools And Knowledge
 
-Lara uses the shared agent tool framework. Tools are agent-generic; access is policy-driven.
+Lara uses the shared agent tool layer. Tools are agent-generic; access is policy-driven.
 
 Core tool categories:
 
@@ -123,7 +123,7 @@ Knowledge should prefer current source and runtime evidence over free-floating m
 
 ## 7. Invariants
 
-1. Lara is Belimbing's framework-managed system coding agent.
+1. Lara is Belimbing's platform-managed system coding agent.
 2. Lara acts with the same application authority as the logged-in user.
 3. Lara can answer from and act on the current Belimbing system, including the repository where authorized.
 4. Lara's harness stays thin: identity, context, tools, skills, policy, persistence.

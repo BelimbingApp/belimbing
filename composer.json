@@ -2,7 +2,7 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "belimbing/blb",
     "type": "project",
-    "description": "Belimbing (BLB) - Enterprise framework built on Laravel with Livewire and Tailwind CSS",
+    "description": "Belimbing (BLB) - Open-source application platform built on Laravel with Livewire and Tailwind CSS",
     "keywords": [
         "laravel",
         "livewire",

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-19
 
-Belimbing is an open-source, self-hosted business framework. This policy explains what information Belimbing may process when an operator connects external services such as eBay, uses Belimbing business modules, or enables AI-assisted workflows.
+Belimbing is an open-source, self-hosted application platform. This policy explains what information Belimbing may process when an operator connects external services such as eBay, uses Belimbing modules, or enables AI-assisted workflows.
 
 This policy is written for the upstream Belimbing project. A business or developer running their own Belimbing installation is responsible for configuring, hosting, securing, and operating that installation, and may need its own privacy notice for its users and customers.
 
@@ -53,7 +53,7 @@ Belimbing includes security controls intended to reduce accidental exposure:
 - Encrypted storage for configured secrets and OAuth tokens.
 - Audit and integration logs for operational visibility.
 - Redaction of sensitive headers and token-like fields in stored outbound integration previews.
-- Separation between general framework behavior and installation-specific configuration.
+- Separation between general platform behavior and installation-specific configuration.
 
 No system can guarantee perfect security. Operators should use HTTPS, keep dependencies updated, restrict administrative access, protect backups, and rotate credentials when needed.
 

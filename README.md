@@ -1,6 +1,6 @@
 # Belimbing
 
-An open-source business process framework designed to help build, operate, and extend itself with AI.
+An open-source application platform designed to help build, operate, and extend itself with AI.
 
 ## The Workforce Model
 
@@ -27,7 +27,7 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 **Workflow engine** — Status lifecycle management with configurable statuses, guarded transitions, full history tracking, and kanban column mapping. Any business module can plug into the workflow system for auditable state machines.
 
-**Base and Core modules** — Required framework infrastructure and integrated business foundations live in the main repo under `app/Base/{Module}/` and `app/Modules/Core/{Module}/`.
+**Base and Core modules** — Required platform infrastructure and integrated business foundations live in the main repo under `app/Base/{Module}/` and `app/Modules/Core/{Module}/`.
 
 **Domain, plugin, and extension system** — Base and Core ship in the main repo; non-Core domains are installable distributions managed from Administration → System → Domains; licensee extensions live under `extensions/{licensee}/{module}`. Nested git is the current default distribution model, while the module contracts remain compatible with future Composer/package installation. Providers, routes, menus, settings, migrations, tests, views, and manifests integrate through the module-system discovery contracts, with installed-module dependency health surfaced in the admin plugin dashboard.
 
@@ -42,7 +42,7 @@ Belimbing is in active development and not yet ready for production. However, yo
 
 ### Quick Install
 
-Setup will take about an hour. A fresh framework clone starts with Base and Core. Optional domains can be installed later from Administration → System → Domains or by mounting the relevant domain distribution at `app/Modules/{Domain}`.
+Setup will take about an hour. A fresh platform clone starts with Base and Core. Optional domains can be installed later from Administration → System → Domains or by mounting the relevant domain distribution at `app/Modules/{Domain}`.
 
 The easiest way to get started is with an AI Agent prompt:
 ```text

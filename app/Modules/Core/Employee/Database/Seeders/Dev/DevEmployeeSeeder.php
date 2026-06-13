@@ -19,7 +19,7 @@ class DevEmployeeSeeder extends DevSeeder
      *
      * Creates realistic employee records for existing companies with
      * department placements and supervisor hierarchies. Also seeds a
-     * licensee employee from the admin user created by framework primitives.
+     * licensee employee from the admin user created by platform primitives.
      */
     protected function seed(): void
     {
@@ -81,7 +81,7 @@ class DevEmployeeSeeder extends DevSeeder
         ]);
 
         // Link admin user to their employee record. This lives in the dev
-        // seeder — not in framework primitives — because production admins
+        // seeder — not in platform primitives — because production admins
         // are not necessarily employees of the licensee company (e.g. an
         // indie developer who is the sole admin but has no employee record).
         if ($employee) {
@@ -94,7 +94,7 @@ class DevEmployeeSeeder extends DevSeeder
                 'full_name' => 'Aiman Rahman',
                 'short_name' => 'Aiman',
                 'designation' => 'Lead Developer',
-                'job_description' => 'Leads Belimbing technical direction, designs core framework architecture, and delivers full-stack features across backend and frontend modules.',
+                'job_description' => 'Leads Belimbing technical direction, designs core platform architecture, and delivers full-stack features across backend and frontend modules.',
                 'department_id' => $itDeptId,
             ],
             [
@@ -110,7 +110,7 @@ class DevEmployeeSeeder extends DevSeeder
                 'full_name' => 'Daniel Khoo',
                 'short_name' => 'Daniel',
                 'designation' => 'Product Manager',
-                'job_description' => 'Defines Belimbing roadmap and release priorities, translates framework vision into clear requirements, and aligns delivery scope with adopter needs.',
+                'job_description' => 'Defines Belimbing roadmap and release priorities, translates platform vision into clear requirements, and aligns delivery scope with adopter needs.',
                 'department_id' => $itDeptId,
             ],
         ];

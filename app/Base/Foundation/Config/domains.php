@@ -9,7 +9,7 @@ return [
     |
     | Official BelimbingApp domain repos installable from the Domains admin
     | screen. Keys are the PascalCase mount directory under app/Modules.
-    | A fresh framework clone ships Base + Core only; everything below is
+    | A fresh Belimbing clone ships Base + Core only; everything below is
     | opt-in per deployment.
     |
     */

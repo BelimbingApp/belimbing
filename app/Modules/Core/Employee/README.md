@@ -1,6 +1,6 @@
 # Employee Module
 
-The Employee Module is a **foundational Core module** for the Belimbing framework. It manages employment relationships and HR data within companies.
+The Employee Module is a **foundational Core module** for the Belimbing application platform. It manages employment relationships and HR data within companies.
 
 ## Overview
 

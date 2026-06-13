@@ -1,7 +1,7 @@
 # Belimbing (BLB) Architect & Agent Guidelines
 
 ## 1. Project Context
-Belimbing (BLB) is a Laravel-based framework:
+Belimbing (BLB) is a Laravel-based application platform:
 - **PHP:** 8.5+
 - **Framework:** Laravel 13
 - **App Server:** FrankenPHP 1.12.3 (required for BLB's PHP worker model)

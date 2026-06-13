@@ -8,19 +8,19 @@ use App\Modules\Core\AI\DTO\Orchestration\SkillPackReference;
 use App\Modules\Core\AI\Enums\SkillPackStatus;
 
 /**
- * Framework knowledge skill pack.
+ * Platform knowledge skill pack.
  *
  * Packages the KnowledgeNavigator's curated Belimbing documentation catalog
  * as a skill pack manifest. This is the first real skill pack in Belimbing,
- * proving the abstraction works with actual framework content.
+ * proving the abstraction works with actual platform content.
  *
  * The pack provides:
- * - prompt resources with framework reference grounding
+ * - prompt resources with platform reference grounding
  * - reference documents from the curated documentation catalog
  * - tool binding to the guide_search tool
  *
  * This pack applies to all agents (empty applicableAgentIds) since
- * any agent may benefit from framework knowledge.
+ * any agent may benefit from platform knowledge.
  */
 class KnowledgeSkillPack
 {
@@ -28,9 +28,9 @@ class KnowledgeSkillPack
 
     private const PACK_VERSION = '1.0.0';
 
-    private const PACK_NAME = 'Belimbing Framework Knowledge';
+    private const PACK_NAME = 'Belimbing Platform Knowledge';
 
-    private const PACK_DESCRIPTION = 'Curated Belimbing framework documentation references and search capability';
+    private const PACK_DESCRIPTION = 'Curated Belimbing platform documentation references and search capability';
 
     private const PACK_OWNER = 'Core AI';
 
@@ -82,9 +82,9 @@ class KnowledgeSkillPack
 
         return [
             new SkillPackPromptResource(
-                label: 'framework-knowledge-grounding',
-                content: "## Belimbing Framework References\n\n"
-                    ."The following curated references are available for framework knowledge:\n\n"
+                label: 'platform-knowledge-grounding',
+                content: "## Belimbing Platform References\n\n"
+                    ."The following curated references are available for platform knowledge:\n\n"
                     .$referenceList."\n"
                     .'Use the `guide_search` tool to search for specific topics across these references.',
                 order: 200,

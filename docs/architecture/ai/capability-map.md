@@ -771,7 +771,7 @@ The `AgenticRuntime` loop would handle async tools by:
 | Personal browser profiles (named `openclaw`, `work`, `chrome`) | BLB's browser is server-side headless (Phase 5), not a personal browser manager. No profile switching, no extension relay. |
 | Gateway lifecycle management (`gateway restart`, `config.apply`) | BLB is a standard Laravel app managed by ops tooling, not a self-managing daemon |
 | Plugin/extension runtime loading (jiti TypeScript modules) | BLB modules are PHP, discovered by Laravel's service container; the module system already exists |
-| AgentSkills `.md` files with YAML frontmatter | BLB's prompt engineering is framework-managed (LaraPromptFactory), not file-driven; skill-like knowledge goes into `LaraKnowledgeNavigator` or memory |
+| AgentSkills `.md` files with YAML frontmatter | BLB's prompt engineering is platform-managed (LaraPromptFactory), not file-driven; skill-like knowledge goes into `LaraKnowledgeNavigator` or memory |
 | `apply_patch` (multi-file code edits) | BLB is not a code editor; ArtisanTool + future scaffolding commands cover this |
 | `tts` (text-to-speech) | Not a core need today; can be a module extension later |
 

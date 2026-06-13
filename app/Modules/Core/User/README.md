@@ -1,6 +1,6 @@
 # User Module
 
-The User Module is a **foundational Core module** for the Belimbing framework. It manages system authentication, access control, and user accounts.
+The User Module is a **foundational Core module** for the Belimbing application platform. It manages system authentication, access control, and user accounts.
 
 ## Overview
 

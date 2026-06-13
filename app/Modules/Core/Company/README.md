@@ -1,6 +1,6 @@
 # Company Module
 
-The Company Module is a **foundational Core module** for the Belimbing ERP system. Every deployment requires at least one company, making this module essential infrastructure rather than optional functionality.
+The Company Module is a **foundational Core module** for the Belimbing application platform. Every deployment requires at least one company, making this module essential infrastructure rather than optional functionality.
 
 ## Overview
 

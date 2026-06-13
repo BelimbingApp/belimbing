@@ -7,9 +7,9 @@ use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 
 /**
- * Belimbing framework documentation guide tool for Agents.
+ * Belimbing documentation guide tool for Agents.
  *
- * Allows a agent to search curated Belimbing framework documentation by topic,
+ * Allows a agent to search curated Belimbing documentation by topic,
  * returning matched references with summaries and the content of the
  * top-matching file for substantive grounding.
  *
@@ -32,15 +32,15 @@ class GuideTool extends AbstractReadOnlyMemoryTool
 
     public function description(): string
     {
-        return 'Search Belimbing framework documentation for a topic and return relevant references with summaries. '
+        return 'Search Belimbing documentation for a topic and return relevant references with summaries. '
             .'Use this to look up architecture decisions, module docs, conventions, or design patterns '
-            .'before answering questions about the Belimbing framework.';
+            .'before answering questions about Belimbing.';
     }
 
     protected function schema(): ToolSchemaBuilder
     {
         return ToolSchemaBuilder::make()
-            ->string('topic', 'Topic to search Belimbing framework documentation for.')->required()
+            ->string('topic', 'Topic to search Belimbing documentation for.')->required()
             ->integer('max_sections', 'Maximum number of relevant sections to return (default 5, max 10).', min: 1, max: self::MAX_SECTIONS_LIMIT);
     }
 
@@ -53,9 +53,9 @@ class GuideTool extends AbstractReadOnlyMemoryTool
     {
         return [
             'display_name' => 'Guide',
-            'summary' => 'Query Belimbing framework documentation for reference information.',
+            'summary' => 'Query Belimbing documentation for reference information.',
             'explanation' => 'Searches the Belimbing documentation directory for relevant sections on a given topic. '
-                .'Returns curated reference material to help answer framework questions. '
+                .'Returns curated reference material to help answer platform questions. '
                 .'This tool reads documentation only — it cannot modify docs.',
             'setup_requirements' => [
                 'Documentation directory must be present',

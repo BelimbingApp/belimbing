@@ -195,7 +195,7 @@ return [
     | Lara (System Agent)
     |--------------------------------------------------------------------------
     |
-    | Lara's core prompt is framework-managed and non-configurable.
+    | Lara's core prompt is platform-managed and non-configurable.
     | Licensees may append additive guidance through an extension file.
     | The extension is append-only and must not override core policy.
     |

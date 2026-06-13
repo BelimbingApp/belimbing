@@ -10,7 +10,7 @@ use InvalidArgumentException;
 /**
  * Installs, disables, and uninstalls non-Core domains.
  *
- * A fresh framework clone ships Base + Core only. Each domain is a nested
+ * A fresh Belimbing clone ships Base + Core only. Each domain is a nested
  * git checkout mounted at app/Modules/{Domain}; installing clones the repo
  * from the catalog (config: domains.catalog) and runs pending migrations,
  * uninstalling deletes the checkout and — only when explicitly requested —

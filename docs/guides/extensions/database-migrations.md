@@ -1,6 +1,6 @@
 # Extension Database Migrations
 
-This guide explains how extensions can create and manage database tables in the Belimbing framework.
+This guide explains how extensions can create and manage database tables in the Belimbing application platform.
 
 ## Overview
 
@@ -106,7 +106,7 @@ Refer to `app/Base/Database/AGENTS.md` for migration standards:
 
 ### Step 3: Reference Core Tables
 
-If your extension needs to reference core framework tables, use proper foreign key constraints:
+If your extension needs to reference core platform tables, use proper foreign key constraints:
 
 ```php
 Schema::create('sbg_quality_audit_assignments', function (Blueprint $table) {

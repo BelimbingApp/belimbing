@@ -12,7 +12,7 @@ use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
 /**
- * Provision framework primitives: licensee company, admin user, and Lara.
+ * Provision platform primitives: licensee company, admin user, and Lara.
  *
  * This service coordinates cross-domain setup during migrations and installation.
  * It is idempotent — safe to call repeatedly.
@@ -48,7 +48,7 @@ class FrameworkPrimitivesProvisioner
     }
 
     /**
-     * Provision all framework primitives.
+     * Provision all platform primitives.
      *
      * Ordering: Licensee company → admin user → Lara employee.
      * Each step depends on the previous being complete.

@@ -61,7 +61,7 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 ### Domain Lifecycle
 
-A fresh framework clone runs with Base + Core. Optional domains can be installed, disabled, or uninstalled from **Administration → System → Domains** or by equivalent deployment automation.
+A fresh Belimbing clone runs with Base + Core. Optional domains can be installed, disabled, or uninstalled from **Administration → System → Domains** or by equivalent deployment automation.
 
 - **Installed:** the domain distribution is present and participates in discovery.
 - **Disabled:** the distribution remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
