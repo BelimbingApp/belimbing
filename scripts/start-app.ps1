@@ -107,6 +107,161 @@ function Resolve-NativeCommandPath {
     return ''
 }
 
+function Resolve-MkcertPath {
+    $mkcert = Resolve-NativeCommandPath 'mkcert'
+    if ($mkcert) {
+        return $mkcert
+    }
+
+    $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path $wingetPackages) {
+        $wingetMkcert = Get-ChildItem -Recurse -Filter mkcert.exe $wingetPackages -ErrorAction SilentlyContinue |
+            Select-Object -First 1 -ExpandProperty FullName
+        if ($wingetMkcert) {
+            return $wingetMkcert
+        }
+    }
+
+    return ''
+}
+
+function Resolve-CaddyRootCertificatePath {
+    $candidates = @(
+        (Join-Path $env:APPDATA 'Caddy\pki\authorities\local\root.crt'),
+        (Join-Path $HOME 'AppData\Roaming\Caddy\pki\authorities\local\root.crt')
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    return $candidates[0]
+}
+
+function Install-TrustedRootCertificate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $CertificatePath
+    )
+
+    if (-not (Test-Path $CertificatePath)) {
+        return $false
+    }
+
+    try {
+        $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new($CertificatePath)
+    } catch {
+        return $false
+    }
+
+    $existing = Get-ChildItem Cert:\CurrentUser\Root -ErrorAction SilentlyContinue |
+        Where-Object { $_.Thumbprint -eq $certificate.Thumbprint } |
+        Select-Object -First 1
+    if ($existing) {
+        return $true
+    }
+
+    try {
+        if (Get-Command Import-Certificate -ErrorAction SilentlyContinue) {
+            Import-Certificate -FilePath $CertificatePath -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
+            return $true
+        }
+
+        & certutil.exe -user -addstore root $CertificatePath | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
+function Ensure-TrustedLocalHttps {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $FrontendDomain,
+
+        [Parameter(Mandatory = $true)]
+        [string] $BackendDomain,
+
+        [Parameter(Mandatory = $true)]
+        [string] $ProjectRootPath
+    )
+
+    $certDir = Join-Path $ProjectRootPath 'certs'
+    $certFile = Join-Path $certDir "$FrontendDomain.pem"
+    $keyFile = Join-Path $certDir "$FrontendDomain-key.pem"
+    $mkcert = Resolve-MkcertPath
+
+    if ($mkcert) {
+        New-Item -ItemType Directory -Force -Path $certDir | Out-Null
+
+        try {
+            & $mkcert -install | Out-Null
+        } catch {
+            Write-Warning "mkcert root trust setup failed; falling back to the Windows trusted Caddy CA path."
+        }
+
+        if ((Test-Path $certFile) -and (Test-Path $keyFile)) {
+            return [pscustomobject]@{
+                Mode = 'mkcert'
+                CertificatePath = $certFile
+                KeyPath = $keyFile
+            }
+        }
+
+        try {
+            & $mkcert -cert-file $certFile -key-file $keyFile $FrontendDomain $BackendDomain | Out-Null
+        } catch {
+            Write-Warning "mkcert could not generate local certificates; falling back to the Windows trusted Caddy CA path."
+        }
+
+        if ((Test-Path $certFile) -and (Test-Path $keyFile)) {
+            return [pscustomobject]@{
+                Mode = 'mkcert'
+                CertificatePath = $certFile
+                KeyPath = $keyFile
+            }
+        }
+    }
+
+    return [pscustomobject]@{
+        Mode = 'internal'
+        RootCertificatePath = $null
+    }
+}
+
+function Trust-LocalCaddyRootCertificate {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int] $TimeoutSeconds = 10
+    )
+
+    $rootCertificatePath = ''
+    for ($attempt = 1; $attempt -le ($TimeoutSeconds * 2); $attempt++) {
+        $candidate = Resolve-CaddyRootCertificatePath
+        if ((Test-Path $candidate) -and ((Get-Item $candidate).Length -gt 0)) {
+            $rootCertificatePath = $candidate
+            break
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    if (-not $rootCertificatePath) {
+        Write-Warning "Could not locate the local Caddy root CA. Browser warnings may remain until the launcher is restarted."
+        return $false
+    }
+
+    if (Install-TrustedRootCertificate -CertificatePath $rootCertificatePath) {
+        Write-Information "Trusted the local Caddy root CA in Cert:\CurrentUser\Root." -InformationAction Continue
+        return $true
+    }
+
+    Write-Warning "Found the local Caddy root CA at '$rootCertificatePath' but could not import it into the Windows trust store."
+    return $false
+}
+
 function Start-BelimbingProcess {
     param(
         [string] $Name,
@@ -152,7 +307,6 @@ $env:VITE_HOST = '127.0.0.1'
 $env:HTTPS_PORT = '443'
 $env:APP_BIND_HOST = '127.0.0.1'
 $env:CADDY_SCHEME = 'https'
-$env:TLS_DIRECTIVE = 'tls internal'
 $env:CADDY_SERVER_ADMIN_HOST = '127.0.0.1'
 $env:CADDY_SERVER_ADMIN_PORT = "$CaddyAdminPort"
 $env:CADDY_LOG_DIR = Join-Path $ProjectRootPath '.caddy\logs'
@@ -169,6 +323,13 @@ $env:CADDY_SERVER_WATCH_DIRECTIVES = ''
 $perfIniDir = Join-Path $ProjectRootPath '.php.d'
 if (Test-Path (Join-Path $perfIniDir 'perf.ini')) {
     $env:PHP_INI_SCAN_DIR = $perfIniDir
+}
+
+$localHttps = Ensure-TrustedLocalHttps -FrontendDomain $frontendDomain -BackendDomain $backendDomain -ProjectRootPath $ProjectRootPath
+if ($localHttps.Mode -eq 'mkcert') {
+    $env:TLS_DIRECTIVE = "tls $($localHttps.CertificatePath) $($localHttps.KeyPath)"
+} else {
+    $env:TLS_DIRECTIVE = 'tls internal'
 }
 
 New-Item -ItemType Directory -Force -Path $env:CADDY_LOG_DIR | Out-Null
@@ -191,6 +352,10 @@ try {
     }
 
     $processes += Start-BelimbingProcess -Name 'FrankenPHP / Octane' -FilePath $frankenPhpExe -Arguments $frankenPhpArgs
+
+    if ($localHttps.Mode -eq 'internal') {
+        Trust-LocalCaddyRootCertificate -TimeoutSeconds 10 | Out-Null
+    }
 
     if (-not $NoQueue) {
         $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @('artisan', 'queue:work', '--queue=ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')

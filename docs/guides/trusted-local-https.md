@@ -13,6 +13,11 @@ Belimbing uses two layers for local HTTPS:
 
 The preferred path is **mkcert**. The `tls internal` fallback exists only for first-run bootstrapping or environments where mkcert is unavailable.
 
+On native Windows, `scripts/start-app.ps1` now prefers mkcert when it is available.
+If it has to fall back to `tls internal`, it imports Caddy's local root CA into
+the current user's Windows trust store before the launcher finishes, which keeps
+the browser warning away in normal Edge and Chrome setups.
+
 ## Prerequisites
 
 - **mkcert** — install it from [github.com/FiloSottile/mkcert](https://github.com/FiloSottile/mkcert)

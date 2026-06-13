@@ -237,13 +237,15 @@ complementary.
 
 ## HTTPS On Windows
 
-The native Windows launcher uses FrankenPHP/Caddy `tls internal`. This gives
-local HTTPS, but browsers may warn until the generated local CA is trusted.
+The native Windows launcher now prefers `mkcert` if it is available. When
+`mkcert` is not installed, it falls back to FrankenPHP/Caddy `tls internal` and
+imports Caddy's local root CA into the current user's Windows trust store before
+the launcher finishes starting. In normal Edge/Chrome setups, that avoids the
+"Not Secure" browser warning on `https://local.blb.lara`.
 
-For local development, it is acceptable to proceed through the browser warning.
-For a trusted-browser setup, install and trust a local development certificate
-authority such as `mkcert`, then configure BLB's local cert files in the project
-Caddyfile path. Do not use public Let's Encrypt certificates for
+If a browser still warns, restart the launcher once so it can re-read the local
+CA files, or install `mkcert` manually and let the launcher generate trusted
+certificates. Do not use public Let's Encrypt certificates for
 `local.blb.lara`; it is a local-only development name.
 
 PHP HTTPS downloads are separate from browser trust. `scripts/setup.ps1` writes
