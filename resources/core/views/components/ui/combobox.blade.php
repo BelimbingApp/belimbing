@@ -88,6 +88,9 @@
                         clearTimeout(this.searchTimeout)
                         this.searchTimeout = setTimeout(() => this.fetchOptions(), 300)
                     })
+                    if (!this.editable && this.selectedValue != null && this.selectedValue !== '' && !this.selectedOption) {
+                        this.fetchOptions()
+                    }
                 } else if (this.searchMethod) {
                     this.$watch('query', () => {
                         clearTimeout(this.searchTimeout)
@@ -104,7 +107,12 @@
                 url.searchParams.set('q', this.query)
                 fetch(url.toString(), { credentials: 'same-origin' })
                     .then(r => r.json())
-                    .then(data => { this.options = Array.isArray(data) ? data : [] })
+                    .then(data => {
+                        this.options = Array.isArray(data) ? data : []
+                        if (!this.open && this.selectedValue != null && this.selectedValue !== '') {
+                            this.syncQuery()
+                        }
+                    })
                     .catch(() => { this.options = [] })
             },
 

@@ -141,6 +141,15 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 - Prefer the combo box primitive `x-ui.combobox` when the list has **more than 8 options**, when labels are long, or when users are likely to search by code/name rather than scan visually.
 - If you are unsure and the list is around the cutoff, choose the combo box primitive when selection speed matters more than strict minimalism.
 
+### Read-first detail pages
+
+- Detail/show pages default to a read-first state: render values as text, badges, links, or compact summaries before exposing form controls.
+- Use `x-ui.edit-in-place.*` for independent low-risk facts where a one-field save is meaningful and the saved value is obvious from the field itself.
+- Use a grouped inline editor with a readable summary, explicit Edit action, Apply, and Cancel when fields are coupled, trigger side effects, or should be reviewed together before persistence.
+- Use a modal or full form when the edit is a workflow: multi-step, destructive, permission-sensitive, association-heavy, or better served by validation across several fields.
+- Keep draft state, validation, authorization, persistence, and side effects in the Livewire page. UI components own interaction behavior and presentation only.
+- Do not force create pages, setup flows, imports, relationship tables, or modal entry forms into read-first mode when the screen's primary job is data entry or association management.
+
 ### Form control ids
 
 - **Always set an explicit `id`** on form controls and form components such as `x-ui.input`, `x-ui.select`, `x-ui.textarea`, `x-ui.checkbox`, and `x-ui.radio`.

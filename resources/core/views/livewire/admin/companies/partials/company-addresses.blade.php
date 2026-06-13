@@ -51,22 +51,24 @@
                                     </div>
                                     <div x-show="editing" class="space-y-1">
                                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
-                                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                                <input type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input accent-accent focus:ring-accent" />
+                                            <label for="company-address-kind-{{ $address->id }}-{{ $kindOption }}" class="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input id="company-address-kind-{{ $address->id }}-{{ $kindOption }}" type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input accent-accent focus:ring-accent" />
                                                 {{ __(ucfirst($kindOption)) }}
                                             </label>
                                         @endforeach
                                         <div class="flex items-center gap-2 mt-1">
-                                            <button @click="$wire.saveAddressKinds({{ $address->id }}, selected); editing = false" class="px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-on hover:bg-accent-hover transition-colors">{{ __('Save') }}</button>
-                                            <button @click="editing = false; selected = @js($address->pivot->kind ?? [])" class="px-2 py-0.5 text-xs font-medium rounded hover:bg-surface-subtle text-muted transition-colors">{{ __('Cancel') }}</button>
+                                            <x-ui.button size="sm" @click="$wire.saveAddressKinds({{ $address->id }}, selected); editing = false">{{ __('Save') }}</x-ui.button>
+                                            <x-ui.button size="sm" variant="ghost" @click="editing = false; selected = @js($address->pivot->kind ?? [])">{{ __('Cancel') }}</x-ui.button>
                                         </div>
                                     </div>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     <button
+                                        type="button"
                                         wire:click="updateAddressPivot({{ $address->id }}, 'is_primary', {{ $address->pivot->is_primary ? '0' : '1' }})"
                                         class="cursor-pointer"
                                         title="{{ __('Toggle primary') }}"
+                                        aria-label="{{ __('Toggle primary') }}"
                                     >
                                         @if($address->pivot->is_primary)
                                             <x-ui.badge variant="success">{{ __('Yes') }}</x-ui.badge>
@@ -83,6 +85,7 @@
                                         <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
                                     <input
+                                        id="company-address-priority-{{ $address->id }}"
                                         x-show="editing"
                                         x-ref="input"
                                         x-model="val"
@@ -182,8 +185,8 @@
                     <span class="block text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Kind') }}</span>
                     <div class="flex flex-wrap gap-x-4 gap-y-1">
                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
-                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="checkbox" value="{{ $kindOption }}" wire:model="attachKind" class="rounded border-border-input accent-accent focus:ring-accent" />
+                            <label for="company-attach-kind-{{ $kindOption }}" class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input id="company-attach-kind-{{ $kindOption }}" type="checkbox" value="{{ $kindOption }}" wire:model="attachKind" class="rounded border-border-input accent-accent focus:ring-accent" />
                                 {{ __(ucfirst($kindOption)) }}
                             </label>
                         @endforeach
@@ -228,6 +231,7 @@
                     />
 
                     <x-ui.combobox
+                        id="company-address-admin1-code"
                         wire:model.live="admin1Code"
                         wire:key="modal-admin1-{{ $countryIso ?? 'none' }}"
                         label="{{ __('State / Province') }}"
@@ -240,6 +244,7 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <x-ui.combobox
+                        id="company-address-postcode"
                         wire:model.live="postcode"
                         wire:key="modal-postcode-{{ $countryIso ?? 'none' }}"
                         label="{{ __('Postcode') }}"
@@ -251,6 +256,7 @@
                     />
 
                     <x-ui.combobox
+                        id="company-address-locality"
                         wire:model.live="locality"
                         wire:key="modal-locality-{{ $countryIso ?? 'none' }}-{{ $admin1Code ?? 'none' }}"
                         label="{{ __('Locality') }}"
@@ -271,8 +277,8 @@
                             <span class="block text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Kind') }}</span>
                             <div class="flex flex-wrap gap-x-4 gap-y-1">
                                 @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
-                                    <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                        <input type="checkbox" value="{{ $kindOption }}" wire:model="kind" class="rounded border-border-input accent-accent focus:ring-accent" />
+                                    <label for="company-address-link-kind-{{ $kindOption }}" class="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input id="company-address-link-kind-{{ $kindOption }}" type="checkbox" value="{{ $kindOption }}" wire:model="kind" class="rounded border-border-input accent-accent focus:ring-accent" />
                                         {{ __(ucfirst($kindOption)) }}
                                     </label>
                                 @endforeach

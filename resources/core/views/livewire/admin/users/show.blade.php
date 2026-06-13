@@ -31,9 +31,10 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('User Details') }}</h3>
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <x-ui.edit-in-place.text :label="__('Name')" :value="$user->name" field="name" save-method="saveField" />
-                <x-ui.edit-in-place.text :label="__('Email')" :value="$user->email" field="email" save-method="saveField" type="email" />
+                <x-ui.edit-in-place.text id="user-name" :label="__('Name')" :value="$user->name" field="name" save-method="saveField" />
+                <x-ui.edit-in-place.text id="user-email" :label="__('Email')" :value="$user->email" field="email" save-method="saveField" type="email" />
                 <x-ui.edit-in-place.select
+                    id="user-company"
                     :label="__('Company')"
                     :value="$user->company_id"
                     save-method="saveCompany"
@@ -118,6 +119,7 @@
                     <div x-show="open" x-cloak>
                         <div>
                             <x-ui.search-input
+                                id="user-role-search"
                                 x-ref="roleSearch"
                                 x-model="roleFilter"
                                 placeholder="{{ __('Search roles...') }}"
@@ -126,10 +128,12 @@
                         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1 mt-2 max-h-48 overflow-y-auto">
                             @foreach($availableRoles as $role)
                                 <label
+                                    for="user-role-{{ $role->id }}"
                                     x-show="!roleFilter || @js(strtolower($role->name)).includes(roleFilter.toLowerCase()) || @js(strtolower($role->code)).includes(roleFilter.toLowerCase())"
                                     class="flex items-center gap-2 px-2 py-1 rounded text-sm hover:bg-surface-subtle cursor-pointer"
                                 >
                                     <input
+                                        id="user-role-{{ $role->id }}"
                                         type="checkbox"
                                         value="{{ $role->id }}"
                                         x-model="selected"
@@ -243,6 +247,7 @@
                         >
                             <div class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Add Capabilities') }}</div>
                             <x-ui.search-input
+                                id="user-capability-search"
                                 x-model="capFilter"
                                 placeholder="{{ __('Search capabilities...') }}"
                             />
@@ -250,10 +255,12 @@
                                 @foreach ($availableCapabilities as $domain => $caps)
                                     @foreach ($caps as $cap)
                                         <label
+                                            for="user-capability-{{ md5($cap) }}"
                                             x-show="!capFilter || @js(strtolower($cap)).includes(capFilter.toLowerCase())"
                                             class="flex items-center gap-2 px-2 py-1 rounded text-sm hover:bg-surface-subtle cursor-pointer"
                                         >
                                             <input
+                                                id="user-capability-{{ md5($cap) }}"
                                                 type="checkbox"
                                                 value="{{ $cap }}"
                                                 x-model="selected"
@@ -424,6 +431,7 @@
                     </x-ui.button>
                     <div x-show="linking" class="flex items-end gap-2">
                         <x-ui.combobox
+                            id="user-link-employee"
                             wire:model="linkEmployeeId"
                             placeholder="{{ __('Search employee...') }}"
                             :options="$unlinkableEmployees->map(fn($e) => ['value' => $e->id, 'label' => $e->full_name . ' (' . $e->employee_number . ')'])->all()"
@@ -445,6 +453,7 @@
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Add Employee Record') }}</h3>
 
                 <x-ui.combobox
+                    id="new-emp-company"
                     wire:model="newEmpCompanyId"
                     label="{{ __('Company') }}"
                     placeholder="{{ __('Search company...') }}"

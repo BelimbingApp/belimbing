@@ -2,10 +2,10 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Company Details') }}</h3>
 
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <x-ui.edit-in-place.text :label="__('Name')" :value="$company->name" field="name" />
-                    <x-ui.edit-in-place.text :label="__('Code')" :value="$company->code" field="code" monospace />
-                    <x-ui.edit-in-place.text :label="__('Legal Name')" :value="$company->legal_name" field="legal_name" />
-                    <x-ui.edit-in-place.select :label="__('Status')" :value="$company->status" save-method="saveStatus">
+                    <x-ui.edit-in-place.text id="company-name" :label="__('Name')" :value="$company->name" field="name" />
+                    <x-ui.edit-in-place.text id="company-code" :label="__('Code')" :value="$company->code" field="code" monospace />
+                    <x-ui.edit-in-place.text id="company-legal-name" :label="__('Legal Name')" :value="$company->legal_name" field="legal_name" />
+                    <x-ui.edit-in-place.select id="company-status" :label="__('Status')" :value="$company->status" save-method="saveStatus">
                         <x-slot name="read">
                             <x-ui.badge :variant="match($company->status) {
                                 'active' => 'success',
@@ -21,6 +21,7 @@
                         <option value="archived">{{ __('Archived') }}</option>
                     </x-ui.edit-in-place.select>
                     <x-ui.edit-in-place.select
+                        id="company-legal-entity-type"
                         :label="__('Legal Entity Type')"
                         :value="$company->legal_entity_type_id"
                         field="legal_entity_type_id"
@@ -35,9 +36,10 @@
                             <option value="{{ $type->id }}">{{ $type->name }}</option>
                         @endforeach
                     </x-ui.edit-in-place.select>
-                    <x-ui.edit-in-place.text :label="__('Registration Number')" :value="$company->registration_number" field="registration_number" />
-                    <x-ui.edit-in-place.text :label="__('Tax ID')" :value="$company->tax_id" field="tax_id" />
+                    <x-ui.edit-in-place.text id="company-registration-number" :label="__('Registration Number')" :value="$company->registration_number" field="registration_number" />
+                    <x-ui.edit-in-place.text id="company-tax-id" :label="__('Tax ID')" :value="$company->tax_id" field="tax_id" />
                     <x-ui.edit-in-place.select
+                        id="company-jurisdiction"
                         :label="__('Jurisdiction')"
                         :value="$company->jurisdiction"
                         field="jurisdiction"
@@ -59,9 +61,10 @@
                             <option value="{{ $country->iso }}">{{ $country->country }} ({{ $country->iso }})</option>
                         @endforeach
                     </x-ui.edit-in-place.select>
-                    <x-ui.edit-in-place.text :label="__('Email')" :value="$company->email" field="email" type="email" />
-                    <x-ui.edit-in-place.text :label="__('Website')" :value="$company->website" field="website" type="url" />
+                    <x-ui.edit-in-place.text id="company-email" :label="__('Email')" :value="$company->email" field="email" type="email" />
+                    <x-ui.edit-in-place.text id="company-website" :label="__('Website')" :value="$company->website" field="website" type="url" />
                     <x-ui.edit-in-place.select
+                        id="company-parent"
                         :label="__('Parent Company')"
                         :value="$company->parent_id"
                         save-method="saveParent"
@@ -111,6 +114,7 @@
 
                                 <div x-show="adding" class="inline-flex items-center gap-1">
                                     <input
+                                        id="company-new-activity"
                                         x-ref="newInput"
                                         x-model="newItem"
                                         @keydown.enter="if (newItem.trim()) { $wire.addActivity(newItem.trim()); newItem = ''; } else { adding = false; }"
@@ -118,7 +122,7 @@
                                         @blur="if (newItem.trim()) { $wire.addActivity(newItem.trim()); newItem = ''; } adding = false;"
                                         type="text"
                                         placeholder="{{ __('e.g. manufacturing') }}"
-                                        class="px-2 py-0.5 text-xs border border-accent rounded-full bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent w-40"
+                                        class="w-48 px-input-x py-input-y text-sm border border-accent rounded-2xl bg-surface-card text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent"
                                     />
                                 </div>
                             </div>
@@ -130,7 +134,7 @@
                     $metadataJson = $company->metadata ? json_encode($company->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
                 @endphp
 
-                <dl class="mt-4" x-data="{ editing: false, val: {{ $metadataJson ? '`' . addslashes($metadataJson) . '`' : "''" }} }">
+                <dl class="mt-4" x-data="{ editing: false, val: @js($metadataJson), original: @js($metadataJson) }">
                     <div>
                         <dt class="flex items-center gap-1.5">
                             <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Metadata') }}</span>
@@ -151,14 +155,15 @@
                             <textarea
                                 x-ref="textarea"
                                 x-model="val"
-                                @keydown.escape="editing = false; val = {{ $metadataJson ? '`' . addslashes($metadataJson) . '`' : "''" }}"
+                                @keydown.escape="editing = false; val = original"
+                                id="company-metadata-json"
                                 rows="6"
                                 class="w-full px-input-x py-input-y text-sm font-mono border border-accent rounded-2xl bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                                 placeholder="{{ __('{"employee_count":120,"founded_year":2014}') }}"
                             ></textarea>
                             <div class="flex items-center gap-2">
-                                <button @click="editing = false; $wire.saveMetadata(val)" class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-lg bg-accent text-accent-on hover:bg-accent-hover transition-colors">{{ __('Save') }}</button>
-                                <button @click="editing = false; val = {{ $metadataJson ? '`' . addslashes($metadataJson) . '`' : "''" }}" class="inline-flex items-center px-3 py-1 text-xs font-medium rounded-lg hover:bg-surface-subtle text-muted transition-colors">{{ __('Cancel') }}</button>
+                                <x-ui.button size="sm" @click="editing = false; original = val; $wire.saveMetadata(val)">{{ __('Save') }}</x-ui.button>
+                                <x-ui.button size="sm" variant="ghost" @click="editing = false; val = original">{{ __('Cancel') }}</x-ui.button>
                             </div>
                         </dd>
                     </div>

@@ -12,6 +12,7 @@ use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Session;
 use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
@@ -30,6 +31,8 @@ class Show extends AbstractAddressForm
 
     public bool $timezoneWasAutoApplied = false;
 
+    public bool $editingLocation = false;
+
     public string $linkedSortBy = 'type';
 
     public string $linkedSortDir = 'asc';
@@ -47,14 +50,7 @@ class Show extends AbstractAddressForm
     public function mount(Address $address): void
     {
         $this->address = $address->load(['country', 'admin1']);
-        $this->countryIso = $address->country_iso;
-        $this->admin1Code = $address->admin1Code;
-        $this->postcode = $address->postcode;
-        $this->locality = $address->locality;
-
-        if ($this->countryIso) {
-            $this->admin1Options = $this->loadAdmin1ForCountry($this->countryIso);
-        }
+        $this->fillLocationDraftFromAddress();
 
         if ($this->companyContextId) {
             $exists = Company::query()
@@ -112,39 +108,58 @@ class Show extends AbstractAddressForm
 
     public function updatedCountryIso($value): void
     {
-        $this->saveCountry($value ?? '');
         parent::updatedCountryIso($value);
-        $this->address->admin1Code = null;
-        $this->address->postcode = null;
-        $this->address->locality = null;
-        $this->address->save();
-        $this->checkCompanyTimezone();
     }
 
     public function updatedPostcode($value): void
     {
-        $this->address->postcode = $value;
-        $this->address->save();
         parent::updatedPostcode($value);
-        $this->address->admin1Code = $this->admin1Code;
-        $this->address->locality = $this->locality;
-        $this->address->save();
-        $this->checkCompanyTimezone();
     }
 
     public function updatedAdmin1Code($value = null): void
     {
         parent::updatedAdmin1Code($value);
-        $this->address->admin1Code = $value ?? $this->admin1Code;
-        $this->address->save();
     }
 
     public function updatedLocality($value = null): void
     {
         parent::updatedLocality($value);
-        $this->address->locality = $value ?? $this->locality;
-        $this->address->save();
+    }
+
+    public function openLocationEditor(): void
+    {
+        $this->fillLocationDraftFromAddress();
+        $this->editingLocation = true;
+    }
+
+    public function cancelLocationEditor(): void
+    {
+        $this->editingLocation = false;
+        $this->fillLocationDraftFromAddress();
+    }
+
+    public function saveLocation(): void
+    {
+        $validated = $this->validate([
+            'countryIso' => ['nullable', 'string', 'size:2'],
+            'admin1Code' => ['nullable', 'string', 'max:20'],
+            'postcode' => ['nullable', 'string', 'max:255'],
+            'locality' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->address->forceFill([
+            'country_iso' => $validated['countryIso'] ? strtoupper($validated['countryIso']) : null,
+            'admin1Code' => $validated['admin1Code'],
+            'postcode' => $validated['postcode'],
+            'locality' => $validated['locality'],
+        ])->save();
+
+        $this->address->refresh()->load(['country', 'admin1']);
+        $this->fillLocationDraftFromAddress();
+        $this->editingLocation = false;
         $this->checkCompanyTimezone();
+
+        Session::flash('success', __('Address location updated.'));
     }
 
     public function saveVerificationStatus(string $status): void
@@ -332,5 +347,20 @@ class Show extends AbstractAddressForm
         }
 
         return (string) ($model->name ?? (string) $model->id);
+    }
+
+    private function fillLocationDraftFromAddress(): void
+    {
+        $this->countryIso = $this->address->country_iso;
+        $this->admin1Code = $this->address->admin1Code;
+        $this->postcode = $this->address->postcode;
+        $this->locality = $this->address->locality;
+        $this->admin1IsAuto = false;
+        $this->localityIsAuto = false;
+        $this->postcodeOptions = [];
+        $this->localityOptions = [];
+        $this->admin1Options = $this->countryIso
+            ? $this->loadAdmin1ForCountry($this->countryIso)
+            : [];
     }
 }

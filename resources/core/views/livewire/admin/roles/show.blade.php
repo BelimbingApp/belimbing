@@ -35,7 +35,7 @@
 
             <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 @if (! $role->is_system && $canEdit)
-                    <x-ui.edit-in-place.text :label="__('Name')" :value="$role->name" field="name" save-method="saveField" />
+                    <x-ui.edit-in-place.text id="role-name" :label="__('Name')" :value="$role->name" field="name" save-method="saveField" />
                 @else
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Name') }}</dt>
@@ -58,6 +58,7 @@
                 </div>
                 @if (! $role->is_system && $canEdit && ! $hasAssignedUsers)
                     <x-ui.edit-in-place.select
+                        id="role-scope"
                         :label="__('Scope')"
                         :value="$role->company_id"
                         save-method="saveScope"
@@ -84,6 +85,7 @@
                 @endif
                 @if (! $role->is_system && $canEdit)
                     <x-ui.edit-in-place.text
+                        id="role-description"
                         class="md:col-span-2"
                         :label="__('Description')"
                         :value="$role->description"
@@ -154,6 +156,7 @@
                 >
                     <div>
                         <x-ui.search-input
+                            id="role-capability-search"
                             x-model="capFilter"
                             placeholder="{{ __('Search capabilities...') }}"
                         />
@@ -162,10 +165,12 @@
                         @foreach ($availableCapabilities as $domain => $capabilities)
                             @foreach ($capabilities as $capability)
                                 <label
+                                    for="role-capability-{{ md5($capability) }}"
                                     x-show="!capFilter || @js(strtolower($capability)).includes(capFilter.toLowerCase())"
                                     class="flex items-center gap-2 px-2 py-1 rounded text-sm hover:bg-surface-subtle cursor-pointer"
                                 >
                                     <input
+                                        id="role-capability-{{ md5($capability) }}"
                                         type="checkbox"
                                         value="{{ $capability }}"
                                         x-model="selected"
@@ -260,16 +265,19 @@
                 >
                     <p class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Add Users') }}</p>
                     <x-ui.search-input
+                        id="role-user-search"
                         x-model="userFilter"
                         placeholder="{{ __('Search users by name or email...') }}"
                     />
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1 mt-2 max-h-48 overflow-y-auto">
                         @foreach ($availableUsers as $availableUser)
                             <label
+                                for="role-user-{{ $availableUser->id }}"
                                 x-show="!userFilter || @js(strtolower($availableUser->name . ' ' . $availableUser->email)).includes(userFilter.toLowerCase())"
                                 class="flex items-center gap-2 px-2 py-1 rounded text-sm hover:bg-surface-subtle cursor-pointer"
                             >
                                 <input
+                                    id="role-user-{{ $availableUser->id }}"
                                     type="checkbox"
                                     value="{{ $availableUser->id }}"
                                     x-model="selected"

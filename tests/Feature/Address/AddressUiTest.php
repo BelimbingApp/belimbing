@@ -1,7 +1,9 @@
 <?php
 
 use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
+use App\Modules\Core\Geonames\Models\Postcode;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
 
@@ -72,4 +74,69 @@ test('address can be created from create page component', function (): void {
         ->toBe('US')
         ->and($address->verificationStatus)
         ->toBe('verified');
+});
+
+test('address detail saves location as a grouped edit', function (): void {
+    Country::query()->create([
+        'iso' => 'US',
+        'iso3' => 'USA',
+        'iso_numeric' => '840',
+        'country' => 'United States',
+        'continent' => 'NA',
+    ]);
+    Country::query()->create([
+        'iso' => 'MY',
+        'iso3' => 'MYS',
+        'iso_numeric' => '458',
+        'country' => 'Malaysia',
+        'continent' => 'AS',
+    ]);
+    Admin1::query()->create(['code' => 'MY.14', 'name' => 'Kuala Lumpur']);
+    Postcode::query()->create([
+        'country_iso' => 'MY',
+        'postcode' => '50450',
+        'place_name' => 'Kuala Lumpur',
+        'admin1Code' => '14',
+        'admin_name1' => 'Kuala Lumpur',
+    ]);
+
+    $user = User::factory()->create();
+    $address = Address::query()->create([
+        'label' => 'HQ',
+        'line1' => '1 Old Road',
+        'country_iso' => 'US',
+        'postcode' => '02110',
+        'locality' => 'Boston',
+        'verificationStatus' => 'unverified',
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test('admin.addresses.show', ['address' => $address])
+        ->call('openLocationEditor')
+        ->set('countryIso', 'MY')
+        ->set('postcode', '50450')
+        ->assertSet('admin1Code', 'MY.14')
+        ->assertSet('locality', 'Kuala Lumpur');
+
+    expect($address->fresh()->country_iso)->toBe('US');
+
+    Livewire::test('admin.addresses.show', ['address' => $address])
+        ->call('openLocationEditor')
+        ->set('countryIso', 'MY')
+        ->set('postcode', '50450')
+        ->call('saveLocation')
+        ->assertSet('editingLocation', false)
+        ->assertSee('Malaysia');
+
+    $address->refresh();
+
+    expect($address->country_iso)
+        ->toBe('MY')
+        ->and($address->admin1Code)
+        ->toBe('MY.14')
+        ->and($address->postcode)
+        ->toBe('50450')
+        ->and($address->locality)
+        ->toBe('Kuala Lumpur');
 });

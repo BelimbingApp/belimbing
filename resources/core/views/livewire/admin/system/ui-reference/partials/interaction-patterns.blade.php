@@ -22,6 +22,21 @@
                     <p class="mt-1 text-xs text-muted">{{ __('Enter saves short text, blur commits, and Escape restores the last saved value.') }}</p>
                 </div>
             </div>
+
+            <div class="grid gap-3 md:grid-cols-3">
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Independent Fact') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('Use field-level edit-in-place when one value can be saved by itself and the saved value is obvious from the row.') }}</p>
+                </div>
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Coupled Facts') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('Use a grouped inline editor when values depend on each other, trigger side effects, or should be reviewed before applying.') }}</p>
+                </div>
+                <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                    <div class="text-sm font-medium text-ink">{{ __('Workflow Edit') }}</div>
+                    <p class="mt-1 text-xs text-muted">{{ __('Use a modal or full form for multi-step, destructive, permission-sensitive, or association-heavy changes.') }}</p>
+                </div>
+            </div>
         </div>
     </x-ui.card>
 
@@ -98,6 +113,111 @@
             </div>
         </x-ui.card>
     </div>
+
+    <x-ui.card>
+        <div class="space-y-4">
+            <x-ui.catalog-section
+                :title="__('Grouped Inline Editor')"
+                component="<code>x-ui.*</code> controls with page-owned draft state"
+            >
+                {{ __('Use this pattern for coupled facts on detail pages. The closed state remains readable; opening the group reveals stable controls with Apply and Cancel so partial changes do not save one field at a time.') }}
+            </x-ui.catalog-section>
+
+            <div
+                x-data="{
+                    editing: false,
+                    saved: { country: 'Malaysia', region: 'Kuala Lumpur', postcode: '50450', locality: 'Kuala Lumpur' },
+                    country: 'Malaysia',
+                    region: 'Kuala Lumpur',
+                    postcode: '50450',
+                    locality: 'Kuala Lumpur',
+                    apply() {
+                        this.saved = { country: this.country, region: this.region, postcode: this.postcode, locality: this.locality };
+                        this.editing = false;
+                    },
+                    cancel() {
+                        this.country = this.saved.country;
+                        this.region = this.saved.region;
+                        this.postcode = this.saved.postcode;
+                        this.locality = this.saved.locality;
+                        this.editing = false;
+                    },
+                }"
+                class="rounded-2xl border border-border-default bg-surface-subtle/40 p-4"
+            >
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h4 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Location') }}</h4>
+                        <p class="mt-1 text-sm text-ink">
+                            <span x-text="[locality, region, postcode, country].filter(Boolean).join(', ')"></span>
+                        </p>
+                    </div>
+
+                    <x-ui.button x-show="!editing" variant="ghost" size="sm" @click="editing = true">
+                        <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
+                        {{ __('Edit Location') }}
+                    </x-ui.button>
+                </div>
+
+                <dl x-show="!editing" class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+                    <div>
+                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Country') }}</dt>
+                        <dd class="text-sm text-ink" x-text="country"></dd>
+                    </div>
+                    <div>
+                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('State / Province') }}</dt>
+                        <dd class="text-sm text-ink" x-text="region"></dd>
+                    </div>
+                    <div>
+                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Postcode') }}</dt>
+                        <dd class="text-sm text-ink tabular-nums" x-text="postcode"></dd>
+                    </div>
+                    <div>
+                        <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Locality') }}</dt>
+                        <dd class="text-sm text-ink" x-text="locality"></dd>
+                    </div>
+                </dl>
+
+                <div x-show="editing" x-cloak class="mt-4 border-t border-border-default pt-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <x-ui.input
+                            id="ui-reference-grouped-country"
+                            x-model="country"
+                            :label="__('Country')"
+                        />
+
+                        <x-ui.input
+                            id="ui-reference-grouped-region"
+                            x-model="region"
+                            :label="__('State / Province')"
+                        />
+
+                        <x-ui.input
+                            id="ui-reference-grouped-postcode"
+                            x-model="postcode"
+                            :label="__('Postcode')"
+                        />
+
+                        <x-ui.input
+                            id="ui-reference-grouped-locality"
+                            x-model="locality"
+                            :label="__('Locality')"
+                        />
+                    </div>
+
+                    <div class="mt-4 flex items-center gap-2">
+                        <x-ui.button variant="primary" size="sm" @click="apply()">
+                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                            {{ __('Apply Location') }}
+                        </x-ui.button>
+                        <x-ui.button variant="ghost" size="sm" @click="cancel()">
+                            {{ __('Cancel') }}
+                        </x-ui.button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </x-ui.card>
 
     <x-ui.card>
         <div class="space-y-4">

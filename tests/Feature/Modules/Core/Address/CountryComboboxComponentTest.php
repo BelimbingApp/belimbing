@@ -31,6 +31,10 @@ test('country-combobox forwards wire:model into the inner combobox entangle', fu
     // admin1/postcode on country change).
     expect($html)->toContain("entangle('countryIso')")
         ->and($html)->toContain('.live')
+        // Saved server-search values fetch their option label after render so
+        // detail pages do not visually blank a persisted country.
+        ->and($html)->toContain('!this.editable && this.selectedValue')
+        ->and($html)->toContain('this.syncQuery()')
         // Options come from the SSOT search endpoint, not inlined markup.
         ->and($html)->toContain('searchUrl:')
         ->and($html)->toContain('admin/addresses/countries/search');

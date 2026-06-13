@@ -19,15 +19,15 @@
             <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Employee Details') }}</h3>
 
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <x-ui.edit-in-place.text :label="__('Full Name')" :value="$employee->full_name" field="full_name" />
-                    <x-ui.edit-in-place.text :label="__('Short Name')" :value="$employee->short_name" field="short_name" />
-                    <x-ui.edit-in-place.text :label="__('Employee Number')" :value="$employee->employee_number" field="employee_number" monospace />
+                    <x-ui.edit-in-place.text id="employee-full-name" :label="__('Full Name')" :value="$employee->full_name" field="full_name" />
+                    <x-ui.edit-in-place.text id="employee-short-name" :label="__('Short Name')" :value="$employee->short_name" field="short_name" />
+                    <x-ui.edit-in-place.text id="employee-number" :label="__('Employee Number')" :value="$employee->employee_number" field="employee_number" monospace />
                     @if($employee->isAgent())
-                        <x-ui.edit-in-place.textarea :label="__('Job Description')" :value="$employee->job_description" field="job_description" rows="2" />
+                        <x-ui.edit-in-place.textarea id="employee-job-description" :label="__('Job Description')" :value="$employee->job_description" field="job_description" rows="2" />
                     @endif
-                    <x-ui.edit-in-place.text :label="__('Designation')" :value="$employee->designation" field="designation" />
-                    <x-ui.edit-in-place.text :label="__('Email')" :value="$employee->email" field="email" type="email" />
-                    <x-ui.edit-in-place.text :label="__('Mobile Number')" :value="$employee->mobile_number" field="mobile_number" />
+                    <x-ui.edit-in-place.text id="employee-designation" :label="__('Designation')" :value="$employee->designation" field="designation" />
+                    <x-ui.edit-in-place.text id="employee-email" :label="__('Email')" :value="$employee->email" field="email" type="email" />
+                    <x-ui.edit-in-place.text id="employee-mobile-number" :label="__('Mobile Number')" :value="$employee->mobile_number" field="mobile_number" />
                 </dl>
         </x-ui.card>
 
@@ -40,6 +40,7 @@
                         <dd class="text-sm text-ink px-1 -mx-1 py-0.5">{{ $employee->company?->name ?? '-' }}</dd>
                     </div>
                     <x-ui.edit-in-place.select
+                        id="employee-department"
                         :label="__('Department')"
                         :value="$employee->department_id"
                         save-method="saveDepartment"
@@ -55,6 +56,7 @@
                         @endforeach
                     </x-ui.edit-in-place.select>
                     <x-ui.edit-in-place.select
+                        id="employee-supervisor"
                         :label="__('Supervisor')"
                         :value="$employee->supervisor_id"
                         save-method="saveSupervisor"
@@ -69,7 +71,7 @@
                             <option value="{{ $sup->id }}">{{ $sup->full_name }}</option>
                         @endforeach
                     </x-ui.edit-in-place.select>
-                    <x-ui.edit-in-place.select :label="__('Employee Type')" :value="$employee->employee_type" save-method="saveEmployeeType">
+                    <x-ui.edit-in-place.select id="employee-type" :label="__('Employee Type')" :value="$employee->employee_type" save-method="saveEmployeeType">
                         <x-slot name="read">
                             @if($employee->isAgent())
                                 <x-ui.badge variant="info">{{ __('Agent') }}</x-ui.badge>
@@ -89,7 +91,7 @@
                             @endforeach
                         </optgroup>
                     </x-ui.edit-in-place.select>
-                    <x-ui.edit-in-place.select :label="__('Status')" :value="$employee->status" save-method="saveStatus">
+                    <x-ui.edit-in-place.select id="employee-status" :label="__('Status')" :value="$employee->status" save-method="saveStatus">
                         <x-slot name="read">
                             <x-ui.badge :variant="match($employee->status) {
                                 'active' => 'success',
@@ -107,6 +109,7 @@
                     </x-ui.edit-in-place.select>
                     @if(!$employee->isAgent())
                     <x-ui.edit-in-place.select
+                        id="employee-user"
                         :label="__('User')"
                         :value="$employee->user_id"
                         save-method="saveUser"
@@ -143,21 +146,22 @@
                     {{ __('Subordinates') }}
                     <x-ui.badge>{{ $employee->subordinates->count() }}</x-ui.badge>
                 </h3>
-                <div x-data="{ adding: false, selected: '' }">
+                    <div x-data="{ adding: false, selected: '' }">
                     <x-ui.button x-show="!adding" variant="primary" size="sm" @click="adding = true">
                         <x-icon name="heroicon-o-plus" class="w-4 h-4" />
                         {{ __('Add') }}
                     </x-ui.button>
                     <div x-show="adding" class="flex items-center gap-2">
-                        <select
+                        <x-ui.select
+                            id="employee-subordinate-select"
                             x-model="selected"
-                            class="px-2 py-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent"
+                            class="min-w-52"
                         >
                             <option value="">{{ __('Select employee...') }}</option>
                             @foreach($availableSubordinates as $avail)
                                 <option value="{{ $avail->id }}">{{ $avail->full_name }}</option>
                             @endforeach
-                        </select>
+                        </x-ui.select>
                         <x-ui.button variant="primary" size="sm" @click="if (selected) { $wire.addSubordinate(parseInt(selected, 10)); selected = ''; adding = false; }">
                             {{ __('Assign') }}
                         </x-ui.button>
@@ -331,14 +335,14 @@
                                     </div>
                                     <div x-show="editing" class="space-y-1">
                                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
-                                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                                <input type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input accent-accent focus:ring-accent" />
+                                            <label for="employee-address-kind-{{ $address->id }}-{{ $kindOption }}" class="flex items-center gap-2 text-sm cursor-pointer">
+                                                <input id="employee-address-kind-{{ $address->id }}-{{ $kindOption }}" type="checkbox" value="{{ $kindOption }}" x-model="selected" class="rounded border-border-input accent-accent focus:ring-accent" />
                                                 {{ __(ucfirst($kindOption)) }}
                                             </label>
                                         @endforeach
                                         <div class="flex items-center gap-2 mt-1">
-                                            <button @click="$wire.saveAddressKinds({{ $address->id }}, selected); editing = false" class="px-2 py-0.5 text-xs font-medium rounded bg-accent text-accent-on hover:bg-accent-hover transition-colors">{{ __('Save') }}</button>
-                                            <button @click="editing = false; selected = @js($address->pivot->kind ?? [])" class="px-2 py-0.5 text-xs font-medium rounded hover:bg-surface-subtle text-muted transition-colors">{{ __('Cancel') }}</button>
+                                            <x-ui.button size="sm" @click="$wire.saveAddressKinds({{ $address->id }}, selected); editing = false">{{ __('Save') }}</x-ui.button>
+                                            <x-ui.button size="sm" variant="ghost" @click="editing = false; selected = @js($address->pivot->kind ?? [])">{{ __('Cancel') }}</x-ui.button>
                                         </div>
                                     </div>
                                 </td>
@@ -364,6 +368,7 @@
                                         <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5 text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
                                     </div>
                                     <input
+                                        id="employee-address-priority-{{ $address->id }}"
                                         x-show="editing"
                                         x-ref="input"
                                         x-model="val"
@@ -414,8 +419,8 @@
                     <span class="block text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Kind') }}</span>
                     <div class="flex flex-wrap gap-x-4 gap-y-1">
                         @foreach(['headquarters', 'billing', 'shipping', 'branch', 'other'] as $kindOption)
-                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="checkbox" value="{{ $kindOption }}" wire:model="attachKind" class="rounded border-border-input accent-accent focus:ring-accent" />
+                            <label for="employee-attach-kind-{{ $kindOption }}" class="flex items-center gap-2 text-sm cursor-pointer">
+                                <input id="employee-attach-kind-{{ $kindOption }}" type="checkbox" value="{{ $kindOption }}" wire:model="attachKind" class="rounded border-border-input accent-accent focus:ring-accent" />
                                 {{ __(ucfirst($kindOption)) }}
                             </label>
                         @endforeach
