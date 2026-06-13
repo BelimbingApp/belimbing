@@ -16,7 +16,9 @@ afterEach(function (): void {
     $file = base_path(INCUBATING_SCHEMA_TEST_DIR.'/'.INCUBATING_SCHEMA_TEST_FILE);
     $dir = dirname($file);
 
+    Schema::dropIfExists(INCUBATING_SCHEMA_TEST_TABLE);
     TableRegistry::query()->where('table_name', INCUBATING_SCHEMA_TEST_TABLE)->delete();
+    DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FILE_NAME)->delete();
 
     if (is_file($file)) {
         @unlink($file);

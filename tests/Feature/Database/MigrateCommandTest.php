@@ -12,6 +12,7 @@ test('migration commands discover extension migration paths and preserve explici
     $owner = 'zz-migration-discovery-'.bin2hex(random_bytes(4));
     $relativePath = 'extensions/'.$owner.'/sample/Database/Migrations';
     $extensionPath = base_path($relativePath);
+    $normalize = static fn (string $path): string => str_replace('\\', '/', $path);
 
     File::ensureDirectoryExists($extensionPath);
 
@@ -30,8 +31,8 @@ test('migration commands discover extension migration paths and preserve explici
             return $this->getMigrationPaths();
         };
 
-        expect($pathsFor->call($command, []))->toContain($extensionPath)
-            ->and($pathsFor->call($command, ['--path' => [$relativePath]]))->toBe([$extensionPath]);
+        expect(array_map($normalize, $pathsFor->call($command, [])))->toContain($normalize($extensionPath))
+            ->and(array_map($normalize, $pathsFor->call($command, ['--path' => [$relativePath]])))->toBe([$normalize($extensionPath)]);
     } finally {
         File::deleteDirectory(base_path('extensions/'.$owner));
     }

@@ -46,7 +46,7 @@ it('hides BLB exception internals in non-debug JSON responses', function (): voi
 
     $response->assertStatus(500)
         ->assertJsonPath('reason_code', AIErrorCode::LARA_PROMPT_CONTEXT_ENCODE_FAILED->value)
-        ->assertJsonPath('message', 'An internal framework error occurred.');
+        ->assertJsonPath('message', 'An internal Belimbing error occurred.');
 
     expect($response->json())->not->toHaveKey('context');
 });
@@ -67,7 +67,7 @@ it('reports BLB exceptions with structured log metadata', function (): void {
 
     Log::shouldHaveReceived('error')
         ->withArgs(function (string $message, array $context): bool {
-            return $message === 'BLB framework exception'
+            return $message === 'BLB platform exception'
                 && $context['reason_code'] === AIErrorCode::LARA_PROMPT_RESOURCE_MISSING->value
                 && $context['context'] === ['path' => '/tmp/system_prompt.md']
                 && is_string($context['exception']);

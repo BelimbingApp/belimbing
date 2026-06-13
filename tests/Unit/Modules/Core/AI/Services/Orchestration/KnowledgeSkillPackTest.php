@@ -20,7 +20,7 @@ it('builds a valid manifest with correct identity', function (): void {
 
     expect($manifest->id)->toBe(KNOWLEDGE_PACK_ID)
         ->and($manifest->version)->toBe('1.0.0')
-        ->and($manifest->name)->toBe('Belimbing Framework Knowledge')
+        ->and($manifest->name)->toBe('Belimbing Platform Knowledge')
         ->and($manifest->status)->toBe(SkillPackStatus::Ready)
         ->and($manifest->owner)->toBe('Core AI');
 });
@@ -42,8 +42,8 @@ it('includes framework reference grounding prompt', function (): void {
 
     $prompt = $manifest->promptResources[0];
 
-    expect($prompt->label)->toBe('framework-knowledge-grounding')
-        ->and($prompt->content)->toContain('Belimbing Framework References')
+    expect($prompt->label)->toBe('platform-knowledge-grounding')
+        ->and($prompt->content)->toContain('Belimbing Platform References')
         ->and($prompt->content)->toContain(KNOWLEDGE_PACK_TOOL_BINDING)
         ->and($prompt->order)->toBe(200);
 });
