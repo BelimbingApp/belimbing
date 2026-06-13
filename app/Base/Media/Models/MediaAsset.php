@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Media\Models;
 
 use DateInterval;
@@ -33,6 +34,13 @@ use Illuminate\Support\Facades\URL;
 class MediaAsset extends Model
 {
     public const KIND_ORIGINAL = 'original';
+
+    /**
+     * Sentinel disk for assets that are external links (the bytes live elsewhere,
+     * e.g. an eBay-hosted image URL captured during listing adoption). Such assets
+     * carry the URL in metadata.public_url and have no streamable stored file.
+     */
+    public const DISK_EXTERNAL = 'external';
 
     protected $table = 'base_media_assets';
 
@@ -76,6 +84,22 @@ class MediaAsset extends Model
         $expires = is_int($expiresIn) ? now()->addMinutes($expiresIn) : now()->add($expiresIn);
 
         return URL::temporarySignedRoute('media.assets.stream', $expires, ['asset' => $this->id]);
+    }
+
+    /**
+     * URL to render this asset in an <img>. External (link-only) assets return
+     * their stored public URL directly; stored-file assets get a short-lived
+     * signed stream URL. Centralizes the choice so views never special-case it.
+     */
+    public function displayUrl(int|DateInterval $expiresIn = 5): string
+    {
+        $publicUrl = data_get($this->metadata, 'public_url');
+
+        if ($this->disk === self::DISK_EXTERNAL && is_string($publicUrl) && $publicUrl !== '') {
+            return $publicUrl;
+        }
+
+        return $this->streamUrl($expiresIn);
     }
 
     /**
