@@ -1,8 +1,44 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools\Concerns;
 
 trait BuildsSurfaceToolPayload
 {
+    /**
+     * @param  list<string>  $targets
+     * @return array{type: string, description: string, enum: list<string>}
+     */
+    protected function repositoryTargetSchema(string $verb, array $targets = ['file', 'data']): array
+    {
+        return [
+            'type' => 'string',
+            'description' => $verb.' target: "file" or "data". Defaults to "file".',
+            'enum' => $targets,
+        ];
+    }
+
+    /**
+     * @return array{type: string, description: string}
+     */
+    protected function repositoryFilePathSchema(): array
+    {
+        return [
+            'type' => 'string',
+            'description' => 'Path relative to the selected target surface when target is "file".',
+        ];
+    }
+
+    /**
+     * @return array{type: string, description: string}
+     */
+    protected function repositorySurfaceSchema(string $operation): array
+    {
+        return [
+            'type' => 'string',
+            'description' => 'Repository ownership surface for file '.$operation.': "core" or "extension:<slug>". Defaults to "core".',
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $arguments
      * @return array{file_path: string, target_surface: string}

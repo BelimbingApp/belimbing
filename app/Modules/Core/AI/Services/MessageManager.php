@@ -458,7 +458,7 @@ class MessageManager
                 'model' => $run->model ?? 'unknown',
             ],
             'latency_ms' => $run->latency_ms,
-            'ai_active_duration_ms' => $this->aiActiveDurationMs($run),
+            'ai_active_duration_ms' => app(AiRunDurations::class)->activeMilliseconds($run),
             'tokens' => [
                 'prompt' => $run->prompt_tokens,
                 'completion' => $run->completion_tokens,
@@ -522,25 +522,5 @@ class MessageManager
         }
 
         return $persisted;
-    }
-
-    private function aiActiveDurationMs(AiRun $run): ?int
-    {
-        $firstCall = $run->calls()
-            ->whereNotNull('started_at')
-            ->reorder()
-            ->orderBy('started_at')
-            ->first(['started_at']);
-        $lastCall = $run->calls()
-            ->whereNotNull('finished_at')
-            ->reorder()
-            ->orderByDesc('finished_at')
-            ->first(['finished_at']);
-
-        if ($firstCall?->started_at === null || $lastCall?->finished_at === null) {
-            return null;
-        }
-
-        return max(0, (int) $firstCall->started_at->diffInMilliseconds($lastCall->finished_at));
     }
 }

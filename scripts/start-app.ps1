@@ -234,7 +234,7 @@ function Ensure-TrustedLocalHttps {
 function Trust-LocalCaddyRootCertificate {
     param(
         [Parameter(Mandatory = $true)]
-        [int] $TimeoutSeconds = 10
+        [int] $TimeoutSeconds
     )
 
     $rootCertificatePath = ''

@@ -34,19 +34,9 @@ class ReadTool extends AbstractTool
         return [
             'type' => 'object',
             'properties' => [
-                'target' => [
-                    'type' => 'string',
-                    'description' => 'Read target: "file" or "data". Defaults to "file".',
-                    'enum' => ['file', 'data'],
-                ],
-                'file_path' => [
-                    'type' => 'string',
-                    'description' => 'Path relative to the selected target surface when target is "file".',
-                ],
-                'target_surface' => [
-                    'type' => 'string',
-                    'description' => 'Repository ownership surface for file reads: "core" or "extension:<slug>". Defaults to "core".',
-                ],
+                'target' => $this->repositoryTargetSchema('Read'),
+                'file_path' => $this->repositoryFilePathSchema(),
+                'target_surface' => $this->repositorySurfaceSchema('reads'),
                 'query' => [
                     'type' => 'string',
                     'description' => 'Read-only SQL SELECT or WITH query when target is "data".',

@@ -8,6 +8,8 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const INTEGRATION_PARAMETERS_ACCOUNT_ID = '2af6a339c8a67f16e5af307db0b3b281';
+
 beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
     setupAuthzRoles();
@@ -52,18 +54,18 @@ test('a text parameter stays readable and the entry modal prefills it', function
         ->set('newSystem', 'cloudflare')
         ->set('newName', 'account_id')
         ->set('newType', 'text')
-        ->set('newValue', '2af6a339c8a67f16e5af307db0b3b281')
+        ->set('newValue', INTEGRATION_PARAMETERS_ACCOUNT_ID)
         ->call('addParameter')
         ->assertHasNoErrors()
         // text parameters display their value — that is the point of the type
-        ->assertSee('2af6a339c8a67f16e5af307db0b3b281');
+        ->assertSee(INTEGRATION_PARAMETERS_ACCOUNT_ID);
 
     expect(Setting::query()->where('key', 'integrations.cloudflare.account_id')->firstOrFail()->is_encrypted)->toBeFalse();
 
     Livewire::test(IntegrationParametersIndex::class)
         ->call('openEntry', 'integrations.cloudflare.account_id')
         ->assertSet('entryModalOpen', true)
-        ->assertSet('entryValue', '2af6a339c8a67f16e5af307db0b3b281')
+        ->assertSet('entryValue', INTEGRATION_PARAMETERS_ACCOUNT_ID)
         ->set('entryValue', 'new-account-id')
         ->call('saveEntry')
         ->assertHasNoErrors()

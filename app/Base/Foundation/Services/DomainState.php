@@ -54,8 +54,14 @@ class DomainState
 
         $decoded = json_decode((string) file_get_contents($path), true);
 
+        if (is_array($decoded)) {
+            $decodedDisabled = $decoded['disabled'] ?? [];
+        } else {
+            $decodedDisabled = [];
+        }
+
         $disabled = array_values(array_filter(
-            is_array($decoded) ? ($decoded['disabled'] ?? []) : [],
+            $decodedDisabled,
             fn ($domain): bool => is_string($domain) && $domain !== '',
         ));
 

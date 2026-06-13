@@ -2,19 +2,16 @@
 
 namespace App\Modules\Core\AI\Livewire\Setup;
 
-use App\Base\Support\File as BlbFile;
-use App\Base\Support\Json as BlbJson;
-use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraInteractiveToolSet;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
+use App\Modules\Core\AI\Services\LaraWorkspaceSlotManager;
 use App\Modules\Core\AI\Services\ToolMetadataRegistry;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
@@ -32,8 +29,6 @@ use Livewire\Component;
  */
 class Lara extends Component
 {
-    private const AUDIT_SUFFIX = '.audit.json';
-
     public ?string $editingSlot = null;
 
     public string $editingContent = '';
@@ -67,19 +62,9 @@ class Lara extends Component
             return;
         }
 
-        $manifest = app(WorkspaceResolver::class)->resolve(Employee::LARA_ID);
-        $entry = $manifest->entry($slotEnum);
-
-        if ($entry === null || ! $entry->exists) {
+        if (! app(LaraWorkspaceSlotManager::class)->copyFrameworkDefaultToWorkspace($slotEnum)) {
             return;
         }
-
-        $content = is_file($entry->path) ? (string) file_get_contents($entry->path) : '';
-        $workspaceTarget = rtrim($manifest->workspacePath, '/').'/'.$slotEnum->filename();
-
-        BlbFile::ensureDirectory($manifest->workspacePath);
-        BlbFile::put($workspaceTarget, $content);
-        $this->writeAuditEntry($slotEnum, strlen($content));
 
         $this->openSlotEditor($slot);
     }
@@ -107,10 +92,7 @@ class Lara extends Component
             return;
         }
 
-        $workspacePath = $this->workspacePath();
-        BlbFile::ensureDirectory($workspacePath);
-        BlbFile::put($workspacePath.'/'.$slotEnum->filename(), $this->editingContent);
-        $this->writeAuditEntry($slotEnum, strlen($this->editingContent));
+        app(LaraWorkspaceSlotManager::class)->writeSlot($slotEnum, $this->editingContent);
 
         Session::flash('success', __(':slot saved.', ['slot' => __($slotEnum->value)]));
         $this->closeSlotEditor();
@@ -127,17 +109,10 @@ class Lara extends Component
             return;
         }
 
-        $workspacePath = $this->workspacePath();
-        $workspaceFile = $workspacePath.'/'.$slotEnum->filename();
-        $auditFile = $workspacePath.'/'.$slotEnum->filename().self::AUDIT_SUFFIX;
+        $deleted = app(LaraWorkspaceSlotManager::class)->deleteSlotOverride($slotEnum);
 
-        if (is_file($workspaceFile)) {
-            @unlink($workspaceFile);
+        if ($deleted) {
             Session::flash('success', __(':slot reverted to framework default.', ['slot' => __($slotEnum->value)]));
-        }
-
-        if (is_file($auditFile)) {
-            @unlink($auditFile);
         }
     }
 
@@ -175,30 +150,7 @@ class Lara extends Component
      */
     public function getAssembledPreviewProperty(): string
     {
-        if ($this->editingSlot === null) {
-            return '';
-        }
-
-        $manifest = app(WorkspaceResolver::class)->resolve(Employee::LARA_ID);
-        $sections = [];
-
-        foreach (WorkspaceFileSlot::inLoadOrder() as $slot) {
-            if (! $slot->isPromptContent()) {
-                continue;
-            }
-
-            $content = $slot->value === $this->editingSlot
-                ? $this->editingContent
-                : $this->readSlotContent($manifest, $slot);
-
-            if (trim($content) === '') {
-                continue;
-            }
-
-            $sections[] = '## '.ucfirst(str_replace('_', ' ', $slot->value))."\n\n".rtrim($content);
-        }
-
-        return implode("\n\n", $sections);
+        return app(LaraWorkspaceSlotManager::class)->assembledPreview($this->editingSlot, $this->editingContent);
     }
 
     /**
@@ -209,17 +161,7 @@ class Lara extends Component
      */
     public function getEditorWarningsProperty(): array
     {
-        if ($this->editingSlot === null) {
-            return [];
-        }
-
-        $slotEnum = WorkspaceFileSlot::tryFrom($this->editingSlot);
-
-        if ($slotEnum === null) {
-            return [];
-        }
-
-        return $this->lintSlotContent($slotEnum, $this->editingContent);
+        return app(LaraWorkspaceSlotManager::class)->editorWarnings($this->editingSlot, $this->editingContent);
     }
 
     public function render(): View
@@ -237,7 +179,7 @@ class Lara extends Component
 
         if ($laraExists) {
             $manifest = app(WorkspaceResolver::class)->resolve(Employee::LARA_ID);
-            $slots = $this->buildSlotRows($manifest);
+            $slots = app(LaraWorkspaceSlotManager::class)->slotRows($manifest);
         }
 
         $taskSummaries = $laraActivated ? $this->buildTaskSummaries($resolver) : [];
@@ -264,50 +206,11 @@ class Lara extends Component
             return;
         }
 
-        $manifest = app(WorkspaceResolver::class)->resolve(Employee::LARA_ID);
-        $entry = $manifest->entry($slotEnum);
+        $content = app(LaraWorkspaceSlotManager::class)->editorContent($slotEnum);
 
         $this->editingSlot = $slot;
-        $this->editingContent = ($entry !== null && $entry->exists && is_file($entry->path))
-            ? (string) file_get_contents($entry->path)
-            : '';
+        $this->editingContent = $content;
         $this->showEditorModal = true;
-    }
-
-    private function workspacePath(): string
-    {
-        return rtrim((string) config('ai.workspace_path'), '/').'/'.Employee::LARA_ID;
-    }
-
-    /**
-     * @return list<array{slot: string, label: string, source: string, exists: bool, byteSize: int|null, isOverridden: bool, audit: array<string, mixed>|null}>
-     */
-    private function buildSlotRows(WorkspaceManifest $manifest): array
-    {
-        $rows = [];
-
-        foreach (WorkspaceFileSlot::inLoadOrder() as $slot) {
-            if (! $slot->isPromptContent()) {
-                continue;
-            }
-
-            $entry = $manifest->entry($slot);
-            $exists = $entry !== null && $entry->exists;
-            $source = $entry?->source ?? 'missing';
-
-            $rows[] = [
-                'slot' => $slot->value,
-                'label' => __(ucfirst(str_replace('_', ' ', $slot->value))),
-                'filename' => $slot->filename(),
-                'source' => $source,
-                'exists' => $exists,
-                'isOverridden' => $source === 'workspace',
-                'byteSize' => $entry?->size,
-                'audit' => $source === 'workspace' ? $this->readAuditEntry($slot) : null,
-            ];
-        }
-
-        return $rows;
     }
 
     /**
@@ -392,91 +295,5 @@ class Lara extends Component
             'enabled' => $enabled,
             'isDefault' => $isDefault,
         ];
-    }
-
-    private function readSlotContent(WorkspaceManifest $manifest, WorkspaceFileSlot $slot): string
-    {
-        $entry = $manifest->entry($slot);
-
-        if ($entry === null || ! $entry->exists || ! is_string($entry->path) || ! is_file($entry->path)) {
-            return '';
-        }
-
-        return (string) file_get_contents($entry->path);
-    }
-
-    /**
-     * Persist a minimal audit record for an overridden slot (last editor + time + bytes).
-     */
-    private function writeAuditEntry(WorkspaceFileSlot $slot, int $byteSize): void
-    {
-        $user = auth()->user();
-        $payload = [
-            'user_id' => $user instanceof User ? $user->id : null,
-            'user_name' => $user instanceof User ? $user->name : null,
-            'edited_at' => now()->toIso8601String(),
-            'byte_size' => $byteSize,
-        ];
-
-        BlbFile::put(
-            $this->workspacePath().'/'.$slot->filename().self::AUDIT_SUFFIX,
-            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-        );
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function readAuditEntry(WorkspaceFileSlot $slot): ?array
-    {
-        $path = $this->workspacePath().'/'.$slot->filename().self::AUDIT_SUFFIX;
-
-        if (! is_file($path)) {
-            return null;
-        }
-
-        $raw = file_get_contents($path);
-
-        if ($raw === false || $raw === '') {
-            return null;
-        }
-
-        $decoded = BlbJson::decodeArray($raw);
-
-        return $decoded === [] ? null : $decoded;
-    }
-
-    /**
-     * Cheap, non-blocking checks. Returns a list of warning strings to surface
-     * inline beneath the editor.
-     *
-     * @return list<string>
-     */
-    private function lintSlotContent(WorkspaceFileSlot $slot, string $content): array
-    {
-        $warnings = [];
-        $trimmed = trim($content);
-
-        if ($slot->isRequired() && $trimmed === '') {
-            $warnings[] = __(':slot is a required slot — saving an empty file will break Lara at runtime.', [
-                'slot' => $slot->value,
-            ]);
-        }
-
-        if ($slot === WorkspaceFileSlot::SystemPrompt && strlen($trimmed) < 100 && $trimmed !== '') {
-            $warnings[] = __('System prompt is unusually short (:len bytes). Lara may lose identity, safety, or orchestration guidance.', [
-                'len' => strlen($trimmed),
-            ]);
-        }
-
-        $openCodeFences = preg_match_all('/^```/m', $content);
-
-        if ($openCodeFences !== false && $openCodeFences % 2 !== 0) {
-            $warnings[] = __('Unbalanced ``` code fences (:count fence markers). Markdown rendering may break.', [
-                'count' => $openCodeFences,
-            ]);
-        }
-
-        return $warnings;
     }
 }

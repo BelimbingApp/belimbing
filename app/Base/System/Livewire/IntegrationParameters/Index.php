@@ -210,11 +210,15 @@ class Index extends SearchablePaginatedList
         $settings = app(SettingsService::class);
         $value = (string) $settings->get($row->key, '');
 
+        if ($row->is_encrypted) {
+            $display = $value === '' ? '' : '••••'.substr($value, -4);
+        } else {
+            $display = $value;
+        }
+
         return [
             'secret' => (bool) $row->is_encrypted,
-            'display' => $row->is_encrypted
-                ? ($value === '' ? '' : '••••'.substr($value, -4))
-                : $value,
+            'display' => $display,
             'description' => (string) $settings->get($row->key.self::DESCRIPTION_SUFFIX, ''),
         ];
     }

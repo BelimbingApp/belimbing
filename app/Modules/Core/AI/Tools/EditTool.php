@@ -34,15 +34,8 @@ class EditTool extends AbstractTool
         return [
             'type' => 'object',
             'properties' => [
-                'target' => [
-                    'type' => 'string',
-                    'description' => 'Edit target: "file" or "data". Defaults to "file".',
-                    'enum' => ['file', 'data'],
-                ],
-                'file_path' => [
-                    'type' => 'string',
-                    'description' => 'Path relative to the selected target surface when target is "file".',
-                ],
+                'target' => $this->repositoryTargetSchema('Edit'),
+                'file_path' => $this->repositoryFilePathSchema(),
                 'operation' => [
                     'type' => 'string',
                     'description' => 'File operation: "write", "append", or "replace". Defaults to "write".',
@@ -60,10 +53,7 @@ class EditTool extends AbstractTool
                     'type' => 'string',
                     'description' => 'Replacement file text when operation is "replace".',
                 ],
-                'target_surface' => [
-                    'type' => 'string',
-                    'description' => 'Repository ownership surface for file edits: "core" or "extension:<slug>". Defaults to "core".',
-                ],
+                'target_surface' => $this->repositorySurfaceSchema('edits'),
                 'statement' => [
                     'type' => 'string',
                     'description' => 'SQL INSERT, UPDATE, or DELETE statement when target is "data".',

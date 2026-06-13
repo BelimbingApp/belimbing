@@ -34,14 +34,23 @@ function decodeEditFileToolResult(mixed $result): array
     return $decoded;
 }
 
+function executeEditFileTool(EditFileTool $tool, array $arguments): array|string
+{
+    $result = $tool->execute($arguments);
+
+    if (str_starts_with((string) $result, 'Error')) {
+        return (string) $result;
+    }
+
+    return decodeEditFileToolResult($result);
+}
+
 it('creates files under a new parent directory', function () {
-    $result = $this->tool->execute([
+    $payload = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_TEST_FILE,
         'content' => 'hello world',
         'operation' => 'write',
     ]);
-
-    $payload = decodeEditFileToolResult($result);
 
     expect($payload['summary'])->toContain('Created '.EDIT_FILE_TOOL_TEST_FILE)
         ->and($payload['target_surface'])->toBe('core')
@@ -60,13 +69,11 @@ it('creates files under a new parent directory', function () {
 it('returns structured append metadata with appended content preview', function () {
     File::put(base_path(EDIT_FILE_TOOL_TEST_FILE), "one\n");
 
-    $result = $this->tool->execute([
+    $payload = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_TEST_FILE,
         'content' => 'two',
         'operation' => 'append',
     ]);
-
-    $payload = decodeEditFileToolResult($result);
 
     expect($payload['summary'])->toContain('Appended 3 bytes')
         ->and($payload['operation'])->toBe('append')
@@ -80,7 +87,7 @@ it('returns structured append metadata with appended content preview', function 
 it('returns an error when writing to a directory path', function () {
     File::ensureDirectoryExists(base_path(EDIT_FILE_TOOL_DIRECTORY_TARGET));
 
-    $result = $this->tool->execute([
+    $result = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_DIRECTORY_TARGET,
         'content' => 'cannot write here',
         'operation' => 'write',
@@ -93,7 +100,7 @@ it('returns an error when writing to a directory path', function () {
 it('returns an error when appending to a directory path', function () {
     File::ensureDirectoryExists(base_path(EDIT_FILE_TOOL_DIRECTORY_TARGET));
 
-    $result = $this->tool->execute([
+    $result = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_DIRECTORY_TARGET,
         'content' => 'cannot append here',
         'operation' => 'append',
@@ -106,14 +113,12 @@ it('returns an error when appending to a directory path', function () {
 it('performs targeted replacement edits', function () {
     File::put(base_path(EDIT_FILE_TOOL_TEST_FILE), "one\ntwo\nthree\n");
 
-    $result = $this->tool->execute([
+    $payload = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_TEST_FILE,
         'operation' => 'replace',
         'old_content' => "two\n",
         'new_content' => "TWO\n",
     ]);
-
-    $payload = decodeEditFileToolResult($result);
 
     expect($payload['summary'])->toContain('targeted replacement')
         ->and($payload['operation'])->toBe('replace')
@@ -129,13 +134,11 @@ it('performs targeted replacement edits', function () {
 it('caps large edit previews', function () {
     $content = str_repeat('large-preview-line'.PHP_EOL, 1200);
 
-    $result = $this->tool->execute([
+    $payload = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_TEST_FILE,
         'content' => $content,
         'operation' => 'write',
     ]);
-
-    $payload = decodeEditFileToolResult($result);
 
     expect($payload['diff_truncated'])->toBeTrue()
         ->and(strlen($payload['diff_preview']))->toBeGreaterThan(12000)
@@ -144,7 +147,7 @@ it('caps large edit previews', function () {
 });
 
 it('blocks extension paths when target surface is core', function () {
-    $result = $this->tool->execute([
+    $result = executeEditFileTool($this->tool, [
         'file_path' => EDIT_FILE_TOOL_EXTENSION_DIRECTORY.'/sample.txt',
         'content' => 'wrong surface',
         'operation' => 'write',
@@ -156,14 +159,12 @@ it('blocks extension paths when target surface is core', function () {
 });
 
 it('writes inside selected extension surface', function () {
-    $result = $this->tool->execute([
+    $payload = executeEditFileTool($this->tool, [
         'file_path' => 'sample.txt',
         'content' => 'extension owned',
         'operation' => 'write',
         'target_surface' => 'extension:edit-file-test',
     ]);
-
-    $payload = decodeEditFileToolResult($result);
 
     expect($payload['target_surface'])->toBe('extension:edit-file-test')
         ->and($payload['file_path'])->toBe('extensions/custom/edit-file-test/sample.txt')
