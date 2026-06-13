@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Livewire\Workflows;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -164,6 +165,31 @@ class Show extends Component
             ->findOrFail($statusId);
 
         $this->saveValidatedField($status, $field, $value, $rules);
+    }
+
+    public function saveStatusListField(string $fieldKey, mixed $value): void
+    {
+        [$statusId, $field] = array_pad(explode('|', $fieldKey, 2), 2, null);
+
+        if (! is_numeric($statusId) || ! in_array($field, ['pic', 'notifications'], true)) {
+            return;
+        }
+
+        $items = collect(explode(',', (string) $value))
+            ->map(fn (string $item): string => trim($item))
+            ->filter(fn (string $item): bool => $item !== '')
+            ->values()
+            ->all();
+
+        $payload = match ($field) {
+            'pic' => $items === [] ? null : $items,
+            'notifications' => $items === [] ? null : [
+                'on_enter' => $items,
+                'channels' => ['database'],
+            ],
+        };
+
+        $this->saveStatusField((int) $statusId, $field, $payload);
     }
 
     /**

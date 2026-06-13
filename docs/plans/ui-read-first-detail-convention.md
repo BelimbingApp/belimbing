@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Last Updated:** 2026-06-13
-**Sources:** `DESIGN.md`, `resources/core/views/AGENTS.md`, `docs/plans/ui-reference-catalog.md`, `resources/core/views/livewire/admin/system/ui-reference/partials/interaction-patterns.blade.php`, `resources/core/views/livewire/admin/addresses/show.blade.php`
+**Sources:** `DESIGN.md`, `resources/core/views/AGENTS.md`, `docs/plans/ui-reference-catalog.md`, `resources/core/views/livewire/admin/system/ui-reference/partials/interaction-patterns.blade.php`, `resources/core/views/livewire/admin/addresses/show.blade.php`, `resources/core/views`, `app/Modules/**/Views`, `extensions/**/Views`
 **Agents:** Codex/GPT-5
 
 ## Problem Essence
@@ -62,6 +62,38 @@ Current read-first/detail candidates found by scanning `resources/core/views`, w
 - `resources/core/views/livewire/admin/system/database-backups/index.blade.php` — settings/index-style surface, intentionally outside the detail-page migration.
 - `resources/core/views/livewire/admin/companies/partials/company-addresses.blade.php` — address create/edit modals stay form-first; table pivot edits align with the shared micro-editor treatment; Company timezone now reads as a fact first and opens an in-place combobox that persists on selection without a save button.
 
+### 2026-06-13 Follow-Up Sweep
+
+Roots swept in this pass:
+
+- `resources/core/views/**/*.blade.php`
+- `app/Modules/**/Views/**/*.blade.php`
+- `extensions/**/Views/**/*.blade.php`
+
+Affected Blade files and dispositions from the sweep:
+
+| Blade file | Disposition |
+|---|---|
+| `resources/core/views/livewire/ai/chat.blade.php` | Implemented. Session title editing is a true inline edit: Enter/blur saves, Escape cancels, and the title suggestion remains a separate icon action. |
+| `resources/core/views/livewire/admin/workflows/show.blade.php` | Implemented. PIC and Notify now use shared edit-in-place text fields with a Livewire adapter that stores comma-separated input as the existing arrays. |
+| `app/Modules/Operation/IT/Views/livewire/it/tickets/show.blade.php` | No immediate drift. Ticket facts are read-first; transition comment and transition buttons are workflow actions. If status, priority, category, or assignee become editable outside transitions, use field-level select/combobox edit-in-place. |
+| `app/Modules/Operation/Quality/Views/livewire/quality/ncr/show.blade.php` | Implemented. Stage-specific triage, assignment, CAPA, and review payloads now read as summaries first and open grouped draft editors; transition buttons remain explicit workflow actions. |
+| `app/Modules/Operation/Quality/Views/livewire/quality/scar/show.blade.php` | Implemented. Supplier response payloads now read first and open grouped draft editors; evidence upload and transition buttons remain explicit workflows. |
+| `extensions/sb-group/ibp/Views/livewire/data-entry/raw-material-cost.blade.php` | No immediate drift. Editable numeric cells already use field-level edit-in-place. |
+| `extensions/sb-group/ibp/Views/livewire/settings/assumption-settings.blade.php` | No immediate drift. Formula constants already use field-level edit-in-place. |
+| `extensions/sb-group/ibp/Views/livewire/settings/safety-stock-settings.blade.php` | Implemented. Policy rows remain readable while a grouped editor expands below the row; Apply/Cancel remains because the policy fields are coupled. |
+| `extensions/sb-group/ibp/Views/livewire/projection/monthly-board.blade.php` | Implemented. Historical actual close entry now uses field-level edit-in-place with direct persistence. |
+| `extensions/sb-group/ibp/Views/livewire/pricing/decision-support.blade.php` | Implemented. BA cost and selling price read first and use grouped editors for value-plus-notes; coating cost uses field-level edit-in-place. |
+| `extensions/sb-group/ibp/Views/livewire/pricing/margin-review.blade.php` | No immediate drift. Editable finance/pricing cells already use field-level edit-in-place. |
+| `extensions/sb-group/ibp/Views/livewire/planning/sales-forecast-entry.blade.php` | Decision recorded. Leave as an intentional form-first data-entry grid for now; revisit table-cell edit-in-place only if existing-row corrections become a frequent workflow. |
+| `extensions/sb-group/ibp/Views/livewire/planning/production-usage.blade.php` | Decision recorded. Leave as an intentional form-first feedback-entry grid for now; revisit table-cell edit-in-place only if existing-row corrections become a frequent workflow. |
+| `extensions/sb-group/ibp/Views/livewire/planning/weekly-grid.blade.php` | No immediate drift. Alert acknowledgement requires a note plus a confirm action, so explicit Confirm/Cancel remains appropriate. |
+| `extensions/sb-group/ibp/Views/livewire/procurement/import-workbench.blade.php` | No immediate drift. Import approval, manual BA line creation, and mapping creation are workbench/create workflows rather than detail fact edits. |
+| `extensions/sb-group/ibp/Views/livewire/dashboard/executive-dashboard.blade.php`, `extensions/sb-group/ibp/Views/livewire/pricing/pricing-history.blade.php`, `extensions/sb-group/ibp/Views/livewire/settings/audit-trail.blade.php` | No immediate drift. Dashboard, history, and audit surfaces are read-only or navigation/filter oriented in this convention. |
+| `resources/core/views/livewire/admin/integration/outbound-exchanges/show.blade.php` | No immediate drift. Detail facts and payloads are read-only inspection data. |
+| `resources/core/views/livewire/admin/system/database-queries/show.blade.php` | No immediate drift. This is a query workbench/document editor, so explicit Save/Discard remains intentional. |
+| `resources/core/views/livewire/admin/companies/partials/company-details.blade.php` | No immediate drift. Company metadata is a multi-line JSON workflow where Save/Cancel is justified; existing independent company facts already use edit-in-place. |
+
 ## Phases
 
 ### Phase 1 — Catalog the Contract
@@ -114,3 +146,21 @@ Goal: The convention is testable, visually reviewed, and hard to accidentally re
 - [x] Run `php artisan view:cache` after Blade/component changes. {Codex/GPT-5}
 - [x] Browser-check representative pages in desktop and narrow viewports when an authenticated local session is available. Attempted `https://local.blb.lara/admin/system/ui-reference#interaction-patterns`; the documented local fixture login was rejected by this database, so no authenticated browser pass was available without mutating local users. {Codex/GPT-5}
 - [x] Update this plan as each page is migrated, including evidence and completed agent/model suffixes. {Codex/GPT-5}
+
+### Phase 6 — Follow-Up Sweep Migration
+
+Affected pages: `resources/core/views/livewire/ai/chat.blade.php`, `resources/core/views/livewire/admin/workflows/show.blade.php`, `app/Modules/Operation/Quality/Views/livewire/quality/ncr/show.blade.php`, `app/Modules/Operation/Quality/Views/livewire/quality/scar/show.blade.php`, `extensions/sb-group/ibp/Views/livewire/settings/safety-stock-settings.blade.php`, `extensions/sb-group/ibp/Views/livewire/projection/monthly-board.blade.php`, `extensions/sb-group/ibp/Views/livewire/pricing/decision-support.blade.php`, with optional list/grid follow-up for `extensions/sb-group/ibp/Views/livewire/planning/sales-forecast-entry.blade.php` and `extensions/sb-group/ibp/Views/livewire/planning/production-usage.blade.php`.
+Goal: Remove form-first drift from detail/review surfaces while preserving explicit workflow saves where the action is coupled, destructive, or state-transitioning.
+
+- [x] Sweep `resources/core/views`, `app/Modules/**/Views`, and `extensions/**/Views` for read-first, in-place edit, and YAGNI save-button opportunities. {Codex/GPT-5}
+- [x] Record affected Blade files, no-change exceptions, and workflow-save justifications in this plan. {Codex/GPT-5}
+- [x] Convert AI chat session title editing to true inline edit without a Save button. {Codex/GPT-5}
+- [x] Rework NCR action context fields into read-first summaries plus grouped inline draft editors, keeping workflow transition buttons explicit. {Codex/GPT-5}
+- [x] Rework SCAR supplier response fields into read-first summaries plus grouped inline draft editors, keeping evidence upload and workflow transitions explicit. {Codex/GPT-5}
+- [x] Convert monthly projection actual-close entry to field-level edit-in-place and remove the single-value Save/Cancel pair. {Codex/GPT-5}
+- [x] Rework IBP pricing decision-support assumptions so current BA cost, selling price, and coating cost read first; use direct edit for coating and grouped editors for value-plus-notes pairs. {Codex/GPT-5}
+- [x] Rework safety-stock policy rows into a read-first grouped editor shell; keep Apply/Cancel because the policy fields are coupled. {Codex/GPT-5}
+- [x] Align workflow status PIC/Notify inline editors with shared read-first primitives when that surface is next touched. {Codex/GPT-5}
+- [x] Decide whether forecast and production feedback list-row corrections are frequent enough to justify table-cell edit-in-place; decision: leave both as intentional form-first data-entry flows until repeated row-correction usage proves otherwise. {Codex/GPT-5}
+
+Evidence: `php artisan view:cache`; `php artisan test tests\Feature\Modules\Core\AI\ChatViewTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; `php artisan test tests\Feature\Workflow\WorkflowShowTest.php`; `php artisan test extensions\sb-group\ibp\Tests\Feature\IbpReadFirstEditsTest.php`.

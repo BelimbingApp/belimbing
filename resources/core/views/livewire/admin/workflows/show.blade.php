@@ -109,81 +109,25 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-ink">{{ $status->code }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">{{ $status->label }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap font-mono text-sm text-muted">{{ $status->kanban_code ?? '—' }}</td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted"
-                                    x-data="{
-                                        editing: false,
-                                        value: @js($status->pic ? implode(', ', $status->pic) : ''),
-                                    }"
-                                >
-                                    <template x-if="!editing">
-                                        <button
-                                            type="button"
-                                            @click="editing = true; $nextTick(() => $refs.picInput{{ $status->id }}.focus())"
-                                            class="text-left hover:text-accent transition-colors cursor-pointer min-w-[60px] inline-block"
-                                            title="{{ __('Click to edit') }}"
-                                        >
-                                            <span x-text="value || '—'"></span>
-                                            <x-icon name="heroicon-m-pencil-square" class="w-3.5 h-3.5 inline-block ml-1 opacity-0 group-hover/row:opacity-50" />
-                                        </button>
-                                    </template>
-                                    <template x-if="editing">
-                                        <input
-                                            type="text"
-                                            x-ref="picInput{{ $status->id }}"
-                                            x-model="value"
-                                            @keydown.enter="
-                                                const arr = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                                                $wire.saveStatusField({{ $status->id }}, 'pic', arr.length ? arr : null);
-                                                editing = false;
-                                            "
-                                            @keydown.escape="editing = false; value = @js($status->pic ? implode(', ', $status->pic) : '')"
-                                            @blur="
-                                                const arr = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                                                $wire.saveStatusField({{ $status->id }}, 'pic', arr.length ? arr : null);
-                                                editing = false;
-                                            "
-                                            class="w-full min-w-[120px] px-input-x py-input-y text-sm border border-border-input rounded bg-surface-card text-ink focus:ring-2 focus:ring-accent focus:ring-offset-2 outline-none"
-                                            placeholder="{{ __('e.g. it_support, it_manager') }}"
-                                        />
-                                    </template>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
+                                    <x-ui.edit-in-place.text
+                                        id="workflow-status-pic-{{ $status->id }}"
+                                        :value="$status->pic ? implode(', ', $status->pic) : ''"
+                                        :field="$status->id.'|pic'"
+                                        save-method="saveStatusListField"
+                                        :empty="'—'"
+                                        class="min-w-28"
+                                    />
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted"
-                                    x-data="{
-                                        editing: false,
-                                        value: @js(($status->notifications['on_enter'] ?? []) ? implode(', ', $status->notifications['on_enter'] ?? []) : ''),
-                                    }"
-                                >
-                                    <template x-if="!editing">
-                                        <button
-                                            type="button"
-                                            @click="editing = true; $nextTick(() => $refs.notifyInput{{ $status->id }}.focus())"
-                                            class="text-left hover:text-accent transition-colors cursor-pointer min-w-[60px] inline-block"
-                                            title="{{ __('Click to edit') }}"
-                                        >
-                                            <span x-text="value || '—'"></span>
-                                            <x-icon name="heroicon-m-pencil-square" class="w-3.5 h-3.5 inline-block ml-1 opacity-0 group-hover/row:opacity-50" />
-                                        </button>
-                                    </template>
-                                    <template x-if="editing">
-                                        <input
-                                            type="text"
-                                            x-ref="notifyInput{{ $status->id }}"
-                                            x-model="value"
-                                            @keydown.enter="
-                                                const arr = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                                                $wire.saveStatusField({{ $status->id }}, 'notifications', arr.length ? { on_enter: arr, channels: ['database'] } : null);
-                                                editing = false;
-                                            "
-                                            @keydown.escape="editing = false; value = @js(($status->notifications['on_enter'] ?? []) ? implode(', ', $status->notifications['on_enter'] ?? []) : '')"
-                                            @blur="
-                                                const arr = value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-                                                $wire.saveStatusField({{ $status->id }}, 'notifications', arr.length ? { on_enter: arr, channels: ['database'] } : null);
-                                                editing = false;
-                                            "
-                                            class="w-full min-w-[120px] px-input-x py-input-y text-sm border border-border-input rounded bg-surface-card text-ink focus:ring-2 focus:ring-accent focus:ring-offset-2 outline-none"
-                                            placeholder="{{ __('e.g. reporter, assignee') }}"
-                                        />
-                                    </template>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
+                                    <x-ui.edit-in-place.text
+                                        id="workflow-status-notify-{{ $status->id }}"
+                                        :value="($status->notifications['on_enter'] ?? []) ? implode(', ', $status->notifications['on_enter'] ?? []) : ''"
+                                        :field="$status->id.'|notifications'"
+                                        save-method="saveStatusListField"
+                                        :empty="'—'"
+                                        class="min-w-28"
+                                    />
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     @if($status->is_active)

@@ -436,6 +436,7 @@
                                             wire:model="editingTitle"
                                             wire:keydown.enter="saveTitle"
                                             wire:keydown.escape="cancelEditingTitle"
+                                            wire:blur="saveTitle"
                                             x-init="$nextTick(() => $el.focus())"
                                             class="flex-1 min-w-0 text-[11px] font-medium bg-surface-default border border-border-default rounded px-1.5 py-0.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                                             placeholder="{{ __('Session title') }}"
@@ -476,11 +477,6 @@
                                             </span>
                                         @endif
                                     </output>
-                                    <div class="flex items-center gap-1">
-                                        <button type="button" wire:click="saveTitle" class="text-[10px] text-accent hover:underline">{{ __('Save') }}</button>
-                                        <span class="text-[10px] text-muted">·</span>
-                                        <button type="button" wire:click="cancelEditingTitle" class="text-[10px] text-muted hover:text-ink">{{ __('Cancel') }}</button>
-                                    </div>
                                 </div>
                             @else
                                 <div
