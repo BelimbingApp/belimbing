@@ -8,6 +8,9 @@ use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
 
 const ADDRESS_UI_WAREHOUSE_LINE = '88 River Road';
+const ADDRESS_UI_BOSTON_POSTCODE = '02110';
+const ADDRESS_UI_KUALA_LUMPUR = 'Kuala Lumpur';
+const ADDRESS_UI_KUALA_LUMPUR_POSTCODE = '50450';
 
 test('guests are redirected to login from addresses pages', function (): void {
     $this->get(route('admin.addresses.index'))->assertRedirect(route('login'));
@@ -49,7 +52,7 @@ test('address can be created from create page component', function (): void {
         ->set('line1', ADDRESS_UI_WAREHOUSE_LINE)
         ->set('countryIso', 'us')
         ->set('locality', 'Boston')
-        ->set('postcode', '02110')
+        ->set('postcode', ADDRESS_UI_BOSTON_POSTCODE)
         ->set('verificationStatus', 'verified')
         ->call('store')
         ->assertRedirect(route('admin.addresses.index'));
@@ -69,7 +72,7 @@ test('address can be created from create page component', function (): void {
         ->and($address->locality)
         ->toBe('Boston')
         ->and($address->postcode)
-        ->toBe('02110')
+        ->toBe(ADDRESS_UI_BOSTON_POSTCODE)
         ->and($address->country_iso)
         ->toBe('US')
         ->and($address->verificationStatus)
@@ -91,13 +94,13 @@ test('address detail saves location as a grouped edit', function (): void {
         'country' => 'Malaysia',
         'continent' => 'AS',
     ]);
-    Admin1::query()->create(['code' => 'MY.14', 'name' => 'Kuala Lumpur']);
+    Admin1::query()->create(['code' => 'MY.14', 'name' => ADDRESS_UI_KUALA_LUMPUR]);
     Postcode::query()->create([
         'country_iso' => 'MY',
-        'postcode' => '50450',
-        'place_name' => 'Kuala Lumpur',
+        'postcode' => ADDRESS_UI_KUALA_LUMPUR_POSTCODE,
+        'place_name' => ADDRESS_UI_KUALA_LUMPUR,
         'admin1Code' => '14',
-        'admin_name1' => 'Kuala Lumpur',
+        'admin_name1' => ADDRESS_UI_KUALA_LUMPUR,
     ]);
 
     $user = User::factory()->create();
@@ -105,7 +108,7 @@ test('address detail saves location as a grouped edit', function (): void {
         'label' => 'HQ',
         'line1' => '1 Old Road',
         'country_iso' => 'US',
-        'postcode' => '02110',
+        'postcode' => ADDRESS_UI_BOSTON_POSTCODE,
         'locality' => 'Boston',
         'verificationStatus' => 'unverified',
     ]);
@@ -115,16 +118,16 @@ test('address detail saves location as a grouped edit', function (): void {
     Livewire::test('admin.addresses.show', ['address' => $address])
         ->call('openLocationEditor')
         ->set('countryIso', 'MY')
-        ->set('postcode', '50450')
+        ->set('postcode', ADDRESS_UI_KUALA_LUMPUR_POSTCODE)
         ->assertSet('admin1Code', 'MY.14')
-        ->assertSet('locality', 'Kuala Lumpur');
+        ->assertSet('locality', ADDRESS_UI_KUALA_LUMPUR);
 
     expect($address->fresh()->country_iso)->toBe('US');
 
     Livewire::test('admin.addresses.show', ['address' => $address])
         ->call('openLocationEditor')
         ->set('countryIso', 'MY')
-        ->set('postcode', '50450')
+        ->set('postcode', ADDRESS_UI_KUALA_LUMPUR_POSTCODE)
         ->call('saveLocation')
         ->assertSet('editingLocation', false)
         ->assertSee('Malaysia');
@@ -136,7 +139,7 @@ test('address detail saves location as a grouped edit', function (): void {
         ->and($address->admin1Code)
         ->toBe('MY.14')
         ->and($address->postcode)
-        ->toBe('50450')
+        ->toBe(ADDRESS_UI_KUALA_LUMPUR_POSTCODE)
         ->and($address->locality)
-        ->toBe('Kuala Lumpur');
+        ->toBe(ADDRESS_UI_KUALA_LUMPUR);
 });

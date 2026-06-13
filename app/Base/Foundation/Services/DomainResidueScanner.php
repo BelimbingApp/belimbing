@@ -265,22 +265,41 @@ class DomainResidueScanner
                 continue;
             }
 
-            foreach ((array) ($config['editable'] ?? []) as $group) {
-                foreach ((array) ($group['fields'] ?? []) as $field) {
-                    if (isset($field['key']) && is_string($field['key'])) {
-                        $keys[] = $field['key'];
-                    }
-                }
-            }
+            $keys = array_merge($keys, self::editableSettingKeys($config), self::runtimeSettingKeys($config));
+        }
 
-            foreach ((array) ($config['runtime'] ?? []) as $entry) {
-                if (is_string($entry) && $entry !== '') {
-                    $keys[] = $entry;
+        return array_values(array_unique($keys));
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return list<string>
+     */
+    private static function editableSettingKeys(array $config): array
+    {
+        $keys = [];
+
+        foreach ((array) ($config['editable'] ?? []) as $group) {
+            foreach ((array) ($group['fields'] ?? []) as $field) {
+                if (isset($field['key']) && is_string($field['key'])) {
+                    $keys[] = $field['key'];
                 }
             }
         }
 
-        return array_values(array_unique($keys));
+        return $keys;
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return list<string>
+     */
+    private static function runtimeSettingKeys(array $config): array
+    {
+        return array_values(array_filter(
+            (array) ($config['runtime'] ?? []),
+            fn ($entry): bool => is_string($entry) && $entry !== '',
+        ));
     }
 
     /**

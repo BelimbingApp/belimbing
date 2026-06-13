@@ -106,26 +106,6 @@ class Show extends AbstractAddressForm
         $this->address->load(['country']);
     }
 
-    public function updatedCountryIso($value): void
-    {
-        parent::updatedCountryIso($value);
-    }
-
-    public function updatedPostcode($value): void
-    {
-        parent::updatedPostcode($value);
-    }
-
-    public function updatedAdmin1Code($value = null): void
-    {
-        parent::updatedAdmin1Code($value);
-    }
-
-    public function updatedLocality($value = null): void
-    {
-        parent::updatedLocality($value);
-    }
-
     public function openLocationEditor(): void
     {
         $this->fillLocationDraftFromAddress();
