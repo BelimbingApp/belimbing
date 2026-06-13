@@ -8,20 +8,37 @@ use Illuminate\Foundation\Testing\TestCase;
 
 uses(TestCase::class);
 
-it('contains metadata for all built-in tools', function () {
+it('contains metadata for the core tool surface', function () {
     $registry = app(ToolMetadataRegistry::class);
     $all = $registry->all();
 
-    // Verify expected tool count (26 built-in tools)
-    expect($all)->toHaveCount(26);
-
-    // Spot-check a few well-known tools
-    expect($registry->has('web_search'))->toBeTrue();
-    expect($registry->has('system_info'))->toBeTrue();
-    expect($registry->has('bash'))->toBeTrue();
-    expect($registry->has('read'))->toBeTrue();
-    expect($registry->has('search'))->toBeTrue();
-    expect($registry->has('edit'))->toBeTrue();
+    expect($all)->toHaveKeys([
+        'active_page_snapshot',
+        'agent_list',
+        'artisan',
+        'bash',
+        'browser',
+        'delegate_task',
+        'delegation_status',
+        'document_analysis',
+        'edit',
+        'guide',
+        'image_analysis',
+        'memory_get',
+        'memory_search',
+        'memory_status',
+        'message',
+        'navigate',
+        'notification',
+        'read',
+        'schedule_task',
+        'search',
+        'system_info',
+        'visible_nav_menu',
+        'web_fetch',
+        'web_search',
+        'write_js',
+    ]);
 });
 
 it('returns null for unknown tool name', function () {
