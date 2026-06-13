@@ -1,6 +1,6 @@
 # blb-hosted-instances
 
-**Status:** Planned — nothing built yet beyond the shared ingress (Cloudflare tunnel + Access + the eBay deletion webhook, verified 2026-06-13 against the dev box). Phase 1 (demo instance) is ready to start; Phase 2 (Ham production) additionally depends on the open productization items in the ham validation plan.
+**Status:** Phase 0 done; Phase 2 production instance built and verified at the origin on the Windows host (2026-06-13) — running on `https://blb.belimbing.app:8643`, first admin + "Kiat Solutions" company seeded, encrypted backup validated, boot-time services + go-live scripted in `D:\Repo\BelimbingApp\ops\`. Remaining to go live: run the elevated service installer + reboot check, flip the Cloudflare tunnel ingress (needs dev's API token; touches the shared edge), restrict Access to Kiat + Ham. Phase 1 (demo) not started. eBay publish still depends on open productization items in the ham validation plan.
 **Last Updated:** 2026-06-13
 **Sources:** `extensions/ham/docs/plans/ham-ebay-sandbox-live-validation.md` (steps A–D, host decision, Windows validation pass item); design discussion 2026-06-12/13 (Windows-native FrankenPHP decision, demo-site idea, phone-test Host-header lesson).
 **Agents:** claude/claude-fable-5
@@ -56,13 +56,13 @@ BLB exists only as Kiat's WSL2 dev instance. Ham needs a hosted production insta
 
 ## Phases
 
-### Phase 0 — Host prerequisites (Windows)
+### Phase 0 — Host prerequisites (Windows) — DONE 2026-06-13
 
 Goal: the box can run a BLB instance natively.
 
-- [ ] Install native runtime set: FrankenPHP (Windows build), PHP extensions BLB needs, Use SQLite instead of MySQL (or MariaDB — decide on install; record the choice here), Node (asset builds), git.
-- [ ] Decide instance directory layout (e.g. one folder per instance, each containing the three repos) and record it here.
-- [ ] Confirm `cloudflared` Windows service auto-starts after reboot (already installed; verify once).
+- [x] Install native runtime set: **FrankenPHP 1.12.4 (bundled PHP 8.5.7, Caddy 2.11.4)** at `C:\Users\user1\.frankenphp`; **SQLite** (PHP `pdo_sqlite`/`sqlite3` from the FrankenPHP bundle — chosen over MySQL/MariaDB), **Bun 1.3.14** (winget), local **Composer 2.10.1** under `storage/app/.devops`, git, gh. PHP CLI quirk recorded: the bundled `php.exe` loads no default ini, so all CLI/scheduled commands must set `PHPRC` to `storage/app/.devops/php` (handled by `ops/_env.ps1`). Bun on Windows needs `bun install --backend copyfile` (cross-volume hardlink EPERM otherwise).
+- [x] Instance directory layout (recorded): one folder per instance under `D:\Repo\BelimbingApp\` — `production\` (belimbing main + nested `app\Modules\Commerce` and `extensions\ham`), future `demo\`, and `ops\` for instance runtime scripts kept **outside** the checkouts so git-driven deploys stay clean. Per-instance public port: prod **8643** (443 is held by WSL2 dev's `wslrelay` on `::1`).
+- [x] `cloudflared` Windows service confirmed Running + StartType Automatic (token/remotely-managed tunnel — no local config.yml; ingress changes via API).
 
 ### Phase 1 — Demo instance
 
@@ -83,12 +83,15 @@ Risks: demo exposes whatever AI/provider features are configured — leave provi
 
 Goal: Ham's instance live at `blb.belimbing.app`; continues into Phase 3 of the ham validation plan (production keyset, OAuth, first live listing).
 
-- [ ] Same recipe as demo with prod values; **no dev seeders** — fresh DB + the aspect-mapping seeder dependency (open item in the ham validation plan; prod is blocked on it for any publish).
-- [ ] Flip the existing `blb.belimbing.app` tunnel rows' origin fields from `local.blb.lara` to `blb.belimbing.app` (via API).
-- [ ] Restrict the `blb.belimbing.app` Access policy to Kiat + Ham.
-- [ ] Backups: nightly dump of `blb_prod` pushed off-box (target to decide: object storage / second machine — record here); one restore drill before Ham relies on it.
-- [ ] Windows validation pass (per the ham validation plan): Pest suite green on the host, sandbox publish smoke, unattended reboot survival.
-- [ ] Move the eBay deletion settings ownership to prod (the endpoint then served by the prod instance; re-verify the challenge).
+Progress 2026-06-13: instance running and verified at the origin (`https://blb.belimbing.app:8643`, `tls internal`); root 302→`https://blb.belimbing.app/login` (clean public hostname, no internal-name leak); login page renders with built assets; first admin `kiatng@hotmail.com` / company "Kiat Solutions" seeded and `Auth::validate` passes. Runtime/ops scripts live in `D:\Repo\BelimbingApp\ops\`. Three repos cloned at **main** (note: dev's `extensions/ham` runs the `commerce-ebay-account-setup` feature branch — confirm `main` carries the aspect-mapping seeder before any live publish).
+
+- [x] Same recipe as demo with prod values; **no dev seeders** — fresh DB created with `migrate --seed --force` (production seeders only). Aspect-mapping seeder dependency for eBay publish still open (ham validation plan).
+- [x] Flipped the `blb.belimbing.app` tunnel ingress (tunnel `blb`, id `cba63ef8-c687-465d-ba5e-65353cffd18f`) from `local.blb.lara` origin to `https://127.0.0.1:8643` (originServerName + httpHostHeader = `blb.belimbing.app`, http2Origin + noTLSVerify). eBay-hook rule and 404 catch-all untouched. Cloudflare API params copied from dev into the **prod** instance settings (`integrations.cloudflare.*`, prod-owned now). 2026-06-13.
+- ~~[ ] Restrict the `blb.belimbing.app` Access policy to Kiat + Ham. Current "Access by Email" policy allows 3 emails: `kiatsiong.ng@gmail.com`, `tohmeimei2@gmail.com`, `hamletsemails@gmail.com` (Ham). Trim to Kiat + Ham when ready (dashboard/Access API).~~
+- Note: exposing dev at `dev.belimbing.app` was explored and **declined** — BLB pins URLs to one canonical `APP_URL` via `URL::forceRootUrl()` in `AppServiceProvider`, so an instance can't cleanly serve two canonical hostnames. Dev stays LAN-only at `local.blb.lara` per the original design. Multi-canonical/per-request host would be a framework change (own plan).
+- [x] Backups: nightly `blb:db:backup --prune` (app-key encrypted, sqlite) validated and one real artifact produced under `storage/app/private/backups/production`; wired as a daily 03:00 SYSTEM task by `ops/install-services.ps1`. **Off-box target still to decide** (object storage / second machine) — set `BLB_BACKUP_OFFBOX` / `-BackupOffboxTarget` to enable the off-box mirror. Restore drill still pending.
+- [~] Windows validation pass: `ops/install-services.ps1` run (2026-06-13) — server/queue/scheduler now run as **SYSTEM `AtStartup` Scheduled Tasks** (`BLB-Prod-{Server,Queue,Scheduler}` + daily `BLB-Prod-Backup`), verified running via parent chain (svchost→powershell→frankenphp, owner SYSTEM) and serving. Unattended-reboot survival CONFIRMED 2026-06-13: after a real reboot, FrankenPHP auto-started ~52s post-boot as a SYSTEM task and all endpoints returned with no manual step (public ebay-hook 200, blb 302 Access, local origin 302). Full Pest suite on host + sandbox publish smoke still pending.
+- [x] Moved eBay deletion settings ownership to prod (2026-06-13): `commerce.marketplace.ebay.deletion_{verification_token,endpoint_url}` copied dev→prod; `ebay-hook.belimbing.app` tunnel ingress flipped dev→prod (`https://127.0.0.1:8643`, host `blb.belimbing.app`, `/webhooks/*` path-lock kept, no Access). Challenge re-verified locally AND through the public URL (`PUBLIC_CHALLENGE_MATCH=True`). Token/endpoint unchanged from eBay's registration, so the existing portal config still matches; re-clicking verify in the eBay dev portal is optional.
 
 ### Phase 3 — Operations
 
