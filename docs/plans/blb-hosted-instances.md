@@ -60,7 +60,7 @@ BLB exists only as Kiat's WSL2 dev instance. Ham needs a hosted production insta
 
 Goal: the box can run a BLB instance natively.
 
-- [ ] Install native runtime set: FrankenPHP (Windows build), PHP extensions BLB needs, MySQL (or MariaDB — decide on install; record the choice here), Node (asset builds), git.
+- [ ] Install native runtime set: FrankenPHP (Windows build), PHP extensions BLB needs, Use SQLite instead of MySQL (or MariaDB — decide on install; record the choice here), Node (asset builds), git.
 - [ ] Decide instance directory layout (e.g. one folder per instance, each containing the three repos) and record it here.
 - [ ] Confirm `cloudflared` Windows service auto-starts after reboot (already installed; verify once).
 
