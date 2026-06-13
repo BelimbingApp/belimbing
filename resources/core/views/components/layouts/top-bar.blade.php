@@ -4,6 +4,7 @@
     $tzLabel = $tzMode->label();
     $companyTz = $tzService->currentCompanyTimezone();
     $companyTzExplicit = $tzService->isCompanyTimezoneExplicit();
+    $companyTimezoneSettingsUrl = route('admin.companies.show', \App\Modules\Core\Company\Models\Company::LICENSEE_ID);
 @endphp
 
 <div class="h-7 bg-surface-bar border-b border-border-default flex items-center justify-between px-2 shrink-0 z-10">
@@ -36,6 +37,7 @@
         tzLabel: @js($tzLabel),
         companyTz: @js($companyTz),
         companyTzExplicit: @js($companyTzExplicit),
+        companyTimezoneSettingsUrl: @js($companyTimezoneSettingsUrl),
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
@@ -51,6 +53,9 @@
             if (mode === 'local') return this.browserTz;
             if (mode === 'utc') return 'UTC · Y-m-d H:i:s';
             return this.companyTzExplicit ? this.companyTz : '{{ __('(not set)') }}';
+        },
+        goToCompanyTimezoneSettings() {
+            window.location.href = this.companyTimezoneSettingsUrl;
         },
         setTz(mode) {
             if (this.tzSaving || mode === this.tzMode) { this.tzOpen = false; return; }
@@ -77,12 +82,12 @@
             <div class="relative" @click.outside="tzOpen = false" @keydown.escape.window="tzOpen = false">
                 <button
                     type="button"
-                    @click="tzOpen = !tzOpen"
+                    @click="(tzMode === 'company' && !companyTzExplicit) ? goToCompanyTimezoneSettings() : tzOpen = !tzOpen"
                     :disabled="tzSaving"
                     class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle transition-colors"
                     :class="[
                         tzSaving && 'opacity-50 cursor-wait',
-                        (tzMode === 'company' && !companyTzExplicit) ? 'text-status-warning' : 'text-muted hover:text-ink',
+                        (tzMode === 'company' && !companyTzExplicit) ? 'text-status-warning hover:text-status-warning' : 'text-muted hover:text-ink',
                     ]"
                     aria-haspopup="true"
                     :aria-expanded="tzOpen"
