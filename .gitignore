@@ -38,11 +38,11 @@ package-lock.json
 /.vscode
 /.zed
 
-# Licensee extension repos are nested git checkouts; only the README is
+# Licensee extension repos are nested git checkouts; only the agent guide is
 # tracked here. The blanket rule keeps private licensee code out of the
 # public framework repo on every clone without naming licensees.
 /extensions/*
-!/extensions/README.md
+!/extensions/AGENTS.md
 
 # Non-Core domains (Commerce, Operation, People, …) are nested git checkouts;
 # the framework repo tracks only Base and Core. See

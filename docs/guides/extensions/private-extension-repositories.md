@@ -59,11 +59,11 @@ point. Prefer shared `resources/core` tokens and components whenever possible.
 ## Parent Repository Guard
 
 The framework's committed `.gitignore` ignores everything under `extensions/`
-except the README:
+except the agent guide:
 
 ```gitignore
 /extensions/*
-!/extensions/README.md
+!/extensions/AGENTS.md
 ```
 
 Because the rule is committed, every clone is protected from day one: `git add`

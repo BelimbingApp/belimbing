@@ -14,10 +14,6 @@ tests/
 └── TestingBaselineSeeder.php
 ```
 
-## Extension Tests
-
-Layout, conventions, and how to run extension tests are documented in [extensions/README.md](../extensions/README.md#tests).
-
 **Guides:**
 
 - [AGENTS.md](AGENTS.md) — test seeding, shared helpers, environment notes, quality guidelines
