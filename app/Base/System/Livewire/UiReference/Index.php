@@ -47,6 +47,8 @@ class Index extends Component
 
     public string $editInPlaceStatus = 'review';
 
+    public string $editInPlaceQueue = 'ready';
+
     public string $editInPlaceNotes = 'Click a value to edit it in place. Press Enter to save short text, Escape to cancel, or blur to commit.';
 
     public string $dataDisplaySortBy = 'workflow';

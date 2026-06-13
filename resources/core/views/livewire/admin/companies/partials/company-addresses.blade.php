@@ -128,24 +128,27 @@
             </x-ui.table>
         </x-ui.card>
 
-        <x-ui.card x-data="{ savedMsg: '' }" @timezone-saved.window="savedMsg = $event.detail.timezone ? '{{ __('Timezone saved:') }} ' + $event.detail.timezone : '{{ __('Timezone cleared.') }}'; setTimeout(() => savedMsg = '', 3000)">
-            <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Timezone') }}</h3>
-            <p class="text-xs text-muted mb-3">{{ __('Default timezone for this company. Used when displaying dates and times in Company mode.') }}</p>
-
+        <x-ui.card
+            x-data="{ savedMsg: '' }"
+            @timezone-saved.window="savedMsg = $event.detail.timezone ? '{{ __('Timezone saved:') }} ' + $event.detail.timezone : '{{ __('Timezone cleared.') }}'; setTimeout(() => savedMsg = '', 3000)"
+        >
             <div class="max-w-md space-y-3">
+                <x-ui.edit-in-place.combobox
+                    id="company-timezone"
+                    wire:model.live="companyTimezone"
+                    :label="__('Timezone')"
+                    :value="$companyTimezone"
+                    :empty="__('Not configured')"
+                    :placeholder="__('Search timezone...')"
+                    :options="$timezoneOptions"
+                    :help="__('Default timezone for this company. Used when displaying dates and times in Company mode.')"
+                />
+
                 @if(! $companyTimezone && ! $timezoneWasAutoApplied && ! $suggestedTimezone)
                     <x-ui.alert variant="info">
                         {{ __('No timezone is configured for this company. Dates and times will display in UTC until a timezone is set.') }}
                     </x-ui.alert>
                 @endif
-
-                <x-ui.combobox
-                    id="company-timezone"
-                    wire:model.live="companyTimezone"
-                    :label="__('IANA Timezone')"
-                    :placeholder="__('Search timezone...')"
-                    :options="$timezoneOptions"
-                />
 
                 <p x-cloak x-show="savedMsg" x-transition.opacity.duration.200ms class="text-xs text-status-success flex items-center gap-1.5">
                     <x-icon name="heroicon-o-check-circle" class="w-3.5 h-3.5 shrink-0" />

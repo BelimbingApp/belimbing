@@ -51,6 +51,7 @@ it('saves timezone on property change', function (): void {
     Livewire::actingAs($this->user)
         ->test(Show::class, ['company' => $this->company])
         ->set('companyTimezone', COMPANY_TZ_KL)
+        ->assertSet('companyTimezone', COMPANY_TZ_KL)
         ->assertDispatched('timezone-saved', timezone: COMPANY_TZ_KL);
 
     $stored = $this->settings->get(
@@ -60,6 +61,15 @@ it('saves timezone on property change', function (): void {
     );
 
     expect($stored)->toBe(COMPANY_TZ_KL);
+});
+
+it('renders timezone as an in-place combobox edit without separate edit or apply actions', function (): void {
+    Livewire::actingAs($this->user)
+        ->test(Show::class, ['company' => $this->company])
+        ->assertSee('Not configured')
+        ->assertSee('Search timezone...')
+        ->assertDontSee('Edit Timezone')
+        ->assertDontSee('Apply Timezone');
 });
 
 it('rejects an invalid timezone identifier', function (): void {

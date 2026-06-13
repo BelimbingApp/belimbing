@@ -42,7 +42,8 @@ Detail pages should consistently present facts first, then expose editing delibe
 ## Public Contract
 
 - A detail page's default state is readable: values render as text, badges, links, or summary blocks rather than full-height form controls.
-- Independent low-risk facts use `x-ui.edit-in-place.text`, `x-ui.edit-in-place.select`, or `x-ui.edit-in-place.textarea`.
+- Independent low-risk facts use `x-ui.edit-in-place.text`, `x-ui.edit-in-place.select`, `x-ui.edit-in-place.combobox`, or `x-ui.edit-in-place.textarea`.
+- Combobox-backed facts open from the displayed value row; a separate Edit button belongs only to grouped workflows.
 - Coupled facts use a grouped inline editor with a visible edit action, clear read summary, stable inputs, Apply, and Cancel.
 - Form controls inside grouped editors use existing `x-ui.*` primitives with explicit stable ids.
 - Livewire components keep draft state separate from persisted state until the grouped editor applies.
@@ -59,7 +60,7 @@ Current read-first/detail candidates found by scanning `resources/core/views`, w
 - `resources/core/views/livewire/admin/roles/show.blade.php` — Role metadata stays read-first with field-level edit where allowed; capabilities and assigned users are association workflows.
 - `resources/core/views/livewire/admin/users/show.blade.php` — User name/email/company stay field-level facts; roles, capabilities, password, employee links, and external access sections are workflows or read-only summaries.
 - `resources/core/views/livewire/admin/system/database-backups/index.blade.php` — settings/index-style surface, intentionally outside the detail-page migration.
-- `resources/core/views/livewire/admin/companies/partials/company-addresses.blade.php` — address create/edit modals stay form-first; table pivot edits align with the shared micro-editor treatment.
+- `resources/core/views/livewire/admin/companies/partials/company-addresses.blade.php` — address create/edit modals stay form-first; table pivot edits align with the shared micro-editor treatment; Company timezone now reads as a fact first and opens an in-place combobox that persists on selection without a save button.
 
 ## Phases
 
@@ -70,6 +71,7 @@ Goal: The UI reference clearly answers which edit mode to use before contributor
 
 - [x] Expand the interaction-patterns page with a read-first detail decision tree. {Codex/GPT-5}
 - [x] Add a rendered grouped inline editor example with Apply/Cancel, using existing `x-ui.*` controls. {Codex/GPT-5}
+- [x] Add a rendered combobox edit-in-place example for searchable independent facts. {Codex/GPT-5}
 - [x] Clarify that field-level edit-in-place is for independent low-risk facts only. {Codex/GPT-5}
 - [x] Cross-reference create/edit forms as form-first exceptions, not violations. {Codex/GPT-5}
 
@@ -89,6 +91,7 @@ Affected pages: `admin/companies/*`, `admin/employees/*`, `admin/users/*`, `admi
 Goal: Core admin detail pages feel like one product family while preserving each domain's behavior.
 
 - [x] Align Company detail sections with the read-first contract. {Codex/GPT-5}
+- [x] Align Company timezone with the read-first contract. Timezone now displays as a summary by default and uses an in-place combobox for direct persistence on selection. {Codex/GPT-5}
 - [x] Align Employee detail sections with the read-first contract. {Codex/GPT-5}
 - [x] Align User detail sections, especially association controls, with the read-first contract. {Codex/GPT-5}
 - [x] Align Role detail sections with the read-first contract. {Codex/GPT-5}

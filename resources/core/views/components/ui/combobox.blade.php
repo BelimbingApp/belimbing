@@ -10,6 +10,7 @@
     - searchMethod: Livewire method; debounced on query change (can cause DOM morph / focus loss)
     - fetchOptions() runs on openList when searchUrl is set, so postcode shows options on focus
     - Clear button when value selected
+    - Dispatches combobox-committed / combobox-cancelled for wrappers such as edit-in-place
     - aria-activedescendant + aria-controls deferred: causes dropdown to fail on second open with Livewire
 --}}
 @props([
@@ -140,6 +141,10 @@
             },
 
             closeList(commit = true) {
+                const previousValue = this.editingValue === null || this.editingValue === undefined
+                    ? null
+                    : String(this.editingValue)
+
                 if (!commit) {
                     this.pendingClear = false
                     this.selectedValue = this.editingValue
@@ -158,6 +163,26 @@
                 this.open = false
                 this.activeValue = null
                 this.syncQuery()
+
+                if (!commit) {
+                    this.$dispatch('combobox-cancelled', {
+                        value: this.selectedValue ?? '',
+                        label: this.selectedOption?.label ?? this.query,
+                    })
+
+                    return
+                }
+
+                const currentValue = this.selectedValue === null || this.selectedValue === undefined
+                    ? null
+                    : String(this.selectedValue)
+
+                if (currentValue !== previousValue) {
+                    this.$dispatch('combobox-committed', {
+                        value: this.selectedValue ?? '',
+                        label: this.selectedOption?.label ?? this.query,
+                    })
+                }
             },
 
             clear() {
@@ -175,6 +200,7 @@
                 this.query = label
                 this.open = false
                 this.activeValue = null
+                this.$dispatch('combobox-committed', { value, label })
             },
 
             matchesFilter(label) {

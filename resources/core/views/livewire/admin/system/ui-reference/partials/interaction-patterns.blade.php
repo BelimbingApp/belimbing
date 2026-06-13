@@ -3,7 +3,7 @@
         <div class="space-y-4">
             <x-ui.catalog-section
                 :title="__('Field-Level Edit-in-Place')"
-                component="<code>x-ui.edit-in-place.text</code>, <code>x-ui.edit-in-place.select</code>, <code>x-ui.edit-in-place.textarea</code>"
+                component="<code>x-ui.edit-in-place.text</code>, <code>x-ui.edit-in-place.select</code>, <code>x-ui.edit-in-place.combobox</code>, <code>x-ui.edit-in-place.textarea</code>"
             >
                 {{ __('Use this pattern on detail pages when the user should review facts first, then update one field without navigating to a separate edit form.') }}
             </x-ui.catalog-section>
@@ -15,11 +15,11 @@
                 </div>
                 <div class="rounded-2xl border border-border-default bg-surface-card p-4">
                     <div class="text-sm font-medium text-ink">{{ __('One Field at a Time') }}</div>
-                    <p class="mt-1 text-xs text-muted">{{ __('Clicking a value swaps only that value into an input, select, or textarea. The rest of the page stays readable.') }}</p>
+                    <p class="mt-1 text-xs text-muted">{{ __('Clicking a value swaps only that value into an input, select, combobox, or textarea. The rest of the page stays readable.') }}</p>
                 </div>
                 <div class="rounded-2xl border border-border-default bg-surface-card p-4">
                     <div class="text-sm font-medium text-ink">{{ __('Keyboard Contract') }}</div>
-                    <p class="mt-1 text-xs text-muted">{{ __('Enter saves short text, blur commits, and Escape restores the last saved value.') }}</p>
+                    <p class="mt-1 text-xs text-muted">{{ __('Enter saves short text, blur commits, combobox selection commits, and Escape restores the last saved value.') }}</p>
                 </div>
             </div>
 
@@ -50,7 +50,7 @@
                     {{ __('This mirrors Company, Address, and Inventory detail pages: compact facts, direct field edits, and page-owned Livewire save methods. Edit-in-place help opens a quiet line below the label so the value row remains readable.') }}
                 </x-ui.catalog-section>
 
-                <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <dl class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                     <x-ui.edit-in-place.text
                         :label="__('Title')"
                         :value="$editInPlaceTitle"
@@ -82,6 +82,16 @@
                         @endforeach
                         <option value="blocked">{{ __('Blocked') }}</option>
                     </x-ui.edit-in-place.select>
+
+                    <x-ui.edit-in-place.combobox
+                        id="ui-reference-edit-in-place-combobox"
+                        wire:model.live="editInPlaceQueue"
+                        :label="__('Release Queue')"
+                        :value="$editInPlaceQueue"
+                        :placeholder="__('Search queue...')"
+                        :options="$comboboxOptions"
+                        :help="__('Use combobox edit-in-place when the saved fact has enough options that search is smoother than a native select.')"
+                    />
                 </dl>
 
                 <dl class="border-t border-border-default pt-4">

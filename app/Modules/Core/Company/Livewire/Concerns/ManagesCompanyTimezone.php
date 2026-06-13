@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Concerns;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -17,7 +18,7 @@ use DateTimeZone;
  */
 trait ManagesCompanyTimezone
 {
-    public string $companyTimezone = '';
+    public ?string $companyTimezone = '';
 
     public ?string $suggestedTimezone = null;
 
@@ -33,12 +34,20 @@ trait ManagesCompanyTimezone
      *
      * @param  string  $value  The IANA timezone identifier
      */
-    public function updatedCompanyTimezone(string $value): void
+    public function updatedCompanyTimezone(?string $value): void
     {
-        $tz = trim($value);
+        $this->persistCompanyTimezone($value);
+    }
+
+    /**
+     * @return string|null Normalized timezone, or null when validation fails.
+     */
+    private function persistCompanyTimezone(?string $value): ?string
+    {
+        $tz = trim((string) $value);
 
         if ($tz !== '' && ! in_array($tz, DateTimeZone::listIdentifiers(), true)) {
-            return;
+            return null;
         }
 
         $settings = app(SettingsService::class);
@@ -51,6 +60,8 @@ trait ManagesCompanyTimezone
             $settings->set('ui.timezone.default', $tz, $scope);
             $this->dispatch('timezone-saved', timezone: $tz);
         }
+
+        return $tz;
     }
 
     /**

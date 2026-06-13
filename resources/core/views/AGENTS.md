@@ -111,6 +111,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.select` | Select dropdowns with label + error |
 | `x-ui.segmented-control` | Compact mutually exclusive choices where all options stay visible |
 | `x-ui.combobox` | Searchable select/lookup inputs |
+| `x-ui.edit-in-place.combobox` | Read-first searchable single-field fact editor |
 | `x-ui.country-combobox` | Single-source country picker (GeoNames-backed; stores 2-letter ISO code) |
 | `x-ui.currency-combobox` | Single-source currency picker (GeoNames-backed; stores 3-letter code) |
 | `x-ui.textarea` | Multi-line text inputs with label + error |
@@ -140,11 +141,13 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 - Prefer `x-ui.select` for short, stable option lists that users can scan quickly.
 - Prefer the combo box primitive `x-ui.combobox` when the list has **more than 8 options**, when labels are long, or when users are likely to search by code/name rather than scan visually.
 - If you are unsure and the list is around the cutoff, choose the combo box primitive when selection speed matters more than strict minimalism.
+- On read-first detail pages, use `x-ui.edit-in-place.combobox` instead of a separate edit button when a searchable lookup is an independent low-risk fact.
 
 ### Read-first detail pages
 
 - Detail/show pages default to a read-first state: render values as text, badges, links, or compact summaries before exposing form controls.
 - Use `x-ui.edit-in-place.*` for independent low-risk facts where a one-field save is meaningful and the saved value is obvious from the field itself.
+- For combobox-backed facts, the displayed value itself opens the combobox. Do not add a separate "Edit" button unless the edit is a grouped workflow with Apply/Cancel.
 - Use a grouped inline editor with a readable summary, explicit Edit action, Apply, and Cancel when fields are coupled, trigger side effects, or should be reviewed together before persistence.
 - Use a modal or full form when the edit is a workflow: multi-step, destructive, permission-sensitive, association-heavy, or better served by validation across several fields.
 - Keep draft state, validation, authorization, persistence, and side effects in the Livewire page. UI components own interaction behavior and presentation only.
