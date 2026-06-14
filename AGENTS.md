@@ -46,3 +46,13 @@ Verify placement against `docs/architecture/module-system.md` before creating mo
 - **Pluggable domains are full-stack modules.** For non-Core domains (`People`, `Commerce`, `Operation`, future `Finance`, `Sales`, `Procurement`, etc.) and `extensions/{owner}/{module}`, keep module-owned Blade views under the module root in `Views/`; do not scatter them under `resources/`.
 - **Module assets are explicit.** If a non-Core module genuinely needs owned CSS or JavaScript, keep source under that module's `Assets/` directory and wire it through an explicit reviewed Vite entry/import. Do not inject global scripts/styles or create new `resources/*` trees.
 - **Promote deliberately.** If a module view reveals a reusable framework component, extract the shared component to `resources/core` and keep the module screen in the module.
+
+## 6. Version Control & Workflow
+
+Trunk-based. This binds **every** agent (Amp, Claude, Codex, Copilot, …) — read and follow it.
+
+- **Work on `main`.** Default to committing directly to `main` with the relevant tests green first. Do **not** create long-lived feature branches — they orphan and drift (across the nested repos `belimbing` / `app/Modules/Commerce` / `extensions/ham`), and unpushed local branches have already nearly lost work.
+- **PR only as a short-lived review gate.** When a change warrants review/CI (e.g. Copilot), branch → open the PR → merge **promptly** → delete the branch. A PR is a brief branch + review + merge; the anti-pattern is the lingering branch, not the PR. Prefer an immediate, short-lived PR over a branch you keep around.
+- **Never leave work unpushed or unmerged.** If you branch, you finish the round trip the same session. Repos use delete-branch-on-merge.
+- **Cross-repo changes** (a feature spanning the three repos) land together; note the merge order when one repo depends on another.
+- **Trade-off:** direct-to-main has no pre-merge gate, so green tests before committing are the safety net; reach for the short-lived PR when the change is risky or wants a second set of eyes.
