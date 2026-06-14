@@ -50,4 +50,5 @@ Verify placement against `docs/architecture/module-system.md` before creating mo
 ## 6. Version Control & Workflow
 
 - **Where direct commits to `main` are authorized, work on `main`.** Do not keep other branches. Otherwise, follow the repo's authority and workflow.
+- **Never leave work unpushed or unmerged.**
 - **Land cross-repo changes together.** Note merge order when one repo depends on another.
