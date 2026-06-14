@@ -129,7 +129,7 @@
                         @endif
                     </div>
                     <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildPhp">
-                        <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies (composer)') }}</span>
+                        <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies') }}</span>
                         <span wire:loading wire:target="rebuildPhp">{{ __('Running composer install…') }}</span>
                     </x-ui.button>
                 </div>
@@ -154,7 +154,7 @@
                         @endif
                     </div>
                     <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildAssets">
-                        <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets (:pm)', ['pm' => $packageManager]) }}</span>
+                        <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets') }}</span>
                         <span wire:loading wire:target="rebuildAssets">{{ __('Running :pm install & build…', ['pm' => $packageManager]) }}</span>
                     </x-ui.button>
                 </div>

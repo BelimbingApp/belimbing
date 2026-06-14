@@ -152,8 +152,8 @@ test('maintenance actions rebuild from the component and record the run', functi
 
     Livewire::test(Index::class)
         ->assertSee('Maintenance')
-        ->assertSee('Install PHP dependencies (composer)')
-        ->assertSee('Build frontend assets (bun)') // names the actual command verb + tool, no misleading "re-"
+        ->assertSee('Install PHP dependencies')
+        ->assertSee('Build frontend assets') // command shown in mono beside the heading, so no tool suffix on the button
         ->assertSee('No composer install has been recorded yet.')
         ->assertSee('No frontend build has been recorded yet.')
         ->call('rebuildAssets')
