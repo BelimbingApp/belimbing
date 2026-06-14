@@ -2,7 +2,7 @@
 
 ## Purpose
 
-A plan is the **whiteboard** of a live discussion: capture what's agreed and why so future readers see it. `docs/plans/` is the in-repo single source of truth and the **status surface** (no parallel observability doc). Early on it holds intent; as the *how* firms up it **becomes the task list** (Phases checklists) in place. **Prose only** for design — no code/patches/full-file dumps; describe contracts and behavior in words. Recommendation-driven copy, stable section names, a preamble for quick orientation.
+A plan is the **whiteboard** of a live discussion: capture what's agreed and why so future readers see it. `docs/plans/` is the in-repo single source of truth, the **status surface** (no parallel observability doc), and the coordination sheet when work spans agents or sessions. Early on it holds intent; as the *how* firms up it **becomes the task list** (Phases checklists) in place. Plans should let a capable agent work autonomously after the user says to build: record contracts, invariants, coordination state, and proof of done rather than line-by-line instructions. **Prose only** for design — no code/patches/full-file dumps. Recommendation-driven copy, stable section names, a preamble for quick orientation.
 
 ## Workflow
 
@@ -23,11 +23,15 @@ Work that implements/fixes something in a plan must **update the plan**, not jus
 
 A stale checklist or design text is a false source of truth.
 
+Because plans may be implemented by different agents, leave an accurate handoff: current status, completed checkboxes with `{agent}/{model}`, evidence, changed assumptions, and any newly discovered work that belongs in the same build.
+
 ## Document shape
 
 **Title:** the filename/path (optional lone `#` matching it). No filler "Plan"/"Notes" sections.
 
 **Preamble** (substantive plans): **Status**, **Last Updated** (`YYYY-MM-DD`), **Sources** (issues/ADRs/parent plans/paths, or `None`), **Agents** (`{agent}/{model}` contributors, kept current).
+
+Status describes current reality; it is not a permission gate. Keep it short and action-oriented, for example `Proposed`, `In progress`, `Complete`, or `Superseded`.
 
 **Body** — use a section only when it has real content; flow intent → system → why → contract → execution; never open with low-level tasks:
 1. **Problem Essence** (required) — 1–2 sentences.
@@ -45,8 +49,9 @@ Optional per-phase, plain `label:` form (no bold, no checkbox): `Affected pages`
 - `Affected pages` — routes/URLs to open to verify that result in-browser.
 - `Goal` — the expected result, stated as what a reviewer should observe on the `Affected pages`.
 - `Evidence` — proof (files, tests).
+- `Validation` — commands or manual checks expected to prove the phase.
 
-Refine as you build: split items and add sub-tasks as scope sharpens; keep narrative beside the list; attach risks/assumptions to their phase. Coupled follow-ups inline; independent work finishes the current phase first.
+Write tasks as observable outcomes. Use stable anchors such as classes, methods, routes, or paths; avoid brittle line numbers. Refine checklists as reality sharpens. Plans guide known work but do not suspend root `AGENTS.md`: make small nearby corrections, and add larger related work as checklist rows for the next agent. Keep coupled follow-ups inline; finish independent work after the current phase.
 
 ## Filenames, splitting, legacy
 
@@ -55,8 +60,8 @@ Refine as you build: split items and add sub-tasks as scope sharpens; keep narra
 
 ## Hard Rules
 
-No questionnaire plans or chat prompts; no neutral option-padding when a recommendation exists; no observability-only sections duplicating this doc; no plan kept only in session state unless explicitly asked; no autopush/autocommit; no treating a prior commit request as standing permission for later work; no stale/contradictory content; no prose-only Phases when steps are concrete (use checkboxes); no code in the plan.
+No questionnaire plans or chat prompts; no neutral option-padding when a recommendation exists; no observability-only sections duplicating this doc; no plan kept only in session state unless explicitly asked; no autopush/autocommit; no treating a prior commit request as standing permission for later work; no stale/contradictory content; no prose-only Phases when steps are concrete (use checkboxes); no code in the plan; no artificial permission/status gates beyond explicit user approval and project hard rules; no line-by-line implementation scripts when contracts, invariants, and acceptance criteria would give a capable agent more useful freedom.
 
 ## Litmus
 
-Can a reader quickly answer: what problem, what outcome, what design, what's open vs done, what changed, where to push back, where constraints came from (**Sources**)? If not, fix the doc first.
+Can a reader quickly answer: what problem, what outcome, what design, what's open vs done, what changed, who did what, where to push back, where constraints came from (**Sources**), and how done is proven? If not, fix the doc first.

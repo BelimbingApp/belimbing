@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Media\Models;
 
 use DateInterval;
@@ -8,9 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
+use RuntimeException;
 
 /**
- * Durable record for a stored file on a Laravel filesystem disk.
+ * Durable record for a media asset. Usually a stored file on a Laravel
+ * filesystem disk; an asset on the {@see self::DISK_EXTERNAL} sentinel disk is
+ * instead an external link (the bytes live elsewhere, e.g. an eBay-hosted image
+ * URL captured during listing adoption) with its URL in metadata.public_url and
+ * no streamable stored file.
  *
  * An asset is either an original (parent_id null) or a derivative of another
  * asset (parent_id set). The kind string is open vocabulary chosen by the
@@ -33,6 +39,13 @@ use Illuminate\Support\Facades\URL;
 class MediaAsset extends Model
 {
     public const KIND_ORIGINAL = 'original';
+
+    /**
+     * Sentinel disk for assets that are external links (the bytes live elsewhere,
+     * e.g. an eBay-hosted image URL captured during listing adoption). Such assets
+     * carry the URL in metadata.public_url and have no streamable stored file.
+     */
+    public const DISK_EXTERNAL = 'external';
 
     protected $table = 'base_media_assets';
 
@@ -76,6 +89,30 @@ class MediaAsset extends Model
         $expires = is_int($expiresIn) ? now()->addMinutes($expiresIn) : now()->add($expiresIn);
 
         return URL::temporarySignedRoute('media.assets.stream', $expires, ['asset' => $this->id]);
+    }
+
+    /**
+     * URL to render this asset in an <img>. External (link-only) assets return
+     * their stored public URL directly; stored-file assets get a short-lived
+     * signed stream URL. Centralizes the choice so views never special-case it.
+     */
+    public function displayUrl(int|DateInterval $expiresIn = 5): string
+    {
+        if ($this->disk === self::DISK_EXTERNAL) {
+            $publicUrl = data_get($this->metadata, 'public_url');
+
+            // External assets have no stored bytes to stream — the stored URL is
+            // the only thing that can render. Require a safe http(s) URL and fail
+            // fast otherwise (missing, or an unsafe data:/file: scheme) rather
+            // than silently returning a stream URL that can never succeed.
+            if (is_string($publicUrl) && preg_match('#^https?://#i', $publicUrl) === 1) {
+                return $publicUrl;
+            }
+
+            throw new RuntimeException('External media asset is missing a valid http(s) public_url.');
+        }
+
+        return $this->streamUrl($expiresIn);
     }
 
     /**
