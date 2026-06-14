@@ -12,7 +12,7 @@ use Livewire\Component;
 
 /**
  * Shows each Distribution Bundle's current vs latest commit and lets the operator update
- * per repo (or all) and gracefully reload — the in-app counterpart to the host
+ * per bundle (or all) and gracefully reload — the in-app counterpart to the host
  * deploy. The actual pull/refresh/migrate/reload lives in DeploymentService so it
  * stays cross-platform and testable.
  */

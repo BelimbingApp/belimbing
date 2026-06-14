@@ -81,7 +81,7 @@ class DeploymentService
             $entry['up_to_date'] = $entry['current'] !== null && $entry['current']['sha'] === $latest['sha'];
 
             return $entry;
-        }, $this->distributions());
+        }, $this->distributionBundles());
     }
 
     /**
@@ -95,8 +95,8 @@ class DeploymentService
     {
         $byOwner = [];
 
-        foreach ($this->distributions() as $dist) {
-            [$owner, $name] = $this->remoteIdentity($dist['path']);
+        foreach ($this->distributionBundles() as $bundle) {
+            [$owner, $name] = $this->remoteIdentity($bundle['path']);
 
             if ($owner === null) {
                 continue;
@@ -124,8 +124,8 @@ class DeploymentService
         $token = $token !== null && trim($token) !== '' ? trim($token) : $this->tokenFor($owner);
         $results = [];
 
-        foreach ($this->distributions() as $dist) {
-            [$repoOwner, $name] = $this->remoteIdentity($dist['path']);
+        foreach ($this->distributionBundles() as $bundle) {
+            [$repoOwner, $name] = $this->remoteIdentity($bundle['path']);
 
             if ($repoOwner === null || ! $this->ownerMatches($repoOwner, $owner)) {
                 continue;
@@ -162,7 +162,7 @@ class DeploymentService
      */
     public function update(array $keys = [], ?callable $progress = null): array
     {
-        $byKey = collect($this->distributions())->keyBy('key');
+        $byKey = collect($this->distributionBundles())->keyBy('key');
         $targets = $keys === [] ? $byKey->values()->all() : $byKey->only($keys)->values()->all();
 
         if ($targets === []) {
@@ -282,7 +282,7 @@ class DeploymentService
      *
      * @return list<array{key: string, label: string, path: string, relative: string}>
      */
-    private function distributions(): array
+    private function distributionBundles(): array
     {
         $found = [[
             'key' => 'platform',
@@ -293,13 +293,13 @@ class DeploymentService
 
         foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
             if (is_dir($dir.'/.git')) {
-                $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
+                $found[] = $this->distributionBundle($dir, (string) __('Module: :name', ['name' => basename($dir)]));
             }
         }
 
         foreach (glob(base_path('extensions/*'), GLOB_ONLYDIR) ?: [] as $dir) {
             if (is_dir($dir.'/.git')) {
-                $found[] = $this->distribution($dir, (string) __('Extension: :name', ['name' => basename($dir)]));
+                $found[] = $this->distributionBundle($dir, (string) __('Extension: :name', ['name' => basename($dir)]));
 
                 continue;
             }
@@ -307,7 +307,7 @@ class DeploymentService
             // Licensee Distribution Bundle one level deeper (extensions/{licensee}/{module}).
             foreach (glob($dir.'/*', GLOB_ONLYDIR) ?: [] as $sub) {
                 if (is_dir($sub.'/.git')) {
-                    $found[] = $this->distribution($sub, (string) __('Extension: :name', ['name' => basename($dir).'/'.basename($sub)]));
+                    $found[] = $this->distributionBundle($sub, (string) __('Extension: :name', ['name' => basename($dir).'/'.basename($sub)]));
                 }
             }
         }
@@ -318,7 +318,7 @@ class DeploymentService
     /**
      * @return array{key: string, label: string, path: string, relative: string}
      */
-    private function distribution(string $path, string $label): array
+    private function distributionBundle(string $path, string $label): array
     {
         $relative = ltrim(str_replace(base_path(), '', $path), DIRECTORY_SEPARATOR);
 
