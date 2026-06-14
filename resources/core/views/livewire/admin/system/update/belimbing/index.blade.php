@@ -1,17 +1,11 @@
 <div>
     <x-slot name="title">{{ __('Update Belimbing') }}</x-slot>
 
-    <div class="space-y-section-gap">
+    <div class="space-y-section-gap" x-data="{ running: false, dismissed: false }" @run-finished.window="running = false" @keydown.escape.window="dismissed = true">
         <x-ui.page-header
             :title="__('Belimbing')"
             :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
-        >
-            <x-slot name="help">
-                <p>{{ __('A Distribution Bundle is BLB\'s installable, versioned code bundle. Each bundle lands at a known path and namespace, such as the Belimbing platform, a domain, a slot, or an extension. Today, bundles are delivered as Git repositories.') }}</p>
-                <p class="mt-2">{{ __('Update pulls the selected Distribution Bundles, installs changed PHP dependencies or refreshes the autoloader, rebuilds frontend assets, runs migrations, and gracefully reloads workers. If a Git repository is private it uses the token set in GitHub Access.') }}</p>
-                <p class="mt-2">{{ __('Reload FrankenPHP does not pull code, install dependencies, build assets, or run migrations. It only asks the FrankenPHP/Caddy admin API to respawn web workers, then signals Laravel queue workers to restart after their current job. Use it when deployed code is already in place but the running workers may still be serving old PHP state.') }}</p>
-            </x-slot>
-        </x-ui.page-header>
+        />
 
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
@@ -21,53 +15,41 @@
         @endif
 
         <x-ui.card>
-            <div class="flex flex-wrap items-start justify-between gap-3">
-                <div class="min-w-0">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="text-base font-medium text-ink">{{ __('FrankenPHP reload') }}</h2>
-
-                        @if ($lastReload !== null)
-                            <x-ui.badge :variant="$lastReload['ok'] ? 'success' : 'warning'">
-                                {{ $lastReload['ok'] ? __('Workers reloaded') : __('Needs attention') }}
-                            </x-ui.badge>
-                        @endif
+            <div x-data="{ helpOpen: false }" class="mb-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <div class="inline-flex max-w-full items-center gap-2">
+                            <h2 class="text-base font-medium text-ink">{{ __('Distribution Bundles') }}</h2>
+                            <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
+                        </div>
+                        <p class="mt-1 text-sm text-muted">{{ __('Update pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, then gracefully reloads workers. Private repositories use the token set in') }}
+                            <a href="{{ route('admin.system.update.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
-
-                    @if ($lastReload !== null)
-                        <p class="mt-1 text-sm text-muted">
-                            {{ __('Last attempted') }}
-                            <x-ui.datetime :value="$lastReload['attempted_at']" />.
-                            <span>{{ $lastReload['message'] }}</span>
-                        </p>
-                        <p class="mt-1 text-xs text-muted">
-                            {{ __('Admin API:') }}
-                            <span class="font-mono">{{ $lastReload['admin_url'] }}</span>
-                        </p>
-                    @else
-                        <p class="mt-1 text-sm text-muted">{{ __('No FrankenPHP reload has been recorded yet.') }}</p>
-                    @endif
+                    <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" :disabled="! $behind">
+                            <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
+                            <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
+                        </x-ui.button>
+                    </div>
                 </div>
 
-                <x-ui.button type="button" variant="outline" wire:click="reloadOnly" wire:loading.attr="disabled" wire:target="reloadOnly">
-                    <span wire:loading.remove wire:target="reloadOnly">{{ __('Reload FrankenPHP') }}</span>
-                    <span wire:loading wire:target="reloadOnly">{{ __('Reloading…') }}</span>
-                </x-ui.button>
-            </div>
-        </x-ui.card>
-
-        <x-ui.card>
-            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 class="text-base font-medium text-ink">{{ __('Distribution Bundles') }}</h2>
-                <div class="flex flex-wrap justify-end gap-2">
-                    @if ($log !== [] && ! $logPanelOpen)
-                        <x-ui.button type="button" variant="outline" wire:click="showLastRun">
-                            {{ __('Show last run') }}
-                        </x-ui.button>
-                    @endif
-                    <x-ui.button type="button" variant="primary" wire:click="updateAll" wire:loading.attr="disabled" :disabled="! $behind">
-                        <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
-                        <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
-                    </x-ui.button>
+                <div
+                    x-cloak
+                    x-show="helpOpen"
+                    x-transition:enter="transition-all ease-out duration-200 motion-reduce:duration-0"
+                    x-transition:enter-start="max-h-0 opacity-0"
+                    x-transition:enter-end="max-h-96 opacity-100"
+                    x-transition:leave="transition-all ease-in duration-150 motion-reduce:duration-0"
+                    x-transition:leave-start="max-h-96 opacity-100"
+                    x-transition:leave-end="max-h-0 opacity-0"
+                    class="mt-3 overflow-hidden rounded-2xl border border-border-default bg-surface-subtle text-sm text-muted"
+                    @click="helpOpen = false"
+                    role="note"
+                    aria-label="{{ __('Click to dismiss') }}"
+                >
+                    <div class="p-4">
+                        <p>{{ __('A Distribution Bundle is BLB\'s installable, versioned code bundle. Each bundle lands at a known path and namespace, such as the Belimbing platform, a domain, a slot, or an extension. Today, bundles are delivered as Git repositories.') }}</p>
+                    </div>
                 </div>
             </div>
 
@@ -109,7 +91,7 @@
                             @if ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" wire:loading.attr="disabled" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
@@ -122,52 +104,136 @@
             </x-ui.table>
         </x-ui.card>
 
-        <div
-            @class(['hidden' => ! $logPanelOpen])
-            wire:loading.class.remove="hidden"
-            wire:target="updateAll,updateRepo,reloadOnly"
-        >
-            <x-ui.card>
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <h2 class="text-base font-medium text-ink">
-                                <span wire:loading wire:target="updateAll,updateRepo,reloadOnly">{{ __('Run in progress') }}</span>
-                                <span wire:loading.remove wire:target="updateAll,updateRepo,reloadOnly">{{ __('Last run') }}</span>
-                            </h2>
+        <x-ui.card>
+            <h2 class="text-base font-medium text-ink">{{ __('Maintenance') }}</h2>
+            <p class="mt-1 text-sm text-muted">{{ __('Each of these runs as part of Update. Trigger one on its own to apply a dependency, asset, or worker change — or to recover from a failed run — without pulling code.') }}</p>
 
-                            @if ($runOutcome !== 'idle')
-                                <x-ui.badge :variant="$runOutcomeVariant">{{ $runOutcomeLabel }}</x-ui.badge>
+            <div class="mt-4 space-y-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-sm font-medium text-ink">{{ __('PHP dependencies') }}</h3>
+                            <span class="font-mono text-xs text-muted">composer install</span>
+                            @if ($lastComposerRun !== null)
+                                <x-ui.badge :variant="$lastComposerRun['ok'] ? 'success' : 'warning'">
+                                    {{ $lastComposerRun['ok'] ? __('OK') : __('Needs attention') }}
+                                </x-ui.badge>
+                            @endif
+                        </div>
+                        @if ($lastComposerRun !== null)
+                            <p class="mt-1 text-xs text-muted">
+                                {{ __('Last run') }} <x-ui.datetime :value="$lastComposerRun['attempted_at']" /> · {{ $lastComposerRun['message'] }}
+                            </p>
+                        @else
+                            <p class="mt-1 text-xs text-muted">{{ __('No composer install has been recorded yet.') }}</p>
+                        @endif
+                    </div>
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildPhp">
+                        <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies (composer)') }}</span>
+                        <span wire:loading wire:target="rebuildPhp">{{ __('Running composer install…') }}</span>
+                    </x-ui.button>
+                </div>
+
+                <div class="flex flex-wrap items-start justify-between gap-3 border-t border-border-default pt-4">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-sm font-medium text-ink">{{ __('Frontend assets') }}</h3>
+                            <span class="font-mono text-xs text-muted">{{ $packageManager }} install &amp;&amp; {{ $packageManager }} run build</span>
+                            @if ($lastFrontendRun !== null)
+                                <x-ui.badge :variant="$lastFrontendRun['ok'] ? 'success' : 'warning'">
+                                    {{ $lastFrontendRun['ok'] ? __('OK') : __('Needs attention') }}
+                                </x-ui.badge>
+                            @endif
+                        </div>
+                        @if ($lastFrontendRun !== null)
+                            <p class="mt-1 text-xs text-muted">
+                                {{ __('Last run') }} <x-ui.datetime :value="$lastFrontendRun['attempted_at']" /> · {{ $lastFrontendRun['message'] }}
+                            </p>
+                        @else
+                            <p class="mt-1 text-xs text-muted">{{ __('No frontend build has been recorded yet.') }}</p>
+                        @endif
+                    </div>
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildAssets">
+                        <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets (:pm)', ['pm' => $packageManager]) }}</span>
+                        <span wire:loading wire:target="rebuildAssets">{{ __('Running :pm install & build…', ['pm' => $packageManager]) }}</span>
+                    </x-ui.button>
+                </div>
+
+                <div class="flex flex-wrap items-start justify-between gap-3 border-t border-border-default pt-4">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h3 class="text-sm font-medium text-ink">{{ __('FrankenPHP workers') }}</h3>
+                            @if ($lastReload !== null)
+                                <x-ui.badge :variant="$lastReload['ok'] ? 'success' : 'warning'">
+                                    {{ $lastReload['ok'] ? __('Workers reloaded') : __('Needs attention') }}
+                                </x-ui.badge>
+                            @endif
+                        </div>
+                        <p class="mt-1 text-xs text-muted">{{ __('Respawns web workers through the FrankenPHP/Caddy admin API and signals queue workers to restart — it does not pull code, install dependencies, build assets, or run migrations. Use it when deployed code is already in place but running workers may still serve old PHP state.') }}</p>
+                        @if ($lastReload !== null)
+                            <p class="mt-1 text-xs text-muted">
+                                {{ __('Last run') }} <x-ui.datetime :value="$lastReload['attempted_at']" /> · {{ $lastReload['message'] }}
+                                <span class="font-mono">({{ $lastReload['admin_url'] }})</span>
+                            </p>
+                        @else
+                            <p class="mt-1 text-xs text-muted">{{ __('No reload has been recorded yet.') }}</p>
+                        @endif
+                    </div>
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="reloadOnly" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="reloadOnly">
+                        <span wire:loading.remove wire:target="reloadOnly">{{ __('Reload FrankenPHP') }}</span>
+                        <span wire:loading wire:target="reloadOnly">{{ __('Reloading…') }}</span>
+                    </x-ui.button>
+                </div>
+            </div>
+        </x-ui.card>
+
+        {{-- Run log: floats as a modal only while a run is in progress (or until dismissed), then docks to rest inline at the end of the page. It never floats on a plain page visit. --}}
+        <div x-show="running && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="dismissed = true"></div>
+
+        <div :class="(running && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
+            <div x-show="running || @js($log !== [])" x-cloak :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
+                <x-ui.card>
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h2 class="text-base font-medium text-ink">
+                                    <span wire:loading wire:target="updateAll,updateRepo,reloadOnly,rebuildPhp,rebuildAssets">{{ __('Run in progress') }}</span>
+                                    <span wire:loading.remove wire:target="updateAll,updateRepo,reloadOnly,rebuildPhp,rebuildAssets">{{ __('Last run') }}</span>
+                                </h2>
+
+                                @if ($runOutcome !== 'idle')
+                                    <x-ui.badge :variant="$runOutcomeVariant">{{ $runOutcomeLabel }}</x-ui.badge>
+                                @endif
+                            </div>
+
+                            @if ($log !== [])
+                                <p class="mt-1 text-xs text-muted">{{ $runSummary }}</p>
                             @endif
                         </div>
 
-                        @if ($log !== [])
-                            <p class="mt-1 text-xs text-muted">{{ $runSummary }}</p>
-                        @endif
+                        {{-- Close exists only while floating; once it rests inline there is nothing to close. --}}
+                        <button
+                            type="button"
+                            x-show="running && ! dismissed"
+                            x-on:click="dismissed = true"
+                            class="rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                            aria-label="{{ __('Dismiss run log') }}"
+                        >
+                            <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
+                        </button>
                     </div>
 
-                    <button
-                        type="button"
-                        wire:click="closeRunLog"
-                        wire:loading.attr="disabled"
-                        wire:target="updateAll,updateRepo,reloadOnly"
-                        class="rounded-md text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent"
-                        aria-label="{{ __('Close run log') }}"
-                    >
-                        <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
-                    </button>
-                </div>
-
-                <div class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
-                    <div class="space-y-0" wire:stream="runLog">
-                        @forelse ($log as $line)
-                            <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
-                        @empty
-                            <div class="text-muted">{{ __('Waiting for run output…') }}</div>
-                        @endforelse
+                    <div class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
+                        <div class="space-y-0" wire:stream="runLog">
+                            @forelse ($log as $line)
+                                <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
+                            @empty
+                                <div class="text-muted">{{ __('Waiting for run output…') }}</div>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
-            </x-ui.card>
+                </x-ui.card>
+            </div>
         </div>
     </div>
 </div>

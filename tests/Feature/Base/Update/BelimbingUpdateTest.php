@@ -47,8 +47,8 @@ test('belimbing update page lists Distribution Bundles with status for admins', 
         ->assertSee('Distribution Bundles')
         ->assertSee('Distribution Bundle')
         ->assertSee('A Distribution Bundle is BLB&#039;s installable, versioned code bundle.', false)
-        ->assertSee('FrankenPHP reload')
-        ->assertSee('No FrankenPHP reload has been recorded yet.')
+        ->assertSee('FrankenPHP workers')
+        ->assertSee('No reload has been recorded yet.')
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform bundle's Git repository
         ->assertSee('Reload FrankenPHP')
@@ -106,13 +106,13 @@ test('belimbing update page shows the last frankenphp reload', function (): void
     app(DeploymentService::class)->reload();
 
     Livewire::test(Index::class)
-        ->assertSee('FrankenPHP reload')
-        ->assertSee('Last attempted')
+        ->assertSee('FrankenPHP workers')
+        ->assertSee('Last run')
         ->assertSee('Workers reloaded')
         ->assertSee('Web workers reloaded.');
 });
 
-test('run log can be closed and reopened with the previous run', function (): void {
+test('the previous run log persists at its rest location across page visits', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
     fakeBelimbingUpdateProcesses();
@@ -121,22 +121,15 @@ test('run log can be closed and reopened with the previous run', function (): vo
         '*' => Http::response([], 200),
     ]);
 
-    $component = Livewire::test(Index::class)
+    $log = Livewire::test(Index::class)
         ->call('reloadOnly')
-        ->assertSet('logPanelOpen', true)
-        ->call('closeRunLog')
-        ->assertSet('logPanelOpen', false);
-
-    $log = $component->get('log');
+        ->get('log');
 
     expect($log)->not->toBeEmpty();
 
-    Livewire::test(Index::class)
-        ->assertSet('log', $log)
-        ->assertSet('logPanelOpen', false)
-        ->call('showLastRun')
-        ->assertSet('logPanelOpen', true)
-        ->assertSet('log', $log);
+    // A fresh visit still shows the last run at rest (it is session-persisted); the
+    // floating panel is purely client-side and never appears on a plain page load.
+    Livewire::test(Index::class)->assertSet('log', $log);
 });
 
 test('manual frontend rebuild installs with the lockfile package manager and builds assets', function (): void {
@@ -149,6 +142,54 @@ test('manual frontend rebuild installs with the lockfile package manager and bui
 
     Process::assertRan(fn ($process): bool => array_slice($process->command, 0, 3) === ['bun', 'install', '--frozen-lockfile']);
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
+});
+
+test('maintenance actions rebuild from the component and record the run', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeBelimbingUpdateProcesses();
+    fakeBelimbingUpdateHttp();
+
+    Livewire::test(Index::class)
+        ->assertSee('Maintenance')
+        ->assertSee('Install PHP dependencies (composer)')
+        ->assertSee('Build frontend assets (bun)') // names the actual command verb + tool, no misleading "re-"
+        ->assertSee('No composer install has been recorded yet.')
+        ->assertSee('No frontend build has been recorded yet.')
+        ->call('rebuildAssets')
+        ->assertHasNoErrors()
+        ->call('rebuildPhp')
+        ->assertHasNoErrors();
+
+    Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
+    Process::assertRan(fn ($process): bool => in_array('install', $process->command, true));
+
+    // Both runs leave a durable last-run record (like the FrankenPHP reload), so any
+    // admin can later see whether vendor/ and public/build are current and healthy.
+    $composerRun = app(DeploymentService::class)->lastComposerRun();
+    $frontendRun = app(DeploymentService::class)->lastFrontendRun();
+
+    expect($composerRun)->toBeArray()
+        ->and($composerRun['ok'])->toBeTrue()
+        ->and($composerRun['message'])->toBe('PHP dependencies installed.')
+        ->and($frontendRun)->toBeArray()
+        ->and($frontendRun['ok'])->toBeTrue()
+        ->and($frontendRun['pm'])->toBe('bun')
+        ->and($frontendRun['message'])->toBe('Frontend assets built.');
+});
+
+test('a failed frontend build records a needs-attention last run', function (): void {
+    Process::fake(fn ($process) => $process->command === ['bun', 'run', 'build']
+        ? Process::result(errorOutput: 'bun: command not found', exitCode: 127)
+        : Process::result());
+
+    app(DeploymentService::class)->rebuildAssets();
+
+    $frontendRun = app(DeploymentService::class)->lastFrontendRun();
+
+    expect($frontendRun)->toBeArray()
+        ->and($frontendRun['ok'])->toBeFalse()
+        ->and($frontendRun['message'])->toContain('Frontend asset build failed');
 });
 
 test('updating the platform pulls, refreshes runtime artifacts, migrates, and reloads', function (): void {

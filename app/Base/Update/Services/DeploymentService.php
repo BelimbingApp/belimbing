@@ -27,6 +27,10 @@ class DeploymentService
 {
     private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
 
+    private const COMPOSER_RUN_KEY = 'system.update.composer.last_run';
+
+    private const FRONTEND_RUN_KEY = 'system.update.frontend.last_run';
+
     public function __construct(
         private readonly SettingsService $settings,
         private readonly DistributionBundleRepository $bundles,
@@ -110,14 +114,14 @@ class DeploymentService
             // just refresh the optimized autoloader for any new/moved classes.
             if ($this->buildRunner->composerLockHash() !== $composerBefore) {
                 $record((string) __('PHP dependencies changed — running composer install…'));
-                $record($this->buildRunner->composerInstall());
+                $record($this->runComposerInstall());
             } else {
                 $record((string) __('Refreshing autoloader…'));
                 $record($this->buildRunner->composerDumpAutoload());
             }
 
             $record((string) __('Building frontend assets…'));
-            $log = array_merge($log, $this->buildRunner->buildAssets($progress));
+            $log = array_merge($log, $this->runFrontendBuild($progress));
 
             $record((string) __('Running migrations…'));
             Artisan::call('migrate', ['--force' => true]);
@@ -147,7 +151,7 @@ class DeploymentService
      */
     public function rebuildPhp(): array
     {
-        $log = [(string) __('Rebuilding PHP dependencies…'), $this->buildRunner->composerInstall()];
+        $log = [(string) __('Installing PHP dependencies…'), $this->runComposerInstall()];
 
         return array_merge($log, $this->reload(), [(string) __('Done.')]);
     }
@@ -161,10 +165,19 @@ class DeploymentService
     public function rebuildAssets(): array
     {
         return array_merge(
-            [(string) __('Rebuilding frontend assets…')],
-            $this->buildRunner->buildAssets(),
+            [(string) __('Building frontend assets…')],
+            $this->runFrontendBuild(),
             [(string) __('Done.')],
         );
+    }
+
+    /**
+     * The JS package manager the asset build will actually invoke on this host
+     * (bun|pnpm|yarn|npm, chosen by lockfile) — so the UI can name it honestly.
+     */
+    public function frontendPackageManager(): string
+    {
+        return $this->buildRunner->frontendPackageManager();
     }
 
     public function tokenFor(string $owner): ?string
@@ -178,6 +191,45 @@ class DeploymentService
     public function saveToken(string $owner, string $token): void
     {
         $this->bundles->saveToken($owner, $token);
+    }
+
+    private function runComposerInstall(): string
+    {
+        $message = $this->buildRunner->composerInstall();
+
+        $this->rememberRun(self::COMPOSER_RUN_KEY, ! $this->hasError([$message]), $message);
+
+        return $message;
+    }
+
+    /**
+     * @param  (callable(string): void)|null  $progress
+     * @return list<string>
+     */
+    private function runFrontendBuild(?callable $progress = null): array
+    {
+        $log = $this->buildRunner->buildAssets($progress);
+
+        $this->rememberRun(
+            self::FRONTEND_RUN_KEY,
+            ! $this->hasError($log),
+            $this->lastFrontendBuildMessage($log),
+            ['pm' => $this->frontendPackageManager()],
+        );
+
+        return $log;
+    }
+
+    /**
+     * @param  list<string>  $log
+     */
+    private function lastFrontendBuildMessage(array $log): string
+    {
+        $lastKey = array_key_last($log);
+
+        return $lastKey !== null
+            ? $log[$lastKey]
+            : (string) __('Frontend build produced no output.');
     }
 
     /**
@@ -222,7 +274,7 @@ class DeploymentService
 
         Artisan::call('queue:restart');
         $log[] = (string) __('Queue restart signaled.');
-        $this->rememberLastReload($webReloaded, $reloadMessage, $adminUrl);
+        $this->rememberRun(self::LAST_RELOAD_KEY, $webReloaded, $reloadMessage, ['admin_url' => $adminUrl]);
 
         return $log;
     }
@@ -232,7 +284,57 @@ class DeploymentService
      */
     public function lastReload(): ?array
     {
-        $record = $this->settings->get(self::LAST_RELOAD_KEY);
+        $run = $this->readRun(self::LAST_RELOAD_KEY, ['admin_url' => true]);
+
+        /** @var array{attempted_at: string, ok: bool, message: string, admin_url: string}|null $run */
+        return $run;
+    }
+
+    /**
+     * Last recorded composer install (manual or auto), or null if none yet.
+     *
+     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     */
+    public function lastComposerRun(): ?array
+    {
+        $run = $this->readRun(self::COMPOSER_RUN_KEY, ['pm' => false]);
+
+        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
+        return $run;
+    }
+
+    /**
+     * Last recorded frontend build (manual or auto), or null if none yet.
+     *
+     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     */
+    public function lastFrontendRun(): ?array
+    {
+        $run = $this->readRun(self::FRONTEND_RUN_KEY, ['pm' => false]);
+
+        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
+        return $run;
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    private function rememberRun(string $key, bool $ok, string $message, array $extra = []): void
+    {
+        $this->settings->set($key, array_merge([
+            'attempted_at' => now()->utc()->toIso8601String(),
+            'ok' => $ok,
+            'message' => $message,
+        ], $extra));
+    }
+
+    /**
+     * @param  array<string, bool>  $stringFields  field => required
+     * @return array<string, bool|string|null>|null
+     */
+    private function readRun(string $key, array $stringFields = []): ?array
+    {
+        $record = $this->settings->get($key);
 
         if (! is_array($record)) {
             return null;
@@ -240,28 +342,28 @@ class DeploymentService
 
         $attemptedAt = $record['attempted_at'] ?? null;
         $message = $record['message'] ?? null;
-        $adminUrl = $record['admin_url'] ?? null;
 
-        if (! is_string($attemptedAt) || ! is_string($message) || ! is_string($adminUrl)) {
+        if (! is_string($attemptedAt) || ! is_string($message)) {
             return null;
         }
 
-        return [
+        $run = [
             'attempted_at' => $attemptedAt,
             'ok' => ($record['ok'] ?? false) === true,
             'message' => $message,
-            'admin_url' => $adminUrl,
         ];
-    }
 
-    private function rememberLastReload(bool $ok, string $message, string $adminUrl): void
-    {
-        $this->settings->set(self::LAST_RELOAD_KEY, [
-            'attempted_at' => now()->utc()->toIso8601String(),
-            'ok' => $ok,
-            'message' => $message,
-            'admin_url' => $adminUrl,
-        ]);
+        foreach ($stringFields as $field => $required) {
+            $value = $record[$field] ?? null;
+
+            if ($required && ! is_string($value)) {
+                return null;
+            }
+
+            $run[$field] = is_string($value) ? $value : null;
+        }
+
+        return $run;
     }
 
     /**

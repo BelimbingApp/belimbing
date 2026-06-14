@@ -54,6 +54,11 @@ class DeploymentBuildRunner
         return (string) __('Autoload refresh failed: :error', ['error' => $this->processError($result)]);
     }
 
+    public function frontendPackageManager(): string
+    {
+        return $this->nodeInstallCommand()[0];
+    }
+
     /**
      * @param  (callable(string): void)|null  $progress
      * @return list<string>
