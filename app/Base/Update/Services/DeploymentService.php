@@ -537,7 +537,7 @@ class DeploymentService
 
         Artisan::call('queue:restart');
         $log[] = (string) __('Queue restart signaled.');
-        $this->rememberLastReload($webReloaded, $reloadMessage, $adminUrl);
+        $this->rememberRun(self::LAST_RELOAD_KEY, $webReloaded, $reloadMessage, ['admin_url' => $adminUrl]);
 
         return $log;
     }
@@ -547,36 +547,10 @@ class DeploymentService
      */
     public function lastReload(): ?array
     {
-        $record = $this->settings->get(self::LAST_RELOAD_KEY);
+        $run = $this->readRun(self::LAST_RELOAD_KEY, ['admin_url' => true]);
 
-        if (! is_array($record)) {
-            return null;
-        }
-
-        $attemptedAt = $record['attempted_at'] ?? null;
-        $message = $record['message'] ?? null;
-        $adminUrl = $record['admin_url'] ?? null;
-
-        if (! is_string($attemptedAt) || ! is_string($message) || ! is_string($adminUrl)) {
-            return null;
-        }
-
-        return [
-            'attempted_at' => $attemptedAt,
-            'ok' => ($record['ok'] ?? false) === true,
-            'message' => $message,
-            'admin_url' => $adminUrl,
-        ];
-    }
-
-    private function rememberLastReload(bool $ok, string $message, string $adminUrl): void
-    {
-        $this->settings->set(self::LAST_RELOAD_KEY, [
-            'attempted_at' => now()->utc()->toIso8601String(),
-            'ok' => $ok,
-            'message' => $message,
-            'admin_url' => $adminUrl,
-        ]);
+        /** @var array{attempted_at: string, ok: bool, message: string, admin_url: string}|null $run */
+        return $run;
     }
 
     /**
@@ -586,7 +560,10 @@ class DeploymentService
      */
     public function lastComposerRun(): ?array
     {
-        return $this->readRun(self::COMPOSER_RUN_KEY);
+        $run = $this->readRun(self::COMPOSER_RUN_KEY, ['pm' => false]);
+
+        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
+        return $run;
     }
 
     /**
@@ -596,7 +573,10 @@ class DeploymentService
      */
     public function lastFrontendRun(): ?array
     {
-        return $this->readRun(self::FRONTEND_RUN_KEY);
+        $run = $this->readRun(self::FRONTEND_RUN_KEY, ['pm' => false]);
+
+        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
+        return $run;
     }
 
     /**
@@ -612,9 +592,10 @@ class DeploymentService
     }
 
     /**
-     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     * @param  array<string, bool>  $stringFields  field => required
+     * @return array<string, bool|string|null>|null
      */
-    private function readRun(string $key): ?array
+    private function readRun(string $key, array $stringFields = []): ?array
     {
         $record = $this->settings->get($key);
 
@@ -629,12 +610,23 @@ class DeploymentService
             return null;
         }
 
-        return [
+        $run = [
             'attempted_at' => $attemptedAt,
             'ok' => ($record['ok'] ?? false) === true,
             'message' => $message,
-            'pm' => is_string($record['pm'] ?? null) ? $record['pm'] : null,
         ];
+
+        foreach ($stringFields as $field => $required) {
+            $value = $record[$field] ?? null;
+
+            if ($required && ! is_string($value)) {
+                return null;
+            }
+
+            $run[$field] = is_string($value) ? $value : null;
+        }
+
+        return $run;
     }
 
     private function composerInstall(): string
