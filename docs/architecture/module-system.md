@@ -1,7 +1,7 @@
 # Module System
 
 **Document Type:** Architecture Specification
-**Scope:** Belimbing's module system — directory layout, distribution model, lifecycle, variation (adapters and slots), and discovery contracts
+**Scope:** Belimbing's module system — directory layout, Distribution Bundle model, lifecycle, variation (adapters and slots), and discovery contracts
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
 **Last Updated:** 2026-06-11
 **Related:** `docs/brief.md`, `docs/architecture/database.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
@@ -13,8 +13,8 @@
 This document defines the module system that supports Belimbing's core principles:
 
 - **Modules as Ownership Boundaries** — the module directory owns its full stack; everything below it is module internals
-- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain distributions, extension modules, and swappable slots (one of N variants fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` never plug — they are the framework
-- **Extension Modules** — licensee-owned extension modules grouped under one licensee distribution
+- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain Distribution Bundles, extension modules, and swappable slots (one of N variants fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` never plug — they are the framework
+- **Extension Modules** — licensee-owned extension modules grouped under one licensee Distribution Bundle
 - **Discovery by Convention** — provider discovery is glob-based; artifact discovery is path-contract based per artifact. A module that satisfies the relevant [discovery contracts](#discovery-contracts) is integrated with no central registration step
 - **Quality-Obsessed** — deep modules with simple interfaces
 
@@ -22,15 +22,15 @@ This document defines the module system that supports Belimbing's core principle
 
 ## Directory Structure
 
-The module boundary is the filesystem path plus its discovery contract. The current default distribution is nested git; Composer/package installation remains valid if it preserves the same path, namespace, and artifact contracts.
+The module boundary is the filesystem path plus its discovery contract. The current default delivery mechanism is nested git; Composer/package installation remains valid if it preserves the same path, namespace, and artifact contracts.
 
-| Layer | Path shape | Distribution | Notes |
+| Layer | Path shape | Distribution Bundle | Notes |
 |------|------------|--------------|-------|
 | Base | `app/Base/{Module}/` | Main repo | Framework infrastructure. Shallow; no domain grouping. Not pluggable. |
 | Core | `app/Modules/Core/{Module}/` | Main repo | Required business foundations. Not pluggable. |
-| Domain | `app/Modules/{Domain}/{Module}/` | One installable distribution per non-Core domain | Domain-level `Config/` and `Tests/` may sit beside modules. A module can later become a slot. |
-| Slot | `app/Modules/{Domain}/{Module}/` | One selected variant distribution | Same path and namespace as the slot contract; only the provider distribution changes. |
-| Extension | `extensions/{licensee}/{module}/` | One licensee distribution containing one or more modules | Licensee and module path segments use kebab-case and map to `Extensions\{Licensee}\{Module}`. |
+| Domain | `app/Modules/{Domain}/{Module}/` | One installable Distribution Bundle per non-Core domain | Domain-level `Config/` and `Tests/` may sit beside modules. A module can later become a slot. |
+| Slot | `app/Modules/{Domain}/{Module}/` | One selected variant Distribution Bundle | Same path and namespace as the slot contract; only the provider Distribution Bundle changes. |
+| Extension | `extensions/{licensee}/{module}/` | One licensee Distribution Bundle containing one or more modules | Licensee and module path segments use kebab-case and map to `Extensions\{Licensee}\{Module}`. |
 
 The **module** directory is the full-stack ownership boundary: code, database artifacts, config, routes, tests, and module-owned views or assets below it are module internals. A directory containing `ServiceProvider.php` at one of the module path shapes is provider-discoverable; other peer directories are inert to provider discovery.
 
@@ -47,15 +47,17 @@ An **entity** is not an ownership boundary. It is a domain object or relation ow
 
 ---
 
-## Distribution Model
+## Distribution Bundle Model
 
-Current BLB deployments use plain nested git for non-Core domains, licensee extensions, and slot variants. The framework repo tracks `Base` and `Core`; each installed distribution keeps its own history while presenting the path and discovery contract from [Directory Structure](#directory-structure).
+A **Distribution Bundle** is BLB's installable, versioned code bundle. It lands in the repository at one of the path and namespace contracts in [Directory Structure](#directory-structure).
 
-Nested git is a distribution mechanism, not the architectural boundary. A future Composer-installed module is valid if it presents the same module identity, namespace, views/assets/config/tests, and discovery surface without moving module-owned internals into global framework directories.
+The Distribution Bundle is the delivery unit, not the ownership boundary. The module path owns the code, database artifacts, config, routes, views, assets, tests, and discovery contract; the Distribution Bundle records how that code is shipped and versioned.
 
-Repo boundaries follow swappability: a single module is carved out of its domain distribution only when its path becomes a [slot](#module-variation-adapters-and-slots) — its first real variant arrives. Do not pre-extract slots. When a module becomes a slot, the original domain distribution stops owning that path and the chosen variant fills the same path; discovery stays unchanged because the namespace and path stay identical.
+Current BLB deployments use nested git repositories for non-Core domains, licensee extensions, and slot variants. `Base` and `Core` ship in the main Belimbing platform repository; installed Distribution Bundles keep their own history. Deployment composition is the platform repo plus the installed Distribution Bundles and their versions, recorded today by Git remotes, branches or tags, and commits.
 
-Deployment composition is the set of installed distributions and their versions. Today that is recorded by Git remotes/branches/tags/commits and deployment automation; a future Composer path should preserve the same module identity and discovery behavior.
+A future Composer/package delivery path is valid if it preserves the same module identity, namespace, manifest, views/assets/config/tests, and discovery surface. The package manager may change; the path and discovery contract must not.
+
+Repo boundaries follow swappability. A module is split out of its domain Distribution Bundle only when its path becomes a [slot](#module-variation-adapters-and-slots) — when the first real variant arrives. Do not pre-extract slots. When a module becomes a slot, the original domain Distribution Bundle stops owning that path and the selected variant Distribution Bundle fills it; discovery stays unchanged because the namespace and path stay identical.
 
 For the full private-repo workflow (creating the repo, remotes, daily commands), see `docs/guides/extensions/private-extension-repositories.md`.
 
@@ -63,9 +65,9 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 A fresh Belimbing clone runs with Base + Core. Optional domains can be installed, disabled, or uninstalled from **Administration → System → Domains** or by equivalent deployment automation.
 
-- **Installed:** the domain distribution is present and participates in discovery.
-- **Disabled:** the distribution remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
-- **Uninstalled:** the distribution is removed. Persistent data is retained unless the operator explicitly chooses cleanup.
+- **Installed:** the domain Distribution Bundle is present and participates in discovery.
+- **Disabled:** the Distribution Bundle remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
+- **Uninstalled:** the Distribution Bundle is removed. Persistent data is retained unless the operator explicitly chooses cleanup.
 
 This separates code composition from durable database state: removing code is not the same decision as deleting data. Unclaimed database state — whether kept by an uninstall or left by schema drift during development — is listed and cleaned up under **Administration → System → Database → Database Residue**, which compares the database against what the code on disk claims (migration-created tables, declared settings).
 
@@ -73,9 +75,9 @@ This separates code composition from durable database state: removing code is no
 
 ## Module Variation: Adapters and Slots
 
-Deployments differ — Malaysian payroll follows EPF/SOCSO/PCB rules, a Malaysian commerce deployment sells through Shopee and Lazada. Replaceability is a **contract problem first and a distribution problem second**: before anything moves between distributions, the variation point needs a defined seam. There are two mechanisms; choose per module.
+Deployments differ — Malaysian payroll follows EPF/SOCSO/PCB rules, a Malaysian commerce deployment sells through Shopee and Lazada. Replaceability is a **contract problem first and a delivery problem second**: before anything moves between Distribution Bundles, the variation point needs a defined seam. There are two mechanisms; choose per module.
 
-> **A note on "pluggable":** earlier versions of this document promised "independently pluggable modules." That phrase conflated two different promises — *removability* (a deployment has the code or doesn't; exercised by domain distributions and extension modules) and *replaceability* (a deployment chooses among implementations; exercised by slots). This document keeps the mechanics that make both possible everywhere (discovery contracts, contract-only dependencies) but does not claim per-module replaceability until a real variant converts that module into a slot. A module inside a domain distribution is *potentially* swappable; domains, slots, and extensions are what *actually* plug.
+> **A note on "pluggable":** earlier versions of this document promised "independently pluggable modules." That phrase conflated two different promises — *removability* (a deployment has the code or doesn't; exercised by domain Distribution Bundles and extension modules) and *replaceability* (a deployment chooses among implementations; exercised by slots). This document keeps the mechanics that make both possible everywhere (discovery contracts, contract-only dependencies) but does not claim per-module replaceability until a real variant converts that module into a slot. A module inside a domain Distribution Bundle is *potentially* swappable; domains, slots, and extensions are what *actually* plug.
 
 ### Mechanism 1 — Contract + adapters (the default)
 
@@ -94,15 +96,15 @@ Use when variants diverge in lifecycle, consumers, or regulatory burden (see [Pr
 
 Slot rules:
 
-1. **Fixed identity.** Every variant mounts at the same path (`app/Modules/People/Payroll/`), declares the same namespace (`App\Modules\People\Payroll\`), and carries the same manifest id (`extra.blb.module: people/payroll`). Variants differ by distribution identity/version (Git remote today, package identity later). Dependents' imports and `requires-modules` declarations never change.
+1. **Fixed identity.** Every variant mounts at the same path (`app/Modules/People/Payroll/`), declares the same namespace (`App\Modules\People\Payroll\`), and carries the same manifest id (`extra.blb.module: people/payroll`). Variants differ by Distribution Bundle identity/version (Git remote today, package identity later). Dependents' imports and `requires-modules` declarations never change.
 2. **Contract-only dependencies.** Other modules may consume the slot's events, call its service contracts, and link its routes — they must never query its tables or import classes outside its contract surface. This is what makes the swap invisible to the rest of the system.
-3. **Variant-owned path.** A slot path is not owned by the parent domain distribution; it is always supplied by the selected variant distribution. The default implementation is itself a variant. A slot is never a tracked default that some deployments overlay.
+3. **Variant-owned path.** A slot path is not owned by the parent domain Distribution Bundle; it is always supplied by the selected variant Distribution Bundle. The default implementation is itself a variant. A slot is never a tracked default that some deployments overlay.
 4. **Deploy-time choice.** Each variant owns its migrations and tables. Picking a variant is a deployment decision; switching variants on a live database is a data-migration project, not a toggle.
-5. **Documented surface.** Before a second variant exists, document the slot's public surface: events published and consumed, service contracts implemented, menu and route surface provided. Keep that contract in `docs/modules/` or in the slot distribution's own module docs and link it from the owning domain docs. The goal is that another team can build a variant without reading the default implementation.
+5. **Documented surface.** Before a second variant exists, document the slot's public surface: events published and consumed, service contracts implemented, menu and route surface provided. Keep that contract in `docs/modules/` or in the slot Distribution Bundle's own module docs and link it from the owning domain docs. The goal is that another team can build a variant without reading the default implementation.
 
 ### Choosing between them
 
-Prefer adapters — they keep one engine maintained instead of N. Convert a module into a slot only when a real whole-module variant arrives, using the [distribution model](#distribution-model). The boundary that matters is the swappable seam, not the domain: `People/Payroll` may become a slot while `People/Settings` — which nothing replaces — stays in the domain distribution beside it.
+Prefer adapters — they keep one engine maintained instead of N. Convert a module into a slot only when a real whole-module variant arrives, using the [Distribution Bundle model](#distribution-bundle-model). The boundary that matters is the swappable seam, not the domain: `People/Payroll` may become a slot while `People/Settings` — which nothing replaces — stays in the domain Distribution Bundle beside it.
 
 ---
 
@@ -156,7 +158,7 @@ All module roots use the same internal vocabulary. A module includes only the di
 
 `Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the plugin dashboard. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
 
-Module manifests are metadata for installed-module UI and dependency-health warnings. They should remain compatible with future Composer distribution, but they do not replace Composer's PHP dependency resolution or provider independence.
+Module manifests are metadata for installed-module UI and dependency-health warnings. They should remain compatible with future Composer Distribution Bundles, but they do not replace Composer's PHP dependency resolution or provider independence.
 
 Extension providers remain the integration point for extension behavior not covered by framework scanners, such as module config, views, commands, schedules, and extension authz. Extension migrations are not provider boilerplate: they are discovered by the Base database layer from `Database/Migrations/`. For private nested-git workflow, see `docs/guides/extensions/private-extension-repositories.md`.
 
@@ -168,7 +170,7 @@ Module-owned tests live inside the module; the root `tests/` tree hosts framewor
 
 - Tests for a specific module belong in that module's `Tests/` directory so they travel with the module. `Tests/Feature/` files receive the application `TestCase` and `RefreshDatabase` via `tests/Pest.php`.
 - Tests that span a whole domain (e.g. the domain menu shape) live in the domain-level `Tests/` directory (`app/Modules/Commerce/Tests/`).
-- The root `tests/Unit/Modules` and `tests/Feature/Modules` trees contain Core module tests only; non-Core domain tests live in their domain distributions.
+- The root `tests/Unit/Modules` and `tests/Feature/Modules` trees contain Core module tests only; non-Core domain tests live in their domain Distribution Bundles.
 - PHPUnit and Pest discover module and extension tests from the path contracts in [Discovery Contracts](#discovery-contracts).
 - Test policy and assertion-strength guidance: `tests/AGENTS.md`.
 
@@ -222,13 +224,13 @@ A lightweight scope flag (`purpose`, `kind`, etc.) is acceptable only when the v
 
 ### 2. Discovery Over Registration
 
-A module declares nothing centrally. Placing a conforming distribution in a discovery root installs its code surface; disabling or removing it changes discovery immediately. Persistent state cleanup is a separate lifecycle decision, not a side effect of provider discovery. Consequences:
+A module declares nothing centrally. Placing a conforming Distribution Bundle in a discovery root installs its code surface; disabling or removing it changes discovery immediately. Persistent state cleanup is a separate lifecycle decision, not a side effect of provider discovery. Consequences:
 
 - Every framework mechanism that consumes module artifacts must use the [discovery contracts](#discovery-contracts) for each artifact and every root where that artifact is supported (`app/Base`, `app/Modules`, `extensions`).
 - Provider load order is part of the contract: priority → Base → Modules → extensions → app providers, alphabetical within each group. Treat this as deterministic bootstrapping and override order, not as permission to create hidden provider-order dependencies.
 
 ### 3. Single Source of Truth
 
-- Code: versioned distributions (main repo plus installed domains, slots, and extensions)
+- Code: versioned Distribution Bundles (main repo plus installed domains, slots, and extensions)
 - Runtime settings: database (`base_settings`)
 - Environment: only bootstrap values

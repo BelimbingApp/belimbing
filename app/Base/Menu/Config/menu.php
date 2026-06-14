@@ -1,4 +1,5 @@
 <?php
+
 /*
  * Menu naming convention
  *
@@ -96,6 +97,12 @@ return [
             'id' => 'admin.system.integrations',
             'label' => 'Integrations',
             'icon' => 'heroicon-o-link',
+            'parent' => 'admin.system',
+        ],
+        [
+            'id' => 'admin.system.update',
+            'label' => 'Update',
+            'icon' => 'heroicon-o-arrow-down-circle',
             'parent' => 'admin.system',
         ],
     ],
