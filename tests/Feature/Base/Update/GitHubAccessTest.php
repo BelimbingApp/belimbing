@@ -2,8 +2,30 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Update\Livewire\GitHubAccess\Index;
-use Illuminate\Support\Facades\Http;
+use App\Base\Update\Services\DeploymentBuildRunner;
+use App\Base\Update\Services\DeploymentService;
+use App\Base\Update\Services\DistributionBundleRepository;
 use Livewire\Livewire;
+
+beforeEach(function (): void {
+    app()->instance(DeploymentService::class, new class(app(SettingsService::class), app(DistributionBundleRepository::class), app(DeploymentBuildRunner::class)) extends DeploymentService
+    {
+        public function owners(): array
+        {
+            return [
+                ['owner' => 'kiatng', 'repos' => ['kiatng/blb-ham'], 'has_token' => false],
+                ['owner' => 'BelimbingApp', 'repos' => ['BelimbingApp/belimbing'], 'has_token' => false],
+            ];
+        }
+
+        public function testOwner(string $owner, ?string $token = null): array
+        {
+            return $owner === 'kiatng'
+                ? [['repo' => 'kiatng/blb-ham', 'ok' => true, 'status' => 200, 'message' => 'Reachable (private).']]
+                : [];
+        }
+    });
+});
 
 test('github access page lists the deployment owners for admins', function (): void {
     $user = createAdminUser();
@@ -41,7 +63,6 @@ test('save rejects a too-short token for an owner', function (): void {
 test('test connection probes an owner repos with its token', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    Http::fake(['https://api.github.com/*' => Http::response(['private' => true], 200)]);
 
     $component = Livewire::test(Index::class)
         ->set('tokens.kiatng', 'github_pat_0123456789abcdef')

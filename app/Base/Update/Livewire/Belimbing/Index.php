@@ -80,19 +80,12 @@ class Index extends Component
 
     public function runLineClass(string $line): string
     {
-        if ($this->isErrorLine($line)) {
-            return 'text-status-danger';
-        }
-
-        if ($this->isWarningLine($line)) {
-            return 'text-status-warning';
-        }
-
-        if (str_starts_with($line, 'Update complete.') || str_starts_with($line, 'Verified:')) {
-            return 'text-status-success';
-        }
-
-        return '';
+        return match (true) {
+            $this->isErrorLine($line) => 'text-status-danger',
+            $this->isWarningLine($line) => 'text-status-warning',
+            str_starts_with($line, 'Update complete.') || str_starts_with($line, 'Verified:') => 'text-status-success',
+            default => '',
+        };
     }
 
     private function authorizeManage(): void
@@ -120,19 +113,12 @@ class Index extends Component
 
     private function runOutcome(): string
     {
-        if ($this->log === []) {
-            return 'idle';
-        }
-
-        if (collect($this->log)->contains(fn (string $line): bool => $this->isErrorLine($line))) {
-            return 'error';
-        }
-
-        if (collect($this->log)->contains(fn (string $line): bool => $this->isWarningLine($line))) {
-            return 'warning';
-        }
-
-        return 'success';
+        return match (true) {
+            $this->log === [] => 'idle',
+            collect($this->log)->contains(fn (string $line): bool => $this->isErrorLine($line)) => 'error',
+            collect($this->log)->contains(fn (string $line): bool => $this->isWarningLine($line)) => 'warning',
+            default => 'success',
+        };
     }
 
     private function runOutcomeLabel(): string

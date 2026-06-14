@@ -40,7 +40,11 @@ class DomainState
         $path = self::statePath();
 
         clearstatcache(false, $path);
-        $mtime = is_file($path) ? (filemtime($path) ?: null) : null;
+        $mtime = null;
+
+        if (is_file($path)) {
+            $mtime = filemtime($path) ?: null;
+        }
 
         if (self::$disabledCache !== null && self::$cacheMtime === $mtime) {
             return self::$disabledCache;

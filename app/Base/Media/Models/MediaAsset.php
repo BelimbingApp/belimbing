@@ -2,6 +2,7 @@
 
 namespace App\Base\Media\Models;
 
+use App\Base\Media\Exceptions\MediaStorageException;
 use DateInterval;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -9,7 +10,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
-use RuntimeException;
 
 /**
  * Durable record for a media asset. Usually a stored file on a Laravel
@@ -109,7 +109,7 @@ class MediaAsset extends Model
                 return $publicUrl;
             }
 
-            throw new RuntimeException('External media asset is missing a valid http(s) public_url.');
+            throw MediaStorageException::invalidExternalUrl();
         }
 
         return $this->streamUrl($expiresIn);
