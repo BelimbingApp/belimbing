@@ -1,0 +1,4 @@
+interface:
+  display_name: "BLB Code Review"
+  short_description: "Review BLB changes with low-entropy judgment"
+  default_prompt: "Use $blb-code-review to review the current BLB changes."
