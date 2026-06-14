@@ -1,16 +1,16 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Update\Livewire\Belimbing\Index;
+use App\Base\Update\Livewire\Deployment\Index;
 use App\Base\Update\Services\DeploymentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Livewire\Livewire;
 
-const BELIMBING_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+const DEPLOYMENT_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
-function fakeBelimbingUpdateProcesses(string $sha = BELIMBING_UPDATE_SHA, ?string $remoteError = null): void
+function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
 {
     Process::fake(function ($process) use ($sha, $remoteError) {
         return match ($process->command) {
@@ -26,7 +26,7 @@ function fakeBelimbingUpdateProcesses(string $sha = BELIMBING_UPDATE_SHA, ?strin
     });
 }
 
-function fakeBelimbingUpdateHttp(bool $reloadOk = true): void
+function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
 {
     Http::fake([
         '127.0.0.1:*' => $reloadOk
@@ -36,14 +36,15 @@ function fakeBelimbingUpdateHttp(bool $reloadOk = true): void
     ]);
 }
 
-test('belimbing update page lists Distribution Bundles with status for admins', function (): void {
+test('deployment page lists Distribution Bundles with status for admins', function (): void {
     $user = createAdminUser();
-    fakeBelimbingUpdateProcesses();
+    fakeDeploymentUpdateProcesses();
     Http::fake();
 
     $this->actingAs($user)
-        ->get(route('admin.system.update.belimbing.index'))
+        ->get(route('admin.system.update.deployment.index'))
         ->assertOk()
+        ->assertSee('Deployment')
         ->assertSee('Distribution Bundles')
         ->assertSee('Distribution Bundle')
         ->assertSee('A Distribution Bundle is BLB&#039;s installable, versioned code bundle.', false)
@@ -60,11 +61,11 @@ test('belimbing update page lists Distribution Bundles with status for admins', 
 
 test('failed remote checks name the repos instead of assuming they are private', function (): void {
     $user = createAdminUser();
-    fakeBelimbingUpdateProcesses(remoteError: 'fatal: unable to access repository');
+    fakeDeploymentUpdateProcesses(remoteError: 'fatal: unable to access repository');
     Http::fake();
 
     $this->actingAs($user)
-        ->get(route('admin.system.update.belimbing.index'))
+        ->get(route('admin.system.update.deployment.index'))
         ->assertOk()
         ->assertSee('Could not check latest commits for these Distribution Bundles: BelimbingApp/belimbing')
         ->assertSee('Public repositories do not need a token')
@@ -77,7 +78,7 @@ test('failed remote checks name the repos instead of assuming they are private',
 test('reload only triggers a graceful worker reload and records a log', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    fakeBelimbingUpdateProcesses();
+    fakeDeploymentUpdateProcesses();
     Http::fake([
         '127.0.0.1:*' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
         '*' => Http::response([], 200),
@@ -97,11 +98,11 @@ test('reload only triggers a graceful worker reload and records a log', function
         ->and($stored['message'])->toBe('Web workers reloaded.');
 });
 
-test('belimbing update page shows the last frankenphp reload', function (): void {
+test('deployment page shows the last frankenphp reload', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    fakeBelimbingUpdateProcesses();
-    fakeBelimbingUpdateHttp();
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
 
     app(DeploymentService::class)->reload();
 
@@ -115,7 +116,7 @@ test('belimbing update page shows the last frankenphp reload', function (): void
 test('the previous run log persists at its rest location across page visits', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    fakeBelimbingUpdateProcesses();
+    fakeDeploymentUpdateProcesses();
     Http::fake([
         '127.0.0.1:*' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
         '*' => Http::response([], 200),
@@ -147,8 +148,8 @@ test('manual frontend rebuild installs with the lockfile package manager and bui
 test('maintenance actions rebuild from the component and record the run', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    fakeBelimbingUpdateProcesses();
-    fakeBelimbingUpdateHttp();
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
 
     Livewire::test(Index::class)
         ->assertSee('Maintenance')
@@ -193,8 +194,8 @@ test('a failed frontend build records a needs-attention last run', function (): 
 });
 
 test('updating the platform pulls, refreshes runtime artifacts, migrates, and reloads', function (): void {
-    fakeBelimbingUpdateProcesses();
-    fakeBelimbingUpdateHttp();
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
 
     $log = app(DeploymentService::class)->update(['platform']);
 
@@ -209,8 +210,8 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {
-    fakeBelimbingUpdateProcesses();
-    fakeBelimbingUpdateHttp(reloadOk: false);
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp(reloadOk: false);
 
     $log = app(DeploymentService::class)->update(['platform']);
 

@@ -1,9 +1,9 @@
 <div>
-    <x-slot name="title">{{ __('Update Belimbing') }}</x-slot>
+    <x-slot name="title">{{ __('Deployment') }}</x-slot>
 
     <div class="space-y-section-gap" x-data="{ running: false, dismissed: false }" @run-finished.window="running = false" @keydown.escape.window="dismissed = true">
         <x-ui.page-header
-            :title="__('Belimbing')"
+            :title="__('Deployment')"
             :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
         />
 

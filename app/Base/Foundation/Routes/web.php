@@ -9,7 +9,7 @@ Route::middleware('auth')->group(function (): void {
         ->middleware('authz:admin.system.plugins.view')
         ->name('admin.system.plugins.index');
 
-    Route::get('admin/system/domains', DomainManager::class)
-        ->middleware('authz:admin.system.domains.view')
-        ->name('admin.system.domains.index');
+    Route::get('admin/system/update/business-domains', DomainManager::class)
+        ->middleware('authz:admin.system.update.business-domain.view')
+        ->name('admin.system.update.business-domains.index');
 });

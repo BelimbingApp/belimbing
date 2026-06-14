@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Base\Update\Livewire\Belimbing;
+namespace App\Base\Update\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
@@ -19,7 +19,7 @@ use Livewire\Component;
 class Index extends Component
 {
     /** @var list<string> last action's log lines (persists so the resting panel survives a page visit) */
-    #[Session('admin.system.update.belimbing.run_log')]
+    #[Session('admin.system.update.deployment.run_log')]
     public array $log = [];
 
     public function updateRepo(string $key, DeploymentService $deployment): void
@@ -66,7 +66,7 @@ class Index extends Component
     {
         $status = $deployment->status();
 
-        return view('livewire.admin.system.update.belimbing.index', [
+        return view('livewire.admin.system.update.deployment.index', [
             'status' => $status,
             'behind' => collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false),
             'checkFailures' => collect($status)
@@ -99,7 +99,7 @@ class Index extends Component
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
-            'admin.system.update.belimbing.manage',
+            'admin.system.update.deployment.manage',
         );
     }
 

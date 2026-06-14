@@ -38,7 +38,7 @@ class DeploymentService
     ) {}
 
     /**
-     * Per-Distribution Bundle version status for the Belimbing update page.
+     * Per-Distribution Bundle version status for the Deployment page.
      *
      * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
      */

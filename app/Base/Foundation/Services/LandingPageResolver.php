@@ -15,7 +15,7 @@ use App\Base\Menu\Contracts\NavigableMenuSnapshot;
  *     lost access to (revoked capability, uninstalled domain) falls through
  *     silently instead of 403ing every login.
  *  2. On an installation with no business domains yet, operators who can
- *     see the Domains screen land there — that screen is how a fresh
+ *     see the Business Domains screen land there — that screen is how a fresh
  *     install gets its domains.
  *  3. The dashboard.
  */
@@ -37,12 +37,16 @@ class LandingPageResolver
             ? ($user->prefsArray()[self::PREF_KEY] ?? null)
             : null;
 
-        if (is_string($preference) && isset($options[$preference]['href'])) {
-            return $options[$preference]['href'];
+        if (is_string($preference)) {
+            $preference = $this->normalizePreference($preference);
+
+            if (isset($options[$preference]['href'])) {
+                return $options[$preference]['href'];
+            }
         }
 
-        if (! $this->installer->hasAnyInstalled() && $this->canViewDomains($user)) {
-            return route('admin.system.domains.index', absolute: false);
+        if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
+            return route('admin.system.update.business-domains.index', absolute: false);
         }
 
         return route('dashboard', absolute: false);
@@ -58,10 +62,19 @@ class LandingPageResolver
         return $this->menu->snapshotForUser($user)['flat'];
     }
 
-    private function canViewDomains(mixed $user): bool
+    private function normalizePreference(string $preference): string
+    {
+        return match ($preference) {
+            'admin.system.domains' => 'admin.system.update.business-domain',
+            'admin.system.update.belimbing' => 'admin.system.update.deployment',
+            default => $preference,
+        };
+    }
+
+    private function canViewBusinessDomains(mixed $user): bool
     {
         return $this->authz
-            ->can(Actor::forUser($user), 'admin.system.domains.view')
+            ->can(Actor::forUser($user), 'admin.system.update.business-domain.view')
             ->allowed;
     }
 }
