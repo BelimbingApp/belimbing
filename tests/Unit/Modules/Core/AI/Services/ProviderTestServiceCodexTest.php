@@ -21,7 +21,7 @@ const PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID = 'gpt-5.1-codex-mini';
 const PROVIDER_TEST_SERVICE_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 const PROVIDER_TEST_SERVICE_CODEX_ACCOUNT_ID = 'acct_test';
 
-function makeCodexProviderTestService(string $model, string $providerMessage): ProviderTestService
+function makeProviderTestServiceCodexFailure(string $model, string $providerMessage): ProviderTestService
 {
     $config = [
         'provider_name' => PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME,
@@ -66,7 +66,7 @@ function makeCodexProviderTestService(string $model, string $providerMessage): P
 test('ProviderTestService preserves Codex transport provider messages and adds structured logs', function (): void {
     Log::spy();
 
-    $service = makeCodexProviderTestService(
+    $service = makeProviderTestServiceCodexFailure(
         PROVIDER_TEST_SERVICE_CODEX_MODEL_ID,
         'missing chatgpt-account-id',
     );
@@ -97,7 +97,7 @@ test('ProviderTestService preserves unsupported Codex model provider messages', 
 
     Log::spy();
 
-    $service = makeCodexProviderTestService(
+    $service = makeProviderTestServiceCodexFailure(
         PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID,
         $unsupportedModelMessage,
     );
