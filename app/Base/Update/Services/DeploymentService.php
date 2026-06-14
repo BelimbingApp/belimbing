@@ -33,6 +33,10 @@ class DeploymentService
 
     private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
 
+    private const COMPOSER_RUN_KEY = 'system.update.composer.last_run';
+
+    private const FRONTEND_RUN_KEY = 'system.update.frontend.last_run';
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
@@ -228,7 +232,7 @@ class DeploymentService
      */
     public function rebuildPhp(): array
     {
-        $log = [(string) __('Rebuilding PHP dependencies…'), $this->composerInstall()];
+        $log = [(string) __('Installing PHP dependencies…'), $this->composerInstall()];
 
         return array_merge($log, $this->reload(), [(string) __('Done.')]);
     }
@@ -242,10 +246,19 @@ class DeploymentService
     public function rebuildAssets(): array
     {
         return array_merge(
-            [(string) __('Rebuilding frontend assets…')],
+            [(string) __('Building frontend assets…')],
             $this->buildAssets(),
             [(string) __('Done.')],
         );
+    }
+
+    /**
+     * The JS package manager the asset build will actually invoke on this host
+     * (bun|pnpm|yarn|npm, chosen by lockfile) — so the UI can name it honestly.
+     */
+    public function frontendPackageManager(): string
+    {
+        return $this->nodeInstallCommand()[0];
     }
 
     public function tokenFor(string $owner): ?string
@@ -566,6 +579,64 @@ class DeploymentService
         ]);
     }
 
+    /**
+     * Last recorded composer install (manual or auto), or null if none yet.
+     *
+     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     */
+    public function lastComposerRun(): ?array
+    {
+        return $this->readRun(self::COMPOSER_RUN_KEY);
+    }
+
+    /**
+     * Last recorded frontend build (manual or auto), or null if none yet.
+     *
+     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     */
+    public function lastFrontendRun(): ?array
+    {
+        return $this->readRun(self::FRONTEND_RUN_KEY);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extra
+     */
+    private function rememberRun(string $key, bool $ok, string $message, array $extra = []): void
+    {
+        $this->settings->set($key, array_merge([
+            'attempted_at' => now()->utc()->toIso8601String(),
+            'ok' => $ok,
+            'message' => $message,
+        ], $extra));
+    }
+
+    /**
+     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
+     */
+    private function readRun(string $key): ?array
+    {
+        $record = $this->settings->get($key);
+
+        if (! is_array($record)) {
+            return null;
+        }
+
+        $attemptedAt = $record['attempted_at'] ?? null;
+        $message = $record['message'] ?? null;
+
+        if (! is_string($attemptedAt) || ! is_string($message)) {
+            return null;
+        }
+
+        return [
+            'attempted_at' => $attemptedAt,
+            'ok' => ($record['ok'] ?? false) === true,
+            'message' => $message,
+            'pm' => is_string($record['pm'] ?? null) ? $record['pm'] : null,
+        ];
+    }
+
     private function composerInstall(): string
     {
         $args = array_merge($this->composerCommand(), [
@@ -581,9 +652,13 @@ class DeploymentService
 
         $result = Process::path(base_path())->timeout(900)->run($args);
 
-        return $result->successful()
+        $message = $result->successful()
             ? (string) __('PHP dependencies installed.')
             : (string) __('PHP dependency install failed: :error', ['error' => $this->processError($result)]);
+
+        $this->rememberRun(self::COMPOSER_RUN_KEY, $result->successful(), $message);
+
+        return $message;
     }
 
     private function composerDumpAutoload(): string
@@ -632,12 +707,15 @@ class DeploymentService
         };
 
         $install = $this->nodeInstallCommand();
+        $pm = $install[0];
         $record((string) __('Installing frontend dependencies (:command)…', ['command' => implode(' ', $install)]));
 
         $installResult = Process::path(base_path())->timeout(900)->run($install);
 
         if (! $installResult->successful()) {
-            $record((string) __('Frontend dependency install failed: :error', ['error' => $this->processError($installResult)]));
+            $message = (string) __('Frontend dependency install failed: :error', ['error' => $this->processError($installResult)]);
+            $record($message);
+            $this->rememberRun(self::FRONTEND_RUN_KEY, false, $message, ['pm' => $pm]);
 
             return $log;
         }
@@ -649,9 +727,11 @@ class DeploymentService
 
         $buildResult = Process::path(base_path())->timeout(600)->run($build);
 
-        $record($buildResult->successful()
+        $message = $buildResult->successful()
             ? (string) __('Frontend assets built.')
-            : (string) __('Frontend asset build failed: :error', ['error' => $this->processError($buildResult)]));
+            : (string) __('Frontend asset build failed: :error', ['error' => $this->processError($buildResult)]);
+        $record($message);
+        $this->rememberRun(self::FRONTEND_RUN_KEY, $buildResult->successful(), $message, ['pm' => $pm]);
 
         return $log;
     }

@@ -18,18 +18,16 @@ use Livewire\Component;
  */
 class Index extends Component
 {
-    /** @var list<string> last action's log lines */
+    /** @var list<string> last action's log lines (persists so the resting panel survives a page visit) */
     #[Session('admin.system.update.belimbing.run_log')]
     public array $log = [];
-
-    #[Session('admin.system.update.belimbing.run_log_open')]
-    public bool $logPanelOpen = false;
 
     public function updateRepo(string $key, DeploymentService $deployment): void
     {
         $this->authorizeManage();
         $this->startRunLog();
         $this->log = $deployment->update([$key], fn (string $line) => $this->streamRunLine($line));
+        $this->dispatch('run-finished');
     }
 
     public function updateAll(DeploymentService $deployment): void
@@ -37,25 +35,31 @@ class Index extends Component
         $this->authorizeManage();
         $this->startRunLog();
         $this->log = $deployment->update([], fn (string $line) => $this->streamRunLine($line));
+        $this->dispatch('run-finished');
     }
 
     public function reloadOnly(DeploymentService $deployment): void
     {
         $this->authorizeManage();
+        $this->startRunLog();
         $this->log = $deployment->reload();
-        $this->logPanelOpen = true;
+        $this->dispatch('run-finished');
     }
 
-    public function closeRunLog(): void
+    public function rebuildPhp(DeploymentService $deployment): void
     {
-        $this->logPanelOpen = false;
+        $this->authorizeManage();
+        $this->startRunLog();
+        $this->log = $deployment->rebuildPhp();
+        $this->dispatch('run-finished');
     }
 
-    public function showLastRun(): void
+    public function rebuildAssets(DeploymentService $deployment): void
     {
-        if ($this->log !== []) {
-            $this->logPanelOpen = true;
-        }
+        $this->authorizeManage();
+        $this->startRunLog();
+        $this->log = $deployment->rebuildAssets();
+        $this->dispatch('run-finished');
     }
 
     public function render(DeploymentService $deployment): View
@@ -75,6 +79,9 @@ class Index extends Component
             'runOutcomeVariant' => $this->runOutcomeVariant(),
             'runSummary' => $this->runSummary(),
             'lastReload' => $deployment->lastReload(),
+            'packageManager' => $deployment->frontendPackageManager(),
+            'lastComposerRun' => $deployment->lastComposerRun(),
+            'lastFrontendRun' => $deployment->lastFrontendRun(),
         ]);
     }
 
@@ -106,7 +113,6 @@ class Index extends Component
     private function startRunLog(): void
     {
         $this->log = [];
-        $this->logPanelOpen = true;
         $this->stream('', replace: true, to: 'runLog');
     }
 
