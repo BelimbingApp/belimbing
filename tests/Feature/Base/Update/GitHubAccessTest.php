@@ -3,12 +3,13 @@
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Update\Livewire\GitHubAccess\Index;
 use App\Base\Update\Services\DeploymentBuildRunner;
+use App\Base\Update\Services\DeploymentRunHistory;
 use App\Base\Update\Services\DeploymentService;
 use App\Base\Update\Services\DistributionBundleRepository;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
-    app()->instance(DeploymentService::class, new class(app(SettingsService::class), app(DistributionBundleRepository::class), app(DeploymentBuildRunner::class)) extends DeploymentService
+    app()->instance(DeploymentService::class, new class(app(DeploymentRunHistory::class), app(DistributionBundleRepository::class), app(DeploymentBuildRunner::class)) extends DeploymentService
     {
         public function owners(): array
         {

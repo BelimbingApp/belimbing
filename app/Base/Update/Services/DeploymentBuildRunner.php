@@ -16,7 +16,13 @@ class DeploymentBuildRunner
     {
         $lock = base_path('composer.lock');
 
-        return is_file($lock) ? (md5_file($lock) ?: null) : null;
+        if (! is_file($lock)) {
+            return null;
+        }
+
+        $hash = md5_file($lock);
+
+        return $hash !== false ? $hash : null;
     }
 
     public function composerInstall(): string

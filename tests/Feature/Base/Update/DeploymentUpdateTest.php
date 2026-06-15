@@ -2,6 +2,7 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Update\Livewire\Deployment\Index;
+use App\Base\Update\Services\DeploymentRunHistory;
 use App\Base\Update\Services\DeploymentService;
 use App\Base\Update\Services\DistributionBundleRepository;
 use Illuminate\Support\Facades\Artisan;
@@ -11,6 +12,10 @@ use Illuminate\Support\Facades\Process;
 use Livewire\Livewire;
 
 const DEPLOYMENT_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+const DEPLOYMENT_UPDATE_GIT_RECORD_SUFFIX = "\x1fCI\x1fCurrent";
+const DEPLOYMENT_UPDATE_LAST_RUN_LABEL = 'Last run';
+const DEPLOYMENT_UPDATE_FRONTEND_BUILT = 'Frontend assets built.';
+const DEPLOYMENT_UPDATE_COMPLETION_MESSAGE = 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.';
 
 function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
 {
@@ -18,11 +23,11 @@ function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?str
         return match (gitCommandWithoutConfig($process->command)) {
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($sha."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
+            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_GIT_RECORD_SUFFIX),
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
                 ? Process::result($sha."\trefs/heads/main")
                 : Process::result(errorOutput: $remoteError, exitCode: 1),
-            ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', $sha] => Process::result($sha."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
+            ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_GIT_RECORD_SUFFIX),
             default => Process::result(),
         };
     });
@@ -126,7 +131,7 @@ test('deployment page shows the last frankenphp reload', function (): void {
 
     Livewire::test(Index::class)
         ->assertSee('FrankenPHP workers')
-        ->assertSee('Last run')
+        ->assertSee(DEPLOYMENT_UPDATE_LAST_RUN_LABEL)
         ->assertSee('Workers reloaded')
         ->assertSee('Web workers reloaded.');
 });
@@ -157,7 +162,7 @@ test('manual frontend rebuild installs with the lockfile package manager and bui
     $log = app(DeploymentService::class)->rebuildAssets();
 
     expect($log)->toContain('Frontend dependencies installed.')
-        ->and($log)->toContain('Frontend assets built.');
+        ->and($log)->toContain(DEPLOYMENT_UPDATE_FRONTEND_BUILT);
 
     Process::assertRan(fn ($process): bool => array_slice($process->command, 0, 3) === ['bun', 'install', '--frozen-lockfile']);
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
@@ -185,8 +190,8 @@ test('maintenance actions rebuild from the component and record the run', functi
 
     // Both runs leave a durable last-run record (like the FrankenPHP reload), so any
     // admin can later see whether vendor/ and public/build are current and healthy.
-    $composerRun = app(DeploymentService::class)->lastComposerRun();
-    $frontendRun = app(DeploymentService::class)->lastFrontendRun();
+    $composerRun = app(DeploymentRunHistory::class)->lastComposerRun();
+    $frontendRun = app(DeploymentRunHistory::class)->lastFrontendRun();
 
     expect($composerRun)->toBeArray()
         ->and($composerRun['ok'])->toBeTrue()
@@ -194,7 +199,7 @@ test('maintenance actions rebuild from the component and record the run', functi
         ->and($frontendRun)->toBeArray()
         ->and($frontendRun['ok'])->toBeTrue()
         ->and($frontendRun['pm'])->toBe('bun')
-        ->and($frontendRun['message'])->toBe('Frontend assets built.');
+        ->and($frontendRun['message'])->toBe(DEPLOYMENT_UPDATE_FRONTEND_BUILT);
 });
 
 test('a failed frontend build records a needs-attention last run', function (): void {
@@ -204,7 +209,7 @@ test('a failed frontend build records a needs-attention last run', function (): 
 
     app(DeploymentService::class)->rebuildAssets();
 
-    $frontendRun = app(DeploymentService::class)->lastFrontendRun();
+    $frontendRun = app(DeploymentRunHistory::class)->lastFrontendRun();
 
     expect($frontendRun)->toBeArray()
         ->and($frontendRun['ok'])->toBeFalse()
@@ -218,9 +223,9 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
     $log = app(DeploymentService::class)->update(['platform']);
 
     expect($log)->toContain('Building frontend assets…')
-        ->and($log)->toContain('Frontend assets built.')
+        ->and($log)->toContain(DEPLOYMENT_UPDATE_FRONTEND_BUILT)
         ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
-        ->and($log)->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+        ->and($log)->toContain(DEPLOYMENT_UPDATE_COMPLETION_MESSAGE);
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', '--ff-only']);
     Process::assertRan(fn ($process): bool => in_array('dump-autoload', $process->command, true));
@@ -237,7 +242,7 @@ test('a run records a durable deployment last-run with its time and outcome', fu
         ->call('reloadOnly')
         ->assertHasNoErrors();
 
-    $run = app(DeploymentService::class)->lastDeploymentRun();
+    $run = app(DeploymentRunHistory::class)->lastDeploymentRun();
 
     expect($run)->toBeArray()
         ->and($run['status'])->toBe('success')
@@ -252,14 +257,14 @@ test('the run box shows the last run, with its time, on a fresh visit', function
     fakeDeploymentUpdateHttp();
 
     // A durable record stands in for a run from an earlier session (the session log is gone).
-    app(DeploymentService::class)->rememberDeploymentRun(
-        ['Pulling Belimbing (platform)…', 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.'],
+    app(DeploymentRunHistory::class)->rememberDeploymentRun(
+        ['Pulling Belimbing (platform)…', DEPLOYMENT_UPDATE_COMPLETION_MESSAGE],
         'success',
     );
 
     Livewire::test(Index::class)
-        ->assertSee('Last run')
-        ->assertSee('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+        ->assertSee(DEPLOYMENT_UPDATE_LAST_RUN_LABEL)
+        ->assertSee(DEPLOYMENT_UPDATE_COMPLETION_MESSAGE);
 });
 
 test('the run card shows an empty state before any run has happened', function (): void {
@@ -269,7 +274,7 @@ test('the run card shows an empty state before any run has happened', function (
     Http::fake();
 
     Livewire::test(Index::class)
-        ->assertSee('Last run')
+        ->assertSee(DEPLOYMENT_UPDATE_LAST_RUN_LABEL)
         ->assertSee('No update has run yet.');
 });
 
@@ -310,7 +315,7 @@ test('update reports reload problems as warnings instead of clean completion', f
         expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
             ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
             ->and($log)->toContain('Update finished with warnings. Code may be updated, but one or more follow-up checks need attention.')
-            ->and($log)->not->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+            ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETION_MESSAGE);
     } finally {
         putenv('CADDY_SERVER_ADMIN_HOST');
         putenv('CADDY_SERVER_ADMIN_PORT');
@@ -374,7 +379,7 @@ function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
             $command === ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
             $command === ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
             in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
-            in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
+            in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_GIT_RECORD_SUFFIX),
             default => Process::result(),
         };
     };
