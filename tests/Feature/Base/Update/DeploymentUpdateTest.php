@@ -346,3 +346,48 @@ test('a diverged bundle reports an actionable message instead of raw git hints',
         ->not->toContain('hint:')
         ->not->toContain('fatal:');
 });
+
+function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
+{
+    return function ($process) use ($porcelain, $leftRightCount) {
+        return match (true) {
+            $process->command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
+            in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
+            $process->command === ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
+            $process->command === ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
+            in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
+            in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
+            default => Process::result(),
+        };
+    };
+}
+
+test('bundle status surfaces a dirty and diverged working tree', function (): void {
+    // git rev-list --left-right --count @{u}...HEAD => "<behind>\t<ahead>"
+    Process::fake(fakeBundleGit(" M a.php\n?? b.php\n D c.php", "4\t2"));
+
+    $platform = collect(app(DistributionBundleRepository::class)->status())->firstWhere('key', 'platform');
+
+    expect($platform['working_tree']['dirty'])->toBe(3)
+        ->and($platform['working_tree']['ahead'])->toBe(2)
+        ->and($platform['working_tree']['behind'])->toBe(4);
+});
+
+test('a clean bundle reports a clean working tree', function (): void {
+    Process::fake(fakeBundleGit('', "0\t0"));
+
+    $platform = collect(app(DistributionBundleRepository::class)->status())->firstWhere('key', 'platform');
+
+    expect($platform['working_tree'])->toBe(['dirty' => 0, 'ahead' => 0, 'behind' => 0]);
+});
+
+test('the deployment page flags a bundle with uncommitted and unpushed changes', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    Process::fake(fakeBundleGit(" M ibp/Database/Migrations/x.php\n?? y.php", "0\t2"));
+    Http::fake();
+
+    Livewire::test(Index::class)
+        ->assertSee('2 uncommitted changes')
+        ->assertSee('2 unpushed commits');
+});

@@ -21,7 +21,7 @@ class DistributionBundleRepository
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
      */
     public function status(): array
     {
@@ -36,6 +36,7 @@ class DistributionBundleRepository
                 'owner' => $owner,
                 'repo' => $owner !== null ? $owner.'/'.$name : null,
                 'branch' => $branch,
+                'working_tree' => $this->workingTree($dist['path']),
                 'current' => $this->localCommit($dist['path']),
                 'latest' => null,
                 'up_to_date' => null,
@@ -265,6 +266,35 @@ class DistributionBundleRepository
             'label' => $label,
             'path' => $path,
             'relative' => str_replace('\\', '/', $relative),
+        ];
+    }
+
+    /**
+     * Local working-tree state for a bundle: count of uncommitted changes and how far
+     * the branch is ahead of / behind its upstream. This is what makes changes another
+     * tool writes into a bundle (e.g. schema incubation rewriting migration files)
+     * visible — each bundle is its own nested git repo, so they never surface in the
+     * platform repo's `git status`.
+     *
+     * @return array{dirty: int, ahead: int, behind: int}
+     */
+    private function workingTree(string $path): array
+    {
+        $porcelain = $this->git($path, ['status', '--porcelain']);
+        $ahead = 0;
+        $behind = 0;
+
+        $counts = $this->git($path, ['rev-list', '--left-right', '--count', '@{u}...HEAD']);
+
+        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+            $behind = (int) $matches[1];
+            $ahead = (int) $matches[2];
+        }
+
+        return [
+            'dirty' => $porcelain === null || $porcelain === '' ? 0 : count(explode("\n", $porcelain)),
+            'ahead' => $ahead,
+            'behind' => $behind,
         ];
     }
 
