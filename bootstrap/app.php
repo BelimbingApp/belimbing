@@ -38,6 +38,15 @@ return Application::configure(basePath: dirname(__DIR__))
         // or shared verification token instead.
         $middleware->validateCsrfTokens(except: ['webhooks/*']);
 
+        // The in-app updater drops the site into maintenance mode while it pulls,
+        // migrates, and reloads. Keep its own console — and the bring-back-online
+        // action — reachable so an operator is never locked out by a run that was
+        // interrupted before it could lift maintenance (it would otherwise 503 too).
+        $middleware->preventRequestsDuringMaintenance(except: [
+            'admin/system/update/deployment',
+            'admin/system/update/online',
+        ]);
+
         // Add database connection recovery middleware to web group
         $middleware->web(append: [
             DatabaseConnectionRecovery::class,

@@ -3,6 +3,7 @@
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Update\Livewire\Deployment\Index;
 use App\Base\Update\Services\DeploymentService;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -207,6 +208,65 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
     Process::assertRan(fn ($process): bool => $process->command === ['git', 'pull', '--ff-only']);
     Process::assertRan(fn ($process): bool => in_array('dump-autoload', $process->command, true));
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
+});
+
+test('a run records a durable deployment last-run with its time and outcome', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+
+    Livewire::test(Index::class)
+        ->call('reloadOnly')
+        ->assertHasNoErrors();
+
+    $run = app(DeploymentService::class)->lastDeploymentRun();
+
+    expect($run)->toBeArray()
+        ->and($run['status'])->toBe('success')
+        ->and($run['attempted_at'])->toBeString()
+        ->and($run['log'])->not->toBeEmpty();
+});
+
+test('the run box shows the last run, with its time, on a fresh visit', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+
+    // A durable record stands in for a run from an earlier session (the session log is gone).
+    app(DeploymentService::class)->rememberDeploymentRun(
+        ['Pulling Belimbing (platform)…', 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.'],
+        'success',
+    );
+
+    Livewire::test(Index::class)
+        ->assertSee('Last run')
+        ->assertSee('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+});
+
+test('the update console stays reachable during maintenance and can bring the site back online', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    Artisan::call('down');
+
+    try {
+        $this->actingAs($user)
+            ->get(route('admin.system.update.deployment.index'))
+            ->assertOk()
+            ->assertSee('The site is in maintenance mode.');
+
+        $this->actingAs($user)
+            ->post(route('admin.system.update.online'))
+            ->assertRedirect(route('admin.system.update.deployment.index'))
+            ->assertSessionHas('status');
+
+        expect(app()->isDownForMaintenance())->toBeFalse();
+    } finally {
+        Artisan::call('up');
+    }
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {

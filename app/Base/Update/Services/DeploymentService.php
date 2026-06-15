@@ -31,6 +31,8 @@ class DeploymentService
 
     private const FRONTEND_RUN_KEY = 'system.update.frontend.last_run';
 
+    private const DEPLOYMENT_RUN_KEY = 'system.update.deployment.last_run';
+
     public function __construct(
         private readonly SettingsService $settings,
         private readonly DistributionBundleRepository $bundles,
@@ -314,6 +316,54 @@ class DeploymentService
 
         /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
         return $run;
+    }
+
+    /**
+     * Record the run shown in the Deployment page's run box so its outcome and time
+     * survive a page reload or a brand-new session — the durable counterpart to the
+     * session-scoped live log. Status is the page's run outcome (success|warning|error).
+     *
+     * @param  list<string>  $log
+     */
+    public function rememberDeploymentRun(array $log, string $status): void
+    {
+        $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
+            'attempted_at' => now()->utc()->toIso8601String(),
+            'status' => $status,
+            'summary' => $log === [] ? '' : (string) $log[array_key_last($log)],
+            'log' => array_values($log),
+        ]);
+    }
+
+    /**
+     * The last recorded Deployment run (update/reload/rebuild), or null if none yet.
+     *
+     * @return array{attempted_at: string, status: string, summary: string, log: list<string>}|null
+     */
+    public function lastDeploymentRun(): ?array
+    {
+        $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+        if (! is_array($record)) {
+            return null;
+        }
+
+        $attemptedAt = $record['attempted_at'] ?? null;
+        $status = $record['status'] ?? null;
+
+        if (! is_string($attemptedAt) || ! is_string($status)) {
+            return null;
+        }
+
+        return [
+            'attempted_at' => $attemptedAt,
+            'status' => $status,
+            'summary' => is_string($record['summary'] ?? null) ? $record['summary'] : '',
+            'log' => array_values(array_filter(
+                is_array($record['log'] ?? null) ? $record['log'] : [],
+                'is_string',
+            )),
+        ];
     }
 
     /**

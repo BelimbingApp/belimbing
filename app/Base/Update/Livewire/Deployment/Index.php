@@ -24,47 +24,55 @@ class Index extends Component
 
     public function updateRepo(string $key, DeploymentService $deployment): void
     {
-        $this->authorizeManage();
-        $this->startRunLog();
-        $this->log = $deployment->update([$key], fn (string $line) => $this->streamRunLine($line));
-        $this->dispatch('run-finished');
+        $this->runAction($deployment, fn (): array => $deployment->update([$key], fn (string $line) => $this->streamRunLine($line)));
     }
 
     public function updateAll(DeploymentService $deployment): void
     {
-        $this->authorizeManage();
-        $this->startRunLog();
-        $this->log = $deployment->update([], fn (string $line) => $this->streamRunLine($line));
-        $this->dispatch('run-finished');
+        $this->runAction($deployment, fn (): array => $deployment->update([], fn (string $line) => $this->streamRunLine($line)));
     }
 
     public function reloadOnly(DeploymentService $deployment): void
     {
-        $this->authorizeManage();
-        $this->startRunLog();
-        $this->log = $deployment->reload();
-        $this->dispatch('run-finished');
+        $this->runAction($deployment, fn (): array => $deployment->reload());
     }
 
     public function rebuildPhp(DeploymentService $deployment): void
     {
-        $this->authorizeManage();
-        $this->startRunLog();
-        $this->log = $deployment->rebuildPhp();
-        $this->dispatch('run-finished');
+        $this->runAction($deployment, fn (): array => $deployment->rebuildPhp());
     }
 
     public function rebuildAssets(DeploymentService $deployment): void
     {
+        $this->runAction($deployment, fn (): array => $deployment->rebuildAssets());
+    }
+
+    /**
+     * Authorize, reset the live log, run the work, then record a durable last-run so
+     * the run box (and its time) survive a page reload or a fresh session.
+     *
+     * @param  callable(): list<string>  $work
+     */
+    private function runAction(DeploymentService $deployment, callable $work): void
+    {
         $this->authorizeManage();
         $this->startRunLog();
-        $this->log = $deployment->rebuildAssets();
+        $this->log = $work();
+        $deployment->rememberDeploymentRun($this->log, $this->runOutcome());
         $this->dispatch('run-finished');
     }
 
     public function render(DeploymentService $deployment): View
     {
         $status = $deployment->status();
+
+        // The run box shows this session's live log while one is running/just ran,
+        // and otherwise falls back to the durable last-run record so its outcome and
+        // time are still there on a fresh visit (or after an interrupted run).
+        $lastRun = $deployment->lastDeploymentRun();
+        $hasSessionLog = $this->log !== [];
+        $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
+        $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
 
         return view('livewire.admin.system.update.deployment.index', [
             'status' => $status,
@@ -74,10 +82,14 @@ class Index extends Component
                 ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
                 ->values()
                 ->all(),
-            'runOutcome' => $this->runOutcome(),
-            'runOutcomeLabel' => $this->runOutcomeLabel(),
-            'runOutcomeVariant' => $this->runOutcomeVariant(),
-            'runSummary' => $this->runSummary(),
+            'maintenanceActive' => app()->isDownForMaintenance(),
+            'runStatus' => $runStatus,
+            'runLabel' => $this->statusLabel($runStatus),
+            'runVariant' => $this->statusVariant($runStatus),
+            'runSummary' => $hasSessionLog ? $this->runSummary() : ($lastRun['summary'] ?? ''),
+            'runAt' => $lastRun['attempted_at'] ?? null,
+            'displayLog' => $displayLog,
+            'hasRun' => $displayLog !== [] || $lastRun !== null,
             'lastReload' => $deployment->lastReload(),
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $deployment->lastComposerRun(),
@@ -127,9 +139,9 @@ class Index extends Component
         };
     }
 
-    private function runOutcomeLabel(): string
+    private function statusLabel(string $status): string
     {
-        return match ($this->runOutcome()) {
+        return match ($status) {
             'error' => (string) __('Needs action'),
             'warning' => (string) __('Warnings'),
             'success' => (string) __('Complete'),
@@ -137,9 +149,9 @@ class Index extends Component
         };
     }
 
-    private function runOutcomeVariant(): string
+    private function statusVariant(string $status): string
     {
-        return match ($this->runOutcome()) {
+        return match ($status) {
             'error' => 'danger',
             'warning' => 'warning',
             'success' => 'success',

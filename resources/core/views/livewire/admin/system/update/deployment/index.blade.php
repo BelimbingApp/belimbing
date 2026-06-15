@@ -7,6 +7,28 @@
             :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
         />
 
+        @if (session('status'))
+            <x-ui.alert variant="success">{{ session('status') }}</x-ui.alert>
+        @endif
+
+        {{-- This page is excepted from maintenance mode, so it stays reachable even when
+             a run was interrupted before it could lift maintenance. Surface that state and
+             let the operator bring the site back online without dropping to a shell. --}}
+        @if ($maintenanceActive)
+            <x-ui.alert variant="danger">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="min-w-0">
+                        <p class="font-medium">{{ __('The site is in maintenance mode.') }}</p>
+                        <p class="mt-1 text-sm">{{ __('Visitors currently see a 503 page — an update may have been interrupted before it could finish. Bring the site back online once the deployment is in a good state.') }}</p>
+                    </div>
+                    <form method="POST" action="{{ route('admin.system.update.online') }}" class="shrink-0">
+                        @csrf
+                        <x-ui.button type="submit" variant="primary">{{ __('Bring back online') }}</x-ui.button>
+                    </form>
+                </div>
+            </x-ui.alert>
+        @endif
+
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
                 {{ __('Could not check latest commits for these Distribution Bundles: :bundles. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['bundles' => implode(', ', $checkFailures)]) }}
@@ -191,7 +213,7 @@
         <div x-show="running && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="dismissed = true"></div>
 
         <div :class="(running && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
-            <div x-show="running || @js($log !== [])" x-cloak :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
+            <div x-show="running || @js($hasRun)" x-cloak :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
                 <x-ui.card>
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -201,12 +223,16 @@
                                     <span wire:loading.remove wire:target="updateAll,updateRepo,reloadOnly,rebuildPhp,rebuildAssets">{{ __('Last run') }}</span>
                                 </h2>
 
-                                @if ($runOutcome !== 'idle')
-                                    <x-ui.badge :variant="$runOutcomeVariant">{{ $runOutcomeLabel }}</x-ui.badge>
+                                @if ($runStatus !== 'idle')
+                                    <x-ui.badge :variant="$runVariant">{{ $runLabel }}</x-ui.badge>
                                 @endif
                             </div>
 
-                            @if ($log !== [])
+                            @if ($runAt)
+                                <p class="mt-1 text-xs text-muted">
+                                    {{ __('Last run') }} <x-ui.datetime :value="$runAt" />@if ($runSummary !== '') · {{ $runSummary }}@endif
+                                </p>
+                            @elseif ($runSummary !== '')
                                 <p class="mt-1 text-xs text-muted">{{ $runSummary }}</p>
                             @endif
                         </div>
@@ -225,7 +251,7 @@
 
                     <div class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
                         <div class="space-y-0" wire:stream="runLog">
-                            @forelse ($log as $line)
+                            @forelse ($displayLog as $line)
                                 <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
                             @empty
                                 <div class="text-muted">{{ __('Waiting for run output…') }}</div>
