@@ -1,46 +1,57 @@
 <?php
 
+$databaseParent = 'admin.system.database';
+$databaseMenuItem = static fn (
+    string $id,
+    string $label,
+    string $icon,
+    string $route,
+    string $permission,
+): array => [
+    'id' => $id,
+    'label' => $label,
+    'icon' => $icon,
+    'route' => $route,
+    'permission' => $permission,
+    'parent' => $databaseParent,
+];
+
 return [
     'items' => [
-        [
-            'id' => 'admin.system.database-table',
-            'label' => 'Database Tables',
-            'icon' => 'heroicon-o-table-cells',
-            'route' => 'admin.system.database-tables.index',
-            'permission' => 'admin.system.database-table.list',
-            'parent' => 'admin.system.database',
-        ],
-        [
-            'id' => 'admin.system.database-incubation',
-            'label' => 'Schema Incubation',
-            'icon' => 'heroicon-o-beaker',
-            'route' => 'admin.system.database-incubation.index',
-            'permission' => 'admin.system.database-incubation.manage',
-            'parent' => 'admin.system.database',
-        ],
-        [
-            'id' => 'admin.system.database-query',
-            'label' => 'Database Queries',
-            'icon' => 'heroicon-o-circle-stack',
-            'route' => 'admin.system.database-queries.index',
-            'permission' => 'admin.system.database-table.list',
-            'parent' => 'admin.system.database',
-        ],
-        [
-            'id' => 'admin.system.database-backup',
-            'label' => 'Database Backups',
-            'icon' => 'heroicon-o-archive-box',
-            'route' => 'admin.system.database-backups.index',
-            'permission' => 'admin.system.database-backup.list',
-            'parent' => 'admin.system.database',
-        ],
-        [
-            'id' => 'admin.system.database-residue',
-            'label' => 'Database Residue',
-            'icon' => 'heroicon-o-trash',
-            'route' => 'admin.system.database-residue.index',
-            'permission' => 'admin.system.database-residue.view',
-            'parent' => 'admin.system.database',
-        ],
+        $databaseMenuItem(
+            'admin.system.database-table',
+            'Database Tables',
+            'heroicon-o-table-cells',
+            'admin.system.database-tables.index',
+            'admin.system.database-table.list',
+        ),
+        $databaseMenuItem(
+            'admin.system.database-incubation',
+            'Schema Incubation',
+            'heroicon-o-beaker',
+            'admin.system.database-incubation.index',
+            'admin.system.database-incubation.manage',
+        ),
+        $databaseMenuItem(
+            'admin.system.database-query',
+            'Database Queries',
+            'heroicon-o-circle-stack',
+            'admin.system.database-queries.index',
+            'admin.system.database-table.list',
+        ),
+        $databaseMenuItem(
+            'admin.system.database-backup',
+            'Database Backups',
+            'heroicon-o-archive-box',
+            'admin.system.database-backups.index',
+            'admin.system.database-backup.list',
+        ),
+        $databaseMenuItem(
+            'admin.system.database-residue',
+            'Database Residue',
+            'heroicon-o-trash',
+            'admin.system.database-residue.index',
+            'admin.system.database-residue.view',
+        ),
     ],
 ];

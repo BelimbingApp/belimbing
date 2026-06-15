@@ -14,10 +14,18 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
-test('ProviderTestService preserves Codex transport provider messages and adds structured logs', function (): void {
+const PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID = 101;
+const PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME = 'openai-codex';
+const PROVIDER_TEST_SERVICE_CODEX_MODEL_ID = 'gpt-5.4-nano';
+const PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID = 'gpt-5.1-codex-mini';
+const PROVIDER_TEST_SERVICE_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+const PROVIDER_TEST_SERVICE_CODEX_ACCOUNT_ID = 'acct_test';
+
+function makeProviderTestServiceCodexFailure(string $model, string $providerMessage): ProviderTestService
+{
     $config = [
-        'provider_name' => 'openai-codex',
-        'model' => 'gpt-5.4-nano',
+        'provider_name' => PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME,
+        'model' => $model,
         'timeout' => 30,
         'api_type' => AiApiType::OpenAiCodexResponses,
     ];
@@ -26,7 +34,7 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
     $configResolver
         ->shouldReceive('resolveForProvider')
         ->once()
-        ->with(101, 'gpt-5.4-nano')
+        ->with(PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID, $model)
         ->andReturn($config);
 
     $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
@@ -36,8 +44,8 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
         ->with($config)
         ->andReturn([
             'api_key' => 'codex-token',
-            'base_url' => 'https://chatgpt.com/backend-api',
-            'headers' => ['chatgpt-account-id' => 'acct_test'],
+            'base_url' => PROVIDER_TEST_SERVICE_CODEX_BASE_URL,
+            'headers' => ['chatgpt-account-id' => PROVIDER_TEST_SERVICE_CODEX_ACCOUNT_ID],
         ]);
 
     $llmClient = Mockery::mock(LlmClient::class);
@@ -48,14 +56,24 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
         ->andReturn([
             'runtime_error' => AiRuntimeError::fromProviderFailure(
                 AiErrorType::BadRequest,
-                'missing chatgpt-account-id',
+                $providerMessage,
             ),
         ]);
 
+    return new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
+}
+
+test('ProviderTestService preserves Codex transport provider messages and adds structured logs', function (): void {
     Log::spy();
 
-    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
-    $result = $service->testSelection(101, 'gpt-5.4-nano');
+    $service = makeProviderTestServiceCodexFailure(
+        PROVIDER_TEST_SERVICE_CODEX_MODEL_ID,
+        'missing chatgpt-account-id',
+    );
+    $result = $service->testSelection(
+        PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID,
+        PROVIDER_TEST_SERVICE_CODEX_MODEL_ID,
+    );
 
     expect($result->connected)->toBeFalse()
         ->and($result->error)->not->toBeNull()
@@ -67,7 +85,7 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
         ->withArgs(function (string $level, string $message, array $context): bool {
             return $level === 'warning'
                 && $message === 'AI provider test completed'
-                && ($context['provider_name'] ?? null) === 'openai-codex'
+                && ($context['provider_name'] ?? null) === PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME
                 && ($context['compatibility_contract'] ?? null) === 'undocumented_chatgpt_backend'
                 && ($context['operator_action'] ?? null) === 'reconnect_or_disable'
                 && ($context['contract_change_suspected'] ?? null) === true;
@@ -75,51 +93,22 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
 });
 
 test('ProviderTestService preserves unsupported Codex model provider messages', function (): void {
-    $config = [
-        'provider_name' => 'openai-codex',
-        'model' => 'gpt-5.1-codex-mini',
-        'timeout' => 30,
-        'api_type' => AiApiType::OpenAiCodexResponses,
-    ];
-
-    $configResolver = Mockery::mock(ConfigResolver::class);
-    $configResolver
-        ->shouldReceive('resolveForProvider')
-        ->once()
-        ->with(101, 'gpt-5.1-codex-mini')
-        ->andReturn($config);
-
-    $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
-    $credentialResolver
-        ->shouldReceive('resolve')
-        ->once()
-        ->with($config)
-        ->andReturn([
-            'api_key' => 'codex-token',
-            'base_url' => 'https://chatgpt.com/backend-api',
-            'headers' => ['chatgpt-account-id' => 'acct_test'],
-        ]);
-
-    $llmClient = Mockery::mock(LlmClient::class);
-    $llmClient
-        ->shouldReceive('chat')
-        ->once()
-        ->with(Mockery::type(ChatRequest::class))
-        ->andReturn([
-            'runtime_error' => AiRuntimeError::fromProviderFailure(
-                AiErrorType::BadRequest,
-                '{"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}',
-            ),
-        ]);
+    $unsupportedModelMessage = '{"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}';
 
     Log::spy();
 
-    $service = new ProviderTestService($configResolver, $credentialResolver, $llmClient, new NullLlmTraceContextFactory);
-    $result = $service->testSelection(101, 'gpt-5.1-codex-mini');
+    $service = makeProviderTestServiceCodexFailure(
+        PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID,
+        $unsupportedModelMessage,
+    );
+    $result = $service->testSelection(
+        PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID,
+        PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID,
+    );
 
     expect($result->connected)->toBeFalse()
         ->and($result->error)->not->toBeNull()
-        ->and($result->error->userMessage)->toBe('{"detail":"The \'gpt-5.1-codex-mini\' model is not supported when using Codex with a ChatGPT account."}')
+        ->and($result->error->userMessage)->toBe($unsupportedModelMessage)
         ->and($result->error->hint)->toBeNull();
 
     Log::shouldHaveReceived('log')
@@ -127,7 +116,7 @@ test('ProviderTestService preserves unsupported Codex model provider messages', 
         ->withArgs(function (string $level, string $message, array $context): bool {
             return $level === 'warning'
                 && $message === 'AI provider test completed'
-                && ($context['provider_name'] ?? null) === 'openai-codex'
+                && ($context['provider_name'] ?? null) === PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME
                 && ! array_key_exists('compatibility_contract', $context);
         });
 });
