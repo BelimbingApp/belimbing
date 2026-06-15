@@ -213,7 +213,7 @@
         <div x-show="running && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="dismissed = true"></div>
 
         <div :class="(running && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
-            <div x-show="running || @js($hasRun)" x-cloak :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
+            <div :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
                 <x-ui.card>
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -232,8 +232,8 @@
                                 <p class="mt-1 text-xs text-muted">
                                     {{ __('Last run') }} <x-ui.datetime :value="$runAt" />@if ($runSummary !== '') · {{ $runSummary }}@endif
                                 </p>
-                            @elseif ($runSummary !== '')
-                                <p class="mt-1 text-xs text-muted">{{ $runSummary }}</p>
+                            @else
+                                <p class="mt-1 text-xs text-muted" wire:loading.remove wire:target="updateAll,updateRepo,reloadOnly,rebuildPhp,rebuildAssets">{{ __('No update has run yet.') }}</p>
                             @endif
                         </div>
 
@@ -249,13 +249,11 @@
                         </button>
                     </div>
 
-                    <div class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
+                    <div x-show="running || @js($displayLog !== [])" x-cloak class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
                         <div class="space-y-0" wire:stream="runLog">
-                            @forelse ($displayLog as $line)
+                            @foreach ($displayLog as $line)
                                 <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
-                            @empty
-                                <div class="text-muted">{{ __('Waiting for run output…') }}</div>
-                            @endforelse
+                            @endforeach
                         </div>
                     </div>
                 </x-ui.card>

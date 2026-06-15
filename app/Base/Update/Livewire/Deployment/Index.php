@@ -89,7 +89,6 @@ class Index extends Component
             'runSummary' => $hasSessionLog ? $this->runSummary() : ($lastRun['summary'] ?? ''),
             'runAt' => $lastRun['attempted_at'] ?? null,
             'displayLog' => $displayLog,
-            'hasRun' => $displayLog !== [] || $lastRun !== null,
             'lastReload' => $deployment->lastReload(),
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $deployment->lastComposerRun(),

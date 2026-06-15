@@ -245,6 +245,17 @@ test('the run box shows the last run, with its time, on a fresh visit', function
         ->assertSee('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
 });
 
+test('the run card shows an empty state before any run has happened', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    Livewire::test(Index::class)
+        ->assertSee('Last run')
+        ->assertSee('No update has run yet.');
+});
+
 test('the update console stays reachable during maintenance and can bring the site back online', function (): void {
     $user = createAdminUser();
     fakeDeploymentUpdateProcesses();
@@ -270,13 +281,44 @@ test('the update console stays reachable during maintenance and can bring the si
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {
+    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv('CADDY_SERVER_ADMIN_PORT=2019');
+
     fakeDeploymentUpdateProcesses();
     fakeDeploymentUpdateHttp(reloadOk: false);
 
-    $log = app(DeploymentService::class)->update(['platform']);
+    try {
+        $log = app(DeploymentService::class)->update(['platform']);
 
-    expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
-        ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
-        ->and($log)->toContain('Update finished with warnings. Code may be updated, but one or more follow-up checks need attention.')
-        ->and($log)->not->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+        expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
+            ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
+            ->and($log)->toContain('Update finished with warnings. Code may be updated, but one or more follow-up checks need attention.')
+            ->and($log)->not->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+    } finally {
+        putenv('CADDY_SERVER_ADMIN_HOST');
+        putenv('CADDY_SERVER_ADMIN_PORT');
+    }
+});
+
+test('the worker reload reads its admin port from the octane server-state file', function (): void {
+    // No env override → the port must come from octane's recorded state, not the
+    // stock Caddy default of 2019 (which is the wrong port for our deployments).
+    putenv('CADDY_SERVER_ADMIN_HOST');
+    putenv('CADDY_SERVER_ADMIN_PORT');
+
+    $statePath = storage_path('logs/octane-server-state.json');
+    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
+    file_put_contents($statePath, json_encode(['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]]));
+
+    try {
+        fakeDeploymentUpdateProcesses();
+        Http::fake(['*' => Http::response('', 500)]);
+
+        $log = app(DeploymentService::class)->reload();
+
+        expect(collect($log)->contains(fn (string $line): bool => str_contains($line, 'http://127.0.0.1:2643/config/apps/frankenphp')))->toBeTrue()
+            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, ':2019/')))->toBeFalse();
+    } finally {
+        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
+    }
 });

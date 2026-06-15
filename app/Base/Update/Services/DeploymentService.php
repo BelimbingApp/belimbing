@@ -244,8 +244,7 @@ class DeploymentService
     public function reload(): array
     {
         $log = [];
-        $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: '127.0.0.1';
-        $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: '2019';
+        [$host, $port] = $this->resolveAdminEndpoint();
         $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
         $webReloaded = false;
         $reloadMessage = '';
@@ -279,6 +278,38 @@ class DeploymentService
         $this->rememberRun(self::LAST_RELOAD_KEY, $webReloaded, $reloadMessage, ['admin_url' => $adminUrl]);
 
         return $log;
+    }
+
+    /**
+     * Resolve the host+port the FrankenPHP/Caddy admin API is actually listening on.
+     * octane:start records it in its server-state file, so we read it from there (the
+     * same source octane:reload trusts) rather than guessing — the stock Caddy admin
+     * port 2019 is wrong for our setups (octane runs the admin on e.g. 2020 on dev,
+     * 2643 on prod). Explicit env vars still win for non-Octane or unusual hosts.
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function resolveAdminEndpoint(): array
+    {
+        $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: null;
+        $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: null;
+
+        if ($host === null || $port === null) {
+            $statePath = storage_path('logs/octane-server-state.json');
+            $state = is_file($statePath)
+                ? json_decode((string) file_get_contents($statePath), true)
+                : null;
+
+            if (is_array($state)) {
+                // Octane nests the live values under "state" (see FrankenPhp\ServerProcessInspector);
+                // fall back to the top level defensively in case that layout changes.
+                $admin = is_array($state['state'] ?? null) ? $state['state'] : $state;
+                $host ??= is_string($admin['adminHost'] ?? null) ? $admin['adminHost'] : null;
+                $port ??= isset($admin['adminPort']) ? (string) $admin['adminPort'] : null;
+            }
+        }
+
+        return [$host ?: '127.0.0.1', $port ?: '2019'];
     }
 
     /**
