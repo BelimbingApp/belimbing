@@ -154,7 +154,7 @@ final class MigrationIncubationManager
         $dir = dirname($path);
 
         while ($dir !== '' && str_starts_with($dir, $base)) {
-            if (is_dir($dir.DIRECTORY_SEPARATOR.'.git')) {
+            if ((new GitRepository($dir))->isRepository()) {
                 return $dir;
             }
 

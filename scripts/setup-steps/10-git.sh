@@ -306,10 +306,12 @@ main() {
 
     # Save state
     save_to_setup_state "GIT_VERSION" "$CURRENT_GIT_VERSION"
+    update_env_file "BLB_GIT_EXECUTABLE" "$(command -v git)"
 
     echo -e "${GREEN}✓ Git setup complete!${NC}"
     echo -e "${CYAN}Installed:${NC}"
     echo -e "  • Git: $(git --version)"
+    echo -e "  • Git executable: $(command -v git)"
     return 0
 }
 

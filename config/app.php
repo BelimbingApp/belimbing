@@ -62,6 +62,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Git Executable
+    |--------------------------------------------------------------------------
+    |
+    | Long-running app servers, especially Windows services, may not inherit the
+    | same PATH as the setup shell. Pinning the executable keeps deployment and
+    | module-management git checks honest even when PATH differs.
+    |
+    */
+
+    'git_executable' => env('BLB_GIT_EXECUTABLE') ?: env('GIT_EXECUTABLE'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

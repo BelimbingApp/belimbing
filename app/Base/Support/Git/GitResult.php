@@ -12,6 +12,7 @@ final readonly class GitResult
         public string $output,
         public string $error,
         public int $exitCode,
+        public bool $started = true,
     ) {}
 
     /**
@@ -32,5 +33,10 @@ final readonly class GitResult
             $this->output !== '' => $this->output,
             default => (string) __('git exited with code :code', ['code' => $this->exitCode]),
         };
+    }
+
+    public function couldNotStart(): bool
+    {
+        return ! $this->started;
     }
 }

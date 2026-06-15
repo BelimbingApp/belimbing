@@ -236,6 +236,36 @@ function Get-DefaultCompanyCode {
     return 'my_company'
 }
 
+function Resolve-NativeCommandPath {
+    param(
+        [Parameter(Mandatory = $true)][string] $Command
+    )
+
+    $nativeExtensions = @('.exe', '.cmd', '.bat', '.com')
+
+    $commandInfo = Get-Command $Command -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandType -eq 'Application' -and $nativeExtensions -contains $_.Extension } |
+        Select-Object -First 1
+    if ($commandInfo) {
+        return $commandInfo.Source
+    }
+
+    foreach ($pathEntry in ($env:Path -split [IO.Path]::PathSeparator)) {
+        if (-not $pathEntry) {
+            continue
+        }
+
+        foreach ($extension in $nativeExtensions) {
+            $candidate = Join-Path $pathEntry "$Command$extension"
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+    }
+
+    return ''
+}
+
 function New-AdminBootstrapFile {
     param(
         [string] $Name,
@@ -262,9 +292,9 @@ function Test-AdminExists {
 }
 
 function Resolve-BunPath {
-    $bun = Get-Command bun -ErrorAction SilentlyContinue
+    $bun = Resolve-NativeCommandPath 'bun'
     if ($bun) {
-        return $bun.Source
+        return $bun
     }
 
     $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
@@ -427,6 +457,14 @@ variables_order=EGPCS
     Set-EnvValue $envPath 'SESSION_DRIVER'    'database'
     Set-EnvValue $envPath 'QUEUE_CONNECTION'  'database'
     Set-EnvValue $envPath 'CACHE_STORE'       'database'
+
+    Write-Step "Verifying Git"
+    $gitExe = Resolve-NativeCommandPath 'git'
+    if (-not $gitExe) {
+        throw "Git is required for BLB but was not found on PATH. Install Git from https://git-scm.com/download/win, restart PowerShell, then re-run scripts/setup.ps1."
+    }
+    Set-EnvValue $envPath 'BLB_GIT_EXECUTABLE' $gitExe
+    Write-Ok "Git: $gitExe"
 
     # User-configurable values — written only when absent unless the param was
     # explicitly provided on this invocation.

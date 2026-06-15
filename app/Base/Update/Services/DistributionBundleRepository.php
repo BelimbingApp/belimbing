@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Http;
  */
 class DistributionBundleRepository
 {
-    private const GIT_DIRECTORY = '/.git';
-
     private const TOKEN_PREFIX = 'integrations.github.token.';
 
     public function __construct(private readonly SettingsService $settings) {}
@@ -26,7 +24,7 @@ class DistributionBundleRepository
     public function status(): array
     {
         return array_map(function (array $dist): array {
-            [$owner, $name] = $this->remoteIdentity($dist['path']);
+            [$owner, $name, $remoteError] = $this->remoteIdentity($dist['path']);
             $branch = $this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD']) ?? 'main';
 
             $entry = [
@@ -44,7 +42,7 @@ class DistributionBundleRepository
             ];
 
             if ($owner === null) {
-                $entry['error'] = (string) __('No GitHub origin remote.');
+                $entry['error'] = $remoteError ?? (string) __('No GitHub origin remote.');
 
                 return $entry;
             }
@@ -224,20 +222,20 @@ class DistributionBundleRepository
         ]];
 
         foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
-            if (is_dir($dir.self::GIT_DIRECTORY)) {
+            if ($this->isRepositoryPath($dir)) {
                 $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
             }
         }
 
         foreach (glob(base_path('extensions/*'), GLOB_ONLYDIR) ?: [] as $dir) {
-            if (is_dir($dir.self::GIT_DIRECTORY)) {
+            if ($this->isRepositoryPath($dir)) {
                 $found[] = $this->distribution($dir, (string) __('Extension: :name', ['name' => basename($dir)]));
 
                 continue;
             }
 
             foreach (glob($dir.'/*', GLOB_ONLYDIR) ?: [] as $sub) {
-                if (is_dir($sub.self::GIT_DIRECTORY)) {
+                if ($this->isRepositoryPath($sub)) {
                     $found[] = $this->distribution($sub, (string) __('Extension: :name', ['name' => basename($dir).'/'.basename($sub)]));
                 }
             }
@@ -374,21 +372,30 @@ class DistributionBundleRepository
     }
 
     /**
-     * @return array{0: string|null, 1: string|null}
+     * @return array{0: string|null, 1: string|null, 2: string|null}
      */
     private function remoteIdentity(string $path): array
     {
-        if (! is_dir($path.self::GIT_DIRECTORY)) {
-            return [null, null];
+        $repo = new GitRepository($path);
+
+        if (! $repo->isRepository()) {
+            return [null, null, (string) __('No git repository found at :path.', ['path' => $path])];
         }
 
-        $url = $this->git($path, ['remote', 'get-url', 'origin']);
+        $remote = $repo->run(['remote', 'get-url', 'origin']);
 
-        if ($url !== null && preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#', $url, $matches) === 1) {
-            return [$matches[1], $matches[2]];
+        if (! $remote->ok) {
+            return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
+                'path' => $path,
+                'detail' => $remote->message(),
+            ])];
         }
 
-        return [null, null];
+        if (preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#', $remote->output, $matches) === 1) {
+            return [$matches[1], $matches[2], null];
+        }
+
+        return [null, null, (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remote->output])];
     }
 
     /**
@@ -397,5 +404,10 @@ class DistributionBundleRepository
     private function git(string $path, array $args): ?string
     {
         return (new GitRepository($path))->output($args);
+    }
+
+    private function isRepositoryPath(string $path): bool
+    {
+        return (new GitRepository($path))->isRepository();
     }
 }

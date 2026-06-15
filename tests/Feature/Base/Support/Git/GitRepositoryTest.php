@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Support\Git\GitRepository;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
 test('commit stages and commits only the given paths, never a blanket add', function (): void {
@@ -37,6 +38,58 @@ test('commit reports the failure when staging fails', function (): void {
     expect($result->ok)->toBeFalse()
         ->and($result->message())->toContain('did not match any files');
     Process::assertDidntRun(fn ($p): bool => in_array('commit', $p->command, true));
+});
+
+test('repository detection accepts worktree metadata files', function (): void {
+    $root = storage_path('framework/testing/git-repository-worktree');
+
+    File::deleteDirectory($root);
+    File::ensureDirectoryExists($root);
+    file_put_contents($root.DIRECTORY_SEPARATOR.'.git', 'gitdir: C:/Repo/BelimbingApp/.git/worktrees/production');
+
+    try {
+        expect((new GitRepository($root))->isRepository())->toBeTrue();
+    } finally {
+        File::deleteDirectory($root);
+    }
+});
+
+test('commands can use an explicit git executable', function (): void {
+    Process::fake();
+
+    (new GitRepository('/srv/bundle', executable: '/opt/git/bin/git'))->remoteUrl();
+
+    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', 'remote', 'get-url', 'origin']);
+});
+
+test('commands use the configured git executable', function (): void {
+    $original = config('app.git_executable');
+
+    config(['app.git_executable' => '/usr/local/bin/blb-git']);
+    Process::fake();
+
+    try {
+        (new GitRepository('/srv/bundle'))->remoteUrl();
+
+        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', 'remote', 'get-url', 'origin']);
+    } finally {
+        config(['app.git_executable' => $original]);
+    }
+});
+
+test('command launch failures are reported separately from git failures', function (): void {
+    Process::fake(fn () => throw new RuntimeException('git executable was not found'));
+
+    $result = (new GitRepository('/srv/bundle'))->remoteUrl();
+
+    expect($result)->toBeNull();
+
+    $failure = (new GitRepository('/srv/bundle'))->run(['remote', 'get-url', 'origin']);
+
+    expect($failure->ok)->toBeFalse()
+        ->and($failure->couldNotStart())->toBeTrue()
+        ->and($failure->message())->toContain('Could not run git')
+        ->and($failure->message())->toContain('git executable was not found');
 });
 
 test('aheadBehind parses the upstream left-right count', function (): void {

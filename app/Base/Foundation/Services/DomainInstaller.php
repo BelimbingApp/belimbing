@@ -3,6 +3,7 @@
 namespace App\Base\Foundation\Services;
 
 use App\Base\Settings\Models\Setting;
+use App\Base\Support\Git\GitRepository;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
@@ -132,14 +133,13 @@ class DomainInstaller
 
         $log = [];
 
-        $clone = Process::path(base_path())
-            ->timeout(300)
-            ->run(['git', 'clone', $entry['repo'], $path]);
+        $clone = (new GitRepository(base_path()))
+            ->run(['clone', $entry['repo'], $path], timeout: 300);
 
         $log[] = '$ git clone '.$entry['repo'];
-        $log[] = trim($clone->output()."\n".$clone->errorOutput());
+        $log[] = trim($clone->output."\n".$clone->error);
 
-        if (! $clone->successful()) {
+        if (! $clone->ok) {
             return ['ok' => false, 'log' => implode("\n", array_filter($log))];
         }
 
@@ -219,18 +219,19 @@ class DomainInstaller
      */
     public function gitState(string $path): array
     {
-        if (! is_dir($path.'/.git')) {
+        $repo = new GitRepository($path);
+
+        if (! $repo->isRepository()) {
             return ['hasGit' => false, 'dirty' => false, 'unpushed' => 0];
         }
 
-        $status = Process::path($path)->timeout(30)->run(['git', 'status', '--porcelain']);
-        $unpushed = Process::path($path)->timeout(30)
-            ->run(['git', 'rev-list', '--count', '--branches', '--not', '--remotes']);
+        $status = $repo->run(['status', '--porcelain'], timeout: 30);
+        $unpushed = $repo->run(['rev-list', '--count', '--branches', '--not', '--remotes'], timeout: 30);
 
         return [
             'hasGit' => true,
-            'dirty' => trim($status->output()) !== '',
-            'unpushed' => (int) trim($unpushed->output()),
+            'dirty' => $status->ok && $status->output !== '',
+            'unpushed' => $unpushed->ok ? (int) $unpushed->output : 0,
         ];
     }
 

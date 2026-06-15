@@ -3,6 +3,7 @@
 namespace App\Base\Support\Git;
 
 use Illuminate\Support\Facades\Process;
+use Throwable;
 
 /**
  * Thin, testable wrapper around the git CLI scoped to one working-tree path.
@@ -18,11 +19,12 @@ final class GitRepository
     public function __construct(
         private readonly string $path,
         private readonly ?string $token = null,
+        private readonly ?string $executable = null,
     ) {}
 
     public function isRepository(): bool
     {
-        return is_dir($this->path.DIRECTORY_SEPARATOR.'.git');
+        return file_exists($this->path.DIRECTORY_SEPARATOR.'.git');
     }
 
     public function currentBranch(): ?string
@@ -111,14 +113,29 @@ final class GitRepository
      */
     public function run(array $args, bool $authenticated = false, int $timeout = 60): GitResult
     {
-        $command = ['git'];
+        $explicitExecutable = $this->executable !== null && $this->executable !== '';
+        $executable = $explicitExecutable ? (string) $this->executable : $this->configuredExecutable();
+        $command = [$executable];
 
         if ($authenticated && $this->token !== null) {
             $command[] = '-c';
             $command[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$this->token);
         }
 
-        $result = Process::path($this->path)->timeout($timeout)->run(array_merge($command, $args));
+        try {
+            $result = Process::path($this->path)->timeout($timeout)->run(array_merge($command, $args));
+        } catch (Throwable $exception) {
+            return new GitResult(
+                ok: false,
+                output: '',
+                error: (string) __('Could not run git in :path: :message', [
+                    'path' => $this->path,
+                    'message' => $exception->getMessage(),
+                ]),
+                exitCode: -1,
+                started: false,
+            );
+        }
 
         return new GitResult(
             ok: $result->successful(),
@@ -126,5 +143,20 @@ final class GitRepository
             error: trim($result->errorOutput()),
             exitCode: $result->exitCode() ?? -1,
         );
+    }
+
+    private function configuredExecutable(): string
+    {
+        $configured = function_exists('config') ? config('app.git_executable') : null;
+
+        if (is_string($configured) && $configured !== '') {
+            return $configured;
+        }
+
+        $configured = function_exists('env') ? env('BLB_GIT_EXECUTABLE') : null;
+
+        return (is_string($configured) && $configured !== '')
+            ? $configured
+            : (getenv('BLB_GIT_EXECUTABLE') ?: getenv('GIT_EXECUTABLE') ?: 'git');
     }
 }

@@ -77,6 +77,22 @@ test('failed remote checks name the repos instead of assuming they are private',
     Http::assertSentCount(0);
 });
 
+test('deployment page reports when git cannot be launched', function (): void {
+    $user = createAdminUser();
+    Process::fake(fn () => throw new RuntimeException('git executable was not found'));
+    Http::fake();
+
+    $this->actingAs($user)
+        ->get(route('admin.system.update.deployment.index'))
+        ->assertOk()
+        ->assertSee('Could not read Git origin remote')
+        ->assertSee('Could not run git')
+        ->assertSee('git executable was not found')
+        ->assertDontSee('No GitHub origin remote');
+
+    Http::assertSentCount(0);
+});
+
 test('reload only triggers a graceful worker reload and records a log', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
