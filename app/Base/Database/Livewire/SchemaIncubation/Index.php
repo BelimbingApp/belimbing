@@ -147,6 +147,8 @@ class Index extends Component
             changed: $result['updated'],
             skipped: array_merge($skipped, $result['skipped']),
             emptyMessage: __('No selected tables were eligible to move into source incubation.'),
+            committed: $result['committed'],
+            uncommitted: $result['uncommitted'],
         );
     }
 
@@ -182,6 +184,8 @@ class Index extends Component
             changed: $result['updated'],
             skipped: array_merge($skipped, $result['skipped']),
             emptyMessage: __('No selected tables could be removed from source incubation.'),
+            committed: $result['committed'],
+            uncommitted: $result['uncommitted'],
         );
     }
 
@@ -328,22 +332,40 @@ class Index extends Component
     /**
      * @param  list<string>  $changed
      * @param  list<string>  $skipped
+     * @param  list<string>  $committed
+     * @param  list<string>  $uncommitted
      */
-    private function flashIncubationResult(string $action, array $changed, array $skipped, string $emptyMessage): void
+    private function flashIncubationResult(string $action, array $changed, array $skipped, string $emptyMessage, array $committed = [], array $uncommitted = []): void
     {
         if ($changed !== []) {
-            session()->flash('status', __('Source incubation updated: :action :tables.', [
+            $status = (string) __('Source incubation updated: :action :tables.', [
                 'action' => $action,
                 'tables' => implode(', ', $changed),
-            ]));
-        } elseif ($skipped === []) {
-            session()->flash('warning', $emptyMessage);
+            ]);
+
+            if ($committed !== []) {
+                $status .= ' '.__('Committed in :repos.', ['repos' => implode('; ', $committed)]);
+            }
+
+            session()->flash('status', $status);
+        }
+
+        $warnings = [];
+
+        if ($changed === [] && $skipped === [] && $committed === []) {
+            $warnings[] = $emptyMessage;
+        }
+
+        if ($uncommitted !== []) {
+            $warnings[] = (string) __('Commit these migration changes manually (auto-commit unavailable): :repos', ['repos' => implode('; ', $uncommitted)]);
         }
 
         if ($skipped !== []) {
-            session()->flash('warning', __('Skipped: :tables', [
-                'tables' => implode('; ', $skipped),
-            ]));
+            $warnings[] = (string) __('Skipped: :tables', ['tables' => implode('; ', $skipped)]);
+        }
+
+        if ($warnings !== []) {
+            session()->flash('warning', implode(' ', $warnings));
         }
     }
 }

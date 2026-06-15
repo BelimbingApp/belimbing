@@ -2,6 +2,7 @@
 
 use App\Base\Database\Livewire\SchemaIncubation\Index as SchemaIncubationIndex;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Process;
 use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
@@ -16,6 +17,7 @@ beforeEach(function (): void {
 
 test('schema incubation index can add selected tables to source incubation', function (): void {
     $this->actingAs(createAdminUser());
+    Process::fake(); // intercept the auto-commit so the test never writes real git history
     $migrationPath = app_path('Modules/Core/AI/Database/Migrations/0200_02_01_000003_create_ai_browser_sessions_table.php');
     $original = file_get_contents($migrationPath);
 
@@ -24,11 +26,16 @@ test('schema incubation index can add selected tables to source incubation', fun
             ->set('search', 'browser')
             ->set('selectedSearchTables', ['ai_browser_sessions'])
             ->call('moveSelectedToIncubation')
-            ->assertSee('create_ai_browser_sessions_table.php [ai_browser_sessions]');
+            ->assertSee('create_ai_browser_sessions_table.php [ai_browser_sessions]')
+            ->assertSee('Committed in');
 
         expect(file_get_contents($migrationPath))
             ->toContain('use App\Base\Database\Concerns\IncubatingSchema;')
             ->toContain('use IncubatingSchema;');
+
+        // The rewritten file is staged + committed scoped to that file — never `add -A`.
+        Process::assertRan(fn ($p): bool => in_array('commit', $p->command, true) && in_array($migrationPath, $p->command, true));
+        Process::assertDidntRun(fn ($p): bool => in_array('-A', $p->command, true));
     } finally {
         file_put_contents($migrationPath, $original);
     }
@@ -36,6 +43,7 @@ test('schema incubation index can add selected tables to source incubation', fun
 
 test('schema incubation index can remove selected tables from source incubation', function (): void {
     $this->actingAs(createAdminUser());
+    Process::fake(); // intercept the auto-commit so the test never writes real git history
 
     $migrationPath = app_path('Modules/People/Leave/Database/Migrations/0320_02_01_000000_create_people_leave_core_tables.php');
     $original = file_get_contents($migrationPath);
@@ -44,9 +52,13 @@ test('schema incubation index can remove selected tables from source incubation'
         Livewire::test(SchemaIncubationIndex::class)
             ->set('selectedIncubatingTables', ['people_leave_types'])
             ->call('removeSelectedFromIncubation')
-            ->assertSee('create_people_leave_core_tables.php [people_leave_types]');
+            ->assertSee('create_people_leave_core_tables.php [people_leave_types]')
+            ->assertSee('Committed in');
 
         expect(file_get_contents($migrationPath))->not()->toContain('use IncubatingSchema;');
+
+        Process::assertRan(fn ($p): bool => in_array('commit', $p->command, true) && in_array($migrationPath, $p->command, true));
+        Process::assertDidntRun(fn ($p): bool => in_array('-A', $p->command, true));
     } finally {
         file_put_contents($migrationPath, $original);
     }
