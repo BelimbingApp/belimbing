@@ -87,6 +87,30 @@ function createCompanyRelationshipFixture(): array
     ];
 }
 
+/**
+ * Return a git process command without leading `-c name=value` config pairs.
+ *
+ * GitRepository always scopes operational config such as safe.directory before
+ * the verb. Most feature tests care about the verb contract, not that plumbing.
+ *
+ * @param  list<string>  $command
+ * @return list<string>
+ */
+function gitCommandWithoutConfig(array $command): array
+{
+    if (($command[0] ?? null) !== 'git') {
+        return $command;
+    }
+
+    $args = array_slice($command, 1);
+
+    while (($args[0] ?? null) === '-c') {
+        array_splice($args, 0, 2);
+    }
+
+    return ['git', ...$args];
+}
+
 final class StubTool implements Tool
 {
     /**

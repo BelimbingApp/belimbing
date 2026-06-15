@@ -115,7 +115,11 @@ final class GitRepository
     {
         $explicitExecutable = $this->executable !== null && $this->executable !== '';
         $executable = $explicitExecutable ? (string) $this->executable : $this->configuredExecutable();
-        $command = [$executable];
+        $command = [
+            $executable,
+            '-c',
+            'safe.directory='.$this->safeDirectory(),
+        ];
 
         if ($authenticated && $this->token !== null) {
             $command[] = '-c';
@@ -158,5 +162,12 @@ final class GitRepository
         return (is_string($configured) && $configured !== '')
             ? $configured
             : (getenv('BLB_GIT_EXECUTABLE') ?: getenv('GIT_EXECUTABLE') ?: 'git');
+    }
+
+    private function safeDirectory(): string
+    {
+        $path = realpath($this->path) ?: $this->path;
+
+        return str_replace('\\', '/', $path);
     }
 }

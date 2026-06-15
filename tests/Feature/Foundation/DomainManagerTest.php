@@ -76,7 +76,7 @@ it('installs an available domain and redirects back', function (): void {
         ->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertRedirect(route('admin.system.update.business-domains.index'));
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 });
 
 it('disables and re-enables an installed domain', function (): void {
@@ -158,5 +158,5 @@ it('blocks install, disable, and uninstall for users without the manage capabili
 
     // Rendering legitimately runs `git status` on installed checkouts; what
     // must never have run without the manage capability is the clone.
-    Process::assertDidntRun(fn ($process): bool => ($process->command[0] ?? '') === 'git' && ($process->command[1] ?? '') === 'clone');
+    Process::assertDidntRun(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 });

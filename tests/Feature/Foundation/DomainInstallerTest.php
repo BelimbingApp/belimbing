@@ -47,7 +47,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
 
     expect($result['ok'])->toBeTrue();
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, app_path(DOMAIN_INSTALLER_FIXTURE_PATH)]);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, app_path(DOMAIN_INSTALLER_FIXTURE_PATH)]);
     Process::assertRan(fn ($process): bool => $process->command === [PHP_BINARY, 'artisan', 'migrate', '--force']);
 
     // A stale disabled flag from a previous uninstall must not mute the new checkout.

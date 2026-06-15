@@ -4,6 +4,11 @@ use App\Base\Support\Git\GitRepository;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
+function gitRepositoryCommand(string $path, string ...$args): array
+{
+    return ['git', '-c', 'safe.directory='.str_replace('\\', '/', $path), ...$args];
+}
+
 test('commit stages and commits only the given paths, never a blanket add', function (): void {
     Process::fake();
 
@@ -14,8 +19,8 @@ test('commit stages and commits only the given paths, never a blanket add', func
 
     expect($result->ok)->toBeTrue();
 
-    Process::assertRan(fn ($p): bool => $p->command === ['git', 'add', '--', 'ibp/Database/Migrations/a.php', 'ibp/Database/Migrations/b.php']);
-    Process::assertRan(fn ($p): bool => $p->command === ['git', 'commit', '-m', 'schema: graduate tables out of incubation', '--', 'ibp/Database/Migrations/a.php', 'ibp/Database/Migrations/b.php']);
+    Process::assertRan(fn ($p): bool => $p->command === gitRepositoryCommand('/srv/bundle', 'add', '--', 'ibp/Database/Migrations/a.php', 'ibp/Database/Migrations/b.php'));
+    Process::assertRan(fn ($p): bool => $p->command === gitRepositoryCommand('/srv/bundle', 'commit', '-m', 'schema: graduate tables out of incubation', '--', 'ibp/Database/Migrations/a.php', 'ibp/Database/Migrations/b.php'));
     Process::assertDidntRun(fn ($p): bool => in_array('-A', $p->command, true) || in_array('.', $p->command, true));
 });
 
@@ -59,7 +64,7 @@ test('commands can use an explicit git executable', function (): void {
 
     (new GitRepository('/srv/bundle', executable: '/opt/git/bin/git'))->remoteUrl();
 
-    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', 'remote', 'get-url', 'origin']);
+    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', '-c', 'safe.directory=/srv/bundle', 'remote', 'get-url', 'origin']);
 });
 
 test('commands use the configured git executable', function (): void {
@@ -71,10 +76,25 @@ test('commands use the configured git executable', function (): void {
     try {
         (new GitRepository('/srv/bundle'))->remoteUrl();
 
-        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', 'remote', 'get-url', 'origin']);
+        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', '-c', 'safe.directory=/srv/bundle', 'remote', 'get-url', 'origin']);
     } finally {
         config(['app.git_executable' => $original]);
     }
+});
+
+test('commands scope git safe-directory to the checkout path', function (): void {
+    Process::fake();
+
+    (new GitRepository('D:\\Repo\\BelimbingApp\\production'))->remoteUrl();
+
+    Process::assertRan(fn ($p): bool => $p->command === [
+        'git',
+        '-c',
+        'safe.directory=D:/Repo/BelimbingApp/production',
+        'remote',
+        'get-url',
+        'origin',
+    ]);
 });
 
 test('command launch failures are reported separately from git failures', function (): void {

@@ -15,7 +15,7 @@ const DEPLOYMENT_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
 {
     Process::fake(function ($process) use ($sha, $remoteError) {
-        return match ($process->command) {
+        return match (gitCommandWithoutConfig($process->command)) {
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
             ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($sha."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
@@ -222,7 +222,7 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
         ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
         ->and($log)->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
 
-    Process::assertRan(fn ($process): bool => $process->command === ['git', 'pull', '--ff-only']);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', '--ff-only']);
     Process::assertRan(fn ($process): bool => in_array('dump-autoload', $process->command, true));
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
 });
@@ -366,11 +366,13 @@ test('a diverged bundle reports an actionable message instead of raw git hints',
 function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
 {
     return function ($process) use ($porcelain, $leftRightCount) {
+        $command = gitCommandWithoutConfig($process->command);
+
         return match (true) {
-            $process->command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
+            $command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
             in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
-            $process->command === ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            $process->command === ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
+            $command === ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
+            $command === ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
             in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
             in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
             default => Process::result(),
