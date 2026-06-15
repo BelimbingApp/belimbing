@@ -4,6 +4,8 @@ namespace App\Base\Database\Services;
 
 use App\Base\Database\Exceptions\IncubatingSchemaMutationException;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Support\Git\GitRepository;
+use Illuminate\Support\Str;
 
 final class MigrationIncubationManager
 {
@@ -11,7 +13,7 @@ final class MigrationIncubationManager
 
     /**
      * @param  list<string>  $tableNames
-     * @return array{updated: list<string>, skipped: list<string>}
+     * @return array{updated: list<string>, skipped: list<string>, committed: list<string>, uncommitted: list<string>}
      */
     public function markTablesIncubating(array $tableNames): array
     {
@@ -20,7 +22,7 @@ final class MigrationIncubationManager
 
     /**
      * @param  list<string>  $tableNames
-     * @return array{updated: list<string>, skipped: list<string>}
+     * @return array{updated: list<string>, skipped: list<string>, committed: list<string>, uncommitted: list<string>}
      */
     public function unmarkTablesIncubating(array $tableNames): array
     {
@@ -29,7 +31,7 @@ final class MigrationIncubationManager
 
     /**
      * @param  list<string>  $tableNames
-     * @return array{updated: list<string>, skipped: list<string>}
+     * @return array{updated: list<string>, skipped: list<string>, committed: list<string>, uncommitted: list<string>}
      */
     private function updateTables(array $tableNames, bool $incubating): array
     {
@@ -62,6 +64,7 @@ final class MigrationIncubationManager
         }
 
         $updated = [];
+        $rewritten = [];
 
         foreach ($byMigration as $path => $payload) {
             $tables = array_values(array_unique($payload['tables'] ?? []));
@@ -71,6 +74,7 @@ final class MigrationIncubationManager
 
             if ($result === 'updated') {
                 $updated[] = $payload['file'].' ['.implode(', ', $tables).']';
+                $rewritten[] = $path;
 
                 continue;
             }
@@ -82,10 +86,91 @@ final class MigrationIncubationManager
             }
         }
 
+        $commit = $this->commitRewrites($rewritten, $incubating);
+
         return [
             'updated' => $updated,
             'skipped' => $skipped,
+            'committed' => $commit['committed'],
+            'uncommitted' => $commit['uncommitted'],
         ];
+    }
+
+    /**
+     * Commit the rewritten migration files in whichever (possibly nested) repository
+     * each one lives in, so incubate/un-incubate is a complete action instead of a
+     * silent dirty working tree the operator must later discover. The commit is scoped
+     * to exactly the rewritten files and best-effort: a path outside a git repo, or a
+     * commit that fails, is reported for manual follow-up rather than aborting.
+     *
+     * @param  list<string>  $paths
+     * @return array{committed: list<string>, uncommitted: list<string>}
+     */
+    private function commitRewrites(array $paths, bool $incubating): array
+    {
+        $byRepo = [];
+
+        foreach ($paths as $path) {
+            $byRepo[$this->repositoryRoot($path) ?? ''][] = $path;
+        }
+
+        $committed = [];
+        $uncommitted = [];
+        $verb = $incubating ? 'mark as incubating' : 'graduate out of incubation';
+
+        foreach ($byRepo as $root => $files) {
+            $count = count($files);
+            $noun = Str::plural('migration', $count);
+
+            if ($root === '') {
+                $uncommitted[] = (string) __(':count :noun outside any git repository', ['count' => $count, 'noun' => $noun]);
+
+                continue;
+            }
+
+            $repo = new GitRepository($root);
+            $result = $repo->commit($files, 'schema: '.$verb.' '.$count.' '.$noun);
+
+            if (! $result->ok) {
+                $uncommitted[] = $this->repoLabel($root).': '.$result->message();
+
+                continue;
+            }
+
+            $sha = $repo->output(['rev-parse', '--short', 'HEAD']);
+            $committed[] = $this->repoLabel($root).' ('.$count.' '.$noun.($sha !== null && $sha !== '' ? ', '.$sha : '').')';
+        }
+
+        return ['committed' => $committed, 'uncommitted' => $uncommitted];
+    }
+
+    /**
+     * The nearest ancestor directory that is a git repository — the platform root for
+     * platform/module files, or a nested bundle repo for files under extensions.
+     */
+    private function repositoryRoot(string $path): ?string
+    {
+        $base = rtrim(base_path(), DIRECTORY_SEPARATOR);
+        $dir = dirname($path);
+
+        while ($dir !== '' && str_starts_with($dir, $base)) {
+            if (is_dir($dir.DIRECTORY_SEPARATOR.'.git')) {
+                return $dir;
+            }
+
+            $dir = dirname($dir);
+        }
+
+        return null;
+    }
+
+    private function repoLabel(string $root): string
+    {
+        if ($root === rtrim(base_path(), DIRECTORY_SEPARATOR)) {
+            return (string) __('platform');
+        }
+
+        return str_replace('\\', '/', str_replace(base_path().DIRECTORY_SEPARATOR, '', $root));
     }
 
     private function migrationPathByFileName(string $migrationFile): ?string
