@@ -3,11 +3,11 @@
 namespace App\Base\Update\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
-use Illuminate\Contracts\Process\ProcessResult;
+use App\Base\Support\Git\GitRepository;
+use App\Base\Support\Git\GitResult;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Process;
 
 /**
  * Discovers git-backed Distribution Bundles and reads their local/remote state.
@@ -145,22 +145,14 @@ class DistributionBundleRepository
     {
         [$owner] = $this->remoteIdentity($dist['path']);
         $token = $owner !== null ? $this->tokenFor($owner) : null;
-        $args = ['git'];
 
-        if ($token !== null) {
-            $args[] = '-c';
-            $args[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$token);
+        $result = (new GitRepository($dist['path'], $token))->pull();
+
+        if ($result->ok) {
+            return $result->output !== '' ? $result->output : (string) __('Already up to date.');
         }
 
-        $result = Process::path($dist['path'])
-            ->timeout(180)
-            ->run(array_merge($args, ['pull', '--ff-only']));
-
-        if ($result->successful()) {
-            return trim($result->output()) ?: (string) __('Already up to date.');
-        }
-
-        $error = trim($result->errorOutput() ?: $result->output());
+        $error = $result->message();
 
         // A diverged checkout (local commits the remote doesn't have) can't be fast-forwarded.
         // That's an anomaly only a human should reconcile — auto-merge can conflict mid-deploy and
@@ -280,21 +272,13 @@ class DistributionBundleRepository
      */
     private function workingTree(string $path): array
     {
-        $porcelain = $this->git($path, ['status', '--porcelain']);
-        $ahead = 0;
-        $behind = 0;
-
-        $counts = $this->git($path, ['rev-list', '--left-right', '--count', '@{u}...HEAD']);
-
-        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
-            $behind = (int) $matches[1];
-            $ahead = (int) $matches[2];
-        }
+        $repo = new GitRepository($path);
+        $aheadBehind = $repo->aheadBehind();
 
         return [
-            'dirty' => $porcelain === null || $porcelain === '' ? 0 : count(explode("\n", $porcelain)),
-            'ahead' => $ahead,
-            'behind' => $behind,
+            'dirty' => $repo->uncommittedCount(),
+            'ahead' => $aheadBehind['ahead'],
+            'behind' => $aheadBehind['behind'],
         ];
     }
 
@@ -317,13 +301,13 @@ class DistributionBundleRepository
     private function latestCommit(string $path, string $owner, string $name, string $branch): array
     {
         $repo = "{$owner}/{$name}";
-        $result = $this->lsRemote($path, $branch, $this->tokenFor($owner));
+        $result = (new GitRepository($path, $this->tokenFor($owner)))->lsRemoteHead($branch);
 
-        if (! $result->successful()) {
+        if (! $result->ok) {
             return [null, $this->remoteCommitError($repo, $branch, $result)];
         }
 
-        $line = trim($result->output());
+        $line = $result->output;
         $sha = (string) strtok($line, " \t");
 
         if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
@@ -346,14 +330,12 @@ class DistributionBundleRepository
         return $this->commit($sha, '', '', (string) __('Remote branch head'));
     }
 
-    private function remoteCommitError(string $repo, string $branch, ProcessResult $result): string
+    private function remoteCommitError(string $repo, string $branch, GitResult $result): string
     {
-        $detail = $this->processError($result);
-
         return (string) __('Could not read latest commit for :repo@:branch via git ls-remote (:detail). Public repositories do not need a token; check the repo name, branch, or network access. If this repo is private, add a token in GitHub Access.', [
             'repo' => $repo,
             'branch' => $branch,
-            'detail' => $detail,
+            'detail' => $result->message(),
         ]);
     }
 
@@ -409,33 +391,11 @@ class DistributionBundleRepository
         return [null, null];
     }
 
-    private function lsRemote(string $path, string $branch, ?string $token): ProcessResult
-    {
-        $args = ['git'];
-
-        if ($token !== null) {
-            $args[] = '-c';
-            $args[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$token);
-        }
-
-        return Process::path($path)
-            ->timeout(30)
-            ->run(array_merge($args, ['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$branch]));
-    }
-
-    private function processError(ProcessResult $result): string
-    {
-        return trim($result->errorOutput() ?: $result->output())
-            ?: (string) __('process exited with code :code', ['code' => $result->exitCode()]);
-    }
-
     /**
      * @param  list<string>  $args
      */
     private function git(string $path, array $args): ?string
     {
-        $result = Process::path($path)->run(array_merge(['git'], $args));
-
-        return $result->successful() ? trim($result->output()) : null;
+        return (new GitRepository($path))->output($args);
     }
 }
