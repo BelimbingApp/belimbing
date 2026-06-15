@@ -1,7 +1,7 @@
 <div>
     <x-slot name="title">{{ __('Deployment') }}</x-slot>
 
-    <div class="space-y-section-gap" x-data="{ running: false, dismissed: false }" @run-finished.window="running = false" @keydown.escape.window="dismissed = true">
+    <div class="space-y-section-gap" x-data="{ running: false, dismissed: false }" @keydown.escape.window="dismissed = true">
         <x-ui.page-header
             :title="__('Deployment')"
             :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
@@ -209,7 +209,7 @@
             </div>
         </x-ui.card>
 
-        {{-- Run log: floats as a modal only while a run is in progress (or until dismissed), then docks to rest inline at the end of the page. It never floats on a plain page visit. --}}
+        {{-- Run log: floats as a modal from when a run starts until the operator closes it (X, backdrop, or Esc); it then docks to rest inline at the end of the page. It never floats on a plain page visit. --}}
         <div x-show="running && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="dismissed = true"></div>
 
         <div :class="(running && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
