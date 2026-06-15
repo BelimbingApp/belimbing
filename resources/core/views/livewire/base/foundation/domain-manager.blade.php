@@ -1,7 +1,7 @@
 <div class="space-y-6">
     <header class="space-y-1">
-        <h1 class="text-2xl font-semibold text-ink">{{ __('Domains') }}</h1>
-        <p class="text-sm text-muted">{{ __('A fresh Belimbing install ships the Core modules only. Install the business domains you need; disable or uninstall them here later.') }}</p>
+        <h1 class="text-2xl font-semibold text-ink">{{ __('Business Domains') }}</h1>
+        <p class="text-sm text-muted">{{ __('A fresh Belimbing install ships Base and Core only. Install the business domains you need; disable or uninstall them here later.') }}</p>
     </header>
 
     @if (session('success'))
@@ -19,7 +19,7 @@
 
     @if (count($available) > 0)
         <section class="space-y-2">
-            <h2 class="text-lg font-semibold text-ink">{{ __('Available domains') }}</h2>
+            <h2 class="text-lg font-semibold text-ink">{{ __('Available business domains') }}</h2>
             <div class="grid gap-4 md:grid-cols-3">
                 @foreach ($available as $name => $entry)
                     <x-ui.card wire:key="available-{{ $name }}">
@@ -48,7 +48,7 @@
     @endif
 
     <section class="space-y-2">
-        <h2 class="text-lg font-semibold text-ink">{{ __('Installed domains') }}</h2>
+        <h2 class="text-lg font-semibold text-ink">{{ __('Installed business domains') }}</h2>
         <div class="grid gap-4 md:grid-cols-3">
             @forelse ($installed as $domain)
                 <x-ui.card wire:key="domain-{{ $domain['name'] }}">
@@ -131,7 +131,7 @@
                 </x-ui.card>
             @empty
                 <x-ui.card>
-                    <div class="text-sm text-muted">{{ __('No non-Core domains are installed.') }}</div>
+                    <div class="text-sm text-muted">{{ __('No non-Core business domains are installed.') }}</div>
                 </x-ui.card>
             @endforelse
         </div>

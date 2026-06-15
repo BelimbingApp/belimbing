@@ -8,11 +8,27 @@ use Livewire\Livewire;
 
 it('lands on the user-preferred menu item when it is still visible', function (): void {
     $user = createAdminUser();
+    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.update.business-domain']]);
+
+    $this->actingAs($user)
+        ->get('/')
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
+});
+
+it('lands legacy update menu preferences on their renamed pages', function (): void {
+    $user = createAdminUser();
+
     $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.domains']]);
 
     $this->actingAs($user)
         ->get('/')
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
+
+    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.update.belimbing']]);
+
+    $this->actingAs($user)
+        ->get('/')
+        ->assertRedirect(route('admin.system.update.deployment.index'));
 });
 
 it('falls back to the dashboard when the preference is unknown or inaccessible', function (): void {
@@ -25,14 +41,14 @@ it('falls back to the dashboard when the preference is unknown or inaccessible',
         ->assertRedirect(route('dashboard'));
 });
 
-it('lands domain-capable admins on the Domains screen when no domains are installed', function (): void {
+it('lands domain-capable admins on the Business Domains screen when no domains are installed', function (): void {
     $installer = Mockery::mock(DomainInstaller::class);
     $installer->shouldReceive('hasAnyInstalled')->andReturnFalse();
     app()->instance(DomainInstaller::class, $installer);
 
     $this->actingAs(createAdminUser())
         ->get('/')
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 });
 
 it('lands ordinary users on the dashboard even when no domains are installed', function (): void {
@@ -51,11 +67,11 @@ it('saves the landing preference from the profile page', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Profile::class)
-        ->set('landingMenuId', 'admin.system.domains')
+        ->set('landingMenuId', 'admin.system.update.business-domain')
         ->call('updateProfileInformation')
         ->assertHasNoErrors();
 
-    expect($user->refresh()->prefs[LandingPageResolver::PREF_KEY])->toBe('admin.system.domains');
+    expect($user->refresh()->prefs[LandingPageResolver::PREF_KEY])->toBe('admin.system.update.business-domain');
 
     Livewire::test(Profile::class)
         ->set('landingMenuId', '')

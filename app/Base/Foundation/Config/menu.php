@@ -11,12 +11,12 @@ return [
             'parent' => 'admin.system',
         ],
         [
-            'id' => 'admin.system.domains',
-            'label' => 'Domains',
+            'id' => 'admin.system.update.business-domain',
+            'label' => 'Business Domains',
             'icon' => 'heroicon-o-squares-2x2',
-            'route' => 'admin.system.domains.index',
-            'permission' => 'admin.system.domains.view',
-            'parent' => 'admin.system',
+            'route' => 'admin.system.update.business-domains.index',
+            'permission' => 'admin.system.update.business-domain.view',
+            'parent' => 'admin.system.update',
         ],
     ],
 ];

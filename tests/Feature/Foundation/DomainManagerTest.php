@@ -38,19 +38,20 @@ function createManagedDomainCheckout(): void
     );
 }
 
-it('renders the domains page with installed domains and a residue pointer', function (): void {
+it('renders the Business Domains page with installed domains and a residue pointer', function (): void {
     $this->actingAs(createAdminUser());
 
-    $this->get(route('admin.system.domains.index'))
+    $this->get(route('admin.system.update.business-domains.index'))
         ->assertOk()
-        ->assertSee('Installed domains')
+        ->assertSee('Business Domains')
+        ->assertSee('Installed business domains')
         ->assertSee(route('admin.system.database-residue.index'));
 });
 
 it('denies the page to users without the view capability', function (): void {
     $this->actingAs(User::factory()->create());
 
-    $this->get(route('admin.system.domains.index'))->assertForbidden();
+    $this->get(route('admin.system.update.business-domains.index'))->assertForbidden();
 });
 
 it('shows catalog domains without a checkout as available to install', function (): void {
@@ -59,7 +60,7 @@ it('shows catalog domains without a checkout as available to install', function 
     configureManagedDomainCatalog();
 
     Livewire::test(DomainManager::class)
-        ->assertSee('Available domains')
+        ->assertSee('Available business domains')
         ->assertSee(DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertSee(DOMAIN_MANAGER_FIXTURE_DESCRIPTION);
 });
@@ -73,7 +74,7 @@ it('installs an available domain and redirects back', function (): void {
 
     Livewire::test(DomainManager::class)
         ->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 
     Process::assertRan(fn ($process): bool => $process->command === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 });
@@ -85,13 +86,13 @@ it('disables and re-enables an installed domain', function (): void {
 
     Livewire::test(DomainManager::class)
         ->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 
     expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeTrue();
 
     Livewire::test(DomainManager::class)
         ->call('enable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 
     expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeFalse();
 });
@@ -121,7 +122,7 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
         ->set('uninstallPhrase', 'uninstall zzmanaged')
         ->call('uninstall')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 
     expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeTrue();
@@ -138,7 +139,7 @@ it('uninstalls and drops tables when the drop phrase is typed', function (): voi
         ->set('uninstallPhrase', 'uninstall zzmanaged and drop all tables')
         ->call('uninstall')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.domains.index'));
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
 
     expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeFalse();

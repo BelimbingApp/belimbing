@@ -7,7 +7,7 @@ return [
     | Domain Catalog
     |--------------------------------------------------------------------------
     |
-    | Official BelimbingApp domain repos installable from the Domains admin
+    | Official BelimbingApp domain repos installable from the Business Domains admin
     | screen. Keys are the PascalCase mount directory under app/Modules.
     | A fresh Belimbing clone ships Base + Core only; everything below is
     | opt-in per deployment.

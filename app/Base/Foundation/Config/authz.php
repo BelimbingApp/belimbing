@@ -7,9 +7,10 @@ return [
         'admin.system.plugins.view',
         'admin.system.plugins.manage',
 
-        // Domain manager UI (admin/system/domains). Code install/uninstall
-        // stays in the shell; manage gates database-residue cleanup only.
-        'admin.system.domains.view',
-        'admin.system.domains.manage',
+        // Business domain manager UI (admin/system/update/business-domains).
+        // Code install/uninstall stays in the shell; manage gates the
+        // lifecycle actions while durable-state cleanup stays in Database.
+        'admin.system.update.business-domain.view',
+        'admin.system.update.business-domain.manage',
     ],
 ];

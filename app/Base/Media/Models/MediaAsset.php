@@ -2,7 +2,7 @@
 
 namespace App\Base\Media\Models;
 
-use App\Base\Media\Exceptions\MediaAssetUrlException;
+use App\Base\Media\Exceptions\MediaStorageException;
 use DateInterval;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -109,7 +109,7 @@ class MediaAsset extends Model
                 return $publicUrl;
             }
 
-            throw MediaAssetUrlException::invalidExternalPublicUrl();
+            throw MediaStorageException::invalidExternalUrl();
         }
 
         return $this->streamUrl($expiresIn);
