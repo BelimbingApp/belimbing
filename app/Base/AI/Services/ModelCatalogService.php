@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\CatalogSyncResult;
@@ -40,6 +41,8 @@ class ModelCatalogService
     private const CATALOG_SYNC_LOCK_WAIT_SECONDS = 45;
 
     private ?array $catalogCache = null;
+
+    private bool $catalogSyncAttempted = false;
 
     public function __construct(
         private readonly ?IntegrationGateway $gateway = null,
@@ -153,6 +156,11 @@ class ModelCatalogService
 
         $data = $this->readCatalogFile();
 
+        if ($data === null || $data === []) {
+            $this->attemptCatalogSync();
+            $data = $this->readCatalogFile();
+        }
+
         $this->catalogCache = is_array($data) ? $data : [];
 
         return $this->catalogCache;
@@ -165,9 +173,20 @@ class ModelCatalogService
      */
     public function getProvider(string $id): ?array
     {
-        $providers = $this->getProviders();
+        $provider = $this->getProviders()[$id] ?? null;
 
-        return $providers[$id] ?? null;
+        if ($provider !== null && ($provider['base_url'] ?? '') !== '') {
+            return $provider;
+        }
+
+        if ($provider === null && ! isset(config('ai.provider_overlay', [])[$id])) {
+            return null;
+        }
+
+        $this->attemptCatalogSync();
+        $this->catalogCache = null;
+
+        return $this->getProviders()[$id] ?? $provider;
     }
 
     /**
@@ -397,5 +416,24 @@ class ModelCatalogService
     private function integrationGateway(): IntegrationGateway
     {
         return $this->gateway ?? app(IntegrationGateway::class);
+    }
+
+    /**
+     * Best-effort catalog refresh for UI and discovery paths that must not
+     * depend on a prior `blb:ai:catalog:sync` run.
+     */
+    private function attemptCatalogSync(): void
+    {
+        if ($this->catalogSyncAttempted) {
+            return;
+        }
+
+        $this->catalogSyncAttempted = true;
+
+        try {
+            $this->ensureSynced();
+        } catch (ModelCatalogSyncException) {
+            // Callers fall back to cached, overlay-only, or empty catalog data.
+        }
     }
 }

@@ -122,6 +122,26 @@ test('github copilot setup starts device flow for a company-scoped user without 
         ->assertSee('Copy');
 });
 
+test('provider setup resolves base url from catalog on demand and labels the field', function (): void {
+    Http::fake([
+        'https://models.dev/api.json' => Http::response([
+            'moonshotai' => [
+                'api' => 'https://api.moonshot.ai/v1',
+                'name' => 'Moonshot AI',
+                'models' => [],
+            ],
+        ], 200, ['ETag' => '"moonshot-etag"']),
+    ]);
+
+    $user = createAiProvidersTestUser();
+    $this->actingAs($user);
+
+    Livewire::test(ProviderSetup::class, ['providerKey' => 'moonshotai'])
+        ->assertSet('baseUrl', 'https://api.moonshot.ai/v1')
+        ->assertSee('Base URL (from provider catalog)')
+        ->assertSee('Get API Key');
+});
+
 test('generic oauth provider setup is honest about missing dedicated sign-in support', function (): void {
     $user = createAiProvidersTestUser();
 

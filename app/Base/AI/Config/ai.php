@@ -335,7 +335,7 @@ return [
             'category' => ['leading-lab'],
             'region' => ['global'],
             'description' => 'Kimi models for long-context tasks',
-            'api_key_url' => 'https://platform.moonshot.cn/console/api-keys',
+            'api_key_url' => 'https://platform.kimi.ai/console/api-keys',
         ],
         'kimi-for-coding' => [
             'category' => ['developer-tool'],

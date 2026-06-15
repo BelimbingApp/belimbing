@@ -1,4 +1,5 @@
 <?php
+
 //
 // Full-page component for setting up a single AI provider connection.
 // Handles shared setup concerns (credential entry, validation, connect, and
@@ -63,8 +64,8 @@ class ProviderSetup extends Component
      */
     public function mount(string $providerKey): void
     {
-        $allProviders = app(ModelCatalogService::class)->getProviders();
-        $tpl = $allProviders[$providerKey] ?? null;
+        $catalogService = app(ModelCatalogService::class);
+        $tpl = $catalogService->getProvider($providerKey);
 
         if ($tpl === null) {
             $this->redirectRoute('admin.ai.providers', navigate: true);
@@ -77,6 +78,10 @@ class ProviderSetup extends Component
         $this->baseUrl = $tpl['base_url'] ?? '';
         $this->apiKeyUrl = $tpl['api_key_url'] ?? null;
         $this->authType = $tpl['auth_type'] ?? 'api_key';
+
+        if ($this->authType === AuthType::ApiKey->value && $this->baseUrl === '') {
+            $this->connectError = __('Could not load this provider\'s API endpoint. Check your network connection and try again.');
+        }
 
         if ($this->authType === 'device_flow') {
             $this->startDeviceFlow();

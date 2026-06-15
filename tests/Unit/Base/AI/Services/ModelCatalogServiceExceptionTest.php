@@ -65,3 +65,48 @@ it('ensureSynced delegates to sync so the catalog file is populated on demand', 
         (new Filesystem)->deleteDirectory($testingStoragePath);
     }
 });
+
+it('getProvider refreshes the catalog when a known provider is missing its endpoint', function (): void {
+    Http::fake([
+        'https://models.dev/api.json' => Http::response([
+            'moonshotai' => [
+                'api' => 'https://api.moonshot.ai/v1',
+                'name' => 'Moonshot AI',
+                'models' => [],
+            ],
+        ], 200, ['ETag' => '"refresh-etag"']),
+    ]);
+
+    $originalStoragePath = app()->storagePath();
+    $testingStoragePath = sys_get_temp_dir().'/blb-testing-models-dev-'.bin2hex(random_bytes(8));
+
+    (new Filesystem)->ensureDirectoryExists($testingStoragePath);
+    app()->useStoragePath($testingStoragePath);
+
+    $catalogDir = $testingStoragePath.'/download/ai/models-dev';
+    (new Filesystem)->ensureDirectoryExists($catalogDir);
+    file_put_contents(
+        $catalogDir.'/catalog.json',
+        json_encode([
+            'openai' => [
+                'api' => 'https://api.openai.com/v1',
+                'name' => 'OpenAI',
+                'models' => [],
+            ],
+        ], JSON_UNESCAPED_SLASHES)
+    );
+
+    $service = null;
+
+    try {
+        $service = new ModelCatalogService;
+
+        expect($service->getProvider('moonshotai')['base_url'] ?? null)
+            ->toBe('https://api.moonshot.ai/v1');
+
+        Http::assertSentCount(1);
+    } finally {
+        app()->useStoragePath($originalStoragePath);
+        (new Filesystem)->deleteDirectory($testingStoragePath);
+    }
+});
