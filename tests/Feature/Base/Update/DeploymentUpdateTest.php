@@ -3,6 +3,7 @@
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Update\Livewire\Deployment\Index;
 use App\Base\Update\Services\DeploymentService;
+use App\Base\Update\Services\DistributionBundleRepository;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -321,4 +322,27 @@ test('the worker reload reads its admin port from the octane server-state file',
     } finally {
         $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
     }
+});
+
+test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {
+    Process::fake(function ($process) {
+        if (in_array('--ff-only', $process->command, true)) {
+            return Process::result(
+                errorOutput: "From https://github.com/kiatng/blb-sbg\n   024bd2e..d45cbe4  main -> origin/main\n".
+                    "hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\n".
+                    'fatal: Not possible to fast-forward, aborting.',
+                exitCode: 128,
+            );
+        }
+
+        return Process::result('https://github.com/kiatng/blb-sbg.git');
+    });
+
+    $message = app(DistributionBundleRepository::class)->pull(['label' => 'blb-sbg', 'path' => '/srv/blb-sbg']);
+
+    expect($message)
+        ->toContain('blb-sbg has diverged from its remote')
+        ->toContain('git -C /srv/blb-sbg log --oneline @{u}..HEAD')
+        ->not->toContain('hint:')
+        ->not->toContain('fatal:');
 });

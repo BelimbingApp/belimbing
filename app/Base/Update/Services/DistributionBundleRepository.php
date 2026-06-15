@@ -159,7 +159,20 @@ class DistributionBundleRepository
             return trim($result->output()) ?: (string) __('Already up to date.');
         }
 
-        return (string) __('FAILED: :error', ['error' => trim($result->errorOutput() ?: $result->output())]);
+        $error = trim($result->errorOutput() ?: $result->output());
+
+        // A diverged checkout (local commits the remote doesn't have) can't be fast-forwarded.
+        // That's an anomaly only a human should reconcile — auto-merge can conflict mid-deploy and
+        // a hard reset would silently discard those commits — so surface one actionable line
+        // instead of git's raw advice hints.
+        if (str_contains($error, 'Not possible to fast-forward')) {
+            return (string) __('FAILED: :label has diverged from its remote — its local checkout has commits that are not on the remote, so it cannot be fast-forwarded. Review them with `git -C :path log --oneline @{u}..HEAD`, reconcile manually, then retry.', [
+                'label' => $dist['label'],
+                'path' => $dist['path'],
+            ]);
+        }
+
+        return (string) __('FAILED: :error', ['error' => $error]);
     }
 
     /**
