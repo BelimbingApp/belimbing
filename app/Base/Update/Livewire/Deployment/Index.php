@@ -4,6 +4,7 @@ namespace App\Base\Update\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Update\Services\DeploymentRunHistory;
 use App\Base\Update\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -22,29 +23,29 @@ class Index extends Component
     #[Session('admin.system.update.deployment.run_log')]
     public array $log = [];
 
-    public function updateRepo(string $key, DeploymentService $deployment): void
+    public function updateRepo(string $key, DeploymentService $deployment, DeploymentRunHistory $runHistory): void
     {
-        $this->runAction($deployment, fn (): array => $deployment->update([$key], fn (string $line) => $this->streamRunLine($line)));
+        $this->runAction($runHistory, fn (): array => $deployment->update([$key], fn (string $line) => $this->streamRunLine($line)));
     }
 
-    public function updateAll(DeploymentService $deployment): void
+    public function updateAll(DeploymentService $deployment, DeploymentRunHistory $runHistory): void
     {
-        $this->runAction($deployment, fn (): array => $deployment->update([], fn (string $line) => $this->streamRunLine($line)));
+        $this->runAction($runHistory, fn (): array => $deployment->update([], fn (string $line) => $this->streamRunLine($line)));
     }
 
-    public function reloadOnly(DeploymentService $deployment): void
+    public function reloadOnly(DeploymentService $deployment, DeploymentRunHistory $runHistory): void
     {
-        $this->runAction($deployment, fn (): array => $deployment->reload());
+        $this->runAction($runHistory, fn (): array => $deployment->reload());
     }
 
-    public function rebuildPhp(DeploymentService $deployment): void
+    public function rebuildPhp(DeploymentService $deployment, DeploymentRunHistory $runHistory): void
     {
-        $this->runAction($deployment, fn (): array => $deployment->rebuildPhp());
+        $this->runAction($runHistory, fn (): array => $deployment->rebuildPhp());
     }
 
-    public function rebuildAssets(DeploymentService $deployment): void
+    public function rebuildAssets(DeploymentService $deployment, DeploymentRunHistory $runHistory): void
     {
-        $this->runAction($deployment, fn (): array => $deployment->rebuildAssets());
+        $this->runAction($runHistory, fn (): array => $deployment->rebuildAssets());
     }
 
     /**
@@ -53,23 +54,23 @@ class Index extends Component
      *
      * @param  callable(): list<string>  $work
      */
-    private function runAction(DeploymentService $deployment, callable $work): void
+    private function runAction(DeploymentRunHistory $runHistory, callable $work): void
     {
         $this->authorizeManage();
         $this->startRunLog();
         $this->log = $work();
-        $deployment->rememberDeploymentRun($this->log, $this->runOutcome());
+        $runHistory->rememberDeploymentRun($this->log, $this->runOutcome());
         $this->dispatch('run-finished');
     }
 
-    public function render(DeploymentService $deployment): View
+    public function render(DeploymentService $deployment, DeploymentRunHistory $runHistory): View
     {
         $status = $deployment->status();
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
         // time are still there on a fresh visit (or after an interrupted run).
-        $lastRun = $deployment->lastDeploymentRun();
+        $lastRun = $runHistory->lastDeploymentRun();
         $hasSessionLog = $this->log !== [];
         $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
         $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
@@ -89,10 +90,10 @@ class Index extends Component
             'runSummary' => $hasSessionLog ? $this->runSummary() : ($lastRun['summary'] ?? ''),
             'runAt' => $lastRun['attempted_at'] ?? null,
             'displayLog' => $displayLog,
-            'lastReload' => $deployment->lastReload(),
+            'lastReload' => $runHistory->lastReload(),
             'packageManager' => $deployment->frontendPackageManager(),
-            'lastComposerRun' => $deployment->lastComposerRun(),
-            'lastFrontendRun' => $deployment->lastFrontendRun(),
+            'lastComposerRun' => $runHistory->lastComposerRun(),
+            'lastFrontendRun' => $runHistory->lastFrontendRun(),
         ]);
     }
 

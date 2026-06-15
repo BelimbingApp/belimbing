@@ -95,10 +95,14 @@
                                 {{-- Uncommitted/unpushed changes inside a bundle's own nested repo never show in the platform repo's git status; surface them here so a tool that wrote into the bundle (e.g. schema incubation) can't leave the operator in the dark. --}}
                                 <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                                     @if ($s['working_tree']['dirty'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this bundle — commit them in its repository.')">{{ trans_choice(':count uncommitted change|:count uncommitted changes', $s['working_tree']['dirty']) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this bundle — commit them in its repository.')">
+                                            {{ trans_choice('{1} 1 uncommitted change|[2,*] :count uncommitted changes', $s['working_tree']['dirty'], ['count' => $s['working_tree']['dirty']]) }}
+                                        </x-ui.badge>
                                     @endif
                                     @if ($s['working_tree']['ahead'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this bundle\'s remote.')">{{ trans_choice(':count unpushed commit|:count unpushed commits', $s['working_tree']['ahead']) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this bundle\'s remote.')">
+                                            {{ trans_choice('{1} 1 unpushed commit|[2,*] :count unpushed commits', $s['working_tree']['ahead'], ['count' => $s['working_tree']['ahead']]) }}
+                                        </x-ui.badge>
                                     @endif
                                 </div>
                             @endif
