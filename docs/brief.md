@@ -8,11 +8,9 @@
 
 ## Founder's Note
 
-I'm Kiat, an indie developer. Belimbing is named after the place where it was borned.
+I'm Kiat, a solo builder. Belimbing is named after the place where it was borned.
 
-Belimbing is an application platform small businesses can run on, developers can build on, and I can play in. Hopefully, it is a place where we find shared resonance.
-
-Belimbing is to serve the unserved.
+Belimbing is an application platform for businesses. All code is written by AI coding agents.
 
 ---
 
@@ -30,7 +28,7 @@ Belimbing is a **general application platform** designed to democratize enterpri
 - **AI-Native Architecture**: Built from the ground up to leverage AI in development, customization, and operation
 - **Quality-Obsessed**: Adoption of Ousterhout's software design principles, performance-first architecture, exceptional user experience
 - **Git-Native Workflow**: Development → Staging → Production managed through version control for safety and transparency
-- **Customizable Framework**: Build your own plugins and extensions
+- **Customizable Platform**: Build your own plugins and extensions
 
 **Core Philosophy:**
 
@@ -67,7 +65,7 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 - Build sustainable competitive advantage through custom business logic
 - Leverage AI for rapid development without sacrificing security and quality
 
-### For Independent Developers
+### For Builders
 
 - Build solutions efficiently on a proven platform
 - Focus on business logic, not infrastructure
@@ -87,28 +85,17 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 
 **1. Git-Native Architecture**
 - All code management through git (development → staging → production → main for upstream)
-- Built-in CI/CD in admin panel
 - Complete audit trail and rollback capability
 - Foundation for AI safety and deployment workflow
 
-**2. Single Source of Truth**
-- Database + Redis for all configuration
-- Environment variables only for bootstrap (DB and Redis connections)
-- Scope-based configuration with hierarchical fallback
-- Scriptable database updates (migrations, seeding, config changes)
+**2. FrankenPHP Native Runtime**
+- **FrankenPHP** (required) — BLB's PHP worker model
+- Cross-OS support
 
-**3. FrankenPHP Native Runtime**
-- **FrankenPHP** (required) — BLB's PHP worker model; native binaries on Linux and Windows
-- **Linux** — primary production target; system Caddy ingress + per-instance FrankenPHP (see `docs/architecture/caddy-frankenphp-topology.md`)
-- **Windows** — supported for development and native deployment (`scripts/start-app.ps1`)
-- Containers remain an optional deployment method
-
-**4. Extension Management System**
-- Pre-installation validation (compatibility, dependencies, security)
-- Runtime safety (resource limits, permissions, crash isolation)
-- Laravel-first extension surface area (Service Providers, config overrides, module migrations/seeders)
-- Registry and marketplace integration
-- Rollback capability for failed extensions
+**3. Distribution Bundles**
+- Modules are full-stack ownership boundaries
+- Business domains can be installed, disabled, or uninstalled in Admin Panel
+- Convention-based discovery integrates providers, migrations, routes, and menus automatically; adapters and slots handle deployment-specific variation
 
 ### Performance & Quality
 
@@ -116,44 +103,6 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 - Aggressive caching (memory, disk, distributed)
 - Lazy loading and database optimization
 - Beautiful, accessible UI with 60fps interactions
-
----
-
-## Deployment & Operations
-
-### Deployment Philosophy
-
-**Simple Installation:**
-- One-command deployment (database, backend, frontend, AI services)
-- Single installer script handles all dependencies
-- Zero-config start with sensible defaults
-- Installation package < 500MB, startup < 30 seconds, memory < 2GB for small deployments
-
-**Remote Management:**
-- Built-in secure tunneling for developer support
-- Remote diagnostics and health monitoring
-- Push updates and patches remotely with rollback
-- Session recording for debugging (privacy-controlled)
-
-**Lifecycle Management:**
-- Automated backups and health monitoring
-- Database migrations with zero-downtime
-- One-click rollback to previous state
-- Cleanup automation for logs and orphaned data
-- Self-healing for common failures
-
-### Requirements
-
-**Infrastructure:**
-- Linux or Windows host with FrankenPHP (modest hardware supported)
-- Database (PostgreSQL likely; any Laravel-supported database possible)
-- Redis for caching
-- Internet connection for git, updates, AI models (works behind corporate firewalls with outbound HTTPS)
-
-**Technical Knowledge:**
-- Minimal for basic deployment
-- Can be remotely managed by independent developers
-- Sophisticated tooling reduces operational burden
 
 ---
 
