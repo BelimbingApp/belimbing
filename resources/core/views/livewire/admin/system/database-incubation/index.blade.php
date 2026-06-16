@@ -19,6 +19,13 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
             </x-slot>
         </x-ui.page-header>
 
+        @unless (app()->environment('local'))
+            <x-ui.alert variant="warning">
+                <p class="font-semibold">{{ __('Schema incubation is a local development workflow.') }}</p>
+                <p class="mt-1">{{ __('This environment is :env, not local. Incubating schema is blocked from migrating outside local/testing, so changes made here will not apply on deploy and migration files should not be edited in this environment. Graduate a migration (remove its incubating marker) before it ships.', ['env' => app()->environment()]) }}</p>
+            </x-ui.alert>
+        @endunless
+
         @if (session('warning'))
             <x-ui.alert variant="warning">{{ session('warning') }}</x-ui.alert>
         @endif

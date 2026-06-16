@@ -126,8 +126,14 @@ class DeploymentService
             $log = array_merge($log, $this->runFrontendBuild($progress));
 
             $record((string) __('Running migrations…'));
-            Artisan::call('migrate', ['--force' => true]);
+            $migrateStatus = Artisan::call('migrate', ['--force' => true]);
             $record(trim(Artisan::output()) ?: (string) __('No pending migrations.'));
+
+            if ($migrateStatus !== 0) {
+                $record((string) __('FAILED: database migrations did not complete; deployment halted before reload.'));
+
+                return $log;
+            }
         } finally {
             Artisan::call('up');
         }

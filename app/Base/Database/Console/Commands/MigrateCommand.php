@@ -69,10 +69,48 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         $this->loadAllModuleMigrations();
 
+        if (! $this->option('dev') && $this->incubatingSchemaIsBlockedHere()) {
+            return Command::FAILURE;
+        }
+
         return $this->guardPostgresMigrationIdentifiers(
             $this->option('database'),
             fn (): int => parent::handle(),
         );
+    }
+
+    /**
+     * Block plain `migrate` from touching incubating schema on a non-disposable
+     * database.
+     *
+     * Incubating migrations are edited in place and rebuilt locally with
+     * `migrate --dev`; that drop-and-rebuild flow is local-only. Once a migration
+     * is recorded on a real database, later in-place edits silently never re-apply,
+     * so incubating schema must be graduated (the `IncubatingSchema` marker removed)
+     * before it reaches production or staging. Local and testing databases are
+     * disposable, so the marker is allowed there.
+     */
+    private function incubatingSchemaIsBlockedHere(): bool
+    {
+        if (app()->environment('local', 'testing')) {
+            return false;
+        }
+
+        $incubating = app(IncubatingSchemaPreflight::class)
+            ->incubatingMigrations($this->getMigrationPaths());
+
+        if ($incubating === []) {
+            return false;
+        }
+
+        $this->error('Incubating schema cannot be migrated outside local/testing. Current: '.app()->environment());
+        $this->line('Graduate these migrations by removing the IncubatingSchema marker before deploying:');
+
+        foreach ($incubating as $migration) {
+            $this->line('  - '.$migration['relative_path']);
+        }
+
+        return true;
     }
 
     /**

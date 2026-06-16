@@ -89,6 +89,8 @@ Use `migrate --seed --seeder=...` when you want one specific seeder class instea
 
 `migrate:refresh`, `migrate:reset`, and `db:wipe` are blocked for normal databases because they bypass the incubating-schema preflight. The only allowed exception is the in-memory SQLite test database path used by automated tests.
 
+Plain `migrate` **blocks incubating schema outside `local`/`testing`.** Incubating migrations are edited in place and rebuilt only by the local-only `migrate --dev` flow; once recorded on a real database, later in-place edits silently never re-apply. So a `migrate` (or `migrate --force`) run on a non-disposable database — including the in-app **Admin > System > Update** deploy, which calls `migrate --force` — fails fast and lists the offending files if any carry the `IncubatingSchema` marker. **Graduate a migration (remove the marker) before it ships to production or staging.** A failed migration also halts the Update flow before workers reload.
+
 ## Schema Editing
 
 BLB uses source-local schema maturity. For schema changes, use `php artisan migrate --dev`.

@@ -409,3 +409,34 @@ test('the deployment page flags a bundle with uncommitted and unpushed changes',
         ->assertSee('2 uncommitted changes')
         ->assertSee('2 unpushed commits');
 });
+
+test('a failed migration halts the deployment before reloading workers', function (): void {
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+
+    // An incubating migration makes `migrate` fail on a non-disposable database.
+    writeIncubatingTestMigration(
+        'extensions/test-vendor/deploy-guard/Database/Migrations',
+        '2099_02_02_020202_create_deploy_guard_widgets_table.php',
+        'deploy_guard_widgets',
+    );
+    app()['env'] = 'production';
+
+    try {
+        $log = app(DeploymentService::class)->update(['platform']);
+
+        expect($log)->toContain('FAILED: database migrations did not complete; deployment halted before reload.')
+            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, 'Incubating schema cannot be migrated outside local/testing')))->toBeTrue()
+            ->and($log)->not->toContain('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+
+        // Workers were never reloaded because the deploy halted at the migration step.
+        Http::assertNothingSent();
+        expect(app()->isDownForMaintenance())->toBeFalse();
+    } finally {
+        cleanupIncubatingTestMigration(
+            'extensions/test-vendor/deploy-guard/Database/Migrations',
+            '2099_02_02_020202_create_deploy_guard_widgets_table.php',
+            'deploy_guard_widgets',
+        );
+    }
+});

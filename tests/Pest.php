@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -318,4 +319,69 @@ function makeBackupManifestPayload(string $backupId, string $artifactPath, strin
         'artifact_path' => $artifactPath,
         ...$overrides,
     ];
+}
+
+/**
+ * Write a throwaway incubating migration into a test extension path and return its file path.
+ *
+ * Used to exercise the incubating-schema guard without shipping a real migration.
+ */
+function writeIncubatingTestMigration(string $relativeDir, string $file, string $table): string
+{
+    $dir = base_path($relativeDir);
+
+    if (! is_dir($dir)) {
+        mkdir($dir, 0755, true);
+    }
+
+    $path = $dir.'/'.$file;
+
+    file_put_contents($path, <<<PHP
+    <?php
+    use App\\Base\\Database\\Concerns\\IncubatingSchema;
+    use Illuminate\\Database\\Migrations\\Migration;
+    use Illuminate\\Database\\Schema\\Blueprint;
+    use Illuminate\\Support\\Facades\\Schema;
+
+    return new class extends Migration
+    {
+        use IncubatingSchema;
+
+        public function up(): void
+        {
+            Schema::create('{$table}', function (Blueprint \$t): void {
+                \$t->id();
+            });
+        }
+
+        public function down(): void
+        {
+            Schema::dropIfExists('{$table}');
+        }
+    };
+    PHP);
+
+    return $path;
+}
+
+/**
+ * Remove a throwaway incubating migration and any schema/registry rows it created.
+ */
+function cleanupIncubatingTestMigration(string $relativeDir, string $file, string $table): void
+{
+    Schema::dropIfExists($table);
+    DB::table('migrations')
+        ->where('migration', str_replace('.php', '', $file))
+        ->delete();
+
+    $path = base_path($relativeDir.'/'.$file);
+
+    if (is_file($path)) {
+        @unlink($path);
+    }
+
+    $dir = dirname($path);
+    @rmdir($dir);
+    @rmdir(dirname($dir));
+    @rmdir(dirname($dir, 2));
 }
