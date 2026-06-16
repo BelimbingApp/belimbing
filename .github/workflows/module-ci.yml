@@ -1,0 +1,139 @@
+name: module-ci
+
+# Reusable CI harness for BLB Distribution Bundle repos (non-Core domains).
+# Extensions are out of scope here — they are mostly private licensee repos.
+# A module repo cannot build alone — it has no composer.json at the
+# root, no vendor/, no Laravel bootstrap, and no Pest config. This workflow
+# composes the module against a platform checkout, resolves its cross-domain
+# dependencies from their manifests, then runs Pint, Pest (with coverage), and a
+# scoped SonarCloud scan. Caller repos invoke it via `uses:` (see each module
+# repo's .github/workflows/ci.yml).
+
+on:
+  workflow_call:
+    inputs:
+      module-path:
+        description: 'Contract path the module mounts at (e.g. app/Modules/People).'
+        required: true
+        type: string
+      platform-repo:
+        description: 'Platform Distribution Bundle that owns Base + Core.'
+        required: false
+        type: string
+        default: BelimbingApp/belimbing
+      platform-ref:
+        description: 'Platform ref to build against. Pin to a tag for reproducible runs.'
+        required: false
+        type: string
+        default: main
+      sonar-project-key:
+        description: 'SonarCloud project key for this module repo.'
+        required: true
+        type: string
+      sonar-organization:
+        description: 'SonarCloud organization key.'
+        required: true
+        type: string
+      php-version:
+        required: false
+        type: string
+        default: '8.5'
+      bun-version:
+        required: false
+        type: string
+        default: '1.3.10'
+    secrets:
+      SONAR_TOKEN:
+        description: 'SonarCloud analysis token for this module project.'
+        required: true
+
+concurrency:
+  group: module-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    environment: Testing
+    env:
+      MODULE_PATH: ${{ inputs.module-path }}
+
+    steps:
+      - name: Checkout platform
+        uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          repository: ${{ inputs.platform-repo }}
+          ref: ${{ inputs.platform-ref }}
+
+      - name: Checkout module under test
+        uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          path: ${{ inputs.module-path }}
+          fetch-depth: 0
+
+      - name: Compose cross-domain dependencies
+        run: |
+          php scripts/ci/compose-module.php --module-path="$MODULE_PATH" > extra-repos.tsv
+          while IFS=$'\t' read -r repo path; do
+            [ -z "$repo" ] && continue
+            echo "Cloning $repo -> $path"
+            git clone --depth=1 "https://github.com/${repo}.git" "$path"
+          done < extra-repos.tsv
+          rm -f extra-repos.tsv
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
+        with:
+          php-version: ${{ inputs.php-version }}
+          extensions: pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: xdebug
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: ${{ inputs.bun-version }}
+          no-cache: true
+
+      - name: Install JS Dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Configure Database for Testing
+        run: |
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
+          sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
+          sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Build Assets
+        run: bun run build
+
+      - name: Run Pint
+        run: vendor/bin/pint --test "$MODULE_PATH"
+
+      - name: Run Tests
+        run: ./vendor/bin/pest "$MODULE_PATH" --coverage-clover=coverage.xml
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v4 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
+        with:
+          args: >
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+            -Dsonar.organization=${{ inputs.sonar-organization }}
+            -Dsonar.sources=${{ inputs.module-path }}
+            -Dsonar.tests=${{ inputs.module-path }}
+            -Dsonar.test.inclusions=${{ inputs.module-path }}/**/Tests/**
+            -Dsonar.php.coverage.reportPaths=coverage.xml
+            -Dsonar.cpd.exclusions=${{ inputs.module-path }}/**/Tests/**,${{ inputs.module-path }}/**/Database/Migrations/**,${{ inputs.module-path }}/**/Config/**,${{ inputs.module-path }}/**/Routes/**
