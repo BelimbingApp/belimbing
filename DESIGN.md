@@ -34,6 +34,13 @@ Use a coherent rounded shape language: compact rounded controls, slightly larger
 
 Component semantics stay in the framework. Reuse `x-ui.*` primitives and `<x-icon>` before creating new markup. Concrete Blade, Livewire, Tailwind, spacing, accessibility, and component rules live in `resources/core/views/AGENTS.md`; rendered examples live in `Administration > System > UI Reference`.
 
+## Detail Pages (Read-First)
+
+Detail/show pages default to **facts first**. Editing is exposed deliberately:
+- Use **edit-in-place** for independent low-risk facts.
+- Use **grouped inline editors** for coupled facts that need review + Apply/Cancel.
+- Use **modal/full forms** when editing is a workflow, high-risk, or requires confirmation.
+
 ## Do's and Don'ts
 
 - Do make every surface, label, action, icon, and motion cue earn its place.
