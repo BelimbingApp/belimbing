@@ -99,6 +99,7 @@
                                         x-show="editing"
                                         x-ref="input"
                                         x-model="name"
+                                        aria-label="{{ __('Admin1 name') }}"
                                         @keydown.enter="editing = false; $wire.saveName({{ $admin1->id }}, name)"
                                         @keydown.escape="editing = false; name = '{{ addslashes($admin1->name) }}'"
                                         @blur="editing = false; $wire.saveName({{ $admin1->id }}, name)"

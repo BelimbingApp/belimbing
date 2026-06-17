@@ -5,14 +5,25 @@ use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
 use App\Modules\Core\AI\Models\AiProvider;
 use Livewire\Livewire;
 
-it('opens for photoroom and saves the api key', function (): void {
+function savedImageProvider(
+    string $providerKey,
+    string $apiKey,
+    ?string $region = null,
+    ?string $providerName = null,
+): AiProvider {
     $user = createAdminUser();
 
-    Livewire::actingAs($user)
+    $component = Livewire::actingAs($user)
         ->test(ImageProviderSetup::class)
-        ->call('open', 'photoroom')
+        ->call('open', $providerKey)
         ->assertSet('show', true)
-        ->set('values.apiKey', 'live-key-xyz')
+        ->set('values.apiKey', $apiKey);
+
+    if ($region !== null) {
+        $component->set('values.region', $region);
+    }
+
+    $component
         ->call('save')
         ->assertHasNoErrors()
         ->assertSet('configured.apiKey', true)
@@ -21,93 +32,40 @@ it('opens for photoroom and saves the api key', function (): void {
     $provider = AiProvider::query()
         ->forCompany($user->company_id)
         ->image()
-        ->where('name', PhotoRoomConfiguration::PROVIDER)
+        ->where('name', $providerName ?? $providerKey)
         ->first();
 
-    expect($provider)->not->toBeNull()
-        ->and($provider->credentials['api_key'])->toBe('live-key-xyz');
+    expect($provider)->toBeInstanceOf(AiProvider::class);
+
+    return $provider;
+}
+
+it('opens for photoroom and saves the api key', function (): void {
+    $provider = savedImageProvider('photoroom', 'live-key-xyz', providerName: PhotoRoomConfiguration::PROVIDER);
+
+    expect($provider->credentials['api_key'])->toBe('live-key-xyz');
 });
 
 it('opens for alibaba and saves the DashScope key and region', function (): void {
-    $user = createAdminUser();
+    $provider = savedImageProvider('alibaba', 'sk-dashscope-test', 'international');
 
-    Livewire::actingAs($user)
-        ->test(ImageProviderSetup::class)
-        ->call('open', 'alibaba')
-        ->assertSet('show', true)
-        ->set('values.apiKey', 'sk-dashscope-test')
-        ->set('values.region', 'international')
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('configured.apiKey', true)
-        ->assertSet('show', false);
-
-    $provider = AiProvider::query()
-        ->forCompany($user->company_id)
-        ->image()
-        ->where('name', 'alibaba')
-        ->first();
-
-    expect($provider?->credentials['api_key'])->toBe('sk-dashscope-test')
-        ->and($provider?->connection_config['region'])->toBe('international');
+    expect($provider->credentials['api_key'])->toBe('sk-dashscope-test')
+        ->and($provider->connection_config['region'])->toBe('international');
 });
 
 it('opens for poof and saves the api key', function (): void {
-    $user = createAdminUser();
-
-    Livewire::actingAs($user)
-        ->test(ImageProviderSetup::class)
-        ->call('open', 'poof')
-        ->set('values.apiKey', 'poof-key-123')
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('configured.apiKey', true);
-
-    expect(
-        AiProvider::query()->forCompany($user->company_id)->image()->where('name', 'poof')->first()?->credentials['api_key']
-    )->toBe('poof-key-123');
+    expect(savedImageProvider('poof', 'poof-key-123')->credentials['api_key'])->toBe('poof-key-123');
 });
 
 it('opens for stability and saves the api key', function (): void {
-    $user = createAdminUser();
-
-    Livewire::actingAs($user)
-        ->test(ImageProviderSetup::class)
-        ->call('open', 'stability')
-        ->assertSet('show', true)
-        ->set('values.apiKey', 'sk-stability-test')
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('configured.apiKey', true)
-        ->assertSet('show', false);
-
-    expect(
-        AiProvider::query()->forCompany($user->company_id)->image()->where('name', 'stability')->first()?->credentials['api_key']
-    )->toBe('sk-stability-test');
+    expect(savedImageProvider('stability', 'sk-stability-test')->credentials['api_key'])->toBe('sk-stability-test');
 });
 
 it('opens for bedrock and saves the api key and region', function (): void {
-    $user = createAdminUser();
+    $provider = savedImageProvider('bedrock', 'bedrock-token-xyz', 'us-west-2');
 
-    Livewire::actingAs($user)
-        ->test(ImageProviderSetup::class)
-        ->call('open', 'bedrock')
-        ->assertSet('show', true)
-        ->set('values.apiKey', 'bedrock-token-xyz')
-        ->set('values.region', 'us-west-2')
-        ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('configured.apiKey', true)
-        ->assertSet('show', false);
-
-    $provider = AiProvider::query()
-        ->forCompany($user->company_id)
-        ->image()
-        ->where('name', 'bedrock')
-        ->first();
-
-    expect($provider?->credentials['api_key'])->toBe('bedrock-token-xyz')
-        ->and($provider?->connection_config['region'])->toBe('us-west-2');
+    expect($provider->credentials['api_key'])->toBe('bedrock-token-xyz')
+        ->and($provider->connection_config['region'])->toBe('us-west-2');
 });
 
 it('leaves a stored secret untouched when the masked field is not edited', function (): void {

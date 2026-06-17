@@ -432,7 +432,7 @@
                     <div class="space-y-4">
                         {{-- Turn picker --}}
                         <div>
-                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Select turn') }}</p>
+                            <label for="test-transport-turn" class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Select turn') }}</label>
                             <select
                                 id="test-transport-turn"
                                 x-model="selectedTurnId"

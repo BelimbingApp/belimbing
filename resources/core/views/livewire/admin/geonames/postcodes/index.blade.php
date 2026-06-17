@@ -51,6 +51,7 @@
                     <input
                         type="text"
                         x-model="countryFilter"
+                        aria-label="{{ __('Search countries') }}"
                         placeholder="{{ __('Search countries...') }}"
                         class="w-full mb-2 px-3 py-1.5 text-sm border border-border-input rounded-2xl bg-surface-card text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                     />

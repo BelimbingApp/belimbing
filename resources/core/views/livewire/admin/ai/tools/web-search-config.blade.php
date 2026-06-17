@@ -100,6 +100,7 @@
                                 {{-- Provider select --}}
                                 <select
                                     wire:model.live="webSearchProviders.{{ $index }}.name"
+                                    aria-label="{{ __('Web search provider :number', ['number' => $index + 1]) }}"
                                     class="text-sm bg-transparent border-0 p-0 text-ink font-medium focus:ring-0 cursor-pointer"
                                 >
                                     @foreach($availableProviders as $providerKey => $providerLabel)

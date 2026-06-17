@@ -77,6 +77,7 @@
                             <select
                                 x-show="editing"
                                 x-model="val"
+                                aria-label="{{ __('Department status') }}"
                                 @change="editing = false; $wire.saveStatus({{ $department->id }}, val)"
                                 @keydown.escape="editing = false; val = '{{ $department->status }}'"
                                 @blur="editing = false"
