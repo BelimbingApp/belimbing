@@ -4,6 +4,14 @@
 
 You are a specialized UI/UX designer focused on responsive design, high-end aesthetics, and **WCAG 2.1** compliance. Build Laravel Blade components with Tailwind CSS. **Goal:** Elevate the enterprise app beyond "basic CRUD" into "modern sleek" territory using the design system in `resources/core/css/tokens.css`.
 
+## UI Reference Stack (Single Source of Truth)
+
+- `DESIGN.md` = intent
+- `resources/core/css/tokens.css` = token values
+- `Administration > System > UI Reference` = rendered/behavioral authority
+- `resources/core/views/AGENTS.md` = repo authoring rules
+- If an idea appears in more than one place, each file carries a different layer: **intent / value / rule / rendered example**.
+
 ## Livewire View Placement
 
 `resources/core/views/` is for Base/Core framework presentation: shell layouts,
@@ -186,92 +194,8 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 - **Motion** — Alpine.js for transitions and modals. Hover lift: `hover:-translate-y-0.5 transition-all duration-300`. Loading: prefer a lightweight skeleton/placeholder (`animate-pulse` on a surface token) or inline status rather than indefinite spinners. Respect `prefers-reduced-motion`.
 - **White space** — Sidebar: `bg-surface-sidebar`. Consistent 8px grid (`p-4`, `p-8`, `gap-6`).
 
-## Examples
+## Notes
 
-```html
-<!-- ✅ Use component -->
-<x-ui.search-input wire:model.live.debounce.300ms="search" placeholder="{{ __('Search...') }}" />
-
-<!-- ❌ Avoid: raw input duplicating search-input markup -->
-<input type="text" wire:model.live.debounce.300ms="search" placeholder="Search..." class="w-full px-3 py-1.5 ..." />
-
-<!-- ✅ Translated string -->
-<h1 class="text-2xl font-medium tracking-tight text-ink">{{ __('Countries') }}</h1>
-
-<!-- ❌ Avoid: hard-coded English, raw primitives -->
-<h1 class="text-2xl text-zinc-900">Countries</h1>
-```
-
-When adding or changing styles, update only Tailwind classes and/or `resources/core/css/tokens.css` / `resources/core/css/components.css`; no one-off `<style>` blocks in Blade.
-
-## Unsaved-Changes Navigation Guard (Alpine.js + Livewire 4)
-
-Use this pattern when a page must warn the user before navigating away with unsaved edits.
-
-### Key pitfalls
-
-1. **Listen to `alpine:navigate`, not `livewire:navigate`.**
-   `wire:navigate` is mapped to Alpine's `x-navigate` directive. Alpine fires `alpine:navigate` and checks `defaultPrevented` *before* calling `navigateTo()`. Livewire then forwards it as `livewire:navigate` — but by then the navigation is already committed. Preventing `livewire:navigate` has no effect on SPA links.
-
-2. **Compute dirty state synchronously in the handler, not via `x-effect`.**
-   Alpine effects are microtask-batched. If the user edits a field and immediately clicks a nav link, the `alpine:navigate` event fires synchronously before the effect flush — so any reactive `unsavedChanges` variable is still `false`. Read `$wire` values directly inside the handler.
-
-3. **`$cleanup` is not available in Livewire's bundled Alpine.**
-   Use `window.__navGuardCleanup` instead: store a cleanup function on `window` at mount, call it at the top of `x-init` (handles re-mount) and before `Livewire.navigate()` (prevents recursive triggering).
-
-4. **`e.returnValue = ''` (empty string) won't trigger the browser "Leave site?" dialog.**
-   Use `e.preventDefault()` *and* a non-empty `e.returnValue`.
-
-### Production-ready template
-
-```blade
-<div
-    x-data="{
-        savedName: @js($savedName),
-        savedSql: @js($savedSql),
-        unsavedChanges: false,
-        skipNextNavigateConfirm: false,
-    }"
-    @some-saved-event.window="
-        savedName = $wire.editName;
-        savedSql  = $wire.editSql;
-        skipNextNavigateConfirm = false;
-    "
-    x-init="
-        window.__navGuardCleanup?.();
-        const isDirty = () => $wire.editName !== savedName || $wire.editSql !== savedSql;
-        const beforeUnloadHandler = (e) => { if (isDirty()) { e.preventDefault(); e.returnValue = 'unsaved'; } };
-        const navigateHandler = (e) => {
-            if (skipNextNavigateConfirm) { skipNextNavigateConfirm = false; return; }
-            if (!isDirty()) return;
-            e.preventDefault();
-            if (confirm({{ json_encode(__('You have unsaved changes. Leave anyway?')) }})) {
-                window.__navGuardCleanup?.();
-                const url = e.detail.url;
-                Livewire.navigate(typeof url === 'string' ? url : url.toString());
-            }
-        };
-        window.addEventListener('beforeunload', beforeUnloadHandler);
-        document.addEventListener('alpine:navigate', navigateHandler);
-        window.__navGuardCleanup = () => {
-            window.removeEventListener('beforeunload', beforeUnloadHandler);
-            document.removeEventListener('alpine:navigate', navigateHandler);
-            window.__navGuardCleanup = null;
-        };
-    "
-    x-effect="unsavedChanges = $wire.editName !== savedName || $wire.editSql !== savedSql;"
->
-```
-
-**On save (PHP):** dispatch a browser event so Alpine can sync `saved*` values:
-```php
-$this->dispatch('some-saved-event'); // triggers @some-saved-event.window in Alpine
-```
-
-**Save/cancel buttons** that should navigate without the guard:
-```blade
-<x-ui.button @click="$dispatch('allow-next-navigate')" wire:click="save">Save</x-ui.button>
-```
-```blade
-@allow-next-navigate.window="skipNextNavigateConfirm = true"
-```
+- Prefer the in-app UI Reference pages for examples: `Administration > System > UI Reference`.
+- Avoid one-off `<style>` blocks in Blade; change Tailwind classes and/or `resources/core/css/tokens.css` / `resources/core/css/components.css`.
+- Unsaved-changes navigation guard (Livewire navigation): `docs/guides/unsaved-changes-navigation-guard.md`.
