@@ -14,6 +14,7 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('company_id')->index();
             $table->string('name');
+            $table->string('family', 20)->default('llm');
             $table->string('display_name');
             $table->string('base_url');
             $table->string('auth_type')->default('api_key');
