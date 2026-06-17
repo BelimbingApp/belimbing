@@ -110,6 +110,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
                 <input
                     type="search"
                     x-model.debounce.200ms="navFilter"
+                    aria-label="{{ __('Filter tables') }}"
                     placeholder="{{ __('Filter tables...') }}"
                     class="w-full pl-7 pr-2 py-1 text-xs border border-border-input rounded-lg bg-surface-card text-ink placeholder:text-muted focus:outline-none focus:ring-1 focus:ring-accent focus:border-transparent [&::-webkit-search-cancel-button]:appearance-none"
                 />

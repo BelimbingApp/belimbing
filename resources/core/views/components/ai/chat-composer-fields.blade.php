@@ -57,6 +57,7 @@
                 x-on:input="window.sharedChatComposerAutoResize($el)"
                 x-init="window.sharedChatComposerAutoResize($el)"
                 placeholder="{{ $placeholder }}"
+                aria-label="{{ __('Message') }}"
                 autocomplete="off"
                 x-bind:disabled="{!! $pendingExpression !!}"
                 rows="1"

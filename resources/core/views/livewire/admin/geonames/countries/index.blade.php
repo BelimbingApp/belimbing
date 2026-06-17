@@ -111,6 +111,7 @@
                                         x-show="editing"
                                         x-ref="input"
                                         x-model="name"
+                                        aria-label="{{ __('Country name') }}"
                                         @keydown.enter="editing = false; $wire.saveName({{ $country->id }}, name)"
                                         @keydown.escape="editing = false; name = '{{ addslashes($country->country) }}'"
                                         @blur="editing = false; $wire.saveName({{ $country->id }}, name)"

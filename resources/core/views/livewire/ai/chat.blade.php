@@ -438,6 +438,7 @@
                                             wire:keydown.escape="cancelEditingTitle"
                                             wire:blur="saveTitle"
                                             x-init="$nextTick(() => $el.focus())"
+                                            aria-label="{{ __('Session title') }}"
                                             class="flex-1 min-w-0 text-[11px] font-medium bg-surface-default border border-border-default rounded px-1.5 py-0.5 text-ink focus:outline-none focus:ring-1 focus:ring-accent"
                                             placeholder="{{ __('Session title') }}"
                                         />

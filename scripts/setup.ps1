@@ -187,6 +187,22 @@ function Set-EnvValue {
     Write-TextFileSafely -TargetPath $Path -Content $next
 }
 
+function Set-EnvValueBatch {
+    param(
+        [Parameter(Mandatory = $true)][string] $Path,
+        [Parameter(Mandatory = $true)][object[]] $Entries
+    )
+
+    foreach ($entry in $Entries) {
+        $onlyIfAbsent = $false
+        if ($entry.PSObject.Properties.Name -contains 'OnlyIfAbsent') {
+            $onlyIfAbsent = [bool] $entry.OnlyIfAbsent
+        }
+
+        Set-EnvValue -Path $Path -Key $entry.Key -Value ([string] $entry.Value) -OnlyIfAbsent:$onlyIfAbsent
+    }
+}
+
 function Add-HostsEntry {
     param(
         [string[]] $Domains,
@@ -449,14 +465,16 @@ variables_order=EGPCS
     $databaseForEnv = $DatabasePath.Replace('\', '/')
 
     # Infrastructure values — BLB's architecture decisions, always applied.
-    Set-EnvValue $envPath 'APP_DEBUG'         'true'
-    Set-EnvValue $envPath 'APP_SCHEME'        'https'
-    Set-EnvValue $envPath 'BLB_INGRESS_MODE'  'direct'
-    Set-EnvValue $envPath 'DB_CONNECTION'     'sqlite'
-    Set-EnvValue $envPath 'DB_DATABASE'       $databaseForEnv
-    Set-EnvValue $envPath 'SESSION_DRIVER'    'database'
-    Set-EnvValue $envPath 'QUEUE_CONNECTION'  'database'
-    Set-EnvValue $envPath 'CACHE_STORE'       'database'
+    Set-EnvValueBatch -Path $envPath -Entries @(
+        [pscustomobject]@{ Key = 'APP_DEBUG';        Value = 'true' },
+        [pscustomobject]@{ Key = 'APP_SCHEME';       Value = 'https' },
+        [pscustomobject]@{ Key = 'BLB_INGRESS_MODE'; Value = 'direct' },
+        [pscustomobject]@{ Key = 'DB_CONNECTION';    Value = 'sqlite' },
+        [pscustomobject]@{ Key = 'DB_DATABASE';      Value = $databaseForEnv },
+        [pscustomobject]@{ Key = 'SESSION_DRIVER';   Value = 'database' },
+        [pscustomobject]@{ Key = 'QUEUE_CONNECTION'; Value = 'database' },
+        [pscustomobject]@{ Key = 'CACHE_STORE';      Value = 'database' }
+    )
 
     Write-Step "Verifying Git"
     $gitExe = Resolve-NativeCommandPath 'git'
@@ -468,17 +486,19 @@ variables_order=EGPCS
 
     # User-configurable values — written only when absent unless the param was
     # explicitly provided on this invocation.
-    Set-EnvValue $envPath 'APP_ENV'           $Environment          -OnlyIfAbsent:(-not $explicitEnvironment)
-    Set-EnvValue $envPath 'APP_URL'           "https://$FrontendDomain" -OnlyIfAbsent:(-not $explicitFrontendDomain)
-    Set-EnvValue $envPath 'FRONTEND_DOMAIN'   $FrontendDomain       -OnlyIfAbsent:(-not $explicitFrontendDomain)
-    Set-EnvValue $envPath 'BACKEND_DOMAIN'    $BackendDomain        -OnlyIfAbsent:(-not $explicitBackendDomain)
-    Set-EnvValue $envPath 'APP_PORT'          "$AppPort"            -OnlyIfAbsent:(-not $explicitAppPort)
-    Set-EnvValue $envPath 'VITE_PORT'         "$VitePort"           -OnlyIfAbsent:(-not $explicitVitePort)
-    Set-EnvValue $envPath 'LICENSEE_COMPANY_NAME' $LicenseeCompanyName -OnlyIfAbsent:(-not $explicitCompanyName)
     if (-not $LicenseeCompanyCode) {
         $LicenseeCompanyCode = Get-DefaultCompanyCode $LicenseeCompanyName
     }
-    Set-EnvValue $envPath 'LICENSEE_COMPANY_CODE' $LicenseeCompanyCode -OnlyIfAbsent:(-not $explicitCompanyCode)
+    Set-EnvValueBatch -Path $envPath -Entries @(
+        [pscustomobject]@{ Key = 'APP_ENV';               Value = $Environment;            OnlyIfAbsent = (-not $explicitEnvironment) },
+        [pscustomobject]@{ Key = 'APP_URL';               Value = "https://$FrontendDomain"; OnlyIfAbsent = (-not $explicitFrontendDomain) },
+        [pscustomobject]@{ Key = 'FRONTEND_DOMAIN';       Value = $FrontendDomain;         OnlyIfAbsent = (-not $explicitFrontendDomain) },
+        [pscustomobject]@{ Key = 'BACKEND_DOMAIN';        Value = $BackendDomain;          OnlyIfAbsent = (-not $explicitBackendDomain) },
+        [pscustomobject]@{ Key = 'APP_PORT';              Value = "$AppPort";              OnlyIfAbsent = (-not $explicitAppPort) },
+        [pscustomobject]@{ Key = 'VITE_PORT';             Value = "$VitePort";             OnlyIfAbsent = (-not $explicitVitePort) },
+        [pscustomobject]@{ Key = 'LICENSEE_COMPANY_NAME'; Value = $LicenseeCompanyName;    OnlyIfAbsent = (-not $explicitCompanyName) },
+        [pscustomobject]@{ Key = 'LICENSEE_COMPANY_CODE'; Value = $LicenseeCompanyCode;    OnlyIfAbsent = (-not $explicitCompanyCode) }
+    )
 
     Write-Ok "SQLite database: $DatabasePath"
 

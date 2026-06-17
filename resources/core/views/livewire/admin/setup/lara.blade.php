@@ -293,6 +293,7 @@
                     <x-ui.tab id="edit" class="space-y-3">
                         <textarea
                             wire:model.live.debounce.300ms="editingContent"
+                            aria-label="{{ __('Prompt slot content') }}"
                             rows="20"
                             class="w-full rounded-2xl border border-border-input bg-surface-card text-ink font-mono text-xs px-input-x py-input-y focus:ring-2 focus:ring-accent focus:ring-offset-2"
                             spellcheck="false"
