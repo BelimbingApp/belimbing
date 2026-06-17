@@ -136,12 +136,20 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 
 When a needed primitive doesn't exist, create it in `resources/core/views/components/ui/` following the patterns of existing components (props via `@props`, class merging via `$attributes->class([...])`, semantic tokens).
 
+### Tables
+
+- Use `x-ui.table` as the canonical shell for normal application tables (overflow, border rhythm, caption, optional sticky header, hover/striping, empty state).
+- Keep `x-ui.table` **presentational**. Callers own sorting state, pagination, row identity (`wire:key`), links, in-place editing controls, actions, and domain formatting.
+- Use `x-ui.sortable-th` for sortable headers; use `x-ui.th` for non-sortable headers.
+- Prefer explicit caller-owned `<tr>/<td>` markup over column-schema builders.
+- Tables that are not “application tables” can stay local (PDF tables, calendar/grid compositions, specialized log/diagnostic viewers, header fragments like `x-ui.day-strip`).
+
 ### Select vs Combo Box
 
 - Prefer `x-ui.select` for short, stable option lists that users can scan quickly.
 - Prefer the combo box primitive `x-ui.combobox` when the list has **more than 8 options**, when labels are long, or when users are likely to search by code/name rather than scan visually.
 - If you are unsure and the list is around the cutoff, choose the combo box primitive when selection speed matters more than strict minimalism.
-- On read-first detail pages, use `x-ui.edit-in-place.combobox` instead of a separate edit button when a searchable lookup is an independent low-risk fact.
+  For read-first detail pages, see “Read-first detail pages” below.
 
 ### Read-first detail pages
 
