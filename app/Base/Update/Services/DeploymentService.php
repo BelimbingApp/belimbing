@@ -2,7 +2,6 @@
 
 namespace App\Base\Update\Services;
 
-use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 
@@ -25,18 +24,10 @@ use Illuminate\Support\Facades\Http;
  */
 class DeploymentService
 {
-    private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
-
-    private const COMPOSER_RUN_KEY = 'system.update.composer.last_run';
-
-    private const FRONTEND_RUN_KEY = 'system.update.frontend.last_run';
-
-    private const DEPLOYMENT_RUN_KEY = 'system.update.deployment.last_run';
-
     public function __construct(
-        private readonly SettingsService $settings,
         private readonly DistributionBundleRepository $bundles,
         private readonly DeploymentBuildRunner $buildRunner,
+        private readonly DeploymentRunHistory $history,
     ) {}
 
     /**
@@ -205,7 +196,7 @@ class DeploymentService
     {
         $message = $this->buildRunner->composerInstall();
 
-        $this->rememberRun(self::COMPOSER_RUN_KEY, ! $this->hasError([$message]), $message);
+        $this->history->rememberComposerRun(! $this->hasError([$message]), $message);
 
         return $message;
     }
@@ -218,11 +209,10 @@ class DeploymentService
     {
         $log = $this->buildRunner->buildAssets($progress);
 
-        $this->rememberRun(
-            self::FRONTEND_RUN_KEY,
+        $this->history->rememberFrontendRun(
             ! $this->hasError($log),
             $this->lastFrontendBuildMessage($log),
-            ['pm' => $this->frontendPackageManager()],
+            $this->frontendPackageManager(),
         );
 
         return $log;
@@ -281,7 +271,7 @@ class DeploymentService
 
         Artisan::call('queue:restart');
         $log[] = (string) __('Queue restart signaled.');
-        $this->rememberRun(self::LAST_RELOAD_KEY, $webReloaded, $reloadMessage, ['admin_url' => $adminUrl]);
+        $this->history->rememberReload($webReloaded, $reloadMessage, $adminUrl);
 
         return $log;
     }
@@ -300,157 +290,36 @@ class DeploymentService
         $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: null;
         $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: null;
 
-        if ($host === null || $port === null) {
-            $statePath = storage_path('logs/octane-server-state.json');
-            $state = is_file($statePath)
-                ? json_decode((string) file_get_contents($statePath), true)
-                : null;
-
-            if (is_array($state)) {
-                // Octane nests the live values under "state" (see FrankenPhp\ServerProcessInspector);
-                // fall back to the top level defensively in case that layout changes.
-                $admin = is_array($state['state'] ?? null) ? $state['state'] : $state;
-                $host ??= is_string($admin['adminHost'] ?? null) ? $admin['adminHost'] : null;
-                $port ??= isset($admin['adminPort']) ? (string) $admin['adminPort'] : null;
-            }
+        if ($host !== null && $port !== null) {
+            return [$host, $port];
         }
 
-        return [$host ?: '127.0.0.1', $port ?: '2019'];
+        [$stateHost, $statePort] = $this->octaneAdminEndpoint();
+
+        return [$host ?: ($stateHost ?: '127.0.0.1'), $port ?: ($statePort ?: '2019')];
     }
 
     /**
-     * @return array{attempted_at: string, ok: bool, message: string, admin_url: string}|null
+     * @return array{0: string|null, 1: string|null}
      */
-    public function lastReload(): ?array
+    private function octaneAdminEndpoint(): array
     {
-        $run = $this->readRun(self::LAST_RELOAD_KEY, ['admin_url' => true]);
+        $statePath = storage_path('logs/octane-server-state.json');
+        $state = is_file($statePath)
+            ? json_decode((string) file_get_contents($statePath), true)
+            : null;
 
-        /** @var array{attempted_at: string, ok: bool, message: string, admin_url: string}|null $run */
-        return $run;
-    }
-
-    /**
-     * Last recorded composer install (manual or auto), or null if none yet.
-     *
-     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
-     */
-    public function lastComposerRun(): ?array
-    {
-        $run = $this->readRun(self::COMPOSER_RUN_KEY, ['pm' => false]);
-
-        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
-        return $run;
-    }
-
-    /**
-     * Last recorded frontend build (manual or auto), or null if none yet.
-     *
-     * @return array{attempted_at: string, ok: bool, message: string, pm: string|null}|null
-     */
-    public function lastFrontendRun(): ?array
-    {
-        $run = $this->readRun(self::FRONTEND_RUN_KEY, ['pm' => false]);
-
-        /** @var array{attempted_at: string, ok: bool, message: string, pm: string|null}|null $run */
-        return $run;
-    }
-
-    /**
-     * Record the run shown in the Deployment page's run box so its outcome and time
-     * survive a page reload or a brand-new session — the durable counterpart to the
-     * session-scoped live log. Status is the page's run outcome (success|warning|error).
-     *
-     * @param  list<string>  $log
-     */
-    public function rememberDeploymentRun(array $log, string $status): void
-    {
-        $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
-            'attempted_at' => now()->utc()->toIso8601String(),
-            'status' => $status,
-            'summary' => $log === [] ? '' : (string) $log[array_key_last($log)],
-            'log' => array_values($log),
-        ]);
-    }
-
-    /**
-     * The last recorded Deployment run (update/reload/rebuild), or null if none yet.
-     *
-     * @return array{attempted_at: string, status: string, summary: string, log: list<string>}|null
-     */
-    public function lastDeploymentRun(): ?array
-    {
-        $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
-
-        if (! is_array($record)) {
-            return null;
+        if (! is_array($state)) {
+            return [null, null];
         }
 
-        $attemptedAt = $record['attempted_at'] ?? null;
-        $status = $record['status'] ?? null;
-
-        if (! is_string($attemptedAt) || ! is_string($status)) {
-            return null;
-        }
+        // Octane nests live values under "state"; fall back to the top level defensively.
+        $admin = is_array($state['state'] ?? null) ? $state['state'] : $state;
 
         return [
-            'attempted_at' => $attemptedAt,
-            'status' => $status,
-            'summary' => is_string($record['summary'] ?? null) ? $record['summary'] : '',
-            'log' => array_values(array_filter(
-                is_array($record['log'] ?? null) ? $record['log'] : [],
-                'is_string',
-            )),
+            is_string($admin['adminHost'] ?? null) ? $admin['adminHost'] : null,
+            isset($admin['adminPort']) ? (string) $admin['adminPort'] : null,
         ];
-    }
-
-    /**
-     * @param  array<string, mixed>  $extra
-     */
-    private function rememberRun(string $key, bool $ok, string $message, array $extra = []): void
-    {
-        $this->settings->set($key, array_merge([
-            'attempted_at' => now()->utc()->toIso8601String(),
-            'ok' => $ok,
-            'message' => $message,
-        ], $extra));
-    }
-
-    /**
-     * @param  array<string, bool>  $stringFields  field => required
-     * @return array<string, bool|string|null>|null
-     */
-    private function readRun(string $key, array $stringFields = []): ?array
-    {
-        $record = $this->settings->get($key);
-
-        if (! is_array($record)) {
-            return null;
-        }
-
-        $attemptedAt = $record['attempted_at'] ?? null;
-        $message = $record['message'] ?? null;
-
-        if (! is_string($attemptedAt) || ! is_string($message)) {
-            return null;
-        }
-
-        $run = [
-            'attempted_at' => $attemptedAt,
-            'ok' => ($record['ok'] ?? false) === true,
-            'message' => $message,
-        ];
-
-        foreach ($stringFields as $field => $required) {
-            $value = $record[$field] ?? null;
-
-            if ($required && ! is_string($value)) {
-                return null;
-            }
-
-            $run[$field] = is_string($value) ? $value : null;
-        }
-
-        return $run;
     }
 
     /**

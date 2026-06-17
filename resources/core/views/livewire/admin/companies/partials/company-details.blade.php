@@ -117,6 +117,7 @@
                                         id="company-new-activity"
                                         x-ref="newInput"
                                         x-model="newItem"
+                                        aria-label="{{ __('New business activity') }}"
                                         @keydown.enter="if (newItem.trim()) { $wire.addActivity(newItem.trim()); newItem = ''; } else { adding = false; }"
                                         @keydown.escape="adding = false; newItem = ''"
                                         @blur="if (newItem.trim()) { $wire.addActivity(newItem.trim()); newItem = ''; } adding = false;"
@@ -155,6 +156,7 @@
                             <textarea
                                 x-ref="textarea"
                                 x-model="val"
+                                aria-label="{{ __('Company metadata JSON') }}"
                                 @keydown.escape="editing = false; val = original"
                                 id="company-metadata-json"
                                 rows="6"

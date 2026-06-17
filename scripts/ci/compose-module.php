@@ -39,8 +39,6 @@ function parseArguments(array $argv): array
 
         if (str_starts_with($argument, '--registry=')) {
             $registry = substr($argument, strlen('--registry='));
-
-            continue;
         }
     }
 

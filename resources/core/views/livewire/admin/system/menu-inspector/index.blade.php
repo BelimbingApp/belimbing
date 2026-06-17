@@ -18,6 +18,7 @@
                 <div class="md:col-span-3">
                     <select
                         wire:model.live="sourceFilter"
+                        aria-label="{{ __('Menu source filter') }}"
                         class="w-full rounded-md border border-border-default bg-surface-card px-3 py-2 text-sm text-ink"
                     >
                         <option value="all">{{ __('All sources') }}</option>
@@ -29,6 +30,7 @@
                 <div class="md:col-span-2">
                     <select
                         wire:model.live="kindFilter"
+                        aria-label="{{ __('Menu kind filter') }}"
                         class="w-full rounded-md border border-border-default bg-surface-card px-3 py-2 text-sm text-ink"
                     >
                         <option value="all">{{ __('Core + Extensions') }}</option>

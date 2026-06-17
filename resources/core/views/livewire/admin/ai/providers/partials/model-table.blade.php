@@ -151,6 +151,7 @@ use Illuminate\Support\Collection;
                                     <input
                                         x-ref="input"
                                         type="number"
+                                        aria-label="{{ __('Cost override :field for :model', ['field' => str_replace('_', ' ', $costField), 'model' => $model->model_id]) }}"
                                         step="0.000001"
                                         min="0"
                                         x-model="value"

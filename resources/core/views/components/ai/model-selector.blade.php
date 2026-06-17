@@ -3,7 +3,7 @@
 ])
 
 <select
-    {{ $attributes->class([
+    {{ $attributes->merge(['aria-label' => __('AI model')])->class([
         'rounded-lg border border-border-input bg-surface-card text-xs text-ink',
         'px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors',
     ]) }}
