@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
@@ -197,6 +198,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         }
 
         $provider = AiProvider::query()
+            ->llm()
             ->whereKey($providerId)
             ->forCompany(Company::LICENSEE_ID)
             ->active()
@@ -237,6 +239,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
     {
         return AiProvider::query()
             ->forCompany(Company::LICENSEE_ID)
+            ->llm()
             ->active()
             ->orderBy('display_name')
             ->get(['id', 'display_name', 'name']);
@@ -263,6 +266,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         }
 
         $providerExists = AiProvider::query()
+            ->llm()
             ->whereKey($providerId)
             ->forCompany(Company::LICENSEE_ID)
             ->active()
@@ -303,6 +307,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
 
         return AiProvider::query()
             ->forCompany(Company::LICENSEE_ID)
+            ->llm()
             ->where('name', $providerName)
             ->value('id');
     }

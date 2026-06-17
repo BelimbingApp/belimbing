@@ -2,10 +2,12 @@
 
 namespace App\Modules\Core\AI;
 
+use App\Base\AI\Contracts\AiProviderFamily;
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore as ImageProviderCredentialStoreContract;
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
@@ -23,9 +25,11 @@ use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
 use App\Modules\Core\AI\Contracts\AgentTaskContextContributor;
+use App\Modules\Core\AI\Providers\Families\LlmProviderFamily;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentTaskPromptFactory;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
+use App\Modules\Core\AI\Services\AiProviderFamilyRegistry;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\Browser\BrowserArtifactStore;
 use App\Modules\Core\AI\Services\Browser\BrowserRuntimeAdapter;
@@ -40,6 +44,7 @@ use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTraceContextFactory;
+use App\Modules\Core\AI\Services\ImageProviderCredentialStore;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
 use App\Modules\Core\AI\Services\LaraNavigationRouter;
@@ -141,6 +146,16 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->app->singleton(ConfigResolver::class);
         $this->app->singleton(ModelDiscoveryService::class);
+
+        // AI provider families: the family-neutral spine over LLM, image, and
+        // future families. Families self-register through the container tag
+        // (like AI tools); the registry collects them for the providers hub.
+        // The LLM family is #1; Base/Media tags the image family (PhotoRoom).
+        $this->app->tag([LlmProviderFamily::class], AiProviderFamily::CONTAINER_TAG);
+        $this->app->singleton(AiProviderFamilyRegistry::class, fn (Application $app): AiProviderFamilyRegistry => new AiProviderFamilyRegistry(
+            $app->tagged(AiProviderFamily::CONTAINER_TAG),
+        ));
+        $this->app->singleton(ImageProviderCredentialStoreContract::class, ImageProviderCredentialStore::class);
         $this->app->singleton(SessionManager::class);
         $this->app->singleton(MessageManager::class);
         $this->app->singleton(LaraTaskRegistry::class);

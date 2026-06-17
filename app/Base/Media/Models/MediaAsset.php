@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\URL;
 
@@ -35,10 +36,13 @@ use Illuminate\Support\Facades\URL;
  * @property Carbon|null $updated_at
  * @property-read MediaAsset|null $parent
  * @property-read Collection<int, MediaAsset> $derivatives
+ * @property-read MediaAsset|null $backgroundRemoved
  */
 class MediaAsset extends Model
 {
     public const KIND_ORIGINAL = 'original';
+
+    public const KIND_BACKGROUND_REMOVED = 'background_removed';
 
     /**
      * Sentinel disk for assets that are external links (the bytes live elsewhere,
@@ -129,5 +133,18 @@ class MediaAsset extends Model
     public function derivatives(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * The single `background_removed` derivative of this asset, if a
+     * photo-cleanup run has produced one. Centralizes the "cleaned child"
+     * predicate so callers never re-state the kind filter.
+     *
+     * @return HasOne<MediaAsset, $this>
+     */
+    public function backgroundRemoved(): HasOne
+    {
+        return $this->hasOne(self::class, 'parent_id')
+            ->where('kind', self::KIND_BACKGROUND_REMOVED);
     }
 }

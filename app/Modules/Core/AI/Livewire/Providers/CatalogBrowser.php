@@ -1,4 +1,5 @@
 <?php
+
 //
 // Provider catalog browser — the "Add a Provider" discovery section.
 //
@@ -52,7 +53,7 @@ class CatalogBrowser extends Component
         $companyId = $this->getCompanyId();
 
         $connectedNames = $companyId !== null
-            ? AiProvider::query()->forCompany($companyId)->pluck('name')->all()
+            ? AiProvider::query()->forCompany($companyId)->llm()->pluck('name')->all()
             : [];
 
         $allProviders = $catalogService->getProviders();

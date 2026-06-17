@@ -7,6 +7,10 @@ use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Media\Models\MediaAsset;
+use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
+use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
+use App\Base\Media\Services\MediaAssetStore;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\RelationshipType;
 use App\Modules\Core\User\Models\User;
@@ -15,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 pest()->extend(TestCase::class)
@@ -86,6 +91,59 @@ function createCompanyRelationshipFixture(): array
         Company::factory()->create(),
         RelationshipType::factory()->create(),
     ];
+}
+
+/**
+ * Configure a PhotoRoom key for photo-cleanup tests. Returns the company id
+ * the credentials were stored under.
+ */
+function configurePhotoRoom(string $apiKey = 'sandbox-key-123', ?int $companyId = null): int
+{
+    $companyId ??= Company::factory()->create()->id;
+
+    app(ImageProviderCredentialStore::class)->upsert($companyId, PhotoRoomConfiguration::PROVIDER, [
+        'display_name' => PhotoRoomConfiguration::PROVIDER_LABEL,
+        'base_url' => PhotoRoomConfiguration::API_BASE_URL,
+        'credentials' => ['api_key' => $apiKey],
+        'connection_config' => [],
+    ]);
+
+    return $companyId;
+}
+
+/** @deprecated Use configurePhotoRoom() */
+function configurePhotoRoomSandbox(string $apiKey = 'sandbox-key-123'): int
+{
+    return configurePhotoRoom($apiKey);
+}
+
+/**
+ * Build a `background_removed` derivative of an original asset that mirrors a
+ * real photo-cleanup run (deterministic storage key + provenance metadata),
+ * without calling the provider. Stand-in for an already-cleaned photo.
+ */
+function backgroundRemovedDerivative(MediaAsset $original, string $bytes = 'CLEANED-PNG-BYTES'): MediaAsset
+{
+    $storageKey = Str::beforeLast($original->storage_key, '.').'.background_removed.png';
+
+    return app(MediaAssetStore::class)->putDerivativeBytes(
+        $original,
+        MediaAsset::KIND_BACKGROUND_REMOVED,
+        $original->disk,
+        $storageKey,
+        $bytes,
+        [
+            'original_filename' => Str::beforeLast((string) $original->original_filename, '.').'.background_removed.png',
+            'mime_type' => 'image/png',
+            'metadata' => [
+                'provider' => PhotoRoomConfiguration::PROVIDER,
+                'provider_label' => PhotoRoomConfiguration::PROVIDER_LABEL,
+                'source_asset_id' => $original->id,
+                'status' => 'ready',
+                'cleaned_at' => now()->toIso8601String(),
+            ],
+        ],
+    );
 }
 
 /**

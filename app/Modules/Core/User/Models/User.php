@@ -107,7 +107,7 @@ class User extends Authenticatable implements CompanyScoped
         }
 
         $exists = AiProviderModel::query()
-            ->whereHas('provider', fn ($q) => $q->forCompany($companyId)->active()->where('name', $provider))
+            ->whereHas('provider', fn ($q) => $q->forCompany($companyId)->llm()->active()->where('name', $provider))
             ->where('model_id', $model)
             ->active()
             ->exists();

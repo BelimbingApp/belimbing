@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\Models\AiProvider;
@@ -29,6 +30,7 @@ trait ResolvesAvailableModels
     {
         $providers = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->orderBy('priority')
             ->orderBy('display_name')
@@ -63,6 +65,7 @@ trait ResolvesAvailableModels
     {
         $provider = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->prioritized()
             ->first();
@@ -70,6 +73,7 @@ trait ResolvesAvailableModels
         if ($provider === null) {
             $provider = AiProvider::query()
                 ->forCompany($companyId)
+                ->llm()
                 ->active()
                 ->orderBy('display_name')
                 ->first();
@@ -114,6 +118,7 @@ trait ResolvesAvailableModels
         [$providerId, $modelId] = $parts;
 
         $provider = AiProvider::query()
+            ->llm()
             ->where('id', $providerId)
             ->active()
             ->first();

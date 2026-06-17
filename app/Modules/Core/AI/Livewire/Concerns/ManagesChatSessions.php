@@ -58,6 +58,7 @@ trait ManagesChatSessions
 
         $provider = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->where('name', $hint['provider'])
             ->first();

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\OpenAiCodexAuth;
 
 use App\Base\Integration\Services\IntegrationGateway;
@@ -133,7 +134,7 @@ final class OpenAiCodexAuthManager
         }
 
         $providerId = (int) ($pending['provider_id'] ?? 0);
-        $provider = AiProvider::query()->find($providerId);
+        $provider = AiProvider::query()->llm()->find($providerId);
         if (! $provider) {
             throw new OpenAiCodexOAuthException('callback_validation_failed', 'Provider not found for OAuth session.');
         }

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\Models\AiProvider;
@@ -34,7 +35,7 @@ trait ManagesSync
      */
     public function syncProviderModels(int $providerId): void
     {
-        $provider = AiProvider::query()->find($providerId);
+        $provider = AiProvider::query()->llm()->find($providerId);
 
         if (! $provider) {
             return;

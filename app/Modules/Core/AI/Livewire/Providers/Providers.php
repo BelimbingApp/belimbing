@@ -1,4 +1,5 @@
 <?php
+
 //
 // Unified full-page component for AI provider management.
 //
@@ -20,10 +21,12 @@ use App\Modules\Core\AI\Livewire\Concerns\ManagesProviders;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Services\AiProviderFamilyRegistry;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class Providers extends Component implements ProvidesLaraPageContext
@@ -63,7 +66,22 @@ class Providers extends Component implements ProvidesLaraPageContext
      */
     public function toggleProvider(int $providerId): void
     {
+        if (! AiProvider::query()->llm()->whereKey($providerId)->exists()) {
+            return;
+        }
+
         $this->expandedProviderId = $this->expandedProviderId === $providerId ? null : $providerId;
+    }
+
+    /**
+     * Re-render after the image-setup modal saves so the Image tab's catalog
+     * reflects the provider's new configured/connected state.
+     */
+    #[On('image-providers-updated')]
+    public function refreshImageProviders(): void
+    {
+        // No state to change — the listener triggers a re-render, which
+        // recomputes $imageProviders from the registry.
     }
 
     protected function afterOpenEditProvider(AiProvider $provider): void
@@ -160,7 +178,7 @@ class Providers extends Component implements ProvidesLaraPageContext
     {
         $companyId = $this->getCompanyId();
         $connectedCount = $companyId !== null
-            ? AiProvider::query()->forCompany($companyId)->count()
+            ? AiProvider::query()->forCompany($companyId)->llm()->count()
             : 0;
 
         return new PageContext(
@@ -184,6 +202,7 @@ class Providers extends Component implements ProvidesLaraPageContext
         if ($companyId !== null) {
             $providers = AiProvider::query()
                 ->forCompany($companyId)
+                ->llm()
                 ->withCount('models')
                 ->orderBy('priority')
                 ->orderBy('display_name')
@@ -192,6 +211,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             if ($this->expandedProviderId !== null) {
                 $expandedModels = AiProviderModel::query()
                     ->where('ai_provider_id', $this->expandedProviderId)
+                    ->whereHas('provider', fn ($query) => $query->llm())
                     ->orderBy('model_id')
                     ->get();
             }
@@ -205,10 +225,17 @@ class Providers extends Component implements ProvidesLaraPageContext
             ->values()
             ->all();
 
+        // Image-processing family providers (connected + available to connect),
+        // pulled from the registry so the Image tab stays in sync as providers
+        // are added. The LLM tab is driven by $providers + the catalog island.
+        // See docs/plans/ai-provider-families.md.
+        $imageProviders = app(AiProviderFamilyRegistry::class)->family('image')?->providers($companyId) ?? [];
+
         return view('livewire.admin.ai.providers.providers', [
             'providers' => $providers,
             'expandedModels' => $expandedModels,
             'templateOptions' => $templates,
+            'imageProviders' => $imageProviders,
             'laraActivated' => Employee::laraActivationState() === true,
         ]);
     }

@@ -9,10 +9,10 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
     <x-slot name="title">{{ __('AI Providers') }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Manage connected providers and their models. In each model table, use the Access column: ★ / ☆ for the provider default, the checkbox to offer or withhold a model from Agents, and sliders for optional execution overrides.')">
+        <x-ui.page-header :title="__('AI Providers')" :subtitle="__('Connect and manage external AI providers, grouped by family. The LLM tab powers Agents; the Image tab powers photo operations such as background removal.')">
             <x-slot name="help">
                 <div class="space-y-3">
-                    <p>{{ __('This page shows the LLM providers and models your organization has connected. Agents use these models to think, reason, and respond — at least one active provider with one active model is required.') }}</p>
+                    <p>{{ __('Each family has its own tab. The LLM tab lists the language-model providers and models your organization has connected — Agents use these to think, reason, and respond, so at least one active provider with one active model is required. In each model table, use the Access column: ★ / ☆ for the provider default, the checkbox to offer or withhold a model from Agents, and sliders for optional execution overrides.') }}</p>
 
                     <div>
                         <p class="font-medium text-ink">{{ __('Priority') }}</p>
@@ -29,12 +29,6 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     <p>{!! __('Once providers and models are set up here, configure Lara and her task models from the :link.', ['link' => '<a href="' . route('admin.setup.lara') . '" class="text-accent hover:underline">' . e(__('Lara setup')) . '</a>']) !!}</p>
                 </div>
             </x-slot>
-            <x-slot name="actions">
-                <x-ui.button variant="ghost" wire:click="openCreateProvider">
-                    <x-icon name="heroicon-m-plus" class="w-4 h-4" />
-                    {{ __('Manual Add') }}
-                </x-ui.button>
-            </x-slot>
         </x-ui.page-header>
 
         @if (! $laraActivated)
@@ -47,10 +41,33 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
         @endif
 
         {{-- ═══════════════════════════════════════════════════
-             Section 1: Connected Providers (management)
+             Primary content: AI provider families as tabs. Each family
+             shows two cards — connected (activated) providers and providers
+             ready for connection. See docs/plans/ai-provider-families.md.
              ═══════════════════════════════════════════════════ --}}
+        <x-ui.tabs
+            variant="underline"
+            default="llm"
+            :tabs="[
+                ['id' => 'llm', 'label' => __('LLM'), 'icon' => 'heroicon-o-chat-bubble-left-right'],
+                ['id' => 'image', 'label' => __('Vision'), 'icon' => 'heroicon-o-photo'],
+            ]"
+        >
+            {{-- ───────────────── LLM family ───────────────── --}}
+            <x-ui.tab id="llm">
+                <div class="space-y-section-gap">
+                    {{-- Per-family add: a custom LLM provider not in the catalog below. --}}
+                    <div class="flex justify-end">
+                        <x-ui.button variant="ghost" wire:click="openCreateProvider">
+                            <x-icon name="heroicon-m-plus" class="w-4 h-4" />
+                            {{ __('Add LLM provider') }}
+                        </x-ui.button>
+                    </div>
+
+        {{-- Card 1: Connected (activated) providers --}}
         @if($providers->isNotEmpty())
             <x-ui.card>
+                <h3 class="text-lg font-medium tracking-tight text-ink mb-3">{{ __('Connected providers') }}</h3>
                 <x-ui.table container="flush" :caption="__('Connected providers')">
                     <x-slot name="head">
                             <tr>
@@ -182,7 +199,81 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                 @endif
             </div>
         @endif
+                </div>{{-- /space-y (LLM tab) --}}
+            </x-ui.tab>
+
+            {{-- ───────────────── Image family ───────────────── --}}
+            <x-ui.tab id="image">
+                <x-ui.card>
+                    <h3 class="text-lg font-medium tracking-tight text-ink">{{ __('Vision providers') }}</h3>
+                    <p class="text-sm text-muted mt-0.5">{{ __('Generate, edit, and process images. Connect one to store its credentials.') }}</p>
+
+                    <x-ui.table container="flush" :caption="__('Vision providers')" class="mt-3">
+                        <x-slot name="head">
+                            <tr>
+                                <x-ui.th>{{ __('Provider') }}</x-ui.th>
+                                <x-ui.th class="hidden md:table-cell">{{ __('Capabilities') }}</x-ui.th>
+                                <x-ui.th>{{ __('Status') }}</x-ui.th>
+                                <x-ui.th align="right">{{ __('Actions') }}</x-ui.th>
+                            </tr>
+                        </x-slot>
+
+                        @forelse($imageProviders as $summary)
+                            <tr wire:key="image-provider-{{ $summary->providerKey }}">
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $summary->displayName }}</td>
+                                <td class="hidden md:table-cell px-table-cell-x py-table-cell-y text-sm text-muted">{{ $summary->description }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                    @if($summary->connected)
+                                        {{-- Usable now: credentials stored AND a working client wired. --}}
+                                        <x-ui.badge variant="success">{{ __('Ready') }}</x-ui.badge>
+                                    @elseif($summary->configured)
+                                        {{-- Credentials stored, but no cleanup client built yet. --}}
+                                        <x-ui.badge variant="default">{{ __('Key stored') }}</x-ui.badge>
+                                    @else
+                                        <span class="text-xs text-muted">{{ __('Not connected') }}</span>
+                                    @endif
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
+                                    @if($summary->configured)
+                                        <x-ui.icon-action-group>
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-pencil"
+                                                :label="__('Edit :provider', ['provider' => $summary->displayName])"
+                                                :title="__('Edit')"
+                                                wire:click="$dispatch('open-image-setup', { providerKey: '{{ $summary->providerKey }}' })"
+                                            />
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-link-slash"
+                                                :label="__('Remove :provider key', ['provider' => $summary->displayName])"
+                                                :title="__('Remove key')"
+                                                wire:click="$dispatch('confirm-remove-image-provider', { providerKey: '{{ $summary->providerKey }}' })"
+                                            />
+                                        </x-ui.icon-action-group>
+                                    @else
+                                        <x-ui.button
+                                            type="button"
+                                            size="sm"
+                                            variant="primary"
+                                            wire:click="$dispatch('open-image-setup', { providerKey: '{{ $summary->providerKey }}' })"
+                                        >
+                                            {{ __('Connect') }}
+                                        </x-ui.button>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="4" class="px-table-cell-x py-table-cell-y text-sm text-muted">{{ __('No image providers available yet.') }}</td>
+                            </tr>
+                        @endforelse
+                    </x-ui.table>
+                </x-ui.card>
+            </x-ui.tab>
+        </x-ui.tabs>
     </div>
+
+    {{-- Image-provider setup modal (opened via the Vision tab's Connect button / edit icon) --}}
+    <livewire:admin.ai.providers.image-setup />
 
     {{-- Provider Create/Edit Modal (manual add) --}}
     <x-ui.modal wire:model="showProviderForm" class="max-w-lg">

@@ -159,6 +159,7 @@ final class OpenAiCodexSetup extends ProviderSetup
 
         return AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->where('name', OpenAiCodexDefinition::KEY)
             ->first();
     }
@@ -182,6 +183,7 @@ final class OpenAiCodexSetup extends ProviderSetup
         $provider = AiProvider::query()->create(array_merge($normalized, [
             'company_id' => $companyId,
             'name' => OpenAiCodexDefinition::KEY,
+            'family' => AiProvider::FAMILY_LLM,
             'display_name' => $this->displayName,
             'is_active' => true,
             'created_by' => Auth::user()?->employee?->id,

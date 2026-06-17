@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 
 /**
@@ -43,9 +45,9 @@ trait ManagesModels
      */
     public function toggleModelActive(int $modelId): void
     {
-        $model = AiProviderModel::query()->find($modelId);
+        $model = AiProviderModel::query()->with('provider')->find($modelId);
 
-        if (! $model) {
+        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
             return;
         }
 
@@ -67,9 +69,9 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->find($modelId);
+        $model = AiProviderModel::query()->with('provider')->find($modelId);
 
-        if (! $model) {
+        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
             return;
         }
 
@@ -83,6 +85,10 @@ trait ManagesModels
 
     public function openCreateModel(int $providerId): void
     {
+        if (! AiProvider::query()->llm()->whereKey($providerId)->exists()) {
+            return;
+        }
+
         $this->resetModelForm();
         $this->modelProviderId = $providerId;
         $this->showModelForm = true;
@@ -91,6 +97,10 @@ trait ManagesModels
     public function saveModel(): void
     {
         if ($this->modelProviderId === null) {
+            return;
+        }
+
+        if (! AiProvider::query()->llm()->whereKey($this->modelProviderId)->exists()) {
             return;
         }
 
@@ -115,9 +125,9 @@ trait ManagesModels
      */
     public function setDefaultModel(int $modelId): void
     {
-        $model = AiProviderModel::query()->find($modelId);
+        $model = AiProviderModel::query()->with('provider')->find($modelId);
 
-        if (! $model) {
+        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
             return;
         }
 
@@ -138,7 +148,7 @@ trait ManagesModels
     {
         $model = AiProviderModel::query()->with('provider')->find($modelId);
 
-        if ($model === null) {
+        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
             return;
         }
 
@@ -179,8 +189,13 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->find($this->editingControlsModelId);
-        $model?->update(['execution_controls' => null]);
+        $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
+
+        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
+            return;
+        }
+
+        $model->update(['execution_controls' => null]);
 
         $this->editingExecutionControls = $this->hydrateExecutionControlsConfig(null);
     }
@@ -196,9 +211,9 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->find($this->editingControlsModelId);
+        $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
 
-        if ($model === null) {
+        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
             return;
         }
 
@@ -224,7 +239,7 @@ trait ManagesModels
 
         $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
 
-        if ($model === null || $model->provider === null) {
+        if ($model === null || $model->provider === null || ! $this->modelBelongsToLlmProvider($model)) {
             return null;
         }
 
@@ -236,5 +251,10 @@ trait ManagesModels
             apiType: $apiType,
             config: $this->editingExecutionControls,
         );
+    }
+
+    private function modelBelongsToLlmProvider(AiProviderModel $model): bool
+    {
+        return $model->provider?->family === AiProvider::FAMILY_LLM;
     }
 }

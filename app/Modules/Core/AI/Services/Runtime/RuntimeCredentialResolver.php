@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Runtime;
 
 use App\Base\AI\DTO\AiRuntimeError;
@@ -102,7 +103,7 @@ class RuntimeCredentialResolver
         $providerId = $config['provider_id'] ?? null;
 
         if (is_numeric($providerId)) {
-            $provider = AiProvider::query()->find((int) $providerId);
+            $provider = AiProvider::query()->llm()->find((int) $providerId);
 
             if ($provider instanceof AiProvider) {
                 return $provider;

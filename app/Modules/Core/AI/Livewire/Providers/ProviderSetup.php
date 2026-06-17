@@ -274,7 +274,7 @@ class ProviderSetup extends Component
         $models = collect();
 
         if ($this->connectedProviderId !== null) {
-            $connectedProvider = AiProvider::query()->find($this->connectedProviderId);
+            $connectedProvider = AiProvider::query()->llm()->find($this->connectedProviderId);
 
             if ($connectedProvider) {
                 $models = AiProviderModel::query()
@@ -330,6 +330,7 @@ class ProviderSetup extends Component
     {
         $existing = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->where('name', $this->providerKey)
             ->first();
 
@@ -350,6 +351,7 @@ class ProviderSetup extends Component
         $provider = AiProvider::query()->create(array_merge($normalized, [
             'company_id' => $companyId,
             'name' => $this->providerKey,
+            'family' => AiProvider::FAMILY_LLM,
             'display_name' => $this->displayName,
             'is_active' => true,
             'created_by' => Auth::user()?->employee?->id,

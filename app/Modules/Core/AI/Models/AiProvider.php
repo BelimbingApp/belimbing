@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Models;
 
 use App\Modules\Core\AI\Enums\AuthType;
@@ -11,6 +12,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AiProvider extends Model
 {
+    public const FAMILY_LLM = 'llm';
+
+    public const FAMILY_IMAGE = 'image';
+
     /**
      * @var string
      */
@@ -22,6 +27,7 @@ class AiProvider extends Model
     protected $fillable = [
         'company_id',
         'name',
+        'family',
         'display_name',
         'base_url',
         'auth_type',
@@ -110,6 +116,22 @@ class AiProvider extends Model
     }
 
     /**
+     * Scope to language-model providers only.
+     */
+    public function scopeLlm($query): void
+    {
+        $query->where('family', self::FAMILY_LLM);
+    }
+
+    /**
+     * Scope to Vision (image) providers only.
+     */
+    public function scopeImage($query): void
+    {
+        $query->where('family', self::FAMILY_IMAGE);
+    }
+
+    /**
      * Get configured active providers for a company in runtime order.
      *
      * @return EloquentCollection<int, self>
@@ -118,6 +140,7 @@ class AiProvider extends Model
     {
         return self::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->orderBy('priority')
             ->orderBy('display_name')
@@ -132,12 +155,17 @@ class AiProvider extends Model
      */
     public function assignNextPriority(): void
     {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
         if ($this->priority > 0) {
             return;
         }
 
         $maxPriority = (int) self::query()
             ->where('company_id', $this->company_id)
+            ->llm()
             ->max('priority');
 
         $this->update(['priority' => $maxPriority + 1]);
@@ -150,6 +178,10 @@ class AiProvider extends Model
      */
     public function setTopPriority(): void
     {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
         if ($this->priority === 1) {
             return;
         }
@@ -157,6 +189,7 @@ class AiProvider extends Model
         // Shift existing priorities down to make room at 1
         self::query()
             ->where('company_id', $this->company_id)
+            ->llm()
             ->where('priority', '>', 0)
             ->where('id', '!=', $this->id)
             ->increment('priority');
@@ -169,6 +202,10 @@ class AiProvider extends Model
      */
     public function clearPriority(): void
     {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
         $oldPriority = $this->priority;
 
         if ($oldPriority === 0) {
@@ -180,6 +217,7 @@ class AiProvider extends Model
         // Close the gap in priority sequence
         self::query()
             ->where('company_id', $this->company_id)
+            ->llm()
             ->where('priority', '>', $oldPriority)
             ->decrement('priority');
     }
@@ -191,6 +229,10 @@ class AiProvider extends Model
      */
     public function swapPriority(self $other): void
     {
+        if ($this->family !== self::FAMILY_LLM || $other->family !== self::FAMILY_LLM) {
+            return;
+        }
+
         $thisPriority = $this->priority;
         $otherPriority = $other->priority;
 

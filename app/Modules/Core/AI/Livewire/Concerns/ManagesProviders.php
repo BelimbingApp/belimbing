@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\Services\ModelCatalogService;
@@ -70,7 +71,7 @@ trait ManagesProviders
 
     public function openEditProvider(int $providerId): void
     {
-        $provider = AiProvider::query()->find($providerId);
+        $provider = AiProvider::query()->llm()->find($providerId);
 
         if (! $provider) {
             return;
@@ -125,7 +126,7 @@ trait ManagesProviders
         ];
 
         if ($this->isEditingProvider && $this->editingProviderId) {
-            $provider = AiProvider::query()->find($this->editingProviderId);
+            $provider = AiProvider::query()->llm()->find($this->editingProviderId);
 
             if ($provider) {
                 unset($data['name']);
@@ -138,10 +139,12 @@ trait ManagesProviders
             }
         } else {
             $data['auth_type'] = 'api_key';
+            $data['family'] = AiProvider::FAMILY_LLM;
             $data['credentials'] = ['api_key' => $this->providerApiKey];
             $data['connection_config'] = [];
             $data['created_by'] = auth()->user()->employee?->id;
-            AiProvider::query()->create($data);
+            $provider = AiProvider::query()->create($data);
+            $provider->assignNextPriority();
         }
 
         $this->showProviderForm = false;
@@ -150,7 +153,7 @@ trait ManagesProviders
 
     public function confirmDeleteProvider(int $providerId): void
     {
-        $provider = AiProvider::query()->find($providerId);
+        $provider = AiProvider::query()->llm()->find($providerId);
 
         if (! $provider) {
             return;
@@ -167,7 +170,7 @@ trait ManagesProviders
             return;
         }
 
-        $provider = AiProvider::query()->find($this->deletingProviderId);
+        $provider = AiProvider::query()->llm()->find($this->deletingProviderId);
 
         if ($provider) {
             $provider->models()->delete();
@@ -188,7 +191,7 @@ trait ManagesProviders
      */
     public function movePriorityUp(int $providerId): void
     {
-        $provider = AiProvider::query()->find($providerId);
+        $provider = AiProvider::query()->llm()->find($providerId);
 
         if (! $provider || $provider->priority <= 1) {
             return;
@@ -196,6 +199,7 @@ trait ManagesProviders
 
         $above = AiProvider::query()
             ->where('company_id', $provider->company_id)
+            ->llm()
             ->where('priority', $provider->priority - 1)
             ->first();
 
@@ -217,5 +221,4 @@ trait ManagesProviders
         $this->selectedTemplate = '';
         $this->resetValidation();
     }
-
 }

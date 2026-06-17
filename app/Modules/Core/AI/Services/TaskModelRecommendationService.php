@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\AiRuntimeError;
@@ -7,9 +8,9 @@ use App\Base\Support\Json as BlbJson;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\ExecutionMode;
-use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\Runtime\RuntimeInvocationContext;
 use App\Modules\Core\Company\Models\Company;
@@ -125,6 +126,7 @@ class TaskModelRecommendationService
     {
         $providers = AiProvider::query()
             ->forCompany(Company::LICENSEE_ID)
+            ->llm()
             ->active()
             ->orderBy('display_name')
             ->get(['id', 'name', 'display_name']);

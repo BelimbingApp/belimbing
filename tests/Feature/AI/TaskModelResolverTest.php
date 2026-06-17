@@ -268,3 +268,66 @@ test('resolve task overlays task execution controls onto the fallback default mo
         ->and($resolved['execution_controls']->sampling->temperature)->toBeNull()
         ->and($resolved['execution_controls']->reasoning->visibility)->toBe(ReasoningVisibility::Summary);
 });
+
+test('resolve company default ignores vision providers when they sort first alphabetically', function (): void {
+    $company = Company::query()->find(Company::LICENSEE_ID)
+        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+
+    AiProvider::query()->create([
+        'company_id' => $company->id,
+        'name' => 'alibaba',
+        'family' => AiProvider::FAMILY_IMAGE,
+        'display_name' => 'Alibaba Model Studio',
+        'base_url' => 'https://vision.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'vision-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 0,
+    ]);
+
+    $llmProvider = AiProvider::query()->create([
+        'company_id' => $company->id,
+        'name' => 'openai',
+        'family' => AiProvider::FAMILY_LLM,
+        'display_name' => 'OpenAI',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'openai-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $llmProvider->id,
+        'model_id' => 'gpt-primary',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    $resolved = app(ConfigResolver::class)->resolveCompanyDefault($company->id);
+
+    expect($resolved)->not->toBeNull()
+        ->and($resolved['provider_name'])->toBe('openai')
+        ->and($resolved['model'])->toBe('gpt-primary');
+});
+
+test('resolve for provider rejects vision provider ids', function (): void {
+    $company = Company::factory()->create();
+
+    $imageProvider = AiProvider::query()->create([
+        'company_id' => $company->id,
+        'name' => 'photoroom',
+        'family' => AiProvider::FAMILY_IMAGE,
+        'display_name' => 'PhotoRoom',
+        'base_url' => 'https://vision.example.test',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'vision-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 0,
+    ]);
+
+    expect(app(ConfigResolver::class)->resolveForProvider($imageProvider->id, 'any-model'))->toBeNull();
+});

@@ -1,4 +1,5 @@
 <?php
+
 //
 // Operator Control Plane - unified view for run inspection, health, and lifecycle controls.
 
@@ -161,6 +162,7 @@ class ControlPlane extends Component
     {
         $service = app(HealthAndPresenceService::class);
         $providerNames = AiProvider::query()
+            ->llm()
             ->active()
             ->orderBy('display_name')
             ->pluck('name')

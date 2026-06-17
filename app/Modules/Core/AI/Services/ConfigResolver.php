@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\DTO\ExecutionControls;
@@ -121,6 +122,7 @@ class ConfigResolver
 
         $provider = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->where('name', $providerName)
             ->first();
@@ -215,6 +217,7 @@ class ConfigResolver
         if ($providerName !== null && $companyId !== null) {
             $provider = AiProvider::query()
                 ->forCompany($companyId)
+                ->llm()
                 ->active()
                 ->where('name', $providerName)
                 ->first();
@@ -261,6 +264,7 @@ class ConfigResolver
         // Try prioritized providers first (priority > 0, ordered ascending)
         $provider = AiProvider::query()
             ->forCompany($companyId)
+            ->llm()
             ->active()
             ->prioritized()
             ->first();
@@ -269,6 +273,7 @@ class ConfigResolver
         if ($provider === null) {
             $provider = AiProvider::query()
                 ->forCompany($companyId)
+                ->llm()
                 ->active()
                 ->orderBy('display_name')
                 ->first();
@@ -330,6 +335,7 @@ class ConfigResolver
     public function resolveForProvider(int $providerId, string $modelId): ?array
     {
         $provider = AiProvider::query()
+            ->llm()
             ->where('id', $providerId)
             ->active()
             ->first();
