@@ -43,9 +43,10 @@
                     placeholder="{{ __('Search tools...') }}"
                 />
             </div>
+            <label class="sr-only" for="tool-category-filter">{{ __('Tool category') }}</label>
             <select
+                id="tool-category-filter"
                 wire:model.live="categoryFilter"
-                aria-label="{{ __('Tool category') }}"
                 class="rounded-xl border border-border-input bg-surface-card text-ink text-sm px-input-x py-input-y focus:ring-2 focus:ring-accent focus:ring-offset-2"
             >
                 <option value="">{{ __('All Categories') }}</option>
