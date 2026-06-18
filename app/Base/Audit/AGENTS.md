@@ -7,7 +7,7 @@ Framework-level audit trail for data mutations and explicit actions. All models 
 - **Opt-out, not opt-in.** Every Eloquent model is audited by default. Use `config('audit.exclude_models')` to skip specific models.
 - **Zero coupling.** Modules never import anything from Audit. The Audit module listens to Eloquent events globally.
 - **Mutations** are captured via global Eloquent event listeners (`eloquent.created/updated/deleted`).
-- **Actions** are captured automatically via middleware (HTTP), auth event listeners (login/logout), console event listeners (commands), and queue event listeners (jobs).
+- **Actions** are captured automatically via middleware (HTTP), auth event listeners (login/logout), console event listeners (commands), and queue event listeners (jobs). Product-level semantic actions are captured through the Foundation-owned `SemanticActionRecorder` contract; modules must not import Audit classes directly.
 - **Deferred writes** — same pattern as `Authz\DatabaseDecisionLogger`. Entries buffer in memory, batch-INSERT after response via named Laravel `defer()->always()` callbacks.
 - **Trace correlation** via compact `trace_id` links audit entries to Authz decision logs within the same request/process. Trace IDs are 12-character Crockford Base32 values stored without separators; UI may display them as 4-4-4 groups.
 
@@ -78,6 +78,31 @@ MutationListener::withoutAuditing(fn () => Model::query()->update([...]));
 
 All togglable via config: `log_http_requests`, `log_auth_events`, `log_console_commands`, `log_queue_jobs`.
 
+## Semantic Product Actions
+
+Use `App\Base\Foundation\Contracts\SemanticActionRecorder` when a workflow needs to explain user intent beyond transport-level `http.request` rows. Audit binds that contract to an Audit writer when the module is loaded; Foundation provides a null implementation so callers stay independent.
+
+Semantic actions should use stable machine event names and sanitized payload context:
+
+```php
+app(SemanticActionRecorder::class)->record(
+    event: 'user.roles.assigned',
+    summary: __('Assigned :count roles to user', ['count' => 2]),
+    source: __('User'),
+    subject: ['name' => 'user', 'id' => $user->id],
+    surface: 'admin.users.show',
+    uiElement: __('Assign roles button'),
+    context: ['role_names' => ['Admin', 'Auditor']],
+);
+```
+
+Guidelines:
+- Keep semantic actions reserved for meaningful business/user-intent operations, not every technical request.
+- Do not store secrets or full before/after values in semantic action context; mutation diffs carry field-level data and redaction rules.
+- Include `subject` when the action affects a record so Actions search and trace timelines can show handles like `User#3`.
+- Include `surface` and `uiElement` when the UI trigger matters for reproduction.
+- Semantic actions are retained by default because they explain long-lived mutation rows; pass `retain: false` only for deliberately short-lived product events.
+
 ## Process Actor Types
 
 | `actor_type` | `actor_id` | `url` | Meaning |
@@ -95,7 +120,7 @@ All togglable via config: `log_http_requests`, `log_auth_events`, `log_console_c
 | Table | Retention |
 |---|---|
 | `base_audit_mutations` | Forever |
-| `base_audit_actions` | Configurable (`audit.action_retention_days`, default 90) |
+| `base_audit_actions` | Configurable (`audit.action_retention_days`, default 90); rows with `is_retained = true`, including default semantic product actions, are not pruned. |
 
 ## UI
 
@@ -124,13 +149,18 @@ app/Base/Audit/
 │   └── JobListener.php        # Queue jobs
 ├── Livewire/AuditLog/
 │   ├── Mutations.php
-│   └── Actions.php
+│   ├── Actions.php
+│   └── SourceHistory.php
 ├── Middleware/AuditRequestMiddleware.php
 ├── Models/
 │   ├── AuditMutation.php
 │   └── AuditAction.php
 ├── Routes/web.php
 ├── Services/AuditBuffer.php
+├── Services/AuditLogPresenter.php
+├── Services/AuditSourceHistory.php
+├── Services/AuditTraceTimeline.php
+├── Services/AuditSemanticActionRecorder.php
 ├── AGENTS.md
 └── ServiceProvider.php
 ```

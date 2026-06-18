@@ -116,7 +116,7 @@ class Mutations extends Component
             })
             ->orderBy($sortColumn, $this->sortDir)
             ->orderByDesc('base_audit_mutations.id')
-            ->paginate(25);
+            ->paginate(20);
     }
 
     /** @return array{name: string, id: int}|null */

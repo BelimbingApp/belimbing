@@ -19,6 +19,7 @@
 
                 <x-ui.select id="audit-action-family" wire:model.live="filterEventFamily" aria-label="{{ __('Action family') }}">
                     <option value="">{{ __('All Sources') }}</option>
+                    <option value="product">{{ __('Product Actions') }}</option>
                     <option value="http">{{ __('HTTP') }}</option>
                     <option value="auth">{{ __('Auth') }}</option>
                     <option value="console">{{ __('Console') }}</option>

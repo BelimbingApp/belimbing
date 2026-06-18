@@ -11,10 +11,12 @@ use App\Base\Audit\Listeners\MutationListener;
 use App\Base\Audit\Middleware\AuditRequestMiddleware;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Audit\Services\AuditDomainLifecycleLedger;
+use App\Base\Audit\Services\AuditSemanticActionRecorder;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Foundation\Contracts\DomainLifecycleLedger;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Events\DomainLifecycleAction;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Auth\Events\Failed;
@@ -40,6 +42,7 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->singleton(AuditBuffer::class);
         $this->app->bind(DomainLifecycleLedger::class, AuditDomainLifecycleLedger::class);
+        $this->app->bind(SemanticActionRecorder::class, AuditSemanticActionRecorder::class);
 
         $this->app->singleton(RequestContext::class, function (): RequestContext {
             if ($this->app->runningInConsole()) {

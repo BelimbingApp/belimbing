@@ -144,6 +144,7 @@ class Actions extends Component
             'auth' => $query->where('base_audit_actions.event', 'like', 'auth.%'),
             'console' => $query->where('base_audit_actions.event', 'console.command'),
             'queue' => $query->where('base_audit_actions.event', 'like', 'queue.job.%'),
+            'product' => $query->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%semantic%']),
             'domain' => $query->where('base_audit_actions.event', 'like', 'domain.%'),
             default => null,
         };
@@ -165,6 +166,10 @@ class Actions extends Component
                     })
                     ->orWhere(function (Builder $domain): void {
                         $domain->where('base_audit_actions.event', 'like', 'domain.%')
+                            ->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%failed%']);
+                    })
+                    ->orWhere(function (Builder $semantic): void {
+                        $semantic->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%semantic%'])
                             ->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%failed%']);
                     });
             }),

@@ -11,6 +11,7 @@ use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\EffectivePermissions;
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Livewire\Concerns\SortsExternalAccesses;
@@ -22,6 +23,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -147,7 +149,7 @@ class Show extends Component
             ],
         ];
 
-        $this->saveValidatedField(
+        $saved = $this->saveValidatedField(
             $this->user,
             $field,
             $value,
@@ -158,6 +160,22 @@ class Show extends Component
                 }
             }
         );
+
+        if ($saved && $this->user->wasChanged()) {
+            $changedFields = $this->meaningfulChangedFields($this->user->getChanges());
+
+            if ($changedFields !== []) {
+                $this->recordUserSemanticAction(
+                    event: 'user.field.updated',
+                    summary: __('Updated user :field', ['field' => (string) Str::of($field)->replace('_', ' ')->lower()]),
+                    uiElement: $this->fieldControlLabel($field),
+                    context: [
+                        'field' => $field,
+                        'fields' => $changedFields,
+                    ],
+                );
+            }
+        }
     }
 
     /**
@@ -165,9 +183,23 @@ class Show extends Component
      */
     public function saveCompany(?int $companyId): void
     {
+        $oldCompanyId = $this->user->company_id;
         $this->user->company_id = $companyId ?: null;
         $this->user->save();
+        $changed = $this->user->wasChanged('company_id');
         $this->user->load('company');
+
+        if ($changed) {
+            $this->recordUserSemanticAction(
+                event: 'user.company.changed',
+                summary: __('Changed user company'),
+                uiElement: __('Company selector'),
+                context: [
+                    'old_company_id' => $oldCompanyId,
+                    'new_company_id' => $this->user->company_id,
+                ],
+            );
+        }
     }
 
     /**
@@ -179,8 +211,18 @@ class Show extends Component
 
         $this->user->password = Hash::make($validated['password']);
         $this->user->save();
+        $changed = $this->user->wasChanged('password');
 
         $this->reset(['password', 'passwordConfirmation']);
+
+        if ($changed) {
+            $this->recordUserSemanticAction(
+                event: 'user.password.updated',
+                summary: __('Changed user password'),
+                uiElement: __('Password form Save button'),
+                context: ['fields' => ['password']],
+            );
+        }
 
         Session::flash('success', __('Password updated successfully.'));
     }
@@ -198,13 +240,43 @@ class Show extends Component
             return;
         }
 
-        foreach ($this->selectedRoleIds as $roleId) {
-            PrincipalRole::query()->firstOrCreate([
+        $roleIds = array_values(array_unique(array_filter(
+            array_map('intval', $this->selectedRoleIds),
+            fn (int $roleId): bool => $roleId > 0,
+        )));
+
+        if ($roleIds === []) {
+            return;
+        }
+
+        $roleNames = Role::query()
+            ->whereIn('id', $roleIds)
+            ->pluck('name', 'id');
+        $createdRoleIds = [];
+
+        foreach ($roleIds as $roleId) {
+            $assignment = PrincipalRole::query()->firstOrCreate([
                 'company_id' => $this->user->company_id,
                 'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $this->user->id,
-                'role_id' => (int) $roleId,
+                'role_id' => $roleId,
             ]);
+
+            if ($assignment->wasRecentlyCreated) {
+                $createdRoleIds[] = $roleId;
+            }
+        }
+
+        if ($createdRoleIds !== []) {
+            $this->recordUserSemanticAction(
+                event: 'user.roles.assigned',
+                summary: trans_choice('Assigned :count role to user|Assigned :count roles to user', count($createdRoleIds), ['count' => count($createdRoleIds)]),
+                uiElement: __('Assign roles button'),
+                context: [
+                    'role_ids' => $createdRoleIds,
+                    'role_names' => array_values($roleNames->only($createdRoleIds)->all()),
+                ],
+            );
         }
 
         $this->selectedRoleIds = [];
@@ -219,11 +291,31 @@ class Show extends Component
             return;
         }
 
-        PrincipalRole::query()
+        $assignment = PrincipalRole::query()
+            ->with('role')
             ->where('id', $principalRoleId)
             ->where('principal_id', $this->user->id)
             ->where('principal_type', PrincipalType::USER->value)
-            ->delete();
+            ->first();
+
+        if ($assignment === null) {
+            return;
+        }
+
+        $roleId = (int) $assignment->role_id;
+        $roleName = $assignment->role?->name;
+
+        if ($assignment->delete()) {
+            $this->recordUserSemanticAction(
+                event: 'user.role.removed',
+                summary: __('Removed role from user'),
+                uiElement: __('Remove role button'),
+                context: [
+                    'role_id' => $roleId,
+                    'role_name' => $roleName,
+                ],
+            );
+        }
     }
 
     /**
@@ -239,8 +331,19 @@ class Show extends Component
             return;
         }
 
-        foreach ($this->selectedCapabilityKeys as $capKey) {
-            PrincipalCapability::query()->firstOrCreate(
+        $capabilityKeys = array_values(array_unique(array_filter(
+            array_map('strval', $this->selectedCapabilityKeys),
+            fn (string $capabilityKey): bool => $capabilityKey !== '',
+        )));
+
+        if ($capabilityKeys === []) {
+            return;
+        }
+
+        $createdCapabilityKeys = [];
+
+        foreach ($capabilityKeys as $capKey) {
+            $capability = PrincipalCapability::query()->firstOrCreate(
                 [
                     'company_id' => $this->user->company_id,
                     'principal_type' => PrincipalType::USER->value,
@@ -250,6 +353,19 @@ class Show extends Component
                 [
                     'is_allowed' => true,
                 ]
+            );
+
+            if ($capability->wasRecentlyCreated) {
+                $createdCapabilityKeys[] = $capKey;
+            }
+        }
+
+        if ($createdCapabilityKeys !== []) {
+            $this->recordUserSemanticAction(
+                event: 'user.capabilities.granted',
+                summary: trans_choice('Granted :count direct capability to user|Granted :count direct capabilities to user', count($createdCapabilityKeys), ['count' => count($createdCapabilityKeys)]),
+                uiElement: __('Add capabilities button'),
+                context: ['capability_keys' => $createdCapabilityKeys],
             );
         }
 
@@ -265,11 +381,30 @@ class Show extends Component
             return;
         }
 
-        PrincipalCapability::query()
+        $capability = PrincipalCapability::query()
             ->where('id', $capabilityId)
             ->where('principal_id', $this->user->id)
             ->where('principal_type', PrincipalType::USER->value)
-            ->delete();
+            ->first();
+
+        if ($capability === null) {
+            return;
+        }
+
+        $capabilityKey = $capability->capability_key;
+        $wasAllowed = (bool) $capability->is_allowed;
+
+        if ($capability->delete()) {
+            $this->recordUserSemanticAction(
+                event: 'user.capability.removed',
+                summary: __('Removed direct capability rule from user'),
+                uiElement: __('Remove capability button'),
+                context: [
+                    'capability_key' => $capabilityKey,
+                    'was_allowed' => $wasAllowed,
+                ],
+            );
+        }
     }
 
     /**
@@ -285,7 +420,7 @@ class Show extends Component
             return;
         }
 
-        PrincipalCapability::query()->firstOrCreate(
+        $capability = PrincipalCapability::query()->firstOrCreate(
             [
                 'company_id' => $this->user->company_id,
                 'principal_type' => PrincipalType::USER->value,
@@ -296,6 +431,15 @@ class Show extends Component
                 'is_allowed' => false,
             ]
         );
+
+        if ($capability->wasRecentlyCreated) {
+            $this->recordUserSemanticAction(
+                event: 'user.capability.denied',
+                summary: __('Denied user capability'),
+                uiElement: __('Deny capability button'),
+                context: ['capability_key' => $capabilityKey],
+            );
+        }
     }
 
     /**
@@ -318,8 +462,18 @@ class Show extends Component
         }
 
         $this->user->update(['employee_id' => $employeeId]);
+        $changed = $this->user->wasChanged('employee_id');
         $this->user->load('employee.company', 'employee.department.type');
         $this->linkEmployeeId = null;
+
+        if ($changed) {
+            $this->recordUserSemanticAction(
+                event: 'user.employee.linked',
+                summary: __('Linked employee record to user'),
+                uiElement: __('Link employee button'),
+                context: $this->employeeContext($employee),
+            );
+        }
     }
 
     /**
@@ -335,8 +489,20 @@ class Show extends Component
             return;
         }
 
+        $employee = $this->user->employee ?? Employee::query()->find($employeeId);
+
         $this->user->update(['employee_id' => null]);
+        $changed = $this->user->wasChanged('employee_id');
         $this->user->load('employee.company', 'employee.department.type');
+
+        if ($changed) {
+            $this->recordUserSemanticAction(
+                event: 'user.employee.unlinked',
+                summary: __('Unlinked employee record from user'),
+                uiElement: __('Unlink employee button'),
+                context: $employee instanceof Employee ? $this->employeeContext($employee) : ['employee_id' => $employeeId],
+            );
+        }
     }
 
     /**
@@ -366,12 +532,23 @@ class Show extends Component
         ]);
 
         $this->user->update(['employee_id' => $employee->id]);
+        $changed = $this->user->wasChanged('employee_id');
         $this->user->load('employee.company', 'employee.department.type');
         $this->showAddEmployeeModal = false;
         $this->reset([
             'newEmpCompanyId', 'newEmpEmployeeNumber', 'newEmpFullName',
             'newEmpDesignation', 'newEmpEmploymentStart',
         ]);
+
+        if ($changed) {
+            $this->recordUserSemanticAction(
+                event: 'user.employee.created-and-linked',
+                summary: __('Created and linked employee record to user'),
+                uiElement: __('Add employee Save button'),
+                context: $this->employeeContext($employee),
+            );
+        }
+
         Session::flash('success', __('Employee record created.'));
     }
 
@@ -532,5 +709,48 @@ class Show extends Component
                 return $a->id <=> $b->id;
             })
             ->values();
+    }
+
+    /**
+     * @param  array<string, mixed>  $changes
+     * @return list<string>
+     */
+    private function meaningfulChangedFields(array $changes): array
+    {
+        return array_values(array_diff(array_keys($changes), ['updated_at']));
+    }
+
+    /** @return array<string, mixed> */
+    private function employeeContext(Employee $employee): array
+    {
+        return [
+            'employee_id' => $employee->id,
+            'employee_number' => $employee->employee_number,
+            'employee_name' => $employee->full_name,
+            'company_id' => $employee->company_id,
+        ];
+    }
+
+    /** @param  array<string, mixed>  $context */
+    private function recordUserSemanticAction(string $event, string $summary, ?string $uiElement = null, array $context = []): void
+    {
+        app(SemanticActionRecorder::class)->record(
+            event: $event,
+            summary: $summary,
+            source: __('User'),
+            subject: ['name' => 'user', 'id' => $this->user->id],
+            surface: 'admin.users.show',
+            uiElement: $uiElement,
+            context: $context,
+        );
+    }
+
+    private function fieldControlLabel(string $field): string
+    {
+        return match ($field) {
+            'name' => __('Name inline editor'),
+            'email' => __('Email inline editor'),
+            default => __(':field inline editor', ['field' => Str::headline($field)]),
+        };
     }
 }

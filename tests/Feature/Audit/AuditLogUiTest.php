@@ -4,6 +4,7 @@ use App\Base\Audit\Listeners\MutationListener;
 use App\Base\Audit\Livewire\AuditLog\Actions;
 use App\Base\Audit\Livewire\AuditLog\Mutations;
 use App\Base\Audit\Livewire\AuditLog\SourceHistory;
+use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
@@ -228,6 +229,35 @@ it('shows user record history from direct mutations and redacts protected values
         ->assertSee('[redacted]')
         ->assertDontSee('SecurePassword123!');
 
+    $fieldAction = AuditAction::query()->where('event', 'user.field.updated')->firstOrFail();
+    $passwordAction = AuditAction::query()->where('event', 'user.password.updated')->firstOrFail();
+
+    expect($fieldAction->is_retained)->toBeTrue()
+        ->and($fieldAction->payload['semantic'])->toBeTrue()
+        ->and($fieldAction->payload['summary'])->toBe('Updated user name')
+        ->and($fieldAction->payload['subject']['label'])->toBe('User#'.$target->id)
+        ->and($fieldAction->payload['surface'])->toBe('admin.users.show')
+        ->and($fieldAction->payload['ui_element'])->toBe('Name inline editor')
+        ->and($fieldAction->payload['context']['fields'])->toContain('name')
+        ->and($passwordAction->payload['summary'])->toBe('Changed user password')
+        ->and($passwordAction->payload['ui_element'])->toBe('Password form Save button')
+        ->and($passwordAction->payload['context']['fields'])->toBe(['password']);
+
+    Livewire::test(Actions::class)
+        ->set('filterEventFamily', 'product')
+        ->assertSee('Updated user name')
+        ->assertSee('User#'.$target->id)
+        ->assertSee('Name inline editor')
+        ->assertSee('Changed user password')
+        ->assertSee('Password form Save button');
+
+    Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target->fresh()))
+        ->call('openTrace', $fieldAction->trace_id)
+        ->assertSet('traceDrawerOpen', true)
+        ->assertSee('Updated user name')
+        ->assertSee('Name inline editor')
+        ->assertSee('History Target Renamed');
+
     expect(
         AuditMutation::query()
             ->where('auditable_type', User::class)
@@ -315,6 +345,23 @@ it('includes user role and direct capability mutations in user record history', 
         ->assertSee('role_id')
         ->assertSee('PrincipalCapability')
         ->assertSee('capability_key')
+        ->assertSee('admin.user.view');
+
+    $roleAction = AuditAction::query()->where('event', 'user.roles.assigned')->firstOrFail();
+    $capabilityAction = AuditAction::query()->where('event', 'user.capabilities.granted')->firstOrFail();
+
+    expect($roleAction->payload['semantic'])->toBeTrue()
+        ->and($roleAction->payload['summary'])->toBe('Assigned 1 role to user')
+        ->and($roleAction->payload['context']['role_ids'])->toBe([$role->id])
+        ->and($roleAction->payload['context']['role_names'])->toBe(['History Role'])
+        ->and($capabilityAction->payload['summary'])->toBe('Granted 1 direct capability to user')
+        ->and($capabilityAction->payload['context']['capability_keys'])->toBe(['admin.user.view']);
+
+    Livewire::test(Actions::class)
+        ->set('filterEventFamily', 'product')
+        ->assertSee('Assigned 1 role to user')
+        ->assertSee('History Role')
+        ->assertSee('Granted 1 direct capability to user')
         ->assertSee('admin.user.view');
 
     expect(

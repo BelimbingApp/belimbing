@@ -1,6 +1,6 @@
 # base-audit-log-usability.md
 
-**Status:** In progress — Phases 1–5 implemented; semantic action capture remains next.
+**Status:** Complete — Phases 1–7 implemented and validated for the User-management rollout; older rows remain limited by the data originally captured.
 **Last Updated:** 2026-06-18
 **Sources:**
 - User report and screenshot of `admin/audit/actions` showing generic action rows with raw URL/payload columns.
@@ -14,6 +14,8 @@
 - `app/Base/Audit/Livewire/AuditLog/Actions.php` and `resources/core/views/livewire/admin/audit/actions.blade.php` — current Actions page behavior.
 - `app/Base/Audit/Livewire/AuditLog/Mutations.php` and `resources/core/views/livewire/admin/audit/mutations.blade.php` — current Data Mutations page behavior.
 - `resources/core/views/livewire/admin/users/show.blade.php` and `app/Modules/Core/User/Models/User.php` — first source-record history candidate.
+- `app/Base/Foundation/Contracts/SemanticActionRecorder.php` — decoupled semantic action capture boundary.
+- `app/Base/Audit/Services/AuditSemanticActionRecorder.php` — Audit implementation of semantic product-action persistence.
 **Agents:** amp/gpt-5
 
 ## Problem Essence
@@ -107,15 +109,17 @@ Shared Audit-owned helpers should normalize actor labels, action summaries, trac
 
 Important source pages need subject coverage for their own model and high-value related models. For a User page this means at least `User`, user-scoped `PrincipalRole`, user-scoped `PrincipalCapability`, and likely `ExternalAccess` if access grants are expected in the user's history.
 
-### Future semantic action capture
+### Semantic action capture
 
-If exploration confirms that request-level data cannot answer user-intent questions, add explicit semantic action descriptors at Livewire/controller/service boundaries. Raw HTTP actions stay diagnostic; semantic actions become the product audit trail for “what the user intended to do.”
+Request-level data cannot answer user-intent questions by itself, so explicit semantic action descriptors now record selected product actions at the workflow boundary. Raw HTTP actions stay diagnostic; semantic actions are retained product audit entries for “what the user intended to do.”
 
 ## Design Decisions
 
 Use existing `trace_id` and mutation subject indexes first. The first useful version should be mostly query and presentation work; do not start with a broad schema rewrite.
 
 Audit tables are incubating during this build. Preserving local audit rows is not a constraint if a needed schema change appears. Phases 4–5 did not need new columns because direct auditable lookup and mutation subject fields already cover source-record history.
+
+Phase 6 did not need new action-table columns. Semantic subject, surface, UI trigger, result, and sanitized context live in `base_audit_actions.payload` for the first iteration, while trace correlation links those actions to mutation rows. The Actions page can find these rows through payload search and a Product Actions filter; if future volumes require subject-specific action queries independent of mutations, promote action subjects into indexed columns later.
 
 Make trace the primary sequence primitive. Show trace IDs in a readable 4-4-4 form, allow copy/search by raw or formatted trace, and tolerate mutation-only timelines when old action rows have been pruned.
 
@@ -129,9 +133,13 @@ Use a drawer for local history and trace detail. A side drawer preserves record 
 
 Keep writer coupling low. Business modules should not write Audit rows directly. They may expose duck-typed `getAuditSubject()` / `getAuditSubjectEntries()` metadata; the Audit listener remains the writer.
 
+Keep semantic-action coupling inverted. Callers use the Foundation-owned `SemanticActionRecorder` contract, which has a null default and an Audit implementation. Core/User does not import Audit classes.
+
 Gate history conservatively. First iteration should show record history only to users who can view the source page and have the existing audit-log capability. If product wants ordinary record maintainers to view only local history, add a narrower capability deliberately.
 
 Respect redaction and retention. Redacted values stay redacted everywhere. Password/secret changes should show that a protected field changed, not reveal the value. Retained sequences should prevent important action context from being pruned where the operator explicitly preserves it.
+
+Retain semantic product actions by default. Raw request diagnostics remain governed by action retention; semantic rows explain long-lived mutation history and are marked retained unless a caller deliberately opts out.
 
 Keep the UI lazy and compact. History drawers should load on demand and paginate/limit rows. Do not render full histories into initial detail-page HTML.
 
@@ -149,7 +157,20 @@ Models may continue to expose audit subject metadata through plain methods only:
 - `getAuditSubject(): ?array`
 - `getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array`
 
-Semantic action capture, if added, should use stable machine event names plus a human summary, subject metadata, sanitized context, outcome, and the current trace. Raw request payloads remain secondary diagnostics.
+Semantic action capture uses stable machine event names plus a human summary, subject metadata, sanitized context, outcome, and the current trace.
+
+Semantic action capture is exposed through `App\Base\Foundation\Contracts\SemanticActionRecorder`:
+- `event`: stable machine name such as `user.field.updated` or `user.roles.assigned`.
+- `summary`: human-readable action summary shown in Actions and trace timelines.
+- `source`: compact product/source label such as `User`.
+- `subject`: subject handle metadata such as `['name' => 'user', 'id' => 3]`.
+- `surface`: route/screen identifier such as `admin.users.show`.
+- `uiElement`: control/trigger label such as `Name inline editor` or `Assign roles button`.
+- `context`: sanitized, non-secret details such as field names, role names, or capability keys.
+- `result`: outcome string, default `succeeded`.
+- `retain`: default `true` for semantic product actions.
+
+Raw request payloads remain secondary diagnostics. Existing historical rows cannot be retroactively enriched; semantic intent is available only for workflows captured after this rollout.
 
 ## Phases
 
@@ -228,23 +249,23 @@ Validation: `php artisan test tests/Feature/Audit/AuditLogUiTest.php` proves dir
 
 Goal: capture future action intent at the right boundaries when presentation alone cannot answer “what did the user do?”
 
-Affected pages: to be chosen from Phase 1 evidence; likely User management and one high-volume operational workflow.
+Affected pages: `admin/users/{user}` for the first rollout.
 
-- [ ] Define a semantic action descriptor contract with stable event name, human summary, source surface, subject keys, sanitized context, outcome, mutation count or linked trace, and retention expectation.
-- [ ] Decide whether `base_audit_actions` needs subject columns and expression indexes, or whether semantic subject data can live in payload plus query projections for the first iteration.
-- [ ] Separate raw request diagnostics from product actions: raw HTTP remains short-retention/noise-controlled; semantic actions explain business operations and should be retained long enough to support mutation investigations.
-- [ ] Add trace propagation for queued jobs only if Phase 1 shows users need HTTP-to-job sequence reconstruction.
-- [ ] Prototype semantic capture on one workflow, then update this plan before broad rollout.
+- [x] Define a semantic action descriptor contract with stable event name, human summary, source surface, subject keys, sanitized context, outcome, linked trace, and retention expectation. {amp/gpt-5}
+- [x] Decide whether `base_audit_actions` needs subject columns and expression indexes, or whether semantic subject data can live in payload plus query projections for the first iteration. Decision: keep semantic subject data in payload for this iteration; no schema change. {amp/gpt-5}
+- [x] Separate raw request diagnostics from product actions: raw HTTP remains short-retention/noise-controlled; semantic actions explain business operations and are retained by default. {amp/gpt-5}
+- [x] Add trace propagation for queued jobs only if Phase 1 shows users need HTTP-to-job sequence reconstruction. Decision: defer; this plan did not need HTTP-to-job causality, and queue traces remain a separate future concern. {amp/gpt-5}
+- [x] Prototype semantic capture on User management workflows, including inline field/company edits, password changes, role assignment/removal, direct capability grant/deny/removal, and employee link/unlink/create-link actions. {amp/gpt-5}
 
-Validation: the chosen prototype workflow records a human-readable action such as “Updated user email” or “Assigned role to user,” links to its mutations by trace, and can be found from both the Actions page and the source record history.
+Validation: `php artisan test tests/Feature/Audit/AuditLogUiTest.php` proves semantic User actions are retained, include subject/surface/UI/context payload data, appear in the Product Actions filter, and link back through trace timelines opened from source history.
 
 ### Phase 7 — Verification, docs, and rollout guardrails
 
 Goal: make the new audit surfaces reliable, fast, and safe enough for normal operations.
 
-- [ ] Add focused tests for action search/filter behavior, action summary derivation, trace timeline correlation, source-history lookup, authorization gating, and redaction display.
-- [ ] Verify page weight stays within UI guidance by lazy-loading drawers and paginating/limiting histories.
-- [ ] Update Audit module docs/AGENTS guidance if new source-history or semantic-action conventions are introduced.
-- [ ] Add a rollout note describing which historical questions are answerable from old rows and which require newly captured semantic actions.
+- [x] Add focused tests for action search/filter behavior, action summary derivation, trace timeline correlation, source-history lookup, authorization gating, redaction display, and semantic action payloads. {amp/gpt-5}
+- [x] Verify page weight stays within UI guidance by lazy-loading drawers and paginating/limiting histories. `admin/audit/actions` rendered at 140.4 KB and `admin/audit/mutations` at 129.7 KB in `php artisan blb:perf:page-weights --limit=20 --max-kb=150`; the User page did not appear in the top 20 heaviest pages. Existing unrelated pages remain over 150 KB. {amp/gpt-5}
+- [x] Update Audit module docs/AGENTS guidance if new source-history or semantic-action conventions are introduced. {amp/gpt-5}
+- [x] Add a rollout note describing which historical questions are answerable from old rows and which require newly captured semantic actions. Old rows remain useful for actor/time/diff/trace/source-record history, but missing user intent, UI trigger, and semantic subject context cannot be reconstructed unless those rows were captured after semantic action rollout. {amp/gpt-5}
 
-Validation: targeted tests pass, a manual browser pass covers `admin/audit/actions`, `admin/audit/mutations`, and `admin/users/{user}`, and the plan status/checklist reflects completed work.
+Validation: `php artisan test tests/Feature/Audit tests/Feature/User/UserUiTest.php tests/Feature/Authz/RoleUiTest.php`, `./vendor/bin/pint --dirty`, `git diff --check`, and `php artisan blb:perf:page-weights --limit=20 --max-kb=150` passed for this implementation scope. Browser verification remains a normal release-review step, but no manual browser pass was claimed in this build.

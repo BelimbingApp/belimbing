@@ -16,6 +16,10 @@ final class AuditLogPresenter
     {
         $payload = $this->payload($action);
 
+        if (($payload['semantic'] ?? false) === true) {
+            return $this->semanticSummary($action, $payload);
+        }
+
         if ($action->event === 'http.request') {
             return $this->httpSummary($action, $payload);
         }
@@ -178,6 +182,47 @@ final class AuditLogPresenter
         return json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) ?: '';
     }
 
+    private function semanticSummary(AuditAction $action, array $payload): array
+    {
+        $subjectLabel = $this->stringOrNull(data_get($payload, 'subject.label'));
+        $contextLabel = $this->semanticContextLabel($payload['context'] ?? null);
+        $surface = $this->stringOrNull($payload['surface'] ?? null);
+        $uiElement = $this->stringOrNull($payload['ui_element'] ?? null);
+        $result = $this->stringOrNull($payload['result'] ?? null) ?? 'recorded';
+
+        return [
+            'source' => $this->stringOrNull($payload['source'] ?? null) ?? __('Product'),
+            'summary' => $this->stringOrNull($payload['summary'] ?? null) ?? $this->humanizeEvent($action->event),
+            'context' => $this->joinContext([$subjectLabel, $contextLabel, $surface, $uiElement]),
+            'result' => Str::headline($result),
+            'variant' => $this->semanticResultVariant($result),
+            'diagnostic' => false,
+        ];
+    }
+
+    private function semanticContextLabel(mixed $context): ?string
+    {
+        if (! is_array($context)) {
+            return null;
+        }
+
+        foreach (['role_names', 'capability_keys', 'fields'] as $key) {
+            if (isset($context[$key]) && is_array($context[$key]) && $context[$key] !== []) {
+                return implode(', ', array_map('strval', $context[$key]));
+            }
+        }
+
+        return $this->stringOrNull($context['employee_name'] ?? null);
+    }
+
+    /** @param  list<string|null>  $parts */
+    private function joinContext(array $parts): ?string
+    {
+        $context = implode(' · ', array_values(array_filter($parts)));
+
+        return $context !== '' ? $context : null;
+    }
+
     private function httpSummary(AuditAction $action, array $payload): array
     {
         $route = $this->stringOrNull($payload['route'] ?? null);
@@ -321,6 +366,18 @@ final class AuditLogPresenter
             $status >= 400 => 'warning',
             $status >= 300 => 'info',
             default => 'success',
+        };
+    }
+
+    private function semanticResultVariant(string $result): string
+    {
+        $result = strtolower($result);
+
+        return match (true) {
+            str_contains($result, 'fail'), str_contains($result, 'error') => 'danger',
+            str_contains($result, 'skip'), str_contains($result, 'noop') => 'warning',
+            str_contains($result, 'success'), str_contains($result, 'succeed'), str_contains($result, 'complete') => 'success',
+            default => 'default',
         };
     }
 
