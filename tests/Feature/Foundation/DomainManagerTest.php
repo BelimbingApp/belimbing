@@ -121,6 +121,16 @@ it('shows installed date and installer from retained audit actions', function ()
         ->assertSeeHtml('datetime="2026-06-17T10:00:00+00:00"');
 });
 
+it('hides install attribution when no retained install action exists', function (): void {
+    $this->actingAs(createAdminUser());
+
+    createManagedDomainCheckout();
+
+    Livewire::test(DomainManager::class)
+        ->assertSee(DOMAIN_MANAGER_FIXTURE_DOMAIN)
+        ->assertDontSee('Not recorded');
+});
+
 it('shows flashed domain action output in the run log overlay', function (): void {
     $this->actingAs(createAdminUser());
 
@@ -128,7 +138,7 @@ it('shows flashed domain action output in the run log overlay', function (): voi
 
     Livewire::test(DomainManager::class)
         ->assertSee('Run log')
-        ->assertSee('Last business-domain action')
+        ->assertSee('The page refreshed after the domain runtime reload')
         ->assertSee('h-72', false)
         ->assertSee('scrollHeight', false)
         ->assertSee('Line one')
@@ -222,6 +232,37 @@ it('disables and re-enables an installed domain', function (): void {
     expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeFalse();
 });
 
+it('records the disabling actor and timestamp from the manager action', function (): void {
+    $user = createAdminUser();
+    $user->forceFill([
+        'name' => 'Disable Admin',
+        'email' => 'disable.admin@example.test',
+    ])->save();
+    $this->actingAs($user);
+
+    createManagedDomainCheckout();
+
+    $timestamp = Carbon::parse('2026-06-18 08:15:00', 'UTC');
+    Carbon::setTestNow($timestamp);
+
+    Livewire::test(DomainManager::class)
+        ->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
+        ->assertRedirect(route('admin.system.update.business-domains.index'));
+
+    Carbon::setTestNow();
+
+    $action = AuditAction::query()->where('event', 'domain.disable')->firstOrFail();
+
+    expect($action->actor_type)->toBe(PrincipalType::USER->value)
+        ->and($action->actor_id)->toBe($user->id)
+        ->and($action->is_retained)->toBeTrue()
+        ->and($action->occurred_at->toIso8601String())->toBe($timestamp->toIso8601String())
+        ->and($action->payload['domain'])->toBe(DOMAIN_MANAGER_FIXTURE_DOMAIN)
+        ->and($action->payload['status'])->toBe('succeeded')
+        ->and($action->payload['actor_name'])->toBe('Disable Admin')
+        ->and($action->payload['actor_email'])->toBe('disable.admin@example.test');
+});
+
 it('disables domain action buttons while their Livewire action is running', function (): void {
     $this->actingAs(createAdminUser());
 
@@ -230,6 +271,11 @@ it('disables domain action buttons while their Livewire action is running', func
 
     Livewire::test(DomainManager::class)
         ->assertSee('wire:loading.attr="disabled"', false)
+        ->assertSee('wire:target="install,disable,enable,uninstall,openUninstall,cancelUninstall"', false)
+        ->assertDontSee('@js(', false)
+        ->assertSee('Run in progress')
+        ->assertSee('Working. The browser may show a refresh spinner near the end; that is expected.')
+        ->assertSee('After you confirm, BLB records who ran this')
         ->assertSee('Enabling…')
         ->assertSee('Opening…');
 });
@@ -259,12 +305,17 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
     createManagedDomainCheckout();
     Schema::create(DOMAIN_MANAGER_FIXTURE_TABLE, fn ($table) => $table->id());
 
+    $timestamp = Carbon::parse('2026-06-18 09:30:00', 'UTC');
+    Carbon::setTestNow($timestamp);
+
     Livewire::test(DomainManager::class)
         ->call('openUninstall', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->set('uninstallPhrase', 'uninstall zzmanaged')
         ->call('uninstall')
         ->assertHasNoErrors()
         ->assertRedirect(route('admin.system.update.business-domains.index'));
+
+    Carbon::setTestNow();
 
     expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeTrue();
@@ -276,6 +327,7 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
     expect($action->actor_type)->toBe(PrincipalType::USER->value)
         ->and($action->actor_id)->toBe($user->id)
         ->and($action->is_retained)->toBeTrue()
+        ->and($action->occurred_at->toIso8601String())->toBe($timestamp->toIso8601String())
         ->and($action->payload['domain'])->toBe(DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->and($action->payload['drop_tables'])->toBeFalse()
         ->and($action->payload['actor_name'])->toBe('Uninstall Admin');

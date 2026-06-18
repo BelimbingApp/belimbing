@@ -35,7 +35,7 @@ class User extends Authenticatable implements CompanyScoped
      *
      * @var list<string>
      */
-    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password', 'prefs'];
+    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password', 'email_verified_at', 'prefs'];
 
     /**
      * The attributes that should be hidden for serialization.
