@@ -1,6 +1,6 @@
 # base-audit-log-usability.md
 
-**Status:** Proposed — Phase 1 evidence pass complete; implementation has not started.
+**Status:** In progress — Phases 1–3 implemented and validated; source-record history remains next.
 **Last Updated:** 2026-06-18
 **Sources:**
 - User report and screenshot of `admin/audit/actions` showing generic action rows with raw URL/payload columns.
@@ -171,14 +171,14 @@ Goal: turn the Actions page into a useful investigation surface without requirin
 
 Affected pages: `admin/audit/actions`.
 
-- [ ] Replace the main raw URL/payload-heavy table with compact columns for occurred time, actor, action summary, page/context, result, trace, and retain state.
-- [ ] Derive summaries for current event families: HTTP request, auth login/logout/failed login, console command, queue processed/failed.
-- [ ] Hide diagnostic transport rows such as `default-livewire.update`, AI event streams, and media streams by default while keeping them available through an explicit diagnostics filter and always surfacing failures.
-- [ ] Expand search/filter support to include trace ID, actor, actor role/type, event family, route/path/URL fragment, IP/client, command/job names, auth email where safe, result status, and retained-only.
-- [ ] Move raw payload and full URL into a row detail drawer or detail section, not the main table.
-- [ ] Add clear empty states explaining which filters are active and whether rows may have been pruned by retention.
+- [x] Replace the main raw URL/payload-heavy table with compact columns for occurred time, actor, action summary, page/context, result, trace, and retain state. {amp/gpt-5}
+- [x] Derive summaries for current event families: HTTP request, auth login/logout/failed login, console command, queue processed/failed, plus retained domain lifecycle actions. {amp/gpt-5}
+- [x] Hide diagnostic transport rows such as `default-livewire.update`, AI event streams, and media streams by default while keeping them available through an explicit diagnostics filter and always surfacing failures. Local PostgreSQL check: default filtered Actions total dropped from about 9.7k to about 2.4k rows while Show Diagnostics retained all rows. {amp/gpt-5}
+- [x] Expand search/filter support to include trace ID, actor, actor role/type, event family, route/path/URL fragment, IP/client, command/job names, auth email where safe, result status, and retained-only. {amp/gpt-5}
+- [x] Move raw payload and full URL into the trace drawer detail section, not the main table. {amp/gpt-5}
+- [x] Add clear empty states explaining which filters are active and whether rows may have been hidden by diagnostic filtering. {amp/gpt-5}
 
-Validation: on `admin/audit/actions`, a reviewer can find an action by route/path, actor, IP, event, result, or trace without reading raw JSON in the table.
+Validation: `php artisan test tests/Feature/Audit` passed; local PostgreSQL smoke check confirmed the filtered and Show Diagnostics queries both execute.
 
 ### Phase 3 — Add trace timelines for sequence reconstruction
 
@@ -186,13 +186,13 @@ Goal: let users follow a sequence of actions and mutations from one investigatio
 
 Affected pages: `admin/audit/actions`, `admin/audit/mutations`.
 
-- [ ] Add an Audit-owned trace timeline query that fetches actions and mutations with the same `trace_id` and orders them deterministically by `occurred_at` and row id.
-- [ ] Add a trace drawer opened from action and mutation rows.
-- [ ] Render action summaries and mutation field diffs in the same timeline, with raw payload/diff detail available only when needed.
-- [ ] Show trace metadata: formatted trace ID, actor(s), first/last occurrence, row counts, and whether action context may have been pruned.
-- [ ] Keep the drawer useful when only mutations remain for a trace.
+- [x] Add an Audit-owned trace timeline query that fetches actions and mutations with the same `trace_id` and orders them deterministically by `occurred_at` and row id. {amp/gpt-5}
+- [x] Add a trace drawer opened from action and mutation rows. {amp/gpt-5}
+- [x] Render action summaries and mutation field diffs in the same timeline, with raw payload/diff detail available only when needed. {amp/gpt-5}
+- [x] Show trace metadata: formatted trace ID, actor(s), first/last occurrence, row counts, and whether action context may have been pruned. {amp/gpt-5}
+- [x] Keep the drawer useful when only mutations remain for a trace. {amp/gpt-5}
 
-Validation: starting from a row on `admin/audit/actions` or `admin/audit/mutations`, a reviewer can open a trace and see what else happened in that request/process.
+Validation: `tests/Feature/Audit/AuditLogUiTest.php` covers diagnostic hiding, raw action detail expanded by default, and opening combined action/mutation timelines from both Actions and Mutations; `php artisan test tests/Feature/Audit`, `./vendor/bin/pint --dirty`, and `git diff --check` passed. A local PostgreSQL smoke check for Actions search `users` also passed after casting `ip_address` before text search.
 
 ### Phase 4 — Add source-record history on the User page
 
