@@ -10,12 +10,15 @@ use App\Base\Locale\Middleware\ApplyLocaleContext;
 use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Company\Enums\CompanyErrorCode;
 use App\Modules\Core\Employee\Enums\EmployeeErrorCode;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -73,6 +76,34 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping();
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        $isLivewireInteraction = static fn (Request $request): bool => $request->hasHeader('X-Livewire')
+            || $request->hasHeader('X-Livewire-Navigate')
+            || str_starts_with($request->path(), 'livewire/');
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($isLivewireInteraction) {
+            if (! $isLivewireInteraction($request)) {
+                return null;
+            }
+
+            return redirect()->guest(route('login'));
+        });
+
+        $exceptions->render(function (TokenMismatchException $exception, Request $request) use ($isLivewireInteraction) {
+            if (! $isLivewireInteraction($request)) {
+                return null;
+            }
+
+            return redirect()->guest(route('login'));
+        });
+
+        $exceptions->render(function (HttpException $exception, Request $request) use ($isLivewireInteraction) {
+            if ($exception->getStatusCode() !== 401 || ! $isLivewireInteraction($request)) {
+                return null;
+            }
+
+            return redirect()->guest(route('login'));
+        });
+
         $exceptions->report(function (BlbException $exception): void {
             Log::error('BLB platform exception', [
                 'exception' => $exception::class,

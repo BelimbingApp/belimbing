@@ -1,6 +1,9 @@
 <?php
+
 namespace App\Providers;
 
+use App\Base\Foundation\Contracts\DomainRuntimeReloader;
+use App\Base\Update\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Cache;
@@ -17,7 +20,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(DomainRuntimeReloader::class, FrankenPhpDomainRuntimeReloader::class);
     }
 
     /**

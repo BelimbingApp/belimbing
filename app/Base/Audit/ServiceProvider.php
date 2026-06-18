@@ -5,13 +5,17 @@ namespace App\Base\Audit;
 use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Listeners\AuthListener;
 use App\Base\Audit\Listeners\CommandListener;
+use App\Base\Audit\Listeners\DomainLifecycleActionListener;
 use App\Base\Audit\Listeners\JobListener;
 use App\Base\Audit\Listeners\MutationListener;
 use App\Base\Audit\Middleware\AuditRequestMiddleware;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Audit\Services\AuditDomainLifecycleLedger;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Foundation\Contracts\DomainLifecycleLedger;
+use App\Base\Foundation\Events\DomainLifecycleAction;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Auth\Events\Failed;
 use Illuminate\Auth\Events\Login;
@@ -35,6 +39,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->discoverModuleAuditConfigs();
 
         $this->app->singleton(AuditBuffer::class);
+        $this->app->bind(DomainLifecycleLedger::class, AuditDomainLifecycleLedger::class);
 
         $this->app->singleton(RequestContext::class, function (): RequestContext {
             if ($this->app->runningInConsole()) {
@@ -53,6 +58,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->registerMutationListeners();
         $this->registerAuthListeners();
         $this->registerCommandListeners();
+        $this->registerDomainLifecycleListeners();
         $this->registerJobListeners();
 
         $this->app['router']->pushMiddlewareToGroup('web', AuditRequestMiddleware::class);
@@ -94,6 +100,11 @@ class ServiceProvider extends BaseServiceProvider
         }
 
         Event::listen(CommandFinished::class, CommandListener::class);
+    }
+
+    private function registerDomainLifecycleListeners(): void
+    {
+        Event::listen(DomainLifecycleAction::class, DomainLifecycleActionListener::class);
     }
 
     /**

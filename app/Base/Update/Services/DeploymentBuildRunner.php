@@ -2,6 +2,7 @@
 
 namespace App\Base\Update\Services;
 
+use App\Base\Support\PhpCli;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Process;
 
@@ -122,7 +123,7 @@ class DeploymentBuildRunner
     {
         $phar = base_path('storage/app/.devops/composer.phar');
 
-        return is_file($phar) ? [PHP_BINARY, $phar] : ['composer'];
+        return is_file($phar) ? PhpCli::current()->script($phar) : ['composer'];
     }
 
     /**

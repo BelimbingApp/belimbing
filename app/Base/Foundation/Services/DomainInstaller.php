@@ -2,8 +2,12 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\Contracts\DomainLifecycleLedger;
+use App\Base\Foundation\Contracts\DomainRuntimeReloader;
+use App\Base\Foundation\Events\DomainLifecycleAction;
 use App\Base\Settings\Models\Setting;
 use App\Base\Support\Git\GitRepository;
+use App\Base\Support\PhpCli;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
@@ -25,6 +29,8 @@ class DomainInstaller
 {
     public function __construct(
         private readonly DomainResidueScanner $scanner,
+        private readonly DomainLifecycleLedger $lifecycleLedger,
+        private readonly DomainRuntimeReloader $runtimeReloader,
     ) {}
 
     /**
@@ -53,7 +59,7 @@ class DomainInstaller
     /**
      * Installed non-Core domains with their runtime state.
      *
-     * @return list<array{name: string, modules: list<string>, disabled: bool, git: array{hasGit: bool, dirty: bool, unpushed: int}}>
+     * @return list<array{name: string, modules: list<string>, disabled: bool, installation: array{occurred_at: string, actor_type: string, actor_id: int, actor_name: string|null, actor_email: string|null, status: string|null}|null, git: array{hasGit: bool, dirty: bool, unpushed: int}}>
      */
     public function installed(): array
     {
@@ -75,8 +81,15 @@ class DomainInstaller
                 'name' => $name,
                 'modules' => $modules,
                 'disabled' => DomainState::isDisabled($name),
+                'installation' => null,
                 'git' => $this->gitState($path),
             ];
+        }
+
+        $installations = $this->lifecycleLedger->latestInstallations(array_column($domains, 'name'));
+
+        foreach ($domains as $index => $domain) {
+            $domains[$index]['installation'] = $installations[$domain['name']] ?? null;
         }
 
         return $domains;
@@ -140,6 +153,11 @@ class DomainInstaller
         $log[] = trim($clone->output."\n".$clone->error);
 
         if (! $clone->ok) {
+            event(new DomainLifecycleAction($domain, 'install', 'clone_failed', [
+                'repo' => $entry['repo'],
+                'exit_code' => $clone->exitCode,
+            ]));
+
             return ['ok' => false, 'log' => implode("\n", array_filter($log))];
         }
 
@@ -148,10 +166,17 @@ class DomainInstaller
 
         $migrate = Process::path(base_path())
             ->timeout(600)
-            ->run([PHP_BINARY, 'artisan', 'migrate', '--force']);
+            ->run(PhpCli::current()->artisan(['migrate', '--force']));
 
         $log[] = '$ php artisan migrate --force';
         $log[] = trim($migrate->output()."\n".$migrate->errorOutput());
+
+        event(new DomainLifecycleAction($domain, 'install', $migrate->successful() ? 'succeeded' : 'migration_failed', [
+            'repo' => $entry['repo'],
+            'exit_code' => $migrate->exitCode(),
+        ]));
+
+        $log = array_merge($log, $this->reloadRuntimeLog());
 
         return [
             'ok' => $migrate->successful(),
@@ -159,24 +184,38 @@ class DomainInstaller
         ];
     }
 
-    public function disable(string $domain): void
+    /**
+     * @return list<string>
+     */
+    public function disable(string $domain): array
     {
         $this->assertInstalled($domain);
 
         DomainState::disable($domain);
+
+        event(new DomainLifecycleAction($domain, 'disable', 'succeeded'));
+
+        return $this->reloadRuntimeLog();
     }
 
-    public function enable(string $domain): void
+    /**
+     * @return list<string>
+     */
+    public function enable(string $domain): array
     {
         $this->assertInstalled($domain);
 
         DomainState::enable($domain);
+
+        event(new DomainLifecycleAction($domain, 'enable', 'succeeded'));
+
+        return $this->reloadRuntimeLog();
     }
 
     /**
      * Delete the domain checkout; optionally drop the database state it claimed.
      *
-     * @return array{droppedTables: list<string>, prunedLedger: int, deletedSettings: int}
+     * @return array{droppedTables: list<string>, prunedLedger: int, deletedSettings: int, reloadLog: list<string>}
      */
     public function uninstall(string $domain, bool $dropTables): array
     {
@@ -202,15 +241,39 @@ class DomainInstaller
         DomainState::enable($domain);
 
         if (! $dropTables) {
-            return ['droppedTables' => [], 'prunedLedger' => 0, 'deletedSettings' => 0];
+            event(new DomainLifecycleAction($domain, 'uninstall', 'succeeded', [
+                'drop_tables' => false,
+                'dropped_tables' => 0,
+                'pruned_ledger' => 0,
+                'deleted_settings' => 0,
+            ]));
+
+            return [
+                'droppedTables' => [],
+                'prunedLedger' => 0,
+                'deletedSettings' => 0,
+                'reloadLog' => $this->reloadRuntimeLog(),
+            ];
         }
 
         $dropped = $this->scanner->dropTables($claimedTables);
 
-        return [
+        $result = [
             'droppedTables' => $dropped['dropped'],
             'prunedLedger' => $this->scanner->pruneLedger($ledgerEntries),
             'deletedSettings' => $this->scanner->deleteSettings($settingKeys),
+        ];
+
+        event(new DomainLifecycleAction($domain, 'uninstall', 'succeeded', [
+            'drop_tables' => true,
+            'dropped_tables' => count($result['droppedTables']),
+            'pruned_ledger' => $result['prunedLedger'],
+            'deleted_settings' => $result['deletedSettings'],
+        ]));
+
+        return [
+            ...$result,
+            'reloadLog' => $this->reloadRuntimeLog(),
         ];
     }
 
@@ -268,6 +331,14 @@ class DomainInstaller
     private function domainPath(string $domain): string
     {
         return app_path('Modules/'.$domain);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function reloadRuntimeLog(): array
+    {
+        return $this->runtimeReloader->reloadAfterDomainChange();
     }
 
     private function directoryIsEmpty(string $path): bool

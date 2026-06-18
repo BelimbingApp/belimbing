@@ -2,15 +2,16 @@
 
 namespace App\Base\System\Console\Commands;
 
+use App\Base\Support\PhpCli;
 use NunoMaduro\Collision\Adapters\Laravel\Commands\TestCommand as CollisionTestCommand;
 
 class TestCommand extends CollisionTestCommand
 {
     /**
-     * Get the PHP binary to execute.
+     * Get the PHP CLI command to execute.
      *
-     * FrankenPHP's CLI reports an empty PHP_BINARY constant. Prefer the wrapper
-     * path exported by scripts/setup-steps/15-runtime.sh when available.
+     * The shared resolver handles shell wrappers, Windows FrankenPHP sidecars,
+     * and FrankenPHP's php-cli fallback.
      *
      * @return array<int, string>
      */
@@ -18,13 +19,13 @@ class TestCommand extends CollisionTestCommand
     {
         $command = $this->testRunnerCommand();
 
-        $phpBinary = $this->resolvePhpBinary();
+        $php = PhpCli::current()->commandPrefix();
 
         if ('phpdbg' === PHP_SAPI) {
-            return [$phpBinary, '-qrr', ...$command];
+            return [$php[0], '-qrr', ...$command];
         }
 
-        return [$phpBinary, ...$command];
+        return [...$php, ...$command];
     }
 
     /**
@@ -41,16 +42,5 @@ class TestCommand extends CollisionTestCommand
         return $this->option('parallel')
             ? ['vendor/brianium/paratest/bin/paratest']
             : ['vendor/phpunit/phpunit/phpunit'];
-    }
-
-    private function resolvePhpBinary(): string
-    {
-        foreach ([getenv('PHP_BINARY'), PHP_BINARY, PHP_BINDIR.'/php', '/usr/local/bin/php'] as $candidate) {
-            if (is_string($candidate) && $candidate !== '' && is_file($candidate) && is_executable($candidate)) {
-                return $candidate;
-            }
-        }
-
-        return 'php';
     }
 }

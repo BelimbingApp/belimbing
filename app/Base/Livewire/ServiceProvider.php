@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Livewire;
 
+use App\Base\Authz\Middleware\AuthorizeCapability;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 use Livewire\Livewire;
 
@@ -24,6 +26,11 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function boot(): void
     {
+        Livewire::addPersistentMiddleware([
+            'authz',
+            AuthorizeCapability::class,
+        ]);
+
         $components = $this->app->make(ComponentDiscoveryService::class)->discover();
 
         foreach ($components as $name => $class) {

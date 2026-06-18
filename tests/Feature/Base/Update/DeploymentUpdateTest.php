@@ -1,11 +1,14 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Support\PhpCli;
 use App\Base\Update\Livewire\Deployment\Index;
 use App\Base\Update\Services\DeploymentRunHistory;
 use App\Base\Update\Services\DeploymentService;
 use App\Base\Update\Services\DistributionBundleRepository;
+use App\Base\Update\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -114,6 +117,8 @@ test('reload only triggers a graceful worker reload and records a log', function
         ->assertHasNoErrors();
 
     expect($component->get('log'))->not->toBeEmpty();
+    expect($component->get('log'))->toContain('Runtime caches cleared.');
+    expect($component->get('log'))->toContain('Runtime bootstrap warmed.');
 
     $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
 
@@ -121,6 +126,69 @@ test('reload only triggers a graceful worker reload and records a log', function
         ->and($stored)->toBeArray()
         ->and($stored['ok'])->toBeTrue()
         ->and($stored['message'])->toBe('Web workers reloaded.');
+
+    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+});
+
+test('domain runtime reload starts in a detached background command', function (): void {
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    Process::fake();
+
+    try {
+        $log = app(FrankenPhpDomainRuntimeReloader::class)->reloadAfterDomainChange();
+
+        expect($log)->toContain('Domain runtime reload scheduled in the background.');
+
+        Process::assertRan(fn ($process): bool => collect($process->command)
+            ->contains(fn (string $part): bool => str_contains($part, 'blb:domain-runtime:reload')));
+
+        expect(app(FrankenPhpDomainRuntimeReloader::class)->reloadAfterDomainChange())
+            ->toContain('Domain runtime reload is already scheduled.');
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
+});
+
+test('domain runtime reload command reloads workers without clearing runtime caches', function (): void {
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
+
+    $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0]);
+    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
+
+    expect($status)->toBe(0)
+        ->and($stored)->toBeArray()
+        ->and($stored['ok'])->toBeTrue()
+        ->and($stored['message'])->toBe('Web workers reloaded.')
+        ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
+
+    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+});
+
+test('the worker reload probes the Windows launcher admin port before the stock Caddy port', function (): void {
+    putenv('CADDY_SERVER_ADMIN_HOST');
+    putenv('CADDY_SERVER_ADMIN_PORT');
+
+    $statePath = storage_path('logs/octane-server-state.json');
+    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
+    @unlink($statePath);
+
+    try {
+        fakeDeploymentUpdateProcesses();
+        Http::fake([
+            'http://127.0.0.1:2020/config/apps/frankenphp' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+            '*' => Http::response('', 500),
+        ]);
+
+        $log = app(DeploymentService::class)->reload();
+
+        expect($log)->toContain('Web workers reloaded.');
+        Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2020/config/apps/frankenphp');
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
+    } finally {
+        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
+    }
 });
 
 test('deployment page shows the last frankenphp reload', function (): void {
@@ -155,7 +223,13 @@ test('the previous run log persists at its rest location across page visits', fu
 
     // A fresh visit still shows the last run at rest (it is session-persisted); the
     // floating panel is purely client-side and never appears on a plain page load.
-    Livewire::test(Index::class)->assertSet('log', $log);
+    Livewire::test(Index::class)
+        ->assertSet('log', $log)
+        ->assertSee('run-finished.window', false)
+        ->assertSee('runLogOpen', false)
+        ->assertSee('runLogOpen && ! dismissed', false)
+        ->assertSee('h-72', false)
+        ->assertSee('scrollToEnd', false);
 });
 
 test('manual frontend rebuild installs with the lockfile package manager and builds assets', function (): void {
@@ -336,12 +410,16 @@ test('the worker reload reads its admin port from the octane server-state file',
 
     try {
         fakeDeploymentUpdateProcesses();
-        Http::fake(['*' => Http::response('', 500)]);
+        Http::fake([
+            'http://127.0.0.1:2643/config/apps/frankenphp' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+            '*' => Http::response('', 500),
+        ]);
 
         $log = app(DeploymentService::class)->reload();
 
-        expect(collect($log)->contains(fn (string $line): bool => str_contains($line, 'http://127.0.0.1:2643/config/apps/frankenphp')))->toBeTrue()
-            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, ':2019/')))->toBeFalse();
+        expect($log)->toContain('Web workers reloaded.');
+        Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2643/config/apps/frankenphp');
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
     } finally {
         $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
     }

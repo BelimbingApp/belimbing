@@ -2,8 +2,10 @@
 
 namespace App\Base\Update\Services;
 
+use App\Base\Support\PhpCli;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 
 /**
  * Reads the deployment's git state and compares it to GitHub so the operator can
@@ -237,34 +239,49 @@ class DeploymentService
      *
      * @return list<string>
      */
-    public function reload(): array
+    public function reload(bool $clearRuntimeCaches = true): array
     {
         $log = [];
-        [$host, $port] = $this->resolveAdminEndpoint();
-        $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
+
+        if ($clearRuntimeCaches) {
+            $log[] = $this->clearRuntimeCaches();
+        }
+
+        $log[] = $this->warmRuntimeBootstrap();
+
         $webReloaded = false;
         $reloadMessage = '';
+        $adminUrl = '';
 
-        try {
-            $config = Http::timeout(3)->get($adminUrl);
+        foreach ($this->adminEndpointCandidates() as [$host, $port]) {
+            $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
 
-            if ($config->successful() && trim($config->body()) !== '') {
-                $patch = Http::withBody($config->body(), 'application/json')
-                    ->withHeaders(['Cache-Control' => 'must-revalidate'])
-                    ->timeout(3)
-                    ->patch($adminUrl);
+            try {
+                $config = Http::connectTimeout(1)->timeout(3)->get($adminUrl);
 
-                if ($patch->successful()) {
-                    $webReloaded = true;
-                    $reloadMessage = (string) __('Web workers reloaded.');
-                } else {
+                if ($config->successful() && trim($config->body()) !== '') {
+                    $patch = Http::withBody($config->body(), 'application/json')
+                        ->withHeaders(['Cache-Control' => 'must-revalidate'])
+                        ->connectTimeout(1)
+                        ->timeout(3)
+                        ->patch($adminUrl);
+
+                    if ($patch->successful()) {
+                        $webReloaded = true;
+                        $reloadMessage = (string) __('Web workers reloaded.');
+
+                        break;
+                    }
+
                     $reloadMessage = (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $patch->status()]);
+
+                    continue;
                 }
-            } else {
+
                 $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $adminUrl]);
+            } catch (\Throwable $exception) {
+                $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]);
             }
-        } catch (\Throwable $exception) {
-            $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]);
         }
 
         $log[] = $reloadMessage;
@@ -277,26 +294,75 @@ class DeploymentService
     }
 
     /**
-     * Resolve the host+port the FrankenPHP/Caddy admin API is actually listening on.
+     * Candidate host+port pairs for the FrankenPHP/Caddy admin API.
+     *
      * octane:start records it in its server-state file, so we read it from there (the
      * same source octane:reload trusts) rather than guessing — the stock Caddy admin
-     * port 2019 is wrong for our setups (octane runs the admin on e.g. 2020 on dev,
-     * 2643 on prod). Explicit env vars still win for non-Octane or unusual hosts.
+     * port 2019 is wrong for several BLB setups. Explicit env vars still win for
+     * non-Octane or unusual hosts; otherwise probe the Windows launcher's default
+     * 2020 before Caddy's stock 2019.
      *
-     * @return array{0: string, 1: string}
+     * @return list<array{0: string, 1: string}>
      */
-    private function resolveAdminEndpoint(): array
+    private function adminEndpointCandidates(): array
     {
         $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: null;
         $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: null;
-
-        if ($host !== null && $port !== null) {
-            return [$host, $port];
-        }
-
         [$stateHost, $statePort] = $this->octaneAdminEndpoint();
 
-        return [$host ?: ($stateHost ?: '127.0.0.1'), $port ?: ($statePort ?: '2019')];
+        if ($host !== null || $port !== null) {
+            return [[$host ?: ($stateHost ?: '127.0.0.1'), $port ?: ($statePort ?: '2019')]];
+        }
+
+        $candidates = [];
+
+        if ($stateHost !== null || $statePort !== null) {
+            $candidates[] = [$stateHost ?: '127.0.0.1', $statePort ?: '2019'];
+        }
+
+        $candidates[] = ['127.0.0.1', '2020'];
+        $candidates[] = ['127.0.0.1', '2019'];
+
+        $unique = [];
+        foreach ($candidates as $candidate) {
+            $unique[implode(':', $candidate)] = $candidate;
+        }
+
+        return array_values($unique);
+    }
+
+    private function clearRuntimeCaches(): string
+    {
+        Artisan::call('optimize:clear');
+
+        if (function_exists('opcache_reset')) {
+            @opcache_reset();
+        }
+
+        return (string) __('Runtime caches cleared.');
+    }
+
+    /**
+     * FrankenPHP boots many workers concurrently. When the provider list changes
+     * (for example, enabling/disabling a domain), letting every worker compile
+     * bootstrap/cache/services.php at once is unreliable on Windows. Warm it once
+     * in a normal CLI process before asking FrankenPHP to respawn the pool.
+     */
+    private function warmRuntimeBootstrap(): string
+    {
+        $warm = Process::path(base_path())
+            ->timeout(60)
+            ->run(PhpCli::current()->artisan(['about', '--only=environment']));
+
+        if ($warm->successful()) {
+            return (string) __('Runtime bootstrap warmed.');
+        }
+
+        $output = trim($warm->output()."\n".$warm->errorOutput());
+
+        return (string) __('Warning: runtime bootstrap warmup failed before worker reload: :message', [
+            'message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $warm->exitCode()]),
+        ]);
     }
 
     /**

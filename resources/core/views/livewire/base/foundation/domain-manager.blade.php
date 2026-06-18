@@ -11,10 +11,46 @@
         <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
     @endif
     @if (session('command-log'))
-        <x-ui.card>
-            <h3 class="text-sm font-medium text-ink">{{ __('Command output') }}</h3>
-            <pre class="mt-2 max-h-64 overflow-auto rounded bg-surface-subtle p-3 text-xs text-muted">{{ session('command-log') }}</pre>
-        </x-ui.card>
+        <div
+            x-data="{ open: true }"
+            x-show="open"
+            x-cloak
+            style="display: none;"
+        >
+            <div
+                x-transition.opacity
+                class="fixed inset-0 z-40 bg-black/50"
+                @click="open = false"
+            ></div>
+
+            <div class="pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">
+                <div class="pointer-events-auto w-full max-w-2xl shadow-2xl">
+                    <x-ui.card>
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <h2 class="text-base font-medium text-ink">{{ __('Run log') }}</h2>
+                                <p class="mt-1 text-xs text-muted">{{ __('Last business-domain action') }}</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                x-on:click="open = false"
+                                class="rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                                aria-label="{{ __('Dismiss run log') }}"
+                            >
+                                <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
+                            </button>
+                        </div>
+
+                        <pre
+                            x-ref="domainRunLog"
+                            x-init="$nextTick(() => { $refs.domainRunLog.scrollTop = $refs.domainRunLog.scrollHeight })"
+                            class="mt-2 h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink"
+                        >{{ session('command-log') }}</pre>
+                    </x-ui.card>
+                </div>
+            </div>
+        </div>
     @endif
 
     @if (count($available) > 0)
@@ -52,6 +88,12 @@
         <div class="grid gap-4 md:grid-cols-3">
             @forelse ($installed as $domain)
                 <x-ui.card wire:key="domain-{{ $domain['name'] }}">
+                    @php
+                        $installation = $domain['installation'];
+                        $installerName = $installation['actor_name'] ?? null;
+                        $installerEmail = $installation['actor_email'] ?? null;
+                        $installerLabel = $installerName ?: ($installerEmail ?: ($installation ? $installation['actor_type'].'#'.$installation['actor_id'] : null));
+                    @endphp
                     <div class="flex items-start justify-between gap-2">
                         <div class="font-medium text-ink">{{ $domain['name'] }}</div>
                         <div class="flex flex-wrap justify-end gap-1">
@@ -66,6 +108,27 @@
                         </div>
                     </div>
                     <div class="mt-1 text-sm text-muted">{{ __(':n module(s):', ['n' => count($domain['modules'])]) }} {{ implode(', ', $domain['modules']) }}</div>
+                    <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs text-muted">
+                        <dt class="font-medium text-ink">{{ __('Installed') }}</dt>
+                        <dd>
+                            @if ($installation)
+                                <x-ui.datetime :value="$installation['occurred_at']" />
+                            @else
+                                {{ __('Not recorded') }}
+                            @endif
+                        </dd>
+                        <dt class="font-medium text-ink">{{ __('By') }}</dt>
+                        <dd>
+                            @if ($installerLabel)
+                                <span>{{ $installerLabel }}</span>
+                                @if ($installerName && $installerEmail)
+                                    <span class="text-muted">({{ $installerEmail }})</span>
+                                @endif
+                            @else
+                                {{ __('Not recorded') }}
+                            @endif
+                        </dd>
+                    </dl>
 
                     @if ($domain['git']['dirty'] || $domain['git']['unpushed'] > 0)
                         <div class="mt-2 text-xs text-status-warning">
@@ -81,8 +144,14 @@
                     @if ($canManage)
                         <div class="mt-3 flex flex-wrap gap-2">
                             @if ($domain['disabled'])
-                                <x-ui.button size="sm" variant="secondary" wire:click="enable('{{ $domain['name'] }}')">
-                                    {{ __('Enable') }}
+                                <x-ui.button
+                                    size="sm"
+                                    variant="secondary"
+                                    wire:click="enable('{{ $domain['name'] }}')"
+                                    wire:loading.attr="disabled"
+                                >
+                                    <span wire:loading.remove wire:target="enable('{{ $domain['name'] }}')">{{ __('Enable') }}</span>
+                                    <span wire:loading wire:target="enable('{{ $domain['name'] }}')">{{ __('Enabling…') }}</span>
                                 </x-ui.button>
                             @else
                                 <x-ui.button
@@ -90,12 +159,20 @@
                                     variant="secondary"
                                     wire:click="disable('{{ $domain['name'] }}')"
                                     wire:confirm="{{ __('Disable :name? Its pages, menus, and settings disappear until re-enabled; code and data are untouched.', ['name' => $domain['name']]) }}"
+                                    wire:loading.attr="disabled"
                                 >
-                                    {{ __('Disable') }}
+                                    <span wire:loading.remove wire:target="disable('{{ $domain['name'] }}')">{{ __('Disable') }}</span>
+                                    <span wire:loading wire:target="disable('{{ $domain['name'] }}')">{{ __('Disabling…') }}</span>
                                 </x-ui.button>
                             @endif
-                            <x-ui.button size="sm" variant="danger" wire:click="openUninstall('{{ $domain['name'] }}')">
-                                {{ __('Uninstall') }}
+                            <x-ui.button
+                                size="sm"
+                                variant="danger"
+                                wire:click="openUninstall('{{ $domain['name'] }}')"
+                                wire:loading.attr="disabled"
+                            >
+                                <span wire:loading.remove wire:target="openUninstall('{{ $domain['name'] }}')">{{ __('Uninstall') }}</span>
+                                <span wire:loading wire:target="openUninstall('{{ $domain['name'] }}')">{{ __('Opening…') }}</span>
                             </x-ui.button>
                         </div>
                     @endif
@@ -119,11 +196,23 @@
                                 wire:keydown.enter="uninstall"
                             />
                             <div class="flex gap-2">
-                                <x-ui.button size="sm" variant="danger" wire:click="uninstall">
-                                    {{ __('Uninstall') }}
+                                <x-ui.button
+                                    size="sm"
+                                    variant="danger"
+                                    wire:click="uninstall"
+                                    wire:loading.attr="disabled"
+                                >
+                                    <span wire:loading.remove wire:target="uninstall">{{ __('Uninstall') }}</span>
+                                    <span wire:loading wire:target="uninstall">{{ __('Uninstalling…') }}</span>
                                 </x-ui.button>
-                                <x-ui.button size="sm" variant="secondary" wire:click="cancelUninstall">
-                                    {{ __('Cancel') }}
+                                <x-ui.button
+                                    size="sm"
+                                    variant="secondary"
+                                    wire:click="cancelUninstall"
+                                    wire:loading.attr="disabled"
+                                >
+                                    <span wire:loading.remove wire:target="cancelUninstall">{{ __('Cancel') }}</span>
+                                    <span wire:loading wire:target="cancelUninstall">{{ __('Cancelling…') }}</span>
                                 </x-ui.button>
                             </div>
                         </div>

@@ -1,7 +1,25 @@
 <div>
     <x-slot name="title">{{ __('Deployment') }}</x-slot>
 
-    <div class="space-y-section-gap" x-data="{ running: false, dismissed: false }" @keydown.escape.window="dismissed = true">
+    <div
+        class="space-y-section-gap"
+        x-data="{
+            running: false,
+            runLogOpen: false,
+            dismissed: false,
+            openRunLog() {
+                this.running = true;
+                this.runLogOpen = true;
+                this.dismissed = false;
+            },
+            closeRunLog() {
+                this.dismissed = true;
+                this.runLogOpen = false;
+            },
+        }"
+        @run-finished.window="running = false"
+        @keydown.escape.window="closeRunLog()"
+    >
         <x-ui.page-header
             :title="__('Deployment')"
             :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
@@ -48,7 +66,7 @@
                             <a href="{{ route('admin.system.update.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" :disabled="! $behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" :disabled="! $behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -124,7 +142,7 @@
                             @if ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
@@ -161,7 +179,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No composer install has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildPhp">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="openRunLog()" wire:loading.attr="disabled" wire:target="rebuildPhp">
                         <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies') }}</span>
                         <span wire:loading wire:target="rebuildPhp">{{ __('Running composer install…') }}</span>
                     </x-ui.button>
@@ -186,7 +204,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No frontend build has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="rebuildAssets">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="openRunLog()" wire:loading.attr="disabled" wire:target="rebuildAssets">
                         <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets') }}</span>
                         <span wire:loading wire:target="rebuildAssets">{{ __('Running :pm install & build…', ['pm' => $packageManager]) }}</span>
                     </x-ui.button>
@@ -212,7 +230,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No reload has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="reloadOnly" x-on:click="running = true; dismissed = false" wire:loading.attr="disabled" wire:target="reloadOnly">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="reloadOnly" x-on:click="openRunLog()" wire:loading.attr="disabled" wire:target="reloadOnly">
                         <span wire:loading.remove wire:target="reloadOnly">{{ __('Reload FrankenPHP') }}</span>
                         <span wire:loading wire:target="reloadOnly">{{ __('Reloading…') }}</span>
                     </x-ui.button>
@@ -221,10 +239,10 @@
         </x-ui.card>
 
         {{-- Run log: floats as a modal from when a run starts until the operator closes it (X, backdrop, or Esc); it then docks to rest inline at the end of the page. It never floats on a plain page visit. --}}
-        <div x-show="running && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="dismissed = true"></div>
+        <div x-show="runLogOpen && ! dismissed" x-cloak style="display: none;" x-transition.opacity class="fixed inset-0 z-40 bg-black/50" @click="closeRunLog()"></div>
 
-        <div :class="(running && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
-            <div :class="(running && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
+        <div :class="(runLogOpen && ! dismissed) ? 'pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center' : ''">
+            <div :class="(runLogOpen && ! dismissed) ? 'pointer-events-auto w-full max-w-2xl shadow-2xl' : ''">
                 <x-ui.card>
                     <div class="flex items-center justify-between gap-3">
                         <div>
@@ -251,8 +269,8 @@
                         {{-- Close exists only while floating; once it rests inline there is nothing to close. --}}
                         <button
                             type="button"
-                            x-show="running && ! dismissed"
-                            x-on:click="dismissed = true"
+                            x-show="runLogOpen && ! dismissed"
+                            x-on:click="closeRunLog()"
                             class="rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                             aria-label="{{ __('Dismiss run log') }}"
                         >
@@ -260,7 +278,25 @@
                         </button>
                     </div>
 
-                    <div x-show="running || @js($displayLog !== [])" x-cloak class="mt-2 max-h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink" aria-live="polite">
+                    <div
+                        x-data="{
+                            scrollToEnd() {
+                                this.$nextTick(() => { this.$el.scrollTop = this.$el.scrollHeight });
+                            },
+                            init() {
+                                this.scrollToEnd();
+                                this.observer = new MutationObserver(() => this.scrollToEnd());
+                                this.observer.observe(this.$el, { childList: true, subtree: true, characterData: true });
+                            },
+                            destroy() {
+                                this.observer?.disconnect();
+                            },
+                        }"
+                        x-show="runLogOpen || running || @js($displayLog !== [])"
+                        x-cloak
+                        class="mt-2 h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink"
+                        aria-live="polite"
+                    >
                         <div class="space-y-0" wire:stream="runLog">
                             @foreach ($displayLog as $line)
                                 <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>

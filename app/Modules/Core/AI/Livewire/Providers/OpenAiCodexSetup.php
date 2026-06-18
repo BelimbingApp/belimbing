@@ -4,6 +4,7 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Services\DetachedProcessLauncher;
+use App\Base\Support\PhpCli;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Livewire\Providers\Concerns\ConfiguresOpenAiCodexSetupView;
@@ -266,12 +267,11 @@ final class OpenAiCodexSetup extends ProviderSetup
             return false;
         }
 
-        $php = $this->resolvePhpBinary();
         $artisan = base_path('artisan');
         $logFile = storage_path('logs/codex-auth-listen.log');
 
         $started = app(DetachedProcessLauncher::class)->launch(
-            [$php, $artisan, 'blb:ai:codex:auth-listen', '--timeout=180'],
+            PhpCli::current()->script($artisan, ['blb:ai:codex:auth-listen', '--timeout=180']),
             base_path(),
             [],
             $logFile,
@@ -303,33 +303,6 @@ final class OpenAiCodexSetup extends ProviderSetup
         }
 
         return false;
-    }
-
-    /**
-     * Resolve the PHP CLI binary path.
-     *
-     * FrankenPHP workers set PHP_BINARY to empty string. Fall back to
-     * a versioned binary in PHP_BINDIR, then to an unversioned `php`.
-     */
-    private function resolvePhpBinary(): string
-    {
-        $binary = PHP_BINARY;
-
-        if ($binary !== '' && ! str_contains(basename($binary), 'frankenphp')) {
-            return $binary;
-        }
-
-        $versioned = PHP_BINDIR.'/php'.PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;
-        if (file_exists($versioned)) {
-            return $versioned;
-        }
-
-        $plain = PHP_BINDIR.'/php';
-        if (file_exists($plain)) {
-            return $plain;
-        }
-
-        return 'php';
     }
 
     private function isPortAvailable(int $port): bool

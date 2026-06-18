@@ -24,6 +24,7 @@ $DevopsDir = Join-Path $ProjectRootPath 'storage\app\.devops'
 $PhpConfigDir = Join-Path $DevopsDir 'php'
 $PhpIniPath = Join-Path $PhpConfigDir 'php.ini'
 $FrankenPhpWorkerPath = Join-Path $ProjectRootPath 'public\frankenphp-worker.php'
+$OctaneStatePath = Join-Path $ProjectRootPath 'storage\logs\octane-server-state.json'
 
 function Get-EnvValue {
     param(
@@ -277,6 +278,40 @@ function Start-BelimbingProcess {
     }
 }
 
+function Write-OctaneServerState {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [string] $Host,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Port,
+
+        [Parameter(Mandatory = $true)]
+        [string] $AdminHost,
+
+        [Parameter(Mandatory = $true)]
+        [int] $AdminPort
+    )
+
+    $state = [ordered]@{
+        state = [ordered]@{
+            appName = 'Belimbing'
+            host = $Host
+            port = $Port
+            adminHost = $AdminHost
+            adminPort = $AdminPort
+            workers = $null
+            maxRequests = $env:MAX_REQUESTS
+        }
+    }
+
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Path) | Out-Null
+    $state | ConvertTo-Json -Depth 4 | Set-Content -Path $Path -Encoding UTF8
+}
+
 $envPath = Join-Path $ProjectRootPath '.env'
 $frankenPhpHome = Resolve-FrankenPhpHome
 $phpExe = Join-Path $frankenPhpHome 'php.exe'
@@ -299,6 +334,7 @@ $VitePort = [int] $vitePortValue
 
 $env:Path = "$frankenPhpHome;$env:Path"
 $env:PHPRC = $PhpConfigDir
+$env:PHP_BINARY = $phpExe
 $env:APP_DOMAIN = $frontendDomain
 $env:BACKEND_DOMAIN = $backendDomain
 $env:APP_PORT = "$AppPort"
@@ -351,6 +387,8 @@ try {
         $frankenPhpArgs += '--watch'
     }
 
+    Write-OctaneServerState -Path $OctaneStatePath -Host $env:APP_BIND_HOST -Port $AppPort -AdminHost $env:CADDY_SERVER_ADMIN_HOST -AdminPort $CaddyAdminPort
+
     $processes += Start-BelimbingProcess -Name 'FrankenPHP / Octane' -FilePath $frankenPhpExe -Arguments $frankenPhpArgs
 
     if ($localHttps.Mode -eq 'internal') {
@@ -395,5 +433,6 @@ try {
             Stop-Process -Id $item.Process.Id -Force -ErrorAction SilentlyContinue
         }
     }
+    Remove-Item -Path $OctaneStatePath -Force -ErrorAction SilentlyContinue
     Pop-Location
 }

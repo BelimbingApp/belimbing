@@ -55,9 +55,10 @@ class DomainManager extends Component
     {
         $this->authorizeManage();
 
-        $installer->disable($domain);
+        $reloadLog = $installer->disable($domain);
 
         session()->flash('success', __(':domain disabled. Its code stays on disk and its data stays claimed; discovery skips it from the next page load.', ['domain' => $domain]));
+        $this->flashReloadLog($reloadLog);
 
         $this->redirectRoute('admin.system.update.business-domains.index');
     }
@@ -66,9 +67,10 @@ class DomainManager extends Component
     {
         $this->authorizeManage();
 
-        $installer->enable($domain);
+        $reloadLog = $installer->enable($domain);
 
         session()->flash('success', __(':domain enabled.', ['domain' => $domain]));
+        $this->flashReloadLog($reloadLog);
 
         $this->redirectRoute('admin.system.update.business-domains.index');
     }
@@ -117,6 +119,8 @@ class DomainManager extends Component
             ])
             : __(':domain uninstalled. Its database state was kept; reinstalling adopts it again, or clean it up under Database Residue.', ['domain' => $domain]));
 
+        $this->flashReloadLog($result['reloadLog']);
+
         $this->redirectRoute('admin.system.update.business-domains.index');
     }
 
@@ -161,5 +165,15 @@ class DomainManager extends Component
         return app(AuthorizationService::class)
             ->can(Actor::forUser($user), 'admin.system.update.business-domain.manage')
             ->allowed;
+    }
+
+    /**
+     * @param  list<string>  $log
+     */
+    private function flashReloadLog(array $log): void
+    {
+        if ($log !== []) {
+            session()->flash('command-log', implode("\n", $log));
+        }
     }
 }
