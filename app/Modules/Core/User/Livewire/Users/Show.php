@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\User\Livewire\Users;
 
 use App\Base\Authz\Capability\CapabilityRegistry;

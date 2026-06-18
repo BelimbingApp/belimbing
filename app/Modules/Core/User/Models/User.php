@@ -45,6 +45,11 @@ class User extends Authenticatable implements CompanyScoped
     protected $hidden = ['password', 'remember_token'];
 
     /**
+     * @var list<string>
+     */
+    protected array $auditRedact = ['password', 'remember_token'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -158,6 +163,14 @@ class User extends Authenticatable implements CompanyScoped
     public function principalType(): PrincipalType
     {
         return PrincipalType::USER;
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->id !== null ? ['name' => 'user', 'id' => (int) $this->id] : null;
     }
 
     /**

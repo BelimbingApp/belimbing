@@ -4,6 +4,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$user->name" :subtitle="__('User details')" :pinnable="['label' => __('Administration') . '/' . __('Users') . '/' . $user->name, 'url' => route('admin.users.show', $user)]">
             <x-slot name="actions">
+                @livewire(\App\Base\Audit\Livewire\AuditLog\SourceHistory::class, [
+                    'title' => __('History for :name', ['name' => $user->name]),
+                    'subjects' => [['name' => 'user', 'id' => $user->id]],
+                    'auditableType' => $user->getMorphClass(),
+                    'auditableId' => $user->id,
+                    'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
+                ], key('user-history-'.$user->id))
                 <form method="POST" action="{{ route('admin.impersonate.start', $user) }}">
                     @csrf
                     <x-ui.button

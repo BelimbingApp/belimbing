@@ -10,6 +10,8 @@ use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -20,6 +22,7 @@ class Mutations extends Component
     use TogglesSort;
     use WithPagination;
 
+    #[Url]
     public string $search = '';
 
     public string $filterEvent = '';
@@ -83,6 +86,7 @@ class Mutations extends Component
                 $query->where(function ($q) use ($search): void {
                     $like = '%'.strtolower($search).'%';
                     $trace = app(AuditLogPresenter::class)->normalizeTrace((string) $search);
+                    $subjectHandle = $this->parseSubjectHandle((string) $search);
 
                     $q->whereRaw('lower(coalesce(users.name, \'\')) like ?', [$like])
                         ->orWhereRaw('lower(base_audit_mutations.auditable_type) like ?', [$like])
@@ -95,6 +99,16 @@ class Mutations extends Component
                     if ($trace !== '') {
                         $q->orWhereRaw('base_audit_mutations.trace_id like ?', ['%'.$trace.'%']);
                     }
+
+                    if ($subjectHandle !== null) {
+                        $q->orWhere(function (Builder $handle) use ($subjectHandle): void {
+                            $handle->whereRaw('lower(base_audit_mutations.auditable_type) like ?', ['%'.$subjectHandle['name'].'%'])
+                                ->where('base_audit_mutations.auditable_id', $subjectHandle['id']);
+                        })->orWhere(function (Builder $handle) use ($subjectHandle): void {
+                            $handle->whereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) = ?', [$subjectHandle['name']])
+                                ->where('base_audit_mutations.subject_id', $subjectHandle['id']);
+                        });
+                    }
                 });
             })
             ->when($this->filterEvent, function ($query, $event): void {
@@ -103,6 +117,24 @@ class Mutations extends Component
             ->orderBy($sortColumn, $this->sortDir)
             ->orderByDesc('base_audit_mutations.id')
             ->paginate(25);
+    }
+
+    /** @return array{name: string, id: int}|null */
+    private function parseSubjectHandle(string $search): ?array
+    {
+        if (! str_contains($search, '#')) {
+            return null;
+        }
+
+        [$name, $id] = array_pad(explode('#', $search, 2), 2, '');
+        $name = strtolower(trim($name));
+        $id = trim($id);
+
+        if ($name === '' || $id === '' || ! ctype_digit($id)) {
+            return null;
+        }
+
+        return ['name' => $name, 'id' => (int) $id];
     }
 
     private function integerTextExpression(string $column): string

@@ -1,6 +1,6 @@
 # base-audit-log-usability.md
 
-**Status:** In progress — Phases 1–3 implemented and validated; source-record history remains next.
+**Status:** In progress — Phases 1–5 implemented; semantic action capture remains next.
 **Last Updated:** 2026-06-18
 **Sources:**
 - User report and screenshot of `admin/audit/actions` showing generic action rows with raw URL/payload columns.
@@ -115,6 +115,8 @@ If exploration confirms that request-level data cannot answer user-intent questi
 
 Use existing `trace_id` and mutation subject indexes first. The first useful version should be mostly query and presentation work; do not start with a broad schema rewrite.
 
+Audit tables are incubating during this build. Preserving local audit rows is not a constraint if a needed schema change appears. Phases 4–5 did not need new columns because direct auditable lookup and mutation subject fields already cover source-record history.
+
 Make trace the primary sequence primitive. Show trace IDs in a readable 4-4-4 form, allow copy/search by raw or formatted trace, and tolerate mutation-only timelines when old action rows have been pruned.
 
 Promote summaries over raw payloads. The main Actions table should show an action summary, route/page/path context, result/status, actor, occurred time, trace, and retain state. Full URL, IP/client, and raw payload belong in row detail.
@@ -200,13 +202,13 @@ Goal: expose mutation history at the source record without forcing users into th
 
 Affected pages: `admin/users/{user}`.
 
-- [ ] Add an Audit-owned, lazy source-history drawer component/query that accepts subject keys and a direct auditable fallback.
-- [ ] Add a compact History trigger near the User page title/header actions, with an accessible label and no initial-history HTML bloat.
-- [ ] For the first User-page version, query direct `User` model mutations by `auditable_type` / `auditable_id` and any available `subject_name = user` rows.
-- [ ] Show occurred time, actor, event, changed fields, old → new values, and trace links.
-- [ ] Provide a full Audit-page/deep-link path for larger histories once the drawer limit is reached.
+- [x] Add an Audit-owned, lazy source-history drawer component/query that accepts subject keys and a direct auditable fallback. {amp/gpt-5}
+- [x] Add a compact History trigger near the User page title/header actions, with an accessible label and no initial-history HTML bloat. {amp/gpt-5}
+- [x] For the first User-page version, query direct `User` model mutations by `auditable_type` / `auditable_id` and any available `subject_name = user` rows. {amp/gpt-5}
+- [x] Show occurred time, actor, event, changed fields, old → new values, and trace links. {amp/gpt-5}
+- [x] Provide a full Audit-page/deep-link path for larger histories once the drawer limit is reached. {amp/gpt-5}
 
-Validation: changing a user's name or email from `admin/users/{user}` results in a visible local history row showing actor, time, field, old value, new value, and trace.
+Validation: `php artisan test tests/Feature/Audit/AuditLogUiTest.php` proves a direct historical User mutation and a new User page mutation both appear in the User history drawer with actor/time/diff/trace data.
 
 ### Phase 5 — Expand subject coverage for source history
 
@@ -214,13 +216,13 @@ Goal: make source histories include the related changes users actually care abou
 
 Affected pages: `admin/users/{user}` first; later Employee, Company, and other high-value detail pages.
 
-- [ ] Add `getAuditSubject()` to `User` so direct User mutations also index as `subject_name = user`, `subject_id = user.id`.
-- [ ] Add subject metadata to user-scoped authorization assignment models so role and capability changes appear on the affected User page.
-- [ ] Add subject metadata to `ExternalAccess` if external access grants should appear in User history.
-- [ ] Review noisy/sensitive User-adjacent fields and add model-level audit exclude/redact/truncate metadata where the current diffs are not useful or safe.
-- [ ] Add focused regression coverage proving direct User updates and user role/capability changes appear in source history while redacted values stay redacted.
+- [x] Add `getAuditSubject()` to `User` so direct User mutations also index as `subject_name = user`, `subject_id = user.id`. {amp/gpt-5}
+- [x] Add subject metadata to user-scoped authorization assignment models so role and capability changes appear on the affected User page. {amp/gpt-5}
+- [x] Add subject metadata to `ExternalAccess` if external access grants should appear in User history. {amp/gpt-5}
+- [x] Review noisy/sensitive User-adjacent fields and add model-level audit exclude/redact/truncate metadata where the current diffs are not useful or safe. User password and remember token are explicitly redacted on `User`; arbitrary `ExternalAccess` metadata is redacted while permissions remain visible. {amp/gpt-5}
+- [x] Add focused regression coverage proving direct User updates and user role/capability changes appear in source history while redacted values stay redacted and users without audit permission cannot open local history or trace data. {amp/gpt-5}
 
-Validation: assigning/removing a role or direct capability for `user#3` appears in `user#3` history with the affected subject, actor, time, and trace.
+Validation: `php artisan test tests/Feature/Audit/AuditLogUiTest.php` proves direct User updates, redacted password changes, role assignments, and direct capability grants appear in the affected User history, while users without audit permission cannot open local history or trace data.
 
 ### Phase 6 — Add semantic action capture where current data is insufficient
 

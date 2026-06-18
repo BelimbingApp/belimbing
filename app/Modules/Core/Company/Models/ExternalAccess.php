@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Models;
 
 use App\Modules\Core\User\Models\User;
@@ -33,6 +34,11 @@ class ExternalAccess extends Model
         'access_expires_at',
         'metadata',
     ];
+
+    /**
+     * @var list<string>
+     */
+    protected array $auditRedact = ['metadata'];
 
     /**
      * The attributes that should be cast.
@@ -75,6 +81,14 @@ class ExternalAccess extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->user_id !== null ? ['name' => 'user', 'id' => (int) $this->user_id] : null;
     }
 
     /**
