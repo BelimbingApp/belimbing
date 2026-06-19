@@ -19,6 +19,11 @@ const DEPLOYMENT_UPDATE_COMMIT_TRAILER = "\x1fCI\x1fCurrent";
 const DEPLOYMENT_UPDATE_FRONTEND_BUILT = 'Frontend assets built.';
 const DEPLOYMENT_UPDATE_LAST_RUN_LABEL = 'Last run';
 const DEPLOYMENT_UPDATE_COMPLETE = 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.';
+const DEPLOYMENT_UPDATE_REMOTE = 'https://github.com/BelimbingApp/belimbing.git';
+const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
+const DEPLOYMENT_UPDATE_LOG_FORMAT = '--format=%H%x1f%cI%x1f%an%x1f%s';
+const DEPLOYMENT_UPDATE_FF_ONLY = '--ff-only';
+const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
 
 final class DeploymentUpdateGitLaunchException extends RuntimeException {}
 
@@ -26,13 +31,13 @@ function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?str
 {
     Process::fake(function ($process) use ($sha, $remoteError) {
         return match (gitCommandWithoutConfig($process->command)) {
-            ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
+            ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
+            ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
                 ? Process::result($sha."\trefs/heads/main")
                 : Process::result(errorOutput: $remoteError, exitCode: 1),
-            ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
             default => Process::result(),
         };
     });
@@ -125,7 +130,7 @@ test('reload only triggers a graceful worker reload and records a log', function
     expect(DB::table('base_settings')->where('key', 'system.update.frankenphp.last_reload')->exists())->toBeTrue()
         ->and($stored)->toBeArray()
         ->and($stored['ok'])->toBeTrue()
-        ->and($stored['message'])->toBe('Web workers reloaded.');
+        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED);
 
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
 });
@@ -160,7 +165,7 @@ test('domain runtime reload command reloads workers without clearing runtime cac
     expect($status)->toBe(0)
         ->and($stored)->toBeArray()
         ->and($stored['ok'])->toBeTrue()
-        ->and($stored['message'])->toBe('Web workers reloaded.')
+        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
         ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
 
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
@@ -183,7 +188,7 @@ test('the worker reload probes the Windows launcher admin port before the stock 
 
         $log = app(DeploymentService::class)->reload();
 
-        expect($log)->toContain('Web workers reloaded.');
+        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
         Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2020/config/apps/frankenphp');
         Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
     } finally {
@@ -203,7 +208,7 @@ test('deployment page shows the last frankenphp reload', function (): void {
         ->assertSee('FrankenPHP workers')
         ->assertSee(DEPLOYMENT_UPDATE_LAST_RUN_LABEL)
         ->assertSee('Workers reloaded')
-        ->assertSee('Web workers reloaded.');
+        ->assertSee(DEPLOYMENT_UPDATE_RELOADED);
 });
 
 test('the previous run log persists at its rest location across page visits', function (): void {
@@ -303,7 +308,7 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
         ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
         ->and($log)->toContain(DEPLOYMENT_UPDATE_COMPLETE);
 
-    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', '--ff-only']);
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY]);
     Process::assertRan(fn ($process): bool => in_array('dump-autoload', $process->command, true));
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
 });
@@ -315,10 +320,10 @@ test('a failed frontend rebuild halts the deployment before migrations and reloa
         }
 
         return match (gitCommandWithoutConfig($process->command)) {
-            ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-            ['git', 'pull', '--ff-only'] => Process::result('Already up to date.'),
+            ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
+            ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
+            ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => Process::result('Already up to date.'),
             default => Process::result(),
         };
     });
@@ -444,7 +449,7 @@ test('the worker reload reads its admin port from the octane server-state file',
 
         $log = app(DeploymentService::class)->reload();
 
-        expect($log)->toContain('Web workers reloaded.');
+        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
         Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2643/config/apps/frankenphp');
         Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
     } finally {
@@ -454,7 +459,7 @@ test('the worker reload reads its admin port from the octane server-state file',
 
 test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {
     Process::fake(function ($process) {
-        if (in_array('--ff-only', $process->command, true)) {
+        if (in_array(DEPLOYMENT_UPDATE_FF_ONLY, $process->command, true)) {
             return Process::result(
                 errorOutput: "From https://github.com/kiatng/blb-sbg\n   024bd2e..d45cbe4  main -> origin/main\n".
                     "hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\n".
@@ -483,8 +488,8 @@ function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
         return match (true) {
             $command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
             in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
-            $command === ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            $command === ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
+            $command === ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
+            $command === ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
             in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
             in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
             default => Process::result(),
