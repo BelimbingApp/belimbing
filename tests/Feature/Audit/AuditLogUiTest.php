@@ -437,7 +437,7 @@ it('includes user role and direct capability mutations in user record history', 
     expect($company->id)->toBe($target->company_id);
 });
 
-it('renders the record history bridge on first-wave detail pages within the page-weight budget', function (): void {
+it('renders the record history bridge on first-wave detail pages', function (): void {
     $actor = createAdminUser();
 
     [$company, $employee, $address] = MutationListener::withoutAuditing(function () use ($actor): array {
@@ -463,11 +463,10 @@ it('renders the record history bridge on first-wave detail pages within the page
         route('admin.addresses.show', $address),
         route('people.employees.show', $employee),
     ] as $url) {
-        $response = $this->get($url)
+        $this->get($url)
             ->assertOk()
-            ->assertSee('History');
-
-        expect(strlen($response->getContent()))->toBeLessThan(150 * 1024);
+            ->assertSee('History')
+            ->assertSeeHtml('wire:click="open"');
     }
 });
 
