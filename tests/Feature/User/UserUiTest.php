@@ -123,6 +123,16 @@ test('email change resets email_verified_at', function (): void {
         ->and($user->email_verified_at)->toBeNull();
 });
 
+test('user without company shows company required notice and hides role assignment', function (): void {
+    $actor = createAdminUser();
+    $user = User::factory()->create(['company_id' => null]);
+    $this->actingAs($actor);
+
+    Livewire::test('admin.users.show', ['user' => $user])
+        ->assertSee(__('Assign a company in User Details before roles or capabilities can be managed. Permissions are evaluated in a company scope.'))
+        ->assertDontSeeHtml('id="user-role-search"');
+});
+
 test('company can be changed from show page', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();

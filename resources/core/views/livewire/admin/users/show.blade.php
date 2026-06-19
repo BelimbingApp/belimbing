@@ -4,14 +4,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$user->name" :subtitle="__('User details')" :pinnable="['label' => __('Administration') . '/' . __('Users') . '/' . $user->name, 'url' => route('admin.users.show', $user)]">
             <x-slot name="actions">
-                @livewire(\App\Base\Audit\Livewire\AuditLog\SourceHistory::class, [
-                    'title' => __('History for :name', ['name' => $user->name]),
-                    'subjects' => [['name' => 'user', 'id' => $user->id]],
-                    'auditableType' => $user->getMorphClass(),
-                    'auditableId' => $user->id,
-                    'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
-                    'sourceCapability' => 'admin.user.view',
-                ], key('user-history-'.$user->id))
+                <x-ui.record-history
+                    :title="__('History for :name', ['name' => $user->name])"
+                    :subjects="[['name' => 'user', 'id' => $user->id]]"
+                    :auditable-type="$user->getMorphClass()"
+                    :auditable-id="$user->id"
+                    source-capability="admin.user.view"
+                />
                 <form method="POST" action="{{ route('admin.impersonate.start', $user) }}">
                     @csrf
                     <x-ui.button
@@ -85,6 +84,12 @@
             </h3>
             <p class="text-xs text-muted mt-0.5 mb-4">{{ __('Roles determine what this user can do. Each role grants a set of capabilities. Effective permissions show the combined result of all assigned roles.') }}</p>
 
+            @if ($user->company_id === null)
+                <x-ui.alert variant="info" class="mb-4">
+                    {{ __('Assign a company in User Details before roles or capabilities can be managed. Permissions are evaluated in a company scope.') }}
+                </x-ui.alert>
+            @endif
+
             {{-- Roles --}}
             <dl class="mb-4">
                 <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-2">{{ __('Roles') }}</dt>
@@ -115,7 +120,7 @@
             </dl>
 
             {{-- Assign Roles --}}
-            @if($canManageRoles && $availableRoles->isNotEmpty() && !$hasGrantAll)
+            @if($canManageRoles && $user->company_id !== null && $availableRoles->isNotEmpty() && !$hasGrantAll)
                 <div
                     x-data="{ open: false, roleFilter: '', selected: @entangle('selectedRoleIds') }"
                     class="mb-6"
@@ -214,7 +219,7 @@
                             </dd>
                         </dl>
                     @empty
-                        <p class="text-sm text-muted">{{ __('No permissions. Assign a role or company first.') }}</p>
+                        <p class="text-sm text-muted">{{ __('No permissions.') }}</p>
                     @endforelse
 
                     {{-- Denied capabilities --}}

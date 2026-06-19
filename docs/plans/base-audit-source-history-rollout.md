@@ -1,16 +1,17 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — backend subject coverage is in place for Wave 1; Codex-ready UI bridge and visible rollout tasks are queued.
-**Last Updated:** 2026-06-19
+**Status:** In progress — the neutral bridge and visible parent/People Wave 1 rollout are implemented; Commerce item rollout, page-by-page field strategy closeout, and later waves remain open.
+**Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
 - `app/Base/Audit/AGENTS.md` — zero-coupling Audit module rules, subject metadata contract, semantic action boundary, and UI ownership.
 - `app/Base/Audit/Livewire/AuditLog/SourceHistory.php` — current local-history Livewire island and authorization gate.
 - `app/Base/Audit/Services/AuditSourceHistory.php` — current mutation lookup by subject metadata plus direct auditable fallback.
 - `resources/core/views/livewire/admin/audit/source-history.blade.php` and `resources/core/views/livewire/admin/audit/partials/source-history-drawer.blade.php` — current trigger and drawer rendering.
-- `resources/core/views/livewire/admin/users/show.blade.php` — first source-record history integration precedent.
+- `resources/core/views/components/ui/record-history.blade.php` — neutral page-facing bridge that owns Audit Livewire mounting, authorization gating, and full-history URL generation.
+- `resources/core/views/livewire/admin/users/show.blade.php`, `resources/core/views/livewire/admin/companies/show.blade.php`, `resources/core/views/livewire/admin/employees/show.blade.php`, `resources/core/views/livewire/admin/addresses/show.blade.php`, and `app/Modules/People/Employees/Views/livewire/people/employees/show.blade.php` — first visible rollout pages using the bridge.
 - Oracle architecture check in the current Amp thread — lightweight review of rollout boundaries and risks.
-**Agents:** amp/gpt-5
+**Agents:** amp/gpt-5, codex/gpt-5
 
 ## Problem Essence
 
@@ -25,8 +26,8 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, full-history link, and source capability to the Audit `SourceHistory` Livewire island.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / `subject_id` / optional `subject_identifier`, with direct `auditable_type` / `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Remaining gaps are page-by-page field strategy review, the neutral bridge, and visible page integration.
-- Codex has finished the shared UI/UX improvement, so the next fastest parallel lane is bridge implementation, User-page migration, and first-wave page integration/browser verification.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Remaining gaps are page-by-page field strategy review, Commerce item page integration, and later-wave page selection.
+- Codex has finished the shared UI/UX improvement, neutral bridge implementation, User-page migration, and parent/People first-wave page integration. Browser and page-weight evidence is captured in the phase evidence rows as it lands.
 
 ## Top-Level Components
 
@@ -97,10 +98,10 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 
 | Wave | Page or route family | Initial disposition |
 |---|---|---|
-| Precedent | `admin/users/{user}` | Working proof; migrate from direct Audit Livewire usage to the neutral bridge after Codex UI/UX settles. |
-| 1 | `admin/companies/{company}` | Backend subject coverage added for direct company, departments, relationships, external accesses, and linked address mutations; page field-strategy review and UI bridge still pending. |
-| 1 | `admin/employees/{employee}` and `people/employees/{employee}` | Backend subject coverage added for direct employee, linked user mutations, linked address mutations, and existing roster subject expansion; page field-strategy review and UI bridge still pending. |
-| 1 | `admin/addresses/{address}` | Backend subject coverage added for direct address and addressable owner links; page field-strategy review and UI bridge still pending. |
+| Precedent | `admin/users/{user}` | Migrated from direct Audit Livewire usage to the neutral bridge; remains the regression precedent for trigger behavior, dual authorization gating, lazy drawer loading, and full-history links. |
+| 1 | `admin/companies/{company}` | Bridge added after backend subject coverage for direct company, departments, relationships, external accesses, and linked address mutations; page field-strategy closeout remains. |
+| 1 | `admin/employees/{employee}` and `people/employees/{employee}` | Bridge added to both admin Core and People workbench detail pages after backend subject coverage for direct employee, linked user mutations, linked address mutations, and existing roster subject expansion; page field-strategy closeout remains. |
+| 1 | `admin/addresses/{address}` | Bridge added after backend subject coverage for direct address and addressable owner links; page field-strategy closeout remains. |
 | 1 | `commerce/inventory/items/{item}` | Backend subject coverage added in the nested Commerce repo for direct item, fitments, photos, catalog values, listings, and listing drafts; listing/draft noisy snapshot fields excluded; page field-strategy review and UI bridge still pending. |
 | 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Operational records with existing workflow/status histories; add Audit history only after deciding how it complements, not duplicates, domain timelines. |
 | 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Framework/admin records where global audit may help operators; lower priority than business source records. |
@@ -113,11 +114,11 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 
 Goal: let Codex accelerate the UI/page work now that the shared drawer/trigger polish is complete, without duplicating backend subject-metadata work.
 
-- [ ] Codex: fold the completed UI/UX treatment into the neutral record-history bridge so page callers never reference `App\Base\Audit\*`, Audit Livewire classes, Audit routes, or Audit search syntax directly.
-- [ ] Codex: migrate `admin/users/{user}` from direct `SourceHistory` usage to the bridge and preserve the existing History trigger behavior, authorization gating, drawer empty state, trace opening, and full-history affordance.
-- [ ] Codex: add the bridge to the Core Wave 1 pages that are in the parent repo (`admin/companies/{company}`, `admin/employees/{employee}`, `people/employees/{employee}` if distinct, and `admin/addresses/{address}`), using only the already-added subject handles/direct fallbacks and source capabilities.
-- [ ] Codex: if taking `commerce/inventory/items/{item}`, treat `app/Modules/Commerce` as a nested repo and keep all Commerce changes inside that repo; otherwise leave the Commerce page for a separate nested-repo pass.
-- [ ] Codex: add/adjust UI-facing tests for the bridge and migrated pages, favoring authorization/disclosure boundaries over brittle markup snapshots.
+- [x] Codex: fold the completed UI/UX treatment into the neutral record-history bridge so page callers never reference `App\Base\Audit\*`, Audit Livewire classes, Audit routes, or Audit search syntax directly. {codex/gpt-5}
+- [x] Codex: migrate `admin/users/{user}` from direct `SourceHistory` usage to the bridge and preserve the existing History trigger behavior, authorization gating, drawer empty state, trace opening, and full-history affordance. {codex/gpt-5}
+- [x] Codex: add the bridge to the Core Wave 1 pages that are in the parent repo (`admin/companies/{company}`, `admin/employees/{employee}`, `people/employees/{employee}` if distinct, and `admin/addresses/{address}`), using only the already-added subject handles/direct fallbacks and source capabilities. {codex/gpt-5}
+- [x] Codex: if taking `commerce/inventory/items/{item}`, treat `app/Modules/Commerce` as a nested repo and keep all Commerce changes inside that repo; otherwise leave the Commerce page for a separate nested-repo pass. Commerce was intentionally left for a separate nested-repo pass. {codex/gpt-5}
+- [x] Codex: add/adjust UI-facing tests for the bridge and migrated pages, favoring authorization/disclosure boundaries over brittle markup snapshots. {codex/gpt-5}
 - [ ] Codex: run browser verification and page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows.
 
 Validation: bridge tests, migrated User history test, parent `git diff --check`, Pint on touched PHP/Blade files, page-weight checks, and manual browser evidence for the pages Codex touches.
@@ -126,12 +127,12 @@ Validation: bridge tests, migrated User history test, parent `git diff --check`,
 
 Goal: make one safe integration point that can be reused across Core, modules, and extensions without copying Audit internals.
 
-- [ ] Capture Codex's final trigger, drawer, responsive, focus-management, and empty-state choices as the shared visual contract.
-- [ ] Add a neutral framework-owned record-history bridge that accepts only plain title, subject, direct fallback, capability, and label inputs.
-- [ ] Centralize full-history URL/search generation behind the bridge or Audit implementation instead of requiring page callers to build Audit routes.
+- [x] Capture Codex's final trigger, drawer, responsive, focus-management, and empty-state choices as the shared visual contract. {codex/gpt-5}
+- [x] Add a neutral framework-owned record-history bridge that accepts only plain title, subject, direct fallback, capability, and label inputs. {codex/gpt-5}
+- [x] Centralize full-history URL/search generation behind the bridge or Audit implementation instead of requiring page callers to build Audit routes. {codex/gpt-5}
 - [ ] Ensure the bridge renders lazily or otherwise preserves the initial page-weight budget for detail pages.
-- [ ] Migrate the existing User page to the bridge and verify behavior matches the direct Audit Livewire precedent.
-- [ ] Add focused tests proving the bridge preserves the dual capability gate and does not expose history to unauthorized users.
+- [x] Migrate the existing User page to the bridge and verify behavior matches the direct Audit Livewire precedent. {codex/gpt-5}
+- [x] Add focused tests proving the bridge preserves the dual capability gate and does not expose history to unauthorized users. {codex/gpt-5}
 
 Validation: User page browser check, targeted Audit/User feature tests, and page-weight check for the User show page.
 
@@ -164,11 +165,11 @@ Evidence: `tests/Feature/Audit/AuditSourceHistorySubjectCoverageTest.php`; subje
 
 Goal: expose consistent local history on the first high-value record pages using only the bridge.
 
-- [ ] Complete or re-verify `admin/users/{user}` after migration to the bridge.
-- [ ] Add the bridge to `admin/companies/{company}` only after company-related subject coverage is present.
-- [ ] Add the bridge to `admin/employees/{employee}` and/or `people/employees/{employee}` only after employee-related subject coverage is present.
-- [ ] Add the bridge to `admin/addresses/{address}` only after owner/subject behavior is explicit.
-- [ ] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present.
+- [x] Complete or re-verify `admin/users/{user}` after migration to the bridge. {codex/gpt-5}
+- [x] Add the bridge to `admin/companies/{company}` only after company-related subject coverage is present. {codex/gpt-5}
+- [x] Add the bridge to `admin/employees/{employee}` and/or `people/employees/{employee}` only after employee-related subject coverage is present. {codex/gpt-5}
+- [x] Add the bridge to `admin/addresses/{address}` only after owner/subject behavior is explicit. {codex/gpt-5}
+- [ ] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present. Left for a separate nested-repo pass.
 - [ ] For every Wave 1 page, verify auditors can open history and trace links, non-auditors cannot see/open history, empty state is useful, and the bounded result set is clear.
 
 Validation: targeted feature tests, browser checks for each page, `git diff --check`, Pint on touched PHP files, and page-weight checks for representative pages.

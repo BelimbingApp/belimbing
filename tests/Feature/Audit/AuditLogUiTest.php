@@ -11,7 +11,9 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
@@ -433,4 +435,65 @@ it('includes user role and direct capability mutations in user record history', 
         )->toBeTrue();
 
     expect($company->id)->toBe($target->company_id);
+});
+
+it('renders the record history bridge on first-wave detail pages within the page-weight budget', function (): void {
+    $actor = createAdminUser();
+
+    [$company, $employee, $address] = MutationListener::withoutAuditing(function () use ($actor): array {
+        $company = Company::query()->findOrFail($actor->company_id);
+        $employee = Employee::factory()->create([
+            'company_id' => $company->id,
+            'full_name' => 'Bridge History Employee',
+        ]);
+        $address = Address::factory()->create([
+            'country_iso' => null,
+            'label' => 'Bridge History Address',
+        ]);
+
+        return [$company, $employee, $address];
+    });
+
+    $this->actingAs($actor);
+
+    foreach ([
+        route('admin.users.show', $actor),
+        route('admin.companies.show', $company),
+        route('admin.employees.show', $employee),
+        route('admin.addresses.show', $address),
+        route('people.employees.show', $employee),
+    ] as $url) {
+        $response = $this->get($url)
+            ->assertOk()
+            ->assertSee('History');
+
+        expect(strlen($response->getContent()))->toBeLessThan(150 * 1024);
+    }
+});
+
+it('does not mount the record history bridge without audit permission', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = MutationListener::withoutAuditing(function (): array {
+        $company = Company::factory()->create();
+        $viewer = User::factory()->create(['company_id' => $company->id]);
+        $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Bridge Hidden Target']);
+
+        return [$company, $viewer, $target];
+    });
+
+    $viewerRole = Role::query()->where('code', 'user_viewer')->whereNull('company_id')->firstOrFail();
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'role_id' => $viewerRole->id,
+    ]);
+
+    $this->actingAs($viewer)
+        ->get(route('admin.users.show', $target))
+        ->assertOk()
+        ->assertDontSee('Record history')
+        ->assertDontSeeHtml('sourceHistoryDrawerOpen')
+        ->assertDontSeeHtml('wire:click="open"');
 });

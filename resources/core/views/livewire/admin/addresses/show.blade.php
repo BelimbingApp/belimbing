@@ -4,6 +4,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Address Details')">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for address #:id', ['id' => $address->id])"
+                    :subjects="[['name' => 'address', 'id' => $address->id]]"
+                    :auditable-type="$address->getMorphClass()"
+                    :auditable-id="$address->id"
+                    source-capability="admin.address.view"
+                />
                 @if($companyContextId)
                     <a href="{{ route('admin.companies.show', $companyContextId) }}" wire:navigate class="inline-flex items-center gap-2 px-4 py-2 rounded-2xl text-accent hover:bg-surface-subtle transition-colors">
                         <x-icon name="heroicon-o-arrow-left" class="w-5 h-5" />
