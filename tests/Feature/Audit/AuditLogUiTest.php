@@ -155,6 +155,7 @@ it('opens a combined action and mutation trace timeline from actions', function 
         ->call('openTrace', 'TRCE-1234-5678')
         ->assertSet('traceDrawerOpen', true)
         ->assertSee('Resize inspector panel')
+        ->assertSee('Drag right to reduce inspector width')
         ->assertSeeHtml('role="separator"')
         ->assertSeeHtml('sm:pointer-events-none')
         ->assertSeeHtml('bg-black/50 sm:hidden')

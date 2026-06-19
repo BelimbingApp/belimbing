@@ -17,6 +17,7 @@
         panelWidth: {{ $defaultWidth }},
         isMobile: false,
         isResizing: false,
+        restoreClickTimer: null,
         PANEL_DEFAULT: {{ $defaultWidth }},
         PANEL_MIN: {{ $minWidth }},
         init() {
@@ -59,9 +60,30 @@
         resizeBy(delta) {
             this.setPanelWidth(this.panelWidth + delta, true);
         },
+        isFullWidth() {
+            return this.panelWidth >= this.maxWidth() - 8;
+        },
+        restoredWidth() {
+            return Math.max(this.PANEL_MIN, Math.min(this.PANEL_DEFAULT, this.maxWidth() - 96));
+        },
         toggleFullWidth() {
-            const isFullWidth = this.panelWidth >= this.maxWidth() - 8;
-            this.setPanelWidth(isFullWidth ? this.PANEL_DEFAULT : this.maxWidth(), true);
+            this.setPanelWidth(this.isFullWidth() ? this.restoredWidth() : this.maxWidth(), true);
+        },
+        handleRailClick() {
+            if (! this.isFullWidth()) {
+                return;
+            }
+
+            window.clearTimeout(this.restoreClickTimer);
+            this.restoreClickTimer = window.setTimeout(() => {
+                this.setPanelWidth(this.restoredWidth(), true);
+                this.restoreClickTimer = null;
+            }, 180);
+        },
+        handleRailDoubleClick() {
+            window.clearTimeout(this.restoreClickTimer);
+            this.restoreClickTimer = null;
+            this.toggleFullWidth();
         },
         persistWidth() {
             if (this.isMobile) {
@@ -150,15 +172,20 @@
         >
             <div
                 @pointerdown.prevent="startResize($event)"
-                @dblclick.prevent="toggleFullWidth()"
+                @click.prevent="handleRailClick()"
+                @dblclick.prevent="handleRailDoubleClick()"
                 @keydown.left.prevent="resizeBy($event.shiftKey ? 120 : 40)"
                 @keydown.right.prevent="resizeBy($event.shiftKey ? -120 : -40)"
                 @keydown.home.prevent="setPanelWidth(maxWidth(), true)"
                 @keydown.end.prevent="setPanelWidth(PANEL_MIN, true)"
-                class="group absolute inset-y-0 left-0 z-20 -ml-2 hidden w-4 cursor-ew-resize items-stretch justify-center focus:outline-none focus:ring-2 focus:ring-accent sm:flex"
+                @keydown.enter.prevent="toggleFullWidth()"
+                @keydown.space.prevent="toggleFullWidth()"
+                class="group absolute inset-y-0 left-0 z-20 hidden w-4 cursor-ew-resize items-stretch justify-center focus:outline-none focus:ring-2 focus:ring-accent sm:flex"
+                :class="isFullWidth() ? 'ml-0' : '-ml-2'"
                 role="separator"
                 tabindex="0"
                 aria-label="{{ __('Resize inspector panel') }}"
+                title="{{ __('Drag right to reduce inspector width') }}"
                 aria-orientation="vertical"
                 :aria-valuemin="PANEL_MIN"
                 :aria-valuemax="maxWidth()"
@@ -167,8 +194,16 @@
                 <span
                     aria-hidden="true"
                     class="my-4 w-1 rounded-full transition-colors"
-                    :class="isResizing ? 'bg-accent' : 'bg-transparent group-hover:bg-border-default group-focus:bg-border-default'"
+                    :class="isResizing || isFullWidth() ? 'bg-accent' : 'bg-transparent group-hover:bg-border-default group-focus:bg-border-default'"
                 ></span>
+                <span
+                    x-show="isFullWidth()"
+                    x-cloak
+                    aria-hidden="true"
+                    class="absolute top-4 flex size-6 items-center justify-center rounded-full border border-border-default bg-surface-card text-accent shadow-sm"
+                >
+                    <x-icon name="heroicon-o-arrows-pointing-in" class="size-3.5" />
+                </span>
             </div>
 
             {{ $slot }}
