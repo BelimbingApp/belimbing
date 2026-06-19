@@ -50,6 +50,8 @@ final class AuditTraceTimeline
                 'event' => $action->event,
                 'payload_json' => $this->presenter->payloadJson($action),
                 'url' => $action->url,
+                'ip_address' => $action->ip_address,
+                'user_agent' => $action->user_agent,
             ];
         }
 

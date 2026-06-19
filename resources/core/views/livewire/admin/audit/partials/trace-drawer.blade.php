@@ -125,13 +125,21 @@
                                         @endforelse
                                     </div>
                                 @else
-                                    @if (! empty($entry['url']) || ! empty($entry['payload_json']))
-                                        <details open class="mt-3 border-t border-border-default pt-3 text-xs text-muted">
+                                    @if (! empty($entry['url']) || ! empty($entry['ip_address']) || ! empty($entry['user_agent']) || ! empty($entry['payload_json']))
+                                        <details class="mt-3 border-t border-border-default pt-3 text-xs text-muted">
                                             <summary class="cursor-pointer font-medium text-accent hover:underline">{{ __('Raw action detail') }}</summary>
                                             @if (! empty($entry['url']))
                                                 <div class="mt-2">
                                                     <span class="font-semibold uppercase tracking-wider">{{ __('URL') }}</span>
                                                     <div class="mt-1 break-all font-mono text-ink">{{ $entry['url'] }}</div>
+                                                </div>
+                                            @endif
+                                            @if (! empty($entry['ip_address']) || ! empty($entry['user_agent']))
+                                                <div class="mt-2">
+                                                    <span class="font-semibold uppercase tracking-wider">{{ __('Client') }}</span>
+                                                    <div class="mt-1 break-all font-mono text-ink">
+                                                        {{ $entry['ip_address'] ?? '—' }}{{ ! empty($entry['user_agent']) ? ' · '.$entry['user_agent'] : '' }}
+                                                    </div>
                                                 </div>
                                             @endif
                                             @if (! empty($entry['payload_json']))

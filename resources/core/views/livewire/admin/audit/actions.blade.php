@@ -21,7 +21,7 @@
                     <option value="">{{ __('All Sources') }}</option>
                     <option value="product">{{ __('Product Actions') }}</option>
                     <option value="http">{{ __('HTTP') }}</option>
-                    <option value="auth">{{ __('Auth') }}</option>
+                    <option value="auth">{{ __('Authentication') }}</option>
                     <option value="console">{{ __('Console') }}</option>
                     <option value="queue">{{ __('Queue') }}</option>
                     <option value="domain">{{ __('Domain') }}</option>
@@ -116,11 +116,6 @@
                             <div class="truncate" title="{{ $summary['context'] ?? $action->url ?? '' }}">
                                 {{ $summary['context'] ?? '—' }}
                             </div>
-                            @if ($action->ip_address || $action->user_agent)
-                                <div class="mt-0.5 truncate text-xs" title="{{ trim(($action->ip_address ?? '').' '.($action->user_agent ?? '')) }}">
-                                    {{ $action->ip_address ?? '—' }}{{ $action->user_agent ? ' · '.$action->user_agent : '' }}
-                                </div>
-                            @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                             <x-ui.badge :variant="$summary['variant']">{{ $summary['result'] }}</x-ui.badge>

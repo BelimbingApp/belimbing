@@ -10,6 +10,7 @@
                     'auditableType' => $user->getMorphClass(),
                     'auditableId' => $user->id,
                     'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
+                    'sourceCapability' => 'admin.user.view',
                 ], key('user-history-'.$user->id))
                 <form method="POST" action="{{ route('admin.impersonate.start', $user) }}">
                     @csrf

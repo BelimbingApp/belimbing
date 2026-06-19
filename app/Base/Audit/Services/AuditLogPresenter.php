@@ -259,7 +259,7 @@ final class AuditLogPresenter
 
         return match ($action->event) {
             'auth.login' => [
-                'source' => __('Auth'),
+                'source' => __('Authentication'),
                 'summary' => __('Login'),
                 'context' => null,
                 'result' => __('Succeeded'),
@@ -267,7 +267,7 @@ final class AuditLogPresenter
                 'diagnostic' => false,
             ],
             'auth.logout' => [
-                'source' => __('Auth'),
+                'source' => __('Authentication'),
                 'summary' => __('Logout'),
                 'context' => null,
                 'result' => __('Completed'),
@@ -275,7 +275,7 @@ final class AuditLogPresenter
                 'diagnostic' => false,
             ],
             'auth.login.failed' => [
-                'source' => __('Auth'),
+                'source' => __('Authentication'),
                 'summary' => __('Failed login'),
                 'context' => $email,
                 'result' => __('Failed'),
@@ -283,7 +283,7 @@ final class AuditLogPresenter
                 'diagnostic' => false,
             ],
             default => [
-                'source' => __('Auth'),
+                'source' => __('Authentication'),
                 'summary' => $this->humanizeEvent($action->event),
                 'context' => $email,
                 'result' => __('Recorded'),

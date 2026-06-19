@@ -1,7 +1,7 @@
 # base-audit-log-usability.md
 
 **Status:** Complete — Phases 1–7 implemented and validated for the User-management rollout; older rows remain limited by the data originally captured.
-**Last Updated:** 2026-06-18
+**Last Updated:** 2026-06-20
 **Sources:**
 - User report and screenshot of `admin/audit/actions` showing generic action rows with raw URL/payload columns.
 - `app/Base/Audit/AGENTS.md` — Audit module rules and writer-coupling constraints.
@@ -16,7 +16,7 @@
 - `resources/core/views/livewire/admin/users/show.blade.php` and `app/Modules/Core/User/Models/User.php` — first source-record history candidate.
 - `app/Base/Foundation/Contracts/SemanticActionRecorder.php` — decoupled semantic action capture boundary.
 - `app/Base/Audit/Services/AuditSemanticActionRecorder.php` — Audit implementation of semantic product-action persistence.
-**Agents:** amp/gpt-5
+**Agents:** amp/gpt-5, codex/gpt-5
 
 ## Problem Essence
 
@@ -215,7 +215,7 @@ Affected pages: `admin/audit/actions`, `admin/audit/mutations`.
 - [x] Show trace metadata: formatted trace ID, actor(s), first/last occurrence, row counts, and whether action context may have been pruned. {amp/gpt-5}
 - [x] Keep the drawer useful when only mutations remain for a trace. {amp/gpt-5}
 
-Validation: `tests/Feature/Audit/AuditLogUiTest.php` covers diagnostic hiding, raw action detail expanded by default, and opening combined action/mutation timelines from both Actions and Mutations; `php artisan test tests/Feature/Audit`, `./vendor/bin/pint --dirty`, and `git diff --check` passed. A local PostgreSQL smoke check for Actions search `users` also passed after casting `ip_address` before text search.
+Validation: `tests/Feature/Audit/AuditLogUiTest.php` covers diagnostic hiding, raw action detail staying collapsed by default, and opening combined action/mutation timelines from both Actions and Mutations; `php artisan test tests/Feature/Audit`, `./vendor/bin/pint --dirty`, and `git diff --check` passed. A local PostgreSQL smoke check for Actions search `users` also passed after casting `ip_address` before text search.
 
 ### Phase 4 — Add source-record history on the User page
 
@@ -267,5 +267,6 @@ Goal: make the new audit surfaces reliable, fast, and safe enough for normal ope
 - [x] Verify page weight stays within UI guidance by lazy-loading drawers and paginating/limiting histories. `admin/audit/actions` rendered at 140.4 KB and `admin/audit/mutations` at 129.7 KB in `php artisan blb:perf:page-weights --limit=20 --max-kb=150`; the User page did not appear in the top 20 heaviest pages. Existing unrelated pages remain over 150 KB. {amp/gpt-5}
 - [x] Update Audit module docs/AGENTS guidance if new source-history or semantic-action conventions are introduced. {amp/gpt-5}
 - [x] Add a rollout note describing which historical questions are answerable from old rows and which require newly captured semantic actions. Old rows remain useful for actor/time/diff/trace/source-record history, but missing user intent, UI trigger, and semantic subject context cannot be reconstructed unless those rows were captured after semantic action rollout. {amp/gpt-5}
+- [x] Fix review findings from the rollout: avoid the Laravel `auth` translation-key collision, keep raw action detail collapsed by default with client diagnostics in the drawer, and require source-page view capability plus audit-log capability for local history. {codex/gpt-5}
 
-Validation: `php artisan test tests/Feature/Audit tests/Feature/User/UserUiTest.php tests/Feature/Authz/RoleUiTest.php`, `./vendor/bin/pint --dirty`, `git diff --check`, and `php artisan blb:perf:page-weights --limit=20 --max-kb=150` passed for this implementation scope. Browser verification remains a normal release-review step, but no manual browser pass was claimed in this build.
+Validation: `php artisan test tests/Feature/Audit tests/Feature/User/UserUiTest.php tests/Feature/Authz/RoleUiTest.php`, `./vendor/bin/pint --dirty`, `git diff --check`, and `php artisan blb:perf:page-weights --limit=20 --max-kb=150` passed for the original implementation scope. On 2026-06-20, the review-fix pass reran the same affected test bundle, `./vendor/bin/pint --dirty`, `git diff --check`, and `php artisan blb:perf:page-weights --limit=20 --max-kb=150`; audit pages stayed under budget (`admin/audit/actions` 134 KB, `admin/audit/mutations` 123.8 KB), while five unrelated pages remained over 150 KB. Browser verification remains a normal release-review step, but no manual browser pass was claimed in this build.

@@ -29,6 +29,8 @@ class SourceHistory extends Component
 
     public string $buttonLabel = '';
 
+    public string $sourceCapability = '';
+
     public function open(): void
     {
         if (! $this->canViewAuditHistory()) {
@@ -69,8 +71,17 @@ class SourceHistory extends Component
             return false;
         }
 
-        return app(AuthorizationService::class)
-            ->can(Actor::forUser($authUser), 'admin.audit.log.list')
-            ->allowed;
+        if ($this->sourceCapability === '') {
+            return false;
+        }
+
+        $authorization = app(AuthorizationService::class);
+        $actor = Actor::forUser($authUser);
+
+        if (! $authorization->can($actor, 'admin.audit.log.list')->allowed) {
+            return false;
+        }
+
+        return $authorization->can($actor, $this->sourceCapability)->allowed;
     }
 }

@@ -40,6 +40,7 @@ function auditLogUiUserHistoryParams(User $user): array
         'auditableType' => $user->getMorphClass(),
         'auditableId' => $user->id,
         'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
+        'sourceCapability' => 'admin.user.view',
     ];
 }
 
@@ -155,7 +156,8 @@ it('opens a combined action and mutation trace timeline from actions', function 
         ->assertSet('traceDrawerOpen', true)
         ->assertSee('TRCE-1234-5678')
         ->assertSee('GET admin.users.show')
-        ->assertSeeHtml('<details open')
+        ->assertSee('Raw action detail')
+        ->assertDontSeeHtml('<details open')
         ->assertSee('User#'.$actor->id)
         ->assertSee('email')
         ->assertSee('old@example.com')
@@ -310,6 +312,50 @@ it('does not expose source history or trace data without audit permission', func
         ->assertSet('traceTimeline', [])
         ->assertDontSee('hidden-old@example.com')
         ->assertDontSee('hidden-new@example.com');
+});
+
+it('requires source page view permission in addition to audit permission', function (): void {
+    setupAuthzRoles();
+
+    [$company, $viewer, $target] = MutationListener::withoutAuditing(function (): array {
+        $company = Company::factory()->create();
+        $viewer = User::factory()->create(['company_id' => $company->id]);
+        $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Source Hidden Target']);
+
+        return [$company, $viewer, $target];
+    });
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'capability_key' => 'admin.audit.log.list',
+        'is_allowed' => true,
+    ]);
+
+    auditLogUiInsertMutation([
+        'actor_id' => $viewer->id,
+        'auditable_id' => $target->id,
+        'old_values' => ['email' => 'source-hidden-old@example.com'],
+        'new_values' => ['email' => 'source-hidden-new@example.com'],
+        'trace_id' => 'NOVIEW123456',
+    ]);
+
+    $this->actingAs($viewer);
+
+    Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target))
+        ->assertDontSeeHtml('wire:click="open"')
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', false)
+        ->assertSet('sourceHistory', [])
+        ->assertDontSee('source-hidden-old@example.com')
+        ->assertDontSee('source-hidden-new@example.com')
+        ->call('openTrace', 'NOVIEW-1234-56')
+        ->assertSet('traceDrawerOpen', false)
+        ->assertSet('selectedTraceId', '')
+        ->assertSet('traceTimeline', [])
+        ->assertDontSee('source-hidden-old@example.com')
+        ->assertDontSee('source-hidden-new@example.com');
 });
 
 it('includes user role and direct capability mutations in user record history', function (): void {
