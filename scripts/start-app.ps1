@@ -284,7 +284,7 @@ function Write-OctaneServerState {
         [string] $Path,
 
         [Parameter(Mandatory = $true)]
-        [string] $Host,
+        [string] $BindHost,
 
         [Parameter(Mandatory = $true)]
         [int] $Port,
@@ -299,7 +299,7 @@ function Write-OctaneServerState {
     $state = [ordered]@{
         state = [ordered]@{
             appName = 'Belimbing'
-            host = $Host
+            host = $BindHost
             port = $Port
             adminHost = $AdminHost
             adminPort = $AdminPort
@@ -387,7 +387,7 @@ try {
         $frankenPhpArgs += '--watch'
     }
 
-    Write-OctaneServerState -Path $OctaneStatePath -Host $env:APP_BIND_HOST -Port $AppPort -AdminHost $env:CADDY_SERVER_ADMIN_HOST -AdminPort $CaddyAdminPort
+    Write-OctaneServerState -Path $OctaneStatePath -BindHost $env:APP_BIND_HOST -Port $AppPort -AdminHost $env:CADDY_SERVER_ADMIN_HOST -AdminPort $CaddyAdminPort
 
     $processes += Start-BelimbingProcess -Name 'FrankenPHP / Octane' -FilePath $frankenPhpExe -Arguments $frankenPhpArgs
 
