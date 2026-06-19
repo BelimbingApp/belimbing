@@ -38,7 +38,7 @@
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ collect([$address->line1, $address->locality, $address->country_iso])->filter()->implode(', ') }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted"
-                                    x-data="{ editing: false, selected: @js($address->pivot->kind ?? []) }"
+                                    x-data="{ editing: false, original: @js(array_values((array) ($address->pivot->kind ?? []))), selected: @js(array_values((array) ($address->pivot->kind ?? []))) }"
                                 >
                                     <div x-show="!editing" @click="editing = true" class="group flex items-center gap-1.5 cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-surface-subtle">
                                         <div class="flex flex-wrap gap-1">
@@ -58,7 +58,7 @@
                                         @endforeach
                                         <div class="flex items-center gap-2 mt-1">
                                             <x-ui.button size="sm" @click="$wire.saveAddressKinds({{ $address->id }}, selected); editing = false">{{ __('Save') }}</x-ui.button>
-                                            <x-ui.button size="sm" variant="ghost" @click="editing = false; selected = @js($address->pivot->kind ?? [])">{{ __('Cancel') }}</x-ui.button>
+                                            <x-ui.button size="sm" variant="ghost" @click="editing = false; selected = [...original]">{{ __('Cancel') }}</x-ui.button>
                                         </div>
                                     </div>
                                 </td>

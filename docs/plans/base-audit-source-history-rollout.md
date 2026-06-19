@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge and visible Wave 1 rollout are implemented across parent, People, and Commerce; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
+**Status:** In progress — the neutral bridge is live on Wave 1 plus numeric-key IT/Quality Wave 2 detail pages; manual browser verification, route-specific page weights, page-by-page field strategy closeout, string-key support, and later waves remain open.
 **Last Updated:** 2026-06-19
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -27,7 +27,7 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / `subject_id` / optional `subject_identifier`, with direct `auditable_type` / `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR detail pages now have numeric-key Wave 2 coverage. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, string-key subjects, and later-wave page selection.
 - Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, and first-wave page integration; automated evidence is captured below, while manual browser spot checks remain open.
 
 ## Top-Level Components
@@ -104,8 +104,8 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 | 1 | `admin/employees/{employee}` and `people/employees/{employee}` | Bridge added to both admin Core and People workbench detail pages after backend subject coverage for direct employee, linked user mutations, linked address mutations, and existing roster subject expansion; page field-strategy closeout remains. |
 | 1 | `admin/addresses/{address}` | Bridge added after backend subject coverage for direct address and addressable owner links; page field-strategy closeout remains. |
 | 1 | `commerce/inventory/items/{item}` | Backend subject coverage added in the nested Commerce repo for direct item, fitments, photos, catalog values, listings, and listing drafts; listing/draft noisy snapshot fields excluded; bridge is present on the detail page and page field-strategy closeout remains. |
-| 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Operational records with existing workflow/status histories; add Audit history only after deciding how it complements, not duplicates, domain timelines. |
-| 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Framework/admin records where global audit may help operators; lower priority than business source records. |
+| 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Bridge added after direct subject coverage; Audit history complements workflow timelines by exposing field-level diffs and trace links. SCAR mutations also expand into parent NCR history. |
+| 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Framework/admin records where global audit may help operators; Workflow is numeric-key and still lower priority, while Outbound Exchange is deferred until the Audit source-history contract supports string IDs. |
 | 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Use only where a stable one-record detail context exists. Do not add one history Livewire island per table row or roster cell. |
 | Deferred | System logs, database-table viewers, UI reference, generic settings/list pages | Not source-record history targets unless a future phase identifies a stable auditable record and business value. |
 
@@ -183,13 +183,14 @@ Evidence: parent Audit bridge tests passed; Commerce item detail trigger passed 
 
 Goal: add Audit history where it complements existing status/audit timelines rather than creating two competing histories.
 
-- [ ] Review IT ticket history, Quality NCR/SCAR history, Workflow detail, and Integration outbound-exchange detail pages for existing domain timelines.
-- [ ] Decide the local Audit drawer's job on each page: field-level data changes, security trace, workflow transition provenance, or operator diagnostics.
-- [ ] Add missing subject metadata, related entries, and field strategies for selected Wave 2 records.
-- [ ] Add the bridge only where the page has a stable record context and the Audit drawer adds information not already present in the domain timeline.
+- [x] Review IT ticket history and Quality NCR/SCAR history for existing domain timelines. {amp/gpt-5}
+- [x] Decide the local Audit drawer's job on IT Ticket/NCR/SCAR pages: field-level data changes and security trace links, not replacement workflow timelines. {amp/gpt-5}
+- [x] Add missing subject metadata for IT Ticket, NCR, and SCAR; SCAR mutations expand into parent NCR history. {amp/gpt-5}
+- [x] Add the bridge to IT Ticket, NCR, and SCAR pages where the page has a stable record context and the Audit drawer adds field-level history not already present in the workflow timeline. {amp/gpt-5}
+- [ ] Review Workflow detail and Integration outbound-exchange detail pages for existing operator diagnostics; defer Outbound Exchange visible rollout until string-key subjects/direct fallback are supported.
 - [ ] Add semantic actions for status transitions or workflow commands where mutation diffs alone do not explain intent.
 
-Validation: one browser check per operational pattern, domain lifecycle tests, and trace-timeline tests where semantic actions are added.
+Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngineTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; nested Operation `git diff --check`.
 
 ### Phase 6 — Extend to workbenches and private extensions carefully
 
