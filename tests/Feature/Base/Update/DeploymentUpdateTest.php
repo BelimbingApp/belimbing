@@ -59,6 +59,40 @@ function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
     ]);
 }
 
+function withDeploymentOctaneState(?array $state, Closure $callback): void
+{
+    putenv('CADDY_SERVER_ADMIN_HOST');
+    putenv('CADDY_SERVER_ADMIN_PORT');
+
+    $statePath = storage_path('logs/octane-server-state.json');
+    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
+
+    $state === null
+        ? @unlink($statePath)
+        : file_put_contents($statePath, json_encode($state));
+
+    try {
+        $callback();
+    } finally {
+        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
+    }
+}
+
+function expectDeploymentReloadUsesAdminEndpoint(string $url): void
+{
+    fakeDeploymentUpdateProcesses();
+    Http::fake([
+        $url => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+        '*' => Http::response('', 500),
+    ]);
+
+    $log = app(DeploymentService::class)->reload();
+
+    expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
+    Http::assertSent(fn ($request): bool => $request->url() === $url);
+    Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
+}
+
 test('deployment page lists Distribution Bundles with status for admins', function (): void {
     $user = createAdminUser();
     fakeDeploymentUpdateProcesses();
@@ -178,28 +212,10 @@ test('domain runtime reload command reloads workers without clearing runtime cac
 });
 
 test('the worker reload probes the Windows launcher admin port before the stock Caddy port', function (): void {
-    putenv('CADDY_SERVER_ADMIN_HOST');
-    putenv('CADDY_SERVER_ADMIN_PORT');
-
-    $statePath = storage_path('logs/octane-server-state.json');
-    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
-    @unlink($statePath);
-
-    try {
-        fakeDeploymentUpdateProcesses();
-        Http::fake([
-            'http://127.0.0.1:2020/config/apps/frankenphp' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
-            '*' => Http::response('', 500),
-        ]);
-
-        $log = app(DeploymentService::class)->reload();
-
-        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
-        Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2020/config/apps/frankenphp');
-        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
-    } finally {
-        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
-    }
+    withDeploymentOctaneState(
+        null,
+        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2020/config/apps/frankenphp')
+    );
 });
 
 test('deployment page shows the last frankenphp reload', function (): void {
@@ -433,28 +449,10 @@ test('update reports reload problems as warnings instead of clean completion', f
 test('the worker reload reads its admin port from the octane server-state file', function (): void {
     // No env override → the port must come from octane's recorded state, not the
     // stock Caddy default of 2019 (which is the wrong port for our deployments).
-    putenv('CADDY_SERVER_ADMIN_HOST');
-    putenv('CADDY_SERVER_ADMIN_PORT');
-
-    $statePath = storage_path('logs/octane-server-state.json');
-    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
-    file_put_contents($statePath, json_encode(['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]]));
-
-    try {
-        fakeDeploymentUpdateProcesses();
-        Http::fake([
-            'http://127.0.0.1:2643/config/apps/frankenphp' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
-            '*' => Http::response('', 500),
-        ]);
-
-        $log = app(DeploymentService::class)->reload();
-
-        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
-        Http::assertSent(fn ($request): bool => $request->url() === 'http://127.0.0.1:2643/config/apps/frankenphp');
-        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
-    } finally {
-        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
-    }
+    withDeploymentOctaneState(
+        ['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]],
+        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643/config/apps/frankenphp')
+    );
 });
 
 test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {
