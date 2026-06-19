@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-06-19
 
 ## Overview
 
@@ -12,7 +12,8 @@ To manage this complexity, the framework enforces:
 1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
 3.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
-4.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
+4.  **Source-Declared Schema Incubation**: To let local/test databases rebuild in-progress schema while production/staging only run explicit, forward-safe changes.
+5.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
 
 ---
 
@@ -47,14 +48,16 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 ### Module Identification (MM_DD)
 
 Within each prefix range, the `MM_DD` component identifies the module. Additional migrations for the **same** module reuse that `YYYY_MM_DD` prefix and differ only in the trailing **`HHMMSS`** segment (for example `000000`, then `000001`) — do not advance `MM_DD` as if it were a calendar day.
-*   **Base (0100):** `0100_01_01` (Database), `0100_01_03` (Events)
+*   **Database infrastructure (0001):** `0001_01_01` (Database registry tables)
+*   **Base (0100):** `0100_01_03` (Events), `0100_01_11` (Authz)
 *   **Core foundations (0200):** `0200_01_03` (Geonames), `0200_01_09` (Employee), `0200_01_20` (User)
 
 **Example ordering:**
-1.  `0100_01_01_000000_create_base_database_seeders_table.php` (Base: seeder registry)
-2.  `0200_01_03_000000_create_geonames_countries_table.php` (Core: Geonames)
-3.  `0200_01_20_000000_create_users_table.php` (Core: User)
-4.  Root `database/migrations/` (cache, jobs, sessions) is always included.
+1.  `0001_01_01_000000_create_base_database_tables_table.php` (Base: table registry)
+2.  `0001_01_01_000001_create_base_database_seeders_table.php` (Base: seeder registry)
+3.  `0200_01_03_000000_create_geonames_countries_table.php` (Core: Geonames)
+4.  `0200_01_20_000000_create_users_table.php` (Core: User)
+5.  Root `database/migrations/` (cache, jobs, sessions) is always included.
 
 ### Table Naming Conventions
 
@@ -79,11 +82,26 @@ BLB uses database registries to track module-owned database assets.
 
 `base_database_seeders` records seeders registered by migrations via `registerSeeder()` in `up()` and `unregisterSeeder()` in `down()`. Seeders can also be discovered from module `Database/Seeders/` when seeding runs. States: `pending` → `running` → `completed` | `failed` | `skipped`; completed seeders are skipped on later runs.
 
+`base_database_migration_sources` records source fingerprints for applied migrations whose source state must stay aligned with a non-disposable database. It is populated for applied source-declared incubating migrations after successful `migrate` runs. The migration name remains the ledger identity; the source fingerprint lets BLB distinguish "already applied but still incubating" from "already applied and source-edited in a way production will not rerun."
+
 For registry implementation details, code examples, execution flow, dev vs production seeders, and CLI, see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md) (Table Registry, SeederRegistry, RegistersSeeders, Seeding Behavior, Development vs. Production Seeders, Development Workflow).
 
 ---
 
-## 4. PostgreSQL Identifier Guard
+## 4. Incubating Schema Across Environments
+
+Migration files can declare in-progress schema with `IncubatingSchema`. The source marker has different operational meaning by environment:
+
+- **Local/testing:** `migrate --dev` may drop and rebuild the migration's declared tables, clear the affected migration ledger rows, then run Laravel's normal migrator. This is the schema-noise reduction path for development.
+- **Production/staging:** plain `migrate` never performs incubating rebuilds. It classifies source-declared incubating files before native migration. Applied incubating migrations are allowed, warned, and fingerprinted. Pending incubating migrations are blocked unless the deployment has an instance-local approval.
+
+The production/staging guard uses the Laravel `migrations` table as the applied/pending source of truth. A live table without a matching migration ledger row is not considered applied. Applied incubating migrations with no previous fingerprint are baselined on the first successful guarded migrate. If the file hash later changes while the migration is still applied, the guard blocks because Laravel will not rerun that source file on the live database; restore the recorded source or carry the change in a new forward migration.
+
+Instance-local approvals are a break-glass mechanism for rare production-only validation. They are stored under `storage/app/.devops/`, are not committed, and match the exact migration name, relative path, source SHA-256, environment, connection, driver, and database identifier. The approval command requires a backup ID/reference and reason, writes an expiring one-time approval, and the migration command consumes it after a successful run. Approvals are exact records, not glob patterns or owner-wide exception lists. When `migrate --database=<connection>` targets a non-default connection, the approval must be created with the same `--database` option so PostgreSQL, SQLite, and future drivers remain isolated from each other.
+
+---
+
+## 5. PostgreSQL Identifier Guard
 
 PostgreSQL limits identifiers to 63 bytes and silently truncates overlong names. BLB treats that as a migration-time schema error rather than allowing truncated table, column, index, or constraint names to be created.
 
@@ -93,7 +111,7 @@ The guarded path covers Laravel schema builder SQL and raw DDL executed with `DB
 
 ---
 
-## 5. Directory Structure
+## 6. Directory Structure
 
 All database assets live within their module to support portability.
 
@@ -115,7 +133,7 @@ app/Modules/Core/Geonames/
 
 ---
 
-## 6. Migration Registry
+## 7. Migration Registry
 
 This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique `MM_DD` identifier within its owner range.
 
@@ -212,7 +230,7 @@ When adding a module, choose the owner first, reserve the next `MM_DD` that pres
 
 ---
 
-## 7. Related Documentation
+## 8. Related Documentation
 
 -   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
 -   **docs/architecture/module-system.md** — Full project directory layout.

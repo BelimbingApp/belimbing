@@ -65,6 +65,7 @@ describe('SQL validation', function () {
     })->with([
         'migrations',
         'base_database_tables',
+        'base_database_migration_sources',
         'base_database_seeders',
         'authz_roles',
         'authz_capabilities',

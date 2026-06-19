@@ -1,9 +1,9 @@
 # Database Schema Rebuild Contract
 
-**Status:** Identified
-**Last Updated:** 2026-05-24
+**Status:** In progress
+**Last Updated:** 2026-06-19
 **Sources:** `AGENTS.md`, `docs/architecture/database.md`, `app/Base/Database/AGENTS.md`, `app/Base/Database/Console/Commands/FreshCommand.php`, `app/Base/Database/Console/Commands/MigrateCommand.php`, `app/Base/Database/Models/TableRegistry.php`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, 2026-05-24 schema workflow discussion
-**Agents:** {codex/gpt-5}
+**Agents:** {codex/gpt-5}, {amp}
 
 ## Problem Essence
 
@@ -121,9 +121,17 @@ All BLB coding work is expected to be carried out by coding agents, so the schem
 
 This strengthens the choice to keep the normal path on `php artisan migrate` and `php artisan migrate --dev`. Every extra BLB-only command or local UI toggle is another hidden ritual an agent can miss. If BLB needs a helper, it should guide or edit the same source-local metadata rather than becoming a second policy surface.
 
+### D9: Production incubation is stateful, not globally blocked
+
+The first production guard blocked every source-declared incubating migration, even when the migration was already recorded in Laravel's `migrations` table. That protects against mutable source drift but also traps ordinary deploys after the guard is introduced to a database that already has incubating schema.
+
+The implemented policy is stateful: pending incubating migrations remain blocked outside local/testing; applied incubating migrations are allowed with a warning and a source fingerprint baseline. If the applied source hash later changes, production blocks because Laravel will not rerun that migration; restore the recorded source or ship a new forward migration. Rare production-only validation uses an instance-local, exact-hash approval stored under `storage/`, requiring a backup reference and reason. Approvals bind to the selected Laravel connection, driver, and database identifier so SQLite, PostgreSQL, and future drivers remain isolated. This avoids committed allow-lists or broad owner/module globs that would affect other licensee productions.
+
 ## Public Contract
 
 `php artisan migrate` runs pending migrations with BLB module discovery. It is the production/staging command.
+
+Outside local/testing, `php artisan migrate` classifies source-declared incubating migrations before native migration. Applied incubating migrations are allowed and fingerprinted; pending incubating migrations are blocked unless an exact local approval exists; applied hash drift is blocked.
 
 `php artisan migrate --dev` is local-only. Before native migration, it drops and rebuilds source-declared incubating migration scopes, then continues through Laravel's migrator and development seeding behavior.
 
@@ -205,3 +213,13 @@ Goal: finish the conceptual migration.
 - [x] Remove the legacy local stability column after source declarations become authoritative.
 - [x] Remove `blb:table:unstable` from the steady-state workflow and keep only a deprecated git-tracked compatibility list while other installations adopt migration-local incubating markers.
 - [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
+
+### Phase 8 - Make production incubation stateful
+
+Goal: keep production deploys safe without blocking already-applied incubating schema on every future run.
+
+- [x] Allow applied source-declared incubating migrations on non-disposable databases while warning that production will not rebuild them. {amp}
+- [x] Record source fingerprints for applied incubating migrations and block later hash drift. {amp}
+- [x] Keep pending incubating migrations blocked by default outside local/testing. {amp}
+- [x] Add instance-local, exact-hash, expiring approvals for rare pending incubating production runs. {amp}
+- [x] Update database architecture and agent guidance to describe the new production guard contract. {amp}

@@ -432,6 +432,12 @@ function cleanupIncubatingTestMigration(string $relativeDir, string $file, strin
         ->where('migration', str_replace('.php', '', $file))
         ->delete();
 
+    if (Schema::hasTable('base_database_migration_sources')) {
+        DB::table('base_database_migration_sources')
+            ->where('migration_name', str_replace('.php', '', $file))
+            ->delete();
+    }
+
     $path = base_path($relativeDir.'/'.$file);
 
     if (is_file($path)) {

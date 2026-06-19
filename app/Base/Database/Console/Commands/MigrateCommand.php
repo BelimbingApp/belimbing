@@ -8,7 +8,9 @@ use App\Base\Database\Exceptions\CircularSeederDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Seeders\DevSeeder;
+use App\Base\Database\Services\IncubatingSchemaApprovalRepository;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Database\Services\IncubatingSchemaProductionPolicy;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
@@ -69,48 +71,120 @@ class MigrateCommand extends IlluminateMigrateCommand
 
         $this->loadAllModuleMigrations();
 
-        if (! $this->option('dev') && $this->incubatingSchemaIsBlockedHere()) {
-            return Command::FAILURE;
+        $incubatingReport = null;
+        $productionPolicy = app(IncubatingSchemaProductionPolicy::class);
+        $connectionName = $this->selectedDatabaseConnection();
+
+        if (! $this->option('dev') && ! $this->incubatingSchemaIsDisposableHere()) {
+            $incubatingReport = $productionPolicy->evaluate($this->getMigrationPaths(), $connectionName);
+
+            if ($this->reportIncubatingSchemaBlocks($incubatingReport)) {
+                return Command::FAILURE;
+            }
+
+            $this->reportIncubatingSchemaWarnings($incubatingReport);
         }
 
-        return $this->guardPostgresMigrationIdentifiers(
-            $this->option('database'),
-            fn (): int => parent::handle(),
-        );
+        try {
+            return $this->guardPostgresMigrationIdentifiers(
+                $this->option('database'),
+                fn (): int => parent::handle(),
+            );
+        } finally {
+            if ($incubatingReport !== null && ! $this->option('pretend')) {
+                $productionPolicy->recordAppliedIncubatingSources($this->getMigrationPaths(), $connectionName);
+                app(IncubatingSchemaApprovalRepository::class)->consume(
+                    $productionPolicy->appliedFindings($incubatingReport['approved'], $connectionName),
+                    $connectionName,
+                );
+            }
+        }
     }
 
     /**
-     * Block plain `migrate` from touching incubating schema on a non-disposable
-     * database.
-     *
-     * Incubating migrations are edited in place and rebuilt locally with
-     * `migrate --dev`; that drop-and-rebuild flow is local-only. Once a migration
-     * is recorded on a real database, later in-place edits silently never re-apply,
-     * so incubating schema must be graduated (the `IncubatingSchema` marker removed)
-     * before it reaches production or staging. Local and testing databases are
-     * disposable, so the marker is allowed there.
+     * Local and testing databases are disposable, so source-declared incubating
+     * schema is allowed there. Non-disposable databases use the production policy.
      */
-    private function incubatingSchemaIsBlockedHere(): bool
+    private function incubatingSchemaIsDisposableHere(): bool
     {
-        if (app()->environment('local', 'testing')) {
+        return app()->environment('local', 'testing');
+    }
+
+    private function selectedDatabaseConnection(): ?string
+    {
+        $connection = $this->option('database');
+
+        return is_string($connection) && $connection !== '' ? $connection : null;
+    }
+
+    /**
+     * @param  array{applied: list<array<string, mixed>>, pending: list<array<string, mixed>>, approved: list<array<string, mixed>>, drifted: list<array<string, mixed>>}  $report
+     */
+    private function reportIncubatingSchemaBlocks(array $report): bool
+    {
+        if ($report['drifted'] !== []) {
+            $this->error('Applied incubating schema source has changed since this database baseline. Restore the recorded source or create a new forward migration.');
+
+            foreach ($report['drifted'] as $migration) {
+                $this->line('  - '.$migration['relative_path']);
+                $this->line('    migration: '.$migration['migration_name']);
+                $this->line('    recorded: '.$migration['recorded_sha256']);
+                $this->line('    current:  '.$migration['sha256']);
+            }
+
+            return true;
+        }
+
+        if ($report['pending'] === []) {
             return false;
         }
 
-        $incubating = app(IncubatingSchemaPreflight::class)
-            ->incubatingMigrations($this->getMigrationPaths());
+        $this->error('Pending incubating schema cannot be migrated outside local/testing without a local approval.');
 
-        if ($incubating === []) {
-            return false;
-        }
-
-        $this->error('Incubating schema cannot be migrated outside local/testing. Current: '.app()->environment());
-        $this->line('Graduate these migrations by removing the IncubatingSchema marker before deploying:');
-
-        foreach ($incubating as $migration) {
+        foreach ($report['pending'] as $migration) {
             $this->line('  - '.$migration['relative_path']);
+            $this->line('    migration: '.$migration['migration_name']);
+            $this->line('    sha256: '.$migration['sha256']);
+            $this->line('    approve: '.$this->incubatingApprovalCommand($migration['migration_name']));
         }
 
         return true;
+    }
+
+    private function incubatingApprovalCommand(string $migrationName): string
+    {
+        $database = $this->selectedDatabaseConnection();
+        $databaseOption = $database !== null ? ' --database='.$database : '';
+
+        return 'php artisan blb:schema:approve-incubating '.$migrationName.$databaseOption.' --backup=<backup-id-or-reference> --reason="<why this production run is necessary>"';
+    }
+
+    /**
+     * @param  array{applied: list<array<string, mixed>>, pending: list<array<string, mixed>>, approved: list<array<string, mixed>>, drifted: list<array<string, mixed>>}  $report
+     */
+    private function reportIncubatingSchemaWarnings(array $report): void
+    {
+        if ($report['applied'] !== []) {
+            $this->warn('Applied incubating schema remains source-declared; production will not rebuild these migrations.');
+
+            foreach ($report['applied'] as $migration) {
+                $suffix = ($migration['baseline'] ?? null) === 'missing' ? ' (baseline will be recorded)' : '';
+                $this->line('  - '.$migration['relative_path'].$suffix);
+            }
+        }
+
+        if ($report['approved'] !== []) {
+            $this->warn('Approved pending incubating schema will run on this non-disposable database.');
+
+            foreach ($report['approved'] as $migration) {
+                $backup = is_array($migration['approval'] ?? null)
+                    ? (string) ($migration['approval']['backup'] ?? '')
+                    : '';
+
+                $this->line('  - '.$migration['relative_path']);
+                $this->line('    backup: '.$backup);
+            }
+        }
     }
 
     /**

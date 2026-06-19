@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -72,6 +73,7 @@ class EditDataTool extends AbstractTool
     private const PROTECTED_TABLES = [
         'migrations',
         'base_database_tables',
+        'base_database_migration_sources',
         'base_database_seeders',
         'authz_roles',
         'authz_capabilities',

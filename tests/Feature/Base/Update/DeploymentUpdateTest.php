@@ -538,7 +538,7 @@ test('a failed migration halts the deployment before reloading workers', functio
         $log = app(DeploymentService::class)->update(['platform']);
 
         expect($log)->toContain('FAILED: database migrations did not complete; deployment halted before reload.')
-            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, 'Incubating schema cannot be migrated outside local/testing')))->toBeTrue()
+            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, 'Pending incubating schema cannot be migrated outside local/testing without a local approval')))->toBeTrue()
             ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
 
         // Workers were never reloaded because the deploy halted at the migration step.

@@ -43,6 +43,7 @@ class TableRegistry extends Model
      */
     const INFRASTRUCTURE_TABLES = [
         'base_database_tables',
+        'base_database_migration_sources',
         'base_database_seeders',
         'migrations',
     ];

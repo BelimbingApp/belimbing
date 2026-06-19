@@ -9,7 +9,7 @@ Use [docs/architecture/database.md](../../../docs/architecture/database.md) as t
 - migration filename prefixes and execution order
 - table naming conventions
 - migration registry assignments and dependency graph
-- registry architecture (`base_database_tables`, `base_database_seeders`)
+- registry architecture (`base_database_tables`, `base_database_seeders`, `base_database_migration_sources`)
 - PostgreSQL identifier guard architecture
 
 For extension authoring rules, use:
@@ -89,7 +89,13 @@ Use `migrate --seed --seeder=...` when you want one specific seeder class instea
 
 `migrate:refresh`, `migrate:reset`, and `db:wipe` are blocked for normal databases because they bypass the incubating-schema preflight. The only allowed exception is the in-memory SQLite test database path used by automated tests.
 
-Plain `migrate` **blocks incubating schema outside `local`/`testing`.** Incubating migrations are edited in place and rebuilt only by the local-only `migrate --dev` flow; once recorded on a real database, later in-place edits silently never re-apply. So a `migrate` (or `migrate --force`) run on a non-disposable database — including the in-app **Admin > System > Update** deploy, which calls `migrate --force` — fails fast and lists the offending files if any carry the `IncubatingSchema` marker. **Graduate a migration (remove the marker) before it ships to production or staging.** A failed migration also halts the Update flow before workers reload.
+Plain `migrate` **guards incubating schema outside `local`/`testing`.** Incubating migrations are edited in place and rebuilt only by the local-only `migrate --dev` flow; once recorded on a real database, later in-place edits silently never re-apply. So a `migrate` (or `migrate --force`) run on a non-disposable database — including the in-app **Admin > System > Update** deploy, which calls `migrate --force` — classifies source-declared incubating files before migrating:
+
+- **Applied incubating migrations** (already present in Laravel's `migrations` table) are allowed and reported as schema debt. BLB records their source hash in `base_database_migration_sources`; later source-hash drift blocks deploy until the recorded source is restored or a forward migration carries the change.
+- **Pending incubating migrations** are blocked by default and listed with their path, migration name, and SHA-256. Prefer graduating the migration before deployment.
+- **Break-glass pending incubating migrations** require an instance-local approval created with `php artisan blb:schema:approve-incubating <migration> --backup=<backup-id-or-reference> --reason="<why>"` (add `--database=<connection>` when migrating a non-default connection). Approvals live under `storage/app/.devops/`, match the exact path/hash/environment/connection/driver/database, expire, and are consumed after a successful migrate. They are for rare production-only validation, not routine schema work.
+
+A failed migration guard also halts the Update flow before workers reload.
 
 ## Schema Editing
 

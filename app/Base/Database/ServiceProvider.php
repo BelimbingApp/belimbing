@@ -2,6 +2,7 @@
 
 namespace App\Base\Database;
 
+use App\Base\Database\Console\Commands\ApproveIncubatingMigrationCommand;
 use App\Base\Database\Console\Commands\BackupCommand;
 use App\Base\Database\Console\Commands\FreshCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
@@ -92,6 +93,7 @@ class ServiceProvider extends BaseServiceProvider
         });
 
         $this->commands([
+            ApproveIncubatingMigrationCommand::class,
             BackupCommand::class,
             RekeyCommand::class,
         ]);
