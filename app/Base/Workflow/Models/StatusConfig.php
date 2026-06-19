@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
@@ -127,5 +128,19 @@ class StatusConfig extends Model
     protected function forKanban(Builder $query, string $kanbanCode): Builder
     {
         return $query->where('kanban_code', $kanbanCode);
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        $workflow = Workflow::query()
+            ->where('code', $this->flow)
+            ->first(['id']);
+
+        if ($workflow === null) {
+            return null;
+        }
+
+        return ['name' => 'workflow', 'id' => $workflow->id];
     }
 }

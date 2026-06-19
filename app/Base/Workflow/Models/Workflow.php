@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
@@ -68,6 +69,16 @@ class Workflow extends Model
     {
         return $this->hasMany(KanbanColumn::class, 'flow', 'code')
             ->orderBy('position');
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        if ($this->id === null) {
+            return null;
+        }
+
+        return ['name' => 'workflow', 'id' => $this->id];
     }
 
     /**

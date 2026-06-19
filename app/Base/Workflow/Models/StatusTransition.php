@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
@@ -117,5 +118,19 @@ class StatusTransition extends Model
             ->where('from_code', $fromCode)
             ->where('is_active', true)
             ->orderBy('position');
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        $workflow = Workflow::query()
+            ->where('code', $this->flow)
+            ->first(['id']);
+
+        if ($workflow === null) {
+            return null;
+        }
+
+        return ['name' => 'workflow', 'id' => $workflow->id];
     }
 }

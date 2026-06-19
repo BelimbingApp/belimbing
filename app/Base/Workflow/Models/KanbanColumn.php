@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
@@ -86,5 +87,19 @@ class KanbanColumn extends Model
     protected function active(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        $workflow = Workflow::query()
+            ->where('code', $this->flow)
+            ->first(['id']);
+
+        if ($workflow === null) {
+            return null;
+        }
+
+        return ['name' => 'workflow', 'id' => $workflow->id];
     }
 }

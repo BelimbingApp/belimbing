@@ -32,3 +32,19 @@ it('saves workflow status lists from shared edit-in-place fields', function (): 
             'channels' => ['database'],
         ]);
 });
+
+it('renders the record history trigger on workflow detail pages', function (): void {
+    $actor = createAdminUser();
+
+    $workflow = Workflow::query()->create([
+        'code' => 'history_flow',
+        'label' => 'History Flow',
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($actor)
+        ->get(route('admin.workflows.show', $workflow))
+        ->assertOk()
+        ->assertSee('History')
+        ->assertSeeHtml('wire:click="open"');
+});

@@ -8,6 +8,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$workflow->label" :subtitle="$workflow->description ?? $workflow->code">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for :name', ['name' => $workflow->label])"
+                    :subjects="[['name' => 'workflow', 'id' => $workflow->id]]"
+                    :auditable-type="$workflow->getMorphClass()"
+                    :auditable-id="$workflow->id"
+                    source-capability="admin.workflow.manage"
+                />
                 <x-ui.button variant="ghost" as="a" href="{{ route('admin.workflows.index') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
                     {{ __('Back') }}

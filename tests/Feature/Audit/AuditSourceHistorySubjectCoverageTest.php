@@ -5,6 +5,10 @@ use App\Base\Audit\Listeners\MutationListener;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Workflow\Models\KanbanColumn;
+use App\Base\Workflow\Models\StatusConfig;
+use App\Base\Workflow\Models\StatusTransition;
+use App\Base\Workflow\Models\Workflow;
 use App\Modules\Commerce\Catalog\Models\Attribute;
 use App\Modules\Commerce\Catalog\Models\AttributeValue;
 use App\Modules\Commerce\Inventory\Models\Item;
@@ -272,4 +276,48 @@ it('includes item-related records in item history and excludes noisy marketplace
         ->and($draftMutation->new_values)
         ->not->toHaveKey('metadata_checked_at')
         ->not->toHaveKey('readiness_snapshot');
+});
+
+it('includes workflow configuration rows in workflow history', function (): void {
+    $workflow = MutationListener::withoutAuditing(
+        fn (): Workflow => Workflow::query()->create([
+            'code' => 'audit_workflow_subject_flow',
+            'label' => 'Audit Workflow Subject Flow',
+            'is_active' => true,
+        ])
+    );
+
+    $workflow->update(['label' => 'Audit Workflow Subject Flow Renamed']);
+
+    StatusConfig::query()->create([
+        'flow' => $workflow->code,
+        'code' => 'open',
+        'label' => 'Open',
+        'position' => 1,
+        'is_active' => true,
+    ]);
+
+    StatusTransition::query()->create([
+        'flow' => $workflow->code,
+        'from_code' => 'open',
+        'to_code' => 'closed',
+        'label' => 'Close',
+        'position' => 1,
+        'is_active' => true,
+    ]);
+
+    KanbanColumn::query()->create([
+        'flow' => $workflow->code,
+        'code' => 'todo',
+        'label' => 'To Do',
+        'position' => 1,
+        'is_active' => true,
+    ]);
+
+    flushAuditSubjectCoverageBuffer();
+
+    expectAuditSubjectRow(Workflow::class, 'workflow', $workflow->id);
+    expectAuditSubjectRow(StatusConfig::class, 'workflow', $workflow->id);
+    expectAuditSubjectRow(StatusTransition::class, 'workflow', $workflow->id);
+    expectAuditSubjectRow(KanbanColumn::class, 'workflow', $workflow->id);
 });
