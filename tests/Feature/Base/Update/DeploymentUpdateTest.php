@@ -30,17 +30,23 @@ final class DeploymentUpdateGitLaunchException extends RuntimeException {}
 function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
 {
     Process::fake(function ($process) use ($sha, $remoteError) {
-        return match (gitCommandWithoutConfig($process->command)) {
-            ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
-            ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
-            ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
-                ? Process::result($sha."\trefs/heads/main")
-                : Process::result(errorOutput: $remoteError, exitCode: 1),
-            ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-            default => Process::result(),
-        };
+        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError) ?? Process::result();
     });
+}
+
+function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): mixed
+{
+    return match (gitCommandWithoutConfig($command)) {
+        ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
+        ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
+        ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+        ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
+            ? Process::result($sha."\trefs/heads/main")
+            : Process::result(errorOutput: $remoteError, exitCode: 1),
+        ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+        ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => Process::result('Already up to date.'),
+        default => null,
+    };
 }
 
 function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
@@ -319,13 +325,7 @@ test('a failed frontend rebuild halts the deployment before migrations and reloa
             return Process::result(errorOutput: "'bun' is not recognized as an internal or external command", exitCode: 1);
         }
 
-        return match (gitCommandWithoutConfig($process->command)) {
-            ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
-            ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
-            ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-            ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => Process::result('Already up to date.'),
-            default => Process::result(),
-        };
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
     });
     Http::fake();
 
