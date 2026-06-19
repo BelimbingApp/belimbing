@@ -45,6 +45,8 @@ public function getAuditSubjectEntries(string $event, array $oldValues = [], arr
 }
 ```
 
+Subject `id` values may be integers or stable strings (UUID, ULID, prefixed integration IDs). Audit stores them as normalized strings; do not cast string identifiers to integers in model metadata or source-history queries.
+
 ## Opting Out
 
 ```php

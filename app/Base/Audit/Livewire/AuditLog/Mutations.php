@@ -93,8 +93,8 @@ class Mutations extends Component
                         ->orWhereRaw('lower(base_audit_mutations.event) like ?', [$like])
                         ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) like ?', [$like])
                         ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_identifier, \'\')) like ?', [$like])
-                        ->orWhereRaw($this->integerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
-                        ->orWhereRaw($this->integerTextExpression('base_audit_mutations.subject_id').' like ?', [$like]);
+                        ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
+                        ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.subject_id').' like ?', [$like]);
 
                     if ($trace !== '') {
                         $q->orWhereRaw('base_audit_mutations.trace_id like ?', ['%'.$trace.'%']);
@@ -119,7 +119,7 @@ class Mutations extends Component
             ->paginate(20);
     }
 
-    /** @return array{name: string, id: int}|null */
+    /** @return array{name: string, id: string}|null */
     private function parseSubjectHandle(string $search): ?array
     {
         if (! str_contains($search, '#')) {
@@ -130,18 +130,18 @@ class Mutations extends Component
         $name = strtolower(trim($name));
         $id = trim($id);
 
-        if ($name === '' || $id === '' || ! ctype_digit($id)) {
+        if ($name === '' || $id === '') {
             return null;
         }
 
-        return ['name' => $name, 'id' => (int) $id];
+        return ['name' => $name, 'id' => $id];
     }
 
-    private function integerTextExpression(string $column): string
+    private function lowerTextExpression(string $column): string
     {
         return match (config('database.default')) {
-            'mysql', 'mariadb' => 'cast('.$column.' as char)',
-            default => 'cast('.$column.' as text)',
+            'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
+            default => 'lower(cast('.$column.' as text))',
         };
     }
 }

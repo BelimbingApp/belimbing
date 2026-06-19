@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -34,6 +35,27 @@ class OutboundExchange extends Model
     public $incrementing = false;
 
     protected $keyType = 'string';
+
+    /**
+     * Payload fields keep their own retention and capability boundary.
+     * Record history should expose exchange metadata changes without becoming
+     * a second retained-payload inspection surface.
+     *
+     * @var list<string>
+     */
+    protected array $auditExclude = [
+        'traceparent',
+        'tracestate',
+        'request_headers',
+        'request_body',
+        'request_body_truncated',
+        'request_body_original_bytes',
+        'response_headers',
+        'response_body',
+        'response_body_truncated',
+        'response_body_original_bytes',
+        'metadata',
+    ];
 
     /**
      * @var list<string>
@@ -79,6 +101,16 @@ class OutboundExchange extends Model
                 $exchange->id = self::ID_PREFIX.Str::ulid()->toBase32();
             }
         });
+    }
+
+    /** @return array{name: string, id: string}|null */
+    public function getAuditSubject(): ?array
+    {
+        if ($this->id === null || $this->id === '') {
+            return null;
+        }
+
+        return ['name' => 'outbound_exchange', 'id' => $this->id];
     }
 
     /**

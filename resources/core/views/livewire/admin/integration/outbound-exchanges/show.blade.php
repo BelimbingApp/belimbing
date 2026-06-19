@@ -7,6 +7,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Outbound Exchange')" :subtitle="$exchange->id">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for exchange :id', ['id' => $exchange->id])"
+                    :subjects="[['name' => 'outbound_exchange', 'id' => $exchange->id]]"
+                    :auditable-type="$exchange->getMorphClass()"
+                    :auditable-id="$exchange->id"
+                    source-capability="admin.system.outbound-exchange.list"
+                />
                 <x-ui.button variant="ghost" as="a" href="{{ route('admin.integration.outbound-exchanges.index') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="h-4 w-4" />
                     {{ __('Back') }}

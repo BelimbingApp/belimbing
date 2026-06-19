@@ -23,7 +23,9 @@ final class AuditSourceHistory
         int|string|null $auditableId,
         int $limit = 25,
     ): array {
-        if ($subjects === [] && ($auditableType === null || $auditableId === null || $auditableId === '')) {
+        $normalizedAuditableId = $this->idOrNull($auditableId);
+
+        if ($subjects === [] && ($auditableType === null || $normalizedAuditableId === null)) {
             return $this->emptyHistory($limit);
         }
 
@@ -33,25 +35,26 @@ final class AuditSourceHistory
                     ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
             })
             ->select('base_audit_mutations.*', 'users.name as actor_name')
-            ->where(function (Builder $query) use ($subjects, $auditableType, $auditableId): void {
-                if ($auditableType !== null && $auditableId !== null && $auditableId !== '') {
-                    $query->orWhere(function (Builder $direct) use ($auditableType, $auditableId): void {
+            ->where(function (Builder $query) use ($subjects, $auditableType, $normalizedAuditableId): void {
+                if ($auditableType !== null && $normalizedAuditableId !== null) {
+                    $query->orWhere(function (Builder $direct) use ($auditableType, $normalizedAuditableId): void {
                         $direct->where('base_audit_mutations.auditable_type', $auditableType)
-                            ->where('base_audit_mutations.auditable_id', (int) $auditableId);
+                            ->where('base_audit_mutations.auditable_id', $normalizedAuditableId)
+                            ->where('base_audit_mutations.source', '!=', 'expanded');
                     });
                 }
 
                 foreach ($subjects as $subject) {
                     $name = $this->stringOrNull($subject['name'] ?? null);
-                    $id = $subject['id'] ?? null;
+                    $id = $this->idOrNull($subject['id'] ?? null);
 
-                    if ($name === null || $id === null || $id === '') {
+                    if ($name === null || $id === null) {
                         continue;
                     }
 
                     $query->orWhere(function (Builder $subjectQuery) use ($name, $id, $subject): void {
                         $subjectQuery->where('base_audit_mutations.subject_name', $name)
-                            ->where('base_audit_mutations.subject_id', (int) $id);
+                            ->where('base_audit_mutations.subject_id', $id);
 
                         $identifier = $this->stringOrNull($subject['identifier'] ?? null);
                         if ($identifier !== null) {
@@ -106,6 +109,21 @@ final class AuditSourceHistory
     private function stringOrNull(mixed $value): ?string
     {
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function idOrNull(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (is_string($value)) {
+            $value = trim($value);
+
+            return $value !== '' ? $value : null;
+        }
+
+        return null;
     }
 
     /** @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int} */

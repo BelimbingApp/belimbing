@@ -1,7 +1,22 @@
 <?php
 
+use App\Base\Audit\Listeners\MutationListener;
+use App\Base\Audit\Livewire\AuditLog\SourceHistory;
+use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Integration\Livewire\OutboundExchanges\Index;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\User\Models\User;
+
+function outboundExchangesUiFlushAuditBuffer(): void
+{
+    $buffer = app(AuditBuffer::class);
+    $reflection = new ReflectionClass($buffer);
+    $method = $reflection->getMethod('flush');
+    $method->invoke($buffer);
+}
 
 it('lists and shows outbound exchanges with retained payloads', function (): void {
     $user = createAdminUser();
@@ -35,12 +50,73 @@ it('lists and shows outbound exchanges with retained payloads', function (): voi
         ->get(route('admin.integration.outbound-exchanges.show', $exchange))
         ->assertOk()
         ->assertSee($exchange->id)
+        ->assertSee('History')
+        ->assertSeeHtml('wire:click="open"')
         ->assertSee('Success')
         ->assertSee('Retained')
         ->assertSee('hello')
         ->assertSee('world')
         ->assertSee('Completed with a non-error response.')
         ->assertSee('Retained payloads are removed by retention cleanup.');
+
+    expect($exchange->getAuditSubject())->toBe(['name' => 'outbound_exchange', 'id' => $exchange->id]);
+});
+
+it('shows exchange record history without leaking retained payloads', function (): void {
+    [$company, $viewer] = MutationListener::withoutAuditing(function (): array {
+        $company = Company::factory()->create();
+        $viewer = User::factory()->create(['company_id' => $company->id]);
+
+        return [$company, $viewer];
+    });
+
+    foreach (['admin.audit.log.list', 'admin.system.outbound-exchange.list'] as $capability) {
+        PrincipalCapability::query()->create([
+            'company_id' => $company->id,
+            'principal_type' => PrincipalType::USER->value,
+            'principal_id' => $viewer->id,
+            'capability_key' => $capability,
+            'is_allowed' => true,
+        ]);
+    }
+
+    $exchange = OutboundExchange::query()->create([
+        'system' => 'example',
+        'provider' => 'provider.example',
+        'operation' => 'example.secret_safe.operation',
+        'transport' => 'http',
+        'protocol' => 'rest',
+        'protocol_operation' => 'POST /things',
+        'endpoint' => 'https://provider.example/things',
+        'request_headers' => ['Authorization' => ['Bearer hidden-header-token']],
+        'request_body' => ['kind' => 'json', 'value' => ['secret' => 'hidden-request-secret']],
+        'response_status' => 200,
+        'response_body' => ['kind' => 'json', 'value' => ['secret' => 'hidden-response-secret']],
+        'metadata' => ['secret' => 'hidden-metadata-secret'],
+        'duration_ms' => 12,
+        'retry_count' => 0,
+        'outcome' => 'success',
+        'occurred_at' => now(),
+    ]);
+
+    outboundExchangesUiFlushAuditBuffer();
+
+    Livewire\Livewire::actingAs($viewer)
+        ->test(SourceHistory::class, [
+            'title' => __('History for exchange :id', ['id' => $exchange->id]),
+            'subjects' => [['name' => 'outbound_exchange', 'id' => $exchange->id]],
+            'auditableType' => $exchange->getMorphClass(),
+            'auditableId' => $exchange->id,
+            'sourceCapability' => 'admin.system.outbound-exchange.list',
+        ])
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSee('example.secret_safe.operation')
+        ->assertSee('outcome')
+        ->assertDontSee('hidden-header-token')
+        ->assertDontSee('hidden-request-secret')
+        ->assertDontSee('hidden-response-secret')
+        ->assertDontSee('hidden-metadata-secret');
 });
 
 it('shows explanatory tooltips for truncated payloads and HTTP errors', function (): void {

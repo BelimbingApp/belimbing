@@ -48,7 +48,8 @@ class AuditMutation extends Model
     protected $casts = [
         'old_values' => 'array',
         'new_values' => 'array',
-        'subject_id' => 'integer',
+        'auditable_id' => 'string',
+        'subject_id' => 'string',
         'occurred_at' => 'datetime',
     ];
 }

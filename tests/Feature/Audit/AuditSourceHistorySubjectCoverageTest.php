@@ -48,13 +48,13 @@ function flushAuditSubjectCoverageBuffer(): void
     $method->invoke($buffer);
 }
 
-function expectAuditSubjectRow(string $auditableType, string $subjectName, int $subjectId, string $source = 'listener'): void
+function expectAuditSubjectRow(string $auditableType, string $subjectName, int|string $subjectId, string $source = 'listener'): void
 {
     expect(
         AuditMutation::query()
             ->where('auditable_type', $auditableType)
             ->where('subject_name', $subjectName)
-            ->where('subject_id', $subjectId)
+            ->where('subject_id', (string) $subjectId)
             ->where('source', $source)
             ->exists()
     )->toBeTrue("Expected {$auditableType} to write {$source} subject {$subjectName}#{$subjectId}");

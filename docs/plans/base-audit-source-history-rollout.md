@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus numeric-key IT/Quality and Workflow Wave 2 detail pages; manual browser verification, route-specific page weights, page-by-page field strategy closeout, string-key support, and later waves remain open.
+**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, and Outbound Exchange Wave 2 detail pages; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
 **Last Updated:** 2026-06-19
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -26,8 +26,8 @@ High-value record/detail pages expose a consistent History trigger that answers 
 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
-- `AuditSourceHistory` reads mutation rows by `subject_name` / `subject_id` / optional `subject_identifier`, with direct `auditable_type` / `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR plus Workflow detail pages now have numeric-key Wave 2 coverage. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, string-key subjects, and later-wave page selection.
+- `AuditSourceHistory` reads mutation rows by `subject_name` / normalized string `subject_id` / optional `subject_identifier`, with direct `auditable_type` / normalized string `auditable_id` fallback for old rows and direct model changes.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, and Outbound Exchange detail pages now have Wave 2 coverage. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
 - Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, and first-wave page integration; automated evidence is captured below, while manual browser spot checks remain open.
 
 ## Top-Level Components
@@ -78,9 +78,9 @@ The rollout keeps the current requirement that viewers have both `admin.audit.lo
 
 Direct auditable fallback is required for old rows and direct model changes. Old action rows cannot gain missing semantics after the fact; future workflows that need user-intent language must record semantic actions at the workflow boundary.
 
-### Treat string-key support as outside this rollout unless needed
+### Normalize Audit record IDs as strings
 
-The current lookup accepts `int|string` inputs but casts subject and auditable IDs to integers. This rollout targets numeric-key records unless a phase explicitly updates the Audit query/index contract for UUID or string-key subjects.
+Audit mutation `auditable_id` and `subject_id` values are normalized bounded strings. Numeric records keep their current behavior while string-key records such as Outbound Exchanges can participate in source history without ad hoc page exceptions.
 
 ## Public Contract
 
@@ -105,7 +105,7 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 | 1 | `admin/addresses/{address}` | Bridge added after backend subject coverage for direct address and addressable owner links; page field-strategy closeout remains. |
 | 1 | `commerce/inventory/items/{item}` | Backend subject coverage added in the nested Commerce repo for direct item, fitments, photos, catalog values, listings, and listing drafts; listing/draft noisy snapshot fields excluded; bridge is present on the detail page and page field-strategy closeout remains. |
 | 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Bridge added after direct subject coverage; Audit history complements workflow timelines by exposing field-level diffs and trace links. SCAR mutations also expand into parent NCR history. |
-| 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Workflow history is live for direct workflow, status, transition, and kanban-column configuration rows. Outbound Exchange is deferred until the Audit source-history contract supports string IDs. |
+| 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Workflow history is live for direct workflow, status, transition, and kanban-column configuration rows. Outbound Exchange history is live after string-key Audit support and payload/header field exclusions, so local history does not bypass the retained-payload inspection capability. |
 | 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Use only where a stable one-record detail context exists. Do not add one history Livewire island per table row or roster cell. |
 | Deferred | System logs, database-table viewers, UI reference, generic settings/list pages | Not source-record history targets unless a future phase identifies a stable auditable record and business value. |
 
@@ -187,12 +187,15 @@ Goal: add Audit history where it complements existing status/audit timelines rat
 - [x] Decide the local Audit drawer's job on IT Ticket/NCR/SCAR pages: field-level data changes and security trace links, not replacement workflow timelines. {amp/gpt-5}
 - [x] Add missing subject metadata for IT Ticket, NCR, and SCAR; SCAR mutations expand into parent NCR history. {amp/gpt-5}
 - [x] Add the bridge to IT Ticket, NCR, and SCAR pages where the page has a stable record context and the Audit drawer adds field-level history not already present in the workflow timeline. {amp/gpt-5}
-- [x] Review Workflow detail and Integration outbound-exchange detail pages for existing operator diagnostics; defer Outbound Exchange visible rollout until string-key subjects/direct fallback are supported. {amp/gpt-5}
+- [x] Review Workflow detail and Integration outbound-exchange detail pages for existing operator diagnostics; complete Outbound Exchange only after string-key subjects/direct fallback are supported. {amp/gpt-5}
 - [x] Add direct Workflow subject metadata plus workflow-subject coverage for status, transition, and kanban configuration rows. {amp/gpt-5}
 - [x] Add the bridge to `admin/workflows/{workflow}` with `admin.workflow.manage` as the source capability. {amp/gpt-5}
+- [x] Update the Audit mutations schema/read model/search contract so `auditable_id` and `subject_id` support normalized string IDs. {amp/gpt-5}
+- [x] Add Outbound Exchange subject metadata and exclude retained payload/header/metadata fields from mutation diffs before exposing local history. {amp/gpt-5}
+- [x] Add the bridge to `admin/integration/outbound-exchanges/{exchange}` with `admin.system.outbound-exchange.list` as the source capability. {amp/gpt-5}
 - [ ] Add semantic actions for status transitions or workflow commands where mutation diffs alone do not explain intent.
 
-Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngineTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; nested Operation `git diff --check`; `php artisan test tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint` on touched Workflow/Audit files; parent `git diff --check`.
+Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngineTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; nested Operation `git diff --check`; `php artisan test tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `php artisan test tests\Feature\Audit\AuditableTraitTest.php tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `vendor\bin\pint` on touched Workflow/Audit/Integration/People files; parent and nested People `git diff --check`.
 
 ### Phase 6 — Extend to workbenches and private extensions carefully
 

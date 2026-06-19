@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Audit\Database\Migrations\Concerns\DefinesAuditActorColumns;
+use App\Base\Database\Concerns\IncubatingSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -9,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     use DefinesAuditActorColumns;
+    use IncubatingSchema;
 
     public function up(): void
     {
@@ -16,9 +18,9 @@ return new class extends Migration
             $table->id();
             $this->addAuditActorColumns($table);
             $table->string('auditable_type')->index();
-            $table->unsignedBigInteger('auditable_id')->index();
+            $table->string('auditable_id', 128)->index();
             $table->string('subject_name')->nullable();
-            $table->unsignedBigInteger('subject_id')->nullable();
+            $table->string('subject_id', 128)->nullable();
             $table->string('subject_identifier')->nullable();
             $table->string('source', 20)->default('listener')->index();
             $table->string('event', 20)->index();

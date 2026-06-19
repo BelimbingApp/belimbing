@@ -7,11 +7,14 @@ use App\Base\Audit\Livewire\AuditLog\SourceHistory;
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
+use App\Base\Audit\Services\AuditSourceHistory;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\Address\Models\Address;
+use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -272,9 +275,9 @@ it('shows user record history from direct mutations and redacts protected values
     expect(
         AuditMutation::query()
             ->where('auditable_type', User::class)
-            ->where('auditable_id', $target->id)
+            ->where('auditable_id', (string) $target->id)
             ->where('subject_name', 'user')
-            ->where('subject_id', $target->id)
+            ->where('subject_id', (string) $target->id)
             ->exists()
     )->toBeTrue();
 });
@@ -423,18 +426,129 @@ it('includes user role and direct capability mutations in user record history', 
         AuditMutation::query()
             ->where('auditable_type', PrincipalRole::class)
             ->where('subject_name', 'user')
-            ->where('subject_id', $target->id)
+            ->where('subject_id', (string) $target->id)
             ->exists()
     )->toBeTrue()
         ->and(
             AuditMutation::query()
                 ->where('auditable_type', PrincipalCapability::class)
                 ->where('subject_name', 'user')
-                ->where('subject_id', $target->id)
+                ->where('subject_id', (string) $target->id)
                 ->exists()
         )->toBeTrue();
 
     expect($company->id)->toBe($target->company_id);
+});
+
+it('deduplicates expanded subject rows from direct record history', function (): void {
+    [$firstCompany, $secondCompany, $address] = MutationListener::withoutAuditing(function (): array {
+        $firstCompany = Company::factory()->minimal()->create(['name' => 'First Linked Company']);
+        $secondCompany = Company::factory()->minimal()->create(['name' => 'Second Linked Company']);
+        $address = Address::factory()->create([
+            'country_iso' => null,
+            'phone' => null,
+        ]);
+
+        foreach ([$firstCompany, $secondCompany] as $company) {
+            Addressable::query()->create([
+                'address_id' => $address->id,
+                'addressable_type' => $company->getMorphClass(),
+                'addressable_id' => $company->id,
+                'kind' => ['billing'],
+            ]);
+        }
+
+        return [$firstCompany, $secondCompany, $address];
+    });
+
+    $address->update(['phone' => '03-77862444']);
+    auditLogUiFlushBuffer();
+
+    expect(
+        AuditMutation::query()
+            ->where('auditable_type', Address::class)
+            ->where('auditable_id', (string) $address->id)
+            ->count()
+    )->toBe(3);
+
+    $expandedSubjectIds = AuditMutation::query()
+        ->where('auditable_type', Address::class)
+        ->where('auditable_id', (string) $address->id)
+        ->where('source', 'expanded')
+        ->pluck('subject_id')
+        ->sort()
+        ->values()
+        ->all();
+
+    expect($expandedSubjectIds)->toBe([
+        (string) $firstCompany->id,
+        (string) $secondCompany->id,
+    ]);
+
+    $history = app(AuditSourceHistory::class)->forRecord(
+        subjects: [['name' => 'address', 'id' => $address->id]],
+        auditableType: $address->getMorphClass(),
+        auditableId: $address->id,
+    );
+
+    expect($history['entries'])->toHaveCount(1)
+        ->and($history['entries'][0]['auditable'])->toBe('Address#'.$address->id)
+        ->and($history['entries'][0]['diffs'])->toHaveCount(1)
+        ->and($history['entries'][0]['diffs'][0])->toMatchArray([
+            'field' => 'phone',
+            'old' => '—',
+            'new' => '03-77862444',
+        ]);
+});
+
+it('finds string-key source history and global mutation searches', function (): void {
+    $id = 'ix_01JSTRINGAUDIT0000000001';
+    $otherId = 'ix_01JSTRINGAUDIT0000000002';
+
+    auditLogUiInsertMutation([
+        'auditable_type' => OutboundExchange::class,
+        'auditable_id' => $id,
+        'subject_name' => 'outbound_exchange',
+        'subject_id' => $id,
+        'old_values' => ['outcome' => 'queued'],
+        'new_values' => ['outcome' => 'string-key-visible'],
+        'trace_id' => 'STRGKEY00001',
+    ]);
+
+    auditLogUiInsertMutation([
+        'auditable_type' => OutboundExchange::class,
+        'auditable_id' => $otherId,
+        'subject_name' => 'outbound_exchange',
+        'subject_id' => $otherId,
+        'old_values' => ['outcome' => 'queued'],
+        'new_values' => ['outcome' => 'string-key-hidden'],
+        'trace_id' => 'STRGKEY00002',
+    ]);
+
+    $historyByDirect = app(AuditSourceHistory::class)->forRecord(
+        subjects: [],
+        auditableType: OutboundExchange::class,
+        auditableId: $id,
+    );
+
+    $historyBySubject = app(AuditSourceHistory::class)->forRecord(
+        subjects: [['name' => 'outbound_exchange', 'id' => $id]],
+        auditableType: null,
+        auditableId: null,
+    );
+
+    expect($historyByDirect['entries'])->toHaveCount(1)
+        ->and($historyByDirect['entries'][0]['auditable'])->toBe('OutboundExchange#'.$id)
+        ->and($historyByDirect['entries'][0]['diffs'][0]['new'])->toBe('string-key-visible')
+        ->and($historyBySubject['entries'])->toHaveCount(1)
+        ->and($historyBySubject['entries'][0]['auditable'])->toBe('OutboundExchange#'.$id);
+
+    Livewire::test(Mutations::class)
+        ->set('search', 'outbound_exchange#'.$id)
+        ->assertSee($id)
+        ->assertSee('string-key-visible')
+        ->assertDontSee($otherId)
+        ->assertDontSee('string-key-hidden');
 });
 
 it('renders the record history bridge on first-wave detail pages', function (): void {

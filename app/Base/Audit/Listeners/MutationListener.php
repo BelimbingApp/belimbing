@@ -74,6 +74,12 @@ class MutationListener
 
         $context = app(RequestContext::class);
         $now = now();
+        $auditableId = $this->auditIdOrNull($model->getKey());
+
+        if ($auditableId === null) {
+            return;
+        }
+
         $subject = $this->resolveAuditSubject($model);
 
         $entry = [
@@ -85,7 +91,7 @@ class MutationListener
             'url' => $context->url,
             'user_agent' => $context->userAgent,
             'auditable_type' => $model->getMorphClass(),
-            'auditable_id' => $model->getKey(),
+            'auditable_id' => $auditableId,
             'subject_name' => $subject['name'],
             'subject_id' => $subject['id'],
             'subject_identifier' => null,
@@ -101,9 +107,13 @@ class MutationListener
         $buffer->bufferMutation($entry);
 
         foreach ($this->resolveAuditSubjectEntries($model, $event, $oldValues, $newValues) as $subjectEntry) {
+            $subjectId = array_key_exists('subject_id', $subjectEntry)
+                ? $this->auditIdOrNull($subjectEntry['subject_id'])
+                : $entry['subject_id'];
+
             $buffer->bufferMutation(array_replace($entry, [
                 'subject_name' => $subjectEntry['subject_name'] ?? $entry['subject_name'],
-                'subject_id' => $subjectEntry['subject_id'] ?? $entry['subject_id'],
+                'subject_id' => $subjectId,
                 'subject_identifier' => $subjectEntry['subject_identifier'] ?? null,
                 'source' => 'expanded',
                 'event' => $subjectEntry['event'] ?? $event,
@@ -114,7 +124,7 @@ class MutationListener
     }
 
     /**
-     * @return array{name: string|null, id: int|null}
+     * @return array{name: string|null, id: string|null}
      */
     private function resolveAuditSubject(Model $model): array
     {
@@ -128,7 +138,22 @@ class MutationListener
             return ['name' => null, 'id' => null];
         }
 
-        return ['name' => $subject['name'], 'id' => (int) $subject['id']];
+        return ['name' => $subject['name'], 'id' => $this->auditIdOrNull($subject['id'])];
+    }
+
+    private function auditIdOrNull(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (is_string($value)) {
+            $value = trim($value);
+
+            return $value !== '' ? $value : null;
+        }
+
+        return null;
     }
 
     /**

@@ -10,6 +10,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 const AUDIT_TEST_TABLE = 'audit_test_models';
+const AUDIT_STRING_KEY_TEST_TABLE = 'audit_string_key_test_models';
 const AUDIT_TEST_EMAIL = 'alice@example.com';
 const AUDIT_REDACTED_VALUE = '[redacted]';
 const AUDIT_TEST_TRACE_ID = '7K9M2F4Q8XDW';
@@ -27,6 +28,12 @@ beforeEach(function (): void {
         $table->timestamps();
     });
 
+    Schema::create(AUDIT_STRING_KEY_TEST_TABLE, function (Blueprint $table): void {
+        $table->string('id', 128)->primary();
+        $table->string('name');
+        $table->timestamps();
+    });
+
     app()->singleton(RequestContext::class, fn () => new RequestContext(
         traceId: AUDIT_TEST_TRACE_ID,
         ipAddress: '127.0.0.1',
@@ -38,6 +45,7 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
+    Schema::dropIfExists(AUDIT_STRING_KEY_TEST_TABLE);
     Schema::dropIfExists(AUDIT_TEST_TABLE);
 });
 
@@ -113,8 +121,38 @@ it('enriches mutation rows with audit subject metadata', function (): void {
 
     expect($mutation)->not->toBeNull();
     expect($mutation->subject_name)->toBe('employee');
-    expect($mutation->subject_id)->toBe(42);
+    expect($mutation->subject_id)->toBe('42');
     expect($mutation->subject_identifier)->toBeNull();
+});
+
+it('preserves string auditable and subject identifiers', function (): void {
+    $id = 'ix_01JSTRINGAUDIT0000000000';
+
+    AuditStringKeyTestModelWithSubjectEntries::query()->create([
+        'id' => $id,
+        'name' => 'String Key Exchange',
+    ]);
+
+    flushAuditBuffer();
+
+    $direct = AuditMutation::query()
+        ->where('auditable_type', AuditStringKeyTestModelWithSubjectEntries::class)
+        ->where('source', 'listener')
+        ->first();
+
+    $expanded = AuditMutation::query()
+        ->where('auditable_type', AuditStringKeyTestModelWithSubjectEntries::class)
+        ->where('source', 'expanded')
+        ->first();
+
+    expect($direct)->not->toBeNull()
+        ->and($direct->auditable_id)->toBe($id)
+        ->and($direct->subject_name)->toBe('outbound_exchange')
+        ->and($direct->subject_id)->toBe($id)
+        ->and($direct->subject_id)->not->toBe('0')
+        ->and($expanded)->not->toBeNull()
+        ->and($expanded->subject_name)->toBe('outbound_exchange_owner')
+        ->and($expanded->subject_id)->toBe($id);
 });
 
 it('writes expanded audit subject entries from model metadata', function (): void {
@@ -358,5 +396,37 @@ class AuditTestModelWithSubjectEntries extends AuditTestModelWithSubject
                 'new_values' => ['shift_code' => 'DAY', 'policy_code' => 'STD'],
             ],
         ];
+    }
+}
+
+class AuditStringKeyTestModel extends Model
+{
+    protected $table = AUDIT_STRING_KEY_TEST_TABLE;
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
+    protected $guarded = [];
+
+    /** @return array{name: string, id: string} */
+    public function getAuditSubject(): array
+    {
+        return ['name' => 'outbound_exchange', 'id' => $this->id];
+    }
+}
+
+class AuditStringKeyTestModelWithSubjectEntries extends AuditStringKeyTestModel
+{
+    /** @return list<array<string, mixed>> */
+    public function getAuditSubjectEntries(): array
+    {
+        return [[
+            'subject_name' => 'outbound_exchange_owner',
+            'subject_id' => $this->id,
+            'event' => 'created',
+            'old_values' => null,
+            'new_values' => ['name' => $this->name],
+        ]];
     }
 }
