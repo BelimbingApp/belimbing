@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -82,6 +83,32 @@ class CompanyRelationship extends Model
     public function externalAccesses(): HasMany
     {
         return $this->hasMany(ExternalAccess::class, 'relationship_id');
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->company_id !== null ? ['name' => 'company', 'id' => (int) $this->company_id] : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return list<array<string, mixed>>
+     */
+    public function getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array
+    {
+        $currentCompanyId = $this->company_id !== null ? (int) $this->company_id : null;
+        $companyIds = [$this->related_company_id];
+
+        if ($event === 'updated') {
+            $companyIds[] = $this->getOriginal('company_id');
+            $companyIds[] = $this->getOriginal('related_company_id');
+        }
+
+        return $this->companyAuditEntries($companyIds, $currentCompanyId, $event, $oldValues, $newValues);
     }
 
     /**
@@ -227,5 +254,38 @@ class CompanyRelationship extends Model
         $query->whereHas('type', function ($q): void {
             $q->where('is_external', false);
         });
+    }
+
+    /**
+     * @param  array<int, mixed>  $companyIds
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return list<array<string, mixed>>
+     */
+    private function companyAuditEntries(array $companyIds, ?int $excludedCompanyId, string $event, array $oldValues, array $newValues): array
+    {
+        $entries = [];
+
+        foreach ($companyIds as $companyId) {
+            if ($companyId === null || $companyId === '') {
+                continue;
+            }
+
+            $id = (int) $companyId;
+
+            if ($id === $excludedCompanyId) {
+                continue;
+            }
+
+            $entries['company#'.$id] = [
+                'subject_name' => 'company',
+                'subject_id' => $id,
+                'event' => $event,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+            ];
+        }
+
+        return array_values($entries);
     }
 }

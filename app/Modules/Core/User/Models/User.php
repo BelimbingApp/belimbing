@@ -174,6 +174,40 @@ class User extends Authenticatable implements CompanyScoped
     }
 
     /**
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return list<array<string, mixed>>
+     */
+    public function getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array
+    {
+        $employeeIds = [$this->employee_id];
+
+        if ($event === 'updated') {
+            $employeeIds[] = $this->getOriginal('employee_id');
+        }
+
+        $entries = [];
+
+        foreach ($employeeIds as $employeeId) {
+            if ($employeeId === null || $employeeId === '') {
+                continue;
+            }
+
+            $id = (int) $employeeId;
+
+            $entries['employee#'.$id] = [
+                'subject_name' => 'employee',
+                'subject_id' => $id,
+                'event' => $event,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+            ];
+        }
+
+        return array_values($entries);
+    }
+
+    /**
      * Get the company ID the user belongs to.
      *
      * Prefer the direct user scope and fall back to the linked employee's

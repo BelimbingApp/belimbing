@@ -160,6 +160,14 @@ class Employee extends Model
     }
 
     /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->id !== null ? ['name' => 'employee', 'id' => (int) $this->id] : null;
+    }
+
+    /**
      * Get the display name (short name if available, otherwise full name).
      */
     public function displayName(): string

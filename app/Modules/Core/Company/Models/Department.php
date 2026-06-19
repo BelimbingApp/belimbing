@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Models;
 
 use App\Modules\Core\Employee\Models\Employee;
@@ -90,6 +91,14 @@ class Department extends Model
     public function employees(): HasMany
     {
         return $this->hasMany(Employee::class, 'department_id');
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->company_id !== null ? ['name' => 'company', 'id' => (int) $this->company_id] : null;
     }
 
     /**

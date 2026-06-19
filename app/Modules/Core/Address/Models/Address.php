@@ -1,7 +1,10 @@
 <?php
+
 namespace App\Modules\Core\Address\Models;
 
 use App\Modules\Core\Address\Database\Factories\AddressFactory;
+use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -104,10 +107,71 @@ class Address extends Model
     }
 
     /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->id !== null ? ['name' => 'address', 'id' => (int) $this->id] : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $oldValues
+     * @param  array<string, mixed>  $newValues
+     * @return list<array<string, mixed>>
+     */
+    public function getAuditSubjectEntries(string $event, array $oldValues = [], array $newValues = []): array
+    {
+        if ($this->id === null) {
+            return [];
+        }
+
+        $entries = [];
+
+        foreach (Addressable::query()->where('address_id', $this->id)->get() as $addressable) {
+            $subject = $this->addressableAuditSubject($addressable);
+
+            if ($subject === null) {
+                continue;
+            }
+
+            $entries[] = [
+                'subject_name' => $subject['name'],
+                'subject_id' => $subject['id'],
+                'event' => $event,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+            ];
+        }
+
+        return $entries;
+    }
+
+    /**
      * Get the Geonames admin1 referenced by this address.
      */
     public function admin1(): BelongsTo
     {
         return $this->belongsTo(Admin1::class, 'admin1Code', 'code');
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    private function addressableAuditSubject(Addressable $addressable): ?array
+    {
+        if ($addressable->addressable_id === null) {
+            return null;
+        }
+
+        $type = (string) $addressable->addressable_type;
+        $subjectName = match ($type) {
+            Company::class, (new Company)->getMorphClass() => 'company',
+            Employee::class, (new Employee)->getMorphClass() => 'employee',
+            default => null,
+        };
+
+        return $subjectName !== null
+            ? ['name' => $subjectName, 'id' => (int) $addressable->addressable_id]
+            : null;
     }
 }

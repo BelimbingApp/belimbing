@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Models;
 
 use App\Base\Support\Str as BlbStr;
@@ -334,6 +335,14 @@ class Company extends Model
             ->whereKey($adminUserId)
             ->where('company_id', $this->id)
             ->first();
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->id !== null ? ['name' => 'company', 'id' => (int) $this->id] : null;
     }
 
     /**
