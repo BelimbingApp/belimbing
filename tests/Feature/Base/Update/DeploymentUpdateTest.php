@@ -308,6 +308,33 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
 });
 
+test('a failed frontend rebuild halts the deployment before migrations and reload', function (): void {
+    Process::fake(function ($process) {
+        if (array_slice($process->command, 0, 3) === ['bun', 'install', '--frozen-lockfile']) {
+            return Process::result(errorOutput: "'bun' is not recognized as an internal or external command", exitCode: 1);
+        }
+
+        return match (gitCommandWithoutConfig($process->command)) {
+            ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('main'),
+            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            ['git', 'pull', '--ff-only'] => Process::result('Already up to date.'),
+            default => Process::result(),
+        };
+    });
+    Http::fake();
+
+    $log = app(DeploymentService::class)->update(['platform']);
+
+    expect($log)->toContain("Frontend dependency install failed: 'bun' is not recognized as an internal or external command")
+        ->and($log)->toContain('FAILED: frontend assets did not build; deployment halted before migrations and reload.')
+        ->and($log)->not->toContain('Running migrations…')
+        ->and($log)->not->toContain('FAILED: database migrations did not complete; deployment halted before reload.');
+
+    Http::assertNothingSent();
+    expect(app()->isDownForMaintenance())->toBeFalse();
+});
+
 test('a run records a durable deployment last-run with its time and outcome', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);

@@ -536,7 +536,7 @@ variables_order=EGPCS
         Write-Step "Installing frontend dependencies"
         $bun = Resolve-BunPath
         if ($bun) {
-            & $bun install
+            & $bun install --backend copyfile
             if ($LASTEXITCODE -ne 0) {
                 throw "Bun dependency install failed"
             }

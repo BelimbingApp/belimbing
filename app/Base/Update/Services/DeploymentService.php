@@ -115,8 +115,20 @@ class DeploymentService
                 $record($this->buildRunner->composerDumpAutoload());
             }
 
+            if ($this->hasError($log)) {
+                $record((string) __('FAILED: dependency refresh did not complete; deployment halted before migrations and reload.'));
+
+                return $log;
+            }
+
             $record((string) __('Building frontend assets…'));
             $log = array_merge($log, $this->runFrontendBuild($progress));
+
+            if ($this->hasError($log)) {
+                $record((string) __('FAILED: frontend assets did not build; deployment halted before migrations and reload.'));
+
+                return $log;
+            }
 
             $record((string) __('Running migrations…'));
             $migrateStatus = Artisan::call('migrate', ['--force' => true]);
