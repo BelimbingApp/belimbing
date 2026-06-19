@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge and visible parent/People Wave 1 rollout are implemented; Commerce item rollout, manual browser verification, page-by-page field strategy closeout, and later waves remain open.
+**Status:** In progress — the neutral bridge and visible Wave 1 rollout are implemented across parent, People, and Commerce; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
 **Last Updated:** 2026-06-19
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -27,8 +27,8 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / `subject_id` / optional `subject_identifier`, with direct `auditable_type` / `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Remaining gaps are page-by-page field strategy review, Commerce item page integration, and later-wave page selection.
-- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, and parent/People first-wave page integration; automated page-weight evidence is captured below, while manual browser spot checks remain open.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
+- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, and first-wave page integration; automated evidence is captured below, while manual browser spot checks remain open.
 
 ## Top-Level Components
 
@@ -103,7 +103,7 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 | 1 | `admin/companies/{company}` | Bridge added after backend subject coverage for direct company, departments, relationships, external accesses, and linked address mutations; page field-strategy closeout remains. |
 | 1 | `admin/employees/{employee}` and `people/employees/{employee}` | Bridge added to both admin Core and People workbench detail pages after backend subject coverage for direct employee, linked user mutations, linked address mutations, and existing roster subject expansion; page field-strategy closeout remains. |
 | 1 | `admin/addresses/{address}` | Bridge added after backend subject coverage for direct address and addressable owner links; page field-strategy closeout remains. |
-| 1 | `commerce/inventory/items/{item}` | Backend subject coverage added in the nested Commerce repo for direct item, fitments, photos, catalog values, listings, and listing drafts; listing/draft noisy snapshot fields excluded; page field-strategy review and UI bridge still pending. |
+| 1 | `commerce/inventory/items/{item}` | Backend subject coverage added in the nested Commerce repo for direct item, fitments, photos, catalog values, listings, and listing drafts; listing/draft noisy snapshot fields excluded; bridge is present on the detail page and page field-strategy closeout remains. |
 | 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Operational records with existing workflow/status histories; add Audit history only after deciding how it complements, not duplicates, domain timelines. |
 | 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Framework/admin records where global audit may help operators; lower priority than business source records. |
 | 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Use only where a stable one-record detail context exists. Do not add one history Livewire island per table row or roster cell. |
@@ -119,7 +119,7 @@ Goal: complete the UI/page work after the shared drawer/trigger polish landed, w
 - [x] Migrate `admin/users/{user}` from direct `SourceHistory` usage to the bridge and preserve the existing History trigger behavior, authorization gating, drawer empty state, trace opening, and full-history affordance. {amp/gpt-5}
 - [x] Add the bridge to the Core Wave 1 pages that are in the parent repo (`admin/companies/{company}`, `admin/employees/{employee}`, and `admin/addresses/{address}`), using only the already-added subject handles/direct fallbacks and source capabilities. {amp/gpt-5}
 - [x] Add the bridge to the People employee detail page in the nested People repo. {amp/gpt-5}
-- [x] Leave `commerce/inventory/items/{item}` for a separate nested-repo pass because Commerce has its own repository boundary. {amp/gpt-5}
+- [x] Complete `commerce/inventory/items/{item}` in a separate nested-repo pass because Commerce has its own repository boundary. {amp/gpt-5}
 - [x] Add/adjust UI-facing tests for the bridge and migrated pages, favoring authorization/disclosure boundaries over brittle markup snapshots. {amp/gpt-5}
 - [x] Run the route-inventory page-weight scan and update this plan with evidence. {amp/gpt-5}
 - [ ] Run manual browser verification and route-specific page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows.
@@ -174,10 +174,10 @@ Goal: expose consistent local history on the first high-value record pages using
 - [x] Add the bridge to `admin/companies/{company}` only after company-related subject coverage is present. {amp/gpt-5}
 - [x] Add the bridge to `admin/employees/{employee}` and/or `people/employees/{employee}` only after employee-related subject coverage is present. {amp/gpt-5}
 - [x] Add the bridge to `admin/addresses/{address}` only after owner/subject behavior is explicit. {amp/gpt-5}
-- [ ] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present. Left for a separate nested-repo pass.
+- [x] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present. {amp/gpt-5}
 - [ ] For every Wave 1 page, verify auditors can open history and trace links, non-auditors cannot see/open history, empty state is useful, and the bounded result set is clear.
 
-Validation: targeted feature tests, browser checks for each page, `git diff --check`, Pint on touched PHP files, and page-weight checks for representative pages.
+Evidence: parent Audit bridge tests passed; Commerce item detail trigger passed with `php artisan test app\Modules\Commerce\Inventory\Tests\Feature\ItemWorkbenchTest.php --filter="authenticated users can view an inventory item detail page"`; full Commerce `ItemWorkbenchTest.php` currently has two unrelated PhotoRoom cleanup failures, while the item-detail/history assertion is green. Remaining validation: browser checks for each page, route-specific page weights, and full-suite cleanup of unrelated failures.
 
 ### Phase 5 — Roll out operational/workflow records without duplicating domain timelines
 
