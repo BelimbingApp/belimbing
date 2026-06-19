@@ -32,14 +32,18 @@
                         @endif
                     </div>
 
-                    <button
-                        type="button"
-                        wire:click="closeTrace"
-                        class="rounded p-1 text-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
-                        aria-label="{{ __('Close trace timeline') }}"
-                    >
-                        <x-icon name="heroicon-o-x-mark" class="size-5" />
-                    </button>
+                    <div class="flex shrink-0 items-center gap-1">
+                        <x-ui.inspector-default-width-button />
+
+                        <button
+                            type="button"
+                            wire:click="closeTrace"
+                            class="rounded p-1 text-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                            aria-label="{{ __('Close trace timeline') }}"
+                        >
+                            <x-icon name="heroicon-o-x-mark" class="size-5" />
+                        </button>
+                    </div>
                 </div>
 
                 @if (! empty($traceTimeline['actor_labels']))
