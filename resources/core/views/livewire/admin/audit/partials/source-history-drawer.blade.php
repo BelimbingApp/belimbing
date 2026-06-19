@@ -1,33 +1,8 @@
-<div
-    x-data="{ open: @entangle('sourceHistoryDrawerOpen') }"
-    x-show="open"
-    x-cloak
-    @keydown.escape.window="$wire.closeSourceHistory()"
-    class="fixed inset-0 z-50 overflow-hidden"
-    style="display: none;"
+<x-ui.inspector-drawer
+    wire:model="sourceHistoryDrawerOpen"
+    close-action="closeSourceHistory"
+    labelledby="audit-source-history-title"
 >
-    <div
-        x-show="open"
-        x-transition.opacity.duration.150ms
-        @click="$wire.closeSourceHistory()"
-        class="absolute inset-0 bg-black/50"
-    ></div>
-
-    <div class="absolute inset-y-0 right-0 flex max-w-full pl-8 sm:pl-12">
-        <section
-            x-show="open"
-            x-transition:enter="transform transition ease-out duration-200 motion-reduce:duration-0"
-            x-transition:enter-start="translate-x-full"
-            x-transition:enter-end="translate-x-0"
-            x-transition:leave="transform transition ease-in duration-150 motion-reduce:duration-0"
-            x-transition:leave-start="translate-x-0"
-            x-transition:leave-end="translate-x-full"
-            @click.stop
-            class="flex h-full w-screen max-w-3xl flex-col border-l border-border-default bg-surface-card shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="audit-source-history-title"
-        >
             <header class="border-b border-border-default p-card-inner">
                 <div class="flex items-start justify-between gap-4">
                     <div class="min-w-0">
@@ -122,6 +97,4 @@
                     </ol>
                 @endif
             </div>
-        </section>
-    </div>
-</div>
+</x-ui.inspector-drawer>
