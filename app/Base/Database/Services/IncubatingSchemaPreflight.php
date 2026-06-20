@@ -89,7 +89,8 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $cascaded = [];
 
         if ($tables !== []) {
-            $scope = $this->expandedRebuildScope($tables, $migrationFiles);
+            $foreignKeysByTable = $this->foreignKeysByTable();
+            $scope = $this->expandedRebuildScope($tables, $migrationFiles, $foreignKeysByTable);
             $tables = $scope['tables'];
             $cascaded = array_values(array_diff($tables, $incubatingTables));
             $migrationFiles = $scope['migration_files'];
@@ -98,7 +99,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 $migrationFiles,
             )));
 
-            $this->dropTables($tables);
+            $this->dropTables($tables, $foreignKeysByTable);
         }
 
         $deletedMigrations = DB::table('migrations')
@@ -236,15 +237,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      *
      * @param  list<string>  $tablesToDrop
      * @param  list<string>  $migrationFiles
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
      * @return array{tables: list<string>, migration_files: list<string>}
      */
-    private function expandedRebuildScope(array $tablesToDrop, array $migrationFiles): array
+    private function expandedRebuildScope(array $tablesToDrop, array $migrationFiles, array $foreignKeysByTable): array
     {
         $tables = array_values(array_unique($tablesToDrop));
         $migrationFiles = array_values(array_unique($migrationFiles));
         $tableSet = array_fill_keys($tables, true);
         $fileSet = array_fill_keys($migrationFiles, true);
-        $foreignKeysByTable = $this->foreignKeysByTable();
 
         do {
             $changed = false;
@@ -442,29 +443,125 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
+     * Drop tables in a driver-agnostic order.
+     *
+     * Tables are dropped dependents-first (a table only after every table
+     * referencing it has already gone), which satisfies PostgreSQL/MySQL
+     * foreign-key enforcement and SQLite's pragma without disabling checks.
+     * Tables left in a foreign-key cycle (mutual references that admit no
+     * ordering) are dropped together: a single comma-list DROP TABLE on
+     * drivers that accept it (Postgres, MySQL), or per-table with SQLite's
+     * foreign-key checks disabled/deferred.
+     *
      * @param  list<string>  $tables
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
      */
-    private function dropTables(array $tables): void
+    private function dropTables(array $tables, array $foreignKeysByTable): void
     {
+        [$ordered, $cyclic] = $this->topologicalDropOrder($tables, $foreignKeysByTable);
+
+        foreach ($ordered as $table) {
+            Schema::dropIfExists($table);
+        }
+
+        if ($cyclic === []) {
+            return;
+        }
+
         $connection = Schema::getConnection();
 
-        if ($connection->getDriverName() === 'pgsql') {
-            $grammar = $connection->getQueryGrammar();
-            $wrapped = array_map(fn (string $table): string => $grammar->wrapTable($table), $tables);
-            $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped));
+        if ($connection->getDriverName() === 'sqlite') {
+            $deferForeignKeys = $connection->transactionLevel() > 0;
+
+            if ($deferForeignKeys) {
+                $connection->statement('PRAGMA defer_foreign_keys = ON');
+            }
+
+            Schema::disableForeignKeyConstraints();
+
+            try {
+                foreach ($cyclic as $table) {
+                    Schema::dropIfExists($table);
+                }
+            } catch (\Throwable $exception) {
+                Schema::enableForeignKeyConstraints();
+
+                throw $exception;
+            }
+
+            Schema::enableForeignKeyConstraints();
+
+            if ($deferForeignKeys) {
+                $connection->statement('PRAGMA defer_foreign_keys = OFF');
+            }
 
             return;
         }
 
-        Schema::disableForeignKeyConstraints();
+        $grammar = $connection->getQueryGrammar();
+        $wrapped = array_map(fn (string $table): string => $grammar->wrapTable($table), $cyclic);
+        $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped));
+    }
 
-        try {
-            foreach ($tables as $table) {
-                Schema::dropIfExists($table);
-            }
-        } finally {
-            Schema::enableForeignKeyConstraints();
+    /**
+     * Order $tables so each table appears only after every other table that
+     * references it (dependents-first), which makes a plain per-table
+     * DROP TABLE safe under foreign-key enforcement on every driver. Self
+     * references are ignored. Returns the ordered prefix plus any tables that
+     * remain because they sit in a foreign-key cycle.
+     *
+     * @param  list<string>  $tables
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     * @return array{0: list<string>, 1: list<string>}
+     */
+    private function topologicalDropOrder(array $tables, array $foreignKeysByTable): array
+    {
+        $tableSet = array_fill_keys($tables, true);
+        $outbound = [];
+        $inDegree = [];
+
+        foreach ($tables as $table) {
+            $outbound[$table] = [];
+            $inDegree[$table] = 0;
         }
+
+        foreach ($tables as $table) {
+            foreach ($foreignKeysByTable[$table] ?? [] as $foreignKey) {
+                $parent = $foreignKey['foreign_table'] ?? null;
+
+                if (! is_string($parent) || $parent === $table || ! isset($tableSet[$parent])) {
+                    continue;
+                }
+
+                // $table references $parent, so $table must be dropped first.
+                $outbound[$table][] = $parent;
+                $inDegree[$parent]++;
+            }
+        }
+
+        $queue = array_values(array_filter($tables, fn (string $table): bool => $inDegree[$table] === 0));
+        sort($queue);
+
+        $ordered = [];
+
+        while ($queue !== []) {
+            $table = array_shift($queue);
+            $ordered[] = $table;
+
+            foreach ($outbound[$table] as $parent) {
+                if (--$inDegree[$parent] === 0) {
+                    $queue[] = $parent;
+                    sort($queue);
+                }
+            }
+        }
+
+        $cyclic = array_values(array_filter(
+            $tables,
+            fn (string $table): bool => $inDegree[$table] > 0,
+        ));
+
+        return [$ordered, $cyclic];
     }
 
     /**

@@ -198,9 +198,10 @@ Goal: avoid unsafe partial rebuilds.
 - [x] Build table dependency discovery from database foreign keys and declared migration effects. {amp}
 - [x] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans. {amp}
 - [x] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split. {amp}
-- [ ] Verify PostgreSQL and SQLite/MySQL behavior separately, especially around constraint preservation and rerun ordering.
+- [x] Verify SQLite behavior around dependent ordering and cyclic foreign-key fallback. {amp}
+- [ ] Verify PostgreSQL and MySQL behavior separately, especially around constraint preservation and rerun ordering.
 
-Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade and the multi-table dependent-migration rerun unit on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. PostgreSQL/MySQL verification remains open.
+Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade, the multi-table dependent-migration rerun unit, and mutually-referencing table drops on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL/MySQL verification remains open.
 
 ### Phase 6 - Pluggable module schema ordering
 
