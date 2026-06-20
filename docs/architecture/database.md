@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-06-20
 
 ## Overview
 
@@ -11,19 +11,22 @@ Belimbing (BLB) uses a **module-first database architecture**. Unlike standard L
 To manage this complexity, the framework enforces:
 1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
-3.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
-4.  **Source-Declared Schema Incubation**: To let local/test databases rebuild in-progress schema while production/staging only run explicit, forward-safe changes.
-5.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
+3.  **Manifest Dependency Preflight**: To fail missing, disabled, incompatible, or misordered module dependencies before migrations run.
+4.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
+5.  **Source-Declared Schema Incubation**: To let local/test databases rebuild in-progress schema while production/staging only run explicit, forward-safe changes.
+6.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
 
 ---
 
 ## 1. Migration Architecture
 
-Migrations are **auto-discovered** from Base, application module, and extension module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
+Migrations are **auto-discovered** from Base, enabled application module, and extension module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
 
 This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
 At a high level, `php artisan migrate --dev` means: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed.
+
+Before module migration paths are registered, BLB scans installed module manifests from `composer.json` `extra.blb` blocks and validates `requires-modules`. Required modules must be installed and enabled. `extra.blb.module` is canonical when present; otherwise a conventional filesystem identity such as `core/company`, `people/payroll`, `base/database`, or `vendor/module` satisfies availability. Version constraints require the required module to publish `extra.blb.version`. Because Laravel sorts migration files by filename after path discovery, BLB also verifies that every requiring module's earliest migration filename sorts after the latest migration filename in each required module that ships migrations. Duplicate migration names across module paths are blocked because Laravel would otherwise keep only one file for that migration name. The manifest graph is therefore the dependency contract, and filename prefixes remain the deterministic ordering mechanism Laravel can execute. Explicit `--path` scopes choose what Laravel runs, but they do not bypass the global module dependency preflight.
 
 ---
 
@@ -44,6 +47,12 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | `0310` | Modules/Commerce domain | Commerce modules. |
 | `0320` | Modules/People domain | People workflows that depend on Core employee/company foundations. |
 | `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
+
+### Manifest Dependency Ordering
+
+`extra.blb.requires-modules` declares module availability and migration-order dependencies. Use canonical module identifiers such as `core/company`, `people/settings`, or `vendor/module`. A required module must be present and not disabled before any module-aware migration command starts. If the requirement uses anything other than `*`, the required module must also publish a compatible `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
+
+Migration filenames must still make the dependency executable. For any two modules with migrations, the requiring module's earliest migration filename must sort after the required module's latest migration filename. If that is not true, BLB fails before running Laravel's migrator and the fix is to rename migrations or change the manifest so the required module sorts first. New cross-module foreign-key dependencies should be represented both in the manifest graph and in filename prefixes/timestamps. Files under `Database/Migrations` that do not match Laravel's `*_*.php` migration pattern are ignored by this ordering check, just as Laravel ignores them.
 
 ### Module Identification (MM_DD)
 

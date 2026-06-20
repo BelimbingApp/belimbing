@@ -2,24 +2,24 @@
 
 namespace App\Base\Foundation\ModuleManifest;
 
+use App\Base\Foundation\Services\DomainState;
+use App\Base\Support\Str;
+
 /**
  * Scans the BLB module tree for `composer.json` files declaring an
  * `extra.blb` block and returns parsed manifests.
  *
  * Operates on filesystem paths — does not require composer's autoloader
- * to be aware of the modules. Used at boot to verify required-module
- * dependencies and to log missing optional modules.
- *
- * Scope today is the People domain plus the `extensions/` tree. Other
- * domains acquire manifests as they decouple.
+ * to be aware of the modules. Used by the plugin dashboard and the database
+ * migration preflight to verify required-module dependencies.
  */
 class ModuleManifestReader
 {
     /**
-     * @param  list<string>  $rootPaths  filesystem directories to scan; each
-     *                                   one is expected to contain
-     *                                   `{Module}/composer.json` immediately
-     *                                   below it.
+     * @param  list<string>  $rootPaths  filesystem directories to scan. A root
+     *                                   may be a module root, a one-level module
+     *                                   collection (`app/Base`), or a two-level
+     *                                   collection (`app/Modules`, `extensions`).
      */
     public function __construct(
         private readonly array $rootPaths,
@@ -32,16 +32,10 @@ class ModuleManifestReader
     {
         $manifests = [];
 
-        foreach ($this->rootPaths as $root) {
-            if (! is_dir($root)) {
-                continue;
-            }
-
-            foreach ((array) glob($root.DIRECTORY_SEPARATOR.'*'.DIRECTORY_SEPARATOR.'composer.json') as $path) {
-                $manifest = $this->parse($path);
-                if ($manifest !== null) {
-                    $manifests[] = $manifest;
-                }
+        foreach ($this->manifestPaths() as $path) {
+            $manifest = $this->parse($path);
+            if ($manifest !== null) {
+                $manifests[] = $manifest;
             }
         }
 
@@ -49,35 +43,111 @@ class ModuleManifestReader
     }
 
     /**
+     * Installed module identities keyed to their module root paths.
+     *
+     * A manifest `extra.blb.module` is authoritative when present. Otherwise
+     * BLB falls back to the filesystem identity (`core/company`,
+     * `people/payroll`, `base/database`, `vendor/module`) so manifests can
+     * require Base/Core modules that have not yet needed their own metadata.
+     *
+     * @return array<string, string>
+     */
+    public function moduleRoots(): array
+    {
+        $roots = [];
+        $manifestsByRoot = [];
+
+        foreach ($this->all() as $manifest) {
+            $manifestsByRoot[$this->normalizePath($manifest->path)] = $manifest;
+        }
+
+        foreach ($this->discoverModuleRoots() as $root) {
+            $manifest = $manifestsByRoot[$this->normalizePath($root)] ?? null;
+            $module = $manifest !== null && $manifest->module !== ''
+                ? $manifest->module
+                : $this->conventionalModuleId($root);
+
+            if ($module !== null) {
+                $this->rememberModuleRoot($roots, $module, $root);
+            }
+        }
+
+        ksort($roots);
+
+        return $roots;
+    }
+
+    /**
      * Verify that every required-module declared by a manifest is itself
      * present in the loaded set. Returns the list of unmet requirements
-     * as ["{manifest-name}" => "{missing-module}"]. Empty array means OK.
+     * as rows with requiring manifest and missing module. Empty array means OK.
      *
      * @param  list<ModuleManifest>  $manifests
      * @return list<array{requiring: string, missing: string}>
      */
     public function verifyRequiredModules(array $manifests): array
     {
-        $present = [];
-        foreach ($manifests as $m) {
-            if ($m->module !== '') {
-                $present[$m->module] = true;
+        return array_values(array_map(
+            fn (array $issue): array => [
+                'requiring' => $issue['requiring'],
+                'missing' => $issue['required'],
+            ],
+            array_filter(
+                $this->dependencyIssues($manifests),
+                fn (array $issue): bool => $issue['issue'] === 'missing',
+            ),
+        ));
+    }
+
+    /**
+     * Required-module dependency issues, including version incompatibility.
+     *
+     * @param  list<ModuleManifest>  $manifests
+     * @return list<array{issue: 'missing'|'incompatible', requiring: string, requiring_module: string, required: string, constraint: string, installed_version?: string}>
+     */
+    public function dependencyIssues(array $manifests): array
+    {
+        $present = $this->moduleRoots();
+        $versions = [];
+
+        foreach ($manifests as $manifest) {
+            if ($manifest->module !== '') {
+                $versions[$manifest->module] = $manifest->version;
             }
         }
 
-        $unmet = [];
-        foreach ($manifests as $m) {
-            foreach (array_keys($m->requiresModules) as $required) {
+        $issues = [];
+
+        foreach ($manifests as $manifest) {
+            foreach ($manifest->requiresModules as $required => $constraint) {
                 if (! isset($present[$required])) {
-                    $unmet[] = [
-                        'requiring' => $m->name,
-                        'missing' => $required,
+                    $issues[] = [
+                        'issue' => 'missing',
+                        'requiring' => $manifest->name,
+                        'requiring_module' => $manifest->module,
+                        'required' => $required,
+                        'constraint' => $constraint,
+                    ];
+
+                    continue;
+                }
+
+                $installedVersion = $versions[$required] ?? '';
+
+                if (! $this->versionSatisfies($installedVersion, $constraint)) {
+                    $issues[] = [
+                        'issue' => 'incompatible',
+                        'requiring' => $manifest->name,
+                        'requiring_module' => $manifest->module,
+                        'required' => $required,
+                        'constraint' => $constraint,
+                        'installed_version' => $installedVersion,
                     ];
                 }
             }
         }
 
-        return $unmet;
+        return $issues;
     }
 
     private function parse(string $composerPath): ?ModuleManifest
@@ -93,9 +163,13 @@ class ModuleManifestReader
             throw new ModuleManifestException(sprintf('Module manifest at %s has no name.', $composerPath));
         }
 
+        $module = is_string($blb['module'] ?? null) && $blb['module'] !== ''
+            ? (string) $blb['module']
+            : ($this->conventionalModuleId(dirname($composerPath)) ?? '');
+
         return new ModuleManifest(
             name: $name,
-            module: (string) ($blb['module'] ?? ''),
+            module: $module,
             role: (string) ($blb['role'] ?? 'unknown'),
             path: dirname($composerPath),
             version: (string) ($blb['version'] ?? ''),
@@ -105,6 +179,268 @@ class ModuleManifestReader
             publishesEvents: $this->normaliseStringList($blb['publishes-events'] ?? []),
             consumesEvents: $this->normaliseStringList($blb['consumes-events'] ?? []),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function manifestPaths(): array
+    {
+        $paths = [];
+
+        foreach ($this->discoverModuleRoots() as $root) {
+            $path = $root.DIRECTORY_SEPARATOR.'composer.json';
+
+            if (is_file($path)) {
+                $paths[] = $path;
+            }
+        }
+
+        sort($paths);
+
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function discoverModuleRoots(): array
+    {
+        $roots = [];
+
+        foreach ($this->rootPaths as $root) {
+            if (! is_dir($root)) {
+                continue;
+            }
+
+            foreach ($this->moduleRootCandidates($root) as $candidate) {
+                if ($this->looksLikeModuleRoot($candidate)) {
+                    $roots[] = $candidate;
+                }
+            }
+        }
+
+        $roots = DomainState::filterPaths(array_values(array_unique($roots)));
+
+        sort($roots);
+
+        return $roots;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function moduleRootCandidates(string $root): array
+    {
+        return array_values(array_unique(array_merge(
+            [$root],
+            glob($root.DIRECTORY_SEPARATOR.'*', GLOB_ONLYDIR) ?: [],
+            glob($root.DIRECTORY_SEPARATOR.'*'.DIRECTORY_SEPARATOR.'*', GLOB_ONLYDIR) ?: [],
+        )));
+    }
+
+    private function looksLikeModuleRoot(string $path): bool
+    {
+        return is_file($path.DIRECTORY_SEPARATOR.'composer.json')
+            || is_file($path.DIRECTORY_SEPARATOR.'ServiceProvider.php')
+            || is_dir($path.DIRECTORY_SEPARATOR.'Database'.DIRECTORY_SEPARATOR.'Migrations');
+    }
+
+    private function conventionalModuleId(string $path): ?string
+    {
+        $relative = $this->relativeBasePath($path);
+        $segments = explode('/', trim($relative, '/'));
+
+        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Base' && isset($segments[2])) {
+            return 'base/'.$this->pascalSegmentToIdentifier($segments[2]);
+        }
+
+        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Modules' && isset($segments[2], $segments[3])) {
+            return $this->pascalSegmentToIdentifier($segments[2]).'/'.$this->pascalSegmentToIdentifier($segments[3]);
+        }
+
+        if (($segments[0] ?? null) === 'extensions' && isset($segments[1], $segments[2])) {
+            return $segments[1].'/'.$segments[2];
+        }
+
+        return null;
+    }
+
+    private function pascalSegmentToIdentifier(string $segment): string
+    {
+        if (strtoupper($segment) === $segment) {
+            return strtolower($segment);
+        }
+
+        return Str::pascalToKebab($segment);
+    }
+
+    /**
+     * @param  array<string, string>  $roots
+     */
+    private function rememberModuleRoot(array &$roots, string $module, string $root): void
+    {
+        $root = rtrim($root, DIRECTORY_SEPARATOR);
+
+        if (isset($roots[$module]) && $this->normalizePath($roots[$module]) !== $this->normalizePath($root)) {
+            throw new ModuleManifestException(sprintf(
+                'Duplicate BLB module identity [%s] declared by [%s] and [%s].',
+                $module,
+                $roots[$module],
+                $root,
+            ));
+        }
+
+        $roots[$module] = $root;
+    }
+
+    private function versionSatisfies(string $version, string $constraint): bool
+    {
+        $constraint = trim($constraint);
+
+        if ($constraint === '' || $constraint === '*') {
+            return true;
+        }
+
+        if ($version === '') {
+            return false;
+        }
+
+        foreach (preg_split('/\s*\|\|\s*/', $constraint) ?: [] as $group) {
+            if ($group === '') {
+                continue;
+            }
+
+            if ($this->versionSatisfiesGroup($version, $group)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function versionSatisfiesGroup(string $version, string $constraint): bool
+    {
+        if (preg_match_all(
+            '/(>=|<=|>|<|=|==|\^|~)?\s*(v?\d+(?:\.\d+){0,2}(?:\.\*)?|\*)/',
+            $constraint,
+            $matches,
+            PREG_SET_ORDER,
+        ) === 0) {
+            return false;
+        }
+
+        $consumed = implode('', array_map(fn (array $match): string => $match[0], $matches));
+        $normalizedConstraint = preg_replace('/[\s,]+/', '', $constraint) ?? $constraint;
+        $normalizedConsumed = preg_replace('/[\s,]+/', '', $consumed) ?? $consumed;
+
+        if ($normalizedConstraint !== $normalizedConsumed) {
+            return false;
+        }
+
+        foreach ($matches as $match) {
+            if (! $this->versionSatisfiesToken($version, $match[1] ?: '', $match[2])) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function versionSatisfiesToken(string $version, string $operator, string $constraint): bool
+    {
+        if ($constraint === '*') {
+            return true;
+        }
+
+        if ($operator === '^') {
+            return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), '>=')
+                && version_compare($this->normalizeVersion($version), $this->caretUpperBound($constraint), '<');
+        }
+
+        if ($operator === '~') {
+            return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), '>=')
+                && version_compare($this->normalizeVersion($version), $this->tildeUpperBound($constraint), '<');
+        }
+
+        if (str_ends_with($constraint, '.*')) {
+            return version_compare($this->normalizeVersion($version), $this->wildcardLowerBound($constraint), '>=')
+                && version_compare($this->normalizeVersion($version), $this->wildcardUpperBound($constraint), '<');
+        }
+
+        $operator = $operator === '==' ? '=' : $operator;
+
+        return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), $operator !== '' ? $operator : '=');
+    }
+
+    private function caretUpperBound(string $version): string
+    {
+        $parts = array_map('intval', explode('.', $this->normalizeVersion($version)));
+        $major = $parts[0] ?? 0;
+        $minor = $parts[1] ?? 0;
+        $patch = $parts[2] ?? 0;
+
+        if ($major > 0) {
+            return ($major + 1).'.0.0';
+        }
+
+        if ($minor > 0) {
+            return '0.'.($minor + 1).'.0';
+        }
+
+        return '0.0.'.($patch + 1);
+    }
+
+    private function tildeUpperBound(string $version): string
+    {
+        $normalized = $this->normalizeVersion($version);
+        $parts = array_map('intval', explode('.', $normalized));
+
+        if (substr_count($normalized, '.') >= 2) {
+            return ($parts[0] ?? 0).'.'.(($parts[1] ?? 0) + 1).'.0';
+        }
+
+        return (($parts[0] ?? 0) + 1).'.0.0';
+    }
+
+    private function wildcardLowerBound(string $version): string
+    {
+        return str_replace('*', '0', $this->normalizeVersion($version));
+    }
+
+    private function wildcardUpperBound(string $version): string
+    {
+        $parts = explode('.', $this->normalizeVersion($version));
+        $wildcardIndex = array_search('*', $parts, true);
+
+        if ($wildcardIndex === false) {
+            return $this->normalizeVersion($version);
+        }
+
+        $base = array_slice($parts, 0, $wildcardIndex);
+        $incrementIndex = max(0, $wildcardIndex - 1);
+        $base[$incrementIndex] = (string) (((int) ($base[$incrementIndex] ?? 0)) + 1);
+
+        while (count($base) < 3) {
+            $base[] = '0';
+        }
+
+        return implode('.', array_slice($base, 0, 3));
+    }
+
+    private function normalizeVersion(string $version): string
+    {
+        return ltrim(trim($version), 'vV');
+    }
+
+    private function relativeBasePath(string $path): string
+    {
+        return str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $path);
+    }
+
+    private function normalizePath(string $path): string
+    {
+        return rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
     }
 
     /**

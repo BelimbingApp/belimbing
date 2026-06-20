@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Concerns;
 
+use App\Base\Database\Services\ModuleMigrationDependencyChecker;
 use Illuminate\Database\Console\Migrations\BaseCommand;
 use Illuminate\Database\Migrations\Migrator;
 
@@ -25,13 +26,10 @@ trait InteractsWithModuleMigrations
      */
     protected function loadAllModuleMigrations(): void
     {
-        $paths = array_merge(
-            glob(app_path('Base/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(app_path('Modules/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(base_path('extensions/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-        );
+        $discovery = app(ModuleMigrationDependencyChecker::class);
+        $discovery->assertReadyForMigration();
 
-        foreach ($paths as $path) {
+        foreach ($discovery->migrationPaths() as $path) {
             $this->migrator->path($path);
         }
     }

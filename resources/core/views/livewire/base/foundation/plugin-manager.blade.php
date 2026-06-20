@@ -18,12 +18,16 @@
     </nav>
 
     @if ($tab === 'installed')
-        @if (count($unmet) > 0)
+        @if (count($dependencyIssues) > 0)
             <div class="rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger-ink">
-                <div class="font-medium">{{ __('Unmet required dependencies') }}</div>
+                <div class="font-medium">{{ __('Module dependency issues') }}</div>
                 <ul class="mt-1 list-disc pl-5">
-                    @foreach ($unmet as $row)
-                        <li>{{ __(':a requires :b — not installed.', ['a' => $row['requiring'], 'b' => $row['missing']]) }}</li>
+                    @foreach ($dependencyIssues as $row)
+                        @if ($row['issue'] === 'missing')
+                            <li>{{ __(':a requires :b (:constraint), but it is not installed or enabled.', ['a' => $row['requiring'], 'b' => $row['required'], 'constraint' => $row['constraint']]) }}</li>
+                        @else
+                            <li>{{ __(':a requires :b (:constraint), but the installed version is :version.', ['a' => $row['requiring'], 'b' => $row['required'], 'constraint' => $row['constraint'], 'version' => $row['installed_version'] ?: __('unversioned')]) }}</li>
+                        @endif
                     @endforeach
                 </ul>
             </div>

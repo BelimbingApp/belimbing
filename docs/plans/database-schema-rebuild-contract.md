@@ -1,6 +1,6 @@
 # Database Schema Rebuild Contract
 
-**Status:** In progress
+**Status:** Complete
 **Last Updated:** 2026-06-20
 **Sources:** `AGENTS.md`, `docs/architecture/database.md`, `app/Base/Database/AGENTS.md`, `app/Base/Database/Console/Commands/FreshCommand.php`, `app/Base/Database/Console/Commands/MigrateCommand.php`, `app/Base/Database/Models/TableRegistry.php`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, 2026-05-24 schema workflow discussion
 **Agents:** {codex/gpt-5}, {amp}
@@ -166,9 +166,9 @@ Goal: move schema state into git-tracked module files.
 - [x] Add parser/resolver support for stable and incubating migration states.
 - [x] Support stable-to-incubating changes in source and document when that is acceptable before release versus after public use.
 - [x] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only. {amp}
-- [ ] Document the future `composer.json extra.blb.schema` mirror for coarse pluggable-module defaults.
+- [x] Document the future `composer.json extra.blb.schema` mirror for coarse pluggable-module defaults. {amp}
 
-Evidence: Deferred — no module has needed coarse module-level defaults; migration-local `use IncubatingSchema;` covers every current case. If a module later needs a whole-module default, add `Database/schema.php` as a coarse fallback only, never a per-file list (per D3). The `extra.blb.schema` doc item stays open under Phase 2 until a composerized plugin actually consumes the field.
+Evidence: `docs/architecture/module-system.md` and `docs/guides/extensions/database-migrations.md` document `extra.blb.schema` as a future coarse package default for nested-git/composer plugins, while keeping migration-local `use IncubatingSchema;` as the per-file source of truth. No current module consumes the coarse field.
 
 ### Phase 3 - Teach `migrate --dev` the incubating-schema preflight
 
@@ -199,18 +199,21 @@ Goal: avoid unsafe partial rebuilds.
 - [x] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans. {amp}
 - [x] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split. {amp}
 - [x] Verify SQLite behavior around dependent ordering and cyclic foreign-key fallback. {amp}
-- [ ] Verify PostgreSQL and MySQL behavior separately, especially around constraint preservation and rerun ordering.
+- [x] Verify PostgreSQL behavior around dependent ordering and cyclic foreign-key fallback. {amp}
+- [x] Skip MySQL behavior verification after PostgreSQL/SQLite coverage because local MySQL access is unavailable and project owner accepted the residual risk. {amp}
 
-Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade, the multi-table dependent-migration rerun unit, and mutually-referencing table drops on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL/MySQL verification remains open.
+Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade, the multi-table dependent-migration rerun unit, and mutually-referencing table drops on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL was verified manually against a disposable schema in the local `postgres` database: dependent-first drops succeeded, and one `DROP TABLE IF EXISTS widget, cycle` dropped a mutual FK cycle. MySQL verification was explicitly skipped because the local listener rejected passwordless/root/current-user access, Docker was unavailable, and the project owner accepted completing the plan without it.
 
 ### Phase 6 - Pluggable module schema ordering
 
 Goal: make preview installs of under-development modules reliable across repos.
 
-- [ ] Define how `extra.blb.requires-modules` maps to migration ordering and module availability.
-- [ ] Update extension migration docs so extension authors know how BLB detects dependencies, changed files, and incubating schema scope.
-- [ ] Decide how nested-git plugins and future composer plugins publish schema state to the host app.
-- [ ] Add checks that missing or incompatible required modules fail before migrations run.
+- [x] Define how `extra.blb.requires-modules` maps to migration ordering and module availability. {amp}
+- [x] Update extension migration docs so extension authors know how BLB detects dependencies, changed files, and incubating schema scope. {amp}
+- [x] Decide how nested-git plugins and future composer plugins publish schema state to the host app. {amp}
+- [x] Add checks that missing or incompatible required modules fail before migrations run. {amp}
+
+Evidence: `App\Base\Foundation\ModuleManifest\ModuleManifestReader` now scans module roots at app/Base, app/Modules, and two-level extensions, treats `extra.blb.module` as authoritative when present, falls back to conventional filesystem identities only for modules without manifests, filters disabled domains, and reports missing or incompatible required modules. `App\Base\Database\Services\ModuleMigrationDependencyChecker` runs before module migration paths are registered, orders paths by the manifest graph for deterministic reporting, blocks duplicate migration names, and fails if Laravel filename order cannot honor the manifest dependency; explicit `--path` scopes do not bypass the global module dependency preflight. The plugin manager now surfaces missing and incompatible dependency issues with the same model. Docs updated in `docs/architecture/database.md`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, and `app/Base/Database/AGENTS.md`. Tests: `tests/Feature/Base/Foundation/ModuleManifestReaderTest.php`, `tests/Feature/Database/MigrateCommandTest.php`, and `tests/Feature/Base/Foundation/PluginManagerTest.php`.
 
 ### Phase 7 - Retire local stability policy
 

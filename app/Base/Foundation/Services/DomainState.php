@@ -110,7 +110,7 @@ class DomainState
         }
 
         $prefixes = array_map(
-            fn (string $domain): string => str_replace('\\', '/', app_path('Modules/'.$domain)).'/',
+            fn (string $domain): string => str_replace('\\', '/', app_path('Modules/'.$domain)),
             $disabled,
         );
 
@@ -120,7 +120,7 @@ class DomainState
                 $normalized = str_replace('\\', '/', $path);
 
                 foreach ($prefixes as $prefix) {
-                    if (str_starts_with($normalized, $prefix)) {
+                    if ($normalized === $prefix || str_starts_with($normalized, $prefix.'/')) {
                         return false;
                     }
                 }

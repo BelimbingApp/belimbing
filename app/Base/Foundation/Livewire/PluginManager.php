@@ -50,7 +50,7 @@ class PluginManager extends Component
     {
         $reader = $this->reader();
         $manifests = $reader->all();
-        $unmet = $reader->verifyRequiredModules($manifests);
+        $dependencyIssues = $reader->dependencyIssues($manifests);
 
         $byRole = [
             'source' => [],
@@ -72,7 +72,7 @@ class PluginManager extends Component
         return view('livewire.base.foundation.plugin-manager', [
             'manifests' => $manifests,
             'byRole' => $byRole,
-            'unmet' => $unmet,
+            'dependencyIssues' => $dependencyIssues,
             'requiredCount' => $this->countRequired($manifests),
             'optionalCount' => $this->countOptional($manifests),
             'catalogEntries' => $available,
@@ -85,11 +85,8 @@ class PluginManager extends Component
     private function reader(): ModuleManifestReader
     {
         return new ModuleManifestReader([
-            base_path('app/Base'),
-            base_path('app/Modules/Core'),
-            base_path('app/Modules/Commerce'),
-            base_path('app/Modules/Operation'),
-            base_path('app/Modules/People'),
+            app_path('Base'),
+            app_path('Modules'),
             base_path('extensions'),
         ]);
     }

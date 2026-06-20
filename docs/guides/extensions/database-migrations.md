@@ -31,6 +31,44 @@ extensions/
         └── [same structure]
 ```
 
+## Module Manifest and Dependencies
+
+Extension modules may publish a module-root `composer.json` with an `extra.blb` block. The manifest is optional for simple extensions, but it is required when another module needs to depend on this extension by version, and it is the recommended way for an extension to declare its own hard dependencies.
+
+```json
+{
+    "name": "acme/quality",
+    "type": "blb-plugin",
+    "autoload": {
+        "psr-4": {
+            "Extensions\\Acme\\Quality\\": ""
+        }
+    },
+    "extra": {
+        "blb": {
+            "module": "acme/quality",
+            "role": "plugin",
+            "version": "0.1.0",
+            "description": "ACME quality extension.",
+            "requires-modules": {
+                "core/company": "*",
+                "core/employee": "*"
+            },
+            "optional-modules": {},
+            "schema": {
+                "default": "incubating"
+            }
+        }
+    }
+}
+```
+
+`extra.blb.module` is the stable BLB identity. Use `{owner}/{module}` for extensions. When present, this manifest identity is authoritative; the filesystem path is not a second alias. `extra.blb.requires-modules` declares hard dependencies by module identity; `*` means any installed version, while a non-wildcard constraint requires the required module to publish `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
+
+Before any module-aware migration command registers migration paths, BLB validates the installed manifest graph. Required modules must be installed and enabled, version constraints must be compatible, and migration filenames must make the dependency executable: the requiring module's earliest migration filename must sort after the latest migration filename in every required module that ships migrations. Laravel still sorts migrations by filename, so fix preflight failures by installing/enabling the required module, relaxing or correcting the constraint, or renaming migrations so the required module sorts first. Duplicate migration names across module paths are blocked because Laravel would otherwise keep only one file for that name. Explicit `--path` scopes choose what Laravel runs, but they do not bypass this global dependency preflight.
+
+Nested-git extensions and future Composer-delivered extensions use the same module-root manifest. Per-file schema maturity stays in the migration via `IncubatingSchema`. The `extra.blb.schema` block is only a coarse package default for future composerized plugins, useful for saying a whole pre-release package defaults to `incubating`; do not list individual migration files there.
+
 ## Table Naming Conventions
 
 **Critical**: Extension tables must be prefixed with the owner and module name to prevent conflicts.
@@ -136,7 +174,7 @@ Extension migrations are discovered automatically from:
 extensions/{owner}/{module}/Database/Migrations/
 ```
 
-The extension still needs `ServiceProvider.php` for provider discovery and any module-owned services, config, commands, views, or authz integration, but migrations do not need `loadMigrationsFrom()`.
+Disabled application domains are excluded from migration discovery. Extensions are discovered from the `extensions/` tree and checked against the manifest dependency preflight described above. The extension still needs `ServiceProvider.php` for provider discovery and any module-owned services, config, commands, views, or authz integration, but migrations do not need `loadMigrationsFrom()`.
 
 ### Step 1: Create Service Provider
 
@@ -270,7 +308,7 @@ public function up(): void
 
 ### 5. Handle Foreign Key Dependencies
 
-Order your migrations to respect foreign key dependencies:
+Order your migrations to respect foreign key dependencies. For cross-module dependencies, declare the module dependency in `extra.blb.requires-modules` and choose migration filenames that sort after the required module's migrations:
 
 ```php
 // Migration 1: Create base table
@@ -382,6 +420,17 @@ return new class extends Migration {
 1. Ensure referenced table exists (check migration order — core tables load before extensions)
 2. Verify foreign key column type matches referenced primary key
 3. Check that referenced table uses `id()` method (UNSIGNED BIGINT)
+
+### Module Dependency Preflight Fails
+
+**Problem**: Migration command fails before running migrations with "Module migration dependency preflight failed."
+
+**Solutions**:
+1. Install and enable the module named in `requires-modules`
+2. If the requirement has a version constraint, verify the required module publishes a compatible `extra.blb.version`
+3. Rename the extension migration timestamps so every required module's migrations sort first
+4. Rename duplicate migration filenames so each module migration has a unique basename
+5. Remove or relax a manifest requirement only when the extension truly works without that module
 
 ## Related Documentation
 

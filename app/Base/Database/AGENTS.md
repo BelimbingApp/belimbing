@@ -7,6 +7,7 @@ Migration-file-aware infrastructure on top of Laravel. Provides source-declared 
 Use [docs/architecture/database.md](../../../docs/architecture/database.md) as the source of truth for:
 
 - migration filename prefixes and execution order
+- module manifest dependency checks (`extra.blb.requires-modules`)
 - table naming conventions
 - migration registry assignments and dependency graph
 - registry architecture (`base_database_tables`, `base_database_seeders`, `base_database_migration_sources`)
@@ -84,6 +85,8 @@ Dev seeders extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (no
 5. run dev seeders
 
 Use `migrate --seed --seeder=...` when you want one specific seeder class instead of the full `--dev` dev-seeder sweep.
+
+Before any module-aware migration command registers paths, BLB scans installed module manifests. `extra.blb.module` is canonical when present; otherwise BLB falls back to the filesystem identity. `extra.blb.requires-modules` must point at modules that are installed and enabled; non-wildcard constraints require the required module to publish a compatible `extra.blb.version`. Because Laravel still sorts migration files by filename, every requiring module's earliest migration filename must sort after the latest migration filename in each required module that ships migrations. Duplicate migration names across module paths are blocked because Laravel would otherwise keep only one file. Explicit `--path` scopes do not bypass this global module dependency preflight. Fix dependency failures by installing/enabling the required module, adjusting the manifest constraint, or renaming migrations so the required module sorts first.
 
 `migrate:fresh` keeps Laravel semantics, but BLB blocks it outside disposable environments. It is allowed only in `APP_ENV=local`, `APP_ENV=testing`, or SQLite `:memory:` connections. For ordinary local schema iteration, use `migrate --dev` instead.
 
