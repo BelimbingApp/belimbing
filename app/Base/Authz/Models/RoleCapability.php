@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -22,5 +23,11 @@ class RoleCapability extends Model
     public function role(): BelongsTo
     {
         return $this->belongsTo(Role::class, 'role_id');
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        return $this->role_id !== null ? ['name' => 'role', 'id' => (int) $this->role_id] : null;
     }
 }

@@ -5,6 +5,9 @@ use App\Base\Audit\Listeners\MutationListener;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
+use App\Base\Authz\Models\RoleCapability;
 use App\Base\Workflow\Models\KanbanColumn;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
@@ -320,4 +323,40 @@ it('includes workflow configuration rows in workflow history', function (): void
     expectAuditSubjectRow(StatusConfig::class, 'workflow', $workflow->id);
     expectAuditSubjectRow(StatusTransition::class, 'workflow', $workflow->id);
     expectAuditSubjectRow(KanbanColumn::class, 'workflow', $workflow->id);
+});
+
+it('includes role capabilities and principal assignments in role history', function (): void {
+    [$company, $role, $user] = MutationListener::withoutAuditing(function (): array {
+        $company = Company::factory()->minimal()->create(['name' => 'Role History Company']);
+        $role = Role::query()->create([
+            'company_id' => $company->id,
+            'name' => 'Role Subject',
+            'code' => 'role_subject',
+            'is_system' => false,
+        ]);
+        $user = User::factory()->create(['company_id' => $company->id]);
+
+        return [$company, $role, $user];
+    });
+
+    $role->update(['description' => 'Role subject changed']);
+
+    RoleCapability::query()->create([
+        'role_id' => $role->id,
+        'capability_key' => 'admin.user.view',
+    ]);
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    flushAuditSubjectCoverageBuffer();
+
+    expectAuditSubjectRow(Role::class, 'role', $role->id);
+    expectAuditSubjectRow(RoleCapability::class, 'role', $role->id);
+    expectAuditSubjectRow(PrincipalRole::class, 'user', $user->id);
+    expectAuditSubjectRow(PrincipalRole::class, 'role', $role->id, 'expanded');
 });

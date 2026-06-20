@@ -1,9 +1,13 @@
 <?php
 
+use App\Base\Audit\Livewire\AuditLog\SourceHistory;
+use App\Base\Audit\Models\AuditMutation;
+use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Authz\Models\RoleCapability;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
@@ -33,6 +37,14 @@ function createRoleTestAdmin(): User
     return $user;
 }
 
+function flushRoleUiAuditBuffer(): void
+{
+    $buffer = app(AuditBuffer::class);
+    $reflection = new ReflectionClass($buffer);
+    $method = $reflection->getMethod('flush');
+    $method->invoke($buffer);
+}
+
 test('guests are redirected to login from role pages', function (): void {
     $role = Role::query()->first();
 
@@ -47,7 +59,78 @@ test('authenticated users with capability can view role pages', function (): voi
     $this->actingAs($user);
 
     $this->get(route('admin.roles.index'))->assertOk();
-    $this->get(route('admin.roles.show', $role))->assertOk();
+    $this->get(route('admin.roles.show', $role))
+        ->assertOk()
+        ->assertSee('History')
+        ->assertSeeHtml('wire:click="open"');
+});
+
+test('role history includes capability and user assignment changes', function (): void {
+    $admin = createRoleTestAdmin();
+    $this->actingAs($admin);
+
+    $role = Role::query()->create([
+        'company_id' => $admin->company_id,
+        'name' => 'History Role',
+        'code' => 'history_role',
+        'is_system' => false,
+    ]);
+
+    $targetUser = User::factory()->create(['company_id' => $admin->company_id]);
+
+    Livewire::test('admin.roles.show', ['role' => $role])
+        ->set('selectedCapabilities', ['admin.user.create'])
+        ->call('assignCapabilities')
+        ->set('selectedUserIds', [(string) $targetUser->id])
+        ->call('assignUsers');
+
+    flushRoleUiAuditBuffer();
+
+    $capability = RoleCapability::query()
+        ->where('role_id', $role->id)
+        ->where('capability_key', 'admin.user.create')
+        ->firstOrFail();
+
+    $assignment = PrincipalRole::query()
+        ->where('role_id', $role->id)
+        ->where('principal_id', $targetUser->id)
+        ->firstOrFail();
+
+    Livewire::test('admin.roles.show', ['role' => $role])
+        ->call('removeCapability', $capability->id)
+        ->call('removeUser', $assignment->id);
+
+    flushRoleUiAuditBuffer();
+
+    Livewire::test(SourceHistory::class, [
+        'title' => __('History for :name', ['name' => $role->name]),
+        'subjects' => [['name' => 'role', 'id' => $role->id]],
+        'auditableType' => $role->getMorphClass(),
+        'auditableId' => $role->id,
+        'sourceCapability' => 'admin.authz.role.view',
+    ])
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSee('RoleCapability')
+        ->assertSee('capability_key')
+        ->assertSee('admin.user.create')
+        ->assertSee('PrincipalRole')
+        ->assertSee('principal_id')
+        ->assertSee('Deleted');
+
+    expect(AuditMutation::query()
+        ->where('auditable_type', RoleCapability::class)
+        ->where('subject_name', 'role')
+        ->where('subject_id', (string) $role->id)
+        ->where('event', 'deleted')
+        ->exists())->toBeTrue()
+        ->and(AuditMutation::query()
+            ->where('auditable_type', PrincipalRole::class)
+            ->where('subject_name', 'role')
+            ->where('subject_id', (string) $role->id)
+            ->where('source', 'expanded')
+            ->where('event', 'deleted')
+            ->exists())->toBeTrue();
 });
 
 test('authenticated users without capability are denied role pages', function (): void {

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Livewire\Roles;
 
 use App\Base\Authz\Capability\CapabilityRegistry;
@@ -205,10 +206,12 @@ class Show extends Component implements ProvidesLaraPageContext
             return;
         }
 
-        RoleCapability::query()
+        $roleCapability = RoleCapability::query()
             ->where('id', $roleCapabilityId)
             ->where('role_id', $this->role->id)
-            ->delete();
+            ->first();
+
+        $roleCapability?->delete();
 
         $this->role->load('capabilities');
     }
@@ -253,10 +256,12 @@ class Show extends Component implements ProvidesLaraPageContext
             return;
         }
 
-        PrincipalRole::query()
+        $principalRole = PrincipalRole::query()
             ->where('id', $principalRoleId)
             ->where('role_id', $this->role->id)
-            ->delete();
+            ->first();
+
+        $principalRole?->delete();
     }
 
     public function render(): View

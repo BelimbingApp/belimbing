@@ -4,6 +4,13 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$role->name" :subtitle="$role->description" :pinnable="['label' => __('Administration') . '/' . __('Authorization') . '/' . __('Roles') . '/' . $role->name, 'url' => route('admin.roles.show', $role)]">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for :name', ['name' => $role->name])"
+                    :subjects="[['name' => 'role', 'id' => $role->id]]"
+                    :auditable-type="$role->getMorphClass()"
+                    :auditable-id="$role->id"
+                    source-capability="admin.authz.role.view"
+                />
                 @if (! $role->is_system && $canDelete)
                     <x-ui.button
                         variant="danger-ghost"

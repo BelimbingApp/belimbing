@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Models;
 
 use App\Modules\Core\Company\Models\Company;
@@ -51,5 +52,15 @@ class Role extends Model
     public function principalCount(): int
     {
         return $this->principalRoles()->count();
+    }
+
+    /** @return array{name: string, id: int}|null */
+    public function getAuditSubject(): ?array
+    {
+        if ($this->id === null) {
+            return null;
+        }
+
+        return ['name' => 'role', 'id' => $this->id];
     }
 }
