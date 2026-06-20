@@ -21,20 +21,20 @@
                                 <span class="font-mono normal-case tracking-normal text-ink">· {{ $subjectLabel }}</span>
                             @endif
                         </h2>
-                        <p class="mt-1 text-sm text-muted">
+                        <p class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
                             @if ($shownCount < $totalCount)
-                                {{ __('Showing :shown of :total mutations', ['shown' => $shownCount, 'total' => $totalCount]) }}
+                                <span>{{ __('Showing :shown of :total mutations', ['shown' => $shownCount, 'total' => $totalCount]) }}</span>
                             @else
-                                {{ trans_choice(':count mutation|:count mutations', $totalCount, ['count' => $totalCount]) }}
+                                <span>{{ trans_choice(':count mutation|:count mutations', $totalCount, ['count' => $totalCount]) }}</span>
+                            @endif
+
+                            @if ($sourceHistoryAllUrl !== '')
+                                <a href="{{ $sourceHistoryAllUrl }}" wire:navigate class="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+                                    {{ __('Data Mutations') }}
+                                    <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3.5" />
+                                </a>
                             @endif
                         </p>
-                        @if ($sourceHistoryAllUrl !== '')
-                            <p class="mt-1 text-xs text-muted">
-                                <a href="{{ $sourceHistoryAllUrl }}" wire:navigate class="font-medium text-accent hover:underline">
-                                    {{ __('Open Data Mutations') }}
-                                </a>
-                            </p>
-                        @endif
                     </div>
 
                     <div class="flex shrink-0 items-center gap-1">
@@ -51,12 +51,12 @@
                     </div>
                 </div>
 
-                <div class="mt-3 flex items-center gap-2">
+                <div class="mt-3 flex flex-wrap items-center gap-2">
                     <x-ui.search-input
                         id="audit-source-history-search"
                         wire:model.live.debounce.300ms="sourceHistorySearch"
                         placeholder="{{ __('Search actor, field, value, event, trace...') }}"
-                        class="w-full"
+                        class="w-full sm:w-96"
                     />
                     @if ($searchActive)
                         <button
@@ -73,18 +73,21 @@
 
             <div class="min-h-0 flex-1 overflow-y-auto p-card-inner">
                 @if ($entries === [])
-                    <div class="rounded-lg border border-border-default bg-surface-subtle p-4 text-sm text-muted">
+                    <div wire:key="source-history-empty" class="rounded-lg border border-border-default bg-surface-subtle p-4 text-sm text-muted">
                         {{ $searchActive ? __('No matching mutations found.') : __('No mutations have been recorded for this record yet.') }}
                     </div>
                 @else
-                    <div x-show="! isMobile && panelWidth >= 640" x-cloak class="overflow-hidden rounded-lg border border-border-default">
-                        <x-ui.table
-                            container="plain"
-                            size="xs"
-                            :caption="__('Record history mutations')"
-                            :sticky-header="true"
-                            :row-hover="true"
-                        >
+                    <x-ui.table
+                        wire:key="source-history-table"
+                        x-show="! isMobile && panelWidth >= 640"
+                        x-cloak
+                        container="plain"
+                        size="xs"
+                        :caption="__('Record history mutations')"
+                        :sticky-header="true"
+                        :row-hover="true"
+                        class="rounded-lg border border-border-default"
+                    >
                             <x-slot name="head">
                                 <tr>
                                     <x-ui.sortable-th
@@ -169,8 +172,7 @@
                                     </td>
                                 </tr>
                             @endforeach
-                        </x-ui.table>
-                    </div>
+                    </x-ui.table>
 
                     <ol x-show="isMobile || panelWidth < 640" x-cloak class="overflow-hidden rounded-lg border border-border-default bg-surface-card">
                         @foreach ($entries as $entry)
