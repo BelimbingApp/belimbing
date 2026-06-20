@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Base\Workflow\Services;
 
+use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Workflow\Contracts\TransitionAction;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\DTO\TransitionPayload;
 use App\Base\Workflow\DTO\TransitionResult;
 use App\Base\Workflow\Events\TransitionCompleted;
+use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
 use Illuminate\Contracts\Container\Container;
@@ -13,6 +16,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Orchestrates status transitions for workflow participants.
@@ -108,6 +112,8 @@ class WorkflowEngine
             transitionedAt: $now,
         );
 
+        $this->recordTransitionSemanticAction($model, $transition, $context, $payload);
+
         TransitionCompleted::dispatch($flow, $model, $transition, $history, $context, $payload);
 
         return TransitionResult::success($history);
@@ -138,5 +144,105 @@ class WorkflowEngine
         /** @var TransitionAction $action */
         $action = $this->container->make($transition->action_class);
         $action->execute($model, $transition, $context);
+    }
+
+    private function recordTransitionSemanticAction(
+        Model $model,
+        StatusTransition $transition,
+        TransitionContext $context,
+        TransitionPayload $payload,
+    ): void {
+        $subject = $this->modelAuditSubject($model);
+        $recordLabel = $this->subjectLabel($subject, $model);
+        $fromLabel = $this->statusLabel($payload->flow, $payload->fromStatus);
+        $toLabel = $this->statusLabel($payload->flow, $payload->toStatus);
+
+        app(SemanticActionRecorder::class)->record(
+            event: 'workflow.transition.completed',
+            summary: __('Transitioned :record from :from to :to', [
+                'record' => $recordLabel,
+                'from' => $fromLabel,
+                'to' => $toLabel,
+            ]),
+            source: __('Workflow'),
+            subject: $subject,
+            surface: 'workflow.'.$payload->flow,
+            context: [
+                'flow' => $payload->flow,
+                'flow_model' => $payload->flowModel,
+                'flow_id' => $payload->flowId,
+                'from_status' => $payload->fromStatus,
+                'to_status' => $payload->toStatus,
+                'from_label' => $fromLabel,
+                'to_label' => $toLabel,
+                'transition_id' => $transition->id,
+                'transition_label' => $transition->resolveLabel(),
+                'actor_type' => $context->actor->type->value,
+                'actor_id' => $context->actor->id,
+                'actor_role' => $context->actor->attributes['role'] ?? null,
+                'actor_department' => $context->actor->attributes['department'] ?? null,
+                'comment_present' => $context->comment !== null && trim($context->comment) !== '',
+                'comment_tag' => $context->commentTag,
+                'assignee_count' => count($context->assignees ?? []),
+                'attachment_count' => count($context->attachments ?? []),
+                'metadata_keys' => array_keys($context->metadata ?? []),
+            ],
+        );
+    }
+
+    /** @return array{name?: string, id?: int|string, identifier?: string|null} */
+    private function modelAuditSubject(Model $model): array
+    {
+        if (method_exists($model, 'getAuditSubject')) {
+            $subject = $model->getAuditSubject();
+
+            if (is_array($subject)
+                && isset($subject['name'], $subject['id'])
+                && is_string($subject['name'])
+                && $subject['name'] !== ''
+                && $subject['id'] !== null
+                && $subject['id'] !== '') {
+                return [
+                    'name' => $subject['name'],
+                    'id' => is_int($subject['id']) ? $subject['id'] : (string) $subject['id'],
+                    ...(($subject['identifier'] ?? null) !== null && $subject['identifier'] !== ''
+                        ? ['identifier' => (string) $subject['identifier']]
+                        : []),
+                ];
+            }
+        }
+
+        $id = $model->getKey();
+
+        return $id !== null && $id !== ''
+            ? ['name' => Str::snake(class_basename($model)), 'id' => is_int($id) ? $id : (string) $id]
+            : [];
+    }
+
+    /** @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject */
+    private function subjectLabel(array $subject, Model $model): string
+    {
+        $name = $subject['name'] ?? null;
+        $id = $subject['id'] ?? null;
+
+        if (is_string($name) && $name !== '' && $id !== null && $id !== '') {
+            return Str::headline($name).'#'.$id;
+        }
+
+        return class_basename($model).'#'.$model->getKey();
+    }
+
+    private function statusLabel(string $flow, ?string $code): string
+    {
+        if ($code === null || $code === '') {
+            return __('Unknown');
+        }
+
+        $label = StatusConfig::query()
+            ->where('flow', $flow)
+            ->where('code', $code)
+            ->value('label');
+
+        return is_string($label) && $label !== '' ? $label : Str::headline($code);
     }
 }

@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages, and the shared drawer now has dense-history search, sort, and progressive-load controls; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
+**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions. Manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
 **Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -27,7 +27,7 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / normalized string `subject_id` / optional `subject_identifier`, with direct `auditable_type` / normalized string `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Workflow transitions also record retained semantic actions so trace timelines can explain the user intent behind status changes. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
 - Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, first-wave page integration, and shared dense-history drawer behavior; automated evidence is captured below, while manual browser spot checks remain open.
 
 ## Top-Level Components
@@ -198,9 +198,9 @@ Goal: add Audit history where it complements existing status/audit timelines rat
 - [x] Add the bridge to `admin/integration/outbound-exchanges/{exchange}` with `admin.system.outbound-exchange.list` as the source capability. {amp/gpt-5}
 - [x] Add Authz Role subject metadata, expand user-role assignments into role history, and switch single-row role assignment removals to event-firing model deletes. {amp/gpt-5}
 - [x] Add the bridge to `admin/roles/{role}` with `admin.authz.role.view` as the source capability. {amp/gpt-5}
-- [ ] Add semantic actions for status transitions or workflow commands where mutation diffs alone do not explain intent.
+- [x] Add semantic actions for status transitions where mutation diffs alone do not explain intent, keeping comments/attachments/metadata sanitized to presence/count/key summaries. {amp/gpt-5}
 
-Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngineTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; nested Operation `git diff --check`; `php artisan test tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `php artisan test tests\Feature\Audit\AuditableTraitTest.php tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint` on touched Workflow/Audit/Integration/People/Authz files; parent and nested People `git diff --check`.
+Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngineTest.php`; `php artisan test app\Modules\Operation\Quality\Tests\Feature\QualityWorkflowUiTest.php`; nested Operation `git diff --check`; `php artisan test tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `php artisan test tests\Feature\Audit\AuditableTraitTest.php tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `php artisan test tests\Feature\Audit\AuditLogUiTest.php --filter="records semantic audit actions for workflow transitions"`; `vendor\bin\pint` on touched Workflow/Audit/Integration/People/Authz files; parent and nested People `git diff --check`.
 
 ### Phase 6 — Extend to workbenches and private extensions carefully
 

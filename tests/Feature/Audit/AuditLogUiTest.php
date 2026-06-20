@@ -8,11 +8,18 @@ use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Audit\Services\AuditSourceHistory;
+use App\Base\Audit\Services\AuditTraceTimeline;
+use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Workflow\DTO\TransitionContext;
+use App\Base\Workflow\Models\StatusConfig;
+use App\Base\Workflow\Models\StatusTransition;
+use App\Base\Workflow\Models\Workflow;
+use App\Base\Workflow\Services\WorkflowEngine;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Models\Company;
@@ -439,6 +446,112 @@ it('includes user role and direct capability mutations in user record history', 
         )->toBeTrue();
 
     expect($company->id)->toBe($target->company_id);
+});
+
+it('records semantic audit actions for workflow transitions', function (): void {
+    $actor = createAdminUser();
+    $this->actingAs($actor);
+
+    $company = MutationListener::withoutAuditing(function (): Company {
+        $company = Company::factory()->minimal()->pending()->create([
+            'name' => 'Workflow Action Company',
+        ]);
+
+        Workflow::query()->create([
+            'code' => 'audit_company_status',
+            'label' => 'Company Status',
+            'module' => 'test',
+        ]);
+
+        StatusConfig::query()->create([
+            'flow' => 'audit_company_status',
+            'code' => 'pending',
+            'label' => 'Pending Review',
+            'position' => 0,
+        ]);
+
+        StatusConfig::query()->create([
+            'flow' => 'audit_company_status',
+            'code' => 'active',
+            'label' => 'Active',
+            'position' => 1,
+        ]);
+
+        StatusTransition::query()->create([
+            'flow' => 'audit_company_status',
+            'from_code' => 'pending',
+            'to_code' => 'active',
+            'label' => 'Approve activation',
+        ]);
+
+        return $company;
+    });
+
+    $result = app(WorkflowEngine::class)->transition(
+        model: $company,
+        flow: 'audit_company_status',
+        toCode: 'active',
+        context: new TransitionContext(
+            actor: Actor::forUser($actor, attributes: ['role' => 'core_admin', 'department' => 'Operations']),
+            comment: 'Approved after review',
+            commentTag: 'approval',
+            assignees: [['user_id' => $actor->id]],
+            attachments: [['name' => 'approval-note.txt']],
+            metadata: ['approval_source' => 'admin-ui'],
+        ),
+    );
+
+    expect($result->success)->toBeTrue();
+
+    auditLogUiFlushBuffer();
+
+    $action = AuditAction::query()
+        ->where('event', 'workflow.transition.completed')
+        ->firstOrFail();
+    $payload = $action->payload;
+
+    expect($payload['semantic'])->toBeTrue()
+        ->and($payload['source'])->toBe('Workflow')
+        ->and($payload['summary'])->toBe('Transitioned Company#'.$company->id.' from Pending Review to Active')
+        ->and($payload['subject']['label'])->toBe('Company#'.$company->id)
+        ->and($payload['surface'])->toBe('workflow.audit_company_status')
+        ->and($payload['context'])->toMatchArray([
+            'flow' => 'audit_company_status',
+            'flow_model' => Company::class,
+            'flow_id' => $company->id,
+            'from_status' => 'pending',
+            'to_status' => 'active',
+            'from_label' => 'Pending Review',
+            'to_label' => 'Active',
+            'transition_label' => 'Approve activation',
+            'actor_type' => 'user',
+            'actor_id' => $actor->id,
+            'actor_role' => 'core_admin',
+            'actor_department' => 'Operations',
+            'comment_present' => true,
+            'comment_tag' => 'approval',
+            'assignee_count' => 1,
+            'attachment_count' => 1,
+            'metadata_keys' => ['approval_source'],
+        ]);
+
+    expect(array_key_exists('comment', $payload['context']))->toBeFalse()
+        ->and(array_key_exists('metadata', $payload['context']))->toBeFalse()
+        ->and(array_key_exists('attachments', $payload['context']))->toBeFalse();
+
+    $timeline = app(AuditTraceTimeline::class)->forTrace($action->trace_id);
+
+    expect(collect($timeline['entries'])->contains(
+        fn (array $entry): bool => $entry['kind'] === 'action'
+            && $entry['event'] === 'workflow.transition.completed'
+            && $entry['summary'] === 'Transitioned Company#'.$company->id.' from Pending Review to Active'
+    ))->toBeTrue();
+
+    Livewire::test(Actions::class)
+        ->set('filterEventFamily', 'product')
+        ->assertSee('Transitioned Company#'.$company->id.' from Pending Review to Active')
+        ->assertSee('Workflow')
+        ->assertSee('workflow.audit_company_status');
 });
 
 it('deduplicates expanded subject rows from direct record history', function (): void {
