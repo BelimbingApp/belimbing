@@ -15,7 +15,7 @@ Review for real harm first, then entropy. Bugs lead; cleanup earns its place.
 - `docs/plans/AGENTS.md` when plans are touched or larger follow-up is real.
 - `docs/architecture/module-system.md` for module placement or ownership.
 
-## Flow
+## Low Entropy Opportunitiy (LEO) Flow
 
 1. Identify scope: working tree, commit(s), branch diff, PR, or files.
 2. Read changed code plus enough callers, callees, data flow, and UI to understand the contract.
@@ -25,9 +25,9 @@ Review for real harm first, then entropy. Bugs lead; cleanup earns its place.
 
 ## Edit Rules
 
-- Review-only: report; do not edit.
+- Default to review-only unless the user explicitly asks to fix, commit, or otherwise edit; in review-only mode, report and do not edit.
 - Fix/commit/merit-commit request: make small merited fixes, validate, and commit only if cohesive with no blocker.
-- Fix tiny nearby entropy problems when already editing the same artifact and the change is obviously safe.
+- Fix tiny nearby entropy problems only when already in an explicit edit/fix path for the same artifact and the change is obviously safe.
 - Put larger or debatable redesigns in `docs/plans/`.
 - Never revert user or other-agent work unless explicitly asked.
 

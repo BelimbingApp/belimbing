@@ -1,7 +1,7 @@
 # Database Schema Rebuild Contract
 
 **Status:** In progress
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-06-20
 **Sources:** `AGENTS.md`, `docs/architecture/database.md`, `app/Base/Database/AGENTS.md`, `app/Base/Database/Console/Commands/FreshCommand.php`, `app/Base/Database/Console/Commands/MigrateCommand.php`, `app/Base/Database/Models/TableRegistry.php`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, 2026-05-24 schema workflow discussion
 **Agents:** {codex/gpt-5}, {amp}
 
@@ -165,8 +165,10 @@ Goal: move schema state into git-tracked module files.
 - [x] Choose the metadata form with agent readability as a first-order criterion: grep-friendly, obvious beside `up()`, and easy to edit without extra docs.
 - [x] Add parser/resolver support for stable and incubating migration states.
 - [x] Support stable-to-incubating changes in source and document when that is acceptable before release versus after public use.
-- [ ] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only.
+- [x] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only. {amp}
 - [ ] Document the future `composer.json extra.blb.schema` mirror for coarse pluggable-module defaults.
+
+Evidence: Deferred — no module has needed coarse module-level defaults; migration-local `use IncubatingSchema;` covers every current case. If a module later needs a whole-module default, add `Database/schema.php` as a coarse fallback only, never a per-file list (per D3). The `extra.blb.schema` doc item stays open under Phase 2 until a composerized plugin actually consumes the field.
 
 ### Phase 3 - Teach `migrate --dev` the incubating-schema preflight
 
@@ -185,16 +187,21 @@ Goal: remove the semantic trap.
 - [x] Remove selective rebuild behavior from `migrate:fresh`.
 - [x] Remove `--dev` from `migrate:fresh` once `migrate --dev` owns the development path.
 - [x] Adjust tests and docs that currently assert selective behavior through `migrate:fresh`.
-- [ ] Keep `migrate:refresh` and `migrate:reset` blocked unless a separate disposable-database policy is introduced.
+- [x] Keep `migrate:refresh` and `migrate:reset` blocked unless a separate disposable-database policy is introduced. {amp}
+
+Evidence: `tests/Feature/Database/RefreshResetCommandTest.php` asserts the `migrate:refresh` and `migrate:reset` blocks on persistent databases, mirroring the existing `WipeCommandTest.php`. The dead `--dev` passthrough was also removed from `RefreshCommand` (the guard already restricts it to in-memory SQLite, where `migrate --dev` is the blessed path).
 
 ### Phase 5 - Dependency-aware dev migration
 
 Goal: avoid unsafe partial rebuilds.
 
-- [ ] Build table dependency discovery from database foreign keys and declared migration effects.
-- [ ] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans.
-- [ ] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split.
-- [ ] Verify PostgreSQL and SQLite/MySQL behavior separately, especially around constraint preservation and rerun ordering.
+- [x] Build table dependency discovery from database foreign keys and declared migration effects. {amp}
+- [x] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans. {amp}
+- [x] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split. {amp}
+- [x] Verify SQLite behavior around dependent ordering and cyclic foreign-key fallback. {amp}
+- [ ] Verify PostgreSQL and MySQL behavior separately, especially around constraint preservation and rerun ordering.
+
+Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade, the multi-table dependent-migration rerun unit, and mutually-referencing table drops on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL/MySQL verification remains open.
 
 ### Phase 6 - Pluggable module schema ordering
 
@@ -212,7 +219,9 @@ Goal: finish the conceptual migration.
 - [x] Rename user-facing "Stable" labels to schema maturity language.
 - [x] Remove the legacy local stability column after source declarations become authoritative.
 - [x] Remove `blb:table:unstable` from the steady-state workflow and keep only a deprecated git-tracked compatibility list while other installations adopt migration-local incubating markers.
-- [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
+- [x] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work. {amp}
+
+Evidence: `docs/brief.md` "Where Detail Lives" table updated from "destructive evolution" to "progressive evolution" — the only live (non-historical) doc that still used the retired term. The remaining mentions live in Completed plans (payroll-intake-dependency-inversion, database-backup-security, ai-control-plane-unified-timeline, module-domain-alignment, base-audit-subject-index) as historical evidence of work done under the prior policy; rewriting completed-plan history would falsify the handoff, so they are deliberately left intact.
 
 ### Phase 8 - Make production incubation stateful
 

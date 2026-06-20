@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\GuardsGlobalReset;
@@ -6,7 +7,6 @@ use Illuminate\Console\Command;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Console\Migrations\RefreshCommand as IlluminateRefreshCommand;
 use Illuminate\Database\Events\DatabaseRefreshed;
-use Symfony\Component\Console\Input\InputOption;
 
 class RefreshCommand extends IlluminateRefreshCommand
 {
@@ -30,7 +30,9 @@ class RefreshCommand extends IlluminateRefreshCommand
             return $result;
         }
 
-        // Re-implement parent flow so we can pass --dev through.
+        // Re-implement parent flow so BLB's migrate command (with module
+        // discovery and incubating-schema preflight) runs instead of the
+        // Laravel parent, which would bypass module migration loading.
         if ($this->isProhibited() || ! $this->confirmToProceed()) {
             return Command::FAILURE;
         }
@@ -63,7 +65,6 @@ class RefreshCommand extends IlluminateRefreshCommand
             '--force' => true,
             '--seed' => $this->needsSeeding(),
             '--seeder' => $this->option('seeder'),
-            '--dev' => $this->option('dev'),
         ]));
 
         if ($this->laravel->bound(Dispatcher::class)) {
@@ -73,26 +74,5 @@ class RefreshCommand extends IlluminateRefreshCommand
         }
 
         return 0;
-    }
-
-    /**
-     * Get the console command options.
-     *
-     * Adds --dev to the parent options.
-     *
-     * {@inheritdoc}
-     */
-    protected function getOptions(): array
-    {
-        $options = parent::getOptions();
-
-        $options[] = [
-            'dev',
-            null,
-            InputOption::VALUE_NONE,
-            'Run dev seeders after production seeders (APP_ENV=local only). Implies --seed.',
-        ];
-
-        return $options;
     }
 }

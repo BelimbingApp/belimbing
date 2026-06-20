@@ -76,6 +76,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         }
 
         $tables = $this->liveTablesDeclaredBy($incubating);
+        $incubatingTables = $tables;
         $migrationFiles = array_values(array_unique(array_map(
             fn (array $migration): string => $migration['file'],
             $incubating,
@@ -88,21 +89,17 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $cascaded = [];
 
         if ($tables !== []) {
-            $cascaded = $this->resolveDependentRebuilds($tables);
+            $foreignKeysByTable = $this->foreignKeysByTable();
+            $scope = $this->expandedRebuildScope($tables, $migrationFiles, $foreignKeysByTable);
+            $tables = $scope['tables'];
+            $cascaded = array_values(array_diff($tables, $incubatingTables));
+            $migrationFiles = $scope['migration_files'];
+            $migrationNames = array_values(array_unique(array_map(
+                fn (string $file): string => (string) preg_replace('/\.php$/', '', $file),
+                $migrationFiles,
+            )));
 
-            if ($cascaded !== []) {
-                $tables = array_values(array_unique(array_merge($tables, $cascaded)));
-
-                foreach ($this->migrationFilesForTables($cascaded) as $file) {
-                    $migrationFiles[] = $file;
-                    $migrationNames[] = preg_replace('/\.php$/', '', $file);
-                }
-
-                $migrationFiles = array_values(array_unique($migrationFiles));
-                $migrationNames = array_values(array_unique($migrationNames));
-            }
-
-            $this->dropTables($tables);
+            $this->dropTables($tables, $foreignKeysByTable);
         }
 
         $deletedMigrations = DB::table('migrations')
@@ -239,11 +236,79 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      * back to the original hard error so data is never silently lost.
      *
      * @param  list<string>  $tablesToDrop
-     * @return list<string>
+     * @param  list<string>  $migrationFiles
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     * @return array{tables: list<string>, migration_files: list<string>}
      */
-    private function resolveDependentRebuilds(array $tablesToDrop): array
+    private function expandedRebuildScope(array $tablesToDrop, array $migrationFiles, array $foreignKeysByTable): array
     {
-        $dependents = $this->dependentClosure($tablesToDrop);
+        $tables = array_values(array_unique($tablesToDrop));
+        $migrationFiles = array_values(array_unique($migrationFiles));
+        $tableSet = array_fill_keys($tables, true);
+        $fileSet = array_fill_keys($migrationFiles, true);
+
+        do {
+            $changed = false;
+
+            foreach ($this->liveTablesForMigrationFiles(array_keys($fileSet)) as $table) {
+                if (isset($tableSet[$table])) {
+                    continue;
+                }
+
+                $tables[] = $table;
+                $tableSet[$table] = true;
+                $changed = true;
+            }
+
+            $dependents = $this->resolveDependentRebuilds(array_keys($tableSet), $foreignKeysByTable);
+
+            foreach ($dependents as $table => $file) {
+                if (! isset($tableSet[$table])) {
+                    $tables[] = $table;
+                    $tableSet[$table] = true;
+                    $changed = true;
+                }
+
+                if (! isset($fileSet[$file])) {
+                    $migrationFiles[] = $file;
+                    $fileSet[$file] = true;
+                    $changed = true;
+                }
+            }
+        } while ($changed);
+
+        return [
+            'tables' => $tables,
+            'migration_files' => $migrationFiles,
+        ];
+    }
+
+    /**
+     * Foreign keys for every live table, keyed by table name. Computed once per
+     * rebuild-scope expansion so the fixpoint loop reuses cached metadata
+     * instead of re-querying each table's foreign keys on every iteration.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    private function foreignKeysByTable(): array
+    {
+        $map = [];
+
+        foreach ($this->liveTableNames() as $table) {
+            $map[$table] = Schema::getForeignKeys($table);
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  list<string>  $tablesToDrop
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     * @return array<string, string>
+     */
+    private function resolveDependentRebuilds(array $tablesToDrop, array $foreignKeysByTable): array
+    {
+        $dependents = $this->dependentClosure($tablesToDrop, $foreignKeysByTable);
 
         if ($dependents === []) {
             return [];
@@ -254,11 +319,11 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
         if ($unrebuildable !== []) {
             throw IncubatingSchemaDependencyException::forStableDependents(
-                $this->dependenciesInto($unrebuildable, array_merge($tablesToDrop, $dependents)),
+                $this->dependenciesInto($unrebuildable, array_merge($tablesToDrop, $dependents), $foreignKeysByTable),
             );
         }
 
-        return $dependents;
+        return $rebuildable;
     }
 
     /**
@@ -266,23 +331,23 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      * set, excluding the seed set itself.
      *
      * @param  list<string>  $seed
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
      * @return list<string>
      */
-    private function dependentClosure(array $seed): array
+    private function dependentClosure(array $seed, array $foreignKeysByTable): array
     {
-        $live = $this->liveTableNames();
         $inSet = array_fill_keys($seed, true);
         $added = [];
 
         do {
             $changed = false;
 
-            foreach ($live as $table) {
+            foreach ($foreignKeysByTable as $table => $foreignKeys) {
                 if (isset($inSet[$table])) {
                     continue;
                 }
 
-                foreach (Schema::getForeignKeys($table) as $foreignKey) {
+                foreach ($foreignKeys as $foreignKey) {
                     if (! isset($inSet[$foreignKey['foreign_table']])) {
                         continue;
                     }
@@ -305,14 +370,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      *
      * @param  list<string>  $dependents
      * @param  list<string>  $foreignTables
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
      * @return list<array{table: string, column: string, foreign_table: string}>
      */
-    private function dependenciesInto(array $dependents, array $foreignTables): array
+    private function dependenciesInto(array $dependents, array $foreignTables, array $foreignKeysByTable): array
     {
         $dependencies = [];
 
         foreach ($dependents as $table) {
-            foreach (Schema::getForeignKeys($table) as $foreignKey) {
+            foreach ($foreignKeysByTable[$table] ?? [] as $foreignKey) {
                 if (! in_array($foreignKey['foreign_table'], $foreignTables, true)) {
                     continue;
                 }
@@ -352,29 +418,150 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
-     * @param  list<string>  $tables
+     * A migration record is the coherent rerun unit. If one table from a
+     * multi-table migration must be rebuilt, every live table owned by that
+     * migration must be dropped too, otherwise the rerun would collide with
+     * sibling tables left behind.
+     *
+     * @param  list<string>  $migrationFiles
+     * @return list<string>
      */
-    private function dropTables(array $tables): void
+    private function liveTablesForMigrationFiles(array $migrationFiles): array
     {
+        if ($migrationFiles === [] || ! Schema::hasTable('base_database_tables')) {
+            return [];
+        }
+
+        $live = array_fill_keys($this->liveTableNames(), true);
+
+        return TableRegistry::query()
+            ->whereIn('migration_file', array_values(array_unique($migrationFiles)))
+            ->pluck('table_name')
+            ->filter(fn (string $table): bool => isset($live[$table]))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Drop tables in a driver-agnostic order.
+     *
+     * Tables are dropped dependents-first (a table only after every table
+     * referencing it has already gone), which satisfies PostgreSQL/MySQL
+     * foreign-key enforcement and SQLite's pragma without disabling checks.
+     * Tables left in a foreign-key cycle (mutual references that admit no
+     * ordering) are dropped together: a single comma-list DROP TABLE on
+     * drivers that accept it (Postgres, MySQL), or per-table with SQLite's
+     * foreign-key checks disabled/deferred.
+     *
+     * @param  list<string>  $tables
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     */
+    private function dropTables(array $tables, array $foreignKeysByTable): void
+    {
+        [$ordered, $cyclic] = $this->topologicalDropOrder($tables, $foreignKeysByTable);
+
+        foreach ($ordered as $table) {
+            Schema::dropIfExists($table);
+        }
+
+        if ($cyclic === []) {
+            return;
+        }
+
         $connection = Schema::getConnection();
 
-        if ($connection->getDriverName() === 'pgsql') {
-            $grammar = $connection->getQueryGrammar();
-            $wrapped = array_map(fn (string $table): string => $grammar->wrapTable($table), $tables);
-            $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped));
+        if ($connection->getDriverName() === 'sqlite') {
+            $deferForeignKeys = $connection->transactionLevel() > 0;
+
+            if ($deferForeignKeys) {
+                $connection->statement('PRAGMA defer_foreign_keys = ON');
+            }
+
+            Schema::disableForeignKeyConstraints();
+
+            try {
+                foreach ($cyclic as $table) {
+                    Schema::dropIfExists($table);
+                }
+            } catch (\Throwable $exception) {
+                Schema::enableForeignKeyConstraints();
+
+                throw $exception;
+            }
+
+            Schema::enableForeignKeyConstraints();
+
+            if ($deferForeignKeys) {
+                $connection->statement('PRAGMA defer_foreign_keys = OFF');
+            }
 
             return;
         }
 
-        Schema::disableForeignKeyConstraints();
+        $grammar = $connection->getQueryGrammar();
+        $wrapped = array_map(fn (string $table): string => $grammar->wrapTable($table), $cyclic);
+        $connection->statement('DROP TABLE IF EXISTS '.implode(', ', $wrapped));
+    }
 
-        try {
-            foreach ($tables as $table) {
-                Schema::dropIfExists($table);
-            }
-        } finally {
-            Schema::enableForeignKeyConstraints();
+    /**
+     * Order $tables so each table appears only after every other table that
+     * references it (dependents-first), which makes a plain per-table
+     * DROP TABLE safe under foreign-key enforcement on every driver. Self
+     * references are ignored. Returns the ordered prefix plus any tables that
+     * remain because they sit in a foreign-key cycle.
+     *
+     * @param  list<string>  $tables
+     * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     * @return array{0: list<string>, 1: list<string>}
+     */
+    private function topologicalDropOrder(array $tables, array $foreignKeysByTable): array
+    {
+        $tableSet = array_fill_keys($tables, true);
+        $outbound = [];
+        $inDegree = [];
+
+        foreach ($tables as $table) {
+            $outbound[$table] = [];
+            $inDegree[$table] = 0;
         }
+
+        foreach ($tables as $table) {
+            foreach ($foreignKeysByTable[$table] ?? [] as $foreignKey) {
+                $parent = $foreignKey['foreign_table'] ?? null;
+
+                if (! is_string($parent) || $parent === $table || ! isset($tableSet[$parent])) {
+                    continue;
+                }
+
+                // $table references $parent, so $table must be dropped first.
+                $outbound[$table][] = $parent;
+                $inDegree[$parent]++;
+            }
+        }
+
+        $queue = array_values(array_filter($tables, fn (string $table): bool => $inDegree[$table] === 0));
+        sort($queue);
+
+        $ordered = [];
+
+        while ($queue !== []) {
+            $table = array_shift($queue);
+            $ordered[] = $table;
+
+            foreach ($outbound[$table] as $parent) {
+                if (--$inDegree[$parent] === 0) {
+                    $queue[] = $parent;
+                    sort($queue);
+                }
+            }
+        }
+
+        $cyclic = array_values(array_filter(
+            $tables,
+            fn (string $table): bool => $inDegree[$table] > 0,
+        ));
+
+        return [$ordered, $cyclic];
     }
 
     /**

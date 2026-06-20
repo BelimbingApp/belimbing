@@ -45,7 +45,7 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 
 | Topic | Read |
 |-------|------|
-| Agent philosophy, PHP conventions, destructive evolution | Root `AGENTS.md` |
+| Agent philosophy, PHP conventions, progressive evolution | Root `AGENTS.md` |
 | Architecture (layers, database, modules, AI) | `docs/architecture/` |
 | Migrations, seeding, incubating schema | `app/Base/Database/AGENTS.md` |
 | Active planning | `docs/plans/` (`docs/plans/AGENTS.md`) |
