@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions. Manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
+**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
 **Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -126,7 +126,7 @@ Goal: complete the UI/page work after the shared drawer/trigger polish landed, w
 - [x] Run the route-inventory page-weight scan and update this plan with evidence. {amp/gpt-5}
 - [ ] Run manual browser verification and route-specific page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows.
 
-Evidence: `tests/Feature/Audit/AuditLogUiTest.php` verifies the bridge trigger appears on first-wave pages, is not mounted without audit permission, and supports source-history search/sort/progressive loading; `php artisan blb:perf:page-weights --max-kb=150 --limit=60` rendered 106 route-inventory pages with 5 existing over-budget pages. Parameterized detail-page weights need separate measurement; the first local check found `admin/users/{user}` already around 1.5 MB, so that cleanup remains open and should not be hidden by the sidebar rollout.
+Evidence: `tests/Feature/Audit/AuditLogUiTest.php` verifies the bridge trigger appears on first-wave pages, is not mounted without audit permission, and supports source-history search/sort/progressive loading; `php artisan blb:perf:page-weights --max-kb=150 --limit=120` rendered 106 no-param route-inventory pages with 5 existing over-budget pages (`sbg/ibp/planning`, `commerce/marketplace/ebay/settings`, `commerce/inventory/items/create`, `admin/ai/control-plane`, `commerce/catalog`). Parameterized detail-page weights need separate measurement; the first local check found `admin/users/{user}` already around 1.5 MB, so that cleanup remains open and should not be hidden by the sidebar rollout.
 
 ### Phase 1 — Stabilize the shared integration contract
 
@@ -141,7 +141,7 @@ Goal: make one safe integration point that can be reused across Core, modules, a
 - [x] Migrate the existing User page to the bridge and verify behavior matches the direct Audit Livewire precedent. {amp/gpt-5}
 - [x] Add focused tests proving the bridge preserves the dual capability gate and does not expose history to unauthorized users. {amp/gpt-5}
 
-Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint app\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithSourceHistory.php app\Base\Audit\Services\AuditSourceHistory.php tests\Feature\Audit\AuditLogUiTest.php`; parent `git diff --check`. Earlier evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `php artisan blb:perf:page-weights --max-kb=150 --limit=60`.
+Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint app\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithSourceHistory.php app\Base\Audit\Services\AuditSourceHistory.php tests\Feature\Audit\AuditLogUiTest.php`; parent `git diff --check`. Earlier evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `php artisan blb:perf:page-weights --max-kb=150 --limit=120`.
 
 ### Phase 2 — Turn the inventory into a page-by-page build sheet
 
@@ -218,13 +218,14 @@ Validation: extension-specific tests or manual browser checks, plus parent/neste
 
 Goal: leave a durable convention and accurate status surface.
 
-- [ ] Update `app/Base/Audit/AGENTS.md` and UI guidance only after the bridge and rollout pattern are stable.
-- [ ] Tick completed page rows in this plan with `{agent}/{model}` suffixes and evidence.
-- [ ] Move deferred or low-value pages to explicit later-wave rows instead of leaving stale prose.
-- [ ] Run the affected Audit/module tests, Pint, `git diff --check`, and representative page-weight checks.
+- [x] Update `app/Base/Audit/AGENTS.md` after the bridge and rollout pattern are stable. {amp/gpt-5}
+- [x] Tick completed page rows in this plan with `{agent}/{model}` suffixes and evidence. {amp/gpt-5}
+- [x] Move deferred or low-value pages to explicit later-wave rows instead of leaving stale prose. {amp/gpt-5}
+- [x] Run the affected Audit/module tests, Pint, `git diff --check`, and broad route-inventory page-weight checks. {amp/gpt-5}
+- [ ] Add route-specific page-weight tooling/evidence for selected parameterized detail pages; the current `blb:perf:page-weights` command skips required route parameters and cannot synthesize bound records.
 - [ ] Mark this plan complete only when the selected system-wide waves are implemented, verified, and documented.
 
-Validation: plan status reflects reality, evidence is linked per completed wave, and no page integration bypasses the bridge.
+Validation: plan status reflects reality, evidence is linked per completed wave, no page integration bypasses the bridge, and `php artisan blb:perf:page-weights --max-kb=150 --limit=120` still reports only the same five unrelated no-param over-budget pages.
 
 ## Oracle Use
 

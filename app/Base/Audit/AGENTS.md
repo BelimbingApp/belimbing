@@ -130,6 +130,13 @@ Two admin pages under the "Audit Log" parent menu:
 - `admin/audit/mutations` (route: `admin.audit.mutations`, capability: `admin.audit.log.list`) — Data Mutations with inline field-level diffs.
 - `admin/audit/actions` (route: `admin.audit.actions`, capability: `admin.audit.log.list`) — Actions log.
 
+Record-level history sidebars are exposed to pages through the neutral
+`x-ui.record-history` bridge only. Page callers pass plain subject handles,
+optional direct auditable fallback, a source capability, and labels; they must
+not import Audit Livewire classes, query Audit tables, or build Audit search
+URLs. `SourceHistory` and `AuditSourceHistory` own authorization, bounded
+lookup, search/sort/load-more behavior, trace links, and full-history URLs.
+
 ## Migration Prefix
 
 `0100_01_17` — registered in `docs/architecture/database.md`.
