@@ -63,12 +63,8 @@ function auditLogUiUserHistoryParams(User $user): array
         'subjects' => [['name' => 'user', 'id' => $user->id]],
         'auditableType' => $user->getMorphClass(),
         'auditableId' => $user->id,
-<<<<<<< HEAD
-        'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
-        'sourceCapability' => 'admin.user.view',
-=======
         'allUrl' => route('admin.audit.mutations', ['search' => AUDIT_LOG_UI_USER_PREFIX.$user->id]),
->>>>>>> 01662452 (quality: reduce Sonar duplication)
+        'sourceCapability' => 'admin.user.view',
     ];
 }
 
@@ -190,14 +186,9 @@ it('opens a combined action and mutation trace timeline from actions', function 
         ->assertSeeHtml('aria-modal="false"')
         ->assertSee('TRCE-1234-5678')
         ->assertSee('GET admin.users.show')
-<<<<<<< HEAD
         ->assertSee('Raw action detail')
         ->assertDontSeeHtml('<details open')
-        ->assertSee('User#'.$actor->id)
-=======
-        ->assertSeeHtml('<details open')
         ->assertSee(AUDIT_LOG_UI_USER_PREFIX.$actor->id)
->>>>>>> 01662452 (quality: reduce Sonar duplication)
         ->assertSee('email')
         ->assertSee(AUDIT_LOG_UI_OLD_EMAIL)
         ->assertSee(AUDIT_LOG_UI_NEW_EMAIL);
@@ -260,13 +251,9 @@ it('shows user record history from direct mutations and redacts protected values
     Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target->fresh()))
         ->call('open')
         ->assertSet('sourceHistoryDrawerOpen', true)
-<<<<<<< HEAD
         ->assertSee('Resize inspector panel')
         ->assertSee('Record history')
         ->assertSee('user#'.$target->id)
-=======
-        ->assertSee('History for '.AUDIT_LOG_UI_RENAMED_TARGET)
->>>>>>> 01662452 (quality: reduce Sonar duplication)
         ->assertSee('legacy-old@example.com')
         ->assertSee('legacy-new@example.com')
         ->assertSee('name')
