@@ -88,4 +88,53 @@
             </div>
         </div>
     </x-ui.card>
+
+    <x-ui.card>
+        <div class="space-y-4">
+            <x-ui.catalog-section
+                :title="__('Links')"
+                component="<code>x-ui.link</code>"
+            >
+                {{ __('Links signal context change through a closed icon vocabulary: one behavior, one glyph. The icon replaces the word, so callers never hand-write target/rel or the affordance icon. Things that move you are links; things that change data are buttons.') }}
+            </x-ui.catalog-section>
+
+            <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                <dl class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('In-app, same tab (default)') }}</dt>
+                        <dd><x-ui.link href="#ui-reference-links">{{ __('Open dashboard') }}</x-ui.link></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('In-app, forced new tab') }}</dt>
+                        <dd><x-ui.link kind="new-tab" href="#ui-reference-links" :title="__('Open Shifts in a new tab')">{{ __('Open Shifts') }}</x-ui.link></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('In-page section anchor') }}</dt>
+                        <dd><x-ui.link kind="anchor" href="#ui-reference-links">{{ __('Jump to section 5') }}</x-ui.link></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('External site (leaves BLB)') }}</dt>
+                        <dd><x-ui.link kind="external" href="https://laravel.com" :title="__('Open laravel.com — leaves BLB')">{{ __('Laravel docs') }}</x-ui.link></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('Download a file') }}</dt>
+                        <dd><x-ui.link kind="download" href="#ui-reference-links">{{ __('Export CSV') }}</x-ui.link></dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('Mutation (is a button)') }}</dt>
+                        <dd>
+                            <x-ui.icon-action
+                                icon="heroicon-o-trash"
+                                :label="__('Delete record')"
+                                type="button"
+                            />
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-4 border-t border-border-default pt-3 text-xs text-muted">
+                    {{ __('External and forced-new-tab share the box-arrow — the difference is rel, which the component owns. Copy uses the clipboard glyph, never the box-arrow. Trailing icons say what happens; leading icons say what kind of thing.') }}
+                </p>
+            </div>
+        </div>
+    </x-ui.card>
 </div>

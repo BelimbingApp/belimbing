@@ -105,14 +105,12 @@ $rawLine = $fragment['raw_line'] ?? '';
         @else
             <span class="italic">{{ __('No raw payload captured for this fragment.') }}</span>
         @endif
-        <a
+        <x-ui.link
+            kind="new-tab"
             href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entryNumber]) }}"
-            target="_blank"
-            rel="noreferrer"
-            class="mt-1 inline-flex items-center gap-1 text-accent hover:underline"
+            class="mt-1"
         >
-            <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3" />
             {{ __('Open raw') }}
-        </a>
+        </x-ui.link>
     </div>
 </div>

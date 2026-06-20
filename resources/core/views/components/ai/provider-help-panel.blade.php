@@ -62,15 +62,9 @@
 
                 @if($help['documentation_url'])
                     <div class="mt-3 pt-3 border-t border-border-default">
-                        <a
-                            href="{{ $help['documentation_url'] }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="inline-flex items-center gap-1 text-xs text-accent hover:underline"
-                        >
-                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-3.5 h-3.5" />
+                        <x-ui.link kind="external" href="{{ $help['documentation_url'] }}" class="text-xs">
                             {{ __('Official documentation') }}
-                        </a>
+                        </x-ui.link>
                     </div>
                 @endif
             </div>

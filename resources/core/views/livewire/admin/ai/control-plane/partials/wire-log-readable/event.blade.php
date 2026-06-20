@@ -45,7 +45,7 @@ $payloadPretty = $event['payload_pretty'] ?? '';
             <a
                 href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entryNumber]) }}"
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener"
                 class="ml-auto inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-subtle px-2 py-0.5 text-ink hover:bg-surface-card"
             >
                 <x-icon name="heroicon-o-arrow-top-right-on-square" class="size-3" />

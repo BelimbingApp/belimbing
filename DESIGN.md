@@ -34,6 +34,10 @@ Use a coherent rounded shape language: compact rounded controls, slightly larger
 
 Component semantics stay in the framework. Reuse `x-ui.*` primitives and `<x-icon>` before creating new markup. Concrete Blade, Livewire, Tailwind, spacing, accessibility, and component rules live in `resources/core/views/AGENTS.md`; rendered examples live in `Administration > System > UI Reference`.
 
+## Links
+
+Links signal *context change* through a closed icon vocabulary: each behavior — same-tab navigation, new tab, external site, in-page anchor, download, overlay — maps to exactly one glyph, so the icon replaces the word ("open", "new tab", "download") without ambiguity. Things that *move* you are links; things that *change data* are buttons. The dictionary and `x-ui.link` contract live in `resources/core/views/AGENTS.md`.
+
 ## Detail Pages (Read-First)
 
 Detail/show pages default to **facts first**. Editing is exposed deliberately:

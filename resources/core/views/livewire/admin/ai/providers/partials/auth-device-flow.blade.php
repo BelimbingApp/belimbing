@@ -25,15 +25,9 @@
             <div class="space-y-1.5">
                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted block">{{ __('Step 2 — Paste it on GitHub') }}</span>
                 <p class="text-xs text-muted">{{ __('Open the link below, paste the code, and approve access for Belimbing.') }}</p>
-                <a
-                    href="{{ $deviceFlow['verification_uri'] }}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-sm text-accent hover:underline inline-flex items-center gap-1"
-                >
+                <x-ui.link kind="external" href="{{ $deviceFlow['verification_uri'] }}" class="text-sm">
                     {{ $deviceFlow['verification_uri'] }}
-                    <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-3.5 h-3.5" />
-                </a>
+                </x-ui.link>
             </div>
 
             <div class="flex items-center gap-2 pt-1 border-t border-border-default">

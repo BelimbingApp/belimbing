@@ -35,11 +35,9 @@
                 </div>
 
                 <div class="mt-4 space-y-3">
-                    <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noreferrer"
-                       class="inline-flex items-center gap-1 text-xs text-accent hover:underline">
-                        <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
+                    <x-ui.link kind="external" href="https://github.com/settings/personal-access-tokens/new" class="text-xs">
                         {{ __('Create a fine-grained token for :owner — Resource owner: :owner, Contents: Read-only', ['owner' => $name]) }}
-                    </a>
+                    </x-ui.link>
 
                     <x-ui.secret-input
                         id="github-token-{{ $name }}"

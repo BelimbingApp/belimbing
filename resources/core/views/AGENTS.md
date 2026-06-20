@@ -47,6 +47,7 @@ Core Livewire view folders in `resources/core/views/livewire/` mirror the sideba
 5. **i18n-Ready** — All user-facing strings must use `__()`, `@lang`, or `trans_choice()`. No hard-coded English in Blade (except temporary scaffolding marked with a TODO). Design for variable-length translations: avoid fixed-width buttons/labels. Never concatenate translated fragments; translate whole sentences with placeholders.
 6. **Deep Components** — Components expose simple props (`variant`, `size`, `disabled`, etc.) and hide Tailwind complexity internally. Callers should not need to remember long class strings. Document component APIs (props/slots) for anything non-trivial.
 7. **Icon Consistency** — Always use `<x-icon>` for icons. Favor **Outline** variants (`heroicon-o-*`, 24x24) for primary UI elements and navigation. Use **Solid/Mini** variants (`heroicon-m-*`, 20x20 or 16x16) only for small inline actions or dense lists where the outline stroke might be too noisy. Never use raw `<svg>` tags for common icons; add them to `components/icon.blade.php` instead. When adding a new icon, search https://blade-ui-kit.com/blade-icons for the SVG path data.
+10. **Link Consistency** — Links signal *context change* through a **closed icon vocabulary**: one behavior maps to exactly one glyph and one element/attribute contract, and a glyph never means two things. For text links, never hand-write `target`/`rel`/the affordance icon — use `x-ui.link`, which owns all three. For button-weight links use `x-ui.button as="a"` and apply the same dictionary contract (`rel` per the table, trailing box-arrow for new-tab/external). Bespoke chrome (dark lightboxes, Alpine `:href`-bound anchors) may stay as raw `<a>` but must still follow the dictionary's `rel` and glyph. **Mutations are `<button>`, never anchors**, even when styled inline (this keeps Enter/Space semantics, ARIA role, and the audit trail truthful). See the Link Dictionary below.
 8. **Open-Source Only** — No proprietary icon sets, hosted font services, analytics scripts, or SaaS widgets. Self-host all assets. Any new UI library must be OSS-compatible with AGPLv3.
 9. **Aesthetics** — Professional, clean, compact. Every pixel counts. See Aesthetic Bar below.
 
@@ -136,6 +137,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.modal` | Modal dialogs |
 | `x-ui.page-header` | Page title + actions + optional `help` slot (slide-down panel) |
 | `x-ui.help` | Standalone "?" toggle button for contextual help |
+| `x-ui.link` | Text links that encode their own behavior (`kind`): emits the correct element, glyph, `target`, and `rel`. See Link Dictionary |
 | `x-ui.icon-action` | Compact icon-only action links/buttons with consistent hover and focus treatment |
 | `x-ui.icon-action-group` | Right-aligned compact action group for one or more icon actions |
 | `x-ui.tabs` | Page-level tab container (underline/pill variants, URL hash, ARIA, keyboard nav) |
@@ -158,6 +160,29 @@ When a needed primitive doesn't exist, create it in `resources/core/views/compon
 - Prefer the combo box primitive `x-ui.combobox` when the list has **more than 8 options**, when labels are long, or when users are likely to search by code/name rather than scan visually.
 - If you are unsure and the list is around the cutoff, choose the combo box primitive when selection speed matters more than strict minimalism.
   For read-first detail pages, see “Read-first detail pages” below.
+
+### Link Dictionary
+
+Every "clickable that takes you somewhere" maps to one of these. Classify by two questions: *will I lose where I am?* (context change) and *does this change data, or just move me?* (`<a>` vs `<button>`). The glyph **is** the verb — so the vocabulary must stay closed: one behavior, one glyph, no collisions.
+
+| Behavior | Element | `x-ui.link kind` | Glyph | `target` / `rel` |
+|----------|---------|------------------|-------|------------------|
+| In-app, same tab (default) | `<a wire:navigate>` | `internal` | none (or trailing `heroicon-m-arrow-right` in dense link lists) | — |
+| In-app, forced new tab | `<a>` | `new-tab` | trailing `heroicon-o-arrow-top-right-on-square` | `_blank` / `noopener` |
+| In-page section anchor (`#`) | `<a>` | `anchor` | leading `heroicon-o-link` | — |
+| External site (leaves BLB) | `<a>` | `external` | trailing `heroicon-o-arrow-top-right-on-square` | `_blank` / `noopener noreferrer` |
+| Download a file | `<a download>` | `download` | leading `heroicon-o-arrow-down-tray` | — |
+| Copy to clipboard | `<button>` | — | `heroicon-o-clipboard` | — |
+| Open modal / dialog | `<button>` | — | optional `heroicon-o-arrows-pointing-out` | — |
+| Open drawer / slide-over | `<button>` | — | trailing `heroicon-o-dock-right` | — |
+| Mutating action (delete/approve/transition) | `<button>` | — | domain glyph (trash, check, flag…) | — |
+
+Rules that keep it a language, not noise:
+- **External and forced-new-tab share the box-arrow** — the user-facing meaning ("a new tab opens") is identical; the only difference is `rel`, which `x-ui.link` owns. Do **not** invent a second near-identical glyph.
+- **Copy uses the clipboard, never the box-arrow.** Reusing the box/duplicate glyph for copy is the most common drift; it is forbidden.
+- **Trailing = "what happens" (new-tab, external, modal, drawer); leading = "what kind of thing" (anchor, download).** Affordance icons render muted (`opacity-60`) so link text carries the eye.
+- **Forced new tab is discouraged** — default to same-tab `wire:navigate` and let users Ctrl/Cmd-click. Force it only when losing unsaved state would be destructive or the target is a genuine side-reference; then it must carry the box-arrow.
+- The dropped words ("Open in new tab", "Link to section 5") survive as `title`/`aria-label` for hover and screen readers — clarity without on-screen clutter.
 
 ### Read-first detail pages
 

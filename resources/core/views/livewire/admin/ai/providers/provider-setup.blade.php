@@ -117,15 +117,9 @@ $providerConnectionDescription = $this->providerConnectionDescription();
                         @endif
                     </div>
                     @if(!empty($apiKeyUrl))
-                        <a
-                            href="{{ $apiKeyUrl }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-sm text-accent hover:underline inline-flex items-center gap-1"
-                        >
+                        <x-ui.link kind="external" href="{{ $apiKeyUrl }}" class="text-sm">
                             {{ __('Get API Key') }}
-                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-3.5 h-3.5" />
-                        </a>
+                        </x-ui.link>
                     @endif
                 </div>
 

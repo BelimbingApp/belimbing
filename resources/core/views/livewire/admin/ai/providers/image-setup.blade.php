@@ -32,9 +32,9 @@ use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
 
                     @if ($this->keyUrl)
                         <div class="text-xs">
-                            <a href="{{ $this->keyUrl }}" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">
-                                {{ __(':provider API key', ['provider' => $displayName]) }} ↗
-                            </a>
+                            <x-ui.link kind="external" href="{{ $this->keyUrl }}">
+                                {{ __(':provider API key', ['provider' => $displayName]) }}
+                            </x-ui.link>
                         </div>
                     @endif
                 </div>

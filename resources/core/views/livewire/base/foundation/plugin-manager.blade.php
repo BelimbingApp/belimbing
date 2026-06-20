@@ -145,7 +145,7 @@
                         <div class="flex items-start justify-between gap-2">
                             <div>
                                 <div class="font-medium text-ink">{{ $entry->moduleIdentifier ?: $entry->composerName }}</div>
-                                <a href="{{ $entry->htmlUrl }}" target="_blank" rel="noopener" class="font-mono text-xs text-accent hover:underline">{{ $entry->repoName }}</a>
+                                <x-ui.link kind="external" href="{{ $entry->htmlUrl }}" class="font-mono text-xs">{{ $entry->repoName }}</x-ui.link>
                             </div>
                             @if ($isInstalled)
                                 <span class="rounded-full border border-success-border bg-success-surface px-2 py-0.5 text-xs text-success-ink">{{ __('Installed') }}</span>

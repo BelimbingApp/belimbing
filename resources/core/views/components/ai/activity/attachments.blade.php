@@ -127,7 +127,7 @@
                                 class="underline hover:text-white"
                                 :href="images[imageIndex]?.url"
                                 target="_blank"
-                                rel="noreferrer"
+                                rel="noopener noreferrer"
                             >{{ __('Open') }}</a>
                             <button type="button" class="px-2 py-1 rounded bg-white/10 hover:bg-white/15" x-on:click="prevImage()">{{ __('Prev') }}</button>
                             <button type="button" class="px-2 py-1 rounded bg-white/10 hover:bg-white/15" x-on:click="nextImage()">{{ __('Next') }}</button>
@@ -166,7 +166,7 @@
                     class="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm text-accent-on hover:brightness-105"
                     :href="file?.url"
                     target="_blank"
-                    rel="noreferrer"
+                    rel="noopener noreferrer"
                 >
                     <x-icon name="heroicon-o-arrow-top-right-on-square" class="w-4 h-4" />
                     <span>{{ __('Open') }}</span>

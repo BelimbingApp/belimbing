@@ -241,11 +241,12 @@ $lifecycleRail = $lifecycleRail ?? null;
                                     as="a"
                                     href="{{ route('admin.ai.runs.wire-log-entry', ['runId' => $runId, 'entryNumber' => $entry['entry_number'] ?? (($summary['offset'] ?? 0) + $index + 1)]) }}"
                                     target="_blank"
-                                    rel="noreferrer"
+                                    rel="noopener"
                                     variant="ghost"
                                     size="sm"
                                 >
                                     {{ __('Open Raw') }}
+                                    <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5 opacity-60" />
                                 </x-ui.button>
                             </div>
                         @endif
