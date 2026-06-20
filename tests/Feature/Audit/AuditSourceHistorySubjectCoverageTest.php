@@ -261,24 +261,22 @@ it('includes item-related records in item history and excludes noisy marketplace
     expectAuditSubjectRow(ItemFitment::class, 'item', $item->id);
     expectAuditSubjectRow(AttributeValue::class, 'item', $item->id);
     expectAuditSubjectRow(Listing::class, 'item', $item->id);
-    expectAuditSubjectRow(ListingDraft::class, 'item', $item->id);
+    expect(
+        AuditMutation::query()
+            ->where('auditable_type', ListingDraft::class)
+            ->where('subject_name', 'item')
+            ->where('subject_id', (string) $item->id)
+            ->exists()
+    )->toBeFalse('ListingDraft readiness/cache rows should not create visible item-history churn.');
 
     $listingMutation = AuditMutation::query()
         ->where('auditable_type', Listing::class)
         ->where('subject_name', 'item')
         ->firstOrFail();
 
-    $draftMutation = AuditMutation::query()
-        ->where('auditable_type', ListingDraft::class)
-        ->where('subject_name', 'item')
-        ->firstOrFail();
-
     expect($listingMutation->new_values)
         ->not->toHaveKey('last_synced_at')
-        ->not->toHaveKey('raw_payload')
-        ->and($draftMutation->new_values)
-        ->not->toHaveKey('metadata_checked_at')
-        ->not->toHaveKey('readiness_snapshot');
+        ->not->toHaveKey('raw_payload');
 });
 
 it('includes workflow configuration rows in workflow history', function (): void {

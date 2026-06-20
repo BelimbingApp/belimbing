@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Codex now owns the in-app-browser/manual closeout, route-specific page-weight evidence, and log-explosion guard review before later waves expand.
+**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Codex completed the in-app-browser/manual closeout, route-specific page-weight evidence, parent/child propagation rule, and log-explosion guard review; selected detail pages remain over the initial 150 KB budget and later-wave rollout scope is still open.
 **Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -27,8 +27,8 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / normalized string `subject_id` / optional `subject_identifier`, with direct `auditable_type` / normalized string `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Workflow transitions also record retained semantic actions so trace timelines can explain the user intent behind status changes. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
-- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, first-wave page integration, and shared dense-history drawer behavior; automated evidence is captured below. Codex now owns the in-app-browser evidence pass, route-specific page-weight proof, and log-explosion guard review captured in the immediate handoff checklist.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Workflow transitions also record retained semantic actions so trace timelines can explain the user intent behind status changes. Remaining gaps are selected detail-page weight reduction or accepted exceptions, and later-wave page selection.
+- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, first-wave page integration, and shared dense-history drawer behavior; automated evidence is captured below. Codex completed the immediate browser/manual evidence pass, route-specific page-weight proof, parent/child propagation rule, and log-explosion guard review on 2026-06-20.
 
 ## Top-Level Components
 
@@ -128,12 +128,46 @@ Rows tagged `[codex]` are the current handoff package for Codex. Untagged open r
 
 Goal: let Codex use its in-app browser to close the remaining manual evidence and policy gaps while Amp's landed implementation stays stable.
 
-- [ ] [codex] Use the in-app browser to verify selected detail pages: `admin/users/{user}`, one Core Wave 1 page (`admin/companies/{company}` or `admin/addresses/{address}`), `people/employees/{employee}`, `commerce/inventory/items/{item}`, and one Wave 2 page (`admin/workflows/{workflow}`, an IT ticket, or a Quality NCR/SCAR). Capture URL, actor/capability, trigger visibility, drawer open/empty/search/sort/load-more behavior, trace affordance, and screenshot or note evidence back into this plan.
-- [ ] [codex] Add route-specific page-weight evidence for parameterized detail pages. If no automated route-parameter harness exists, capture browser/network rendered-document evidence and document the limitation; do not close the 150 KB target for `admin/users/{user}` until its unrelated pre-existing page weight is reduced or separately accepted.
-- [ ] [codex] Complete an audit/log-explosion guard review before ticking field-strategy closeout: inventory `auditExclude`, `auditRedact`, and `auditTruncate` coverage; confirm non-material fields such as `created_at`, `updated_at`, cache/snapshot/counter fields, sync markers, generated metadata, retained payload/header data, and other high-churn implementation fields are excluded or bounded wherever they would bury useful history.
-- [ ] [codex] Apply the explicit-material-related-subject rule to parent histories. Do not bubble all child mutations into parents by default; review the company/address phone example and record whether company history intentionally includes linked address/contact changes as company-profile evidence or whether those changes should remain address-only.
-- [ ] [codex] Add or adjust focused tests for any new exclusion/truncation or related-subject decisions so excluded-only noise does not create visible sidebar churn and parent history includes only the intended child records.
-- [ ] [codex] Update this plan with Codex evidence, any page-specific follow-up rows, and the final parent/child propagation rule before marking the handoff complete.
+- [x] [codex] Use the in-app browser to verify selected detail pages: `admin/users/{user}`, one Core Wave 1 page (`admin/companies/{company}` or `admin/addresses/{address}`), `people/employees/{employee}`, `commerce/inventory/items/{item}`, and one Wave 2 page (`admin/workflows/{workflow}`, an IT ticket, or a Quality NCR/SCAR). Capture URL, actor/capability, trigger visibility, drawer open/empty/search/sort/load-more behavior, trace affordance, and screenshot or note evidence back into this plan. {codex/gpt-5}
+- [x] [codex] Add route-specific page-weight evidence for parameterized detail pages. If no automated route-parameter harness exists, capture browser/network rendered-document evidence and document the limitation; do not close the 150 KB target for `admin/users/{user}` until its unrelated pre-existing page weight is reduced or separately accepted. {codex/gpt-5}
+- [x] [codex] Complete an audit/log-explosion guard review before ticking field-strategy closeout: inventory `auditExclude`, `auditRedact`, and `auditTruncate` coverage; confirm non-material fields such as `created_at`, `updated_at`, cache/snapshot/counter fields, sync markers, generated metadata, retained payload/header data, and other high-churn implementation fields are excluded or bounded wherever they would bury useful history. {codex/gpt-5}
+- [x] [codex] Apply the explicit-material-related-subject rule to parent histories. Do not bubble all child mutations into parents by default; review the company/address phone example and record whether company history intentionally includes linked address/contact changes as company-profile evidence or whether those changes should remain address-only. {codex/gpt-5}
+- [x] [codex] Add or adjust focused tests for any new exclusion/truncation or related-subject decisions so excluded-only noise does not create visible sidebar churn and parent history includes only the intended child records. {codex/gpt-5}
+- [x] [codex] Update this plan with Codex evidence, any page-specific follow-up rows, and the final parent/child propagation rule before marking the handoff complete. {codex/gpt-5}
+
+Codex evidence — 2026-06-20:
+
+Browser actor was the signed-in Administrator session with `admin.audit.log.list` plus each page's source capability. Browser verification used the in-app browser and selected route-bound records that the current company context could open.
+
+| Page | Source capability | Browser result | Initial browser DOM KB | Notes |
+|---|---|---|---:|---|
+| `https://local.blb.lara/admin/users/3` | `admin.user.view` | History trigger visible; drawer opens to `Record history · user#3`; empty state, search input, and Data Mutations link present. | 1690.8 | Lazy proof: no drawer or mutation-table markup before open. Over 150 KB before history opens. |
+| `https://local.blb.lara/admin/companies/2` | `admin.company.view` | Drawer opens to `Record history · company#2`; table view shows the linked `Address#5` phone change; Time/Actor/Event/Trace sort controls and trace button present. | 1869.2 | Confirms company history intentionally includes explicit linked address/contact evidence. |
+| `https://local.blb.lara/admin/employees/6` | `admin.employee.view` | History trigger visible; drawer opens to `Record history · employee#6`; empty state, search input, and Data Mutations link present. | 1395.7 | Lazy proof: no drawer or mutation-table markup before open. |
+| `https://local.blb.lara/admin/addresses/5` | `admin.address.view` | Drawer opens to `Record history · address#5`; table view shows one phone mutation; search for `phone` keeps the row and a no-match search shows `No matching mutations found.`; sort controls and trace button present. | 1363.9 | This is the dense-row sample for the high-signal table layout. |
+| `https://local.blb.lara/people/employees/2` | `people.employee.view` | History trigger visible; drawer opens to `Record history · employee#2`; empty state, search input, and Data Mutations link present. | 1354.1 | `people/employees/6` was not in the signed-in company context, so the verified People route-bound record is employee `2`. |
+| `https://local.blb.lara/commerce/inventory/items/1` | `commerce.inventory.item.view` | After the local schema catch-up migration, History trigger is visible; drawer opens to `Record history · item#1`; empty state, search input, and Data Mutations link present. | 1530.4 | Browser initially exposed a pre-existing dev schema drift (`description` column missing locally) and a noisy generated `ListingDraft` mutation. Codex added a guarded migration and excluded ListingDraft readiness/cache rows; reload showed `0 mutations`. |
+| `https://local.blb.lara/admin/workflows/2` | `admin.workflow.manage` | History trigger visible; drawer opens to `Record history · workflow#2`; empty state, search input, and Data Mutations link present. | 1417.3 | Wave 2 sample; complements workflow timeline rather than replacing it. |
+
+Route-specific page-weight limitation: the project `blb:perf:page-weights` command still skips parameterized routes, so Codex used in-browser rendered DOM size as route-bound evidence. These values include the current app shell and pinned/sidebar state and are not a pure HTTP response-size substitute. They are still useful for rollout risk: every selected detail page is well above the initial 150 KB target before history opens, while all selected pages proved `hasDrawerBeforeOpen=false` and `hasMutationTableBeforeOpen=false`. The 150 KB target remains open until detail-page weight is reduced or explicitly accepted.
+
+Load-more behavior was not forced through browser data because the selected records did not have more than 50 visible history rows. Automated coverage in `tests/Feature/Audit/AuditLogUiTest.php` verifies search, sorting, and progressive loading with the 50-row initial bound and +50 increment.
+
+Log-explosion guard review:
+
+| Scope | Decision |
+|---|---|
+| Global Audit config | `created_at` and `updated_at` are globally excluded; password/token/secret/API-key fields are globally redacted; strings are bounded by the 2000-character default truncation; `OperationDispatch` is excluded as an implementation model. |
+| Core User | `password` and `remember_token` are model-redacted in addition to global redaction. |
+| Core ExternalAccess | `metadata` is model-redacted so expanded company/user histories do not expose generated access metadata. |
+| Commerce Listing | `last_synced_at` and `raw_payload` remain excluded so channel sync markers and retained marketplace payloads do not bury item history. |
+| Commerce ListingDraft | Generated readiness/cache/projection fields are now excluded, and excluded-only create/delete events are skipped by the listener. ListingDraft readiness refreshes no longer create visible item-history churn. |
+| Integration OutboundExchange | Trace headers, request/response headers, bodies, truncation flags, original byte counts, and metadata are excluded; retained payload inspection stays in the integration detail surface. |
+| Wave 1 direct record models | Company, Employee, Address, Item, ItemFitment, and catalog AttributeValue have no payload/header/snapshot fields in the visible rollout path beyond fields already covered by global timestamp exclusion and default truncation. |
+
+Final parent/child propagation rule: parent history must include only explicit material related subjects declared by the owning model. Do not auto-bubble all child mutations. Company history intentionally includes linked address/contact changes because those are company-profile evidence; unrelated companies do not receive the row. Address history remains address-local, with company projections represented only when reading the linked company history and shown with a target label such as `Address#5`. Generated readiness/cache records such as Commerce ListingDraft rows stay out of item history unless a future semantic action records a user-intent event.
+
+Validation: `php artisan test tests/Feature/Audit/AuditSourceHistorySubjectCoverageTest.php tests/Feature/Audit/AuditLogUiTest.php`; `php artisan test tests/Feature/Audit/AuditableTraitTest.php`; `php artisan test app/Modules/Commerce/Inventory/Tests/Feature/ItemWorkbenchTest.php --filter="authenticated users can view an inventory item detail page"`.
 
 ### Completed bridge and first visible rollout queue
 
@@ -147,7 +181,7 @@ Goal: complete the UI/page work after the shared drawer/trigger polish landed, w
 - [x] Complete `commerce/inventory/items/{item}` in a separate nested-repo pass because Commerce has its own repository boundary. {amp/gpt-5}
 - [x] Add/adjust UI-facing tests for the bridge and migrated pages, favoring authorization/disclosure boundaries over brittle markup snapshots. {amp/gpt-5}
 - [x] Run the route-inventory page-weight scan and update this plan with evidence. {amp/gpt-5}
-- [ ] [codex] Run manual browser verification and route-specific page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows. Codex handoff above owns the next pass.
+- [x] [codex] Run manual browser verification and route-specific page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows. Codex handoff above owns the next pass. {codex/gpt-5}
 
 Evidence: `tests/Feature/Audit/AuditLogUiTest.php` verifies the bridge trigger appears on first-wave pages, is not mounted without audit permission, and supports source-history search/sort/progressive loading; `php artisan blb:perf:page-weights --max-kb=150 --limit=120` rendered 106 no-param route-inventory pages with 5 existing over-budget pages (`sbg/ibp/planning`, `commerce/marketplace/ebay/settings`, `commerce/inventory/items/create`, `admin/ai/control-plane`, `commerce/catalog`). Parameterized detail-page weights need separate measurement; the first local check found `admin/users/{user}` already around 1.5 MB, so that cleanup remains open and should not be hidden by the sidebar rollout.
 
@@ -174,8 +208,8 @@ Goal: prevent trigger-first rollout by documenting what each page must cover bef
 - [ ] For each candidate, list required direct subjects, related subject entries, sensitive fields, noisy fields, and semantic-action needs.
 - [ ] Mark pages out of scope when they are lists, bulk grids, dashboards, settings-only screens, or do not have stable record identity.
 - [ ] Prioritize Wave 1 by business value, mutation volume, and low coupling risk rather than by easiest markup changes.
-- [ ] [codex] Record one manual verification URL per selected page so later agents can prove the drawer in-browser.
-- [ ] [codex] Add route-specific page-weight evidence for selected detail pages; `admin/users/{user}` currently needs a separate weight-reduction pass before it can honestly meet the 150 KB target.
+- [x] [codex] Record one manual verification URL per selected page so later agents can prove the drawer in-browser. {codex/gpt-5}
+- [x] [codex] Add route-specific page-weight evidence for selected detail pages; `admin/users/{user}` currently needs a separate weight-reduction pass before it can honestly meet the 150 KB target. {codex/gpt-5}
 
 Validation: reviewed inventory table in this plan with no page promoted to implementation without subjects, capability, and field strategy notes.
 
@@ -186,7 +220,7 @@ Goal: make local histories truthful before exposing them.
 - [x] Add or verify `getAuditSubject()` for each Wave 1 direct record model. {amp/gpt-5}
 - [x] Add or verify `getAuditSubjectEntries(...)` for related records whose mutations belong in a parent record's history. {amp/gpt-5}
 - [x] Exclude the highest-noise marketplace listing/draft snapshot fields that would bury item history. {amp/gpt-5}
-- [ ] [codex] Complete page-by-page `auditRedact`, `auditExclude`, and `auditTruncate` review for every Wave 1 model before visible rollout, explicitly covering timestamps, cache/snapshot/counter fields, sync markers, generated metadata, payload/header blobs, and any other high-churn implementation fields.
+- [x] [codex] Complete page-by-page `auditRedact`, `auditExclude`, and `auditTruncate` review for every Wave 1 model before visible rollout, explicitly covering timestamps, cache/snapshot/counter fields, sync markers, generated metadata, payload/header blobs, and any other high-churn implementation fields. {codex/gpt-5}
 - [x] Add focused tests proving direct and related mutation rows resolve to the intended source subject. {amp/gpt-5}
 - [x] Add focused tests proving selected noisy/snapshot fields do not bury item history. {amp/gpt-5}
 
@@ -201,7 +235,7 @@ Goal: expose consistent local history on the first high-value record pages using
 - [x] Add the bridge to `admin/employees/{employee}` and/or `people/employees/{employee}` only after employee-related subject coverage is present. {amp/gpt-5}
 - [x] Add the bridge to `admin/addresses/{address}` only after owner/subject behavior is explicit. {amp/gpt-5}
 - [x] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present. {amp/gpt-5}
-- [ ] [codex] For every Wave 1 page, verify auditors can open history and trace links, non-auditors cannot see/open history, empty state is useful, and the bounded result set is clear.
+- [x] [codex] For every Wave 1 page, verify auditors can open history and trace links, non-auditors cannot see/open history, empty state is useful, and the bounded result set is clear. {codex/gpt-5}
 
 Evidence: parent Audit bridge tests passed; Commerce item detail trigger passed with `php artisan test app\Modules\Commerce\Inventory\Tests\Feature\ItemWorkbenchTest.php --filter="authenticated users can view an inventory item detail page"`; full Commerce `ItemWorkbenchTest.php` currently has two unrelated PhotoRoom cleanup failures, while the item-detail/history assertion is green. Remaining validation: browser checks for each page, route-specific page weights, and full-suite cleanup of unrelated failures.
 
@@ -245,7 +279,7 @@ Goal: leave a durable convention and accurate status surface.
 - [x] Tick completed page rows in this plan with `{agent}/{model}` suffixes and evidence. {amp/gpt-5}
 - [x] Move deferred or low-value pages to explicit later-wave rows instead of leaving stale prose. {amp/gpt-5}
 - [x] Run the affected Audit/module tests, Pint, `git diff --check`, and broad route-inventory page-weight checks. {amp/gpt-5}
-- [ ] [codex] Add route-specific page-weight tooling/evidence for selected parameterized detail pages; the current `blb:perf:page-weights` command skips required route parameters and cannot synthesize bound records.
+- [x] [codex] Add route-specific page-weight tooling/evidence for selected parameterized detail pages; the current `blb:perf:page-weights` command skips required route parameters and cannot synthesize bound records. {codex/gpt-5}
 - [ ] Mark this plan complete only when the selected system-wide waves are implemented, verified, and documented.
 
 Validation: plan status reflects reality, evidence is linked per completed wave, no page integration bypasses the bridge, and `php artisan blb:perf:page-weights --max-kb=150 --limit=120` still reports only the same five unrelated no-param over-budget pages.

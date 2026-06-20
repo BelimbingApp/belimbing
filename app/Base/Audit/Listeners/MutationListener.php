@@ -211,11 +211,15 @@ class MutationListener
         $args = [$excludedFields, $redactedFields, $encryptedFields, $truncateFields, $truncateDefault];
 
         if ($event === 'created') {
-            return [[], $this->collectFieldValues($model->getAttributes(), ...$args)];
+            $newValues = $this->collectFieldValues($model->getAttributes(), ...$args);
+
+            return $newValues !== [] ? [[], $newValues] : null;
         }
 
         if ($event === 'deleted') {
-            return [$this->collectFieldValues($model->getAttributes(), ...$args), []];
+            $oldValues = $this->collectFieldValues($model->getAttributes(), ...$args);
+
+            return $oldValues !== [] ? [$oldValues, []] : null;
         }
 
         if ($event === 'updated') {

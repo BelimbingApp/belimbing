@@ -615,6 +615,52 @@ it('deduplicates expanded subject rows from direct record history', function ():
         ]);
 });
 
+it('includes explicitly linked address contact changes in company record history', function (): void {
+    [$company, $unrelatedCompany, $address] = MutationListener::withoutAuditing(function (): array {
+        $company = Company::factory()->minimal()->create(['name' => 'Company With Shared Address']);
+        $unrelatedCompany = Company::factory()->minimal()->create(['name' => 'Company Without Address Link']);
+        $address = Address::factory()->create([
+            'country_iso' => null,
+            'phone' => null,
+        ]);
+
+        Addressable::query()->create([
+            'address_id' => $address->id,
+            'addressable_type' => $company->getMorphClass(),
+            'addressable_id' => $company->id,
+            'kind' => ['billing'],
+        ]);
+
+        return [$company, $unrelatedCompany, $address];
+    });
+
+    $address->update(['phone' => '03-77862444']);
+    auditLogUiFlushBuffer();
+
+    $companyHistory = app(AuditSourceHistory::class)->forRecord(
+        subjects: [['name' => 'company', 'id' => $company->id]],
+        auditableType: $company->getMorphClass(),
+        auditableId: $company->id,
+    );
+
+    $unrelatedHistory = app(AuditSourceHistory::class)->forRecord(
+        subjects: [['name' => 'company', 'id' => $unrelatedCompany->id]],
+        auditableType: $unrelatedCompany->getMorphClass(),
+        auditableId: $unrelatedCompany->id,
+    );
+
+    expect($companyHistory['entries'])->toHaveCount(1)
+        ->and($companyHistory['entries'][0]['auditable'])->toBe('Address#'.$address->id)
+        ->and($companyHistory['entries'][0]['target'])->toBe('Address#'.$address->id)
+        ->and($companyHistory['entries'][0]['diffs'])->toHaveCount(1)
+        ->and($companyHistory['entries'][0]['diffs'][0])->toMatchArray([
+            'field' => 'phone',
+            'old' => '—',
+            'new' => '03-77862444',
+        ])
+        ->and($unrelatedHistory['entries'])->toHaveCount(0);
+});
+
 it('searches, sorts, and progressively loads source history rows', function (): void {
     $actor = createAdminUser();
 
