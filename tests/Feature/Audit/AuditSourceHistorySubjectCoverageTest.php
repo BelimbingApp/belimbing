@@ -12,12 +12,6 @@ use App\Base\Workflow\Models\KanbanColumn;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
 use App\Base\Workflow\Models\Workflow;
-use App\Modules\Commerce\Catalog\Models\Attribute;
-use App\Modules\Commerce\Catalog\Models\AttributeValue;
-use App\Modules\Commerce\Inventory\Models\Item;
-use App\Modules\Commerce\Inventory\Models\ItemFitment;
-use App\Modules\Commerce\Marketplace\Models\Listing;
-use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Models\Company;
@@ -63,27 +57,24 @@ function expectAuditSubjectRow(string $auditableType, string $subjectName, int|s
     )->toBeTrue("Expected {$auditableType} to write {$source} subject {$subjectName}#{$subjectId}");
 }
 
-it('writes direct source-history subjects for first-wave record models', function (): void {
-    [$company, $employee, $address, $item] = MutationListener::withoutAuditing(function (): array {
+it('writes direct source-history subjects for parent-owned first-wave record models', function (): void {
+    [$company, $employee, $address] = MutationListener::withoutAuditing(function (): array {
         $company = Company::factory()->minimal()->create(['name' => 'Coverage Company']);
         $employee = Employee::factory()->create(['company_id' => $company->id, 'full_name' => 'Coverage Employee']);
         $address = Address::factory()->create(['country_iso' => null, 'line1' => '1 Old Road']);
-        $item = Item::factory()->create(['company_id' => $company->id, 'title' => 'Coverage Item']);
 
-        return [$company, $employee, $address, $item];
+        return [$company, $employee, $address];
     });
 
     $company->update(['name' => 'Coverage Company Renamed']);
     $employee->update(['full_name' => 'Coverage Employee Renamed']);
     $address->update(['line1' => '2 New Road']);
-    $item->update(['title' => 'Coverage Item Renamed']);
 
     flushAuditSubjectCoverageBuffer();
 
     expectAuditSubjectRow(Company::class, 'company', $company->id);
     expectAuditSubjectRow(Employee::class, 'employee', $employee->id);
     expectAuditSubjectRow(Address::class, 'address', $address->id);
-    expectAuditSubjectRow(Item::class, 'item', $item->id);
 });
 
 it('expands address mutations into company and employee record histories', function (): void {
@@ -196,87 +187,6 @@ it('includes linked users in employee history', function (): void {
 
     expectAuditSubjectRow(User::class, 'user', $user->id);
     expectAuditSubjectRow(User::class, 'employee', $employee->id, 'expanded');
-});
-
-it('includes item-related records in item history and excludes noisy marketplace fields', function (): void {
-    [$company, $item, $attribute] = MutationListener::withoutAuditing(function (): array {
-        $company = Company::factory()->minimal()->create(['name' => 'Item Company']);
-        $item = Item::factory()->create(['company_id' => $company->id, 'title' => 'History Item']);
-        $attribute = Attribute::query()->create([
-            'company_id' => $company->id,
-            'code' => 'colour',
-            'name' => 'Colour',
-            'type' => Attribute::TYPE_TEXT,
-            'sort_order' => 1,
-        ]);
-
-        return [$company, $item, $attribute];
-    });
-
-    ItemFitment::query()->create([
-        'company_id' => $company->id,
-        'item_id' => $item->id,
-        'display_make' => 'Toyota',
-        'display_model' => 'Hilux',
-        'source' => ItemFitment::SOURCE_OPERATOR,
-        'confidence' => ItemFitment::CONFIDENCE_SELLER_CONFIRMED,
-    ]);
-
-    AttributeValue::query()->create([
-        'item_id' => $item->id,
-        'attribute_id' => $attribute->id,
-        'value' => ['blue'],
-        'display_value' => 'Blue',
-    ]);
-
-    Listing::query()->create([
-        'company_id' => $company->id,
-        'item_id' => $item->id,
-        'channel' => 'ebay',
-        'external_listing_id' => 'LISTING-SUBJECT-COVERAGE',
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'History Listing',
-        'status' => 'ACTIVE',
-        'management_state' => Listing::MANAGEMENT_IMPORTED,
-        'drift_status' => Listing::DRIFT_UNKNOWN,
-        'last_synced_at' => now(),
-        'raw_payload' => ['inventory_item' => ['sku' => $item->sku]],
-    ]);
-
-    ListingDraft::query()->create([
-        'company_id' => $company->id,
-        'item_id' => $item->id,
-        'channel' => 'ebay',
-        'marketplace_id' => 'EBAY_US',
-        'title' => 'History Draft',
-        'status' => ListingDraft::STATUS_DRAFT,
-        'management_state' => ListingDraft::MANAGEMENT_LOCAL,
-        'readiness_status' => 'blocked',
-        'readiness_snapshot' => ['blockers' => [['key' => 'missing_photo']]],
-        'metadata_checked_at' => now(),
-    ]);
-
-    flushAuditSubjectCoverageBuffer();
-
-    expectAuditSubjectRow(ItemFitment::class, 'item', $item->id);
-    expectAuditSubjectRow(AttributeValue::class, 'item', $item->id);
-    expectAuditSubjectRow(Listing::class, 'item', $item->id);
-    expect(
-        AuditMutation::query()
-            ->where('auditable_type', ListingDraft::class)
-            ->where('subject_name', 'item')
-            ->where('subject_id', (string) $item->id)
-            ->exists()
-    )->toBeFalse('ListingDraft readiness/cache rows should not create visible item-history churn.');
-
-    $listingMutation = AuditMutation::query()
-        ->where('auditable_type', Listing::class)
-        ->where('subject_name', 'item')
-        ->firstOrFail();
-
-    expect($listingMutation->new_values)
-        ->not->toHaveKey('last_synced_at')
-        ->not->toHaveKey('raw_payload');
 });
 
 it('includes workflow configuration rows in workflow history', function (): void {

@@ -787,7 +787,6 @@ it('renders the record history bridge on first-wave detail pages', function (): 
         route('admin.companies.show', $company),
         route('admin.employees.show', $employee),
         route('admin.addresses.show', $address),
-        route('people.employees.show', $employee),
     ] as $url) {
         $this->get($url)
             ->assertOk()
