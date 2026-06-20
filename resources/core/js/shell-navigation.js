@@ -12,6 +12,16 @@ const applyClientHtmlState = () => {
     document.documentElement.classList.toggle('dark', localStorage.getItem('theme') === 'dark')
 }
 
+const applySidebarShellState = () => {
+    const sidebarLayout = globalThis.blbSidebarLayout
+
+    if (!sidebarLayout) {
+        return
+    }
+
+    sidebarLayout.applyGeometry(sidebarLayout.currentStoredWidth())
+}
+
 const prepareLaraChatForNavigate = () => {
     const chat = document.getElementById('lara-chat-instance')
     const home = document.getElementById('lara-chat-home')
@@ -162,9 +172,10 @@ const applyLaraChatShellState = () => {
 
 const applyNavigateSwapShellState = () => {
     applyClientHtmlState()
-    // Desktop sidebar width is no longer reapplied here: the sidebar column is an
-    // x-persist region, so its live element (with its current width) is carried
-    // across wire:navigate untouched. See app.blade.php [data-blb-sidebar-width-shell].
+    // The desktop sidebar column is persisted across wire:navigate. Reapply the
+    // width defensively so a stale persisted inline style cannot leave the shell
+    // visually stuck at rail width while Alpine state has already expanded it.
+    applySidebarShellState()
     applyLaraChatShellState()
 }
 
@@ -284,6 +295,7 @@ globalThis.blbShellNavigation = {
     refreshPersistedChrome,
     applyNavigateSwapShellState,
     applyClientHtmlState,
+    applySidebarShellState,
     applyLaraChatShellState,
     resolveLaraChatTargetRef,
     prepareLaraChatForNavigate,

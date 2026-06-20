@@ -1,4 +1,63 @@
-const storedInt = (key, fallback) => Number.parseInt(localStorage.getItem(key)) || fallback
+const DEFAULT_SIDEBAR_WIDTH = 224
+const RAIL_WIDTH = 56
+const MAX_SIDEBAR_WIDTH = 288
+const COLLAPSE_THRESHOLD = 80
+
+const storedInt = (key, fallback) => {
+    const value = Number.parseInt(localStorage.getItem(key), 10)
+
+    return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+const expandedSidebarWidth = (value, fallback = DEFAULT_SIDEBAR_WIDTH) => {
+    const width = Number.parseInt(value, 10)
+    const parsedFallback = Number.parseInt(fallback, 10)
+    const safeFallback = Number.isFinite(parsedFallback) && parsedFallback > COLLAPSE_THRESHOLD
+        ? parsedFallback
+        : DEFAULT_SIDEBAR_WIDTH
+
+    if (!Number.isFinite(width) || width <= COLLAPSE_THRESHOLD) {
+        return clamp(safeFallback, COLLAPSE_THRESHOLD + 1, MAX_SIDEBAR_WIDTH)
+    }
+
+    return clamp(width, COLLAPSE_THRESHOLD + 1, MAX_SIDEBAR_WIDTH)
+}
+
+const storedSidebarRail = () => (localStorage.getItem('sidebarRail') ?? '0') === '1'
+const storedExpandedSidebarWidth = () => expandedSidebarWidth(localStorage.getItem('sidebarWidth'))
+const currentStoredSidebarWidth = () => storedSidebarRail() ? RAIL_WIDTH : storedExpandedSidebarWidth()
+
+const applySidebarGeometry = (width) => {
+    const parsedWidth = Number.parseInt(width, 10)
+    const safeWidth = Number.isFinite(parsedWidth)
+        ? clamp(parsedWidth, RAIL_WIDTH, MAX_SIDEBAR_WIDTH)
+        : DEFAULT_SIDEBAR_WIDTH
+
+    const sidebar = document.querySelector('[data-blb-sidebar-width-shell]')
+
+    if (sidebar) {
+        sidebar.style.width = `${safeWidth}px`
+    }
+
+    const dragHandle = document.querySelector('[data-blb-sidebar-drag-handle]')
+
+    if (dragHandle) {
+        dragHandle.style.left = `${safeWidth - 2}px`
+    }
+}
+
+globalThis.blbSidebarLayout = {
+    DEFAULT_WIDTH: DEFAULT_SIDEBAR_WIDTH,
+    RAIL_WIDTH,
+    MAX_WIDTH: MAX_SIDEBAR_WIDTH,
+    COLLAPSE_THRESHOLD,
+    expandedWidth: expandedSidebarWidth,
+    storedExpandedWidth: storedExpandedSidebarWidth,
+    currentStoredWidth: currentStoredSidebarWidth,
+    applyGeometry: applySidebarGeometry,
+}
 
 // Rail (icon-only) state lives in a global Alpine store, NOT in blbAppShell's
 // x-data. The desktop sidebar is an x-persist region whose <aside>/<li> carry
@@ -10,20 +69,21 @@ const storedInt = (key, fallback) => Number.parseInt(localStorage.getItem(key)) 
 // Livewire) but the sidebar's `x-show` stays frozen on the dead scope.
 document.addEventListener('alpine:init', () => {
     globalThis.Alpine.store('shell', {
-        rail: (localStorage.getItem('sidebarRail') ?? '0') === '1',
+        rail: storedSidebarRail(),
     })
 })
 
 globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     sidebarOpen: false,
-    sidebarWidth: storedInt('sidebarWidth', 224),
-    _lastExpandedWidth: storedInt('sidebarWidth', 224),
+    sidebarWidth: currentStoredSidebarWidth(),
+    _lastExpandedWidth: storedExpandedSidebarWidth(),
     _dragging: false,
 
-    RAIL_WIDTH: 56,
-    MIN_WIDTH: 56,
-    MAX_WIDTH: 288,
-    COLLAPSE_THRESHOLD: 80,
+    DEFAULT_WIDTH: DEFAULT_SIDEBAR_WIDTH,
+    RAIL_WIDTH,
+    MIN_WIDTH: RAIL_WIDTH,
+    MAX_WIDTH: MAX_SIDEBAR_WIDTH,
+    COLLAPSE_THRESHOLD,
 
     laraActivated,
     laraChatOpen: (localStorage.getItem('agent-chat-1-open') ?? '0') === '1',
@@ -52,9 +112,15 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     },
 
     initSidebar() {
+        this._lastExpandedWidth = this._expandedSidebarWidth(this._lastExpandedWidth)
+
         if (this.$store.shell.rail) {
             this.sidebarWidth = this.RAIL_WIDTH
+        } else {
+            this.sidebarWidth = this._expandedSidebarWidth(this.sidebarWidth, this._lastExpandedWidth)
         }
+
+        this._syncSidebarGeometry()
 
         if (!this.laraActivated) {
             this.laraChatOpen = false
@@ -66,15 +132,19 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
 
     toggleSidebar() {
         if (globalThis.innerWidth >= 1024) {
-            if (this.$store.shell.rail) {
+            const collapsed = this.$store.shell.rail || this.sidebarWidth <= this.COLLAPSE_THRESHOLD
+            this._lastExpandedWidth = this._expandedSidebarWidth(this._lastExpandedWidth)
+
+            if (collapsed) {
                 this.$store.shell.rail = false
                 this.sidebarWidth = this._lastExpandedWidth
             } else {
-                this._lastExpandedWidth = this.sidebarWidth
+                this._lastExpandedWidth = this._expandedSidebarWidth(this.sidebarWidth, this._lastExpandedWidth)
                 this.$store.shell.rail = true
                 this.sidebarWidth = this.RAIL_WIDTH
             }
 
+            this._syncSidebarGeometry()
             this._persistSidebar()
         } else {
             this.sidebarOpen = !this.sidebarOpen
@@ -84,7 +154,9 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     startDrag(event) {
         this._dragging = true
         const startX = event.clientX
-        const startWidth = this.sidebarWidth
+        const startWidth = (this.$store.shell.rail || this.sidebarWidth <= this.COLLAPSE_THRESHOLD)
+            ? this.RAIL_WIDTH
+            : this._expandedSidebarWidth(this.sidebarWidth, this._lastExpandedWidth)
         document.documentElement.style.cursor = 'col-resize'
         document.documentElement.style.userSelect = 'none'
 
@@ -100,6 +172,8 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
                 this.$store.shell.rail = false
                 this._lastExpandedWidth = newWidth
             }
+
+            this._syncSidebarGeometry()
         }
 
         const onUp = () => {
@@ -116,8 +190,26 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
     },
 
     _persistSidebar() {
+        this._lastExpandedWidth = this._expandedSidebarWidth(this._lastExpandedWidth)
+
+        if (this.$store.shell.rail) {
+            this.sidebarWidth = this.RAIL_WIDTH
+        } else {
+            this.sidebarWidth = this._expandedSidebarWidth(this.sidebarWidth, this._lastExpandedWidth)
+            this._lastExpandedWidth = this.sidebarWidth
+        }
+
+        this._syncSidebarGeometry()
         localStorage.setItem('sidebarWidth', this._lastExpandedWidth)
         localStorage.setItem('sidebarRail', this.$store.shell.rail ? '1' : '0')
+    },
+
+    _expandedSidebarWidth(value, fallback = this.DEFAULT_WIDTH) {
+        return expandedSidebarWidth(value, fallback)
+    },
+
+    _syncSidebarGeometry() {
+        applySidebarGeometry(this.sidebarWidth)
     },
 
     startDockDrag(event) {

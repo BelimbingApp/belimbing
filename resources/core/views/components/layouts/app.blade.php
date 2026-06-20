@@ -78,6 +78,7 @@
              every navigation. Positioned at the column's right edge via a
              reactive :style (re-evaluated each navigate). --}}
         <div
+            data-blb-sidebar-drag-handle
             @mousedown.prevent="startDrag($event)"
             class="hidden lg:block absolute top-0 bottom-0 w-1 cursor-col-resize z-20 group"
             :style="'left: ' + (sidebarWidth - 2) + 'px'"
