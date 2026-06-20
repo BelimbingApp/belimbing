@@ -77,7 +77,7 @@
     <x-ui.card>
         <div class="space-y-4">
             <x-ui.catalog-section
-                :title="__('Pagination')"
+                :title="__('Pagination controls')"
                 component="<code>$paginator-&gt;links()</code>"
             >
                 {{ __('Dense result sets should paginate by default. Pagination belongs near the records it controls, not isolated from the table.') }}
@@ -95,30 +95,30 @@
                 :title="__('Links')"
                 component="<code>x-ui.link</code>"
             >
-                {{ __('Links signal context change through a closed icon vocabulary: one behavior, one glyph. The icon replaces the word, so callers never hand-write target/rel or the affordance icon. Things that move you are links; things that change data are buttons.') }}
+                {{ __('Links signal context change through a closed icon vocabulary: one behavior, one glyph. The glyph carries the verb (new tab, external, download), so the link text just names the destination. Callers pass a kind — never hand-written target, rel, or affordance icons. Things that move you are links; things that change data are buttons.') }}
             </x-ui.catalog-section>
 
-            <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+            <div id="ui-reference-links" class="scroll-mt-4 rounded-2xl border border-border-default bg-surface-card p-4">
                 <dl class="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('In-app, same tab (default)') }}</dt>
-                        <dd><x-ui.link href="#ui-reference-links">{{ __('Open dashboard') }}</x-ui.link></dd>
+                        <dd><x-ui.link href="{{ route('dashboard') }}">{{ __('Dashboard') }}</x-ui.link></dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('In-app, forced new tab') }}</dt>
-                        <dd><x-ui.link kind="new-tab" href="#ui-reference-links" :title="__('Open Shifts in a new tab')">{{ __('Open Shifts') }}</x-ui.link></dd>
+                        <dd><x-ui.link kind="new-tab" href="{{ route('admin.system.ui-reference.index') }}" :title="__('Open the UI reference in a new tab')">{{ __('UI reference') }}</x-ui.link></dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('In-page section anchor') }}</dt>
-                        <dd><x-ui.link kind="anchor" href="#ui-reference-links">{{ __('Jump to section 5') }}</x-ui.link></dd>
+                        <dd><x-ui.link kind="anchor" href="#ui-reference-links">{{ __('This section') }}</x-ui.link></dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('External site (leaves BLB)') }}</dt>
-                        <dd><x-ui.link kind="external" href="https://laravel.com" :title="__('Open laravel.com — leaves BLB')">{{ __('Laravel docs') }}</x-ui.link></dd>
+                        <dd><x-ui.link kind="external" href="https://github.com/belimbingapp/belimbing" :title="__('Open the Belimbing repository — leaves BLB')">{{ __('Belimbing on GitHub') }}</x-ui.link></dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('Download a file') }}</dt>
-                        <dd><x-ui.link kind="download" href="#ui-reference-links">{{ __('Export CSV') }}</x-ui.link></dd>
+                        <dd><x-ui.link kind="download" href="data:text/csv;charset=utf-8,Name%2CRole%0AAda%2CEngineer%0A">{{ __('Sample CSV') }}</x-ui.link></dd>
                     </div>
                     <div class="flex items-center justify-between gap-3">
                         <dt class="text-sm text-muted">{{ __('Mutation (is a button)') }}</dt>
