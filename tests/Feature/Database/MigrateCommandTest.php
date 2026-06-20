@@ -31,6 +31,21 @@ function migrationModuleFixture(string $owner, string $suffix, array $blb): stri
     return $module;
 }
 
+function migrationRequiredAndDependentFixtures(string $owner, string $requiredConstraint = '*'): array
+{
+    $required = migrationModuleFixture($owner, MIGRATION_REQUIRED_SUFFIX, [
+        'role' => 'source',
+        'version' => MIGRATION_TEST_VERSION,
+    ]);
+    $dependent = migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
+        'role' => 'plugin',
+        'version' => MIGRATION_TEST_VERSION,
+        'requires-modules' => [$owner.MIGRATION_REQUIRED_SUFFIX => $requiredConstraint],
+    ]);
+
+    return [$required, $dependent];
+}
+
 function runMigrationDiscovery(): MigrateCommand
 {
     $command = app(MigrateCommand::class);
@@ -94,15 +109,7 @@ test('migration discovery rejects missing required modules before registration',
 
 test('migration discovery rejects incompatible required module versions before registration', function (): void {
     $owner = 'zz-migration-version-'.bin2hex(random_bytes(4));
-    migrationModuleFixture($owner, MIGRATION_REQUIRED_SUFFIX, [
-        'role' => 'source',
-        'version' => MIGRATION_TEST_VERSION,
-    ]);
-    migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
-        'version' => MIGRATION_TEST_VERSION,
-        'requires-modules' => [$owner.MIGRATION_REQUIRED_SUFFIX => '^2.0.0'],
-    ]);
+    migrationRequiredAndDependentFixtures($owner, '^2.0.0');
 
     try {
         runMigrationDiscovery();
@@ -122,15 +129,7 @@ test('migration discovery rejects incompatible required module versions before r
 
 test('migration discovery rejects manifest dependency order that filenames cannot honor', function (): void {
     $owner = 'zz-migration-order-'.bin2hex(random_bytes(4));
-    $required = migrationModuleFixture($owner, MIGRATION_REQUIRED_SUFFIX, [
-        'role' => 'source',
-        'version' => MIGRATION_TEST_VERSION,
-    ]);
-    $dependent = migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
-        'version' => MIGRATION_TEST_VERSION,
-        'requires-modules' => [$owner.MIGRATION_REQUIRED_SUFFIX => '*'],
-    ]);
+    [$required, $dependent] = migrationRequiredAndDependentFixtures($owner);
 
     touch($required.MIGRATION_MIGRATIONS_SUFFIX.'/2026_02_01_000000_create_required_table.php');
     touch($dependent.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_01_000000_create_dependent_table.php');
@@ -153,15 +152,7 @@ test('migration discovery rejects manifest dependency order that filenames canno
 
 test('migration dependency ordering ignores helper php files Laravel would not migrate', function (): void {
     $owner = 'zz-migration-helper-'.bin2hex(random_bytes(4));
-    $required = migrationModuleFixture($owner, MIGRATION_REQUIRED_SUFFIX, [
-        'role' => 'source',
-        'version' => MIGRATION_TEST_VERSION,
-    ]);
-    $dependent = migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
-        'version' => MIGRATION_TEST_VERSION,
-        'requires-modules' => [$owner.MIGRATION_REQUIRED_SUFFIX => '*'],
-    ]);
+    [$required, $dependent] = migrationRequiredAndDependentFixtures($owner);
 
     touch($required.MIGRATION_MIGRATIONS_SUFFIX.'/helper.php');
     touch($dependent.MIGRATION_MIGRATIONS_SUFFIX.'/2026_01_01_000000_create_dependent_table.php');
