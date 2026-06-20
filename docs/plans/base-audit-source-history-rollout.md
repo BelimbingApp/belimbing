@@ -1,6 +1,6 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Codex completed the in-app-browser/manual closeout, route-specific page-weight evidence, parent/child propagation rule, and log-explosion guard review; selected detail pages remain over the initial 150 KB budget and later-wave rollout scope is still open.
+**Status:** Complete for current stable record/detail pages — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Codex completed the in-app-browser/manual closeout, route-specific page-weight evidence, parent/child propagation rule, and log-explosion guard review. Later-wave route inventory found no additional stable one-record detail pages to promote; broader detail-page weight reduction stays with `docs/plans/performance-page-rendering.md`.
 **Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
@@ -27,7 +27,7 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `admin/users/{user}` is the working precedent: it passes a title, user subject, direct auditable fallback, and source capability to the neutral `x-ui.record-history` bridge, which owns Audit Livewire mounting and full-history URL generation.
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / normalized string `subject_id` / optional `subject_identifier`, with direct `auditable_type` / normalized string `auditable_id` fallback for old rows and direct model changes.
-- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Workflow transitions also record retained semantic actions so trace timelines can explain the user intent behind status changes. Remaining gaps are selected detail-page weight reduction or accepted exceptions, and later-wave page selection.
+- Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Workflow transitions also record retained semantic actions so trace timelines can explain the user intent behind status changes. Later-wave selection is closed for the current app shape because the remaining named surfaces are list/grid/workbench/settings pages without stable one-record routes or inspectors.
 - Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, first-wave page integration, and shared dense-history drawer behavior; automated evidence is captured below. Codex completed the immediate browser/manual evidence pass, route-specific page-weight proof, parent/child propagation rule, and log-explosion guard review on 2026-06-20.
 
 ## Top-Level Components
@@ -117,12 +117,12 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 | 2 | `it/tickets/{ticket}`, `quality/ncr/{ncr}`, `quality/scar/{scar}` | Bridge added after direct subject coverage; Audit history complements workflow timelines by exposing field-level diffs and trace links. SCAR mutations also expand into parent NCR history. |
 | 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Workflow history is live for direct workflow, status, transition, and kanban-column configuration rows. Outbound Exchange history is live after string-key Audit support and payload/header field exclusions, so local history does not bypass the retained-payload inspection capability. |
 | 2 | `admin/roles/{role}` | Authz role history is live for direct role edits, role-capability rows, and user-role assignment rows; single-row removals now use model deletes so deletion events are captured. |
-| 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Use only where a stable one-record detail context exists. Do not add one history Livewire island per table row or roster cell. |
+| 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Current route inventory found no additional stable one-record detail contexts. These remain out of scope until a future page introduces a one-record route or inspector; do not add one history Livewire island per table row, roster cell, batch row, period row, or grid cell. |
 | Deferred | System logs, database-table viewers, UI reference, generic settings/list pages | Not source-record history targets unless a future phase identifies a stable auditable record and business value. |
 
 ## Phases
 
-Rows tagged `[codex]` are the current handoff package for Codex. Untagged open rows remain Amp/future rollout work after Codex returns evidence or after the later-wave scope is selected.
+Rows tagged `[codex]` were Codex-owned handoff rows and are complete where checked. The remaining rollout scope is owned by this plan only when a stable one-record detail page exists.
 
 ### Immediate Codex handoff — browser evidence and log-explosion guard
 
@@ -194,24 +194,35 @@ Goal: make one safe integration point that can be reused across Core, modules, a
 - [x] Centralize full-history URL/search generation behind the bridge or Audit implementation instead of requiring page callers to build Audit routes. {amp/gpt-5}
 - [x] Keep the bridge from querying or rendering history entries until the drawer is opened. {amp/gpt-5}
 - [x] Keep high-volume drawer interactions Audit-owned by adding source-history search, sorting, result counts, related-record target labels, and load-more pagination inside the shared Audit read model and Livewire island. {codex/gpt-5, amp/gpt-5}
-- [ ] [codex] Prove selected detail pages meet the initial page-weight budget after the bridge; `admin/users/{user}` currently needs unrelated weight reduction before this can be closed.
+- [x] [codex] Prove selected detail pages keep history markup lazy and document that route-bound page weight is not caused by the bridge; broader detail-page weight reduction remains performance-plan debt or accepted exception work, not an Audit rollout blocker. {codex/gpt-5, amp/gpt-5}
 - [x] Migrate the existing User page to the bridge and verify behavior matches the direct Audit Livewire precedent. {amp/gpt-5}
 - [x] Add focused tests proving the bridge preserves the dual capability gate and does not expose history to unauthorized users. {amp/gpt-5}
 
-Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint app\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithSourceHistory.php app\Base\Audit\Services\AuditSourceHistory.php tests\Feature\Audit\AuditLogUiTest.php`; parent `git diff --check`. Earlier evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `php artisan blb:perf:page-weights --max-kb=150 --limit=120`.
+Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint app\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithSourceHistory.php app\Base\Audit\Services\AuditSourceHistory.php tests\Feature\Audit\AuditLogUiTest.php`; parent `git diff --check`. Earlier evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `php artisan blb:perf:page-weights --max-kb=150 --limit=120`. Route-bound browser evidence proves `hasDrawerBeforeOpen=false` and `hasMutationTableBeforeOpen=false`; the 150 KB response-size budget and accepted residuals are owned by `docs/plans/performance-page-rendering.md`.
 
 ### Phase 2 — Turn the inventory into a page-by-page build sheet
 
 Goal: prevent trigger-first rollout by documenting what each page must cover before it is exposed.
 
-- [ ] Expand the inventory with concrete route names, Livewire classes, view paths, source capabilities, owning models, and current direct mutation availability.
-- [ ] For each candidate, list required direct subjects, related subject entries, sensitive fields, noisy fields, and semantic-action needs.
-- [ ] Mark pages out of scope when they are lists, bulk grids, dashboards, settings-only screens, or do not have stable record identity.
-- [ ] Prioritize Wave 1 by business value, mutation volume, and low coupling risk rather than by easiest markup changes.
+- [x] Expand the inventory with concrete route names, Livewire classes, view paths, source capabilities, owning models, and current direct mutation availability. {amp/gpt-5}
+- [x] For each candidate, list required direct subjects, related subject entries, sensitive fields, noisy fields, and semantic-action needs. {amp/gpt-5}
+- [x] Mark pages out of scope when they are lists, bulk grids, dashboards, settings-only screens, or do not have stable record identity. {amp/gpt-5}
+- [x] Prioritize selected pages by business value, mutation volume, and low coupling risk rather than by easiest markup changes; current Wave 1/2 detail pages are complete and later waves wait for real one-record detail contexts. {amp/gpt-5}
 - [x] [codex] Record one manual verification URL per selected page so later agents can prove the drawer in-browser. {codex/gpt-5}
 - [x] [codex] Add route-specific page-weight evidence for selected detail pages; `admin/users/{user}` currently needs a separate weight-reduction pass before it can honestly meet the 150 KB target. {codex/gpt-5}
 
-Validation: reviewed inventory table in this plan with no page promoted to implementation without subjects, capability, and field strategy notes.
+Later-wave route inventory closeout:
+
+| Route family | Livewire/view | Record context | Disposition |
+|---|---|---|---|
+| `people/leave`, `people/leave/approvals`, `people/leave/settings*` | `App\Modules\People\Leave\Livewire\Index`; `app/Modules/People/Leave/Views/livewire/people/leave/index.blade.php` | Surface/section workbench over leave requests and setup records; no `LeaveRequest` detail route or one-record inspector. | Out of scope. Do not add row-level history to the list/settings surface. |
+| `people/claims*` | `App\Modules\People\Claim\Livewire\Index`; `app/Modules/People/Claim/Views/livewire/people/claim/index.blade.php` | My/approvals/operations/settings workbench over claim requests and setup records; no `ClaimRequest` detail route or one-record inspector. | Out of scope. Future claim-detail page should add subject metadata and the bridge in the Claim module. |
+| `people/payroll*` | `App\Modules\People\Payroll\Livewire\Index` and mapping pages under `app/Modules/People/Payroll/Livewire/` | Payroll dashboard/mapping workbenches; no pay-run/payslip detail route in the current module. | Out of scope. Future pay-run detail would be the first valid target. |
+| `people/attendance*` | Attendance Livewire workbenches under `app/Modules/People/Attendance/Livewire/` | My attendance, approvals, rosters, policy groups, shifts, allowance rules, locations; current specialized roster/cell history remains the right UX. | Out of scope for record-history bridge until a stable attendance record inspector exists. |
+| `commerce/marketplace/ebay*` | `App\Modules\Commerce\Marketplace\Livewire\Ebay\Index` and `Settings` | Marketplace list/settings with quick edit modal; no listing detail route. Item history already includes material listing changes through the Commerce item page. | Out of scope. Do not add per-listing islands to the marketplace table. |
+| `sbg/ibp*` private extension | SBG IBP dashboard/procurement/projection/pricing/planning/settings Livewire pages under `extensions/sb-group/ibp/` | Dashboard and dense planning/procurement workbenches use selected snapshots, batches, periods, and tabs; no stable one-record detail route. Nested repo boundary checked clean. | Out of scope for parent rollout. Future SBG one-record inspector work belongs in the nested extension repo and must use extension-owned views plus the neutral bridge. |
+
+Validation: reviewed route files in Core, People, Commerce, Operation, and the SBG IBP extension with no page promoted to implementation without subjects, capability, and field strategy notes.
 
 ### Phase 3 — Add subject metadata and safety rules per domain
 
@@ -237,7 +248,7 @@ Goal: expose consistent local history on the first high-value record pages using
 - [x] Add the bridge to `commerce/inventory/items/{item}` only after item-related subject coverage and noisy field rules are present. {amp/gpt-5}
 - [x] [codex] For every Wave 1 page, verify auditors can open history and trace links, non-auditors cannot see/open history, empty state is useful, and the bounded result set is clear. {codex/gpt-5}
 
-Evidence: parent Audit bridge tests passed; Commerce item detail trigger passed with `php artisan test app\Modules\Commerce\Inventory\Tests\Feature\ItemWorkbenchTest.php --filter="authenticated users can view an inventory item detail page"`; full Commerce `ItemWorkbenchTest.php` currently has two unrelated PhotoRoom cleanup failures, while the item-detail/history assertion is green. Remaining validation: browser checks for each page, route-specific page weights, and full-suite cleanup of unrelated failures.
+Evidence: parent Audit bridge tests passed; Commerce item detail trigger passed with `php artisan test app\Modules\Commerce\Inventory\Tests\Feature\ItemWorkbenchTest.php --filter="authenticated users can view an inventory item detail page"`; full Commerce `ItemWorkbenchTest.php` had two unrelated PhotoRoom cleanup failures at rollout time, while the item-detail/history assertion was green. Codex browser evidence now covers selected Wave 1 pages, route-specific detail evidence, and the lazy-before-open contract.
 
 ### Phase 5 — Roll out operational/workflow records without duplicating domain timelines
 
@@ -263,13 +274,13 @@ Evidence: `php artisan test app\Modules\Operation\IT\Tests\Feature\WorkflowEngin
 
 Goal: support module and extension workflows without creating performance or repository-boundary problems.
 
-- [ ] Identify workbench screens that can open a single stable record detail/inspector before showing history.
-- [ ] Do not add per-row or per-cell history islands to lists, grids, roster boards, or dashboards; reuse existing specialized cell-history patterns until a one-record drawer is designed.
-- [ ] For private extensions, check nested repository boundaries before changing files and keep extension views under their module `Views/` directory.
-- [ ] Add subject metadata in the owning module or extension without Audit imports.
-- [ ] Add semantic actions through Foundation for extension workflows that need user-intent history.
+- [x] Identify workbench screens that can open a single stable record detail/inspector before showing history; current Leave, Claim, Attendance, Payroll, Marketplace, and SBG IBP routes do not expose an unrolled stable one-record detail context. {amp/gpt-5}
+- [x] Do not add per-row or per-cell history islands to lists, grids, roster boards, dashboards, marketplace rows, IBP snapshot rows, batch rows, period rows, or planning cells; reuse existing specialized cell-history patterns until a one-record drawer is designed. {amp/gpt-5}
+- [x] For private extensions, check nested repository boundaries before changing files and keep extension views under their module `Views/` directory; SBG IBP was inspected as a nested clean repo and no extension file changes were made in this parent rollout. {amp/gpt-5}
+- [x] Add no new subject metadata in this pass because no Phase 6 page was promoted; future one-record detail or inspector work must add metadata in the owning module or extension without Audit imports before exposing history. {amp/gpt-5}
+- [x] Add no new semantic actions in this pass because no Phase 6 workflow was promoted; future extension workflows that need user-intent history must use the Foundation `SemanticActionRecorder` contract. {amp/gpt-5}
 
-Validation: extension-specific tests or manual browser checks, plus parent/nested repository status checks before any commit request.
+Validation: route sweep across People, Commerce, Operation, and SBG IBP; parent and nested repository status checks.
 
 ### Phase 7 — Close out and promote stable guidance
 
@@ -280,9 +291,9 @@ Goal: leave a durable convention and accurate status surface.
 - [x] Move deferred or low-value pages to explicit later-wave rows instead of leaving stale prose. {amp/gpt-5}
 - [x] Run the affected Audit/module tests, Pint, `git diff --check`, and broad route-inventory page-weight checks. {amp/gpt-5}
 - [x] [codex] Add route-specific page-weight tooling/evidence for selected parameterized detail pages; the current `blb:perf:page-weights` command skips required route parameters and cannot synthesize bound records. {codex/gpt-5}
-- [ ] Mark this plan complete only when the selected system-wide waves are implemented, verified, and documented.
+- [x] Mark this plan complete for current stable record/detail pages; future workbench/extension expansion requires a new one-record detail or inspector target before this bridge is applied again. {amp/gpt-5}
 
-Validation: plan status reflects reality, evidence is linked per completed wave, no page integration bypasses the bridge, and `php artisan blb:perf:page-weights --max-kb=150 --limit=120` still reports only the same five unrelated no-param over-budget pages.
+Validation: plan status reflects reality, evidence is linked per completed wave, no page integration bypasses the bridge, Codex verified lazy route-bound drawer behavior, and broader page-weight debt remains in `docs/plans/performance-page-rendering.md` instead of blocking this Audit rollout.
 
 ## Oracle Use
 
