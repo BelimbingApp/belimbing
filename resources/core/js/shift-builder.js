@@ -1,5 +1,5 @@
-// shift-builder.js — Interactive shift builder: clock dial + day strip + grace sliders.
-// Integrated with Livewire 3 via $wire from Alpine.js.
+// shift-builder.js — Interactive shift builder: clock dial with draggable
+// shift/break/grace handles. Integrated with Livewire 3 via $wire from Alpine.js.
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -181,7 +181,7 @@ class ShiftDial {
         this.d.br = mkSvg('path', { fill: 'none', stroke: 'var(--sb-break, #7a7548)', 'stroke-width': rW, 'stroke-linecap': 'butt' }, svg)
         this.d.w2 = mkSvg('path', { fill: 'none', stroke: 'var(--color-accent, #b5622f)', 'stroke-width': rW, 'stroke-linecap': 'butt' }, svg)
         // Tea break — same ring width as main break, solid olive covers the terracotta arc beneath
-        this.d.br2 = mkSvg('path', { fill: 'none', stroke: 'var(--sb-break,#7a7548)', 'stroke-width': rW, 'stroke-linecap': 'butt', display: 'none' }, svg)
+        this.d.br2 = mkSvg('path', { fill: 'none', stroke: 'var(--sb-tea,#5c7f99)', 'stroke-width': rW, 'stroke-linecap': 'butt', display: 'none' }, svg)
 
         // Separator hairlines between segments
         this.d.seps = [0, 1, 2, 3].map(() => mkSvg('line', { stroke: 'var(--color-surface-card, #faf9f5)', 'stroke-width': 1 }, svg))
@@ -189,7 +189,7 @@ class ShiftDial {
         // Center readout
         this.d.dur = mkSvg('text', {
             x: cx, y: cy - sz * 0.005, 'text-anchor': 'middle',
-            'font-size': sz * 0.13, 'font-weight': 500, fill: 'var(--color-ink, #2c2418)',
+            'font-size': sz * 0.105, 'font-weight': 500, fill: 'var(--color-ink, #2c2418)',
             'font-variant-numeric': 'tabular-nums', 'letter-spacing': '-0.02em', 'font-family': 'inherit',
         }, svg)
         const lbl = mkSvg('text', {
@@ -200,7 +200,7 @@ class ShiftDial {
         lbl.textContent = 'paid work'
 
         // Tea break handles — smaller notch+dot, hidden until break2 enabled
-        const teaColor = 'var(--sb-break,#7a7548)'
+        const teaColor = 'var(--sb-tea,#5c7f99)'
         this.d.teaHandles = {}
         for (const key of ['break2Start', 'break2End']) {
             this.d.teaHandles[key] = this._mkHandle(svg, key, { dotR: 2.5, notchBgW: 2, hidden: true, color: teaColor })
@@ -300,7 +300,9 @@ class ShiftDial {
         })
 
         // Center
-        const totalBreak = sbSpan(s.breakStart, s.breakEnd) + (s.hasBreak2 ? sbSpan(s.break2Start, s.break2End) : 0)
+        // Only unpaid breaks are deducted from paid work.
+        const totalBreak = (s.break1Paid ? 0 : sbSpan(s.breakStart, s.breakEnd))
+            + (s.hasBreak2 && !s.break2Paid ? sbSpan(s.break2Start, s.break2End) : 0)
         const paid = Math.max(0, sbSpan(s.shiftStart, s.shiftEnd) - totalBreak)
         this.d.dur.textContent = sbFmtDur(paid)
 
@@ -386,326 +388,6 @@ class ShiftDial {
     }
 }
 
-// ── ShiftStrip ───────────────────────────────────────────────────────────────
-
-class ShiftStrip {
-    constructor(container, getState, onUpdate, onDragEnd) {
-        this.container = container
-        this.getState = getState
-        this.onUpdate = onUpdate
-        this.onDragEnd = onDragEnd
-        this.dragging = null
-        this.w = 800
-        this.d = {}
-        this._build()
-    }
-
-    _build() {
-        this.container.innerHTML = ''
-        const padTop = 30, trackH = 10, gapG = 24, graceH = 10, padBottom = 14
-        this.padTop = padTop
-        this.trackH = trackH
-        this.gapG = gapG
-        this.graceH = graceH
-        this.totalH = padTop + trackH + gapG + graceH + padBottom
-        const midY = padTop + trackH / 2
-        const graceTop = padTop + trackH + gapG
-        const gMidY = graceTop + graceH / 2
-        const pillW = 52, pillH = 24, pillRx = 12
-        const labelY = midY - pillH / 2 - 4
-
-        const svg = mkSvg('svg', {
-            width: '100%', height: this.totalH,
-            viewBox: `0 0 ${this.w} ${this.totalH}`,
-            preserveAspectRatio: 'none',
-            style: 'display:block;overflow:visible;user-select:none;touch-action:none',
-        }, this.container)
-        this.svg = svg
-
-        this._ro = new ResizeObserver((entries) => {
-            this.w = entries[0].contentRect.width || 800
-            svg.setAttribute('viewBox', `0 0 ${this.w} ${this.totalH}`)
-            cancelAnimationFrame(this._rafId)
-            this._rafId = requestAnimationFrame(() => this.draw())
-        })
-        this._ro.observe(this.container)
-
-        // Defs
-        const defs = mkSvg('defs', {}, svg)
-        // Terracotta stripe — outer window (graceIn before start, graceOut after end)
-        const patBef = mkSvg('pattern', { id: 'sbStripTolBef', patternUnits: 'userSpaceOnUse', width: 6, height: 6, patternTransform: 'rotate(45)' }, defs)
-        mkSvg('rect', { width: 6, height: 6, fill: 'rgba(181,98,47,0.30)' }, patBef)
-        mkSvg('line', { x1: 0, y1: 0, x2: 0, y2: 6, stroke: 'rgba(181,98,47,0.85)', 'stroke-width': 2 }, patBef)
-        // Olive stripe — inner slip (inAfter after start, outBefore before end)
-        const patAft = mkSvg('pattern', { id: 'sbStripTolAft', patternUnits: 'userSpaceOnUse', width: 6, height: 6, patternTransform: 'rotate(45)' }, defs)
-        mkSvg('rect', { width: 6, height: 6, fill: 'rgba(122,117,72,0.30)' }, patAft)
-        mkSvg('line', { x1: 0, y1: 0, x2: 0, y2: 6, stroke: 'rgba(122,117,72,0.85)', 'stroke-width': 2 }, patAft)
-
-        // Hour grid lines and labels
-        const hours = [0, 3, 6, 9, 12, 15, 18, 21, 24]
-        this.d.hLines = {}
-        this.d.hLabels = {}
-        for (const h of hours) {
-            this.d.hLines[h] = mkSvg('line', {
-                y1: padTop - 2, y2: graceTop + graceH + 2,
-                stroke: 'var(--color-border-default, #ddd8cf)',
-                'stroke-width': h % 6 === 0 ? 1 : 0.5,
-                opacity: h % 6 === 0 ? 0.9 : 0.6,
-            }, svg)
-            this.d.hLabels[h] = mkSvg('text', {
-                y: labelY,
-                'text-anchor': h === 0 ? 'start' : h === 24 ? 'end' : 'middle',
-                'font-size': 10, 'font-weight': 600,
-                fill: 'var(--color-muted, #6b6057)',
-                'letter-spacing': '0.06em', 'font-family': 'inherit',
-                'font-variant-numeric': 'tabular-nums',
-            }, svg)
-            this.d.hLabels[h].textContent = String(h).padStart(2, '0')
-        }
-
-        // Main track background — thin strip
-        this.d.trackBg = mkSvg('rect', { x: 0, y: padTop, height: trackH, fill: 'var(--color-surface-subtle, #ece8e0)', rx: 2 }, svg)
-
-        // Shift / break segments on thin strip
-        this.d.shift = [0, 1].map(() => mkSvg('rect', { y: padTop, height: trackH, fill: 'var(--color-accent, #b5622f)', rx: 2, display: 'none' }, svg))
-        this.d.brk   = [0, 1].map(() => mkSvg('rect', { y: padTop, height: trackH, fill: 'var(--sb-break, #7a7548)', rx: 2, display: 'none' }, svg))
-        // Tea break — same height, layered over shift segment
-        this.d.br2   = [0, 1].map(() => mkSvg('rect', { y: padTop, height: trackH, fill: 'var(--sb-break, #7a7548)', rx: 2, display: 'none' }, svg))
-
-        // Main track handles — floating pill centered on thin strip
-        const handleDefs = [
-            { key: 'shiftStart', work: true },
-            { key: 'shiftEnd',   work: true },
-            { key: 'breakStart', work: false },
-            { key: 'breakEnd',   work: false },
-        ]
-        this.d.handles = {}
-        for (const { key, work } of handleDefs) {
-            const rawColor = work ? '#b5622f' : '#7a7548'
-            const hg = mkSvg('g', { style: 'cursor:ew-resize' }, svg)
-            const hit = mkSvg('rect', { y: midY - pillH / 2, width: pillW, height: pillH, fill: 'transparent' }, hg)
-            const pillBg = mkSvg('rect', {
-                y: midY - pillH / 2, width: pillW, height: pillH, rx: pillRx,
-                fill: 'var(--color-surface-card,#faf9f5)', stroke: rawColor, 'stroke-width': 2,
-            }, hg)
-            const pillTxt = mkSvg('text', {
-                y: midY + 4.5, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 600,
-                fill: 'var(--color-ink,#2c2418)',
-                'font-variant-numeric': 'tabular-nums', 'font-family': 'inherit',
-            }, hg)
-            this.d.handles[key] = { hg, hit, pillBg, pillTxt }
-
-            hg.addEventListener('pointerdown', (e) => {
-                e.preventDefault()
-                hg.setPointerCapture(e.pointerId)
-                this.dragging = key
-            })
-        }
-
-        // Tea break small pills — draggable, smaller than main pills
-        const smW = 38, smH = 18, smRx = 9
-        this.d.teaPills = {}
-        for (const key of ['break2Start', 'break2End']) {
-            const hg = mkSvg('g', { style: 'cursor:ew-resize;display:none' }, svg)
-            const hit    = mkSvg('rect', { y: midY - pillH / 2, width: smW, height: pillH, fill: 'transparent' }, hg)
-            const pillBg = mkSvg('rect', {
-                y: midY - smH / 2, width: smW, height: smH, rx: smRx,
-                fill: 'var(--color-surface-card,#faf9f5)', stroke: '#7a7548', 'stroke-width': 1.5,
-            }, hg)
-            const pillTxt = mkSvg('text', {
-                y: midY + 3.5, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 600,
-                fill: 'var(--color-ink,#2c2418)',
-                'font-variant-numeric': 'tabular-nums', 'font-family': 'inherit',
-            }, hg)
-            this.d.teaPills[key] = { hg, hit, pillBg, pillTxt }
-            hg.addEventListener('pointerdown', (e) => {
-                e.preventDefault()
-                hg.setPointerCapture(e.pointerId)
-                this.dragging = key
-            })
-        }
-
-        // Grace track background — thin strip, same style as main
-        this.d.gTrackBg = mkSvg('rect', { x: 0, y: graceTop, height: graceH, fill: 'var(--color-surface-subtle, #ece8e0)', rx: 2 }, svg)
-
-        // Grace bars — outer (terracotta) rendered first, inner (olive) on top
-        this.d.gIn  = mkSvg('rect', { y: graceTop, height: graceH, fill: 'url(#sbStripTolBef)', rx: 2, display: 'none' }, svg)
-        this.d.gOut = mkSvg('rect', { y: graceTop, height: graceH, fill: 'url(#sbStripTolBef)', rx: 2, display: 'none' }, svg)
-        this.d.gInAfter   = mkSvg('rect', { y: graceTop, height: graceH, fill: 'url(#sbStripTolAft)', rx: 2, display: 'none' }, svg)
-        this.d.gOutBefore = mkSvg('rect', { y: graceTop, height: graceH, fill: 'url(#sbStripTolAft)', rx: 2, display: 'none' }, svg)
-
-        // Grace handles — same pill size as main handles
-        const ghDefs = [
-            { key: 'graceIn',   color: '#b5622f' },
-            { key: 'inAfter',   color: '#7a7548' },
-            { key: 'outBefore', color: '#7a7548' },
-            { key: 'graceOut',  color: '#b5622f' },
-        ]
-        this.d.gHandles = {}
-        for (const { key, color } of ghDefs) {
-            const hg = mkSvg('g', { style: 'cursor:ew-resize' }, svg)
-            const hit = mkSvg('rect', { y: gMidY - pillH / 2 - 4, width: pillW, height: pillH + 8, fill: 'transparent' }, hg)
-            const pillBg = mkSvg('rect', {
-                y: gMidY - pillH / 2, width: pillW, height: pillH, rx: pillRx,
-                fill: 'var(--color-surface-card,#faf9f5)', stroke: color, 'stroke-width': 2,
-            }, hg)
-            const pillTxt = mkSvg('text', {
-                y: gMidY + 4.5, 'text-anchor': 'middle', 'font-size': 11, 'font-weight': 600,
-                fill: 'var(--color-ink,#2c2418)',
-                'font-variant-numeric': 'tabular-nums', 'font-family': 'inherit',
-            }, hg)
-            this.d.gHandles[key] = { hg, hit, pillBg, pillTxt }
-            hg.addEventListener('pointerdown', (e) => {
-                e.preventDefault()
-                hg.setPointerCapture(e.pointerId)
-                this.dragging = key
-            })
-        }
-
-        this._onMove = (e) => {
-            if (!this.dragging) return
-            const s = { ...this.getState() }
-            const snap = s.snap || 5
-            const rect = this.container.getBoundingClientRect()
-            const x = Math.max(0, Math.min(this.w, (e.clientX - rect.left) * (this.w / rect.width)))
-            const xMins = (x / this.w) * 1440
-            const clamp = (v, max) => Math.max(0, Math.min(max, Math.round(v / snap) * snap))
-
-            if (this.dragging === 'graceIn')   s.graceIn   = clamp(s.shiftStart - xMins, 120)
-            else if (this.dragging === 'inAfter')   s.inAfter   = clamp(xMins - s.shiftStart, 60)
-            else if (this.dragging === 'outBefore') s.outBefore = clamp(s.shiftEnd - xMins, 60)
-            else if (this.dragging === 'graceOut')  s.graceOut  = clamp(xMins - s.shiftEnd, 240)
-            else {
-                let t = Math.round(xMins / snap) * snap
-                if (t >= 1440) t = 1440 - snap
-                s[this.dragging] = t
-            }
-            this.onUpdate(s)
-            this.draw()
-        }
-        this._onUp = () => {
-            if (this.dragging) {
-                this.dragging = null
-                this.onDragEnd(this.getState())
-            }
-        }
-        window.addEventListener('pointermove', this._onMove)
-        window.addEventListener('pointerup', this._onUp)
-        window.addEventListener('pointercancel', this._onUp)
-    }
-
-    _x(mins) { return (mins / 1440) * this.w }
-
-    draw() {
-        const s = this.getState()
-        const { w, padTop, trackH } = this
-
-        // Hour grid
-        for (const h of [0, 3, 6, 9, 12, 15, 18, 21, 24]) {
-            const x = this._x(h * 60)
-            sa(this.d.hLines[h], { x1: x, x2: x })
-            sa(this.d.hLabels[h], { x })
-        }
-        sa(this.d.trackBg, { width: w })
-
-        // Shift segments
-        const shiftSegs = s.shiftEnd > s.shiftStart
-            ? [[s.shiftStart, s.shiftEnd]]
-            : [[s.shiftStart, 1440], [0, s.shiftEnd]]
-        shiftSegs.forEach(([st, en], i) => {
-            sa(this.d.shift[i], { x: this._x(st), width: Math.max(0.5, this._x(en) - this._x(st)), display: '' })
-        })
-        for (let i = shiftSegs.length; i < 2; i++) sa(this.d.shift[i], { display: 'none' })
-
-        // Break segments
-        const brkSegs = s.breakEnd > s.breakStart
-            ? [[s.breakStart, s.breakEnd]]
-            : s.breakEnd < s.breakStart
-                ? [[s.breakStart, 1440], [0, s.breakEnd]]
-                : []
-        brkSegs.forEach(([st, en], i) => {
-            sa(this.d.brk[i], { x: this._x(st), width: Math.max(0.5, this._x(en) - this._x(st)), display: '' })
-        })
-        for (let i = brkSegs.length; i < 2; i++) sa(this.d.brk[i], { display: 'none' })
-
-        // Main track handles
-        for (const [key, h] of Object.entries(this.d.handles)) {
-            const x = this._x(s[key])
-            sa(h.hit, { x: x - 26 })
-            sa(h.pillBg, { x: x - 26 })
-            sa(h.pillTxt, { x })
-            h.pillTxt.textContent = sbMinsToHhmm(s[key])
-        }
-
-        // Tea break segment + small pills
-        if (s.hasBreak2) {
-            const b2Segs = s.break2End > s.break2Start
-                ? [[s.break2Start, s.break2End]]
-                : s.break2End < s.break2Start
-                    ? [[s.break2Start, 1440], [0, s.break2End]]
-                    : []
-            b2Segs.forEach(([st, en], i) => {
-                sa(this.d.br2[i], { x: this._x(st), width: Math.max(0.5, this._x(en) - this._x(st)), display: '' })
-            })
-            for (let i = b2Segs.length; i < 2; i++) sa(this.d.br2[i], { display: 'none' })
-            for (const [key, h] of Object.entries(this.d.teaPills)) {
-                const x = this._x(s[key])
-                const active = this.dragging === key
-                h.hg.style.display = ''
-                sa(h.hit,    { x: x - 19 })
-                sa(h.pillBg, { x: x - 19, 'stroke-width': active ? 2 : 1.5 })
-                sa(h.pillTxt, { x })
-                h.pillTxt.textContent = sbMinsToHhmm(s[key])
-            }
-        } else {
-            this.d.br2.forEach(el => sa(el, { display: 'none' }))
-            for (const h of Object.values(this.d.teaPills)) h.hg.style.display = 'none'
-        }
-
-        // Grace track
-        sa(this.d.gTrackBg, { width: w })
-
-        const gInStart  = ((s.shiftStart - s.graceIn) % 1440 + 1440) % 1440
-        const gInAftEnd = (s.shiftStart + s.inAfter) % 1440
-        const gOutBefSt = ((s.shiftEnd - s.outBefore) % 1440 + 1440) % 1440
-        const gOutEnd   = (s.shiftEnd + s.graceOut) % 1440
-
-        const gbar = (rect, show, start, end) => {
-            if (!show || end <= start) { sa(rect, { display: 'none' }); return }
-            sa(rect, { x: this._x(start), width: Math.max(1, this._x(end) - this._x(start)), display: '' })
-        }
-        gbar(this.d.gIn,       s.graceIn > 0,   gInStart,  s.shiftStart)
-        gbar(this.d.gOut,      s.graceOut > 0,  s.shiftEnd, gOutEnd)
-        gbar(this.d.gInAfter,  s.inAfter > 0,   s.shiftStart, gInAftEnd)
-        gbar(this.d.gOutBefore,s.outBefore > 0, gOutBefSt,  s.shiftEnd)
-
-        // Grace handles — pill positioned at the draggable outer edge of each bar
-        const ghPos = {
-            graceIn:   { x: this._x(gInStart),  show: s.graceIn > 0,   val: s.graceIn   },
-            inAfter:   { x: this._x(gInAftEnd), show: s.inAfter > 0,   val: s.inAfter   },
-            outBefore: { x: this._x(gOutBefSt), show: s.outBefore > 0, val: s.outBefore },
-            graceOut:  { x: this._x(gOutEnd),   show: s.graceOut > 0,  val: s.graceOut  },
-        }
-        for (const [key, { x, show, val }] of Object.entries(ghPos)) {
-            const h = this.d.gHandles[key]
-            if (!show) { h.hg.style.display = 'none'; continue }
-            h.hg.style.display = ''
-            sa(h.hit, { x: x - 26 })
-            sa(h.pillBg, { x: x - 26 })
-            sa(h.pillTxt, { x })
-            h.pillTxt.textContent = sbFmtDur(val)
-        }
-    }
-
-    destroy() {
-        window.removeEventListener('pointermove', this._onMove)
-        window.removeEventListener('pointerup', this._onUp)
-        window.removeEventListener('pointercancel', this._onUp)
-        cancelAnimationFrame(this._rafId)
-        this._ro?.disconnect()
-    }
-}
-
 // ── Alpine component ─────────────────────────────────────────────────────────
 
 document.addEventListener('alpine:init', () => {
@@ -721,11 +403,12 @@ document.addEventListener('alpine:init', () => {
         break2Start: 0,
         break2End: 0,
         hasBreak2: false,
+        break1Paid: false,
+        break2Paid: false,
         snap: 5,
         sbHelpOpen: false,
 
         _dial: null,
-        _strip: null,
         _fromWire: false,
         _redrawTimer: null,
 
@@ -738,6 +421,8 @@ document.addEventListener('alpine:init', () => {
                 break2Start: this.break2Start,
                 break2End: this.break2End,
                 hasBreak2: this.hasBreak2,
+                break1Paid: this.break1Paid,
+                break2Paid: this.break2Paid,
                 graceIn: this.graceIn,
                 inAfter: this.inAfter,
                 outBefore: this.outBefore,
@@ -747,7 +432,9 @@ document.addEventListener('alpine:init', () => {
         },
 
         get totalBreakMins() {
-            return sbSpan(this.breakStart, this.breakEnd) + (this.hasBreak2 ? sbSpan(this.break2Start, this.break2End) : 0)
+            // Paid breaks count as paid time, so only unpaid breaks are deducted.
+            return (this.break1Paid ? 0 : sbSpan(this.breakStart, this.breakEnd))
+                + (this.hasBreak2 && !this.break2Paid ? sbSpan(this.break2Start, this.break2End) : 0)
         },
         get paidWork() {
             return Math.max(0, sbSpan(this.shiftStart, this.shiftEnd) - this.totalBreakMins)
@@ -802,6 +489,18 @@ document.addEventListener('alpine:init', () => {
                 this.break2End = v ? sbHhmmToMins(v) : 0
                 this._scheduleRedraw()
             })
+            this.$watch(() => this.$wire.shiftBreaks?.[0]?.paid, v => {
+                if (this._fromWire) return
+                this.break1Paid = !!v
+                this.$wire.shiftExpectedWorkMinutes = String(this.paidWork)
+                this._scheduleRedraw()
+            })
+            this.$watch(() => this.$wire.shiftBreaks?.[1]?.paid, v => {
+                if (this._fromWire) return
+                this.break2Paid = !!v
+                this.$wire.shiftExpectedWorkMinutes = String(this.paidWork)
+                this._scheduleRedraw()
+            })
             this.$watch(() => this.$wire.shiftInWindowBeforeMinutes, v => {
                 if (this._fromWire) return
                 this.graceIn = parseInt(v) || 0
@@ -837,6 +536,8 @@ document.addEventListener('alpine:init', () => {
             this.hasBreak2   = !!(br2?.starts_at && br2?.ends_at)
             this.break2Start = this.hasBreak2 ? sbHhmmToMins(br2.starts_at) : 0
             this.break2End   = this.hasBreak2 ? sbHhmmToMins(br2.ends_at)   : 0
+            this.break1Paid  = !!(br?.paid)
+            this.break2Paid  = !!(br2?.paid)
             this.graceIn    = parseInt(this.$wire.shiftInWindowBeforeMinutes  || '60')  || 0
             this.inAfter    = parseInt(this.$wire.shiftInWindowAfterMinutes   || '15')  || 0
             this.outBefore  = parseInt(this.$wire.shiftOutWindowBeforeMinutes || '15')  || 0
@@ -894,16 +595,10 @@ document.addEventListener('alpine:init', () => {
                 this._dial = new ShiftDial(this.$refs.dialContainer, () => this._state, onUpdate, onDragEnd, 320)
                 this._dial.draw()
             }
-            if (this.$refs.stripContainer) {
-                this._strip?.destroy()
-                this._strip = new ShiftStrip(this.$refs.stripContainer, () => this._state, onUpdate, onDragEnd)
-                this._strip.draw()
-            }
         },
 
         _redraw() {
             this._dial?.draw()
-            this._strip?.draw()
         },
 
         _scheduleRedraw() {
@@ -928,6 +623,18 @@ document.addEventListener('alpine:init', () => {
                 this._redraw()
                 this._syncToWire()
             }
+        },
+
+        // Numeric grace inputs. Maxes mirror the drag clamps in ShiftDial/ShiftStrip
+        // so typing and dragging stay in lock-step.
+        setGrace(field, val) {
+            const max = { graceIn: 120, inAfter: 60, outBefore: 60, graceOut: 240 }[field]
+            if (max === undefined) return
+            let v = parseInt(val, 10)
+            if (Number.isNaN(v)) v = 0
+            this[field] = Math.max(0, Math.min(max, v))
+            this._redraw()
+            this._syncToWire()
         },
 
     }))
