@@ -1,7 +1,7 @@
 # Database Schema Rebuild Contract
 
 **Status:** In progress
-**Last Updated:** 2026-06-19
+**Last Updated:** 2026-06-20
 **Sources:** `AGENTS.md`, `docs/architecture/database.md`, `app/Base/Database/AGENTS.md`, `app/Base/Database/Console/Commands/FreshCommand.php`, `app/Base/Database/Console/Commands/MigrateCommand.php`, `app/Base/Database/Models/TableRegistry.php`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, 2026-05-24 schema workflow discussion
 **Agents:** {codex/gpt-5}, {amp}
 
@@ -185,16 +185,20 @@ Goal: remove the semantic trap.
 - [x] Remove selective rebuild behavior from `migrate:fresh`.
 - [x] Remove `--dev` from `migrate:fresh` once `migrate --dev` owns the development path.
 - [x] Adjust tests and docs that currently assert selective behavior through `migrate:fresh`.
-- [ ] Keep `migrate:refresh` and `migrate:reset` blocked unless a separate disposable-database policy is introduced.
+- [x] Keep `migrate:refresh` and `migrate:reset` blocked unless a separate disposable-database policy is introduced. {amp}
+
+Evidence: `tests/Feature/Database/RefreshResetCommandTest.php` asserts the `migrate:refresh` and `migrate:reset` blocks on persistent databases, mirroring the existing `WipeCommandTest.php`. The dead `--dev` passthrough was also removed from `RefreshCommand` (the guard already restricts it to in-memory SQLite, where `migrate --dev` is the blessed path).
 
 ### Phase 5 - Dependency-aware dev migration
 
 Goal: avoid unsafe partial rebuilds.
 
-- [ ] Build table dependency discovery from database foreign keys and declared migration effects.
-- [ ] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans.
-- [ ] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split.
+- [x] Build table dependency discovery from database foreign keys and declared migration effects. {amp}
+- [x] Expand incubating rebuild plans to include dependent tables or refuse unsafe partial plans. {amp}
+- [x] Handle multi-table migrations as a single coherent rebuild unit unless the migration is split. {amp}
 - [ ] Verify PostgreSQL and SQLite/MySQL behavior separately, especially around constraint preservation and rerun ordering.
+
+Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade and the multi-table dependent-migration rerun unit on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. PostgreSQL/MySQL verification remains open.
 
 ### Phase 6 - Pluggable module schema ordering
 
