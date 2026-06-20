@@ -23,6 +23,7 @@ class ModuleManifestReader
      */
     public function __construct(
         private readonly array $rootPaths,
+        private readonly ?ModuleVersionConstraint $versionConstraint = null,
     ) {}
 
     /**
@@ -134,7 +135,7 @@ class ModuleManifestReader
 
                 $installedVersion = $versions[$required] ?? '';
 
-                if (! $this->versionSatisfies($installedVersion, $constraint)) {
+                if (! $this->versions()->satisfies($installedVersion, $constraint)) {
                     $issues[] = [
                         'issue' => 'incompatible',
                         'requiring' => $manifest->name,
@@ -294,145 +295,6 @@ class ModuleManifestReader
         $roots[$module] = $root;
     }
 
-    private function versionSatisfies(string $version, string $constraint): bool
-    {
-        $constraint = trim($constraint);
-
-        if ($constraint === '' || $constraint === '*') {
-            return true;
-        }
-
-        if ($version === '') {
-            return false;
-        }
-
-        foreach (preg_split('/\s*\|\|\s*/', $constraint) ?: [] as $group) {
-            if ($group === '') {
-                continue;
-            }
-
-            if ($this->versionSatisfiesGroup($version, $group)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function versionSatisfiesGroup(string $version, string $constraint): bool
-    {
-        if (preg_match_all(
-            '/(>=|<=|>|<|=|==|\^|~)?\s*(v?\d+(?:\.\d+){0,2}(?:\.\*)?|\*)/',
-            $constraint,
-            $matches,
-            PREG_SET_ORDER,
-        ) === 0) {
-            return false;
-        }
-
-        $consumed = implode('', array_map(fn (array $match): string => $match[0], $matches));
-        $normalizedConstraint = preg_replace('/[\s,]+/', '', $constraint) ?? $constraint;
-        $normalizedConsumed = preg_replace('/[\s,]+/', '', $consumed) ?? $consumed;
-
-        if ($normalizedConstraint !== $normalizedConsumed) {
-            return false;
-        }
-
-        foreach ($matches as $match) {
-            if (! $this->versionSatisfiesToken($version, $match[1] ?: '', $match[2])) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private function versionSatisfiesToken(string $version, string $operator, string $constraint): bool
-    {
-        if ($constraint === '*') {
-            return true;
-        }
-
-        if ($operator === '^') {
-            return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), '>=')
-                && version_compare($this->normalizeVersion($version), $this->caretUpperBound($constraint), '<');
-        }
-
-        if ($operator === '~') {
-            return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), '>=')
-                && version_compare($this->normalizeVersion($version), $this->tildeUpperBound($constraint), '<');
-        }
-
-        if (str_ends_with($constraint, '.*')) {
-            return version_compare($this->normalizeVersion($version), $this->wildcardLowerBound($constraint), '>=')
-                && version_compare($this->normalizeVersion($version), $this->wildcardUpperBound($constraint), '<');
-        }
-
-        $operator = $operator === '==' ? '=' : $operator;
-
-        return version_compare($this->normalizeVersion($version), $this->normalizeVersion($constraint), $operator !== '' ? $operator : '=');
-    }
-
-    private function caretUpperBound(string $version): string
-    {
-        $parts = array_map('intval', explode('.', $this->normalizeVersion($version)));
-        $major = $parts[0] ?? 0;
-        $minor = $parts[1] ?? 0;
-        $patch = $parts[2] ?? 0;
-
-        if ($major > 0) {
-            return ($major + 1).'.0.0';
-        }
-
-        if ($minor > 0) {
-            return '0.'.($minor + 1).'.0';
-        }
-
-        return '0.0.'.($patch + 1);
-    }
-
-    private function tildeUpperBound(string $version): string
-    {
-        $normalized = $this->normalizeVersion($version);
-        $parts = array_map('intval', explode('.', $normalized));
-
-        if (substr_count($normalized, '.') >= 2) {
-            return ($parts[0] ?? 0).'.'.(($parts[1] ?? 0) + 1).'.0';
-        }
-
-        return (($parts[0] ?? 0) + 1).'.0.0';
-    }
-
-    private function wildcardLowerBound(string $version): string
-    {
-        return str_replace('*', '0', $this->normalizeVersion($version));
-    }
-
-    private function wildcardUpperBound(string $version): string
-    {
-        $parts = explode('.', $this->normalizeVersion($version));
-        $wildcardIndex = array_search('*', $parts, true);
-
-        if ($wildcardIndex === false) {
-            return $this->normalizeVersion($version);
-        }
-
-        $base = array_slice($parts, 0, $wildcardIndex);
-        $incrementIndex = max(0, $wildcardIndex - 1);
-        $base[$incrementIndex] = (string) (((int) ($base[$incrementIndex] ?? 0)) + 1);
-
-        while (count($base) < 3) {
-            $base[] = '0';
-        }
-
-        return implode('.', array_slice($base, 0, 3));
-    }
-
-    private function normalizeVersion(string $version): string
-    {
-        return ltrim(trim($version), 'vV');
-    }
-
     private function relativeBasePath(string $path): string
     {
         return str_replace([base_path().DIRECTORY_SEPARATOR, '\\'], ['', '/'], $path);
@@ -441,6 +303,11 @@ class ModuleManifestReader
     private function normalizePath(string $path): string
     {
         return rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
+    }
+
+    private function versions(): ModuleVersionConstraint
+    {
+        return $this->versionConstraint ?? new ModuleVersionConstraint;
     }
 
     /**

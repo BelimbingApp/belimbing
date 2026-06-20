@@ -202,21 +202,29 @@ class WorkflowEngine
                 && $subject['name'] !== ''
                 && $subject['id'] !== null
                 && $subject['id'] !== '') {
-                return [
+                $payload = [
                     'name' => $subject['name'],
                     'id' => is_int($subject['id']) ? $subject['id'] : (string) $subject['id'],
-                    ...(($subject['identifier'] ?? null) !== null && $subject['identifier'] !== ''
-                        ? ['identifier' => (string) $subject['identifier']]
-                        : []),
                 ];
+
+                if (($subject['identifier'] ?? null) !== null && $subject['identifier'] !== '') {
+                    $payload['identifier'] = (string) $subject['identifier'];
+                }
+
+                return $payload;
             }
         }
 
         $id = $model->getKey();
 
-        return $id !== null && $id !== ''
-            ? ['name' => Str::snake(class_basename($model)), 'id' => is_int($id) ? $id : (string) $id]
-            : [];
+        if ($id === null || $id === '') {
+            return [];
+        }
+
+        return [
+            'name' => Str::snake(class_basename($model)),
+            'id' => is_int($id) ? $id : (string) $id,
+        ];
     }
 
     /** @param  array{name?: string, id?: int|string, identifier?: string|null}  $subject */
