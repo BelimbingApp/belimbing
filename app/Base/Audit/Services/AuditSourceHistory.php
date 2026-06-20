@@ -9,19 +9,29 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class AuditSourceHistory
 {
+    private const SORTABLE = [
+        'occurred_at' => 'base_audit_mutations.occurred_at',
+        'actor' => 'users.name',
+        'event' => 'base_audit_mutations.event',
+        'trace_id' => 'base_audit_mutations.trace_id',
+    ];
+
     public function __construct(
         private readonly AuditLogPresenter $presenter,
     ) {}
 
     /**
      * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
-     * @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int}
+     * @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int, total: int}
      */
     public function forRecord(
         array $subjects,
         ?string $auditableType,
         int|string|null $auditableId,
         int $limit = 25,
+        string $search = '',
+        string $sortBy = 'occurred_at',
+        string $sortDir = 'desc',
     ): array {
         $normalizedAuditableId = $this->idOrNull($auditableId);
 
@@ -29,7 +39,10 @@ final class AuditSourceHistory
             return $this->emptyHistory($limit);
         }
 
-        $rows = AuditMutation::query()
+        $sortBy = array_key_exists($sortBy, self::SORTABLE) ? $sortBy : 'occurred_at';
+        $sortDir = strtolower($sortDir) === 'asc' ? 'asc' : 'desc';
+
+        $query = AuditMutation::query()
             ->leftJoin('users', function ($join): void {
                 $join->on('base_audit_mutations.actor_id', '=', 'users.id')
                     ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
@@ -63,23 +76,37 @@ final class AuditSourceHistory
                     });
                 }
             })
-            ->orderByDesc('base_audit_mutations.occurred_at')
-            ->orderByDesc('base_audit_mutations.id')
+            ->tap(fn (Builder $query): Builder => $this->applySearch($query, $search));
+
+        $total = (clone $query)->count('base_audit_mutations.id');
+
+        $rows = $query
+            ->orderBy(self::SORTABLE[$sortBy], $sortDir)
+            ->when($sortBy === 'occurred_at', function (Builder $query) use ($sortDir): void {
+                $query->orderBy('base_audit_mutations.id', $sortDir);
+            }, function (Builder $query): void {
+                $query->orderByDesc('base_audit_mutations.occurred_at')
+                    ->orderByDesc('base_audit_mutations.id');
+            })
             ->limit($limit + 1)
             ->get();
 
         $hasMore = $rows->count() > $limit;
 
         return [
-            'entries' => $rows->take($limit)->map(fn (AuditMutation $mutation): array => $this->entry($mutation))->values()->all(),
+            'entries' => $rows->take($limit)->map(fn (AuditMutation $mutation): array => $this->entry($mutation, $subjects, $auditableType, $normalizedAuditableId))->values()->all(),
             'has_more' => $hasMore,
             'limit' => $limit,
+            'total' => $total,
         ];
     }
 
     /** @return array<string, mixed> */
-    private function entry(AuditMutation $mutation): array
+    private function entry(AuditMutation $mutation, array $subjects, ?string $auditableType, ?string $auditableId): array
     {
+        $auditable = class_basename((string) $mutation->auditable_type).'#'.$mutation->auditable_id;
+        $summary = $this->presenter->mutationLabel($mutation);
+
         return [
             'id' => $mutation->id,
             'occurred_at' => $this->serializeTime($mutation->occurred_at),
@@ -88,13 +115,95 @@ final class AuditSourceHistory
             'event' => $mutation->event,
             'event_label' => $this->presenter->mutationEventLabel($mutation->event),
             'event_variant' => $this->presenter->mutationEventVariant($mutation->event),
-            'summary' => $this->presenter->mutationLabel($mutation),
-            'auditable' => class_basename((string) $mutation->auditable_type).'#'.$mutation->auditable_id,
+            'summary' => $summary,
+            'auditable' => $auditable,
+            'target' => $this->targetLabel($mutation, $subjects, $auditableType, $auditableId, $summary, $auditable),
             'source' => $mutation->source,
             'diffs' => $this->presenter->mutationDiffs($mutation),
             'trace_id' => $mutation->trace_id,
             'formatted_trace_id' => $this->presenter->formatTrace($mutation->trace_id),
         ];
+    }
+
+    private function applySearch(Builder $query, string $search): Builder
+    {
+        $search = trim($search);
+
+        if ($search === '') {
+            return $query;
+        }
+
+        $like = '%'.strtolower($search).'%';
+        $trace = $this->presenter->normalizeTrace($search);
+        $subjectHandle = $this->parseSubjectHandle($search);
+
+        return $query->where(function (Builder $searchQuery) use ($like, $trace, $subjectHandle): void {
+            $searchQuery->whereRaw('lower(coalesce(users.name, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.actor_role, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.actor_type, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.auditable_type, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.event, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) like ?', [$like])
+                ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_identifier, \'\')) like ?', [$like])
+                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
+                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.subject_id').' like ?', [$like])
+                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.old_values').' like ?', [$like])
+                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.new_values').' like ?', [$like]);
+
+            if ($trace !== '') {
+                $searchQuery->orWhereRaw('base_audit_mutations.trace_id like ?', ['%'.$trace.'%']);
+            }
+
+            if ($subjectHandle !== null) {
+                $searchQuery->orWhere(function (Builder $handle) use ($subjectHandle): void {
+                    $handle->whereRaw('lower(base_audit_mutations.auditable_type) like ?', ['%'.$subjectHandle['name'].'%'])
+                        ->where('base_audit_mutations.auditable_id', $subjectHandle['id']);
+                })->orWhere(function (Builder $handle) use ($subjectHandle): void {
+                    $handle->whereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) = ?', [$subjectHandle['name']])
+                        ->where('base_audit_mutations.subject_id', $subjectHandle['id']);
+                });
+            }
+        });
+    }
+
+    /**
+     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     */
+    private function targetLabel(AuditMutation $mutation, array $subjects, ?string $auditableType, ?string $auditableId, string $summary, string $auditable): ?string
+    {
+        if ($auditableType !== null
+            && $auditableId !== null
+            && $mutation->auditable_type === $auditableType
+            && (string) $mutation->auditable_id === $auditableId) {
+            return null;
+        }
+
+        if ($this->matchesCurrentSubject($mutation, $subjects)) {
+            return $auditable;
+        }
+
+        return $summary !== $auditable ? $summary.' · '.$auditable : $auditable;
+    }
+
+    /**
+     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     */
+    private function matchesCurrentSubject(AuditMutation $mutation, array $subjects): bool
+    {
+        foreach ($subjects as $subject) {
+            $name = $this->stringOrNull($subject['name'] ?? null);
+            $id = $this->idOrNull($subject['id'] ?? null);
+
+            if ($name === null || $id === null) {
+                continue;
+            }
+
+            if ($mutation->subject_name === $name && (string) $mutation->subject_id === $id) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function serializeTime(mixed $time): ?string
@@ -126,13 +235,40 @@ final class AuditSourceHistory
         return null;
     }
 
-    /** @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int} */
+    /** @return array{name: string, id: string}|null */
+    private function parseSubjectHandle(string $search): ?array
+    {
+        if (! str_contains($search, '#')) {
+            return null;
+        }
+
+        [$name, $id] = array_pad(explode('#', $search, 2), 2, '');
+        $name = strtolower(trim($name));
+        $id = trim($id);
+
+        if ($name === '' || $id === '') {
+            return null;
+        }
+
+        return ['name' => $name, 'id' => $id];
+    }
+
+    private function lowerTextExpression(string $column): string
+    {
+        return match (config('database.default')) {
+            'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
+            default => 'lower(cast('.$column.' as text))',
+        };
+    }
+
+    /** @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int, total: int} */
     private function emptyHistory(int $limit): array
     {
         return [
             'entries' => [],
             'has_more' => false,
             'limit' => $limit,
+            'total' => 0,
         ];
     }
 }

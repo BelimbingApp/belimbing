@@ -233,7 +233,8 @@ it('shows user record history from direct mutations and redacts protected values
         ->call('open')
         ->assertSet('sourceHistoryDrawerOpen', true)
         ->assertSee('Resize inspector panel')
-        ->assertSee('History for History Target Renamed')
+        ->assertSee('Record history')
+        ->assertSee('user#'.$target->id)
         ->assertSee('legacy-old@example.com')
         ->assertSee('legacy-new@example.com')
         ->assertSee('name')
@@ -499,6 +500,58 @@ it('deduplicates expanded subject rows from direct record history', function ():
             'old' => '—',
             'new' => '03-77862444',
         ]);
+});
+
+it('searches, sorts, and progressively loads source history rows', function (): void {
+    $actor = createAdminUser();
+
+    $target = MutationListener::withoutAuditing(
+        fn (): User => User::factory()->create(['company_id' => $actor->company_id, 'name' => 'Dense History Target'])
+    );
+
+    $this->actingAs($actor);
+
+    auditLogUiInsertMutation([
+        'actor_id' => $actor->id,
+        'auditable_id' => (string) $target->id,
+        'old_values' => ['phone' => '100'],
+        'new_values' => ['phone' => 'alpha-phone'],
+        'trace_id' => 'DENSEHIST001',
+        'occurred_at' => now()->subMinutes(3)->toDateTimeString(),
+    ]);
+    auditLogUiInsertMutation([
+        'actor_id' => $actor->id,
+        'auditable_id' => (string) $target->id,
+        'old_values' => ['email' => 'old@example.com'],
+        'new_values' => ['email' => 'beta@example.com'],
+        'trace_id' => 'DENSEHIST002',
+        'occurred_at' => now()->subMinutes(2)->toDateTimeString(),
+    ]);
+    auditLogUiInsertMutation([
+        'actor_id' => $actor->id,
+        'auditable_id' => (string) $target->id,
+        'event' => 'created',
+        'old_values' => [],
+        'new_values' => ['name' => 'created-target'],
+        'trace_id' => 'DENSEHIST003',
+        'occurred_at' => now()->subMinute()->toDateTimeString(),
+    ]);
+
+    Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target))
+        ->call('open')
+        ->assertSet('sourceHistory.total', 3)
+        ->assertSet('sourceHistorySubjectLabel', 'user#'.$target->id)
+        ->set('sourceHistorySearch', 'phone')
+        ->assertSet('sourceHistory.total', 1)
+        ->assertSee('alpha-phone')
+        ->assertDontSee('beta@example.com')
+        ->call('clearSourceHistorySearch')
+        ->assertSet('sourceHistory.total', 3)
+        ->call('sortSourceHistory', 'event')
+        ->assertSet('sourceHistorySortBy', 'event')
+        ->assertSet('sourceHistorySortDir', 'asc')
+        ->call('loadMoreSourceHistory')
+        ->assertSet('sourceHistoryLimit', 100);
 });
 
 it('finds string-key source history and global mutation searches', function (): void {

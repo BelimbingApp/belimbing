@@ -1,7 +1,7 @@
 # base-audit-source-history-rollout.md
 
-**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
-**Last Updated:** 2026-06-19
+**Status:** In progress — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages, and the shared drawer now has dense-history search, sort, and progressive-load controls; manual browser verification, route-specific page weights, page-by-page field strategy closeout, and later waves remain open.
+**Last Updated:** 2026-06-20
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
 - `app/Base/Audit/AGENTS.md` — zero-coupling Audit module rules, subject metadata contract, semantic action boundary, and UI ownership.
@@ -28,7 +28,7 @@ High-value record/detail pages expose a consistent History trigger that answers 
 - `SourceHistory` currently requires both `admin.audit.log.list` and the page's source capability before rendering or opening history.
 - `AuditSourceHistory` reads mutation rows by `subject_name` / normalized string `subject_id` / optional `subject_identifier`, with direct `auditable_type` / normalized string `auditable_id` fallback for old rows and direct model changes.
 - Existing subject metadata coverage now includes the first-wave direct record subjects and several high-value related records. Visible Wave 1 bridge integration is in place for parent, People, and Commerce item detail pages, and IT Ticket/NCR/SCAR, Workflow, Outbound Exchange, and Authz Role detail pages now have Wave 2 coverage. Remaining gaps are page-by-page field strategy review, manual verification/page-weight proof, and later-wave page selection.
-- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, and first-wave page integration; automated evidence is captured below, while manual browser spot checks remain open.
+- Codex has finished the shared UI/UX improvement. Amp implemented the neutral bridge, User-page migration, first-wave page integration, and shared dense-history drawer behavior; automated evidence is captured below, while manual browser spot checks remain open.
 
 ## Top-Level Components
 
@@ -117,6 +117,7 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 Goal: complete the UI/page work after the shared drawer/trigger polish landed, without duplicating backend subject-metadata work.
 
 - [x] Fold the completed UI/UX treatment into the neutral record-history bridge so page callers never reference `App\Base\Audit\*`, Audit Livewire classes, Audit routes, or Audit search syntax directly. {amp/gpt-5}
+- [x] Add shared drawer controls for high-volume histories: record handle context, search across actor/event/field/value/trace, sortable time/actor/event/trace columns, and progressive loading without page callers wiring Audit internals. {codex/gpt-5, amp/gpt-5}
 - [x] Migrate `admin/users/{user}` from direct `SourceHistory` usage to the bridge and preserve the existing History trigger behavior, authorization gating, drawer empty state, trace opening, and full-history affordance. {amp/gpt-5}
 - [x] Add the bridge to the Core Wave 1 pages that are in the parent repo (`admin/companies/{company}`, `admin/employees/{employee}`, and `admin/addresses/{address}`), using only the already-added subject handles/direct fallbacks and source capabilities. {amp/gpt-5}
 - [x] Add the bridge to the People employee detail page in the nested People repo. {amp/gpt-5}
@@ -125,7 +126,7 @@ Goal: complete the UI/page work after the shared drawer/trigger polish landed, w
 - [x] Run the route-inventory page-weight scan and update this plan with evidence. {amp/gpt-5}
 - [ ] Run manual browser verification and route-specific page-weight checks for User plus at least one representative Wave 1 page, then update this plan with evidence and any page-specific follow-up rows.
 
-Evidence: `tests/Feature/Audit/AuditLogUiTest.php` verifies the bridge trigger appears on first-wave pages and is not mounted without audit permission; `php artisan blb:perf:page-weights --max-kb=150 --limit=60` rendered 106 route-inventory pages with 5 existing over-budget pages. Parameterized detail-page weights need separate measurement; the first local check found `admin/users/{user}` already around 1.5 MB, so that cleanup remains open and should not be hidden by the sidebar rollout.
+Evidence: `tests/Feature/Audit/AuditLogUiTest.php` verifies the bridge trigger appears on first-wave pages, is not mounted without audit permission, and supports source-history search/sort/progressive loading; `php artisan blb:perf:page-weights --max-kb=150 --limit=60` rendered 106 route-inventory pages with 5 existing over-budget pages. Parameterized detail-page weights need separate measurement; the first local check found `admin/users/{user}` already around 1.5 MB, so that cleanup remains open and should not be hidden by the sidebar rollout.
 
 ### Phase 1 — Stabilize the shared integration contract
 
@@ -135,11 +136,12 @@ Goal: make one safe integration point that can be reused across Core, modules, a
 - [x] Add a neutral framework-owned record-history bridge that accepts only plain title, subject, direct fallback, capability, and label inputs. {amp/gpt-5}
 - [x] Centralize full-history URL/search generation behind the bridge or Audit implementation instead of requiring page callers to build Audit routes. {amp/gpt-5}
 - [x] Keep the bridge from querying or rendering history entries until the drawer is opened. {amp/gpt-5}
+- [x] Keep high-volume drawer interactions Audit-owned by adding source-history search, sorting, result counts, related-record target labels, and load-more pagination inside the shared Audit read model and Livewire island. {codex/gpt-5, amp/gpt-5}
 - [ ] Prove selected detail pages meet the initial page-weight budget after the bridge; `admin/users/{user}` currently needs unrelated weight reduction before this can be closed.
 - [x] Migrate the existing User page to the bridge and verify behavior matches the direct Audit Livewire precedent. {amp/gpt-5}
 - [x] Add focused tests proving the bridge preserves the dual capability gate and does not expose history to unauthorized users. {amp/gpt-5}
 
-Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `vendor\bin\pint` on touched parent Blade/test files; `php artisan blb:perf:page-weights --max-kb=150 --limit=60`; parent `git diff --check`.
+Evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php`; `php artisan test tests\Feature\Authz\RoleUiTest.php tests\Feature\Base\Integration\OutboundExchangesUiTest.php tests\Feature\Workflow\WorkflowShowTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php`; `vendor\bin\pint app\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithSourceHistory.php app\Base\Audit\Services\AuditSourceHistory.php tests\Feature\Audit\AuditLogUiTest.php`; parent `git diff --check`. Earlier evidence: `php artisan test tests\Feature\Audit\AuditLogUiTest.php tests\Feature\Audit\AuditSourceHistorySubjectCoverageTest.php tests\Feature\Audit\AuditableTraitTest.php app\Modules\People\Attendance\Tests\Feature\RosterAuditSubjectTest.php`; `php artisan view:clear`; `php artisan blb:perf:page-weights --max-kb=150 --limit=60`.
 
 ### Phase 2 — Turn the inventory into a page-by-page build sheet
 
