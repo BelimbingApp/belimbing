@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Tools\Catalog $this */
+
+use App\Modules\Core\AI\Livewire\Tools\Catalog;
+
+/** @var Catalog $this */
 ?>
 <div>
     <x-ui.page-header :title="__('Tools')" :subtitle="__('Tools extend what Agents can do — they let AI take actions, query data, and interact with external systems beyond generating text.')">
