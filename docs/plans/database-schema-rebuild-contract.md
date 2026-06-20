@@ -165,8 +165,10 @@ Goal: move schema state into git-tracked module files.
 - [x] Choose the metadata form with agent readability as a first-order criterion: grep-friendly, obvious beside `up()`, and easy to edit without extra docs.
 - [x] Add parser/resolver support for stable and incubating migration states.
 - [x] Support stable-to-incubating changes in source and document when that is acceptable before release versus after public use.
-- [ ] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only.
+- [x] Decide whether optional `Database/schema.php` module defaults are needed, and keep them coarse only. {amp}
 - [ ] Document the future `composer.json extra.blb.schema` mirror for coarse pluggable-module defaults.
+
+Evidence: Deferred — no module has needed coarse module-level defaults; migration-local `use IncubatingSchema;` covers every current case. If a module later needs a whole-module default, add `Database/schema.php` as a coarse fallback only, never a per-file list (per D3). The `extra.blb.schema` doc item stays open under Phase 2 until a composerized plugin actually consumes the field.
 
 ### Phase 3 - Teach `migrate --dev` the incubating-schema preflight
 
@@ -216,7 +218,9 @@ Goal: finish the conceptual migration.
 - [x] Rename user-facing "Stable" labels to schema maturity language.
 - [x] Remove the legacy local stability column after source declarations become authoritative.
 - [x] Remove `blb:table:unstable` from the steady-state workflow and keep only a deprecated git-tracked compatibility list while other installations adopt migration-local incubating markers.
-- [ ] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work.
+- [x] Audit existing plans that mention destructive evolution or `migrate:fresh --dev --seed` and update wording where it would mislead future work. {amp}
+
+Evidence: `docs/brief.md` "Where Detail Lives" table updated from "destructive evolution" to "progressive evolution" — the only live (non-historical) doc that still used the retired term. The remaining mentions live in Completed plans (payroll-intake-dependency-inversion, database-backup-security, ai-control-plane-unified-timeline, module-domain-alignment, base-audit-subject-index) as historical evidence of work done under the prior policy; rewriting completed-plan history would falsify the handoff, so they are deliberately left intact.
 
 ### Phase 8 - Make production incubation stateful
 
