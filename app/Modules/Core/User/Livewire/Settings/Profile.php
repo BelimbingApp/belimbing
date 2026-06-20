@@ -8,6 +8,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class Profile extends Component
@@ -38,24 +39,30 @@ class Profile extends Component
     {
         $user = Auth::user();
 
-        $validated = $this->validate([
-            'name' => ['required', 'string', 'max:255'],
+        try {
+            $validated = $this->validate([
+                'name' => ['required', 'string', 'max:255'],
 
-            'email' => [
-                'required',
-                'string',
-                'lowercase',
-                'email',
-                'max:255',
-                Rule::unique(User::class)->ignore($user->id),
-            ],
+                'email' => [
+                    'required',
+                    'string',
+                    'lowercase',
+                    'email',
+                    'max:255',
+                    Rule::unique(User::class)->ignore($user->id),
+                ],
 
-            'landingMenuId' => [
-                'nullable',
-                'string',
-                Rule::in(['', ...array_keys($landing->optionsFor($user))]),
-            ],
-        ]);
+                'landingMenuId' => [
+                    'nullable',
+                    'string',
+                    Rule::in(['', ...array_keys($landing->optionsFor($user))]),
+                ],
+            ]);
+        } catch (ValidationException $exception) {
+            Session::flash('error', __('Profile was not saved. Review the highlighted fields.'));
+
+            throw $exception;
+        }
 
         // Read prefs before fill(): prefsArray() may refresh a partially
         // hydrated instance, which would discard pending attribute changes.
@@ -80,7 +87,7 @@ class Profile extends Component
 
         $user->save();
 
-        $this->dispatch('profile-updated', name: $user->name);
+        Session::flash('success', __('Profile saved.'));
     }
 
     /**

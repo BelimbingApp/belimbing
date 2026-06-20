@@ -19,6 +19,7 @@ test('password can be updated', function () {
         ->call('updatePassword');
 
     $response->assertHasNoErrors();
+    $response->assertSee(__('Password updated successfully.'));
 
     expect(Hash::check('new-password', $user->refresh()->password))->toBeTrue();
 });
@@ -37,4 +38,5 @@ test('correct password must be provided to update password', function () {
         ->call('updatePassword');
 
     $response->assertHasErrors(['currentPassword']);
+    $response->assertSee(__('Password was not saved. Review the highlighted fields.'));
 });

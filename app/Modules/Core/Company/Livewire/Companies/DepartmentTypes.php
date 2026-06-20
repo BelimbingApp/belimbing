@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -105,6 +106,7 @@ class DepartmentTypes extends Component
         $type = DepartmentType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
+        Session::flash('success', __('Department type status updated.'));
     }
 
     public function deleteType(int $typeId): void

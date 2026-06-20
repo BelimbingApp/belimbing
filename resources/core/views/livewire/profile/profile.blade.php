@@ -2,11 +2,13 @@
     @include('partials.settings-heading')
 
     <x-settings.layout :heading="__('Profile')" :subheading="__('Update your name and email address')">
+        <x-ui.session-flash />
+
         <form wire:submit="updateProfileInformation" class="my-6 w-full space-y-6">
-            <x-ui.input id="profile-name" wire:model="name" label="{{ __('Name') }}" type="text" required autofocus autocomplete="name" />
+            <x-ui.input id="profile-name" wire:model="name" label="{{ __('Name') }}" type="text" required autofocus autocomplete="name" :error="$errors->first('name')" />
 
             <div>
-                <x-ui.input id="profile-email" wire:model="email" label="{{ __('Email') }}" type="email" required autocomplete="email" />
+                <x-ui.input id="profile-email" wire:model="email" label="{{ __('Email') }}" type="email" required autocomplete="email" :error="$errors->first('email')" />
 
                 @if (auth()->user() instanceof \Illuminate\Contracts\Auth\MustVerifyEmail &&! auth()->user()->hasVerifiedEmail())
                     <div>
@@ -32,6 +34,7 @@
                 wire:model="landingMenuId"
                 :label="__('Landing page')"
                 :help="__('The first page you see after logging in.')"
+                :error="$errors->first('landingMenuId')"
             >
                 <option value="">{{ __('Default') }}</option>
                 @foreach ($landingOptions as $id => $label)
@@ -45,10 +48,6 @@
                         {{ __('Save') }}
                     </x-ui.button>
                 </div>
-
-                <x-action-message class="me-3" on="profile-updated">
-                    {{ __('Saved.') }}
-                </x-action-message>
             </div>
         </form>
 

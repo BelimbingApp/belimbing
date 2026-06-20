@@ -32,9 +32,7 @@
             <x-ui.alert variant="info">{{ __('This is the licensee company operating this Belimbing instance.') }}</x-ui.alert>
         @endif
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         @include('livewire.admin.companies.partials.company-details')
 

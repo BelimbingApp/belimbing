@@ -40,6 +40,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
             </x-ui.alert>
         @endif
 
+        <x-ui.session-flash />
+
         {{-- ═══════════════════════════════════════════════════
              Primary content: AI provider families as tabs. Each family
              shows two cards — connected (activated) providers and providers
@@ -292,6 +294,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                 </button>
             </div>
 
+            <x-ui.session-flash class="mb-4" />
+
             @php
                 $advancedAvailable = $isEditingProvider && ($this->advancedSettingsSchema ?? []) !== [];
             @endphp
@@ -386,6 +390,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                     <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
                 </button>
             </div>
+
+            <x-ui.session-flash class="mb-4" />
 
             <form wire:submit="saveModel" class="space-y-4">
                 <x-ui.input

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -139,11 +140,14 @@ class Show extends AbstractAddressForm
     public function saveStatus(string $status): void
     {
         if (! in_array($status, ['active', 'suspended', 'pending', 'archived'])) {
+            Session::flash('error', __('The selected company status is not valid.'));
+
             return;
         }
 
         $this->company->status = $status;
         $this->company->save();
+        Session::flash('success', __('Company status updated.'));
     }
 
     public function saveParent(?int $parentId): void
@@ -151,6 +155,7 @@ class Show extends AbstractAddressForm
         $this->company->parent_id = $parentId ?: null;
         $this->company->save();
         $this->company->load('parent');
+        Session::flash('success', __('Parent company updated.'));
     }
 
     public function addActivity(string $activity): void
@@ -164,6 +169,7 @@ class Show extends AbstractAddressForm
         $activities[] = $activity;
         $this->company->scope_activities = array_values(array_unique($activities));
         $this->company->save();
+        Session::flash('success', __('Activity added.'));
     }
 
     public function removeActivity(int $index): void
@@ -172,6 +178,7 @@ class Show extends AbstractAddressForm
         unset($activities[$index]);
         $this->company->scope_activities = array_values($activities) ?: null;
         $this->company->save();
+        Session::flash('success', __('Activity removed.'));
     }
 
     public function saveMetadata(string $json): void
@@ -181,6 +188,7 @@ class Show extends AbstractAddressForm
         if ($json === '') {
             $this->company->metadata = null;
             $this->company->save();
+            Session::flash('success', __('Metadata cleared.'));
 
             return;
         }
@@ -188,17 +196,22 @@ class Show extends AbstractAddressForm
         $decoded = json_decode($json, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
+            Session::flash('error', __('Metadata was not saved. Enter valid JSON.'));
+
             return;
         }
 
         $this->company->metadata = $decoded;
         $this->company->save();
+        Session::flash('success', __('Metadata saved.'));
     }
 
     public function updateAddressPivot(int $addressId, string $field, mixed $value): void
     {
         $allowed = ['is_primary', 'priority'];
         if (! in_array($field, $allowed)) {
+            Session::flash('error', __('The selected address setting is not valid.'));
+
             return;
         }
 
@@ -209,6 +222,7 @@ class Show extends AbstractAddressForm
         }
 
         $this->company->addresses()->updateExistingPivot($addressId, [$field => $value]);
+        Session::flash('success', __('Address setting updated.'));
     }
 
     public function saveAddressKinds(int $addressId, array $kinds): void
@@ -217,6 +231,7 @@ class Show extends AbstractAddressForm
         $kinds = array_values(array_intersect($kinds, $valid));
 
         $this->company->addresses()->updateExistingPivot($addressId, ['kind' => $kinds]);
+        Session::flash('success', __('Address kinds updated.'));
     }
 
     public function unlinkAddress(int $addressId): void
@@ -228,6 +243,8 @@ class Show extends AbstractAddressForm
     public function attachAddress(): void
     {
         if ($this->attachAddressId === 0) {
+            Session::flash('error', __('Choose an address before attaching.'));
+
             return;
         }
 

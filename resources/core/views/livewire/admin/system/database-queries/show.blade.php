@@ -183,6 +183,8 @@
             </x-slot>
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         {{-- Inline-editable description --}}
         <input
             type="text"

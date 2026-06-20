@@ -107,6 +107,7 @@ class Show extends Component implements ProvidesLaraPageContext
                 $this->role->company_id = $newCompanyId;
                 $this->role->save();
                 $this->role->load('company');
+                Session::flash('success', __('Role scope updated.'));
             }
         }
     }
@@ -158,6 +159,7 @@ class Show extends Component implements ProvidesLaraPageContext
         $this->role->principalRoles()->delete();
         $this->role->delete();
 
+        Session::flash('success', __('Role deleted.'));
         $this->redirect(route('admin.roles.index'), navigate: true);
     }
 
@@ -180,15 +182,25 @@ class Show extends Component implements ProvidesLaraPageContext
             return;
         }
 
+        $assigned = 0;
+
         foreach ($this->selectedCapabilities as $capabilityKey) {
-            RoleCapability::query()->firstOrCreate([
+            $capability = RoleCapability::query()->firstOrCreate([
                 'role_id' => $this->role->id,
                 'capability_key' => $capabilityKey,
             ]);
+
+            if ($capability->wasRecentlyCreated) {
+                $assigned++;
+            }
         }
 
         $this->selectedCapabilities = [];
         $this->role->load('capabilities');
+
+        if ($assigned > 0) {
+            Session::flash('success', trans_choice('Assigned :count capability.|Assigned :count capabilities.', $assigned, ['count' => $assigned]));
+        }
     }
 
     /**
@@ -211,7 +223,9 @@ class Show extends Component implements ProvidesLaraPageContext
             ->where('role_id', $this->role->id)
             ->first();
 
-        $roleCapability?->delete();
+        if ($roleCapability?->delete()) {
+            Session::flash('success', __('Capability removed.'));
+        }
 
         $this->role->load('capabilities');
     }
@@ -229,6 +243,8 @@ class Show extends Component implements ProvidesLaraPageContext
             return;
         }
 
+        $assigned = 0;
+
         foreach ($this->selectedUserIds as $userId) {
             $user = User::query()->find((int) $userId);
 
@@ -236,15 +252,23 @@ class Show extends Component implements ProvidesLaraPageContext
                 continue;
             }
 
-            PrincipalRole::query()->firstOrCreate([
+            $principalRole = PrincipalRole::query()->firstOrCreate([
                 'company_id' => $user->company_id,
                 'principal_type' => PrincipalType::USER->value,
                 'principal_id' => $user->id,
                 'role_id' => $this->role->id,
             ]);
+
+            if ($principalRole->wasRecentlyCreated) {
+                $assigned++;
+            }
         }
 
         $this->selectedUserIds = [];
+
+        if ($assigned > 0) {
+            Session::flash('success', trans_choice('Assigned :count user.|Assigned :count users.', $assigned, ['count' => $assigned]));
+        }
     }
 
     /**
@@ -261,7 +285,9 @@ class Show extends Component implements ProvidesLaraPageContext
             ->where('role_id', $this->role->id)
             ->first();
 
-        $principalRole?->delete();
+        if ($principalRole?->delete()) {
+            Session::flash('success', __('User removed from role.'));
+        }
     }
 
     public function render(): View

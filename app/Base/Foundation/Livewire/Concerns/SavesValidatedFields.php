@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Base\Foundation\Livewire\Concerns;
 
 use Closure;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
 
 trait SavesValidatedFields
 {
@@ -23,7 +25,14 @@ trait SavesValidatedFields
             return false;
         }
 
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        try {
+            $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Could not save changes. Review the highlighted field.'));
+
+            throw $exception;
+        }
+
         $validatedValue = $validated[$field];
 
         $model->$field = $validatedValue;
@@ -33,6 +42,8 @@ trait SavesValidatedFields
         }
 
         $model->save();
+
+        session()->flash('success', __('Saved.'));
 
         return true;
     }

@@ -18,6 +18,8 @@
             </x-slot>
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         <x-ui.card>
             <div class="mb-2 flex items-center gap-4 flex-wrap">
                 <div class="flex-1 min-w-0">

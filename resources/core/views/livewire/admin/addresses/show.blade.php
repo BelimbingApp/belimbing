@@ -24,6 +24,8 @@
             </x-slot>
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         @if($timezoneWasAutoApplied)
             <x-ui.alert variant="info">
                 {{ __('Company timezone was automatically updated based on the address locality.') }}

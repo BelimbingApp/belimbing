@@ -2,6 +2,8 @@
     @include('partials.settings-heading')
 
     <x-settings.layout :heading="__('Update password')" :subheading="__('Ensure your account is using a long, random password to stay secure')">
+        <x-ui.session-flash />
+
         <form method="POST" wire:submit="updatePassword" class="mt-6 space-y-6">
             <x-ui.input
                 id="current-password"
@@ -10,6 +12,7 @@
                 type="password"
                 required
                 autocomplete="current-password"
+                :error="$errors->first('currentPassword')"
             />
             <x-ui.input
                 id="new-password"
@@ -18,6 +21,7 @@
                 type="password"
                 required
                 autocomplete="new-password"
+                :error="$errors->first('password')"
             />
             <x-ui.input
                 id="password-confirmation"
@@ -26,6 +30,7 @@
                 type="password"
                 required
                 autocomplete="new-password"
+                :error="$errors->first('passwordConfirmation')"
             />
 
             <div class="flex items-center gap-4">
@@ -34,10 +39,6 @@
                         {{ __('Save') }}
                     </x-ui.button>
                 </div>
-
-                <x-action-message class="me-3" on="password-updated">
-                    {{ __('Saved.') }}
-                </x-action-message>
             </div>
         </form>
     </x-settings.layout>

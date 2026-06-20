@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
@@ -17,6 +18,7 @@ use App\Modules\Core\User\Models\UserPin;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -117,17 +119,23 @@ class Show extends Component
      */
     public function save(): void
     {
-        $validated = validator([
-            'name' => $this->editName,
-            'prompt' => $this->editPrompt ?: null,
-            'description' => $this->editDescription ?: null,
-            'sql_query' => $this->editSql ?: '',
-        ], [
-            'name' => ['required', 'string', 'max:255'],
-            'prompt' => ['nullable', 'string'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'sql_query' => ['required', 'string'],
-        ])->validate();
+        try {
+            $validated = validator([
+                'name' => $this->editName,
+                'prompt' => $this->editPrompt ?: null,
+                'description' => $this->editDescription ?: null,
+                'sql_query' => $this->editSql ?: '',
+            ], [
+                'name' => ['required', 'string', 'max:255'],
+                'prompt' => ['nullable', 'string'],
+                'description' => ['nullable', 'string', 'max:1000'],
+                'sql_query' => ['required', 'string'],
+            ])->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Query was not saved. Review the highlighted fields.'));
+
+            throw $exception;
+        }
 
         if ($this->isNew) {
             $userId = (int) auth()->id();
@@ -142,6 +150,7 @@ class Show extends Component
             ]);
 
             $this->isNew = false;
+            session()->flash('success', __('Query saved.'));
             $this->redirect(
                 route('admin.system.database-queries.show', $this->query->slug),
                 navigate: true,
@@ -157,6 +166,7 @@ class Show extends Component
         $this->query->sql_query = $validated['sql_query'];
         $this->query->save();
 
+        session()->flash('success', __('Query saved.'));
         $this->dispatch('query-saved');
     }
 
@@ -168,6 +178,7 @@ class Show extends Component
     public function delete(): void
     {
         if ($this->isNew || $this->query === null) {
+            session()->flash('success', __('Query discarded.'));
             $this->redirect(route('admin.system.database-queries.index'), navigate: true);
 
             return;
@@ -185,6 +196,7 @@ class Show extends Component
             ->where('user_id', auth()->id())
             ->delete();
 
+        session()->flash('success', __('Query deleted.'));
         $this->redirect(route('admin.system.database-queries.index'), navigate: true);
     }
 

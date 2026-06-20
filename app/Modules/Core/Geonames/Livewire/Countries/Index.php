@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Geonames\Livewire\Countries;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -71,6 +72,7 @@ class Index extends Component
         $country = Country::query()->findOrFail($id);
         $country->country = trim($name);
         $country->save();
+        Session::flash('success', __('Country name saved.'));
     }
 
     public function update(): void

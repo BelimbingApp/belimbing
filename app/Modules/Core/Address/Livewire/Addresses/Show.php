@@ -104,6 +104,7 @@ class Show extends AbstractAddressForm
 
         $this->address->save();
         $this->address->load(['country']);
+        Session::flash('success', __('Country updated.'));
     }
 
     public function openLocationEditor(): void
@@ -145,11 +146,14 @@ class Show extends AbstractAddressForm
     public function saveVerificationStatus(string $status): void
     {
         if (! in_array($status, ['unverified', 'suggested', 'verified'])) {
+            Session::flash('error', __('The selected verification status is not valid.'));
+
             return;
         }
 
         $this->address->verificationStatus = $status;
         $this->address->save();
+        Session::flash('success', __('Verification status updated.'));
     }
 
     /**
@@ -158,12 +162,16 @@ class Show extends AbstractAddressForm
     public function acceptSuggestedTimezone(): void
     {
         if (! $this->suggestedTimezone || ! $this->companyContextId) {
+            Session::flash('error', __('No timezone suggestion is available.'));
+
             return;
         }
 
         $company = Company::query()->find($this->companyContextId);
 
         if (! $company) {
+            Session::flash('error', __('Company context could not be found.'));
+
             return;
         }
 
@@ -172,6 +180,7 @@ class Show extends AbstractAddressForm
         $this->timezoneWasAutoApplied = true;
         $this->suggestedTimezone = null;
         $this->suggestedTimezoneOld = null;
+        Session::flash('success', __('Company timezone updated.'));
     }
 
     /**

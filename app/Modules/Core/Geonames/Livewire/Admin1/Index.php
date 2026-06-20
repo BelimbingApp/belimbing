@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Geonames\Livewire\Admin1;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -97,6 +98,7 @@ class Index extends Component
         $admin1 = Admin1::query()->findOrFail($id);
         $admin1->name = trim($name);
         $admin1->save();
+        Session::flash('success', __('Admin1 name saved.'));
     }
 
     public function update(): void

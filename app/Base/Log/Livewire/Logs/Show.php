@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Log\Livewire\Logs;
 
 use Illuminate\Contracts\View\View;
@@ -87,9 +88,12 @@ class Show extends Component
 
         $path = $this->resolvedPath();
         if ($path === null) {
+            session()->flash('error', __('Log file could not be found.'));
+
             return;
         }
 
+        $deleted = min($count, $this->countLines($path));
         $tmpPath = $path.'.tmp';
         $source = new SplFileObject($path, 'r');
         $dest = new SplFileObject($tmpPath, 'w');
@@ -107,8 +111,14 @@ class Show extends Component
         }
 
         unset($source, $dest);
-        rename($tmpPath, $path);
+        if (! rename($tmpPath, $path)) {
+            session()->flash('error', __('Log lines could not be deleted.'));
+
+            return;
+        }
+
         $this->deleteLines = 10;
+        session()->flash('success', trans_choice('Deleted :count line from the top.|Deleted :count lines from the top.', $deleted, ['count' => $deleted]));
     }
 
     /**
@@ -119,6 +129,9 @@ class Show extends Component
         $path = $this->resolvedPath();
         if ($path !== null) {
             File::delete($path);
+            session()->flash('success', __('Log file deleted.'));
+        } else {
+            session()->flash('error', __('Log file could not be found.'));
         }
 
         $this->redirect(route('admin.system.logs.index'), navigate: true);

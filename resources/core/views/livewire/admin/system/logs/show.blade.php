@@ -28,6 +28,8 @@
             </x-slot>
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         {{-- Toolbar --}}
         <x-ui.card>
             <div class="flex flex-wrap items-end gap-3">

@@ -13,6 +13,8 @@
             @endif
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         <x-ui.card>
             <div class="mb-2">
                 <x-ui.search-input

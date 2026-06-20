@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
@@ -87,6 +88,7 @@ class LegalEntityTypes extends Component
         $type = LegalEntityType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
+        Session::flash('success', __('Legal entity type status updated.'));
     }
 
     public function deleteType(int $typeId): void

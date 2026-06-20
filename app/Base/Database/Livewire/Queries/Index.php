@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Livewire\Queries;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
@@ -73,6 +74,7 @@ class Index extends Component
             ->delete();
 
         $query->delete();
+        session()->flash('success', __('Query deleted.'));
     }
 
     /**
@@ -99,6 +101,7 @@ class Index extends Component
             'description' => $source->description,
             'icon' => $source->icon,
         ]);
+        session()->flash('success', __('Query duplicated.'));
     }
 
     public function render(): View

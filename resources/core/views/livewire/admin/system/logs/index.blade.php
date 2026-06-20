@@ -4,6 +4,8 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Logs')" :subtitle="__('Application log files')" />
 
+        <x-ui.session-flash />
+
         <x-ui.card>
             <x-ui.table container="flush" :caption="__('Application log files')">
                 <x-slot name="head">

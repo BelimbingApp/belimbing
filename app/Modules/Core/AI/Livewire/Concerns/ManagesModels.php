@@ -52,6 +52,7 @@ trait ManagesModels
         }
 
         $model->update(['is_active' => ! $model->is_active]);
+        session()->flash('success', __('Model availability updated.'));
     }
 
     /**
@@ -81,6 +82,7 @@ trait ManagesModels
         $hasAnyCost = array_filter($cost, fn ($v) => $v !== null && $v !== '') !== [];
 
         $model->update(['cost_override' => $hasAnyCost ? $cost : null]);
+        session()->flash('success', __('Model cost override updated.'));
     }
 
     public function openCreateModel(int $providerId): void
@@ -97,10 +99,14 @@ trait ManagesModels
     public function saveModel(): void
     {
         if ($this->modelProviderId === null) {
+            session()->flash('error', __('Choose a provider before adding a model.'));
+
             return;
         }
 
         if (! AiProvider::query()->llm()->whereKey($this->modelProviderId)->exists()) {
+            session()->flash('error', __('Provider was not found.'));
+
             return;
         }
 
@@ -118,6 +124,7 @@ trait ManagesModels
 
         $this->showModelForm = false;
         $this->resetModelForm();
+        session()->flash('success', __('Model saved.'));
     }
 
     /**
@@ -132,6 +139,7 @@ trait ManagesModels
         }
 
         $model->setAsDefault();
+        session()->flash('success', __('Default model updated.'));
     }
 
     private function resetModelForm(): void
@@ -198,6 +206,7 @@ trait ManagesModels
         $model->update(['execution_controls' => null]);
 
         $this->editingExecutionControls = $this->hydrateExecutionControlsConfig(null);
+        session()->flash('success', __('Execution controls reset.'));
     }
 
     /**

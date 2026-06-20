@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Modules\Core\User\Livewire\Settings;
 
 use App\Modules\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
@@ -30,6 +32,7 @@ class Password extends Component
             ]);
         } catch (ValidationException $e) {
             $this->reset('currentPassword', 'password', 'passwordConfirmation');
+            Session::flash('error', __('Password was not saved. Review the highlighted fields.'));
 
             throw $e;
         }
@@ -40,7 +43,7 @@ class Password extends Component
 
         $this->reset('currentPassword', 'password', 'passwordConfirmation');
 
-        $this->dispatch('password-updated');
+        Session::flash('success', __('Password updated successfully.'));
     }
 
     public function render(): View

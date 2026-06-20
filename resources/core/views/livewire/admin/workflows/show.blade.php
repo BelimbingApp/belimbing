@@ -22,6 +22,8 @@
             </x-slot>
         </x-ui.page-header>
 
+        <x-ui.session-flash />
+
         {{-- Workflow metadata --}}
         <x-ui.card>
             <dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
