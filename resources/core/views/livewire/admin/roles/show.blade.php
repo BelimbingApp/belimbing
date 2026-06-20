@@ -28,13 +28,7 @@
             </x-slot>
         </x-ui.page-header>
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
-
-        @if (session('error'))
-            <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         {{-- Role Details --}}
         <x-ui.card>

@@ -11,6 +11,7 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
@@ -32,6 +33,7 @@ use Livewire\Component;
 class Providers extends Component implements ProvidesLaraPageContext
 {
     use FormatsDisplayValues;
+    use InteractsWithNotifications;
     use ManagesModels;
     use ManagesProviderHelp;
     use ManagesProviders;

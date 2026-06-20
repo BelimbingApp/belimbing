@@ -13,13 +13,7 @@ use App\Base\Settings\Livewire\SettingsForm;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$pageTitle" :subtitle="$pageSubtitle" />
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
-
-        @if (session('error'))
-            <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         <form wire:submit="save" class="space-y-6">
             @if (($group['fields'] ?? []) === [])

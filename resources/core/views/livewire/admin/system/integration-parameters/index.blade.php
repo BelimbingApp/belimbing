@@ -13,9 +13,7 @@ use App\Base\Settings\Models\Setting;
             :subtitle="__('Key-value parameters for external integrations — Cloudflare, WeChat ingest, legacy AX, … — stored as global settings under integrations.<system>.<name>; code reads them by that key. Secret is a per-entry type: secrets are encrypted and write-only, text parameters stay readable. Configuration owned by a module (e.g. eBay) belongs on that module’s settings page, not here.')"
         />
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         <x-ui.card>
             <div class="mb-4 flex flex-wrap items-center justify-between gap-3">

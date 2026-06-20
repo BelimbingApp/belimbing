@@ -50,12 +50,7 @@
         <p class="text-sm text-muted">{{ __('A fresh Belimbing install ships Base and Core only. Install the business domains you need; disable or uninstall them here later.') }}</p>
     </header>
 
-    @if (session('success'))
-        <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-    @endif
-    @if (session('error'))
-        <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
-    @endif
+    <x-ui.session-flash />
     <div x-show="lifecycleOpen" x-cloak style="display: none;" class="fixed inset-0 z-40 bg-black/50"></div>
 
     <div x-show="lifecycleOpen" x-cloak style="display: none;" class="pointer-events-none fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center">

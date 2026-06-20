@@ -22,7 +22,6 @@ use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -201,7 +200,7 @@ class Show extends Component
             );
         }
 
-        Session::flash('success', __('Company assignment saved.'));
+        $this->notify(__('Company assignment saved.'));
     }
 
     /**
@@ -226,7 +225,7 @@ class Show extends Component
             );
         }
 
-        Session::flash('success', __('Password updated successfully.'));
+        $this->notify(__('Password updated successfully.'));
     }
 
     /**
@@ -279,7 +278,7 @@ class Show extends Component
                     'role_names' => array_values($roleNames->only($createdRoleIds)->all()),
                 ],
             );
-            Session::flash('success', trans_choice('Assigned :count role.|Assigned :count roles.', count($createdRoleIds), ['count' => count($createdRoleIds)]));
+            $this->notify(trans_choice('Assigned :count role.|Assigned :count roles.', count($createdRoleIds), ['count' => count($createdRoleIds)]));
         }
 
         $this->selectedRoleIds = [];
@@ -318,7 +317,7 @@ class Show extends Component
                     'role_name' => $roleName,
                 ],
             );
-            Session::flash('success', __('Role removed.'));
+            $this->notify(__('Role removed.'));
         }
     }
 
@@ -371,7 +370,7 @@ class Show extends Component
                 uiElement: __('Add capabilities button'),
                 context: ['capability_keys' => $createdCapabilityKeys],
             );
-            Session::flash('success', trans_choice('Granted :count capability.|Granted :count capabilities.', count($createdCapabilityKeys), ['count' => count($createdCapabilityKeys)]));
+            $this->notify(trans_choice('Granted :count capability.|Granted :count capabilities.', count($createdCapabilityKeys), ['count' => count($createdCapabilityKeys)]));
         }
 
         $this->selectedCapabilityKeys = [];
@@ -409,7 +408,7 @@ class Show extends Component
                     'was_allowed' => $wasAllowed,
                 ],
             );
-            Session::flash('success', __('Capability rule removed.'));
+            $this->notify(__('Capability rule removed.'));
         }
     }
 
@@ -445,7 +444,7 @@ class Show extends Component
                 uiElement: __('Deny capability button'),
                 context: ['capability_key' => $capabilityKey],
             );
-            Session::flash('success', __('Capability denied.'));
+            $this->notify(__('Capability denied.'));
         }
     }
 
@@ -460,14 +459,14 @@ class Show extends Component
 
         $employee = Employee::query()->find($employeeId);
         if (! $employee) {
-            Session::flash('error', __('Employee could not be found.'));
+            $this->notifyError(__('Employee could not be found.'));
 
             return;
         }
 
         $alreadyLinked = User::query()->where('employee_id', $employeeId)->exists();
         if ($alreadyLinked) {
-            Session::flash('error', __('That employee is already linked to another user.'));
+            $this->notifyError(__('That employee is already linked to another user.'));
 
             return;
         }
@@ -484,7 +483,7 @@ class Show extends Component
                 uiElement: __('Link employee button'),
                 context: $this->employeeContext($employee),
             );
-            Session::flash('success', __('Employee linked.'));
+            $this->notify(__('Employee linked.'));
         }
     }
 
@@ -514,7 +513,7 @@ class Show extends Component
                 uiElement: __('Unlink employee button'),
                 context: $employee instanceof Employee ? $this->employeeContext($employee) : ['employee_id' => $employeeId],
             );
-            Session::flash('success', __('Employee unlinked.'));
+            $this->notify(__('Employee unlinked.'));
         }
     }
 
@@ -562,7 +561,7 @@ class Show extends Component
             );
         }
 
-        Session::flash('success', __('Employee record created.'));
+        $this->notify(__('Employee record created.'));
     }
 
     public function render(): View

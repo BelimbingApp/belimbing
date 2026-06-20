@@ -99,7 +99,7 @@ trait ManagesProviders
         $companyId = $this->getCompanyId();
 
         if ($companyId === null) {
-            session()->flash('error', __('Provider was not saved. No company context is available.'));
+            $this->notifyError(__('Provider was not saved. No company context is available.'));
 
             return;
         }
@@ -138,9 +138,9 @@ trait ManagesProviders
                 }
 
                 $provider->update($data);
-                session()->flash('success', __('Provider updated.'));
+                $this->notify(__('Provider updated.'));
             } else {
-                session()->flash('error', __('Provider was not found.'));
+                $this->notifyError(__('Provider was not found.'));
             }
         } else {
             $data['auth_type'] = 'api_key';
@@ -150,7 +150,7 @@ trait ManagesProviders
             $data['created_by'] = auth()->user()->employee?->id;
             $provider = AiProvider::query()->create($data);
             $provider->assignNextPriority();
-            session()->flash('success', __('Provider connected.'));
+            $this->notify(__('Provider connected.'));
         }
 
         $this->showProviderForm = false;
@@ -181,9 +181,9 @@ trait ManagesProviders
         if ($provider) {
             $provider->models()->delete();
             $provider->delete();
-            session()->flash('success', __('Provider disconnected.'));
+            $this->notify(__('Provider disconnected.'));
         } else {
-            session()->flash('error', __('Provider was not found.'));
+            $this->notifyError(__('Provider was not found.'));
         }
 
         if ($this->expandedProviderId === $this->deletingProviderId) {
@@ -214,7 +214,7 @@ trait ManagesProviders
 
         if ($above) {
             $provider->swapPriority($above);
-            session()->flash('success', __('Provider priority updated.'));
+            $this->notify(__('Provider priority updated.'));
             $this->dispatch('priority-changed', $providerId);
         }
     }

@@ -17,9 +17,7 @@
             </x-slot>
         </x-ui.page-header>
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         @forelse ($owners as $owner)
             @php($name = $owner['owner'])

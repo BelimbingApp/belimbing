@@ -16,13 +16,7 @@
             </x-slot>
         </x-ui.page-header>
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
-
-        @if (session('error'))
-            <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         <x-ui.card>
             <div class="mb-4 flex flex-col sm:flex-row gap-4">

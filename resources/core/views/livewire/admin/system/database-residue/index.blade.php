@@ -4,9 +4,7 @@
         <p class="text-sm text-muted">{{ __('Everything listed here exists only in the database — the code that created it is gone. That happens when migration files are deleted or renamed during development, or when a domain is uninstalled but its data kept. Keeping residue is harmless; cleanup below is permanent and only ever needed for tidiness.') }}</p>
     </header>
 
-    @if (session('success'))
-        <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-    @endif
+    <x-ui.session-flash />
 
     @if (count($residue['orphanTables']) === 0 && count($residue['orphanLedger']) === 0 && count($residue['orphanSettings']) === 0)
         <x-ui.alert variant="success">

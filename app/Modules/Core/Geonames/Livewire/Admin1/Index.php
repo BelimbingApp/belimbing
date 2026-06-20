@@ -2,18 +2,19 @@
 
 namespace App\Modules\Core\Geonames\Livewire\Admin1;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\Admin1Seeder;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -98,14 +99,14 @@ class Index extends Component
         $admin1 = Admin1::query()->findOrFail($id);
         $admin1->name = trim($name);
         $admin1->save();
-        Session::flash('success', __('Admin1 name saved.'));
+        $this->notify(__('Admin1 name saved.'));
     }
 
     public function update(): void
     {
         app(Admin1Seeder::class)->run();
 
-        Session::flash('success', __('Admin1 divisions updated from Geonames.'));
+        $this->notify(__('Admin1 divisions updated from Geonames.'));
     }
 
     public function render(): View

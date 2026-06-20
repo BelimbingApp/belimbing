@@ -4,9 +4,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Sessions')" :subtitle="__('View and manage active sessions')" />
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         <x-ui.card>
             <div class="mb-2">

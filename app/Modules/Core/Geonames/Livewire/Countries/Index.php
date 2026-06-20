@@ -2,17 +2,18 @@
 
 namespace App\Modules\Core\Geonames\Livewire\Countries;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\CountrySeeder;
 use App\Modules\Core\Geonames\Models\Country;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -72,13 +73,13 @@ class Index extends Component
         $country = Country::query()->findOrFail($id);
         $country->country = trim($name);
         $country->save();
-        Session::flash('success', __('Country name saved.'));
+        $this->notify(__('Country name saved.'));
     }
 
     public function update(): void
     {
         app(CountrySeeder::class)->run();
-        Session::flash('success', __('Countries updated from Geonames.'));
+        $this->notify(__('Countries updated from Geonames.'));
     }
 
     public function render(): View

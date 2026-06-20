@@ -202,5 +202,12 @@
             <x-layouts.status-bar />
         @endunless
     @endpersist
+
+    {{-- Global notification outlet: catches `notify` events from the
+         InteractsWithNotifications trait. Page-independent and self-contained, so
+         it is persisted across wire:navigate like the other chrome regions. --}}
+    @persist('notification-hub')
+        <x-ui.notification-hub />
+    @endpersist
 </body>
 </html>

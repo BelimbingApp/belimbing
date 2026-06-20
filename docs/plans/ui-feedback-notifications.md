@@ -1,0 +1,90 @@
+# docs/plans/ui-feedback-notifications.md
+
+Status: In progress — outlet built (severity-tiered persistence); Phases 1–2 done (same-page feedback across Core admin + Commerce now notifies); Phases 3–4 open
+Last Updated: 2026-06-21
+Sources: `docs/plans/ui-session-flash-rollout.md`, `resources/core/views/components/ui/{notification-hub,flash,flash-stack}.blade.php`, `app/Base/Foundation/Livewire/Concerns/InteractsWithNotifications.php`, `DESIGN.md`
+Agents: claude/claude-opus-4-8
+
+## Problem Essence
+
+Most BLB feedback is a same-page confirmation: the user toggles/saves/edits a control mid-page and stays there. ~356 `success`/`error` flashes are set across the app; only ~19 files pair a flash with a `redirect()`. Rendering those as inline `x-ui.alert`/`x-ui.session-flash` prepends a banner to the page top (often scrolled out of view) and shifts layout right where the user is looking. The `x-ui.flash` / `x-ui.flash-stack` notification components were built and demoed in the UI Reference but never wired to real feedback.
+
+## Desired Outcome
+
+Three clear feedback lanes, each on its right component:
+
+- **Same-page feedback** (stay on page, result obvious) → top-right notification via `InteractsWithNotifications` + the global `x-ui.notification-hub`.
+- **Persistent context** (validation summaries, standing warnings like "Lara inactive", licensee notice) → inline `x-ui.alert`.
+- **Post-redirect landing banner** (delete-then-return, save-then-navigate) → `success`/`error` session flash via `x-ui.session-flash` (the lane standardized in the sibling plan).
+
+A reader can tell which lane an action uses from the call (`$this->notify(...)` vs `session()->flash(...)`), and the notification styling lives in one place.
+
+## Top-Level Components
+
+- `x-ui.notification-hub` — global outlet, mounted once in `layouts/app.blade.php` (persisted across `wire:navigate`). Listens for the `notify` window event and renders stacked notifications via `x-ui.flash-stack`. Owns the severity → persistence policy.
+- `InteractsWithNotifications` trait — `notify($message, $variant='success', $duration=null)` (+ `notifySuccess`/`notifyError`/`notifyWarning`), dispatching `notify`. Components opt in by using the trait.
+
+## Design Decisions
+
+- **Severity-tiered persistence (decided 2026-06-21).** `error`/`warning` stay until the user dismisses them — they must not be missed; `success`/`info` auto-dismiss after ~4.7s. A close button is always present.
+- **High-signal width.** The notification stack renders at `width="wide"` (two-thirds of the viewport, via `x-ui.flash-stack`) so action feedback is noticeable regardless of where on the page it was triggered. The narrow `sm` default remains for other `flash-stack` uses (e.g. the UI Reference demo). The policy lives in one place: the hub's `sticky` list. Rationale: a missed *error* is harmful, but making every "Saved." a manual dismiss creates pile-up — the exact friction operational users dislike, and the action's visible result already confirms success. An explicit `duration` (ms) overrides the default for any variant.
+- **Honest naming.** Because messages can persist, the lane is "notifications," not "toasts"/"flash" (which mean transient by definition). Hence `notification-hub` / `InteractsWithNotifications` / `notify()` / event `notify`. The lower-level `x-ui.flash` (presentational item) and `x-ui.flash-stack` (positioning) keep their names — they remain accurate primitives; `flash-stack` is lane-agnostic positioning.
+- **Dispatch bus, not session.** Notifications ride `$this->dispatch('notify', ...)` so they deliver immediately on the current Livewire render without a page reload, and do **not** survive a redirect — which matches the same-page contract. Redirect cases deliberately stay on session flash.
+- **Above modals.** The notification layer is `z-[60]`, above modals and the Lara overlays (z-50), so a notification fired from an open modal (e.g. execution-controls reset, `saveModel` errors) is never buried.
+- **Accessibility by severity.** Sticky `error`/`warning` render `role="alert"` `aria-live="assertive"`; auto-dismiss `success`/`info` render `role="status"` `aria-live="polite"`.
+- **Known duplication to retire.** The hub carries a variant→`{bg,border,text,icon-path}` map that mirrors `x-ui.flash` and `x-ui.alert` token-for-token. Unify behind one `StatusVariant` source (see Phase 3). Until then a variant style change must touch all three.
+
+## Public Contract
+
+- `InteractsWithNotifications::notify(string $message, string $variant = 'success', ?int $duration = null)` — `$variant` ∈ `success|error|warning|info`; unknown variant falls back to `success`. `$duration` in ms forces a timer; null → severity default (sticky for error/warning, ~4700ms for success/info). Helpers: `notifySuccess`, `notifyError`, `notifyWarning`.
+- Browser event: `notify` with `detail = { message, variant, duration }`, caught only by `x-ui.notification-hub`.
+
+## Phases
+
+### Phase 1 — Outlet + trigger + prototype (done)
+
+Goal: a real page emits notifications through the global outlet, with severity-tiered persistence.
+Affected pages: `/admin/ai/providers` (model rows — toggle active, set default, cost override, save model, reset execution controls).
+Evidence: `notification-hub.blade.php`, `InteractsWithNotifications.php`, `layouts/app.blade.php` (persisted mount), `ManagesModels.php` (7 sites → `$this->notify(...)`/`notifyError(...)`), `tests/Feature/AI/ModelNotificationFeedbackTest.php` (asserts `notify` dispatched, no session flash).
+
+- [x] Build `x-ui.notification-hub` (listens `notify`, stacks via `x-ui.flash-stack`, severity-tiered persistence + close, severity-based aria) — claude/claude-opus-4-8
+- [x] Raise the notification layer to `z-[60]` so notifications from an open modal are not buried under the z-50 modal/overlays — claude/claude-opus-4-8
+- [x] Add `InteractsWithNotifications` trait and mount the hub once in `layouts/app.blade.php` — claude/claude-opus-4-8
+- [x] Convert AI model actions (`ManagesModels`) to `$this->notify(...)`; opt the `Providers` component into the trait — claude/claude-opus-4-8
+- [x] Document `x-ui.notification-hub` in `resources/core/views/AGENTS.md` — claude/claude-opus-4-8
+
+### Phase 2 — Roll out to same-page feedback (done)
+
+Goal: same-page mutation feedback uses notifications; only persistent context and post-redirect banners stay inline. Converted `session()->flash(...)`/`Session::flash(...)` to `$this->notify(...)`/`notifyError(...)`/`notifyWarning(...)` wherever the action does not redirect.
+Validation: Pint clean (also removed now-unused `Session` imports); `php artisan view:cache` compiled; targeted Pest suites green — AI (58), Authz/User (50), Company/Employee/Geonames/Company-timezone (51).
+Redirect exceptions deliberately kept on session flash (must survive navigation): `Roles\Show::deleteRole`, `Logs\Show::deleteFile`, `EmployeeTypes\Create`, `EmployeeTypes\Edit`.
+Trait wiring: components already using `SavesValidatedFields` get `notify()` transitively (the trait now `use`s `InteractsWithNotifications`); `Geonames\Admin1\Index`, `Geonames\Countries\Index`, `EmployeeTypes\Index`, and `Logs\Show` opt in directly. Latent gap fixed: `ProviderSetup` hosts `ManagesModels` (converted in Phase 1) but lacked the trait — added.
+
+- [x] Commerce Inventory `Items\Show` + `items/show.blade.php` — all same-page actions → `$this->notify(...)`; bespoke `x-ui.flash-stack` surface replaced with `<x-ui.session-flash>` (post-redirect only). Policy reconciled: adopted the global rule (`warning` sticky), superseding Commerce's 7s auto-dismiss — claude/claude-opus-4-8
+- [x] AI providers (`ManagesProviders`): save/update/delete provider, priority move — claude/claude-opus-4-8
+- [x] Inline edit-in-place saves via `SavesValidatedFields` ("Saved.") — trait now notifies; covers all 9 hosts (also Addresses\Show, Workflows\Show) — claude/claude-opus-4-8
+- [x] Geonames row renames (`Admin1\Index`, `Countries\Index`) — claude/claude-opus-4-8
+- [x] Company show: status, parent, activities, metadata, address pivots/kinds, attach address — claude/claude-opus-4-8
+- [x] Employee show: status, type, department, supervisor, user link, subordinates, address pivots/kinds — claude/claude-opus-4-8
+- [x] User show: company, roles, capabilities, employee link/unlink — claude/claude-opus-4-8
+- [x] Role show: scope, capability assign/remove, user assign/remove (deleteRole stays inline — redirects) — claude/claude-opus-4-8
+- [x] Address show: country, location, verification status, timezone accept — claude/claude-opus-4-8
+- [x] Type toggles/CRUD: department & legal-entity types (inline, same-page); employee-types `Index::delete` (Create/Edit redirect → inline) — claude/claude-opus-4-8
+- [x] Logs: delete lines from top → notify; delete-file stays inline (redirects) — claude/claude-opus-4-8
+- [ ] Admin `session('status')` success alerts (database-incubation, database-tables, deployment) — still open; same-page? route here; otherwise re-key to `success` + `x-ui.session-flash` (tracked in `ui-session-flash-rollout.md` Phase 2)
+
+Follow-up (minor, deferred): show/detail pages whose every flash became a notification now carry a vestigial `<x-ui.session-flash>` that only fires if a redirect lands there. Harmless; prune where a page is provably not a redirect destination.
+
+### Phase 3 — Unify the variant style map
+
+Goal: one source of truth for variant → `{bg,border,text,glyph}`, consumed by `x-ui.alert`, `x-ui.flash`, and `x-ui.notification-hub`; remove the duplicated `match()`/JS maps.
+
+- [ ] Introduce `StatusVariant` (enum or value object) exposing the class set + heroicon glyph, with the `danger`==`error` alias handled once
+- [ ] Refactor `alert`, `flash`, `notification-hub` to consume it (expose to JS via `@js` for the hub)
+
+### Phase 4 — Make the UI Reference demo real
+
+Goal: the Feedback section demos the production trigger, not bespoke Alpine.
+
+- [ ] Replace the `timer()`/`stack()` demo in `ui-reference/partials/feedback.blade.php` with buttons that dispatch `notify` (show a sticky error + an auto-dismiss success)
+- [ ] Update the surrounding copy: drop "proposed standard"; describe the adopted pattern, severity-tiered persistence, and when to use a notification vs an inline alert

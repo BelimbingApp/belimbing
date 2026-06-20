@@ -8,6 +8,8 @@ use Illuminate\Validation\ValidationException;
 
 trait SavesValidatedFields
 {
+    use InteractsWithNotifications;
+
     /**
      * Validate a single field and persist it onto the given model.
      *
@@ -28,7 +30,7 @@ trait SavesValidatedFields
         try {
             $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Could not save changes. Review the highlighted field.'));
+            $this->notifyError(__('Could not save changes. Review the highlighted field.'));
 
             throw $exception;
         }
@@ -43,7 +45,7 @@ trait SavesValidatedFields
 
         $model->save();
 
-        session()->flash('success', __('Saved.'));
+        $this->notify(__('Saved.'));
 
         return true;
     }

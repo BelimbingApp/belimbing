@@ -74,7 +74,7 @@ class Show extends Component implements ProvidesLaraPageContext
         }
 
         if ($this->role->is_system) {
-            Session::flash('error', __('System roles cannot be edited.'));
+            $this->notifyError(__('System roles cannot be edited.'));
 
             return;
         }
@@ -96,18 +96,18 @@ class Show extends Component implements ProvidesLaraPageContext
             $newCompanyId = $companyId !== '' && $companyId !== null ? (int) $companyId : null;
 
             if ($this->role->is_system) {
-                Session::flash('error', __('System roles cannot be edited.'));
+                $this->notifyError(__('System roles cannot be edited.'));
             } elseif ($this->role->principalRoles()->exists()) {
-                Session::flash('error', __('Cannot change scope while users are assigned to this role.'));
+                $this->notifyError(__('Cannot change scope while users are assigned to this role.'));
             } elseif ($this->isInvalidScopeCompany($newCompanyId)) {
-                Session::flash('error', __('The selected company is not valid for this role scope.'));
+                $this->notifyError(__('The selected company is not valid for this role scope.'));
             } elseif ($this->scopeConflictExists($newCompanyId)) {
-                Session::flash('error', __('A role with this code already exists in the selected scope.'));
+                $this->notifyError(__('A role with this code already exists in the selected scope.'));
             } else {
                 $this->role->company_id = $newCompanyId;
                 $this->role->save();
                 $this->role->load('company');
-                Session::flash('success', __('Role scope updated.'));
+                $this->notify(__('Role scope updated.'));
             }
         }
     }
@@ -150,7 +150,7 @@ class Show extends Component implements ProvidesLaraPageContext
         }
 
         if ($this->role->is_system) {
-            Session::flash('error', __('System roles cannot be deleted.'));
+            $this->notifyError(__('System roles cannot be deleted.'));
 
             return;
         }
@@ -159,6 +159,8 @@ class Show extends Component implements ProvidesLaraPageContext
         $this->role->principalRoles()->delete();
         $this->role->delete();
 
+        // Redirect lands on the roles index, so this confirmation must survive the
+        // navigation — keep it on the session-flash lane, not the notification bus.
         Session::flash('success', __('Role deleted.'));
         $this->redirect(route('admin.roles.index'), navigate: true);
     }
@@ -173,7 +175,7 @@ class Show extends Component implements ProvidesLaraPageContext
         }
 
         if ($this->role->is_system) {
-            Session::flash('error', __('System role capabilities are managed by configuration.'));
+            $this->notifyError(__('System role capabilities are managed by configuration.'));
 
             return;
         }
@@ -199,7 +201,7 @@ class Show extends Component implements ProvidesLaraPageContext
         $this->role->load('capabilities');
 
         if ($assigned > 0) {
-            Session::flash('success', trans_choice('Assigned :count capability.|Assigned :count capabilities.', $assigned, ['count' => $assigned]));
+            $this->notify(trans_choice('Assigned :count capability.|Assigned :count capabilities.', $assigned, ['count' => $assigned]));
         }
     }
 
@@ -213,7 +215,7 @@ class Show extends Component implements ProvidesLaraPageContext
         }
 
         if ($this->role->is_system) {
-            Session::flash('error', __('System role capabilities are managed by configuration.'));
+            $this->notifyError(__('System role capabilities are managed by configuration.'));
 
             return;
         }
@@ -224,7 +226,7 @@ class Show extends Component implements ProvidesLaraPageContext
             ->first();
 
         if ($roleCapability?->delete()) {
-            Session::flash('success', __('Capability removed.'));
+            $this->notify(__('Capability removed.'));
         }
 
         $this->role->load('capabilities');
@@ -267,7 +269,7 @@ class Show extends Component implements ProvidesLaraPageContext
         $this->selectedUserIds = [];
 
         if ($assigned > 0) {
-            Session::flash('success', trans_choice('Assigned :count user.|Assigned :count users.', $assigned, ['count' => $assigned]));
+            $this->notify(trans_choice('Assigned :count user.|Assigned :count users.', $assigned, ['count' => $assigned]));
         }
     }
 
@@ -286,7 +288,7 @@ class Show extends Component implements ProvidesLaraPageContext
             ->first();
 
         if ($principalRole?->delete()) {
-            Session::flash('success', __('User removed from role.'));
+            $this->notify(__('User removed from role.'));
         }
     }
 

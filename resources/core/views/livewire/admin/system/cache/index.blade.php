@@ -4,9 +4,7 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Cache')" :subtitle="__('View cache configuration and manage cache')" />
 
-        @if (session('success'))
-            <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
-        @endif
+        <x-ui.session-flash />
 
         <x-ui.card>
             <h3 class="text-sm font-medium text-ink mb-3">{{ __('Cache Configuration') }}</h3>

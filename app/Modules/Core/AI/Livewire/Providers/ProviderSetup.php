@@ -9,6 +9,7 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Foundation\Contracts\CompanyScoped;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
@@ -33,6 +34,7 @@ class ProviderSetup extends Component
 {
     use FormatsDisplayValues;
     use HasProviderSetupPresentation;
+    use InteractsWithNotifications;
     use ManagesModels;
     use ManagesProviderHelp;
     use ManagesSync;

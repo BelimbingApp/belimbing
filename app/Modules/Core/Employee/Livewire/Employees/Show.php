@@ -18,7 +18,6 @@ use App\Modules\Core\Employee\Models\EmployeeType;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
 class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPageSnapshot
@@ -130,21 +129,21 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
     public function saveStatus(string $status): void
     {
         if (! in_array($status, ['pending', 'probation', 'active', 'inactive', 'terminated'])) {
-            Session::flash('error', __('The selected employee status is not valid.'));
+            $this->notifyError(__('The selected employee status is not valid.'));
 
             return;
         }
 
         $this->employee->status = $status;
         $this->employee->save();
-        Session::flash('success', __('Employee status updated.'));
+        $this->notify(__('Employee status updated.'));
     }
 
     public function saveEmployeeType(string $type): void
     {
         $exists = EmployeeType::query()->where('code', $type)->exists();
         if (! $exists) {
-            Session::flash('error', __('The selected employee type is not valid.'));
+            $this->notifyError(__('The selected employee type is not valid.'));
 
             return;
         }
@@ -158,7 +157,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
             $this->employee->unsetRelation('user');
         }
         $this->employee->save();
-        Session::flash('success', __('Employee type updated.'));
+        $this->notify(__('Employee type updated.'));
     }
 
     public function saveDepartment(?int $departmentId): void
@@ -166,7 +165,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         $this->employee->department_id = $departmentId ?: null;
         $this->employee->save();
         $this->employee->load('department.type');
-        Session::flash('success', __('Department assignment updated.'));
+        $this->notify(__('Department assignment updated.'));
     }
 
     public function saveSupervisor(?int $supervisorId): void
@@ -174,7 +173,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         $this->employee->supervisor_id = $supervisorId ?: null;
         $this->employee->save();
         $this->employee->load('supervisor');
-        Session::flash('success', __('Supervisor assignment updated.'));
+        $this->notify(__('Supervisor assignment updated.'));
     }
 
     public function saveUser(?int $userId): void
@@ -195,7 +194,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
             if (! $user) {
                 $this->employee->load('user');
-                Session::flash('error', __('The selected user is not available for this employee.'));
+                $this->notifyError(__('The selected user is not available for this employee.'));
 
                 return;
             }
@@ -204,14 +203,14 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         }
 
         $this->employee->load('user');
-        Session::flash('success', __('User link updated.'));
+        $this->notify(__('User link updated.'));
     }
 
     public function addSubordinate(int $employeeId): void
     {
         $target = Employee::query()->find($employeeId);
         if (! $target || $target->company_id !== $this->employee->company_id) {
-            Session::flash('error', __('The selected subordinate is not valid for this employee.'));
+            $this->notifyError(__('The selected subordinate is not valid for this employee.'));
 
             return;
         }
@@ -219,7 +218,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         $target->supervisor_id = $this->employee->id;
         $target->save();
         $this->employee->load('subordinates.department.type');
-        Session::flash('success', __('Subordinate assigned.'));
+        $this->notify(__('Subordinate assigned.'));
     }
 
     public function removeSubordinate(int $employeeId): void
@@ -236,13 +235,13 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         $target->supervisor_id = null;
         $target->save();
         $this->employee->load('subordinates.department.type');
-        Session::flash('success', __('Subordinate removed.'));
+        $this->notify(__('Subordinate removed.'));
     }
 
     public function attachAddress(): void
     {
         if ($this->attachAddressId === 0) {
-            Session::flash('error', __('Choose an address before attaching.'));
+            $this->notifyError(__('Choose an address before attaching.'));
 
             return;
         }
@@ -257,21 +256,21 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         $this->employee->load('addresses');
         $this->showAttachModal = false;
         $this->reset(['attachAddressId', 'attachKind', 'attachIsPrimary', 'attachPriority']);
-        Session::flash('success', __('Address attached.'));
+        $this->notify(__('Address attached.'));
     }
 
     public function unlinkAddress(int $addressId): void
     {
         $this->employee->addresses()->detach($addressId);
         $this->employee->load('addresses');
-        Session::flash('success', __('Address unlinked.'));
+        $this->notify(__('Address unlinked.'));
     }
 
     public function updateAddressPivot(int $addressId, string $field, mixed $value): void
     {
         $allowed = ['is_primary', 'priority'];
         if (! in_array($field, $allowed)) {
-            Session::flash('error', __('The selected address setting is not valid.'));
+            $this->notifyError(__('The selected address setting is not valid.'));
 
             return;
         }
@@ -284,7 +283,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
         $this->employee->addresses()->updateExistingPivot($addressId, [$field => $value]);
         $this->employee->load('addresses');
-        Session::flash('success', __('Address setting updated.'));
+        $this->notify(__('Address setting updated.'));
     }
 
     public function saveAddressKinds(int $addressId, array $kinds): void
@@ -294,7 +293,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
         $this->employee->addresses()->updateExistingPivot($addressId, ['kind' => $kinds]);
         $this->employee->load('addresses');
-        Session::flash('success', __('Address kinds updated.'));
+        $this->notify(__('Address kinds updated.'));
     }
 
     public function render(): View

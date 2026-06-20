@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Modules\Core\Employee\Livewire\EmployeeTypes;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Employee\Models\EmployeeType;
@@ -13,6 +15,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -51,12 +54,12 @@ class Index extends Component
             return;
         }
         if ($type->employees_count > 0) {
-            session()->flash('error', __('Cannot delete: employees are using this type.'));
+            $this->notifyError(__('Cannot delete: employees are using this type.'));
 
             return;
         }
         $type->delete();
-        session()->flash('success', __('Employee type deleted.'));
+        $this->notify(__('Employee type deleted.'));
     }
 
     public function render(): View

@@ -4,9 +4,7 @@
         <p class="text-sm text-muted">{{ __('What the runtime sees, plus what is available from BelimbingApp. Read-only by design — installation runs from a shell.') }}</p>
     </header>
 
-    @if (session('success'))
-        <div class="rounded-2xl border border-success-border bg-success-surface px-4 py-2 text-sm text-success-ink">{{ session('success') }}</div>
-    @endif
+    <x-ui.session-flash />
 
     <nav class="flex gap-2 border-b border-border-default">
         <button type="button" wire:click="setTab('installed')" class="px-3 py-2 text-sm {{ $tab === 'installed' ? 'border-b-2 border-accent font-semibold text-ink' : 'text-muted hover:text-ink' }}">

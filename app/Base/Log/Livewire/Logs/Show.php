@@ -2,6 +2,7 @@
 
 namespace App\Base\Log\Livewire\Logs;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Url;
@@ -10,6 +11,8 @@ use SplFileObject;
 
 class Show extends Component
 {
+    use InteractsWithNotifications;
+
     private const DEFAULT_CHUNK_SIZE = 100;
 
     private const MAX_CHUNK_SIZE = 1000;
@@ -88,7 +91,7 @@ class Show extends Component
 
         $path = $this->resolvedPath();
         if ($path === null) {
-            session()->flash('error', __('Log file could not be found.'));
+            $this->notifyError(__('Log file could not be found.'));
 
             return;
         }
@@ -112,13 +115,13 @@ class Show extends Component
 
         unset($source, $dest);
         if (! rename($tmpPath, $path)) {
-            session()->flash('error', __('Log lines could not be deleted.'));
+            $this->notifyError(__('Log lines could not be deleted.'));
 
             return;
         }
 
         $this->deleteLines = 10;
-        session()->flash('success', trans_choice('Deleted :count line from the top.|Deleted :count lines from the top.', $deleted, ['count' => $deleted]));
+        $this->notify(trans_choice('Deleted :count line from the top.|Deleted :count lines from the top.', $deleted, ['count' => $deleted]));
     }
 
     /**

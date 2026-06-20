@@ -6,7 +6,6 @@ use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -69,7 +68,7 @@ class LegalEntityTypes extends Component
         $this->showCreateModal = false;
         $this->reset(['createCode', 'createName', 'createDescription', 'createIsActive']);
         $this->createIsActive = true;
-        Session::flash('success', __('Legal entity type created.'));
+        $this->notify(__('Legal entity type created.'));
     }
 
     public function saveField(int $typeId, string $field, mixed $value): void
@@ -88,7 +87,7 @@ class LegalEntityTypes extends Component
         $type = LegalEntityType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
-        Session::flash('success', __('Legal entity type status updated.'));
+        $this->notify(__('Legal entity type status updated.'));
     }
 
     public function deleteType(int $typeId): void
@@ -96,13 +95,13 @@ class LegalEntityTypes extends Component
         $type = LegalEntityType::query()->withCount('companies')->findOrFail($typeId);
 
         if ($type->companies_count > 0) {
-            Session::flash('error', __('Cannot delete a legal entity type that is in use by companies.'));
+            $this->notifyError(__('Cannot delete a legal entity type that is in use by companies.'));
 
             return;
         }
 
         $type->delete();
-        Session::flash('success', __('Legal entity type deleted.'));
+        $this->notify(__('Legal entity type deleted.'));
     }
 
     public function render(): View

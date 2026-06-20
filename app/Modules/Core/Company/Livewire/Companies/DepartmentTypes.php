@@ -6,7 +6,6 @@ use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\DepartmentType;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -86,7 +85,7 @@ class DepartmentTypes extends Component
         $this->reset(['createCode', 'createName', 'createCategory', 'createDescription', 'createIsActive']);
         $this->createCategory = 'operational';
         $this->createIsActive = true;
-        Session::flash('success', __('Department type created.'));
+        $this->notify(__('Department type created.'));
     }
 
     public function saveField(int $typeId, string $field, mixed $value): void
@@ -106,7 +105,7 @@ class DepartmentTypes extends Component
         $type = DepartmentType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
-        Session::flash('success', __('Department type status updated.'));
+        $this->notify(__('Department type status updated.'));
     }
 
     public function deleteType(int $typeId): void
@@ -114,13 +113,13 @@ class DepartmentTypes extends Component
         $type = DepartmentType::query()->withCount('departments')->findOrFail($typeId);
 
         if ($type->departments_count > 0) {
-            Session::flash('error', __('Cannot delete a department type that is in use by departments.'));
+            $this->notifyError(__('Cannot delete a department type that is in use by departments.'));
 
             return;
         }
 
         $type->delete();
-        Session::flash('success', __('Department type deleted.'));
+        $this->notify(__('Department type deleted.'));
     }
 
     public function render(): View

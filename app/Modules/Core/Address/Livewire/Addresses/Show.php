@@ -12,7 +12,6 @@ use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Session;
 use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
@@ -104,7 +103,7 @@ class Show extends AbstractAddressForm
 
         $this->address->save();
         $this->address->load(['country']);
-        Session::flash('success', __('Country updated.'));
+        $this->notify(__('Country updated.'));
     }
 
     public function openLocationEditor(): void
@@ -140,20 +139,20 @@ class Show extends AbstractAddressForm
         $this->editingLocation = false;
         $this->checkCompanyTimezone();
 
-        Session::flash('success', __('Address location updated.'));
+        $this->notify(__('Address location updated.'));
     }
 
     public function saveVerificationStatus(string $status): void
     {
         if (! in_array($status, ['unverified', 'suggested', 'verified'])) {
-            Session::flash('error', __('The selected verification status is not valid.'));
+            $this->notifyError(__('The selected verification status is not valid.'));
 
             return;
         }
 
         $this->address->verificationStatus = $status;
         $this->address->save();
-        Session::flash('success', __('Verification status updated.'));
+        $this->notify(__('Verification status updated.'));
     }
 
     /**
@@ -162,7 +161,7 @@ class Show extends AbstractAddressForm
     public function acceptSuggestedTimezone(): void
     {
         if (! $this->suggestedTimezone || ! $this->companyContextId) {
-            Session::flash('error', __('No timezone suggestion is available.'));
+            $this->notifyError(__('No timezone suggestion is available.'));
 
             return;
         }
@@ -170,7 +169,7 @@ class Show extends AbstractAddressForm
         $company = Company::query()->find($this->companyContextId);
 
         if (! $company) {
-            Session::flash('error', __('Company context could not be found.'));
+            $this->notifyError(__('Company context could not be found.'));
 
             return;
         }
@@ -180,7 +179,7 @@ class Show extends AbstractAddressForm
         $this->timezoneWasAutoApplied = true;
         $this->suggestedTimezone = null;
         $this->suggestedTimezoneOld = null;
-        Session::flash('success', __('Company timezone updated.'));
+        $this->notify(__('Company timezone updated.'));
     }
 
     /**

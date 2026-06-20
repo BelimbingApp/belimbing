@@ -128,8 +128,10 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.checkbox` | Checkbox inputs |
 | `x-ui.radio` | Radio inputs |
 | `x-ui.alert` | Informational, warning, success, or danger notices |
+| `x-ui.session-flash` | Renders `success`/`error` session flash as alerts; use once per page instead of hand-writing `@if (session(...))` blocks |
 | `x-ui.flash` | Transient stacked flash notification message |
 | `x-ui.flash-stack` | Fixed-position flash stack wrapper |
+| `x-ui.notification-hub` | Global notification outlet (mounted once in the app layout); renders `notify` events from the `InteractsWithNotifications` Livewire trait as top-right notifications. Persistence is severity-tiered: `error`/`warning` stay until closed, `success`/`info` auto-dismiss. Use for same-page feedback (toggles, inline-edit saves, row actions); use inline `x-ui.alert` / `x-ui.session-flash` for persistent page context and post-redirect banners |
 | `x-ui.badge` | Status badges |
 | `x-ui.card` | Card containers |
 | `x-ui.table` | Application table shell with overflow, captions, head/body/foot slots, row hover, striping, and empty state support |
