@@ -9,8 +9,8 @@ uses(RefreshDatabase::class);
 const BUNDLE_MANAGER_TEST_VERSION = '1.0.0';
 const BUNDLE_MANAGER_EXTENSION_ROOT = 'extensions/';
 const BUNDLE_MANAGER_COMPOSER_JSON = '/composer.json';
-const REQUIRED_MODULE_SUFFIX = '/required';
-const DEPENDENT_MODULE_SUFFIX = '/dependent';
+const BUNDLE_MANAGER_REQUIRED_SUFFIX = '/required';
+const BUNDLE_MANAGER_DEPENDENT_SUFFIX = '/dependent';
 
 beforeEach(function (): void {
     setupAuthzRoles();
@@ -41,24 +41,24 @@ test('the dashboard treats conventional Core module paths as installed dependenc
 
 test('the dashboard reports incompatible required dependency versions', function (): void {
     $owner = 'zz-bundle-manager-'.bin2hex(random_bytes(4));
-    $required = base_path(BUNDLE_MANAGER_EXTENSION_ROOT.$owner.REQUIRED_MODULE_SUFFIX);
-    $dependent = base_path(BUNDLE_MANAGER_EXTENSION_ROOT.$owner.DEPENDENT_MODULE_SUFFIX);
+    $required = base_path(BUNDLE_MANAGER_EXTENSION_ROOT.$owner.BUNDLE_MANAGER_REQUIRED_SUFFIX);
+    $dependent = base_path(BUNDLE_MANAGER_EXTENSION_ROOT.$owner.BUNDLE_MANAGER_DEPENDENT_SUFFIX);
 
     foreach ([$required, $dependent] as $module) {
         File::ensureDirectoryExists($module);
     }
 
     file_put_contents($required.BUNDLE_MANAGER_COMPOSER_JSON, json_encode([
-        'name' => $owner.REQUIRED_MODULE_SUFFIX,
-        'extra' => ['blb' => ['module' => $owner.REQUIRED_MODULE_SUFFIX, 'version' => BUNDLE_MANAGER_TEST_VERSION]],
+        'name' => $owner.BUNDLE_MANAGER_REQUIRED_SUFFIX,
+        'extra' => ['blb' => ['module' => $owner.BUNDLE_MANAGER_REQUIRED_SUFFIX, 'version' => BUNDLE_MANAGER_TEST_VERSION]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     file_put_contents($dependent.BUNDLE_MANAGER_COMPOSER_JSON, json_encode([
-        'name' => $owner.DEPENDENT_MODULE_SUFFIX,
+        'name' => $owner.BUNDLE_MANAGER_DEPENDENT_SUFFIX,
         'extra' => ['blb' => [
-            'module' => $owner.DEPENDENT_MODULE_SUFFIX,
+            'module' => $owner.BUNDLE_MANAGER_DEPENDENT_SUFFIX,
             'version' => BUNDLE_MANAGER_TEST_VERSION,
-            'requires-modules' => [$owner.REQUIRED_MODULE_SUFFIX => '^2.0.0'],
+            'requires-modules' => [$owner.BUNDLE_MANAGER_REQUIRED_SUFFIX => '^2.0.0'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
@@ -69,8 +69,8 @@ test('the dashboard reports incompatible required dependency versions', function
 
         $response->assertOk()
             ->assertSee('Module dependency issues')
-            ->assertSee($owner.DEPENDENT_MODULE_SUFFIX)
-            ->assertSee($owner.REQUIRED_MODULE_SUFFIX)
+            ->assertSee($owner.BUNDLE_MANAGER_DEPENDENT_SUFFIX)
+            ->assertSee($owner.BUNDLE_MANAGER_REQUIRED_SUFFIX)
             ->assertSee('^2.0.0')
             ->assertSee(BUNDLE_MANAGER_TEST_VERSION);
     } finally {
