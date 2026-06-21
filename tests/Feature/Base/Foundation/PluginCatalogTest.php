@@ -100,7 +100,7 @@ test('refreshCatalog action populates the cache and switches tab', function (): 
     Livewire::test(PluginManager::class)
         ->call('refreshCatalog')
         ->assertSet('tab', 'available')
-        ->assertSee('Catalog refreshed from GitHub');
+        ->assertDispatched('notify', fn ($event, $params) => str_contains((string) ($params['message'] ?? ''), 'Catalog refreshed from GitHub'));
 });
 
 test('refreshCatalog requires the system.plugins.manage capability', function (): void {
