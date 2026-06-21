@@ -5,6 +5,7 @@ use App\Base\Database\Console\Commands\MigrateCommand;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Foundation\ModuleManifest\ModuleManifestException;
 use Illuminate\Console\OutputStyle;
+use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\Facades\File;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -16,6 +17,11 @@ const MIGRATION_MIGRATIONS_SUFFIX = '/Database/Migrations';
 const MIGRATION_COMPOSER_JSON = '/composer.json';
 const MIGRATION_TEST_VERSION = '1.0.0';
 const MIGRATION_MISSING_SUFFIX = '/missing';
+
+afterEach(function (): void {
+    $property = new ReflectionProperty(Migrator::class, 'paths');
+    $property->setValue(app(Migrator::class), []);
+});
 
 function migrationModuleFixture(string $owner, string $suffix, array $blb): string
 {
