@@ -12,7 +12,7 @@
     This owns the *same-page* feedback lane; inline `x-ui.alert` /
     `x-ui.session-flash` own persistent page context and post-redirect banners.
     Variant styling (surface/border/text + glyph path) comes from the shared
-    `StatusVariant` source, also used by `x-ui.alert` and `x-ui.flash`.
+    `StatusVariant` source, also used by `x-ui.alert`.
 --}}
 @php
     $notificationVariants = \App\Base\Foundation\Enums\StatusVariant::jsMap();
