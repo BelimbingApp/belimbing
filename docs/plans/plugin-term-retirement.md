@@ -1,6 +1,6 @@
 # plugin-term-retirement
 
-**Status:** Phases 1–2 complete (2026-06-21). Phases 3–4 proposed — HALT for approval before implementing them.
+**Status:** Complete (2026-06-21). Phases 1–2 implemented; Phases 3–4 dropped — "plugin" is accurate where it remains (see those phases).
 **Last Updated:** 2026-06-21
 **Sources:**
 - `docs/architecture/module-system.md` — Vocabulary note that defines Module / Distribution Bundle (Bundle) / adapter / extension seam and records "plugin" as retired on operator surfaces.
@@ -17,7 +17,7 @@
 
 ## Desired Outcome
 
-"Plugin" no longer appears as a load-bearing term. The install unit is **Bundle** (the operator short form of Distribution Bundle) everywhere — UI, routes, authz, table, catalog service, GitHub topic. The manifest *role* and the Commerce *extension seam* are renamed to honest, non-overloaded terms. Persisted identifiers carry back-compat aliases so no existing user pref, role assignment, or external repo tag breaks. `plugin-manager-ui.md` tells the truth about both naming and the install-from-UI security posture.
+"Plugin" no longer *misdescribes* anything. The install unit is **Bundle** (operator short form of Distribution Bundle) everywhere it surfaces — UI, routes, authz, table, catalog service, GitHub topic — and the redundant `extra.blb.role` field is gone. Where "plugin" still appears it names an actual plug-in (the `Commerce/Plugins` extension seam, Payroll prose, composer `type`) and is left as-is. `plugin-manager-ui.md` tells the truth about both naming and the install-from-UI security posture.
 
 ## Already Landed (small corrections, done this pass)
 
@@ -63,7 +63,7 @@ A module *role* in the dependency graph (paired with `source` / `unknown`), surf
 
 **Sequence by data-trap urgency, not by visibility.** Strategic Programming says spend the cheap design budget before the cost rises. The GitHub topic (untagged) and the manifest role (unused in shipped manifests) are free to change now and expensive once adopted — so they rank high despite being low-visibility. The Commerce seam has no persisted cost and can move last or be left to the doc note if priorities slip.
 
-**Rename the word, keep the concepts.** The manifest *role* taxonomy and the Commerce *seam* are sound designs; only the overloaded token changes. `CommerceReadinessContributor` keeps its name. Recommended targets: role `plugin` → **`optional`** (honest about "optionally installed / removable", read opposite `source`), a hard switch with no alias since no shipped manifest declares a role; Commerce `Plugins` → **`Extensions`** namespace with `CommerceExtensionRegistry` / `CommerceExtensionDiscoveryService`, matching the doc's "extension seam" language.
+**Retire the word only where it misdescribes — not everywhere.** "Plugin" is dishonest when applied to something that is not a plug-in: the install *unit* (a delivery bundle) and the dashboard *label*. Those were fixed. But it is *accurate* for a genuine extension point. So: the manifest `role` field was deleted (unused + derivable, see Phase 2), while `Commerce/Plugins` and the "Payroll plugin" prose are **kept** — they name real plug-ins (Phases 3–4 dropped). Consistency-for-its-own-sake is not an honesty requirement, and the would-be target `Commerce/Extensions` collides with BLB's load-bearing `extensions/` concept.
 
 **Correct `plugin-manager-ui.md` in place.** Per the "no stale/contradictory content" hard rule, fix its naming and rewrite the install-from-UI section to reflect that Updates already performs authenticated pull/build/migrate/reload of private bundles; the honest remaining boundary is the *initial clone*, not "no code execution from the UI."
 
@@ -72,8 +72,8 @@ A module *role* in the dependency graph (paired with `source` / `unknown`), surf
 After implementation:
 - Bundle dashboard lives at `admin/system/bundles` (route `admin.system.bundles.index`, menu id `admin.system.bundles`), gated by `admin.system.bundles.{view,manage}`. The former `admin/system/plugins` URL, route, menu id, and authz ids are removed outright (BLB is pre-release; nothing references them in persisted data).
 - Catalog cache table is `base_foundation_bundle_catalog_cache`; GitHub discovery topic is `blb-bundle`; TTL config key is `bundle_catalog.ttl_hours`.
-- `extra.blb.role` canonical value is `optional`; the `plugin` value is removed, not aliased.
-- Commerce extension contributions register through `CommerceExtensionRegistry`; `Config/commerce.php` keys are unchanged.
+- `extra.blb.role` is removed entirely (unused + derivable); module role is no longer a manifest field.
+- `Commerce/Plugins` / `CommercePluginRegistry` keep their names — "plugin" accurately names an extension point there; `Config/commerce.php` discovery is unchanged.
 
 ## Phases
 
@@ -105,21 +105,13 @@ Decision (changed from the original "rename `plugin` → `optional`"): `role` dr
 
 Evidence: `BundleManagerTest` (4) + `BundleCatalogTest` (4) + `ModuleManifestReaderTest` (7) + `MigrateCommandTest` (10) green — 25 passed, 81 assertions.
 
-### Phase 3 — Commerce extension seam
+### Phase 3 — Commerce extension seam — DROPPED (2026-06-21)
 
-Goal: `Commerce/Plugins` becomes `Commerce/Extensions`; all consumers compile against `CommerceExtensionRegistry`.
+`Commerce/Plugins` / `CommercePluginRegistry` is a genuine extension point — other modules and extensions *plug into* it — so "plugin" is accurate, not dishonest. Renaming to `Commerce/Extensions` would collide with BLB's load-bearing `extensions/` (licensee repos) / `Extensions\` namespace, trading a non-problem for a real ambiguity. The `module-system.md` glossary already disambiguates it as "Commerce's extension seam." Left as-is. {claud/opus-4.8}
 
-- [ ] Rename namespace/dir and `CommercePluginRegistry`/`CommercePluginDiscoveryService` → `CommerceExtension*`; keep `CommerceReadinessContributor`.
-- [ ] Update consumers: `EbayMetadataRefreshCommand`, `Ebay\Settings`, `Inventory\Items\Show`, and Commerce/marketplace tests.
+### Phase 4 — Prose / composer `type` / repo tag — DROPPED (2026-06-21)
 
-Validation: Commerce + marketplace suites green; `Config/commerce.php` discovery unchanged.
-
-### Phase 4 — Prose + comment cleanup
-
-Goal: no "plugin" left as a load-bearing noun; remaining hits are quoted history or external proper nouns.
-
-- [ ] Replace "Payroll plugin" → "Payroll module" (or "optional Payroll module") across People docblocks and test names where it means the module.
-- [ ] Re-tag BelimbingApp repos with `blb-bundle` when the catalog goes live (operator action; folds in the never-completed plugin-manager-ui Phase 4).
-- [ ] Grep sweep: no `plugin` identifier remains outside deprecated aliases and quoted history.
-
-Validation: repo-wide `plugin` grep returns only aliases, external names, and intentional historical references.
+None of these misdescribe anything:
+- "Payroll plugin" in People prose/test names is accurate — Payroll is a removable, event-driven plug-in module.
+- composer `"type": "blb-plugin"` / `"blb-source-module"` honestly classify the packages in composer's standard field. After Phase 2, `type` is the sole carrier of the source/plugin distinction; kept deliberately — it is a standard field, accurate, and forward-looking for composer delivery (currently unread by BLB).
+- Repo tagging is not outstanding work: the catalog code already filters on the `blb-bundle` topic; whoever publishes catalog repos tags them `blb-bundle`. This belongs as a one-line note in the catalog docs, not a phase. {claud/opus-4.8}
