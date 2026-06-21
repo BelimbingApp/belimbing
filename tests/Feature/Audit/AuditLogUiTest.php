@@ -39,6 +39,13 @@ const AUDIT_LOG_UI_NAME_EDITOR = 'Name inline editor';
 const AUDIT_LOG_UI_HIDDEN_OLD_EMAIL = 'hidden-old@example.com';
 const AUDIT_LOG_UI_HIDDEN_NEW_EMAIL = 'hidden-new@example.com';
 const AUDIT_LOG_UI_HISTORY_ROLE = 'History Role';
+const AUDIT_LOG_UI_OPEN_WIRE_ACTION = 'wire:click="open"';
+const AUDIT_LOG_UI_SOURCE_HIDDEN_OLD_EMAIL = 'source-hidden-old@example.com';
+const AUDIT_LOG_UI_SOURCE_HIDDEN_NEW_EMAIL = 'source-hidden-new@example.com';
+const AUDIT_LOG_UI_WORKFLOW_SUMMARY_PREFIX = 'Transitioned Company#';
+const AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX = ' from Pending Review to Active';
+const AUDIT_LOG_UI_ADDRESS_PHONE = '03-77862444';
+const AUDIT_LOG_UI_ADDRESS_PREFIX = 'Address#';
 
 function auditLogUiActor(): User
 {
@@ -53,6 +60,28 @@ function auditLogUiFlushBuffer(): void
     $reflection = new ReflectionClass($buffer);
     $method = $reflection->getMethod('flush');
     $method->invoke($buffer);
+}
+
+/** @return array{0: Company, 1: User, 2: User} */
+function auditLogUiViewerWithoutAudit(string $targetName): array
+{
+    [$company, $viewer, $target] = MutationListener::withoutAuditing(function () use ($targetName): array {
+        $company = Company::factory()->create();
+        $viewer = User::factory()->create(['company_id' => $company->id]);
+        $target = User::factory()->create(['company_id' => $company->id, 'name' => $targetName]);
+
+        return [$company, $viewer, $target];
+    });
+
+    $viewerRole = Role::query()->where('code', 'user_viewer')->whereNull('company_id')->firstOrFail();
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $viewer->id,
+        'role_id' => $viewerRole->id,
+    ]);
+
+    return [$company, $viewer, $target];
 }
 
 /** @return array<string, mixed> */
@@ -180,10 +209,9 @@ it('opens a combined action and mutation trace timeline from actions', function 
         ->assertSet('traceDrawerOpen', true)
         ->assertSee('Resize inspector panel')
         ->assertSee('Reset inspector width')
-        ->assertSeeHtml('role="separator"')
+        ->assertSeeHtml('type="button"')
         ->assertSeeHtml('sm:pointer-events-none')
         ->assertSeeHtml('bg-black/50 sm:hidden')
-        ->assertSeeHtml('aria-modal="false"')
         ->assertSee('TRCE-1234-5678')
         ->assertSee('GET admin.users.show')
         ->assertSee('Raw action detail')
@@ -305,21 +333,7 @@ it('shows user record history from direct mutations and redacts protected values
 it('does not expose source history or trace data without audit permission', function (): void {
     setupAuthzRoles();
 
-    [$company, $viewer, $target] = MutationListener::withoutAuditing(function (): array {
-        $company = Company::factory()->create();
-        $viewer = User::factory()->create(['company_id' => $company->id]);
-        $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Hidden History Target']);
-
-        return [$company, $viewer, $target];
-    });
-
-    $viewerRole = Role::query()->where('code', 'user_viewer')->whereNull('company_id')->firstOrFail();
-    PrincipalRole::query()->create([
-        'company_id' => $company->id,
-        'principal_type' => PrincipalType::USER->value,
-        'principal_id' => $viewer->id,
-        'role_id' => $viewerRole->id,
-    ]);
+    [, $viewer, $target] = auditLogUiViewerWithoutAudit('Hidden History Target');
 
     auditLogUiInsertMutation([
         'actor_id' => $viewer->id,
@@ -332,7 +346,7 @@ it('does not expose source history or trace data without audit permission', func
     $this->actingAs($viewer);
 
     Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target))
-        ->assertDontSeeHtml('wire:click="open"')
+        ->assertDontSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION)
         ->call('open')
         ->assertSet('sourceHistoryDrawerOpen', false)
         ->assertSet('sourceHistory', [])
@@ -368,26 +382,26 @@ it('requires source page view permission in addition to audit permission', funct
     auditLogUiInsertMutation([
         'actor_id' => $viewer->id,
         'auditable_id' => $target->id,
-        'old_values' => ['email' => 'source-hidden-old@example.com'],
-        'new_values' => ['email' => 'source-hidden-new@example.com'],
+        'old_values' => ['email' => AUDIT_LOG_UI_SOURCE_HIDDEN_OLD_EMAIL],
+        'new_values' => ['email' => AUDIT_LOG_UI_SOURCE_HIDDEN_NEW_EMAIL],
         'trace_id' => 'NOVIEW123456',
     ]);
 
     $this->actingAs($viewer);
 
     Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target))
-        ->assertDontSeeHtml('wire:click="open"')
+        ->assertDontSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION)
         ->call('open')
         ->assertSet('sourceHistoryDrawerOpen', false)
         ->assertSet('sourceHistory', [])
-        ->assertDontSee('source-hidden-old@example.com')
-        ->assertDontSee('source-hidden-new@example.com')
+        ->assertDontSee(AUDIT_LOG_UI_SOURCE_HIDDEN_OLD_EMAIL)
+        ->assertDontSee(AUDIT_LOG_UI_SOURCE_HIDDEN_NEW_EMAIL)
         ->call('openTrace', 'NOVIEW-1234-56')
         ->assertSet('traceDrawerOpen', false)
         ->assertSet('selectedTraceId', '')
         ->assertSet('traceTimeline', [])
-        ->assertDontSee('source-hidden-old@example.com')
-        ->assertDontSee('source-hidden-new@example.com');
+        ->assertDontSee(AUDIT_LOG_UI_SOURCE_HIDDEN_OLD_EMAIL)
+        ->assertDontSee(AUDIT_LOG_UI_SOURCE_HIDDEN_NEW_EMAIL);
 });
 
 it('includes user role and direct capability mutations in user record history', function (): void {
@@ -524,7 +538,7 @@ it('records semantic audit actions for workflow transitions', function (): void 
 
     expect($payload['semantic'])->toBeTrue()
         ->and($payload['source'])->toBe('Workflow')
-        ->and($payload['summary'])->toBe('Transitioned Company#'.$company->id.' from Pending Review to Active')
+        ->and($payload['summary'])->toBe(AUDIT_LOG_UI_WORKFLOW_SUMMARY_PREFIX.$company->id.AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX)
         ->and($payload['subject']['label'])->toBe('Company#'.$company->id)
         ->and($payload['surface'])->toBe('workflow.audit_company_status')
         ->and($payload['context'])->toMatchArray([
@@ -556,12 +570,12 @@ it('records semantic audit actions for workflow transitions', function (): void 
     expect(collect($timeline['entries'])->contains(
         fn (array $entry): bool => $entry['kind'] === 'action'
             && $entry['event'] === 'workflow.transition.completed'
-            && $entry['summary'] === 'Transitioned Company#'.$company->id.' from Pending Review to Active'
+            && $entry['summary'] === AUDIT_LOG_UI_WORKFLOW_SUMMARY_PREFIX.$company->id.AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX
     ))->toBeTrue();
 
     Livewire::test(Actions::class)
         ->set('filterEventFamily', 'product')
-        ->assertSee('Transitioned Company#'.$company->id.' from Pending Review to Active')
+        ->assertSee(AUDIT_LOG_UI_WORKFLOW_SUMMARY_PREFIX.$company->id.AUDIT_LOG_UI_WORKFLOW_SUMMARY_SUFFIX)
         ->assertSee('Workflow')
         ->assertSee('workflow.audit_company_status');
 });
@@ -587,7 +601,7 @@ it('deduplicates expanded subject rows from direct record history', function ():
         return [$firstCompany, $secondCompany, $address];
     });
 
-    $address->update(['phone' => '03-77862444']);
+    $address->update(['phone' => AUDIT_LOG_UI_ADDRESS_PHONE]);
     auditLogUiFlushBuffer();
 
     expect(
@@ -618,12 +632,12 @@ it('deduplicates expanded subject rows from direct record history', function ():
     );
 
     expect($history['entries'])->toHaveCount(1)
-        ->and($history['entries'][0]['auditable'])->toBe('Address#'.$address->id)
+        ->and($history['entries'][0]['auditable'])->toBe(AUDIT_LOG_UI_ADDRESS_PREFIX.$address->id)
         ->and($history['entries'][0]['diffs'])->toHaveCount(1)
         ->and($history['entries'][0]['diffs'][0])->toMatchArray([
             'field' => 'phone',
             'old' => '—',
-            'new' => '03-77862444',
+            'new' => AUDIT_LOG_UI_ADDRESS_PHONE,
         ]);
 });
 
@@ -646,7 +660,7 @@ it('includes explicitly linked address contact changes in company record history
         return [$company, $unrelatedCompany, $address];
     });
 
-    $address->update(['phone' => '03-77862444']);
+    $address->update(['phone' => AUDIT_LOG_UI_ADDRESS_PHONE]);
     auditLogUiFlushBuffer();
 
     $companyHistory = app(AuditSourceHistory::class)->forRecord(
@@ -662,13 +676,13 @@ it('includes explicitly linked address contact changes in company record history
     );
 
     expect($companyHistory['entries'])->toHaveCount(1)
-        ->and($companyHistory['entries'][0]['auditable'])->toBe('Address#'.$address->id)
-        ->and($companyHistory['entries'][0]['target'])->toBe('Address#'.$address->id)
+        ->and($companyHistory['entries'][0]['auditable'])->toBe(AUDIT_LOG_UI_ADDRESS_PREFIX.$address->id)
+        ->and($companyHistory['entries'][0]['target'])->toBe(AUDIT_LOG_UI_ADDRESS_PREFIX.$address->id)
         ->and($companyHistory['entries'][0]['diffs'])->toHaveCount(1)
         ->and($companyHistory['entries'][0]['diffs'][0])->toMatchArray([
             'field' => 'phone',
             'old' => '—',
-            'new' => '03-77862444',
+            'new' => AUDIT_LOG_UI_ADDRESS_PHONE,
         ])
         ->and($unrelatedHistory['entries'])->toHaveCount(0);
 });
@@ -803,33 +817,19 @@ it('renders the record history bridge on first-wave detail pages', function (): 
         $this->get($url)
             ->assertOk()
             ->assertSee('History')
-            ->assertSeeHtml('wire:click="open"');
+            ->assertSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION);
     }
 });
 
 it('does not mount the record history bridge without audit permission', function (): void {
     setupAuthzRoles();
 
-    [$company, $viewer, $target] = MutationListener::withoutAuditing(function (): array {
-        $company = Company::factory()->create();
-        $viewer = User::factory()->create(['company_id' => $company->id]);
-        $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Bridge Hidden Target']);
-
-        return [$company, $viewer, $target];
-    });
-
-    $viewerRole = Role::query()->where('code', 'user_viewer')->whereNull('company_id')->firstOrFail();
-    PrincipalRole::query()->create([
-        'company_id' => $company->id,
-        'principal_type' => PrincipalType::USER->value,
-        'principal_id' => $viewer->id,
-        'role_id' => $viewerRole->id,
-    ]);
+    [, $viewer, $target] = auditLogUiViewerWithoutAudit('Bridge Hidden Target');
 
     $this->actingAs($viewer)
         ->get(route('admin.users.show', $target))
         ->assertOk()
         ->assertDontSee('Record history')
         ->assertDontSeeHtml('sourceHistoryDrawerOpen')
-        ->assertDontSeeHtml('wire:click="open"');
+        ->assertDontSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION);
 });

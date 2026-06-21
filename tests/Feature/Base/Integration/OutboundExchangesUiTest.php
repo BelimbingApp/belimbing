@@ -10,6 +10,8 @@ use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 
+const OUTBOUND_EXCHANGES_UI_ENDPOINT = 'https://provider.example/things';
+
 function outboundExchangesUiFlushAuditBuffer(): void
 {
     $buffer = app(AuditBuffer::class);
@@ -27,7 +29,7 @@ it('lists and shows outbound exchanges with retained payloads', function (): voi
         'transport' => 'http',
         'protocol' => 'rest',
         'protocol_operation' => 'GET /things',
-        'endpoint' => 'https://provider.example/things',
+        'endpoint' => OUTBOUND_EXCHANGES_UI_ENDPOINT,
         'owner_type' => 'company',
         'owner_id' => $user->company_id,
         'request_headers' => ['X-Test' => ['1']],
@@ -87,7 +89,7 @@ it('shows exchange record history without leaking retained payloads', function (
         'transport' => 'http',
         'protocol' => 'rest',
         'protocol_operation' => 'POST /things',
-        'endpoint' => 'https://provider.example/things',
+        'endpoint' => OUTBOUND_EXCHANGES_UI_ENDPOINT,
         'request_headers' => ['Authorization' => ['Bearer hidden-header-token']],
         'request_body' => ['kind' => 'json', 'value' => ['secret' => 'hidden-request-secret']],
         'response_status' => 200,
@@ -128,7 +130,7 @@ it('shows explanatory tooltips for truncated payloads and HTTP errors', function
         'transport' => 'http',
         'protocol' => 'rest',
         'protocol_operation' => 'POST /things',
-        'endpoint' => 'https://provider.example/things',
+        'endpoint' => OUTBOUND_EXCHANGES_UI_ENDPOINT,
         'owner_type' => 'company',
         'owner_id' => $user->company_id,
         'request_body' => ['kind' => 'json', 'value' => ['hello' => 'world']],

@@ -18,6 +18,7 @@ const DOMAIN_INSTALLER_FIXTURE_PATH = 'Modules/ZzInstallable';
 const DOMAIN_INSTALLER_FIXTURE_REPO = 'https://example.test/zz.git';
 const DOMAIN_INSTALLER_FIXTURE_DESCRIPTION = 'Fixture domain.';
 const DOMAIN_INSTALLER_FIXTURE_MIGRATION = '2099_01_01_000000_create_zz_install_table_table';
+const DOMAIN_INSTALLER_RELOAD_SCHEDULED = 'Domain runtime reload scheduled in the background.';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -68,7 +69,7 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
     $result = domainInstaller()->install(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
 
     expect($result['ok'])->toBeTrue();
-    expect($result['log'])->toContain('Domain runtime reload scheduled in the background.')
+    expect($result['log'])->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
         ->and(domainInstallerRuntimeReloader()->calls)->toBe(1);
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_INSTALLER_FIXTURE_REPO, app_path(DOMAIN_INSTALLER_FIXTURE_PATH)]);
@@ -112,11 +113,11 @@ it('records and reloads domain enable and disable actions', function (): void {
     createFakeDomainCheckout(DOMAIN_INSTALLER_FIXTURE_DOMAIN, 'zz_install_table', 'zz_install.option');
 
     $disableLog = domainInstaller()->disable(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
-    expect($disableLog)->toContain('Domain runtime reload scheduled in the background.')
+    expect($disableLog)->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
         ->and(domainInstallerRuntimeReloader()->calls)->toBe(1);
 
     $enableLog = domainInstaller()->enable(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
-    expect($enableLog)->toContain('Domain runtime reload scheduled in the background.')
+    expect($enableLog)->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
         ->and(domainInstallerRuntimeReloader()->calls)->toBe(2);
 
     $actions = AuditAction::query()
@@ -172,7 +173,7 @@ it('uninstall deletes the checkout but keeps database state by default', functio
 
     expect(is_dir(app_path(DOMAIN_INSTALLER_FIXTURE_PATH)))->toBeFalse()
         ->and($result['droppedTables'])->toBe([])
-        ->and($result['reloadLog'])->toContain('Domain runtime reload scheduled in the background.')
+        ->and($result['reloadLog'])->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
         ->and(Schema::hasTable('zz_install_table'))->toBeTrue()
         ->and(DB::table('migrations')->where('migration', DOMAIN_INSTALLER_FIXTURE_MIGRATION)->exists())->toBeTrue()
         ->and(Setting::query()->where('key', 'zz_install.option')->exists())->toBeTrue();

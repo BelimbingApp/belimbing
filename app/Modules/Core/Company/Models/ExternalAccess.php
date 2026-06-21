@@ -2,6 +2,8 @@
 
 namespace App\Modules\Core\Company\Models;
 
+use App\Modules\Core\Company\Models\Concerns\BuildsCompanyAuditEntries;
+use App\Modules\Core\Company\Models\Concerns\ResolvesRelationshipCompanies;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -10,7 +12,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ExternalAccess extends Model
 {
+    use BuildsCompanyAuditEntries;
     use HasFactory, SoftDeletes;
+    use ResolvesRelationshipCompanies;
 
     /**
      * The table associated with the model.
@@ -297,55 +301,5 @@ class ExternalAccess extends Model
         $query
             ->whereNotNull('access_granted_at')
             ->where('access_granted_at', '>', now());
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function relationshipCompanyIds(mixed $relationshipId): array
-    {
-        if ($relationshipId === null || $relationshipId === '') {
-            return [];
-        }
-
-        $relationship = CompanyRelationship::query()->find((int) $relationshipId);
-
-        if (! $relationship instanceof CompanyRelationship) {
-            return [];
-        }
-
-        return array_values(array_filter([
-            $relationship->company_id !== null ? (int) $relationship->company_id : null,
-            $relationship->related_company_id !== null ? (int) $relationship->related_company_id : null,
-        ]));
-    }
-
-    /**
-     * @param  array<int, mixed>  $companyIds
-     * @param  array<string, mixed>  $oldValues
-     * @param  array<string, mixed>  $newValues
-     * @return list<array<string, mixed>>
-     */
-    private function companyAuditEntries(array $companyIds, string $event, array $oldValues, array $newValues): array
-    {
-        $entries = [];
-
-        foreach ($companyIds as $companyId) {
-            if ($companyId === null || $companyId === '') {
-                continue;
-            }
-
-            $id = (int) $companyId;
-
-            $entries['company#'.$id] = [
-                'subject_name' => 'company',
-                'subject_id' => $id,
-                'event' => $event,
-                'old_values' => $oldValues,
-                'new_values' => $newValues,
-            ];
-        }
-
-        return array_values($entries);
     }
 }

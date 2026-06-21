@@ -21,6 +21,8 @@ const DOMAIN_MANAGER_FIXTURE_DESCRIPTION = 'Fixture description.';
 const DOMAIN_MANAGER_FIXTURE_TABLE = 'zz_managed_table';
 const DOMAIN_MANAGER_FIXTURE_SETTING = 'zz_managed.option';
 const DOMAIN_MANAGER_FIXTURE_PATH = 'Modules/'.DOMAIN_MANAGER_FIXTURE_DOMAIN;
+const DOMAIN_MANAGER_INSTALLER_NAME = 'Ada Admin';
+const DOMAIN_MANAGER_INSTALLER_EMAIL = 'ada.admin@example.test';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -87,8 +89,8 @@ it('shows catalog domains without a checkout as available to install', function 
 it('shows installed date and installer from retained audit actions', function (): void {
     $user = createAdminUser();
     $user->forceFill([
-        'name' => 'Ada Admin',
-        'email' => 'ada.admin@example.test',
+        'name' => DOMAIN_MANAGER_INSTALLER_NAME,
+        'email' => DOMAIN_MANAGER_INSTALLER_EMAIL,
     ])->save();
 
     $this->actingAs($user);
@@ -107,8 +109,8 @@ it('shows installed date and installer from retained audit actions', function ()
         'payload' => json_encode([
             'domain' => DOMAIN_MANAGER_FIXTURE_DOMAIN,
             'status' => 'succeeded',
-            'actor_name' => 'Ada Admin',
-            'actor_email' => 'ada.admin@example.test',
+            'actor_name' => DOMAIN_MANAGER_INSTALLER_NAME,
+            'actor_email' => DOMAIN_MANAGER_INSTALLER_EMAIL,
         ]),
         'trace_id' => 'D0MA1N1NSTAL',
         'is_retained' => true,
@@ -116,8 +118,8 @@ it('shows installed date and installer from retained audit actions', function ()
     ]);
 
     Livewire::test(DomainManager::class)
-        ->assertSee('Ada Admin')
-        ->assertSee('ada.admin@example.test')
+        ->assertSee(DOMAIN_MANAGER_INSTALLER_NAME)
+        ->assertSee(DOMAIN_MANAGER_INSTALLER_EMAIL)
         ->assertSeeHtml('datetime="2026-06-17T10:00:00+00:00"');
 });
 
