@@ -4,6 +4,15 @@ use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Support\Facades\File;
 
+const MODULE_MANIFEST_ROOT_PREFIX = 'framework/testing/module-manifests-';
+const MODULE_MANIFEST_COMPOSER_JSON = '/composer.json';
+const MODULE_MANIFEST_EXTENSIONS_SEGMENT = '/extensions/';
+const ACME_PAYROLL_MODULE = 'acme/payroll';
+const ACME_DEPENDENT_MODULE = 'acme/dependent';
+const ACME_REQUIRED_MODULE = 'acme/required';
+const MODULE_MANIFEST_TEST_VERSION = '1.0.0';
+const REQUIRED_MODULE_SUFFIX = '/required';
+
 it('reads extra.blb metadata from People sub-module composer.json files', function (): void {
     $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
 
@@ -50,16 +59,16 @@ it('treats conventional app module paths as installed required modules', functio
 })->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
 
 it('reads extension manifests from owner and module depth', function (): void {
-    $root = storage_path('framework/testing/module-manifests-'.bin2hex(random_bytes(4)));
-    $module = $root.'/extensions/acme/payroll';
+    $root = storage_path(MODULE_MANIFEST_ROOT_PREFIX.bin2hex(random_bytes(4)));
+    $module = $root.MODULE_MANIFEST_EXTENSIONS_SEGMENT.ACME_PAYROLL_MODULE;
 
     File::ensureDirectoryExists($module);
 
-    file_put_contents($module.'/composer.json', json_encode([
-        'name' => 'acme/payroll',
+    file_put_contents($module.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
+        'name' => ACME_PAYROLL_MODULE,
         'extra' => [
             'blb' => [
-                'module' => 'acme/payroll',
+                'module' => ACME_PAYROLL_MODULE,
                 'role' => 'plugin',
                 'version' => '1.2.3',
             ],
@@ -70,8 +79,8 @@ it('reads extension manifests from owner and module depth', function (): void {
         $manifests = (new ModuleManifestReader([$root.'/extensions']))->all();
 
         expect($manifests)->toHaveCount(1)
-            ->and($manifests[0]->name)->toBe('acme/payroll')
-            ->and($manifests[0]->module)->toBe('acme/payroll')
+            ->and($manifests[0]->name)->toBe(ACME_PAYROLL_MODULE)
+            ->and($manifests[0]->module)->toBe(ACME_PAYROLL_MODULE)
             ->and($manifests[0]->version)->toBe('1.2.3');
     } finally {
         File::deleteDirectory($root);
@@ -79,25 +88,25 @@ it('reads extension manifests from owner and module depth', function (): void {
 });
 
 it('uses manifest module identity instead of also accepting the conventional path identity', function (): void {
-    $root = storage_path('framework/testing/module-manifests-'.bin2hex(random_bytes(4)));
-    $canonical = $root.'/extensions/acme/payroll';
-    $dependent = $root.'/extensions/acme/dependent';
+    $root = storage_path(MODULE_MANIFEST_ROOT_PREFIX.bin2hex(random_bytes(4)));
+    $canonical = $root.MODULE_MANIFEST_EXTENSIONS_SEGMENT.ACME_PAYROLL_MODULE;
+    $dependent = $root.MODULE_MANIFEST_EXTENSIONS_SEGMENT.ACME_DEPENDENT_MODULE;
 
     File::ensureDirectoryExists($canonical);
     File::ensureDirectoryExists($dependent);
 
-    file_put_contents($canonical.'/composer.json', json_encode([
-        'name' => 'acme/payroll',
-        'extra' => ['blb' => ['module' => 'vendor/payroll', 'role' => 'plugin', 'version' => '1.0.0']],
+    file_put_contents($canonical.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
+        'name' => ACME_PAYROLL_MODULE,
+        'extra' => ['blb' => ['module' => 'vendor/payroll', 'role' => 'plugin', 'version' => MODULE_MANIFEST_TEST_VERSION]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-    file_put_contents($dependent.'/composer.json', json_encode([
-        'name' => 'acme/dependent',
+    file_put_contents($dependent.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
+        'name' => ACME_DEPENDENT_MODULE,
         'extra' => ['blb' => [
-            'module' => 'acme/dependent',
+            'module' => ACME_DEPENDENT_MODULE,
             'role' => 'plugin',
-            'version' => '1.0.0',
-            'requires-modules' => ['acme/payroll' => '*'],
+            'version' => MODULE_MANIFEST_TEST_VERSION,
+            'requires-modules' => [ACME_PAYROLL_MODULE => '*'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
@@ -105,9 +114,9 @@ it('uses manifest module identity instead of also accepting the conventional pat
         $reader = new ModuleManifestReader([$root.'/extensions']);
 
         expect($reader->moduleRoots())->toHaveKey('vendor/payroll')
-            ->not->toHaveKey('acme/payroll')
+            ->not->toHaveKey(ACME_PAYROLL_MODULE)
             ->and($reader->verifyRequiredModules($reader->all()))->toBe([
-                ['requiring' => 'acme/dependent', 'missing' => 'acme/payroll'],
+                ['requiring' => ACME_DEPENDENT_MODULE, 'missing' => ACME_PAYROLL_MODULE],
             ]);
     } finally {
         File::deleteDirectory($root);
@@ -117,24 +126,24 @@ it('uses manifest module identity instead of also accepting the conventional pat
 it('uses the filesystem identity and manifest version when the module id is omitted', function (): void {
     $owner = 'zz-manifest-conventional-'.bin2hex(random_bytes(4));
     $root = base_path('extensions/'.$owner);
-    $required = $root.'/required';
+    $required = $root.REQUIRED_MODULE_SUFFIX;
     $dependent = $root.'/dependent';
 
     foreach ([$required, $dependent] as $module) {
         File::ensureDirectoryExists($module);
     }
 
-    file_put_contents($required.'/composer.json', json_encode([
-        'name' => $owner.'/required',
+    file_put_contents($required.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
+        'name' => $owner.REQUIRED_MODULE_SUFFIX,
         'extra' => ['blb' => ['role' => 'source', 'version' => '1.2.0']],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-    file_put_contents($dependent.'/composer.json', json_encode([
+    file_put_contents($dependent.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => $owner.'/dependent',
         'extra' => ['blb' => [
             'role' => 'plugin',
-            'version' => '1.0.0',
-            'requires-modules' => [$owner.'/required' => '^1.0'],
+            'version' => MODULE_MANIFEST_TEST_VERSION,
+            'requires-modules' => [$owner.REQUIRED_MODULE_SUFFIX => '^1.0'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
@@ -142,8 +151,8 @@ it('uses the filesystem identity and manifest version when the module id is omit
         $reader = new ModuleManifestReader([$root]);
         $manifests = collect($reader->all())->keyBy('name');
 
-        expect($manifests[$owner.'/required']->module)->toBe($owner.'/required')
-            ->and($reader->moduleRoots())->toHaveKey($owner.'/required')
+        expect($manifests[$owner.REQUIRED_MODULE_SUFFIX]->module)->toBe($owner.REQUIRED_MODULE_SUFFIX)
+            ->and($reader->moduleRoots())->toHaveKey($owner.REQUIRED_MODULE_SUFFIX)
             ->and($reader->dependencyIssues($reader->all()))->toBe([]);
     } finally {
         File::deleteDirectory($root);
@@ -151,25 +160,25 @@ it('uses the filesystem identity and manifest version when the module id is omit
 });
 
 it('reports incompatible required module versions', function (): void {
-    $root = storage_path('framework/testing/module-manifests-'.bin2hex(random_bytes(4)));
+    $root = storage_path(MODULE_MANIFEST_ROOT_PREFIX.bin2hex(random_bytes(4)));
 
     foreach ([
         'Required' => [
-            'name' => 'acme/required',
-            'extra' => ['blb' => ['module' => 'acme/required', 'role' => 'source', 'version' => '1.0.0']],
+            'name' => ACME_REQUIRED_MODULE,
+            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'role' => 'source', 'version' => MODULE_MANIFEST_TEST_VERSION]],
         ],
         'Dependent' => [
-            'name' => 'acme/dependent',
+            'name' => ACME_DEPENDENT_MODULE,
             'extra' => ['blb' => [
-                'module' => 'acme/dependent',
+                'module' => ACME_DEPENDENT_MODULE,
                 'role' => 'plugin',
-                'version' => '1.0.0',
-                'requires-modules' => ['acme/required' => '^2.0.0'],
+                'version' => MODULE_MANIFEST_TEST_VERSION,
+                'requires-modules' => [ACME_REQUIRED_MODULE => '^2.0.0'],
             ]],
         ],
     ] as $directory => $payload) {
         File::ensureDirectoryExists($root.'/'.$directory);
-        file_put_contents($root.'/'.$directory.'/composer.json', json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        file_put_contents($root.'/'.$directory.MODULE_MANIFEST_COMPOSER_JSON, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     try {
@@ -178,43 +187,44 @@ it('reports incompatible required module versions', function (): void {
 
         expect($issues)->toHaveCount(1)
             ->and($issues[0]['issue'])->toBe('incompatible')
-            ->and($issues[0]['required'])->toBe('acme/required')
+            ->and($issues[0]['required'])->toBe(ACME_REQUIRED_MODULE)
             ->and($issues[0]['constraint'])->toBe('^2.0.0')
-            ->and($issues[0]['installed_version'])->toBe('1.0.0');
+            ->and($issues[0]['installed_version'])->toBe(MODULE_MANIFEST_TEST_VERSION);
     } finally {
         File::deleteDirectory($root);
     }
 });
 
 it('accepts common composer-style required module version constraints', function (): void {
-    $root = storage_path('framework/testing/module-manifests-'.bin2hex(random_bytes(4)));
+    $root = storage_path(MODULE_MANIFEST_ROOT_PREFIX.bin2hex(random_bytes(4)));
 
     $manifests = [
         'Required' => [
-            'name' => 'acme/required',
-            'extra' => ['blb' => ['module' => 'acme/required', 'role' => 'source', 'version' => '2.1.3']],
-        ],
-        'DependentA' => [
-            'name' => 'acme/dependent-a',
-            'extra' => ['blb' => ['module' => 'acme/dependent-a', 'role' => 'plugin', 'requires-modules' => ['acme/required' => '>= 2.0 < 3.0']]],
-        ],
-        'DependentB' => [
-            'name' => 'acme/dependent-b',
-            'extra' => ['blb' => ['module' => 'acme/dependent-b', 'role' => 'plugin', 'requires-modules' => ['acme/required' => '^1.0 || ^2.0']]],
-        ],
-        'DependentC' => [
-            'name' => 'acme/dependent-c',
-            'extra' => ['blb' => ['module' => 'acme/dependent-c', 'role' => 'plugin', 'requires-modules' => ['acme/required' => '~2.1']]],
-        ],
-        'DependentD' => [
-            'name' => 'acme/dependent-d',
-            'extra' => ['blb' => ['module' => 'acme/dependent-d', 'role' => 'plugin', 'requires-modules' => ['acme/required' => '2.*']]],
+            'name' => ACME_REQUIRED_MODULE,
+            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'role' => 'source', 'version' => '2.1.3']],
         ],
     ];
 
+    foreach ([
+        'A' => ['suffix' => 'a', 'constraint' => '>= 2.0 < 3.0'],
+        'B' => ['suffix' => 'b', 'constraint' => '^1.0 || ^2.0'],
+        'C' => ['suffix' => 'c', 'constraint' => '~2.1'],
+        'D' => ['suffix' => 'd', 'constraint' => '2.*'],
+    ] as $key => $case) {
+        $module = 'acme/dependent-'.$case['suffix'];
+        $manifests['Dependent'.$key] = [
+            'name' => $module,
+            'extra' => ['blb' => [
+                'module' => $module,
+                'role' => 'plugin',
+                'requires-modules' => [ACME_REQUIRED_MODULE => $case['constraint']],
+            ]],
+        ];
+    }
+
     foreach ($manifests as $directory => $payload) {
         File::ensureDirectoryExists($root.'/'.$directory);
-        file_put_contents($root.'/'.$directory.'/composer.json', json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        file_put_contents($root.'/'.$directory.MODULE_MANIFEST_COMPOSER_JSON, json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
     }
 
     try {

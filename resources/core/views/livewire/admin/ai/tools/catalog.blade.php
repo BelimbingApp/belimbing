@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Tools\Catalog $this */
+
+use App\Modules\Core\AI\Livewire\Tools\Catalog;
+
+/** @var Catalog $this */
 ?>
 <div>
     <x-ui.page-header :title="__('Tools')" :subtitle="__('Tools extend what Agents can do — they let AI take actions, query data, and interact with external systems beyond generating text.')">
@@ -43,9 +46,10 @@
                     placeholder="{{ __('Search tools...') }}"
                 />
             </div>
+            <label class="sr-only" for="tool-category-filter">{{ __('Tool category') }}</label>
             <select
+                id="tool-category-filter"
                 wire:model.live="categoryFilter"
-                aria-label="{{ __('Tool category') }}"
                 class="rounded-xl border border-border-input bg-surface-card text-ink text-sm px-input-x py-input-y focus:ring-2 focus:ring-accent focus:ring-offset-2"
             >
                 <option value="">{{ __('All Categories') }}</option>

@@ -5,6 +5,8 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const PHP_CLI_TEST_FORCE_ARG = '--force';
+
 function phpCliTestRoot(): string
 {
     return storage_path('framework/testing/php-cli');
@@ -16,7 +18,7 @@ function phpCliTestExecutable(string $relativePath): string
     $directory = dirname($path);
 
     if (! is_dir($directory)) {
-        mkdir($directory, 0777, true);
+        mkdir($directory, 0755, true);
     }
 
     file_put_contents($path, '#!/usr/bin/env php');
@@ -36,16 +38,16 @@ afterEach(function (): void {
 it('builds artisan commands from an ordinary php binary', function (): void {
     $php = phpCliTestExecutable('ordinary/php.exe');
 
-    expect((new PhpCli(phpBinary: $php))->artisan(['migrate', '--force']))
-        ->toBe([$php, 'artisan', 'migrate', '--force']);
+    expect((new PhpCli(phpBinary: $php))->artisan(['migrate', PHP_CLI_TEST_FORCE_ARG]))
+        ->toBe([$php, 'artisan', 'migrate', PHP_CLI_TEST_FORCE_ARG]);
 });
 
 it('uses the Windows FrankenPHP sidecar php executable for artisan commands', function (): void {
     $frankenPhp = phpCliTestExecutable('windows/frankenphp.exe');
     $php = phpCliTestExecutable('windows/php.exe');
 
-    expect((new PhpCli(phpBinary: $frankenPhp))->artisan(['migrate', '--force']))
-        ->toBe([$php, 'artisan', 'migrate', '--force']);
+    expect((new PhpCli(phpBinary: $frankenPhp))->artisan(['migrate', PHP_CLI_TEST_FORCE_ARG]))
+        ->toBe([$php, 'artisan', 'migrate', PHP_CLI_TEST_FORCE_ARG]);
 });
 
 it('falls back to FrankenPHP php-cli when no sidecar php executable exists', function (): void {

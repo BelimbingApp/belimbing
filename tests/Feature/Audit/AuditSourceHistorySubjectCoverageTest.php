@@ -134,7 +134,7 @@ it('includes company relationships departments and external access in company hi
         return [$company, $relatedCompany, $relationshipType, $departmentType, $user];
     });
 
-    $department = Department::query()->create([
+    Department::query()->create([
         'company_id' => $company->id,
         'department_type_id' => $departmentType->id,
         'status' => 'active',

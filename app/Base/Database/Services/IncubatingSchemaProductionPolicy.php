@@ -37,34 +37,7 @@ final class IncubatingSchemaProductionPolicy
 
         foreach ($this->incubatingFindings($migrationPaths) as $finding) {
             $seen[$finding['migration_name']] = true;
-
-            if (! isset($ran[$finding['migration_name']])) {
-                $approval = $this->approvals->approvalFor($finding, $connectionName);
-
-                if ($approval !== null) {
-                    $finding['approval'] = $approval;
-                    $report['approved'][] = $finding;
-
-                    continue;
-                }
-
-                $report['pending'][] = $finding;
-
-                continue;
-            }
-
-            $record = $records[$finding['migration_name']] ?? null;
-
-            if ($record !== null && (string) $record->source_sha256 !== $finding['sha256']) {
-                $finding['recorded_sha256'] = (string) $record->source_sha256;
-                $finding['recorded_path'] = (string) $record->relative_path;
-                $report['drifted'][] = $finding;
-
-                continue;
-            }
-
-            $finding['baseline'] = $record === null ? 'missing' : 'matched';
-            $report['applied'][] = $finding;
+            $this->appendFindingToReport($report, $finding, $ran, $records, $connectionName);
         }
 
         foreach ($records as $migrationName => $record) {
@@ -91,6 +64,57 @@ final class IncubatingSchemaProductionPolicy
         }
 
         return $report;
+    }
+
+    /**
+     * @param  array{applied: list<array<string, mixed>>, pending: list<array<string, mixed>>, approved: list<array<string, mixed>>, drifted: list<array<string, mixed>>}  $report
+     * @param  array{path: string, relative_path: string, file: string, migration_name: string, tables: list<string>, sha256: string}  $finding
+     * @param  array<string, true>  $ran
+     * @param  array<string, object>  $records
+     */
+    private function appendFindingToReport(
+        array &$report,
+        array $finding,
+        array $ran,
+        array $records,
+        ?string $connectionName,
+    ): void {
+        if (! isset($ran[$finding['migration_name']])) {
+            $this->appendPendingFinding($report, $finding, $connectionName);
+
+            return;
+        }
+
+        $record = $records[$finding['migration_name']] ?? null;
+
+        if ($record !== null && (string) $record->source_sha256 !== $finding['sha256']) {
+            $finding['recorded_sha256'] = (string) $record->source_sha256;
+            $finding['recorded_path'] = (string) $record->relative_path;
+            $report['drifted'][] = $finding;
+
+            return;
+        }
+
+        $finding['baseline'] = $record === null ? 'missing' : 'matched';
+        $report['applied'][] = $finding;
+    }
+
+    /**
+     * @param  array{applied: list<array<string, mixed>>, pending: list<array<string, mixed>>, approved: list<array<string, mixed>>, drifted: list<array<string, mixed>>}  $report
+     * @param  array{path: string, relative_path: string, file: string, migration_name: string, tables: list<string>, sha256: string}  $finding
+     */
+    private function appendPendingFinding(array &$report, array $finding, ?string $connectionName): void
+    {
+        $approval = $this->approvals->approvalFor($finding, $connectionName);
+
+        if ($approval !== null) {
+            $finding['approval'] = $approval;
+            $report['approved'][] = $finding;
+
+            return;
+        }
+
+        $report['pending'][] = $finding;
     }
 
     /**

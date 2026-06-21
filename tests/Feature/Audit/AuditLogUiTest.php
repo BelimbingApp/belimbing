@@ -28,6 +28,18 @@ use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
+const AUDIT_LOG_UI_USER_PREFIX = 'User#';
+const AUDIT_LOG_UI_USER_URL = 'https://example.test/admin/users/';
+const AUDIT_LOG_UI_OLD_EMAIL = 'old@example.com';
+const AUDIT_LOG_UI_NEW_EMAIL = 'new@example.com';
+const AUDIT_LOG_UI_RENAMED_TARGET = 'History Target Renamed';
+const AUDIT_LOG_UI_PASSWORD = 'SecurePassword123!';
+const AUDIT_LOG_UI_UPDATED_NAME = 'Updated user name';
+const AUDIT_LOG_UI_NAME_EDITOR = 'Name inline editor';
+const AUDIT_LOG_UI_HIDDEN_OLD_EMAIL = 'hidden-old@example.com';
+const AUDIT_LOG_UI_HIDDEN_NEW_EMAIL = 'hidden-new@example.com';
+const AUDIT_LOG_UI_HISTORY_ROLE = 'History Role';
+
 function auditLogUiActor(): User
 {
     return MutationListener::withoutAuditing(
@@ -51,7 +63,7 @@ function auditLogUiUserHistoryParams(User $user): array
         'subjects' => [['name' => 'user', 'id' => $user->id]],
         'auditableType' => $user->getMorphClass(),
         'auditableId' => $user->id,
-        'allUrl' => route('admin.audit.mutations', ['search' => 'User#'.$user->id]),
+        'allUrl' => route('admin.audit.mutations', ['search' => AUDIT_LOG_UI_USER_PREFIX.$user->id]),
         'sourceCapability' => 'admin.user.view',
     ];
 }
@@ -74,7 +86,7 @@ function auditLogUiInsertAction(array $overrides = []): int
         'actor_id' => 1,
         'actor_role' => 'core_admin',
         'ip_address' => '127.0.0.1',
-        'url' => 'https://example.test/admin/users/1',
+        'url' => AUDIT_LOG_UI_USER_URL.'1',
         'user_agent' => 'Chrome 148 / Linux',
         'event' => 'http.request',
         'payload' => json_encode($payload),
@@ -87,8 +99,8 @@ function auditLogUiInsertAction(array $overrides = []): int
 /** @param  array<string, mixed>  $overrides */
 function auditLogUiInsertMutation(array $overrides = []): int
 {
-    $oldValues = $overrides['old_values'] ?? ['email' => 'old@example.com'];
-    $newValues = $overrides['new_values'] ?? ['email' => 'new@example.com'];
+    $oldValues = $overrides['old_values'] ?? ['email' => AUDIT_LOG_UI_OLD_EMAIL];
+    $newValues = $overrides['new_values'] ?? ['email' => AUDIT_LOG_UI_NEW_EMAIL];
 
     unset($overrides['old_values'], $overrides['new_values']);
 
@@ -98,7 +110,7 @@ function auditLogUiInsertMutation(array $overrides = []): int
         'actor_id' => 1,
         'actor_role' => 'core_admin',
         'ip_address' => '127.0.0.1',
-        'url' => 'https://example.test/admin/users/1',
+        'url' => AUDIT_LOG_UI_USER_URL.'1',
         'user_agent' => 'Chrome 148 / Linux',
         'auditable_type' => User::class,
         'auditable_id' => 1,
@@ -121,7 +133,7 @@ it('hides successful diagnostic requests by default while surfacing failures', f
         'actor_id' => $actor->id,
         'trace_id' => 'AUDTMAIN0001',
         'payload' => ['method' => 'GET', 'route' => 'admin.users.show', 'status' => 200, 'duration_ms' => 31],
-        'url' => 'https://example.test/admin/users/'.$actor->id,
+        'url' => AUDIT_LOG_UI_USER_URL.$actor->id,
     ]);
 
     auditLogUiInsertAction([
@@ -154,7 +166,7 @@ it('opens a combined action and mutation trace timeline from actions', function 
         'actor_id' => $actor->id,
         'trace_id' => $trace,
         'payload' => ['method' => 'GET', 'route' => 'admin.users.show', 'status' => 200, 'duration_ms' => 31],
-        'url' => 'https://example.test/admin/users/'.$actor->id,
+        'url' => AUDIT_LOG_UI_USER_URL.$actor->id,
     ]);
 
     auditLogUiInsertMutation([
@@ -176,10 +188,10 @@ it('opens a combined action and mutation trace timeline from actions', function 
         ->assertSee('GET admin.users.show')
         ->assertSee('Raw action detail')
         ->assertDontSeeHtml('<details open')
-        ->assertSee('User#'.$actor->id)
+        ->assertSee(AUDIT_LOG_UI_USER_PREFIX.$actor->id)
         ->assertSee('email')
-        ->assertSee('old@example.com')
-        ->assertSee('new@example.com');
+        ->assertSee(AUDIT_LOG_UI_OLD_EMAIL)
+        ->assertSee(AUDIT_LOG_UI_NEW_EMAIL);
 });
 
 it('opens the same trace timeline from mutations', function (): void {
@@ -190,7 +202,7 @@ it('opens the same trace timeline from mutations', function (): void {
         'actor_id' => $actor->id,
         'trace_id' => $trace,
         'payload' => ['method' => 'POST', 'route' => 'admin.users.show', 'status' => 200, 'duration_ms' => 42],
-        'url' => 'https://example.test/admin/users/'.$actor->id,
+        'url' => AUDIT_LOG_UI_USER_URL.$actor->id,
     ]);
 
     auditLogUiInsertMutation([
@@ -204,8 +216,8 @@ it('opens the same trace timeline from mutations', function (): void {
         ->assertSet('traceDrawerOpen', true)
         ->assertSee('MUTR-1234-5678')
         ->assertSee('POST admin.users.show')
-        ->assertSee('old@example.com')
-        ->assertSee('new@example.com');
+        ->assertSee(AUDIT_LOG_UI_OLD_EMAIL)
+        ->assertSee(AUDIT_LOG_UI_NEW_EMAIL);
 });
 
 it('shows user record history from direct mutations and redacts protected values', function (): void {
@@ -225,9 +237,9 @@ it('shows user record history from direct mutations and redacts protected values
     ]);
 
     Livewire::test('admin.users.show', ['user' => $target])
-        ->call('saveField', 'name', 'History Target Renamed')
-        ->set('password', 'SecurePassword123!')
-        ->set('passwordConfirmation', 'SecurePassword123!')
+        ->call('saveField', 'name', AUDIT_LOG_UI_RENAMED_TARGET)
+        ->set('password', AUDIT_LOG_UI_PASSWORD)
+        ->set('passwordConfirmation', AUDIT_LOG_UI_PASSWORD)
         ->call('updatePassword')
         ->assertHasNoErrors();
 
@@ -246,20 +258,20 @@ it('shows user record history from direct mutations and redacts protected values
         ->assertSee('legacy-new@example.com')
         ->assertSee('name')
         ->assertSee('History Target')
-        ->assertSee('History Target Renamed')
+        ->assertSee(AUDIT_LOG_UI_RENAMED_TARGET)
         ->assertSee('password')
         ->assertSee('[redacted]')
-        ->assertDontSee('SecurePassword123!');
+        ->assertDontSee(AUDIT_LOG_UI_PASSWORD);
 
     $fieldAction = AuditAction::query()->where('event', 'user.field.updated')->firstOrFail();
     $passwordAction = AuditAction::query()->where('event', 'user.password.updated')->firstOrFail();
 
     expect($fieldAction->is_retained)->toBeTrue()
         ->and($fieldAction->payload['semantic'])->toBeTrue()
-        ->and($fieldAction->payload['summary'])->toBe('Updated user name')
-        ->and($fieldAction->payload['subject']['label'])->toBe('User#'.$target->id)
+        ->and($fieldAction->payload['summary'])->toBe(AUDIT_LOG_UI_UPDATED_NAME)
+        ->and($fieldAction->payload['subject']['label'])->toBe(AUDIT_LOG_UI_USER_PREFIX.$target->id)
         ->and($fieldAction->payload['surface'])->toBe('admin.users.show')
-        ->and($fieldAction->payload['ui_element'])->toBe('Name inline editor')
+        ->and($fieldAction->payload['ui_element'])->toBe(AUDIT_LOG_UI_NAME_EDITOR)
         ->and($fieldAction->payload['context']['fields'])->toContain('name')
         ->and($passwordAction->payload['summary'])->toBe('Changed user password')
         ->and($passwordAction->payload['ui_element'])->toBe('Password form Save button')
@@ -267,18 +279,18 @@ it('shows user record history from direct mutations and redacts protected values
 
     Livewire::test(Actions::class)
         ->set('filterEventFamily', 'product')
-        ->assertSee('Updated user name')
-        ->assertSee('User#'.$target->id)
-        ->assertSee('Name inline editor')
+        ->assertSee(AUDIT_LOG_UI_UPDATED_NAME)
+        ->assertSee(AUDIT_LOG_UI_USER_PREFIX.$target->id)
+        ->assertSee(AUDIT_LOG_UI_NAME_EDITOR)
         ->assertSee('Changed user password')
         ->assertSee('Password form Save button');
 
     Livewire::test(SourceHistory::class, auditLogUiUserHistoryParams($target->fresh()))
         ->call('openTrace', $fieldAction->trace_id)
         ->assertSet('traceDrawerOpen', true)
-        ->assertSee('Updated user name')
-        ->assertSee('Name inline editor')
-        ->assertSee('History Target Renamed');
+        ->assertSee(AUDIT_LOG_UI_UPDATED_NAME)
+        ->assertSee(AUDIT_LOG_UI_NAME_EDITOR)
+        ->assertSee(AUDIT_LOG_UI_RENAMED_TARGET);
 
     expect(
         AuditMutation::query()
@@ -312,8 +324,8 @@ it('does not expose source history or trace data without audit permission', func
     auditLogUiInsertMutation([
         'actor_id' => $viewer->id,
         'auditable_id' => $target->id,
-        'old_values' => ['email' => 'hidden-old@example.com'],
-        'new_values' => ['email' => 'hidden-new@example.com'],
+        'old_values' => ['email' => AUDIT_LOG_UI_HIDDEN_OLD_EMAIL],
+        'new_values' => ['email' => AUDIT_LOG_UI_HIDDEN_NEW_EMAIL],
         'trace_id' => 'NOAUDT123456',
     ]);
 
@@ -324,14 +336,14 @@ it('does not expose source history or trace data without audit permission', func
         ->call('open')
         ->assertSet('sourceHistoryDrawerOpen', false)
         ->assertSet('sourceHistory', [])
-        ->assertDontSee('hidden-old@example.com')
-        ->assertDontSee('hidden-new@example.com')
+        ->assertDontSee(AUDIT_LOG_UI_HIDDEN_OLD_EMAIL)
+        ->assertDontSee(AUDIT_LOG_UI_HIDDEN_NEW_EMAIL)
         ->call('openTrace', 'NOAUDT-1234-56')
         ->assertSet('traceDrawerOpen', false)
         ->assertSet('selectedTraceId', '')
         ->assertSet('traceTimeline', [])
-        ->assertDontSee('hidden-old@example.com')
-        ->assertDontSee('hidden-new@example.com');
+        ->assertDontSee(AUDIT_LOG_UI_HIDDEN_OLD_EMAIL)
+        ->assertDontSee(AUDIT_LOG_UI_HIDDEN_NEW_EMAIL);
 });
 
 it('requires source page view permission in addition to audit permission', function (): void {
@@ -386,7 +398,7 @@ it('includes user role and direct capability mutations in user record history', 
         $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Authz Target']);
         $role = Role::query()->create([
             'company_id' => null,
-            'name' => 'History Role',
+            'name' => AUDIT_LOG_UI_HISTORY_ROLE,
             'code' => 'history_role',
             'is_system' => false,
         ]);
@@ -419,14 +431,14 @@ it('includes user role and direct capability mutations in user record history', 
     expect($roleAction->payload['semantic'])->toBeTrue()
         ->and($roleAction->payload['summary'])->toBe('Assigned 1 role to user')
         ->and($roleAction->payload['context']['role_ids'])->toBe([$role->id])
-        ->and($roleAction->payload['context']['role_names'])->toBe(['History Role'])
+        ->and($roleAction->payload['context']['role_names'])->toBe([AUDIT_LOG_UI_HISTORY_ROLE])
         ->and($capabilityAction->payload['summary'])->toBe('Granted 1 direct capability to user')
         ->and($capabilityAction->payload['context']['capability_keys'])->toBe(['admin.user.view']);
 
     Livewire::test(Actions::class)
         ->set('filterEventFamily', 'product')
         ->assertSee('Assigned 1 role to user')
-        ->assertSee('History Role')
+        ->assertSee(AUDIT_LOG_UI_HISTORY_ROLE)
         ->assertSee('Granted 1 direct capability to user')
         ->assertSee('admin.user.view');
 

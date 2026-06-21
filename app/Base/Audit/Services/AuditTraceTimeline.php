@@ -145,7 +145,11 @@ final class AuditTraceTimeline
             return $time->getTimestamp();
         }
 
-        return $time !== null ? strtotime((string) $time) ?: 0 : 0;
+        if ($time === null) {
+            return 0;
+        }
+
+        return strtotime((string) $time) ?: 0;
     }
 
     private function serializeTime(mixed $time): ?string

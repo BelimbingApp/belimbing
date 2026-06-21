@@ -7,12 +7,13 @@ use Illuminate\Support\Facades\Process;
 const GIT_REPOSITORY_BUNDLE_PATH = '/srv/bundle';
 const GIT_REPOSITORY_MIGRATION_A = 'ibp/Database/Migrations/a.php';
 const GIT_REPOSITORY_MIGRATION_B = 'ibp/Database/Migrations/b.php';
+const GIT_SAFE_DIRECTORY_OPTION = 'safe.directory=';
 
 final class GitRepositoryLaunchException extends RuntimeException {}
 
 function gitRepositoryCommand(string $path, string ...$args): array
 {
-    return ['git', '-c', 'safe.directory='.str_replace('\\', '/', $path), ...$args];
+    return ['git', '-c', GIT_SAFE_DIRECTORY_OPTION.str_replace('\\', '/', $path), ...$args];
 }
 
 test('commit stages and commits only the given paths, never a blanket add', function (): void {
@@ -70,7 +71,7 @@ test('commands can use an explicit git executable', function (): void {
 
     (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH, executable: '/opt/git/bin/git'))->remoteUrl();
 
-    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', '-c', 'safe.directory='.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
+    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
 });
 
 test('commands use the configured git executable', function (): void {
@@ -82,7 +83,7 @@ test('commands use the configured git executable', function (): void {
     try {
         (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH))->remoteUrl();
 
-        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', '-c', 'safe.directory='.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
+        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
     } finally {
         config(['app.git_executable' => $original]);
     }

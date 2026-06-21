@@ -9,11 +9,30 @@ use Illuminate\Database\Eloquent\Builder;
 
 final class AuditSourceHistory
 {
+    private const LIKE_PLACEHOLDER = ' like ?';
+
     private const SORTABLE = [
         'occurred_at' => 'base_audit_mutations.occurred_at',
         'actor' => 'users.name',
         'event' => 'base_audit_mutations.event',
         'trace_id' => 'base_audit_mutations.trace_id',
+    ];
+
+    private const SEARCH_TEXT_COLUMNS = [
+        'users.name',
+        'base_audit_mutations.actor_role',
+        'base_audit_mutations.actor_type',
+        'base_audit_mutations.auditable_type',
+        'base_audit_mutations.event',
+        'base_audit_mutations.subject_name',
+        'base_audit_mutations.subject_identifier',
+    ];
+
+    private const SEARCH_CAST_COLUMNS = [
+        'base_audit_mutations.auditable_id',
+        'base_audit_mutations.subject_id',
+        'base_audit_mutations.old_values',
+        'base_audit_mutations.new_values',
     ];
 
     public function __construct(
@@ -138,32 +157,44 @@ final class AuditSourceHistory
         $subjectHandle = $this->parseSubjectHandle($search);
 
         return $query->where(function (Builder $searchQuery) use ($like, $trace, $subjectHandle): void {
-            $searchQuery->whereRaw('lower(coalesce(users.name, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.actor_role, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.actor_type, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.auditable_type, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.event, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) like ?', [$like])
-                ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_identifier, \'\')) like ?', [$like])
-                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
-                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.subject_id').' like ?', [$like])
-                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.old_values').' like ?', [$like])
-                ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.new_values').' like ?', [$like]);
+            $this->applyTextSearch($searchQuery, $like);
 
             if ($trace !== '') {
-                $searchQuery->orWhereRaw('base_audit_mutations.trace_id like ?', ['%'.$trace.'%']);
+                $searchQuery->orWhereRaw('base_audit_mutations.trace_id'.self::LIKE_PLACEHOLDER, ['%'.$trace.'%']);
             }
 
             if ($subjectHandle !== null) {
                 $searchQuery->orWhere(function (Builder $handle) use ($subjectHandle): void {
-                    $handle->whereRaw('lower(base_audit_mutations.auditable_type) like ?', ['%'.$subjectHandle['name'].'%'])
+                    $handle->whereRaw('lower(base_audit_mutations.auditable_type)'.self::LIKE_PLACEHOLDER, ['%'.$subjectHandle['name'].'%'])
                         ->where('base_audit_mutations.auditable_id', $subjectHandle['id']);
                 })->orWhere(function (Builder $handle) use ($subjectHandle): void {
-                    $handle->whereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) = ?', [$subjectHandle['name']])
+                    $handle->whereRaw($this->lowerCoalescedExpression('base_audit_mutations.subject_name').' = ?', [$subjectHandle['name']])
                         ->where('base_audit_mutations.subject_id', $subjectHandle['id']);
                 });
             }
         });
+    }
+
+    private function applyTextSearch(Builder $query, string $like): void
+    {
+        $first = true;
+
+        foreach ($this->searchExpressions() as $expression) {
+            $method = $first ? 'whereRaw' : 'orWhereRaw';
+            $query->{$method}($expression.self::LIKE_PLACEHOLDER, [$like]);
+            $first = false;
+        }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function searchExpressions(): array
+    {
+        return [
+            ...array_map($this->lowerCoalescedExpression(...), self::SEARCH_TEXT_COLUMNS),
+            ...array_map($this->lowerTextExpression(...), self::SEARCH_CAST_COLUMNS),
+        ];
     }
 
     /**
@@ -259,6 +290,11 @@ final class AuditSourceHistory
             'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
             default => 'lower(cast('.$column.' as text))',
         };
+    }
+
+    private function lowerCoalescedExpression(string $column): string
+    {
+        return 'lower(coalesce('.$column.', \'\'))';
     }
 
     /** @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int, total: int} */
