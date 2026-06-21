@@ -421,7 +421,7 @@
             :subtitle="__('Replay real turn events through a persistent-fetch transport to evaluate latency, ordering, and UX fidelity.')"
         />
 
-        <x-ui.alert variant="default">
+        <x-ui.alert variant="info">
             {{ __('This page reads real turn events from the database and streams them through a persistent fetch connection with paced delivery. Select a turn, choose a speed multiplier, and observe how the events render in real time.') }}
         </x-ui.alert>
 

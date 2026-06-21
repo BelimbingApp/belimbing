@@ -63,19 +63,26 @@
                     :role="sticky.includes(item.variant) ? 'alert' : 'status'"
                     :aria-live="sticky.includes(item.variant) ? 'assertive' : 'polite'"
                 >
-                    <svg class="mt-0.5 h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" :d="variants[item.variant].path" />
-                    </svg>
+                    <template x-if="item.variant === 'success'">
+                        <x-icon name="heroicon-o-check-circle" class="mt-0.5 h-5 w-5 shrink-0" />
+                    </template>
+                    <template x-if="item.variant === 'error'">
+                        <x-icon name="heroicon-o-exclamation-circle" class="mt-0.5 h-5 w-5 shrink-0" />
+                    </template>
+                    <template x-if="item.variant === 'warning'">
+                        <x-icon name="heroicon-o-exclamation-triangle" class="mt-0.5 h-5 w-5 shrink-0" />
+                    </template>
+                    <template x-if="item.variant === 'info'">
+                        <x-icon name="heroicon-o-information-circle" class="mt-0.5 h-5 w-5 shrink-0" />
+                    </template>
                     <p class="min-w-0 flex-1 text-xs leading-5" x-text="item.message"></p>
                     <button
                         type="button"
-                        class="shrink-0 opacity-60 transition-opacity hover:opacity-100"
+                        class="shrink-0 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
                         @click="dismiss(item.id)"
                         :aria-label="@js(__('Dismiss'))"
                     >
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                        </svg>
+                        <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
                     </button>
                 </div>
             </div>
