@@ -152,7 +152,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             $this->advancedSettingsOverridden[$stateKey] = true;
         }
 
-        session()->flash('success', __('Advanced settings saved.'));
+        $this->notify(__('Advanced settings saved.'));
     }
 
     public function resetAdvancedSettings(): void
@@ -177,7 +177,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             $this->advancedSettings[$stateKey] = $default;
         }
 
-        session()->flash('success', __('Advanced settings reset.'));
+        $this->notify(__('Advanced settings reset.'));
     }
 
     public function pageContext(): PageContext

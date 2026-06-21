@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Livewire\Queries;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\User\Models\Query;
@@ -13,6 +14,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -74,7 +76,7 @@ class Index extends Component
             ->delete();
 
         $query->delete();
-        session()->flash('success', __('Query deleted.'));
+        $this->notify(__('Query deleted.'));
     }
 
     /**
@@ -101,7 +103,7 @@ class Index extends Component
             'description' => $source->description,
             'icon' => $source->icon,
         ]);
-        session()->flash('success', __('Query duplicated.'));
+        $this->notify(__('Query duplicated.'));
     }
 
     public function render(): View

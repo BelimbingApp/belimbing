@@ -1,17 +1,19 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
 use App\Modules\Core\Company\Models\DepartmentType;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Departments extends Component
 {
+    use InteractsWithNotifications;
     use TogglesSort;
     use WithPagination;
 
@@ -65,7 +67,7 @@ class Departments extends Component
 
         $this->showCreateModal = false;
         $this->reset(['createDepartmentTypeId', 'createStatus']);
-        Session::flash('success', __('Department created.'));
+        $this->notify(__('Department created.'));
     }
 
     public function saveStatus(int $departmentId, string $status): void
@@ -78,13 +80,13 @@ class Departments extends Component
         $dept->status = $status;
         $dept->save();
 
-        Session::flash('success', __('Department status updated.'));
+        $this->notify(__('Department status updated.'));
     }
 
     public function deleteDepartment(int $departmentId): void
     {
         Department::query()->findOrFail($departmentId)->delete();
-        Session::flash('success', __('Department deleted.'));
+        $this->notify(__('Department deleted.'));
     }
 
     public function render(): View

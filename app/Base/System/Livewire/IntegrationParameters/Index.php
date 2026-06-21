@@ -4,6 +4,7 @@ namespace App\Base\System\Livewire\IntegrationParameters;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\SearchablePaginatedList;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\Auth;
  */
 class Index extends SearchablePaginatedList
 {
+    use InteractsWithNotifications;
+
     protected const string VIEW_NAME = 'livewire.admin.system.integration-parameters.index';
 
     protected const string VIEW_DATA_KEY = 'parameters';
@@ -110,7 +113,7 @@ class Index extends SearchablePaginatedList
 
         $this->addModalOpen = false;
 
-        session()->flash('success', $validated['newType'] === 'secret'
+        $this->notify($validated['newType'] === 'secret'
             ? __('Secret stored encrypted as :key.', ['key' => $key])
             : __('Parameter stored as :key.', ['key' => $key]));
     }
@@ -169,7 +172,7 @@ class Index extends SearchablePaginatedList
 
         $key = $row->key;
         $this->closeEntry();
-        session()->flash('success', __('Parameter :key updated.', ['key' => $key]));
+        $this->notify(__('Parameter :key updated.', ['key' => $key]));
     }
 
     public function deleteParameter(SettingsService $settings): void
@@ -188,7 +191,7 @@ class Index extends SearchablePaginatedList
         $settings->forget($key.self::DESCRIPTION_SUFFIX);
 
         $this->closeEntry();
-        session()->flash('success', __('Parameter :key deleted.', ['key' => $key]));
+        $this->notify(__('Parameter :key deleted.', ['key' => $key]));
     }
 
     public function closeEntry(): void

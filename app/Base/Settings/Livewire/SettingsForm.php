@@ -2,6 +2,7 @@
 
 namespace App\Base\Settings\Livewire;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Support\Str as BlbStr;
@@ -17,6 +18,8 @@ use Livewire\Component;
  */
 abstract class SettingsForm extends Component
 {
+    use InteractsWithNotifications;
+
     /**
      * @var array<string, mixed>
      */
@@ -102,7 +105,7 @@ abstract class SettingsForm extends Component
             $this->resetValidation('values.'.$formKey);
         }
 
-        session()->flash('success', __('Settings saved.'));
+        $this->notify(__('Settings saved.'));
     }
 
     /**

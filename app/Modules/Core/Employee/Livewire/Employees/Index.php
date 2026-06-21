@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
@@ -8,12 +10,12 @@ use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component implements ProvidesLaraPageContext
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -74,7 +76,7 @@ class Index extends Component implements ProvidesLaraPageContext
 
         $employee->delete();
 
-        Session::flash('success', __('Employee deleted successfully.'));
+        $this->notify(__('Employee deleted successfully.'));
     }
 
     public function render(): View

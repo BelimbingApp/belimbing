@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\Geonames\Livewire\Postcodes;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\PostcodeSeeder;
@@ -9,12 +11,12 @@ use App\Modules\Core\Geonames\Models\Postcode;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -133,7 +135,7 @@ class Index extends Component
     public function import(): void
     {
         if (empty($this->selectedCountries)) {
-            Session::flash('error', __('Please select at least one country to import.'));
+            $this->notifyError(__('Please select at least one country to import.'));
 
             return;
         }
@@ -146,9 +148,9 @@ class Index extends Component
 
         try {
             app(PostcodeSeeder::class)->run($countryCodes);
-            Session::flash('success', __('Import completed for :count country(s).', ['count' => count($countryCodes)]));
+            $this->notify(__('Import completed for :count country(s).', ['count' => count($countryCodes)]));
         } catch (\Throwable $e) {
-            Session::flash('error', __('Import failed: :message', ['message' => $e->getMessage()]));
+            $this->notifyError(__('Import failed: :message', ['message' => $e->getMessage()]));
         }
     }
 
@@ -165,9 +167,9 @@ class Index extends Component
 
         try {
             app(PostcodeSeeder::class)->run($importedIsos);
-            Session::flash('success', __('Update completed for :count country(s).', ['count' => count($importedIsos)]));
+            $this->notify(__('Update completed for :count country(s).', ['count' => count($importedIsos)]));
         } catch (\Throwable $e) {
-            Session::flash('error', __('Update failed: :message', ['message' => $e->getMessage()]));
+            $this->notifyError(__('Update failed: :message', ['message' => $e->getMessage()]));
         }
     }
 

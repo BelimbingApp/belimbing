@@ -7,6 +7,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\MigrationIncubationManager;
 use App\Base\Database\Services\TableInspector;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -15,6 +16,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ManagesSchemaIncubationSelection;
     use TogglesSort;
     use WithPagination;
@@ -112,7 +114,7 @@ class Index extends Component
     public function moveSelectedToIncubation(): void
     {
         if ($this->selectedSearchTables === []) {
-            session()->flash('warning', __('Select at least one table first.'));
+            $this->notifyWarning(__('Select at least one table first.'));
 
             return;
         }
@@ -155,7 +157,7 @@ class Index extends Component
     public function removeSelectedFromIncubation(): void
     {
         if ($this->selectedIncubatingTables === []) {
-            session()->flash('warning', __('Select at least one table first.'));
+            $this->notifyWarning(__('Select at least one table first.'));
 
             return;
         }
@@ -365,7 +367,7 @@ class Index extends Component
         }
 
         if ($warnings !== []) {
-            session()->flash('warning', implode(' ', $warnings));
+            $this->notifyWarning(implode(' ', $warnings));
         }
     }
 }

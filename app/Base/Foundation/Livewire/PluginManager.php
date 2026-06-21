@@ -4,6 +4,7 @@ namespace App\Base\Foundation\Livewire;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
@@ -26,6 +27,8 @@ use Livewire\Component;
  */
 class PluginManager extends Component
 {
+    use InteractsWithNotifications;
+
     #[Url(as: 'tab')]
     public string $tab = 'installed';
 
@@ -43,7 +46,7 @@ class PluginManager extends Component
         app(BelimbingAppCatalogService::class)->refresh();
         $this->tab = 'available';
 
-        session()->flash('success', __('Catalog refreshed from GitHub.'));
+        $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
     public function render(): View

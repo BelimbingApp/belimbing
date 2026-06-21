@@ -11,6 +11,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\User;
@@ -32,6 +33,7 @@ use Livewire\WithPagination;
  */
 class Show extends Component
 {
+    use InteractsWithNotifications;
     use ResolvesAvailableModels;
     use TogglesSort;
     use WithPagination;
@@ -132,7 +134,7 @@ class Show extends Component
                 'sql_query' => ['required', 'string'],
             ])->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Query was not saved. Review the highlighted fields.'));
+            $this->notifyError(__('Query was not saved. Review the highlighted fields.'));
 
             throw $exception;
         }
@@ -166,7 +168,7 @@ class Show extends Component
         $this->query->sql_query = $validated['sql_query'];
         $this->query->save();
 
-        session()->flash('success', __('Query saved.'));
+        $this->notify(__('Query saved.'));
         $this->dispatch('query-saved');
     }
 

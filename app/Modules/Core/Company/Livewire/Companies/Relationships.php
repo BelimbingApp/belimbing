@@ -1,17 +1,19 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
 use App\Modules\Core\Company\Models\RelationshipType;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
 class Relationships extends Component
 {
+    use InteractsWithNotifications;
     use TogglesSort;
 
     public Company $company;
@@ -85,7 +87,7 @@ class Relationships extends Component
 
         $this->showCreateModal = false;
         $this->reset(['createRelatedCompanyId', 'createRelationshipTypeId', 'createEffectiveFrom', 'createEffectiveTo']);
-        Session::flash('success', __('Relationship created.'));
+        $this->notify(__('Relationship created.'));
     }
 
     public function editRelationship(int $relationshipId): void
@@ -110,13 +112,13 @@ class Relationships extends Component
 
         $this->showEditModal = false;
         $this->reset(['editRelationshipId', 'editEffectiveFrom', 'editEffectiveTo']);
-        Session::flash('success', __('Relationship updated.'));
+        $this->notify(__('Relationship updated.'));
     }
 
     public function deleteRelationship(int $relationshipId): void
     {
         CompanyRelationship::query()->findOrFail($relationshipId)->delete();
-        Session::flash('success', __('Relationship deleted.'));
+        $this->notify(__('Relationship deleted.'));
     }
 
     public function render(): View

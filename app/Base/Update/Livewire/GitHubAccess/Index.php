@@ -4,6 +4,7 @@ namespace App\Base\Update\Livewire\GitHubAccess;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Update\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -18,6 +19,8 @@ use Livewire\Component;
  */
 class Index extends Component
 {
+    use InteractsWithNotifications;
+
     /** x-ui.secret-input renders this for an already-stored secret; an untouched save submits it (= keep). */
     private const SECRET_KEPT = '******';
 
@@ -35,7 +38,7 @@ class Index extends Component
 
         // Untouched secret field (mask sentinel, or empty while one is stored) = keep.
         if ($value === self::SECRET_KEPT || ($value === '' && $deployment->tokenFor($owner) !== null)) {
-            session()->flash('success', __('Token for :owner is unchanged.', ['owner' => $owner]));
+            $this->notify(__('Token for :owner is unchanged.', ['owner' => $owner]));
 
             return;
         }
@@ -48,7 +51,7 @@ class Index extends Component
 
         $deployment->saveToken($owner, $value);
         unset($this->tokens[$owner], $this->testResults[$owner]);
-        session()->flash('success', __('Token saved for :owner.', ['owner' => $owner]));
+        $this->notify(__('Token saved for :owner.', ['owner' => $owner]));
     }
 
     public function test(string $owner, DeploymentService $deployment): void
@@ -68,7 +71,7 @@ class Index extends Component
 
         $deployment->saveToken($owner, '');
         unset($this->tokens[$owner], $this->testResults[$owner]);
-        session()->flash('success', __('Token cleared for :owner.', ['owner' => $owner]));
+        $this->notify(__('Token cleared for :owner.', ['owner' => $owner]));
     }
 
     public function render(DeploymentService $deployment): View

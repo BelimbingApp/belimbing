@@ -1,17 +1,19 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -63,20 +65,20 @@ class Index extends Component
         $company = Company::query()->withCount('children')->findOrFail($companyId);
 
         if ($company->id === Company::LICENSEE_ID) {
-            Session::flash('error', __('The licensee company cannot be deleted.'));
+            $this->notifyError(__('The licensee company cannot be deleted.'));
 
             return;
         }
 
         if ($company->children_count > 0) {
-            Session::flash('error', __('Cannot delete a company that has subsidiaries.'));
+            $this->notifyError(__('Cannot delete a company that has subsidiaries.'));
 
             return;
         }
 
         $company->delete();
 
-        Session::flash('success', __('Company deleted successfully.'));
+        $this->notify(__('Company deleted successfully.'));
     }
 
     public function render(): View

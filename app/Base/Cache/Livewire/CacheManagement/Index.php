@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Cache\Livewire\CacheManagement;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Menu\MenuRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Cache;
@@ -8,16 +10,18 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
+
     public function flushAll(): void
     {
         Cache::flush();
-        session()->flash('success', __('All cache flushed successfully.'));
+        $this->notify(__('All cache flushed successfully.'));
     }
 
     public function clearMenuCache(): void
     {
         app(MenuRegistry::class)->clear();
-        session()->flash('success', __('Menu cache cleared successfully.'));
+        $this->notify(__('Menu cache cleared successfully.'));
     }
 
     public function render(): View

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Livewire\Setup;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraInteractiveToolSet;
@@ -13,7 +14,6 @@ use App\Modules\Core\AI\Services\Workspace\WorkspaceResolver;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 
 /**
@@ -29,6 +29,8 @@ use Livewire\Component;
  */
 class Lara extends Component
 {
+    use InteractsWithNotifications;
+
     public ?string $editingSlot = null;
 
     public string $editingContent = '';
@@ -47,7 +49,7 @@ class Lara extends Component
     public function provisionLara(): void
     {
         if (Employee::provisionLara()) {
-            Session::flash('success', __('Lara has been provisioned.'));
+            $this->notify(__('Lara has been provisioned.'));
         }
     }
 
@@ -94,7 +96,7 @@ class Lara extends Component
 
         app(LaraWorkspaceSlotManager::class)->writeSlot($slotEnum, $this->editingContent);
 
-        Session::flash('success', __(':slot saved.', ['slot' => __($slotEnum->value)]));
+        $this->notify(__(':slot saved.', ['slot' => __($slotEnum->value)]));
         $this->closeSlotEditor();
     }
 
@@ -112,7 +114,7 @@ class Lara extends Component
         $deleted = app(LaraWorkspaceSlotManager::class)->deleteSlotOverride($slotEnum);
 
         if ($deleted) {
-            Session::flash('success', __(':slot reverted to framework default.', ['slot' => __($slotEnum->value)]));
+            $this->notify(__(':slot reverted to framework default.', ['slot' => __($slotEnum->value)]));
         }
     }
 
@@ -136,7 +138,7 @@ class Lara extends Component
         $toolSet = app(LaraInteractiveToolSet::class);
         $toolSet->setExtraToolEnabled($toolName, ! in_array($toolName, $toolSet->extraToolNames(), true));
 
-        Session::flash('success', __('Lara interactive tools updated.'));
+        $this->notify(__('Lara interactive tools updated.'));
     }
 
     /**

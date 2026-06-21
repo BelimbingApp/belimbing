@@ -4,6 +4,7 @@ namespace App\Base\Database\Livewire\Residue;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Services\DomainResidueScanner;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -25,6 +26,8 @@ use Livewire\Component;
  */
 class Index extends Component
 {
+    use InteractsWithNotifications;
+
     /**
      * Typed acknowledgment that arms the action buttons. The phrase states
      * what the user is accepting — permanence — rather than a magic word.
@@ -54,7 +57,7 @@ class Index extends Component
 
         $this->reset('selectedTables', 'confirmText');
 
-        session()->flash('success', __(':n table(s) dropped.', ['n' => count($result['dropped'])])
+        $this->notify(__(':n table(s) dropped.', ['n' => count($result['dropped'])])
             .(count($result['skipped']) > 0 ? ' '.__(':n skipped (no longer orphaned).', ['n' => count($result['skipped'])]) : ''));
     }
 
@@ -70,7 +73,7 @@ class Index extends Component
 
         $this->reset('selectedLedger', 'confirmText');
 
-        session()->flash('success', __(':n migration record(s) removed.', ['n' => $deleted]));
+        $this->notify(__(':n migration record(s) removed.', ['n' => $deleted]));
     }
 
     public function deleteSelectedSettings(DomainResidueScanner $scanner): void
@@ -85,7 +88,7 @@ class Index extends Component
 
         $this->reset('selectedSettings', 'confirmText');
 
-        session()->flash('success', __(':n setting row(s) deleted.', ['n' => $deleted]));
+        $this->notify(__(':n setting row(s) deleted.', ['n' => $deleted]));
     }
 
     public function render(DomainResidueScanner $scanner): View
