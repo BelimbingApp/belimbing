@@ -19,61 +19,30 @@
         <x-ui.card>
             <div
                 x-data="{
-                    success: false,
-                    warning: false,
-                    info: false,
-                    timer(name, delay = 4500) {
-                        this[name] = true
-                        setTimeout(() => this[name] = false, delay)
-                    },
+                    demo(variant, message) { $dispatch('notify', { variant, message }) },
                     stack() {
-                        this.timer('success', 4200)
-                        setTimeout(() => this.timer('warning', 5000), 250)
-                        setTimeout(() => this.timer('info', 5600), 500)
+                        this.demo('success', '{{ __('Default model updated.') }}')
+                        setTimeout(() => this.demo('warning', '{{ __('Availability sync needs attention.') }}'), 150)
+                        setTimeout(() => this.demo('error', '{{ __('The channel could not be reached.') }}'), 300)
                     },
                 }"
                 class="space-y-4"
             >
                 <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Flash Notification Demo') }}</h2>
-                    <p class="text-xs text-muted">{{ __('Flash notifications are transient and stack at the viewport edge. This demo uses the proposed standard: top-right placement, title above supporting copy, and auto-dismiss after a short dwell time.') }}</p>
+                    <h2 class="text-sm font-medium text-ink">{{ __('Notifications') }}</h2>
+                    <p class="text-xs text-muted">{{ __('Notifications confirm same-page actions at the top-right of the viewport, two-thirds wide so they are noticeable wherever the action was triggered. Persistence is severity-tiered: errors and warnings stay until dismissed; success and info auto-dismiss. Trigger them from a Livewire component with the InteractsWithNotifications trait ($this->notify()).') }}</p>
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <x-ui.button variant="primary" @click="timer('success')">{{ __('Success Flash') }}</x-ui.button>
-                    <x-ui.button variant="secondary" @click="timer('warning', 5200)">{{ __('Warning Flash') }}</x-ui.button>
+                    <x-ui.button variant="primary" @click="demo('success', '{{ __('Default model updated.') }}')">{{ __('Success') }}</x-ui.button>
+                    <x-ui.button variant="secondary" @click="demo('warning', '{{ __('Availability sync needs attention.') }}')">{{ __('Warning (sticky)') }}</x-ui.button>
+                    <x-ui.button variant="secondary" @click="demo('error', '{{ __('The channel could not be reached.') }}')">{{ __('Error (sticky)') }}</x-ui.button>
                     <x-ui.button variant="ghost" @click="stack()">{{ __('Stack Three') }}</x-ui.button>
                 </div>
 
                 <div class="rounded-2xl border border-dashed border-border-default bg-surface-subtle p-4 text-xs text-muted">
-                    {{ __('Preview behavior: flash notifications appear in the top-right viewport corner, allow stacking, and disappear automatically unless the pattern is later revised for a persistent critical state.') }}
+                    {{ __('These buttons dispatch the real `notify` event handled by the global notification outlet — the same path production code uses. Reach for a notification when feedback follows an action and the user stays on the page; reach for an inline alert (left) when the message is context that should remain on the page.') }}
                 </div>
-
-                <x-ui.flash-stack>
-                    <div x-cloak x-show="success" x-transition.opacity.scale.duration.200ms>
-                        <x-ui.flash
-                            variant="success"
-                            :title="__('Settings Saved')"
-                            :description="__('Compact spacing keeps the message readable without overwhelming the page.')"
-                        />
-                    </div>
-
-                    <div x-cloak x-show="warning" x-transition.opacity.scale.duration.200ms>
-                        <x-ui.flash
-                            variant="warning"
-                            :title="__('Review Needed')"
-                            :description="__('A second flash should stack cleanly under the first with the same internal rhythm.')"
-                        />
-                    </div>
-
-                    <div x-cloak x-show="info" x-transition.opacity.scale.duration.200ms>
-                        <x-ui.flash
-                            variant="info"
-                            :title="__('Background Sync Running')"
-                            :description="__('Use transient info for low-friction operational status, not for durable audit history.')"
-                        />
-                    </div>
-                </x-ui.flash-stack>
             </div>
         </x-ui.card>
     </div>

@@ -1,6 +1,6 @@
 # docs/plans/ui-feedback-notifications.md
 
-Status: In progress — outlet built (severity-tiered persistence); Phases 1–2 done (same-page feedback across Core admin + Commerce now notifies); Phases 3–4 open
+Status: Complete — notification lane built (severity-tiered, two-thirds width), same-page feedback rolled out across Core admin + Commerce, variant styling unified behind StatusVariant, UI Reference demo fires the real event. Minor follow-ups noted.
 Last Updated: 2026-06-21
 Sources: `docs/plans/ui-session-flash-rollout.md`, `resources/core/views/components/ui/{notification-hub,flash,flash-stack}.blade.php`, `app/Base/Foundation/Livewire/Concerns/InteractsWithNotifications.php`, `DESIGN.md`
 Agents: claude/claude-opus-4-8
@@ -75,16 +75,23 @@ Trait wiring: components already using `SavesValidatedFields` get `notify()` tra
 
 Follow-up (minor, deferred): show/detail pages whose every flash became a notification now carry a vestigial `<x-ui.session-flash>` that only fires if a redirect lands there. Harmless; prune where a page is provably not a redirect destination.
 
-### Phase 3 — Unify the variant style map
+### Phase 3 — Unify the variant style map (done)
 
 Goal: one source of truth for variant → `{bg,border,text,glyph}`, consumed by `x-ui.alert`, `x-ui.flash`, and `x-ui.notification-hub`; remove the duplicated `match()`/JS maps.
+Evidence: `app/Base/Foundation/Enums/StatusVariant.php`; `alert`/`flash` consume `classes()` + `icon()`, the hub consumes `StatusVariant::jsMap()` via `@js`. Pint clean, all Blade compiles, 15 alert-rendering tests green (identical class output).
 
-- [ ] Introduce `StatusVariant` (enum or value object) exposing the class set + heroicon glyph, with the `danger`==`error` alias handled once
-- [ ] Refactor `alert`, `flash`, `notification-hub` to consume it (expose to JS via `@js` for the hub)
+- [x] Introduce `StatusVariant` enum exposing `classes()` + `icon()` (heroicon name) + `iconPath()` (for JS) + `jsMap()`, with the `danger`==`error` alias in `fromLabel()` — claude/claude-opus-4-8
+- [x] Refactor `alert`, `flash`, `notification-hub` to consume it (hub via `@js(StatusVariant::jsMap())`) — claude/claude-opus-4-8
 
-### Phase 4 — Make the UI Reference demo real
+### Phase 4 — Make the UI Reference demo real (done)
 
 Goal: the Feedback section demos the production trigger, not bespoke Alpine.
 
-- [ ] Replace the `timer()`/`stack()` demo in `ui-reference/partials/feedback.blade.php` with buttons that dispatch `notify` (show a sticky error + an auto-dismiss success)
-- [ ] Update the surrounding copy: drop "proposed standard"; describe the adopted pattern, severity-tiered persistence, and when to use a notification vs an inline alert
+- [x] Replaced the `timer()`/`stack()` demo in `ui-reference/partials/feedback.blade.php` with buttons that `$dispatch('notify', …)` through the global hub — sticky error + warning and an auto-dismiss success, plus a stack-three — claude/claude-opus-4-8
+- [x] Rewrote the copy: dropped "proposed standard"; describes the adopted severity-tiered pattern and notification-vs-inline-alert guidance — claude/claude-opus-4-8
+
+### Follow-ups (open)
+
+- `x-ui.flash` is now orphaned — the demo no longer uses it and the hub renders its own markup (a Blade component can't be used per dynamic `x-for` item). It still compiles and consumes `StatusVariant`. Left in place rather than deleted (pre-existing public primitive); decide whether to remove it and its inventory row.
+- The 3 admin `session('status')` success alerts (database-incubation, database-tables, deployment) — still on the raw inline block (tracked here and in `ui-session-flash-rollout.md`).
+- Vestigial `<x-ui.session-flash>` on show pages whose every flash became a notification — harmless; prune where a page is provably not a redirect destination.
