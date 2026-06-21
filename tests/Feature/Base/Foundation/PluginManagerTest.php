@@ -6,6 +6,12 @@ use Illuminate\Support\Facades\File;
 
 uses(RefreshDatabase::class);
 
+const PLUGIN_MANAGER_TEST_VERSION = '1.0.0';
+const PLUGIN_MANAGER_EXTENSION_ROOT = 'extensions/';
+const PLUGIN_MANAGER_COMPOSER_JSON = '/composer.json';
+const REQUIRED_PLUGIN_SUFFIX = '/required';
+const DEPENDENT_PLUGIN_SUFFIX = '/dependent';
+
 beforeEach(function (): void {
     setupAuthzRoles();
 })->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
@@ -35,25 +41,25 @@ test('the dashboard treats conventional Core module paths as installed dependenc
 
 test('the dashboard reports incompatible required dependency versions', function (): void {
     $owner = 'zz-plugin-manager-'.bin2hex(random_bytes(4));
-    $required = base_path('extensions/'.$owner.'/required');
-    $dependent = base_path('extensions/'.$owner.'/dependent');
+    $required = base_path(PLUGIN_MANAGER_EXTENSION_ROOT.$owner.REQUIRED_PLUGIN_SUFFIX);
+    $dependent = base_path(PLUGIN_MANAGER_EXTENSION_ROOT.$owner.DEPENDENT_PLUGIN_SUFFIX);
 
     foreach ([$required, $dependent] as $module) {
         File::ensureDirectoryExists($module);
     }
 
-    file_put_contents($required.'/composer.json', json_encode([
-        'name' => $owner.'/required',
-        'extra' => ['blb' => ['module' => $owner.'/required', 'role' => 'source', 'version' => '1.0.0']],
+    file_put_contents($required.PLUGIN_MANAGER_COMPOSER_JSON, json_encode([
+        'name' => $owner.REQUIRED_PLUGIN_SUFFIX,
+        'extra' => ['blb' => ['module' => $owner.REQUIRED_PLUGIN_SUFFIX, 'role' => 'source', 'version' => PLUGIN_MANAGER_TEST_VERSION]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
-    file_put_contents($dependent.'/composer.json', json_encode([
-        'name' => $owner.'/dependent',
+    file_put_contents($dependent.PLUGIN_MANAGER_COMPOSER_JSON, json_encode([
+        'name' => $owner.DEPENDENT_PLUGIN_SUFFIX,
         'extra' => ['blb' => [
-            'module' => $owner.'/dependent',
+            'module' => $owner.DEPENDENT_PLUGIN_SUFFIX,
             'role' => 'plugin',
-            'version' => '1.0.0',
-            'requires-modules' => [$owner.'/required' => '^2.0.0'],
+            'version' => PLUGIN_MANAGER_TEST_VERSION,
+            'requires-modules' => [$owner.REQUIRED_PLUGIN_SUFFIX => '^2.0.0'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
@@ -64,12 +70,12 @@ test('the dashboard reports incompatible required dependency versions', function
 
         $response->assertOk()
             ->assertSee('Module dependency issues')
-            ->assertSee($owner.'/dependent')
-            ->assertSee($owner.'/required')
+            ->assertSee($owner.DEPENDENT_PLUGIN_SUFFIX)
+            ->assertSee($owner.REQUIRED_PLUGIN_SUFFIX)
             ->assertSee('^2.0.0')
-            ->assertSee('1.0.0');
+            ->assertSee(PLUGIN_MANAGER_TEST_VERSION);
     } finally {
-        File::deleteDirectory(base_path('extensions/'.$owner));
+        File::deleteDirectory(base_path(PLUGIN_MANAGER_EXTENSION_ROOT.$owner));
     }
 });
 

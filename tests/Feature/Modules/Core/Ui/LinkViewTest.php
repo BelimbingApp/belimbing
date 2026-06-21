@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Blade;
 const BOX_ARROW = 'M13.5 6H5.25C4.00736 6';      // heroicon-o-arrow-top-right-on-square
 const LINK_GLYPH = 'M13.1903 8.68842';            // heroicon-o-link
 const DOWN_TRAY = 'M3 16.5V18.75C3 19.9926';      // heroicon-o-arrow-down-tray
+const NEW_TAB_TARGET = 'target="_blank"';
 
 it('renders an internal link with wire:navigate and no affordance icon', function (): void {
     $html = html_entity_decode(Blade::render(
@@ -18,7 +19,7 @@ BLADE
         ->toContain('href="/dashboard"')
         ->toContain('wire:navigate')
         ->toContain('Dashboard')
-        ->not->toContain('target="_blank"')
+        ->not->toContain(NEW_TAB_TARGET)
         ->not->toContain('<svg');
 });
 
@@ -40,7 +41,7 @@ BLADE
     ));
 
     expect($html)
-        ->toContain('target="_blank"')
+        ->toContain(NEW_TAB_TARGET)
         ->toContain('rel="noopener noreferrer"')
         ->toContain(BOX_ARROW);
 });
@@ -53,7 +54,7 @@ BLADE
     ));
 
     expect($html)
-        ->toContain('target="_blank"')
+        ->toContain(NEW_TAB_TARGET)
         ->toContain('rel="noopener"')
         ->not->toContain('noreferrer')
         ->toContain(BOX_ARROW);
@@ -69,7 +70,7 @@ BLADE
     expect($html)
         ->toContain('href="#section-5"')
         ->toContain(LINK_GLYPH)
-        ->not->toContain('target="_blank"')
+        ->not->toContain(NEW_TAB_TARGET)
         ->not->toContain('wire:navigate');
 });
 
@@ -93,6 +94,6 @@ BLADE
     ));
 
     expect($html)
-        ->toContain('target="_blank"')
+        ->toContain(NEW_TAB_TARGET)
         ->not->toContain('<svg');
 });

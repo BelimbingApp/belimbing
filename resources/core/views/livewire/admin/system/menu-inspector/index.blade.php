@@ -16,9 +16,10 @@
                     />
                 </div>
                 <div class="md:col-span-3">
+                    <label class="sr-only" for="menu-source-filter">{{ __('Menu source filter') }}</label>
                     <select
+                        id="menu-source-filter"
                         wire:model.live="sourceFilter"
-                        aria-label="{{ __('Menu source filter') }}"
                         class="w-full rounded-md border border-border-default bg-surface-card px-3 py-2 text-sm text-ink"
                     >
                         <option value="all">{{ __('All sources') }}</option>
@@ -28,9 +29,10 @@
                     </select>
                 </div>
                 <div class="md:col-span-2">
+                    <label class="sr-only" for="menu-kind-filter">{{ __('Menu kind filter') }}</label>
                     <select
+                        id="menu-kind-filter"
                         wire:model.live="kindFilter"
-                        aria-label="{{ __('Menu kind filter') }}"
                         class="w-full rounded-md border border-border-default bg-surface-card px-3 py-2 text-sm text-ink"
                     >
                         <option value="all">{{ __('Core + Extensions') }}</option>

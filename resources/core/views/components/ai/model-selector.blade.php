@@ -1,9 +1,20 @@
 @props([
+    'id' => null,
+    'label' => null,
     'models' => [],
 ])
 
+@php
+    $wireModel = $attributes->wire('model')->value();
+    $selectId = $id
+        ?? $attributes->get('id')
+        ?? 'ai-model-selector'.($wireModel ? '-'.preg_replace('/[^A-Za-z0-9_-]+/', '-', $wireModel) : '');
+    $labelText = $label ?? $attributes->get('aria-label') ?? __('AI model');
+@endphp
+
+<label class="sr-only" for="{{ $selectId }}">{{ $labelText }}</label>
 <select
-    {{ $attributes->merge(['aria-label' => __('AI model')])->class([
+    {{ $attributes->merge(['id' => $selectId, 'aria-label' => $labelText])->class([
         'rounded-lg border border-border-input bg-surface-card text-xs text-ink',
         'px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors',
     ]) }}

@@ -1,8 +1,18 @@
 <?php
-$messagingChannel = static fn (string $enabledKey, int $rateLimit): array => [
-    'enabled' => env($enabledKey, false),
-    'rate_limit_per_minute' => $rateLimit,
-];
+
+$messagingChannels = [];
+
+foreach ([
+    'whatsapp' => 60,
+    'telegram' => 30,
+    'slack' => 60,
+    'email' => 30,
+] as $channel => $rateLimit) {
+    $messagingChannels[$channel] = [
+        'enabled' => env('AI_MESSAGING_'.strtoupper($channel).'_ENABLED', false),
+        'rate_limit_per_minute' => $rateLimit,
+    ];
+}
 
 return [
     /*
@@ -106,12 +116,7 @@ return [
             ],
         ],
         'messaging' => [
-            'channels' => [
-                'whatsapp' => $messagingChannel('AI_MESSAGING_WHATSAPP_ENABLED', 60),
-                'telegram' => $messagingChannel('AI_MESSAGING_TELEGRAM_ENABLED', 30),
-                'slack' => $messagingChannel('AI_MESSAGING_SLACK_ENABLED', 60),
-                'email' => $messagingChannel('AI_MESSAGING_EMAIL_ENABLED', 30),
-            ],
+            'channels' => $messagingChannels,
         ],
         'artisan' => [
             // Command prefixes allowed for background (queued) execution.

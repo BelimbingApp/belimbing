@@ -3,9 +3,7 @@
 namespace App\Base\Audit\Services;
 
 use App\Base\Audit\DTO\RequestContext;
-use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Contracts\SemanticActionRecorder;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Str;
 
 class AuditSemanticActionRecorder implements SemanticActionRecorder
@@ -13,6 +11,7 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
     public function __construct(
         private readonly AuditBuffer $buffer,
         private readonly RequestContext $context,
+        private readonly AuditActorResolver $actors,
     ) {}
 
     public function record(
@@ -33,7 +32,7 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
             return;
         }
 
-        $actor = $this->resolveActor();
+        $actor = $this->actors->currentActor();
         $normalizedSubject = $this->normalizeSubject($subject);
 
         $this->buffer->bufferAction([
@@ -59,35 +58,6 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
             'is_retained' => $retain,
             'occurred_at' => now(),
         ]);
-    }
-
-    /**
-     * @return array{type: string, id: int, company_id: int|null}
-     */
-    private function resolveActor(): array
-    {
-        $user = auth()->user();
-
-        if ($user instanceof Authenticatable) {
-            $companyId = $this->context->companyId;
-            if ($companyId === null && method_exists($user, 'getCompanyId')) {
-                $companyId = $user->getCompanyId();
-            }
-
-            return [
-                'type' => method_exists($user, 'principalType')
-                    ? $user->principalType()->value
-                    : PrincipalType::USER->value,
-                'id' => (int) $user->getAuthIdentifier(),
-                'company_id' => $companyId,
-            ];
-        }
-
-        return [
-            'type' => $this->context->actorType ?? PrincipalType::GUEST->value,
-            'id' => $this->context->actorId ?? 0,
-            'company_id' => $this->context->companyId,
-        ];
     }
 
     /**
