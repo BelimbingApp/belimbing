@@ -101,7 +101,7 @@ return [
         ],
         [
             'id' => 'admin.system.update',
-            'label' => 'Update',
+            'label' => 'Software',
             'icon' => 'heroicon-o-arrow-down-circle',
             'parent' => 'admin.system',
         ],

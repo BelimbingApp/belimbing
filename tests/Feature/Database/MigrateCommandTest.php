@@ -40,11 +40,9 @@ function migrationModuleFixture(string $owner, string $suffix, array $blb): stri
 function migrationRequiredAndDependentFixtures(string $owner, string $requiredConstraint = '*'): array
 {
     $required = migrationModuleFixture($owner, MIGRATION_REQUIRED_SUFFIX, [
-        'role' => 'source',
         'version' => MIGRATION_TEST_VERSION,
     ]);
     $dependent = migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
         'version' => MIGRATION_TEST_VERSION,
         'requires-modules' => [$owner.MIGRATION_REQUIRED_SUFFIX => $requiredConstraint],
     ]);
@@ -92,7 +90,6 @@ test('migration commands discover extension migration paths and preserve explici
 test('migration discovery rejects missing required modules before registration', function (): void {
     $owner = 'zz-migration-dependency-'.bin2hex(random_bytes(4));
     migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
         'version' => MIGRATION_TEST_VERSION,
         'requires-modules' => [$owner.MIGRATION_MISSING_SUFFIX => '*'],
     ]);
@@ -207,7 +204,6 @@ test('migration discovery rejects duplicate migration names before Laravel colla
 test('explicit path scopes do not bypass module dependency preflight', function (): void {
     $owner = 'zz-migration-explicit-path-'.bin2hex(random_bytes(4));
     migrationModuleFixture($owner, MIGRATION_DEPENDENT_SUFFIX, [
-        'role' => 'plugin',
         'version' => MIGRATION_TEST_VERSION,
         'requires-modules' => [$owner.MIGRATION_MISSING_SUFFIX => '*'],
     ]);

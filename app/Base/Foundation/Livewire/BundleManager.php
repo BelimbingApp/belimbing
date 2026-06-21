@@ -14,18 +14,18 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Admin plugin-manager screen.
+ * Admin bundle-manager screen.
  *
  * Per docs/plans/plugin-manager-ui.md:
  *  - Installed tab: every BLB module the runtime sees, with manifest
  *    data and dependency health.
- *  - Available tab: plugins discovered from the BelimbingApp org.
+ *  - Available tab: bundles discovered from the BelimbingApp org.
  *    Cached; refreshable; surfaces install commands as copyable text.
  *
  * Read-only by design — no install or migration actions trigger from
  * this screen.
  */
-class PluginManager extends Component
+class BundleManager extends Component
 {
     use InteractsWithNotifications;
 
@@ -55,16 +55,6 @@ class PluginManager extends Component
         $manifests = $reader->all();
         $dependencyIssues = $reader->dependencyIssues($manifests);
 
-        $byRole = [
-            'source' => [],
-            'plugin' => [],
-            'unknown' => [],
-        ];
-        foreach ($manifests as $m) {
-            $role = isset($byRole[$m->role]) ? $m->role : 'unknown';
-            $byRole[$role][] = $m;
-        }
-
         $catalog = app(BelimbingAppCatalogService::class);
         $available = $catalog->available();
         $installedModuleIds = collect($manifests)
@@ -72,9 +62,8 @@ class PluginManager extends Component
             ->filter()
             ->all();
 
-        return view('livewire.base.foundation.plugin-manager', [
+        return view('livewire.base.foundation.bundle-manager', [
             'manifests' => $manifests,
-            'byRole' => $byRole,
             'dependencyIssues' => $dependencyIssues,
             'requiredCount' => $this->countRequired($manifests),
             'optionalCount' => $this->countOptional($manifests),
@@ -128,7 +117,7 @@ class PluginManager extends Component
         }
 
         return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.system.plugins.manage')
+            ->can(Actor::forUser($user), 'admin.system.bundles.manage')
             ->allowed;
     }
 }

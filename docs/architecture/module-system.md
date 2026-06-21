@@ -18,6 +18,19 @@ This document defines the module system that supports Belimbing's core principle
 - **Discovery by Convention** — provider discovery is glob-based; artifact discovery is path-contract based per artifact. A module that satisfies the relevant [discovery contracts](#discovery-contracts) is integrated with no central registration step
 - **Quality-Obsessed** — deep modules with simple interfaces
 
+### Vocabulary
+
+These terms are adjacent and easily conflated. They are not synonyms.
+
+| Term | Meaning |
+|------|---------|
+| **Module** | The *ownership boundary* — a filesystem path that owns its full stack (code, DB artifacts, config, routes, views, tests, discovery contract). |
+| **Distribution Bundle** (operator-facing: **Bundle**) | The *delivery/versioning unit* — the installable, versioned code bundle (git remote/branch/tag/commit today, Composer later). One bundle may contain several modules; a licensee extension bundle is the common case. **Bundle** is the operator-facing short form, used by the admin UI in place of the retired word "plugin." See [Distribution Bundle Model](#distribution-bundle-model). |
+| **Adapter** | A class that implements a provider/contract so variation registers through discovery — e.g. `MarketplaceChannelProvider` (Shopee, Lazada) or `CommerceReadinessContributor` (Ham auto-parts). This is [Mechanism 1](#mechanism-1--contract--adapters-the-default). An adapter is one *contribution*, not a registry. |
+| **Extension seam (contribution registry)** | A module that *discovers and registers contributions from other modules* into a host domain. `Commerce/Plugins` + `CommercePluginRegistry` is the live example: it collects both adapter classes (channel providers, readiness contributors) **and** data/config contributions (catalog presets, template mappings, workbench panels, insight pages). It is an extension point, **not** an adapter, and the contributions it holds are broader than adapters. The historical `Plugins` directory name predates this glossary; read it as "Commerce's extension seam." |
+
+> **Note on "plugin" (retired on operator surfaces):** the word was overloaded across the codebase, meaning three different things — (1) the inventory **dashboard** of installed *modules* plus an available-bundle catalog; (2) `Commerce/Plugins`, an **extension seam** (above); (3) colloquially, an installable unit, which this spec always calls a **Distribution Bundle** and never "plugin." None of these is an *adapter*. The operator-facing surfaces have dropped "plugin": the admin menu group is **Software**, its inventory/catalog screen is **Bundles**, and the pull/build/migrate/reload screen is **Updates**. The `extra.blb.role` field (which carried `source`/`plugin` values) was removed entirely as unused — a module's role is derivable from its dependency edges and was duplicated by the composer `"type"`. The remaining "plugin" tokens are internal: the `Commerce/Plugins` directory / `CommercePluginRegistry`, and the composer package `"type": "blb-plugin"`. When precision matters, prefer Module, Distribution Bundle (Bundle), adapter, or extension seam over "plugin."
+
 ---
 
 ## Directory Structure
@@ -154,7 +167,7 @@ All module roots use the same internal vocabulary. A module includes only the di
 | `Assets/` | Optional module-owned frontend source. It is never auto-injected; the host build must explicitly import reviewed entry points. |
 | `Models/`, `Services/`, `Livewire/`, `Events/`, `Listeners/`, `Hooks/`, `Controllers/` | Module implementation internals. |
 | `Tests/` | Module-owned tests that travel with the module. |
-| `composer.json` | Optional `extra.blb` manifest for module identity, role, version, dependencies, published/consumed events, and coarse schema defaults. |
+| `composer.json` | Optional `extra.blb` manifest for module identity, version, dependencies, published/consumed events, and coarse schema defaults. |
 
 `Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the plugin dashboard. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
 

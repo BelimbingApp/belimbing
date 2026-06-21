@@ -171,7 +171,6 @@ class ModuleManifestReader
         return new ModuleManifest(
             name: $name,
             module: $module,
-            role: (string) ($blb['role'] ?? 'unknown'),
             path: dirname($composerPath),
             version: (string) ($blb['version'] ?? ''),
             description: (string) ($blb['description'] ?? ($data['description'] ?? '')),

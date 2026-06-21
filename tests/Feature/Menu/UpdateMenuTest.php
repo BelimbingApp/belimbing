@@ -2,12 +2,12 @@
 
 use App\Base\Menu\Services\MenuDiscoveryService;
 
-test('update menu groups deployment, business domains, and github access', function (): void {
+test('update menu groups updates, business domains, and github access', function (): void {
     $items = app(MenuDiscoveryService::class)->discover()->keyBy('id');
 
     expect($items->get('admin.system.update.deployment'))
         ->toMatchArray([
-            'label' => 'Deployment',
+            'label' => 'Updates',
             'parent' => 'admin.system.update',
             'route' => 'admin.system.update.deployment.index',
             'permission' => 'admin.system.update.deployment.manage',

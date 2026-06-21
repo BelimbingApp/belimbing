@@ -9,12 +9,12 @@ use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
- * Discovers BLB plugins published under the BelimbingApp GitHub org.
+ * Discovers BLB bundles published under the BelimbingApp GitHub org.
  *
  * Per docs/plans/plugin-manager-ui.md:
  *  - Trusts exactly one source: the BelimbingApp org.
  *  - Anonymous GitHub API access (60 req/hr is comfortable for ~10 repos).
- *  - 24h-default cache in `base_foundation_plugin_catalog_cache`.
+ *  - 24h-default cache in `base_foundation_bundle_catalog_cache`.
  *  - Read-only: no install, no code execution. The UI surfaces a copy-
  *    to-clipboard install command; operators run it from a shell.
  */
@@ -24,9 +24,9 @@ class BelimbingAppCatalogService
 
     private const ORG = 'BelimbingApp';
 
-    private const TOPIC = 'blb-plugin';
+    private const TOPIC = 'blb-bundle';
 
-    private const TABLE = 'base_foundation_plugin_catalog_cache';
+    private const TABLE = 'base_foundation_bundle_catalog_cache';
 
     public function __construct(
         private readonly HttpFactory $http,
@@ -37,13 +37,13 @@ class BelimbingAppCatalogService
      */
     public function ttlHours(): int
     {
-        $configured = (int) config('plugin_catalog.ttl_hours', 24);
+        $configured = (int) config('bundle_catalog.ttl_hours', 24);
 
         return $configured > 0 ? $configured : 24;
     }
 
     /**
-     * @return list<PluginCatalogEntry>
+     * @return list<BundleCatalogEntry>
      */
     public function available(): array
     {
@@ -70,7 +70,7 @@ class BelimbingAppCatalogService
      * Returns the resulting list of entries. Catches per-repo failures
      * so a single malformed composer.json does not abort the whole sync.
      *
-     * @return list<PluginCatalogEntry>
+     * @return list<BundleCatalogEntry>
      */
     public function refresh(): array
     {
@@ -99,7 +99,6 @@ class BelimbingAppCatalogService
                     'default_branch_sha' => $entry->defaultBranchSha,
                     'composer_name' => $entry->composerName,
                     'module_identifier' => $entry->moduleIdentifier,
-                    'role' => $entry->role,
                     'version' => $entry->version,
                     'description' => $entry->description,
                     'manifest' => json_encode($entry->manifest, JSON_THROW_ON_ERROR),
@@ -169,7 +168,7 @@ class BelimbingAppCatalogService
     /**
      * @param  array<string, mixed>  $repo
      */
-    private function buildEntryForRepo(array $repo): ?PluginCatalogEntry
+    private function buildEntryForRepo(array $repo): ?BundleCatalogEntry
     {
         $repoName = (string) ($repo['name'] ?? '');
         $htmlUrl = (string) ($repo['html_url'] ?? '');
@@ -191,12 +190,11 @@ class BelimbingAppCatalogService
 
         $sha = $this->fetchDefaultBranchSha($repoName, $defaultBranch);
 
-        return new PluginCatalogEntry(
+        return new BundleCatalogEntry(
             repoName: $repoName,
             htmlUrl: $htmlUrl,
             composerName: (string) ($manifestData['name'] ?? ''),
             moduleIdentifier: (string) ($blb['module'] ?? ''),
-            role: (string) ($blb['role'] ?? 'unknown'),
             version: (string) ($blb['version'] ?? ''),
             description: (string) ($blb['description'] ?? ($manifestData['description'] ?? '')),
             defaultBranch: $defaultBranch,
@@ -240,7 +238,7 @@ class BelimbingAppCatalogService
         return is_string($sha) ? $sha : null;
     }
 
-    private function rowToEntry(object $row): PluginCatalogEntry
+    private function rowToEntry(object $row): BundleCatalogEntry
     {
         $manifest = [];
         if (is_string($row->manifest)) {
@@ -248,12 +246,11 @@ class BelimbingAppCatalogService
             $manifest = is_array($decodedManifest) ? $decodedManifest : [];
         }
 
-        return new PluginCatalogEntry(
+        return new BundleCatalogEntry(
             repoName: (string) $row->repo_name,
             htmlUrl: (string) $row->html_url,
             composerName: (string) ($row->composer_name ?? ''),
             moduleIdentifier: (string) ($row->module_identifier ?? ''),
-            role: (string) ($row->role ?? 'unknown'),
             version: (string) ($row->version ?? ''),
             description: (string) ($row->description ?? ''),
             defaultBranch: $row->default_branch === null ? null : (string) $row->default_branch,

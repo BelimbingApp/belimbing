@@ -3,11 +3,11 @@
 return [
     'items' => [
         [
-            'id' => 'admin.system.plugins',
-            'label' => 'Plugins',
+            'id' => 'admin.system.bundles',
+            'label' => 'Bundles',
             'icon' => 'heroicon-o-puzzle-piece',
-            'route' => 'admin.system.plugins.index',
-            'permission' => 'admin.system.plugins.view',
+            'route' => 'admin.system.bundles.index',
+            'permission' => 'admin.system.bundles.view',
             'parent' => 'admin.system',
         ],
         [

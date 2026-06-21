@@ -30,8 +30,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
 
     $attendance = collect($manifests)->firstWhere('name', 'blb/people-attendance');
 
-    expect($attendance->role)->toBe('source')
-        ->and($attendance->version)->not->toBe('')
+    expect($attendance->version)->not->toBe('')
         ->and($attendance->description)->not->toBe('')
         ->and($attendance->publishesEvents)->toContain(
             'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
@@ -40,8 +39,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
 
     $payroll = collect($manifests)->firstWhere('name', 'blb/payroll-my');
 
-    expect($payroll->role)->toBe('plugin')
-        ->and($payroll->version)->not->toBe('')
+    expect($payroll->version)->not->toBe('')
         ->and($payroll->description)->not->toBe('')
         ->and($payroll->consumesEvents)->toContain(
             'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
@@ -69,7 +67,6 @@ it('reads extension manifests from owner and module depth', function (): void {
         'extra' => [
             'blb' => [
                 'module' => ACME_PAYROLL_MODULE,
-                'role' => 'plugin',
                 'version' => '1.2.3',
             ],
         ],
@@ -97,14 +94,13 @@ it('uses manifest module identity instead of also accepting the conventional pat
 
     file_put_contents($canonical.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => ACME_PAYROLL_MODULE,
-        'extra' => ['blb' => ['module' => 'vendor/payroll', 'role' => 'plugin', 'version' => MODULE_MANIFEST_TEST_VERSION]],
+        'extra' => ['blb' => ['module' => 'vendor/payroll', 'version' => MODULE_MANIFEST_TEST_VERSION]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     file_put_contents($dependent.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => ACME_DEPENDENT_MODULE,
         'extra' => ['blb' => [
             'module' => ACME_DEPENDENT_MODULE,
-            'role' => 'plugin',
             'version' => MODULE_MANIFEST_TEST_VERSION,
             'requires-modules' => [ACME_PAYROLL_MODULE => '*'],
         ]],
@@ -135,13 +131,12 @@ it('uses the filesystem identity and manifest version when the module id is omit
 
     file_put_contents($required.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => $owner.REQUIRED_MODULE_SUFFIX,
-        'extra' => ['blb' => ['role' => 'source', 'version' => '1.2.0']],
+        'extra' => ['blb' => ['version' => '1.2.0']],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
 
     file_put_contents($dependent.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => $owner.'/dependent',
         'extra' => ['blb' => [
-            'role' => 'plugin',
             'version' => MODULE_MANIFEST_TEST_VERSION,
             'requires-modules' => [$owner.REQUIRED_MODULE_SUFFIX => '^1.0'],
         ]],
@@ -165,13 +160,12 @@ it('reports incompatible required module versions', function (): void {
     foreach ([
         'Required' => [
             'name' => ACME_REQUIRED_MODULE,
-            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'role' => 'source', 'version' => MODULE_MANIFEST_TEST_VERSION]],
+            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'version' => MODULE_MANIFEST_TEST_VERSION]],
         ],
         'Dependent' => [
             'name' => ACME_DEPENDENT_MODULE,
             'extra' => ['blb' => [
                 'module' => ACME_DEPENDENT_MODULE,
-                'role' => 'plugin',
                 'version' => MODULE_MANIFEST_TEST_VERSION,
                 'requires-modules' => [ACME_REQUIRED_MODULE => '^2.0.0'],
             ]],
@@ -201,7 +195,7 @@ it('accepts common composer-style required module version constraints', function
     $manifests = [
         'Required' => [
             'name' => ACME_REQUIRED_MODULE,
-            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'role' => 'source', 'version' => '2.1.3']],
+            'extra' => ['blb' => ['module' => ACME_REQUIRED_MODULE, 'version' => '2.1.3']],
         ],
     ];
 
@@ -216,7 +210,6 @@ it('accepts common composer-style required module version constraints', function
             'name' => $module,
             'extra' => ['blb' => [
                 'module' => $module,
-                'role' => 'plugin',
                 'requires-modules' => [ACME_REQUIRED_MODULE => $case['constraint']],
             ]],
         ];
@@ -251,7 +244,6 @@ it('does not count disabled domains as installed dependencies', function (): voi
         'name' => 'test/enabled-consumer',
         'extra' => ['blb' => [
             'module' => 'zz-enabled-for-manifest-test/consumer',
-            'role' => 'plugin',
             'requires-modules' => ['zz-disabled-for-manifest-test/provider' => '*'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));

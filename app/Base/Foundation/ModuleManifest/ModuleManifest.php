@@ -19,7 +19,6 @@ final readonly class ModuleManifest
     public function __construct(
         public string $name,
         public string $module,
-        public string $role,
         public string $path,
         public string $version = '',
         public string $description = '',

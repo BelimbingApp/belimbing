@@ -5,12 +5,12 @@ namespace App\Base\Foundation\ModuleManifest;
 use DateTimeImmutable;
 
 /**
- * One plugin discovered from the BelimbingApp catalog.
+ * One bundle discovered from the BelimbingApp catalog.
  *
  * Immutable value object; the catalog service builds these from cached
  * rows and returns lists to the UI.
  */
-final readonly class PluginCatalogEntry
+final readonly class BundleCatalogEntry
 {
     /**
      * @param  array<string, mixed>  $manifest  Raw extra.blb block as parsed JSON.
@@ -20,7 +20,6 @@ final readonly class PluginCatalogEntry
         public string $htmlUrl,
         public string $composerName,
         public string $moduleIdentifier,
-        public string $role,
         public string $version,
         public string $description,
         public ?string $defaultBranch,

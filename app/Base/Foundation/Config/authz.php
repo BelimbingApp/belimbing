@@ -2,10 +2,10 @@
 
 return [
     'capabilities' => [
-        // Plugin manager UI (admin/system/plugins). Read-only by design;
+        // Bundle manager UI (admin/system/bundles). Read-only by design;
         // see docs/plans/plugin-manager-ui.md.
-        'admin.system.plugins.view',
-        'admin.system.plugins.manage',
+        'admin.system.bundles.view',
+        'admin.system.bundles.manage',
 
         // Business domain manager UI (admin/system/update/business-domains).
         // Code install/uninstall stays in the shell; manage gates the

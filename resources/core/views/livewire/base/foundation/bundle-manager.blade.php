@@ -1,6 +1,6 @@
 <div class="space-y-6">
     <header class="space-y-1">
-        <h1 class="text-2xl font-semibold text-ink">{{ __('Plugin manager') }}</h1>
+        <h1 class="text-2xl font-semibold text-ink">{{ __('Bundles') }}</h1>
         <p class="text-sm text-muted">{{ __('What the runtime sees, plus what is available from BelimbingApp. Read-only by design — installation runs from a shell.') }}</p>
     </header>
 
@@ -50,75 +50,68 @@
             </x-ui.card>
         </div>
 
-        @foreach (['plugin' => __('Plugins'), 'source' => __('Source modules'), 'unknown' => __('Other / unrecognised role')] as $role => $heading)
-            @if (count($byRole[$role]) > 0)
-                <section class="space-y-2">
-                    <h2 class="text-lg font-semibold text-ink">{{ $heading }}</h2>
-                    <div class="grid gap-4 md:grid-cols-2">
-                        @foreach ($byRole[$role] as $m)
-                            <x-ui.card wire:key="manifest-{{ $m->module ?: $m->name }}">
-                                <div class="flex items-start justify-between gap-2">
-                                    <div>
-                                        <div class="font-medium text-ink">{{ $m->module ?: $m->name }}</div>
-                                        <div class="font-mono text-xs text-muted">{{ $m->name }}</div>
-                                    </div>
-                                    <span class="rounded-full border border-border-default px-2 py-0.5 text-xs text-muted">{{ $m->version ?: __('unversioned') }}</span>
-                                </div>
-                                @if ($m->description !== '')
-                                    <p class="mt-2 text-sm text-muted">{{ $m->description }}</p>
-                                @endif
-
-                                @if (count($m->requiresModules) > 0)
-                                    <div class="mt-3 text-xs">
-                                        <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Requires') }}</div>
-                                        <ul class="mt-1 space-y-0.5">
-                                            @foreach ($m->requiresModules as $required => $constraint)
-                                                <li class="font-mono">{{ $required }} <span class="text-muted">{{ $constraint }}</span></li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-
-                                @if (count($m->optionalModules) > 0)
-                                    <div class="mt-2 text-xs">
-                                        <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Optional') }}</div>
-                                        <ul class="mt-1 space-y-0.5">
-                                            @foreach ($m->optionalModules as $optional => $constraint)
-                                                <li class="font-mono">{{ $optional }} <span class="text-muted">{{ $constraint }}</span></li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-
-                                @if (count($m->publishesEvents) > 0)
-                                    <div class="mt-2 text-xs">
-                                        <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Publishes') }}</div>
-                                        <ul class="mt-1 space-y-0.5 font-mono">
-                                            @foreach ($m->publishesEvents as $event)
-                                                <li class="break-all">{{ class_basename($event) }} <span class="text-muted">({{ $event }})</span></li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-
-                                @if (count($m->consumesEvents) > 0)
-                                    <div class="mt-2 text-xs">
-                                        <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Consumes') }}</div>
-                                        <ul class="mt-1 space-y-0.5 font-mono">
-                                            @foreach ($m->consumesEvents as $event)
-                                                <li class="break-all">{{ class_basename($event) }} <span class="text-muted">({{ $event }})</span></li>
-                                            @endforeach
-                                        </ul>
-                                    </div>
-                                @endif
-
-                                <div class="mt-3 font-mono text-xs text-muted">{{ $m->path }}</div>
-                            </x-ui.card>
-                        @endforeach
+        <div class="grid gap-4 md:grid-cols-2">
+            @foreach ($manifests as $m)
+                <x-ui.card wire:key="manifest-{{ $m->module ?: $m->name }}">
+                    <div class="flex items-start justify-between gap-2">
+                        <div>
+                            <div class="font-medium text-ink">{{ $m->module ?: $m->name }}</div>
+                            <div class="font-mono text-xs text-muted">{{ $m->name }}</div>
+                        </div>
+                        <span class="rounded-full border border-border-default px-2 py-0.5 text-xs text-muted">{{ $m->version ?: __('unversioned') }}</span>
                     </div>
-                </section>
-            @endif
-        @endforeach
+                    @if ($m->description !== '')
+                        <p class="mt-2 text-sm text-muted">{{ $m->description }}</p>
+                    @endif
+
+                    @if (count($m->requiresModules) > 0)
+                        <div class="mt-3 text-xs">
+                            <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Requires') }}</div>
+                            <ul class="mt-1 space-y-0.5">
+                                @foreach ($m->requiresModules as $required => $constraint)
+                                    <li class="font-mono">{{ $required }} <span class="text-muted">{{ $constraint }}</span></li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if (count($m->optionalModules) > 0)
+                        <div class="mt-2 text-xs">
+                            <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Optional') }}</div>
+                            <ul class="mt-1 space-y-0.5">
+                                @foreach ($m->optionalModules as $optional => $constraint)
+                                    <li class="font-mono">{{ $optional }} <span class="text-muted">{{ $constraint }}</span></li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if (count($m->publishesEvents) > 0)
+                        <div class="mt-2 text-xs">
+                            <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Publishes') }}</div>
+                            <ul class="mt-1 space-y-0.5 font-mono">
+                                @foreach ($m->publishesEvents as $event)
+                                    <li class="break-all">{{ class_basename($event) }} <span class="text-muted">({{ $event }})</span></li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    @if (count($m->consumesEvents) > 0)
+                        <div class="mt-2 text-xs">
+                            <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Consumes') }}</div>
+                            <ul class="mt-1 space-y-0.5 font-mono">
+                                @foreach ($m->consumesEvents as $event)
+                                    <li class="break-all">{{ class_basename($event) }} <span class="text-muted">({{ $event }})</span></li>
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endif
+
+                    <div class="mt-3 font-mono text-xs text-muted">{{ $m->path }}</div>
+                </x-ui.card>
+            @endforeach
+        </div>
     @endif
 
     @if ($tab === 'available')
@@ -137,7 +130,7 @@
 
         @if (count($catalogEntries) === 0)
             <x-ui.card>
-                <p class="text-sm text-muted">{{ __('No catalog entries cached. Refresh from GitHub to discover BelimbingApp plugins.') }}</p>
+                <p class="text-sm text-muted">{{ __('No catalog entries cached. Refresh from GitHub to discover BelimbingApp bundles.') }}</p>
             </x-ui.card>
         @else
             <div class="grid gap-4 md:grid-cols-2">
@@ -159,11 +152,6 @@
                         @if ($entry->description !== '')
                             <p class="mt-2 text-sm text-muted">{{ $entry->description }}</p>
                         @endif
-
-                        <div class="mt-3 text-xs">
-                            <div class="font-semibold uppercase tracking-wide text-muted">{{ __('Role') }}</div>
-                            <div class="font-mono">{{ $entry->role }}</div>
-                        </div>
 
                         @if (! $isInstalled)
                             <div class="mt-3 text-xs">

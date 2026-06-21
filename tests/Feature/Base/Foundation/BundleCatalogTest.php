@@ -1,6 +1,6 @@
 <?php
 
-use App\Base\Foundation\Livewire\PluginManager;
+use App\Base\Foundation\Livewire\BundleManager;
 use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -9,7 +9,7 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
-const PLUGIN_CATALOG_PAYROLL_MODULE = 'people/payroll';
+const BUNDLE_CATALOG_PAYROLL_MODULE = 'people/payroll';
 
 beforeEach(function (): void {
     setupAuthzRoles();
@@ -23,13 +23,13 @@ function fakeBelimbingAppCatalog(): void
                 'name' => 'blb-payroll-my',
                 'html_url' => 'https://github.com/BelimbingApp/blb-payroll-my',
                 'default_branch' => 'main',
-                'topics' => ['blb-plugin', 'payroll'],
+                'topics' => ['blb-bundle', 'payroll'],
             ],
             [
                 'name' => 'blb-payroll-sg',
                 'html_url' => 'https://github.com/BelimbingApp/blb-payroll-sg',
                 'default_branch' => 'main',
-                'topics' => ['blb-plugin'],
+                'topics' => ['blb-bundle'],
             ],
             [
                 'name' => 'unrelated-repo',
@@ -43,8 +43,7 @@ function fakeBelimbingAppCatalog(): void
             'description' => 'Composer-level description',
             'extra' => [
                 'blb' => [
-                    'module' => PLUGIN_CATALOG_PAYROLL_MODULE,
-                    'role' => 'plugin',
+                    'module' => BUNDLE_CATALOG_PAYROLL_MODULE,
                     'version' => '0.1.0',
                     'description' => 'Payroll — Malaysia reference plugin.',
                 ],
@@ -54,8 +53,7 @@ function fakeBelimbingAppCatalog(): void
             'name' => 'blb/payroll-sg',
             'extra' => [
                 'blb' => [
-                    'module' => PLUGIN_CATALOG_PAYROLL_MODULE.'-sg',
-                    'role' => 'plugin',
+                    'module' => BUNDLE_CATALOG_PAYROLL_MODULE.'-sg',
                     'version' => '0.0.1',
                     'description' => 'Payroll — Singapore (hypothetical).',
                 ],
@@ -67,14 +65,14 @@ function fakeBelimbingAppCatalog(): void
     ]);
 }
 
-test('catalog refresh fetches BelimbingApp repos with blb-plugin topic', function (): void {
+test('catalog refresh fetches BelimbingApp repos with blb-bundle topic', function (): void {
     fakeBelimbingAppCatalog();
 
     $entries = app(BelimbingAppCatalogService::class)->refresh();
 
     expect($entries)->toHaveCount(2)
         ->and($entries[0]->repoName)->toBe('blb-payroll-my')
-        ->and($entries[0]->moduleIdentifier)->toBe(PLUGIN_CATALOG_PAYROLL_MODULE)
+        ->and($entries[0]->moduleIdentifier)->toBe(BUNDLE_CATALOG_PAYROLL_MODULE)
         ->and($entries[0]->version)->toBe('0.1.0');
 });
 
@@ -84,9 +82,9 @@ test('catalog tab renders cached entries with the Installed badge on live module
 
     $this->actingAs(createAdminUser());
 
-    Livewire::test(PluginManager::class, ['tab' => 'available'])
+    Livewire::test(BundleManager::class, ['tab' => 'available'])
         ->assertSee('blb-payroll-my')
-        ->assertSee(PLUGIN_CATALOG_PAYROLL_MODULE)
+        ->assertSee(BUNDLE_CATALOG_PAYROLL_MODULE)
         ->assertSee('blb-payroll-sg')
         ->assertSee('Installed')                 // people/payroll is locally installed
         ->assertSee('git clone https://github.com/BelimbingApp/blb-payroll-sg.git'); // SG not installed → command shown
@@ -97,7 +95,7 @@ test('refreshCatalog action populates the cache and switches tab', function (): 
 
     $this->actingAs(createAdminUser());
 
-    Livewire::test(PluginManager::class)
+    Livewire::test(BundleManager::class)
         ->call('refreshCatalog')
         ->assertSet('tab', 'available')
         ->assertSee('blb-payroll-my')
@@ -108,11 +106,11 @@ test('refreshCatalog action populates the cache and switches tab', function (): 
         );
 });
 
-test('refreshCatalog requires the system.plugins.manage capability', function (): void {
+test('refreshCatalog requires the system.bundles.manage capability', function (): void {
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $response = $this->get(route('admin.system.plugins.index'));
+    $response = $this->get(route('admin.system.bundles.index'));
 
     // Even getting to the page fails on the read capability — manage is strictly stricter.
     $response->assertForbidden();
