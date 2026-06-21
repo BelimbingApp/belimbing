@@ -113,10 +113,10 @@
                                 {{-- Uncommitted/unpushed changes inside a bundle's own nested repo never show in the platform repo's git status; surface them here so a tool that wrote into the bundle (e.g. schema incubation) can't leave the operator in the dark. --}}
                                 <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                                     @if ($s['working_tree']['dirty'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this bundle — commit them in its repository.')">{{ __(':count uncommitted :noun', ['count' => $s['working_tree']['dirty'], 'noun' => $s['working_tree']['dirty'] === 1 ? __('change') : __('changes')]) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this bundle — commit them in its repository.')">{{ trans_choice('{1} :count uncommitted change|[2,*] :count uncommitted changes', (int) $s['working_tree']['dirty'], ['count' => $s['working_tree']['dirty']]) }}</x-ui.badge>
                                     @endif
                                     @if ($s['working_tree']['ahead'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this bundle\'s remote.')">{{ __(':count unpushed :noun', ['count' => $s['working_tree']['ahead'], 'noun' => $s['working_tree']['ahead'] === 1 ? __('commit') : __('commits')]) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this bundle\'s remote.')">{{ trans_choice('{1} :count unpushed commit|[2,*] :count unpushed commits', (int) $s['working_tree']['ahead'], ['count' => $s['working_tree']['ahead']]) }}</x-ui.badge>
                                     @endif
                                 </div>
                             @endif
