@@ -100,7 +100,7 @@ test('refreshCatalog action populates the cache and switches tab', function (): 
     Livewire::test(PluginManager::class)
         ->call('refreshCatalog')
         ->assertSet('tab', 'available')
-        ->assertSee('Catalog refreshed from GitHub');
+        ->assertSee('blb-payroll-my');
 });
 
 test('refreshCatalog requires the system.plugins.manage capability', function (): void {
