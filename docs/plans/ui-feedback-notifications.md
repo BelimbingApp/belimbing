@@ -90,6 +90,20 @@ Goal: the Feedback section demos the production trigger, not bespoke Alpine.
 - [x] Replaced the `timer()`/`stack()` demo in `ui-reference/partials/feedback.blade.php` with buttons that `$dispatch('notify', …)` through the global hub — sticky error + warning and an auto-dismiss success, plus a stack-three — claude/claude-opus-4-8
 - [x] Rewrote the copy: dropped "proposed standard"; describes the adopted severity-tiered pattern and notification-vs-inline-alert guidance — claude/claude-opus-4-8
 
+### Phase 5 — App-wide rollout (done, with one deferral)
+
+Extended the same-page→`notify` conversion beyond the original Core-admin scope to the rest of the app, classifying each flash site by whether its method redirects (broad audit including `redirectRoute`/`redirectIntended`/`->redirect`). Committed per repo (Core/Base + nested Commerce, Operation, People).
+
+- [x] Core/Base remainder: cache, database residue/queries/schema-incubation, settings form, integration parameters, GitHub access, plugin manager, AI advanced-settings + Lara, company departments/relationships/index, address index, employee/user index, geonames postcodes — claude/claude-opus-4-8
+- [x] Commerce: Catalog (categories/templates/attributes), Inventory item concerns, Marketplace eBay (index + settings) — claude/claude-opus-4-8
+- [x] Operation: IT ticket, Quality NCR + SCAR show pages — claude/claude-opus-4-8
+- [x] People (non-Attendance): Claim, Leave, Payroll, Employees, Settings — claude/claude-opus-4-8
+- [ ] **People Attendance — deferred.** Policy groups, allowance rules, rosters, shift templates are heavily covered by `AttendancePolicyOperationsTest`, which asserts flash text via `assertSee`. Converting requires migrating those assertions to `assertDispatched('notify', ...)` first. Reverted to keep the suite green; do this as a focused pass.
+
+Post-redirect flashes left on the session lane throughout (all `*Create`/`*Edit`, domain install/disable/enable/uninstall, query create/delete, db-table reconcile redirect, eBay OAuth). Auth `status`, OAuth callback, and custom keys (`command-log`, `locale-status`) untouched. Two latent redirect-misclassifications were caught and reverted during the pass (`DomainManager`, `DatabaseTables\Show` — both use `redirectRoute`, which the first-pass `redirect(` grep missed).
+
+Note: People has 4 pre-existing `*DoesNotImportPayroll`/`PayrollIntakeBoundary` test failures unrelated to this work (confirmed failing on a clean tree).
+
 ### Follow-ups (open)
 
 - `x-ui.flash` is now orphaned — the demo no longer uses it and the hub renders its own markup (a Blade component can't be used per dynamic `x-for` item). It still compiles and consumes `StatusVariant`. Left in place rather than deleted (pre-existing public primitive); decide whether to remove it and its inventory row.
