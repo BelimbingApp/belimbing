@@ -19,6 +19,7 @@ const MIGRATION_TEST_VERSION = '1.0.0';
 const MIGRATION_MISSING_SUFFIX = '/missing';
 
 afterEach(function (): void {
+    app()->forgetInstance('migrator');
     app()->forgetInstance(Migrator::class);
 });
 
