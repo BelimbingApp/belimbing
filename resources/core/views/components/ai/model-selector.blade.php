@@ -14,7 +14,8 @@
 
 <label class="sr-only" for="{{ $selectId }}">{{ $labelText }}</label>
 <select
-    {{ $attributes->merge(['id' => $selectId, 'aria-label' => $labelText])->class([
+    id="{{ $selectId }}"
+    {{ $attributes->except(['id', 'aria-label'])->class([
         'rounded-lg border border-border-input bg-surface-card text-xs text-ink',
         'px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors',
     ]) }}

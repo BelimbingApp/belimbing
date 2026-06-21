@@ -6,8 +6,8 @@
 function sbHhmmToMins(hhmm) {
     if (!hhmm || typeof hhmm !== 'string') return 0
     const parts = hhmm.split(':')
-    const h = parseInt(parts[0], 10) || 0
-    const m = parseInt(parts[1], 10) || 0
+    const h = Number.parseInt(parts[0], 10) || 0
+    const m = Number.parseInt(parts[1], 10) || 0
     return ((h * 60 + m) % 1440 + 1440) % 1440
 }
 
@@ -503,22 +503,22 @@ document.addEventListener('alpine:init', () => {
             })
             this.$watch(() => this.$wire.shiftInWindowBeforeMinutes, v => {
                 if (this._fromWire) return
-                this.graceIn = parseInt(v) || 0
+                this.graceIn = Number.parseInt(v) || 0
                 this._scheduleRedraw()
             })
             this.$watch(() => this.$wire.shiftInWindowAfterMinutes, v => {
                 if (this._fromWire) return
-                this.inAfter = parseInt(v) || 0
+                this.inAfter = Number.parseInt(v) || 0
                 this._scheduleRedraw()
             })
             this.$watch(() => this.$wire.shiftOutWindowBeforeMinutes, v => {
                 if (this._fromWire) return
-                this.outBefore = parseInt(v) || 0
+                this.outBefore = Number.parseInt(v) || 0
                 this._scheduleRedraw()
             })
             this.$watch(() => this.$wire.shiftOutWindowAfterMinutes, v => {
                 if (this._fromWire) return
-                this.graceOut = parseInt(v) || 0
+                this.graceOut = Number.parseInt(v) || 0
                 this._scheduleRedraw()
             })
 
@@ -538,10 +538,10 @@ document.addEventListener('alpine:init', () => {
             this.break2End   = this.hasBreak2 ? sbHhmmToMins(br2.ends_at)   : 0
             this.break1Paid  = !!(br?.paid)
             this.break2Paid  = !!(br2?.paid)
-            this.graceIn    = parseInt(this.$wire.shiftInWindowBeforeMinutes  || '60')  || 0
-            this.inAfter    = parseInt(this.$wire.shiftInWindowAfterMinutes   || '15')  || 0
-            this.outBefore  = parseInt(this.$wire.shiftOutWindowBeforeMinutes || '15')  || 0
-            this.graceOut   = parseInt(this.$wire.shiftOutWindowAfterMinutes  || '120') || 0
+            this.graceIn    = Number.parseInt(this.$wire.shiftInWindowBeforeMinutes  || '60')  || 0
+            this.inAfter    = Number.parseInt(this.$wire.shiftInWindowAfterMinutes   || '15')  || 0
+            this.outBefore  = Number.parseInt(this.$wire.shiftOutWindowBeforeMinutes || '15')  || 0
+            this.graceOut   = Number.parseInt(this.$wire.shiftOutWindowAfterMinutes  || '120') || 0
         },
 
         _syncToWire() {
@@ -615,8 +615,8 @@ document.addEventListener('alpine:init', () => {
 
         parseTime(field, val) {
             const parts = (val || '').trim().split(':')
-            const h = parseInt(parts[0], 10)
-            const m = parseInt(parts[1], 10) || 0
+            const h = Number.parseInt(parts[0], 10)
+            const m = Number.parseInt(parts[1], 10) || 0
             if (!Number.isNaN(h)) {
                 this[field] = ((h * 60 + m) % 1440 + 1440) % 1440
                 if (field.startsWith('break2')) this.hasBreak2 = true
@@ -630,7 +630,7 @@ document.addEventListener('alpine:init', () => {
         setGrace(field, val) {
             const max = { graceIn: 120, inAfter: 60, outBefore: 60, graceOut: 240 }[field]
             if (max === undefined) return
-            let v = parseInt(val, 10)
+            let v = Number.parseInt(val, 10)
             if (Number.isNaN(v)) v = 0
             this[field] = Math.max(0, Math.min(max, v))
             this._redraw()

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Company\Models;
 
+use App\Modules\Core\Company\Models\Concerns\BuildsCompanyAuditEntries;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,6 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CompanyRelationship extends Model
 {
+    use BuildsCompanyAuditEntries;
     use HasFactory, SoftDeletes;
 
     /**
@@ -108,7 +110,7 @@ class CompanyRelationship extends Model
             $companyIds[] = $this->getOriginal('related_company_id');
         }
 
-        return $this->companyAuditEntries($companyIds, $currentCompanyId, $event, $oldValues, $newValues);
+        return $this->companyAuditEntries($companyIds, $event, $oldValues, $newValues, $currentCompanyId);
     }
 
     /**
@@ -254,38 +256,5 @@ class CompanyRelationship extends Model
         $query->whereHas('type', function ($q): void {
             $q->where('is_external', false);
         });
-    }
-
-    /**
-     * @param  array<int, mixed>  $companyIds
-     * @param  array<string, mixed>  $oldValues
-     * @param  array<string, mixed>  $newValues
-     * @return list<array<string, mixed>>
-     */
-    private function companyAuditEntries(array $companyIds, ?int $excludedCompanyId, string $event, array $oldValues, array $newValues): array
-    {
-        $entries = [];
-
-        foreach ($companyIds as $companyId) {
-            if ($companyId === null || $companyId === '') {
-                continue;
-            }
-
-            $id = (int) $companyId;
-
-            if ($id === $excludedCompanyId) {
-                continue;
-            }
-
-            $entries['company#'.$id] = [
-                'subject_name' => 'company',
-                'subject_id' => $id,
-                'event' => $event,
-                'old_values' => $oldValues,
-                'new_values' => $newValues,
-            ];
-        }
-
-        return array_values($entries);
     }
 }

@@ -29,6 +29,7 @@ class DeploymentService
     public function __construct(
         private readonly DistributionBundleRepository $bundles,
         private readonly DeploymentBuildRunner $buildRunner,
+        private readonly DeploymentAdminEndpointResolver $adminEndpoints,
         private readonly DeploymentRunHistory $history,
     ) {}
 
@@ -265,7 +266,7 @@ class DeploymentService
         $reloadMessage = '';
         $adminUrl = '';
 
-        foreach ($this->adminEndpointCandidates() as [$host, $port]) {
+        foreach ($this->adminEndpoints->candidates() as [$host, $port]) {
             $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
 
             try {
@@ -305,44 +306,6 @@ class DeploymentService
         return $log;
     }
 
-    /**
-     * Candidate host+port pairs for the FrankenPHP/Caddy admin API.
-     *
-     * octane:start records it in its server-state file, so we read it from there (the
-     * same source octane:reload trusts) rather than guessing — the stock Caddy admin
-     * port 2019 is wrong for several BLB setups. Explicit env vars still win for
-     * non-Octane or unusual hosts; otherwise probe the Windows launcher's default
-     * 2020 before Caddy's stock 2019.
-     *
-     * @return list<array{0: string, 1: string}>
-     */
-    private function adminEndpointCandidates(): array
-    {
-        $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: null;
-        $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: null;
-        [$stateHost, $statePort] = $this->octaneAdminEndpoint();
-
-        if ($host !== null || $port !== null) {
-            return [[$host ?: ($stateHost ?: '127.0.0.1'), $port ?: ($statePort ?: '2019')]];
-        }
-
-        $candidates = [];
-
-        if ($stateHost !== null || $statePort !== null) {
-            $candidates[] = [$stateHost ?: '127.0.0.1', $statePort ?: '2019'];
-        }
-
-        $candidates[] = ['127.0.0.1', '2020'];
-        $candidates[] = ['127.0.0.1', '2019'];
-
-        $unique = [];
-        foreach ($candidates as $candidate) {
-            $unique[implode(':', $candidate)] = $candidate;
-        }
-
-        return array_values($unique);
-    }
-
     private function clearRuntimeCaches(): string
     {
         Artisan::call('optimize:clear');
@@ -375,29 +338,6 @@ class DeploymentService
         return (string) __('Warning: runtime bootstrap warmup failed before worker reload: :message', [
             'message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $warm->exitCode()]),
         ]);
-    }
-
-    /**
-     * @return array{0: string|null, 1: string|null}
-     */
-    private function octaneAdminEndpoint(): array
-    {
-        $statePath = storage_path('logs/octane-server-state.json');
-        $state = is_file($statePath)
-            ? json_decode((string) file_get_contents($statePath), true)
-            : null;
-
-        if (! is_array($state)) {
-            return [null, null];
-        }
-
-        // Octane nests live values under "state"; fall back to the top level defensively.
-        $admin = is_array($state['state'] ?? null) ? $state['state'] : $state;
-
-        return [
-            is_string($admin['adminHost'] ?? null) ? $admin['adminHost'] : null,
-            isset($admin['adminPort']) ? (string) $admin['adminPort'] : null,
-        ];
     }
 
     /**

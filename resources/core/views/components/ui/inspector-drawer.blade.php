@@ -154,11 +154,10 @@
             @click.stop
             :style="panelStyle()"
             class="pointer-events-auto relative flex h-full w-screen flex-col border-l border-border-default bg-surface-card shadow-xl sm:w-auto"
-            role="dialog"
-            aria-modal="false"
             aria-labelledby="{{ $labelledby }}"
         >
-            <div
+            <button
+                type="button"
                 @pointerdown.prevent="startResize($event)"
                 @dblclick.prevent="toggleFullWidth()"
                 @keydown.left.prevent="resizeBy($event.shiftKey ? 120 : 40)"
@@ -169,20 +168,14 @@
                 @keydown.space.prevent="toggleFullWidth()"
                 class="group absolute inset-y-0 left-0 z-20 hidden w-4 cursor-ew-resize items-stretch justify-center focus:outline-none focus:ring-2 focus:ring-accent sm:flex"
                 :class="isFullWidth() ? 'ml-0' : '-ml-2'"
-                role="separator"
-                tabindex="0"
                 aria-label="{{ __('Resize inspector panel') }}"
-                aria-orientation="vertical"
-                :aria-valuemin="PANEL_MIN"
-                :aria-valuemax="maxWidth()"
-                :aria-valuenow="panelWidth"
             >
                 <span
                     aria-hidden="true"
                     class="my-4 w-1 rounded-full transition-colors"
                     :class="isResizing ? 'bg-accent' : 'bg-transparent group-hover:bg-border-default group-focus:bg-border-default'"
                 ></span>
-            </div>
+            </button>
 
             {{ $slot }}
         </section>
