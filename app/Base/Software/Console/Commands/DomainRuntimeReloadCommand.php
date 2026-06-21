@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Base\Update\Console\Commands;
+namespace App\Base\Software\Console\Commands;
 
-use App\Base\Update\Services\DeploymentService;
-use App\Base\Update\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Services\DeploymentService;
+use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Throwable;

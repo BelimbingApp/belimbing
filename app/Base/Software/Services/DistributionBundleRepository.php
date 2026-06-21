@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Base\Update\Services;
+namespace App\Base\Software\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Support\Git\GitRepository;

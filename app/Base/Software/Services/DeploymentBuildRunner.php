@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Base\Update\Services;
+namespace App\Base\Software\Services;
 
 use App\Base\Support\PhpCli;
 use Illuminate\Contracts\Process\ProcessResult;

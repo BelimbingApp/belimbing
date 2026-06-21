@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Base\Update\Livewire\GitHubAccess;
+namespace App\Base\Software\Livewire\GitHubAccess;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
-use App\Base\Update\Services\DeploymentService;
+use App\Base\Software\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
@@ -76,7 +76,7 @@ class Index extends Component
 
     public function render(DeploymentService $deployment): View
     {
-        return view('livewire.admin.system.update.github-access.index', [
+        return view('livewire.admin.system.software.github-access.index', [
             'owners' => $deployment->owners(),
         ]);
     }

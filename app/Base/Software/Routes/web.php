@@ -1,8 +1,8 @@
 <?php
 
-use App\Base\Update\Http\Controllers\DeploymentRecoveryController;
-use App\Base\Update\Livewire\Deployment\Index as DeploymentIndex;
-use App\Base\Update\Livewire\GitHubAccess\Index as GitHubAccessIndex;
+use App\Base\Software\Http\Controllers\DeploymentRecoveryController;
+use App\Base\Software\Livewire\Deployment\Index as DeploymentIndex;
+use App\Base\Software\Livewire\GitHubAccess\Index as GitHubAccessIndex;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {

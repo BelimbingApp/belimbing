@@ -1,12 +1,12 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Update\Livewire\GitHubAccess\Index;
-use App\Base\Update\Services\DeploymentAdminEndpointResolver;
-use App\Base\Update\Services\DeploymentBuildRunner;
-use App\Base\Update\Services\DeploymentRunHistory;
-use App\Base\Update\Services\DeploymentService;
-use App\Base\Update\Services\DistributionBundleRepository;
+use App\Base\Software\Livewire\GitHubAccess\Index;
+use App\Base\Software\Services\DeploymentAdminEndpointResolver;
+use App\Base\Software\Services\DeploymentBuildRunner;
+use App\Base\Software\Services\DeploymentRunHistory;
+use App\Base\Software\Services\DeploymentService;
+use App\Base\Software\Services\DistributionBundleRepository;
 use Livewire\Livewire;
 
 beforeEach(function (): void {

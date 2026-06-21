@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Base\Update\Http\Controllers;
+namespace App\Base\Software\Http\Controllers;
 
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;

@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Base\Update;
+namespace App\Base\Software;
 
-use App\Base\Update\Console\Commands\DomainRuntimeReloadCommand;
+use App\Base\Software\Console\Commands\DomainRuntimeReloadCommand;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider

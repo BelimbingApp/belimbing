@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Base\Update\Livewire\Deployment;
+namespace App\Base\Software\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
-use App\Base\Update\Services\DeploymentRunHistory;
-use App\Base\Update\Services\DeploymentService;
+use App\Base\Software\Services\DeploymentRunHistory;
+use App\Base\Software\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Session;
@@ -75,7 +75,7 @@ class Index extends Component
         $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
         $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
 
-        return view('livewire.admin.system.update.deployment.index', [
+        return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
             'behind' => collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false),
             'checkFailures' => collect($status)

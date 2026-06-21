@@ -2,11 +2,11 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Support\PhpCli;
-use App\Base\Update\Livewire\Deployment\Index;
-use App\Base\Update\Services\DeploymentRunHistory;
-use App\Base\Update\Services\DeploymentService;
-use App\Base\Update\Services\DistributionBundleRepository;
-use App\Base\Update\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Livewire\Deployment\Index;
+use App\Base\Software\Services\DeploymentRunHistory;
+use App\Base\Software\Services\DeploymentService;
+use App\Base\Software\Services\DistributionBundleRepository;
+use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
