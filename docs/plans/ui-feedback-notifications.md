@@ -98,14 +98,19 @@ Extended the same-page→`notify` conversion beyond the original Core-admin scop
 - [x] Commerce: Catalog (categories/templates/attributes), Inventory item concerns, Marketplace eBay (index + settings) — claude/claude-opus-4-8
 - [x] Operation: IT ticket, Quality NCR + SCAR show pages — claude/claude-opus-4-8
 - [x] People (non-Attendance): Claim, Leave, Payroll, Employees, Settings — claude/claude-opus-4-8
-- [ ] **People Attendance — deferred.** Policy groups, allowance rules, rosters, shift templates are heavily covered by `AttendancePolicyOperationsTest`, which asserts flash text via `assertSee`. Converting requires migrating those assertions to `assertDispatched('notify', ...)` first. Reverted to keep the suite green; do this as a focused pass.
+- [x] **People Attendance** — policy groups, allowance rules, rosters (+ concerns), shift templates, operations, approvals, my-attendance; `InteractsWithAttendanceScreen` and roster concerns reach `notify` via their hosts. Migrated the 16 `AttendancePolicyOperationsTest` flash assertions from `assertSee(...)` to `assertDispatched('notify', ...)` — claude/claude-opus-4-8
+- [x] `ChecksCapabilityAuthorization` permission-denied guard → `notifyError` (both hosts already had the trait) — claude/claude-opus-4-8
 
 Post-redirect flashes left on the session lane throughout (all `*Create`/`*Edit`, domain install/disable/enable/uninstall, query create/delete, db-table reconcile redirect, eBay OAuth). Auth `status`, OAuth callback, and custom keys (`command-log`, `locale-status`) untouched. Two latent redirect-misclassifications were caught and reverted during the pass (`DomainManager`, `DatabaseTables\Show` — both use `redirectRoute`, which the first-pass `redirect(` grep missed).
 
 Note: People has 4 pre-existing `*DoesNotImportPayroll`/`PayrollIntakeBoundary` test failures unrelated to this work (confirmed failing on a clean tree).
 
-### Follow-ups (open)
+### Follow-ups
 
-- `x-ui.flash` is now orphaned — the demo no longer uses it and the hub renders its own markup (a Blade component can't be used per dynamic `x-for` item). It still compiles and consumes `StatusVariant`. Left in place rather than deleted (pre-existing public primitive); decide whether to remove it and its inventory row.
-- The 3 admin `session('status')` success alerts (database-incubation, database-tables, deployment) — still on the raw inline block (tracked here and in `ui-session-flash-rollout.md`).
-- Vestigial `<x-ui.session-flash>` on show pages whose every flash became a notification — harmless; prune where a page is provably not a redirect destination.
+- [x] `x-ui.flash` removed — orphaned once the demo and Commerce item page stopped using it and the hub renders its own markup. `x-ui.flash-stack` kept (positioning for the hub). Inventory row dropped — claude/claude-opus-4-8
+- **Kept on session-flash deliberately** — the 3 admin `session('status')` alerts: `deployment` is post-redirect (recovery controller `->with('status')`); `database-tables` has no clear same-page setter; `database-incubation` is same-page but entangled with `DatabaseTablesIncubationManagementTest` assertions for low value. Not worth converting.
+- **Vestigial `<x-ui.session-flash>`** on show pages whose every flash became a notification — left in place (harmless; only fires if a redirect lands there). Pruning needs per-page redirect-destination proof; low value, deferred.
+
+### Verification
+
+The rendered notification markup was verified server-side (`Blade::render` of `x-ui.notification-hub` and `x-ui.flash-stack width="wide"`): two-thirds width (`w-2/3`), `z-[60]` above modals, `notify.window` listener, `aria-live`, the `sticky` severity list, the 4700 ms dwell, and the variant + close icons all present. The dispatch path is covered by `ModelNotificationFeedbackTest`. Live Alpine runtime (timers/transitions in a real browser) was not click-tested — that requires an authenticated admin session.
