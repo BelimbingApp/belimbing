@@ -67,21 +67,14 @@ class SourceHistory extends Component
     {
         $authUser = auth()->user();
 
-        if ($authUser === null) {
-            return false;
-        }
-
-        if ($this->sourceCapability === '') {
+        if ($authUser === null || $this->sourceCapability === '') {
             return false;
         }
 
         $authorization = app(AuthorizationService::class);
         $actor = Actor::forUser($authUser);
 
-        if (! $authorization->can($actor, 'admin.audit.log.list')->allowed) {
-            return false;
-        }
-
-        return $authorization->can($actor, $this->sourceCapability)->allowed;
+        return $authorization->can($actor, 'admin.audit.log.list')->allowed
+            && $authorization->can($actor, $this->sourceCapability)->allowed;
     }
 }

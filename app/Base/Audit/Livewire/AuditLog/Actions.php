@@ -35,6 +35,12 @@ class Actions extends Component
 
     public string $sortDir = 'desc';
 
+    private const COALESCED_TEXT_PREFIX = 'lower(coalesce(';
+
+    private const COALESCED_TEXT_SUFFIX = ', \'\'))';
+
+    private const SQL_LIKE_PLACEHOLDER = ' like ?';
+
     private const SORTABLE = [
         'occurred_at' => 'base_audit_actions.occurred_at',
         'event' => 'base_audit_actions.event',
@@ -107,17 +113,17 @@ class Actions extends Component
                     $trace = app(AuditLogPresenter::class)->normalizeTrace((string) $search);
 
                     $q->whereRaw('lower(base_audit_actions.event) like ?', [$like])
-                        ->orWhereRaw('lower(coalesce(users.name, \'\')) like ?', [$like])
-                        ->orWhereRaw('lower(coalesce(base_audit_actions.actor_role, \'\')) like ?', [$like])
-                        ->orWhereRaw('lower(coalesce(base_audit_actions.url, \'\')) like ?', [$like])
-                        ->orWhereRaw('lower(coalesce('.$this->ipAddressTextExpression().', \'\')) like ?', [$like])
-                        ->orWhereRaw('lower(coalesce(base_audit_actions.user_agent, \'\')) like ?', [$like]);
+                        ->orWhereRaw($this->coalescedTextLike('users.name'), [$like])
+                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.actor_role'), [$like])
+                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.url'), [$like])
+                        ->orWhereRaw($this->coalescedTextLike($this->ipAddressTextExpression()), [$like])
+                        ->orWhereRaw($this->coalescedTextLike('base_audit_actions.user_agent'), [$like]);
 
                     if ($trace !== '') {
                         $q->orWhereRaw('base_audit_actions.trace_id like ?', ['%'.$trace.'%']);
                     }
 
-                    $q->orWhereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', [$like]);
+                    $q->orWhereRaw($this->coalescedTextLike($this->payloadTextExpression()), [$like]);
                 });
             })
             ->when($this->filterActorType, function ($query, $actorType): void {
@@ -144,7 +150,7 @@ class Actions extends Component
             'auth' => $query->where('base_audit_actions.event', 'like', 'auth.%'),
             'console' => $query->where('base_audit_actions.event', 'console.command'),
             'queue' => $query->where('base_audit_actions.event', 'like', 'queue.job.%'),
-            'product' => $query->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%semantic%']),
+            'product' => $query->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%semantic%']),
             'domain' => $query->where('base_audit_actions.event', 'like', 'domain.%'),
             default => null,
         };
@@ -166,11 +172,11 @@ class Actions extends Component
                     })
                     ->orWhere(function (Builder $domain): void {
                         $domain->where('base_audit_actions.event', 'like', 'domain.%')
-                            ->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%failed%']);
+                            ->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%failed%']);
                     })
                     ->orWhere(function (Builder $semantic): void {
-                        $semantic->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%semantic%'])
-                            ->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) like ?', ['%failed%']);
+                        $semantic->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%semantic%'])
+                            ->whereRaw($this->coalescedTextLike($this->payloadTextExpression()), ['%failed%']);
                     });
             }),
             'retained' => $query->where('base_audit_actions.is_retained', true),
@@ -201,12 +207,12 @@ class Actions extends Component
 
     private function whereNotPayloadLike(Builder $query, string $needle): void
     {
-        $query->whereRaw('lower(coalesce('.$this->payloadTextExpression().', \'\')) not like ?', ['%'.strtolower($needle).'%']);
+        $query->whereRaw($this->coalescedTextExpression($this->payloadTextExpression()).' not'.self::SQL_LIKE_PLACEHOLDER, ['%'.strtolower($needle).'%']);
     }
 
     private function whereNotUrlLike(Builder $query, string $needle): void
     {
-        $query->whereRaw('lower(coalesce(base_audit_actions.url, \'\')) not like ?', ['%'.strtolower($needle).'%']);
+        $query->whereRaw($this->coalescedTextExpression('base_audit_actions.url').' not'.self::SQL_LIKE_PLACEHOLDER, ['%'.strtolower($needle).'%']);
     }
 
     private function payloadTextExpression(): string
@@ -229,6 +235,16 @@ class Actions extends Component
     private function httpStatusExpression(): string
     {
         return 'coalesce('.$this->payloadIntegerExpression('status').', 0)';
+    }
+
+    private function coalescedTextLike(string $expression): string
+    {
+        return $this->coalescedTextExpression($expression).self::SQL_LIKE_PLACEHOLDER;
+    }
+
+    private function coalescedTextExpression(string $expression): string
+    {
+        return self::COALESCED_TEXT_PREFIX.$expression.self::COALESCED_TEXT_SUFFIX;
     }
 
     private function payloadIntegerExpression(string $key): string

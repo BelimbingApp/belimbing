@@ -67,34 +67,7 @@ final class AuditSourceHistory
                     ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
             })
             ->select('base_audit_mutations.*', 'users.name as actor_name')
-            ->where(function (Builder $query) use ($subjects, $auditableType, $normalizedAuditableId): void {
-                if ($auditableType !== null && $normalizedAuditableId !== null) {
-                    $query->orWhere(function (Builder $direct) use ($auditableType, $normalizedAuditableId): void {
-                        $direct->where('base_audit_mutations.auditable_type', $auditableType)
-                            ->where('base_audit_mutations.auditable_id', $normalizedAuditableId)
-                            ->where('base_audit_mutations.source', '!=', 'expanded');
-                    });
-                }
-
-                foreach ($subjects as $subject) {
-                    $name = $this->stringOrNull($subject['name'] ?? null);
-                    $id = $this->idOrNull($subject['id'] ?? null);
-
-                    if ($name === null || $id === null) {
-                        continue;
-                    }
-
-                    $query->orWhere(function (Builder $subjectQuery) use ($name, $id, $subject): void {
-                        $subjectQuery->where('base_audit_mutations.subject_name', $name)
-                            ->where('base_audit_mutations.subject_id', $id);
-
-                        $identifier = $this->stringOrNull($subject['identifier'] ?? null);
-                        if ($identifier !== null) {
-                            $subjectQuery->where('base_audit_mutations.subject_identifier', $identifier);
-                        }
-                    });
-                }
-            })
+            ->where(fn (Builder $query): Builder => $this->applyRecordScope($query, $subjects, $auditableType, $normalizedAuditableId))
             ->tap(fn (Builder $query): Builder => $this->applySearch($query, $search));
 
         $total = (clone $query)->count('base_audit_mutations.id');
@@ -118,6 +91,49 @@ final class AuditSourceHistory
             'limit' => $limit,
             'total' => $total,
         ];
+    }
+
+    /**
+     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     */
+    private function applyRecordScope(Builder $query, array $subjects, ?string $auditableType, ?string $auditableId): Builder
+    {
+        if ($auditableType !== null && $auditableId !== null) {
+            $query->orWhere(function (Builder $direct) use ($auditableType, $auditableId): void {
+                $direct->where('base_audit_mutations.auditable_type', $auditableType)
+                    ->where('base_audit_mutations.auditable_id', $auditableId)
+                    ->where('base_audit_mutations.source', '!=', 'expanded');
+            });
+        }
+
+        $this->applySubjectScopes($query, $subjects);
+
+        return $query;
+    }
+
+    /**
+     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     */
+    private function applySubjectScopes(Builder $query, array $subjects): void
+    {
+        foreach ($subjects as $subject) {
+            $name = $this->stringOrNull($subject['name'] ?? null);
+            $id = $this->idOrNull($subject['id'] ?? null);
+
+            if ($name === null || $id === null) {
+                continue;
+            }
+
+            $query->orWhere(function (Builder $subjectQuery) use ($name, $id, $subject): void {
+                $subjectQuery->where('base_audit_mutations.subject_name', $name)
+                    ->where('base_audit_mutations.subject_id', $id);
+
+                $identifier = $this->stringOrNull($subject['identifier'] ?? null);
+                if ($identifier !== null) {
+                    $subjectQuery->where('base_audit_mutations.subject_identifier', $identifier);
+                }
+            });
+        }
     }
 
     /** @return array<string, mixed> */
