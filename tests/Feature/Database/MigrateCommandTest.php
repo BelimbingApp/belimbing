@@ -19,8 +19,7 @@ const MIGRATION_TEST_VERSION = '1.0.0';
 const MIGRATION_MISSING_SUFFIX = '/missing';
 
 afterEach(function (): void {
-    $property = new ReflectionProperty(Migrator::class, 'paths');
-    $property->setValue(app(Migrator::class), []);
+    app()->forgetInstance(Migrator::class);
 });
 
 function migrationModuleFixture(string $owner, string $suffix, array $blb): string
