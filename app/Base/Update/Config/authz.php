@@ -2,7 +2,7 @@
 
 return [
     'capabilities' => [
-        'admin.system.update.github-access.manage',
-        'admin.system.update.deployment.manage',
+        'admin.system.software.github-access.manage',
+        'admin.system.software.deployment.manage',
     ],
 ];

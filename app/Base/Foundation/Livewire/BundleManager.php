@@ -117,7 +117,7 @@ class BundleManager extends Component
         }
 
         return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.system.bundles.manage')
+            ->can(Actor::forUser($user), 'admin.system.software.bundles.manage')
             ->allowed;
     }
 }

@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 /**
- * Admin business-domain manager screen (admin/system/update/business-domains).
+ * Admin business-domain manager screen (admin/system/software/business-domains).
  *
  * A fresh install ships Base + Core only; this screen is where an operator
  * installs official domains (clone + migrate), disables or re-enables an
@@ -48,7 +48,7 @@ class DomainManager extends Component
             : __(':domain install failed.', ['domain' => $domain]));
         session()->flash('command-log', $result['log']);
 
-        $this->redirectRoute('admin.system.update.business-domains.index');
+        $this->redirectRoute('admin.system.software.business-domains.index');
     }
 
     public function disable(string $domain, DomainInstaller $installer): void
@@ -60,7 +60,7 @@ class DomainManager extends Component
         session()->flash('success', __(':domain disabled. Its code stays on disk and its data stays claimed; discovery skips it from the next page load.', ['domain' => $domain]));
         $this->flashReloadLog($reloadLog);
 
-        $this->redirectRoute('admin.system.update.business-domains.index');
+        $this->redirectRoute('admin.system.software.business-domains.index');
     }
 
     public function enable(string $domain, DomainInstaller $installer): void
@@ -72,7 +72,7 @@ class DomainManager extends Component
         session()->flash('success', __(':domain enabled.', ['domain' => $domain]));
         $this->flashReloadLog($reloadLog);
 
-        $this->redirectRoute('admin.system.update.business-domains.index');
+        $this->redirectRoute('admin.system.software.business-domains.index');
     }
 
     public function openUninstall(string $domain): void
@@ -121,7 +121,7 @@ class DomainManager extends Component
 
         $this->flashReloadLog($result['reloadLog']);
 
-        $this->redirectRoute('admin.system.update.business-domains.index');
+        $this->redirectRoute('admin.system.software.business-domains.index');
     }
 
     public function render(DomainInstaller $installer): View
@@ -163,7 +163,7 @@ class DomainManager extends Component
         }
 
         return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.system.update.business-domain.manage')
+            ->can(Actor::forUser($user), 'admin.system.software.business-domain.manage')
             ->allowed;
     }
 

@@ -39,7 +39,7 @@
                         <p class="font-medium">{{ __('The site is in maintenance mode.') }}</p>
                         <p class="mt-1 text-sm">{{ __('Visitors currently see a 503 page — an update may have been interrupted before it could finish. Bring the site back online once the deployment is in a good state.') }}</p>
                     </div>
-                    <form method="POST" action="{{ route('admin.system.update.online') }}" class="shrink-0">
+                    <form method="POST" action="{{ route('admin.system.software.online') }}" class="shrink-0">
                         @csrf
                         <x-ui.button type="submit" variant="primary">{{ __('Bring back online') }}</x-ui.button>
                     </form>
@@ -50,7 +50,7 @@
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
                 {{ __('Could not check latest commits for these Distribution Bundles: :bundles. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['bundles' => implode(', ', $checkFailures)]) }}
-                <a href="{{ route('admin.system.update.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
+                <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
             </x-ui.alert>
         @endif
 
@@ -63,7 +63,7 @@
                             <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
                         </div>
                         <p class="mt-1 text-sm text-muted">{{ __('Update pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, then gracefully reloads workers. Private repositories use the token set in') }}
-                            <a href="{{ route('admin.system.update.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
+                            <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
                         <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" :disabled="! $behind">

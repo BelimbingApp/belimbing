@@ -33,7 +33,7 @@ test('github access page lists the deployment owners for admins', function (): v
     $user = createAdminUser();
 
     $this->actingAs($user)
-        ->get(route('admin.system.update.github-access.index'))
+        ->get(route('admin.system.software.github-access.index'))
         ->assertOk()
         ->assertSee('GitHub Access')
         ->assertSee('kiatng')         // private extension owner (blb-ham)

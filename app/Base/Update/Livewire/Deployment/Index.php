@@ -20,7 +20,7 @@ use Livewire\Component;
 class Index extends Component
 {
     /** @var list<string> last action's log lines (persists so the resting panel survives a page visit) */
-    #[Session('admin.system.update.deployment.run_log')]
+    #[Session('admin.system.software.deployment.run_log')]
     public array $log = [];
 
     public function updateRepo(string $key, DeploymentService $deployment, DeploymentRunHistory $history): void
@@ -111,7 +111,7 @@ class Index extends Component
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
-            'admin.system.update.deployment.manage',
+            'admin.system.software.deployment.manage',
         );
     }
 

@@ -8,11 +8,11 @@ use Livewire\Livewire;
 
 it('lands on the user-preferred menu item when it is still visible', function (): void {
     $user = createAdminUser();
-    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.update.business-domain']]);
+    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.software.business-domain']]);
 
     $this->actingAs($user)
         ->get('/')
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 });
 
 it('lands legacy update menu preferences on their renamed pages', function (): void {
@@ -22,13 +22,13 @@ it('lands legacy update menu preferences on their renamed pages', function (): v
 
     $this->actingAs($user)
         ->get('/')
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.update.belimbing']]);
 
     $this->actingAs($user)
         ->get('/')
-        ->assertRedirect(route('admin.system.update.deployment.index'));
+        ->assertRedirect(route('admin.system.software.deployment.index'));
 });
 
 it('falls back to the dashboard when the preference is unknown or inaccessible', function (): void {
@@ -48,7 +48,7 @@ it('lands domain-capable admins on the Business Domains screen when no domains a
 
     $this->actingAs(createAdminUser())
         ->get('/')
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 });
 
 it('lands ordinary users on the dashboard even when no domains are installed', function (): void {
@@ -67,11 +67,11 @@ it('saves the landing preference from the profile page', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Profile::class)
-        ->set('landingMenuId', 'admin.system.update.business-domain')
+        ->set('landingMenuId', 'admin.system.software.business-domain')
         ->call('updateProfileInformation')
         ->assertHasNoErrors();
 
-    expect($user->refresh()->prefs[LandingPageResolver::PREF_KEY])->toBe('admin.system.update.business-domain');
+    expect($user->refresh()->prefs[LandingPageResolver::PREF_KEY])->toBe('admin.system.software.business-domain');
 
     Livewire::test(Profile::class)
         ->set('landingMenuId', '')

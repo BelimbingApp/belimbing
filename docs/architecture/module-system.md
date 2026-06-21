@@ -76,7 +76,7 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 ### Domain Lifecycle
 
-A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Update → Business Domains** or by equivalent deployment automation.
+A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Business Domains** or by equivalent deployment automation.
 
 - **Installed:** the domain Distribution Bundle is present and participates in discovery.
 - **Disabled:** the Distribution Bundle remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.

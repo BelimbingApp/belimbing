@@ -85,7 +85,7 @@ class Index extends Component
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
-            'admin.system.update.github-access.manage',
+            'admin.system.software.github-access.manage',
         );
     }
 }

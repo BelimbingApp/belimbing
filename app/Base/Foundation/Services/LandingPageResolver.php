@@ -46,7 +46,7 @@ class LandingPageResolver
         }
 
         if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
-            return route('admin.system.update.business-domains.index', absolute: false);
+            return route('admin.system.software.business-domains.index', absolute: false);
         }
 
         return route('dashboard', absolute: false);
@@ -65,8 +65,8 @@ class LandingPageResolver
     private function normalizePreference(string $preference): string
     {
         return match ($preference) {
-            'admin.system.domains' => 'admin.system.update.business-domain',
-            'admin.system.update.belimbing' => 'admin.system.update.deployment',
+            'admin.system.domains' => 'admin.system.software.business-domain',
+            'admin.system.update.belimbing' => 'admin.system.software.deployment',
             default => $preference,
         };
     }
@@ -74,7 +74,7 @@ class LandingPageResolver
     private function canViewBusinessDomains(mixed $user): bool
     {
         return $this->authz
-            ->can(Actor::forUser($user), 'admin.system.update.business-domain.view')
+            ->can(Actor::forUser($user), 'admin.system.software.business-domain.view')
             ->allowed;
     }
 }

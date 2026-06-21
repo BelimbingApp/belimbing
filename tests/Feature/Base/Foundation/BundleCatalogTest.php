@@ -110,7 +110,7 @@ test('refreshCatalog requires the system.bundles.manage capability', function ()
     $user = User::factory()->create();
     $this->actingAs($user);
 
-    $response = $this->get(route('admin.system.bundles.index'));
+    $response = $this->get(route('admin.system.software.bundles.index'));
 
     // Even getting to the page fails on the read capability — manage is strictly stricter.
     $response->assertForbidden();

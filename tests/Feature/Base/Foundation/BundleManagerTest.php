@@ -19,7 +19,7 @@ beforeEach(function (): void {
 test('admin sees the bundle manager page with installed module cards', function (): void {
     $this->actingAs(createAdminUser());
 
-    $response = $this->get(route('admin.system.bundles.index'));
+    $response = $this->get(route('admin.system.software.bundles.index'));
 
     $response->assertOk()
         ->assertSee('Bundles')
@@ -32,7 +32,7 @@ test('admin sees the bundle manager page with installed module cards', function 
 test('the dashboard treats conventional Core module paths as installed dependencies', function (): void {
     $this->actingAs(createAdminUser());
 
-    $response = $this->get(route('admin.system.bundles.index'));
+    $response = $this->get(route('admin.system.software.bundles.index'));
 
     $response->assertOk()
         ->assertSee('All required module dependencies are satisfied.')
@@ -65,7 +65,7 @@ test('the dashboard reports incompatible required dependency versions', function
     try {
         $this->actingAs(createAdminUser());
 
-        $response = $this->get(route('admin.system.bundles.index'));
+        $response = $this->get(route('admin.system.software.bundles.index'));
 
         $response->assertOk()
             ->assertSee('Module dependency issues')
@@ -83,7 +83,7 @@ test('the bundle manager requires the system.bundles.view capability', function 
 
     $this->actingAs($user);
 
-    $response = $this->get(route('admin.system.bundles.index'));
+    $response = $this->get(route('admin.system.software.bundles.index'));
 
     $response->assertForbidden();
 });

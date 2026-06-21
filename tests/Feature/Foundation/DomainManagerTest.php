@@ -62,7 +62,7 @@ function flushDomainManagerAuditBuffer(): void
 it('renders the Business Domains page with installed domains and a residue pointer', function (): void {
     $this->actingAs(createAdminUser());
 
-    $this->get(route('admin.system.update.business-domains.index'))
+    $this->get(route('admin.system.software.business-domains.index'))
         ->assertOk()
         ->assertSee('Business Domains')
         ->assertSee('Installed business domains')
@@ -72,7 +72,7 @@ it('renders the Business Domains page with installed domains and a residue point
 it('denies the page to users without the view capability', function (): void {
     $this->actingAs(User::factory()->create());
 
-    $this->get(route('admin.system.update.business-domains.index'))->assertForbidden();
+    $this->get(route('admin.system.software.business-domains.index'))->assertForbidden();
 });
 
 it('shows catalog domains without a checkout as available to install', function (): void {
@@ -103,7 +103,7 @@ it('shows installed date and installer from retained audit actions', function ()
         'actor_id' => $user->id,
         'actor_role' => 'core_admin',
         'ip_address' => '127.0.0.1',
-        'url' => route('admin.system.update.business-domains.index'),
+        'url' => route('admin.system.software.business-domains.index'),
         'user_agent' => 'Feature test',
         'event' => 'domain.install',
         'payload' => json_encode([
@@ -161,7 +161,7 @@ it('installs an available domain and redirects back', function (): void {
 
     Livewire::test(DomainManager::class)
         ->call('install', DOMAIN_MANAGER_FIXTURE_DOMAIN)
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'clone', DOMAIN_MANAGER_FIXTURE_REPO, app_path(DOMAIN_MANAGER_FIXTURE_PATH)]);
 
@@ -182,7 +182,7 @@ it('redirects stale Livewire domain actions to login before running them', funct
 
     configureManagedDomainCatalog();
 
-    $response = $this->get(route('admin.system.update.business-domains.index'))->assertOk();
+    $response = $this->get(route('admin.system.software.business-domains.index'))->assertOk();
     $snapshot = Utils::extractAttributeDataFromHtml($response->getContent(), 'wire:snapshot');
     $csrf = csrf_token();
 
@@ -222,14 +222,14 @@ it('disables and re-enables an installed domain', function (): void {
     Livewire::test(DomainManager::class)
         ->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertSessionHas('command-log')
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeTrue();
 
     Livewire::test(DomainManager::class)
         ->call('enable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
         ->assertSessionHas('command-log')
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     expect(DomainState::isDisabled(DOMAIN_MANAGER_FIXTURE_DOMAIN))->toBeFalse();
 });
@@ -249,7 +249,7 @@ it('records the disabling actor and timestamp from the manager action', function
 
     Livewire::test(DomainManager::class)
         ->call('disable', DOMAIN_MANAGER_FIXTURE_DOMAIN)
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     Carbon::setTestNow();
 
@@ -315,7 +315,7 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
         ->set('uninstallPhrase', 'uninstall zzmanaged')
         ->call('uninstall')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     Carbon::setTestNow();
 
@@ -346,7 +346,7 @@ it('uninstalls and drops tables when the drop phrase is typed', function (): voi
         ->set('uninstallPhrase', 'uninstall zzmanaged and drop all tables')
         ->call('uninstall')
         ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.update.business-domains.index'));
+        ->assertRedirect(route('admin.system.software.business-domains.index'));
 
     expect(is_dir(app_path(DOMAIN_MANAGER_FIXTURE_PATH)))->toBeFalse()
         ->and(Schema::hasTable(DOMAIN_MANAGER_FIXTURE_TABLE))->toBeFalse();
