@@ -235,6 +235,107 @@ and increases OPcache memory. `scripts/start-app.ps1` loads it automatically via
 editing it. The Defender exclusions above are the larger win; this is
 complementary.
 
+## File Locks During Renames, Moves, and Branch Switches (Important)
+
+On Windows a file or directory cannot be renamed, moved, or deleted while any
+process holds an open handle to it — or to a file inside it — that was not opened
+with the `FILE_SHARE_DELETE` sharing flag. An open handle to a single file
+**pins the whole path**, so an ancestor directory cannot be renamed either. The
+symptom is an operation failing with one of:
+
+```text
+Permission denied
+Access to the path '...' is denied.
+The process cannot access the file because it is being used by another process.
+```
+
+This bites `git mv`, `git checkout`/branch switches that add or remove
+directories, `Rename-Item`, `Remove-Item`, and any refactor that moves folders.
+Linux and WSL2 do not behave this way — they let you rename or unlink open
+files (the inode lives until the last handle closes) — so it only appears on the
+native Windows path.
+
+The impact differs sharply between development and production — treat them
+separately.
+
+### Dev gotcha — watchers and editors block refactors
+
+In a dev session the path is almost always pinned by a **file watcher or
+editor**, and the durable fix is the share-delete principle:
+
+> Every long-running process that reads or watches the source tree should open
+> files with full sharing — `FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE`
+> — so it never pins the path. Renames and deletes then succeed while it keeps
+> running, with nothing to stop first.
+
+The sharing mode belongs to each tool (Node/libuv, your editor, the C runtime),
+not to PHP or Laravel, so "ensuring share-delete" means using compliant tools.
+Mapped to the BLB Windows dev stack:
+
+| Tool | Status / lever |
+|------|----------------|
+| Windows Defender, Search indexer | Already share-delete — scan without blocking renames (they cost compile *time*, not locks; see [Performance](#performance-important)). |
+| Git for Windows, Composer | Already compliant. |
+| VS Code / Cursor watcher | Modern versions are share-delete; keep the editor updated. A stale language server can still pin files — close the folder if it does. |
+| **Vite / Node watcher** (`scripts/start-app.ps1`) | The usual blocker; its native watch handle is not reliably share-delete and the flag is not a Vite option. Lever: set `server.watch.usePolling` in `vite.config.js` so it stat-polls instead of holding a directory handle (costs CPU), or just don't run it during a structural change. |
+| FrankenPHP / `php.exe` | Not a blocker — reads and closes source files; OPcache holds bytecode in shared memory. |
+
+**Immediate unblock** when a non-compliant tool is pinning the path right now —
+stop it, do the operation, restart:
+
+```powershell
+Stop-Process -Name frankenphp,php,bun -Force -ErrorAction SilentlyContinue
+# the watcher may also be a node.exe — target it by command line, not your editor's helpers:
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -match 'vite|belimbing' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+```
+
+Then ensure no shell's current directory is inside the folder, run the
+rename / move / `git mv` / branch switch, and restart with `.\scripts\start-app.ps1`.
+The Defender exclusions reduce file churn but do not remove a lock.
+
+### Production gotcha — the in-app updater replacing files in place
+
+The dev lockers are absent on a server: there is no Vite watcher (assets are
+pre-built), no editor, and FrankenPHP workers do not hold source-file handles
+(PHP reads-and-closes; OPcache keeps bytecode in shared memory). So the in-app
+updater (**Administration → System → Software → Updates**), which replaces files
+with `git pull` + `composer install`, **usually succeeds in place on a clean
+Windows Server**.
+
+The residual risk is narrow and conditional: a **non-share-delete third-party
+process touching the deploy path during the pull** — an AV, backup, or file-sync
+agent (Defender is fine; some others are not), or a watcher/editor someone left
+on the box. Maintenance mode does *not* help: it stops serving requests, not file
+handles, so an agent grabbing a file mid-pull still fails the step.
+
+#### Practical solution for BLB
+
+In order of effort:
+
+1. **Harden the current in-place updater (low effort, fits today's design).**
+   Exclude the deploy path from AV/backup *real-time* scanning (or require
+   share-delete agents) and keep watchers/editors off the production host. The
+   updater already runs under maintenance mode and gracefully reloads FrankenPHP
+   workers after replacing files, so on a clean host this is normally enough.
+
+2. **Atomic release directories (robust; sidesteps the lock entirely).** Instead
+   of pulling over the live tree, build each release in its own
+   `releases\<timestamp>` directory and flip a `current` **directory junction**
+   (`New-Item -ItemType Junction` / `mklink /J`) to point at it, then reload
+   workers. You never overwrite an open file — you write a fresh directory and
+   repoint a pointer — so Windows file locks cannot block the update. This is the
+   standard zero-downtime pattern (Capistrano / Deployer / Envoyer), and
+   FrankenPHP's graceful worker restart handles the cut-over. It is **not** how
+   BLB's updater works today (it pulls in place); adopt it if in-place updates
+   prove flaky on Windows.
+
+3. **Run production on Linux (simplest robust answer).** On Linux, open files
+   never block rename/replace, so this whole class of failure disappears and the
+   in-place updater is safe with no extra machinery. Recommended when the in-app
+   updater is a primary operational path.
+
 ## HTTPS On Windows
 
 The native Windows launcher now prefers `mkcert` if it is available. When
@@ -343,6 +444,14 @@ matching URL.
 
 `-AppPort` changes the internal Octane listener. It does not move the public
 `https://local.blb.lara` listener away from port `443`.
+
+### `git mv`, rename, or branch switch fails with "Access is denied" / "being used by another process"
+
+A watcher or editor holds an open handle to the file or directory; Windows pins
+open files against rename and delete. Stop the launcher's Vite/Node watcher (and
+close the folder in your editor if it still holds the path), then retry. This is
+not a BLB setting — see
+[File Locks During Renames, Moves, and Branch Switches](#file-locks-during-renames-moves-and-branch-switches-important).
 
 ## Reset Local Data
 
