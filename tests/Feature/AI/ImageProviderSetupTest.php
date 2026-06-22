@@ -117,7 +117,7 @@ it('shows the api endpoint and a get-key link in the setup modal', function (): 
         ->call('open', 'poof')
         ->assertSee('api.poof.bg')
         ->assertSee('Poof API key')
-        ->assertSee('https://poof.bg', false);
+        ->assertSee('https://dash.poof.bg/', false);
 });
 
 it('shows a region-aware endpoint for alibaba', function (): void {

@@ -106,9 +106,9 @@ it('organizes the hub into LLM and Image family tabs with two cards each', funct
         ->assertSee('Poof')
         ->assertSee('Stability AI')
         ->assertSee('AWS Bedrock')
-        ->assertSee('Connect')
+        ->assertSee('Add key')
         ->assertSee('Status')
-        ->assertSee('Not connected')
+        ->assertSee('No key stored')
         ->assertSee('Fast, e-commerce-tuned background removal & product cutouts.')
         ->assertSee('Low-cost, high-resolution background removal.')
         ->assertSee('Stable Image edit API — background removal, search-and-recolor, erase & more.')
@@ -122,6 +122,7 @@ it('organizes the hub into LLM and Image family tabs with two cards each', funct
 it('shows honest readiness status per vision provider', function (): void {
     $user = createAdminUser();
     configurePhotoRoom(companyId: $user->company_id);
+    configureImageProviderKey('poof', $user->company_id);
     app(ImageProviderCredentialStore::class)->upsert(
         $user->company_id,
         StabilityConfiguration::PROVIDER,
@@ -136,6 +137,10 @@ it('shows honest readiness status per vision provider', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Providers::class)
+        // PhotoRoom is the default active choice → Active (the provider cleanup uses).
+        ->assertSee('Active')
+        // Poof is Ready (adapter bound + key stored) but not the active choice.
         ->assertSee('Ready')
+        // Stability has a key but no cleanup adapter yet → Key stored.
         ->assertSee('Key stored');
 });

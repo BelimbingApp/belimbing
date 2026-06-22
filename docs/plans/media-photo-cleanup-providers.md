@@ -1,13 +1,15 @@
 # media-photo-cleanup-providers
 
-**Status:** Proposed
-**Last Updated:** 2026-06-16
-**Sources:** `app/Base/Media/PhotoCleanup/*` (the shipped engine + PhotoRoom adapter), `docs/architecture/module-system.md` (Contract + adapters), `extensions/ham/docs/plans/ham-auto-parts-continuation.md` (PhotoRoom chosen as the *first* provider), `docs/plans/ai-lara-collapse-into-provider-priority.md` (existing provider-priority shape to mirror, not duplicate).
-**Agents:** claude/Sonnet-4.6
+**Status:** In progress (Phase 2 landing)
+**Last Updated:** 2026-06-22
+**Sources:** `app/Base/Media/PhotoCleanup/*` (the shipped engine + PhotoRoom/Poof adapters), `docs/architecture/module-system.md` (Contract + adapters), `extensions/ham/docs/plans/ham-auto-parts-continuation.md` (PhotoRoom chosen as the *first* provider), `docs/plans/ai-provider-families.md` (existing family/registry shape mirrored as a template, not shared), the 2026-06-22 Vision-providers copy/handshake thread (honest `Add key` / `Key stored` / `Ready` taxonomy plus per-provider handshake findings).
+**Agents:** claude/Sonnet-4.6, glm/GLM-5.2
 
 ## Problem Essence
 
-`photo-cleanup` runs background removal through PhotoRoom, chosen as the *first* of presumably several providers. The engine now depends on a `PhotoCleanupProvider` contract (PhotoRoom is the bound default), but provider selection is still a single hard container binding — there is no registry, no per-provider settings surface, and no operator choice. A second provider cannot be added without editing `Base\Media\ServiceProvider`.
+`photo-cleanup` runs background removal through a chosen provider, PhotoRoom being the *first* of several. The engine depends on a `PhotoCleanupProvider` contract; selection is no longer a single hard container binding — a per-company setting resolves the active adapter through a `PhotoCleanupProviderRegistry` + `PhotoCleanupSelection`, and a second adapter (Poof) is wired as the registry proof. Adding a provider is now "ship a client + register its key in the registry," not "edit `Base\Media\ServiceProvider` or the engine."
+
+The "when a 2nd provider is real" gate on Phase 2 is now met: the production deployment has real stored image-provider keys (`ai_providers`, `family = image`), and the Vision providers tab already stores and labels them honestly (`No key stored` → `Key stored` → `Ready` → `Active`). Phase 2 is landing, not a speculative slot.
 
 ## Desired Outcome
 
@@ -15,19 +17,23 @@ A second background-removal provider can register and be selected without touchi
 
 ## Top-Level Components
 
-- **Engine** — `PhotoCleanupService` (shipped). Provider-agnostic; records `provider`, `provider_label`, `environment` provenance on each derivative.
+- **Engine** — `PhotoCleanupService` (shipped). Provider-agnostic; records `provider`, `provider_label`, `source_asset_id`, `status`, `cleaned_at` provenance on each derivative. Sealed: depends only on the `PhotoCleanupProvider` contract, never branches on which provider is active.
 - **Contract** — `PhotoCleanupProvider` (shipped). `removeBackground()` returns cleaned bytes + provenance.
-- **Registry/selection** — not built. Resolves the active provider from settings instead of a fixed container binding.
-- **Per-provider config** — Vision credentials live in company-scoped `ai_providers` rows (`family = image`); PhotoRoom uses a single `api_key`, region-style fields use `connection_config`.
-- **Operator surface** — not built. A settings control to pick the active provider and see configured/unconfigured state.
+- **Registry** — `PhotoCleanupProviderRegistry` (landed). Maps provider keys → adapter classes; resolves an adapter by key through the container. The single source of truth for which providers have a working cleanup client (`ImageProviderFamily` reads `supports()` to decide `Ready` vs `Key stored`).
+- **Selection** — `PhotoCleanupSelection` (landed). Resolves the active adapter from the company-scoped setting `media.photo_cleanup.provider` (default `photoroom`) instead of a fixed binding; unknown/unregistered key fails with `PhotoCleanupException::unknownProvider()`. Credential validation stays with the adapter.
+- **Resolving proxy** — `ResolvingPhotoCleanupProvider` (landed). Bound as the container's `PhotoCleanupProvider`; delegates each `removeBackground()` to the selection-resolved adapter per company, keeping the engine sealed.
+- **Per-provider config** — Vision credentials live in company-scoped `ai_providers` rows (`family = image`); each provider's `*Configuration` reads its key + base URL, and `requireConfigured()` throws `PhotoCleanupException::notConfigured($label)`.
+- **Operator surface** — landed. A "Set active" affordance on `admin/ai/providers#image` picks the active provider among `Ready` rows; the chosen row shows `Active`, connected-but-not-chosen rows show `Ready`, credential-only rows show `Key stored`, reusing the existing taxonomy.
 
 ## Design Decisions
 
-- **Reuse, don't reinvent, provider-priority.** BLB already has provider-priority machinery for Lara/AI (`docs/plans/ai-lara-collapse-into-provider-priority.md`). Photo cleanup should mirror that selection shape rather than grow a parallel registry idiom. Decide during build whether the AI provider-priority service is genuinely shared or only a template.
-- **Keep the engine sealed.** The registry resolves and returns a `PhotoCleanupProvider`; `PhotoCleanupService` must not gain provider branches. Provenance already carries the discriminator, so historical derivatives stay attributable across provider changes.
-- **`environment` stays generic.** Sandbox/live is PhotoRoom-shaped but persisted as a neutral provenance string. A provider without that concept returns its own mode; do not special-case PhotoRoom in the engine or schema.
+- **Reuse the family/selection *shape*, not the cascade.** BLB's Lara/AI provider machinery is a priority-ordered *cascade* (fallback chain) for LLM routing, which does not match photo cleanup's model: background removal runs through a single chosen provider per company, not a fallback chain. So `PhotoCleanupSelection` mirrors the *shape* (company-scoped setting + resolver, read through `SettingsService`) as a template, not by reusing the LLM priority service. The earlier reference to a `docs/plans/ai-lara-collapse-into-provider-priority.md` doc was wrong (no such file); the actual sibling is `docs/plans/ai-provider-families.md`.
+- **Keep the engine sealed.** The registry resolves and returns a `PhotoCleanupProvider`; `PhotoCleanupService` must not gain provider branches. The bound contract is a `ResolvingPhotoCleanupProvider` proxy that delegates per company, so the engine still depends only on the contract and never learns which provider is active. Provenance carries `provider` + `provider_label`, so historical derivatives stay attributable across provider changes.
+- **`environment` stays generic.** The shipped contract returns only `{bytes, provider, provider_label}` and the engine records those plus `source_asset_id`, `status`, `cleaned_at` on the derivative — there is no sandbox/live `environment` field today. The earlier sandbox/live toggle was collapsed when image-provider credentials moved to company-scoped `ai_providers` (one `api_key` per provider). If a future provider needs a mode discriminator, it extends provenance as a neutral string; do not special-case any provider in the engine or schema.
 - **Adapter ownership.** Background removal is a generic platform capability, so default adapters live in `Base/Media` (unlike geo-specific marketplace channels, which are extension-owned). A licensee-specific provider could still register from an extension.
 - **Don't build speculative slots.** Per `module-system.md`, this stays a single bound default until a real second provider exists; this plan is the trigger to convert the binding into a registry at that point, not before.
+- **Handshake is per-provider, not a uniform promise.** A cheap connectivity handshake exists for 4 of the 6 providers — Stability (`GET /v1/user/balance` on `api.stability.ai`), PhotoRoom (production key: `GET /v2/account` on `image-api.photoroom.com`, with a `/v1/account` fallback for accounts on the legacy pricing version; sandbox key: a minimal probe edit on `POST /v1/segment` since sandbox accounts expose no account endpoint), DashScope (model-list read), Bedrock (`ListFoundationModels` on the control-plane host) — and none for Claid or Poof. A "Test connection" affordance is exposed only for providers with a real cheap read or probe endpoint; for the rest, `Ready` follows from a real cleanup run, not a handshake. The handshake stays out of the engine — it is a provider/selection concern, never a `PhotoCleanupService` branch.
+- **Reuse the Vision providers tab's honest taxonomy.** The operator selection surface builds on the existing `connected` / `configured` / `Key stored` / `Ready` states already rendered on `admin/ai/providers#image`, not a parallel status vocabulary. `Ready` already means "a working cleanup client is wired" — the registry's job is to promote a row to `Ready` once its adapter is bound and runnable, which is exactly the existing semantics.
 
 ## Phases
 
@@ -36,13 +42,19 @@ A second background-removal provider can register and be selected without touchi
 - [x] Engine depends on `PhotoCleanupProvider`; PhotoRoom implements it and is bound as the default in `Base\Media\ServiceProvider`.
 - [x] Provenance carries `provider` + `provider_label`; UI renders the persisted provider instead of a hardcoded brand.
 
-### Phase 2 — Registry + selection (when a 2nd provider is real)
+### Phase 2 — Registry + selection (landing 2026-06-22, glm/GLM-5.2)
 
-- [ ] Resolve the active `PhotoCleanupProvider` from settings (provider id) rather than a fixed binding; unknown/unconfigured id fails with a clear operator-facing error, not a container exception.
+- [x] Resolve the active `PhotoCleanupProvider` from a per-company setting (`media.photo_cleanup.provider`, default `photoroom`) rather than the fixed container binding; unknown/unregistered id fails with `PhotoCleanupException::unknownProvider()`, not a container exception. The family/selection *shape* is mirrored from `docs/plans/ai-provider-families.md` as a template (single active provider), not the LLM priority cascade. {glm/GLM-5.2}
 - [x] Define the uniform per-provider credential shape on `ai_providers` (`family = image`).
-- [ ] Operator surface to choose the active provider and show per-provider configured/unconfigured state, alongside the existing PhotoRoom environment toggle.
-- [ ] Confirm `PhotoCleanupService` still has zero provider branches after the registry lands (engine-sealed check).
+- [x] Wire a second adapter as the registry proof: **Poof** (`POST /v1/remove`, `x-api-key`, multipart `image_file` + `size=full`). `PoofClient` implements `PhotoCleanupProvider` (no `TestsConnection` — Poof has no cheap read/probe endpoint, so `Ready` follows from a real cleanup run). Verified live against the stored dev key: 922 KB JPEG → 7.5 MB full-resolution transparent PNG. {glm/GLM-5.2}
+  - Poof spec finding (2026-06-22, glm/GLM-5.2): the marketing-site curl example sends `size=auto`, but the API rejects it with `validation_error` — the real `size` enum is `preview` | `medium` | `hd` | `full`. The client sends `size=full` to match the cleanup intent (full-resolution output, consistent with PhotoRoom's `full` default).
+- [x] Operator surface on `admin/ai/providers#image`: a "Set active" affordance picks the active provider among `Ready` rows; the chosen row shows `Active`, connected-but-not-chosen rows show `Ready`, credential-only rows show `Key stored`. Reuses the existing taxonomy — no parallel status vocabulary, no "PhotoRoom environment toggle". {glm/GLM-5.2}
+- [x] Expose a "Test connection" handshake only for providers with a documented cheap read or probe endpoint (Stability, PhotoRoom, DashScope, Bedrock); for Claid/Poof, `Ready` follows from a real cleanup run. Keep the handshake out of the engine. {glm/GLM-5.2}
+  - PhotoRoom spec research (2026-06-22, glm/GLM-5.2): the OpenAPI at `https://image-api.photoroom.com/openapi` documents `POST /v1/segment` (remove background, `sdk.photoroom.com`), `GET /v1/account` (`{credits}`), and `GET /v2/account` (`{images, plan}`), both account endpoints on `image-api.photoroom.com`; auth is `x-api-key`. Sandbox mode (`sandbox_`-prefixed key) gives 1,000 calls/month, 100/day, watermarked output, and supports all edit features. A sandbox account has **no account/quota state**, so PhotoRoom's own response validator rejects BOTH account endpoints: `/v2/account` → 400 `"You are using an old pricing version."`, `/v1/account` → 400 (`credits.available/subscription: ... undefined`). The only honest sandbox verification is a minimal probe edit on `/v1/segment` — confirmed live (82-byte probe image + `size=preview` returns 200 with a ~0.6 KB watermarked image). The `Accept: application/json` header hypothesis was investigated and disproved as the cause.
+  - Handshake is now hybrid and honest (2026-06-22, glm/GLM-5.2): production keys use the cheap `GET /v2/account` read (with a `/v1/account` fallback for accounts on the legacy pricing version), returning plan + remaining credits; sandbox keys (`sandbox_` prefix) use a minimal probe edit on the same `/v1/segment` endpoint the real cleanup uses, and the result detail says so ("Sandbox key verified via a probe edit (watermarked; uses sandbox quota)."). Live dev-sandbox check now reports `ok=1 / Connected` instead of HTTP 400. No engine change.
+  - The handshake tester routes per provider key through `PhotoCleanupProviderRegistry` (not a single bound client), so each registered adapter that implements `TestsConnection` becomes testable without touching the engine. PhotoRoom is the only `TestsConnection` adapter today; Poof correctly shows no "Test connection".
+- [x] Confirm `PhotoCleanupService` still has zero provider branches after the registry lands (engine-sealed check): the engine calls only `$this->provider->removeBackground(...)` and never branches on which provider is active; `app(PhotoCleanupProvider::class)` resolves to `ResolvingPhotoCleanupProvider`, never a concrete client. {glm/GLM-5.2}
 
 ### Phase 3 — Usage/credits visibility (tracked, not provider-pluggability)
 
-- [ ] Surface provider usage/remaining credits through the shared operator status UI (carried from the Ham Phase 2 checklist; applies per active provider).
+- [ ] Surface provider usage/remaining credits through the shared operator status UI (carried from the Ham Phase 2 checklist; applies per active provider). Where the Phase 2 handshake endpoint already returns balance (Stability `/v1/user/balance`, PhotoRoom `/v2/account` `images.available`), reuse that response rather than adding a second call.

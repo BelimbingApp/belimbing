@@ -102,6 +102,23 @@ After the remote exists:
 git push -u origin main
 ```
 
+## Install From the Modules Screen
+
+Production deployments can expose a curated extension catalog on
+**Administration → System → Software → Modules → Available**. Add approved
+private repositories to `config/extensions.php`; the key is the
+`extensions/{owner}` checkout folder and the `repo` value is the private GitHub
+repository URL. Keep the committed default catalog empty unless the deployment
+is intentionally bundled with a specific private extension.
+
+For private GitHub repositories, save a token for the repository owner under
+**Administration → System → Software → GitHub Access** before installing. The
+installer clones into `extensions/{owner}`, runs pending migrations in a fresh
+Artisan process, reloads runtime discovery, and returns the run log to the
+Modules screen. Uninstall removes the checkout; database tables, migration
+ledger rows, and settings are kept unless the operator types the destructive
+drop phrase.
+
 ## If the Extension Does Not Load
 
 BLB discovers extension files from the two-level

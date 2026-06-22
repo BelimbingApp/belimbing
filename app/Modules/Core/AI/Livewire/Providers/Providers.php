@@ -12,6 +12,8 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Media\PhotoCleanup\PhotoCleanupConnectionTester;
+use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
@@ -84,6 +86,63 @@ class Providers extends Component implements ProvidesLaraPageContext
     {
         // No state to change — the listener triggers a re-render, which
         // recomputes $imageProviders from the registry.
+    }
+
+    /**
+     * Run the per-provider connectivity handshake for a Vision provider and
+     * surface the honest result through the standard notification hub. This is
+     * a one-shot row action: the result goes to `<x-ui.notification-hub>` (a
+     * transient toast on success, a sticky alert on error) rather than an
+     * inline row mutation, so the Vision table layout stays stable across the
+     * call. Only providers whose registered adapter implements
+     * TestsConnection (PhotoRoom today) get a real handshake; others get an
+     * honest "no handshake available" result without touching the engine. See
+     * docs/plans/media-photo-cleanup-providers.md.
+     */
+    public function testImageConnection(string $providerKey): void
+    {
+        $companyId = $this->getCompanyId();
+
+        if ($companyId === null) {
+            return;
+        }
+
+        $result = app(PhotoCleanupConnectionTester::class)->test($companyId, $providerKey);
+
+        $message = $result->detail !== null
+            ? $result->label.' · '.$result->detail
+            : $result->label;
+
+        $this->notify($message, $result->ok ? 'success' : 'error');
+    }
+
+    /**
+     * Choose the active photo-cleanup provider for the company. The choice is
+     * persisted to a company-scoped setting and the row re-renders so the
+     * `Active` badge moves honestly — only a `Ready` provider (adapter bound
+     * + key stored) is selectable. See docs/plans/media-photo-cleanup-providers.md.
+     */
+    public function setActiveImageProvider(string $providerKey): void
+    {
+        $companyId = $this->getCompanyId();
+
+        if ($companyId === null) {
+            return;
+        }
+
+        // Only a Ready provider (adapter bound + key stored) is selectable.
+        $ready = collect(app(AiProviderFamilyRegistry::class)->family('image')?->providers($companyId) ?? [])
+            ->first(fn ($summary) => $summary->providerKey === $providerKey && $summary->connected);
+
+        if ($ready === null) {
+            $this->notify(__('That provider is not ready. Add a key first.'), 'error');
+
+            return;
+        }
+
+        app(PhotoCleanupSelection::class)->setActiveProvider($companyId, $providerKey);
+
+        $this->notify(__('Photo cleanup now uses this provider.'));
     }
 
     protected function afterOpenEditProvider(AiProvider $provider): void

@@ -26,4 +26,19 @@ class PoofConfiguration
             'api_base_url' => self::API_BASE_URL,
         ];
     }
+
+    /**
+     * @return array{api_key: string, api_base_url: string}
+     */
+    public function requireConfigured(?int $companyId = null): array
+    {
+        $config = $this->resolve($companyId);
+
+        if ($config['api_key'] === null) {
+            throw PhotoCleanupException::notConfigured(self::PROVIDER_LABEL);
+        }
+
+        /** @var array{api_key: string, api_base_url: string} $config */
+        return $config;
+    }
 }

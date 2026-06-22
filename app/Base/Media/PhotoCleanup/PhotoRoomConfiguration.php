@@ -18,6 +18,39 @@ class PhotoRoomConfiguration
 
     public const API_BASE_URL = 'https://sdk.photoroom.com';
 
+    /**
+     * Account/usage host for the connectivity handshake. PhotoRoom exposes
+     * account details on a separate host from the remove-background API; the
+     * stored `x-api-key` works against both. See
+     * docs/plans/media-photo-cleanup-providers.md.
+     */
+    public const ACCOUNT_API_BASE_URL = 'https://image-api.photoroom.com';
+
+    public const ACCOUNT_ENDPOINT = self::ACCOUNT_API_BASE_URL.'/v2/account';
+
+    /**
+     * Legacy account/usage endpoint. PhotoRoom keeps both `/v1/account`
+     * (returns `credits`) and `/v2/account` (returns `images` + `plan`) live;
+     * an account on the older pricing version rejects `/v2/account` with a
+     * 400, so the handshake falls back here. See
+     * docs/plans/media-photo-cleanup-providers.md.
+     */
+    public const ACCOUNT_ENDPOINT_V1 = self::ACCOUNT_API_BASE_URL.'/v1/account';
+
+    /**
+     * PhotoRoom sandbox keys are prefixed `sandbox_` (per the sandbox-mode
+     * docs); the prefix is the documented, definitive marker of a sandbox
+     * key. The handshake branches on it because sandbox accounts expose no
+     * account/quota state — both account endpoints 400 — so a sandbox key is
+     * verified by a minimal probe edit instead of an account read.
+     */
+    public const SANDBOX_KEY_PREFIX = 'sandbox_';
+
+    public static function isSandboxKey(?string $apiKey): bool
+    {
+        return $apiKey !== null && str_starts_with($apiKey, self::SANDBOX_KEY_PREFIX);
+    }
+
     public function __construct(
         private readonly ImageProviderCredentialStore $credentials,
     ) {}

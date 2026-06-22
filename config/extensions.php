@@ -18,9 +18,9 @@ return [
     |
     */
     'catalog' => [
-        'kiat' => [
-            'repo' => 'https://github.com/kiatng/blb-kiat',
-            'description' => 'Kiat licensee extension.',
-        ],
+        // 'licensee' => [
+        //     'repo' => 'https://github.com/vendor/private-extension',
+        //     'description' => 'Licensee extension.',
+        // ],
     ],
 ];

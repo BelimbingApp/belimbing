@@ -31,6 +31,7 @@ class ExtensionInstaller
         private readonly SettingsService $settings,
         private readonly DomainResidueScanner $scanner,
         private readonly DomainRuntimeReloader $runtimeReloader,
+        private readonly NestedCheckoutGitState $gitState,
     ) {}
 
     /**
@@ -83,7 +84,7 @@ class ExtensionInstaller
             $extensions[] = [
                 'name' => basename($path),
                 'modules' => $modules,
-                'git' => $this->gitState($path),
+                'git' => $this->gitState->inspect($path),
             ];
         }
 
@@ -207,20 +208,7 @@ class ExtensionInstaller
      */
     public function gitState(string $path): array
     {
-        $repo = new GitRepository($path);
-
-        if (! $repo->isRepository()) {
-            return ['hasGit' => false, 'dirty' => false, 'unpushed' => 0];
-        }
-
-        $status = $repo->run(['status', '--porcelain'], timeout: 30);
-        $unpushed = $repo->run(['rev-list', '--count', '--branches', '--not', '--remotes'], timeout: 30);
-
-        return [
-            'hasGit' => true,
-            'dirty' => $status->ok && $status->output !== '',
-            'unpushed' => $unpushed->ok ? (int) $unpushed->output : 0,
-        ];
+        return $this->gitState->inspect($path);
     }
 
     private function ownerFromRepo(string $repo): ?string

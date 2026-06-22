@@ -225,19 +225,42 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $summary->displayName }}</td>
                                 <td class="hidden md:table-cell px-table-cell-x py-table-cell-y text-sm text-muted">{{ $summary->description }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    @if($summary->connected)
-                                        {{-- Usable now: credentials stored AND a working client wired. --}}
-                                        <x-ui.badge variant="success">{{ __('Ready') }}</x-ui.badge>
-                                    @elseif($summary->configured)
-                                        {{-- Credentials stored, but no cleanup client built yet. --}}
-                                        <x-ui.badge variant="default">{{ __('Key stored') }}</x-ui.badge>
-                                    @else
-                                        <span class="text-xs text-muted">{{ __('Not connected') }}</span>
-                                    @endif
+                                    <div class="flex items-center gap-1.5">
+                                        @if($summary->active)
+                                            {{-- The operator's chosen photo-cleanup provider. --}}
+                                            <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
+                                        @elseif($summary->connected)
+                                            {{-- Usable now: credentials stored AND a working client wired. --}}
+                                            <x-ui.badge variant="default">{{ __('Ready') }}</x-ui.badge>
+                                        @elseif($summary->configured)
+                                            {{-- Credentials stored, but no cleanup client built yet. --}}
+                                            <x-ui.badge variant="default">{{ __('Key stored') }}</x-ui.badge>
+                                        @else
+                                            <span class="text-xs text-muted">{{ __('No key stored') }}</span>
+                                        @endif
+                                    </div>
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                     @if($summary->configured)
                                         <x-ui.icon-action-group>
+                                            @if($summary->connected)
+                                                @unless($summary->active)
+                                                    <x-ui.icon-action
+                                                        icon="heroicon-o-check-circle"
+                                                        :label="__('Use :provider for photo cleanup', ['provider' => $summary->displayName])"
+                                                        :title="__('Set active')"
+                                                        wire:click="setActiveImageProvider('{{ $summary->providerKey }}')"
+                                                    />
+                                                @endunless
+                                                <x-ui.icon-action
+                                                    icon="heroicon-o-signal"
+                                                    :label="__('Test :provider connection', ['provider' => $summary->displayName])"
+                                                    :title="__('Test connection')"
+                                                    wire:click="testImageConnection('{{ $summary->providerKey }}')"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="testImageConnection('{{ $summary->providerKey }}')"
+                                                />
+                                            @endif
                                             <x-ui.icon-action
                                                 icon="heroicon-o-pencil"
                                                 :label="__('Edit :provider', ['provider' => $summary->displayName])"
@@ -258,7 +281,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                             variant="primary"
                                             wire:click="$dispatch('open-image-setup', { providerKey: '{{ $summary->providerKey }}' })"
                                         >
-                                            {{ __('Connect') }}
+                                            {{ __('Add key') }}
                                         </x-ui.button>
                                     @endif
                                 </td>
