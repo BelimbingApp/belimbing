@@ -9,6 +9,7 @@ use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
+use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -44,6 +45,11 @@ class Modules extends Component
      */
     public string $uninstallPhrase = '';
 
+    /**
+     * What the open uninstall panel targets: 'domain' or 'extension'.
+     */
+    public string $uninstallKind = 'domain';
+
     public function setTab(string $tab): void
     {
         $this->tab = in_array($tab, ['installed', 'available'], true) ? $tab : 'installed';
@@ -61,6 +67,23 @@ class Modules extends Component
         session()->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? __(':domain installed. Its menus and routes are live from the next page load.', ['domain' => $domain])
             : __(':domain install failed.', ['domain' => $domain]));
+        session()->flash('command-log', $result['log']);
+
+        $this->redirectRoute('admin.system.software.modules.index');
+    }
+
+    public function installExtension(string $folder, ExtensionInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        // Clone + migrate outlive a default PHP execution window.
+        set_time_limit(0);
+
+        $result = $installer->install($folder);
+
+        session()->flash($result['ok'] ? 'success' : 'error', $result['ok']
+            ? __('Extension :folder installed. Its modules are live from the next page load.', ['folder' => $folder])
+            : __('Extension :folder install failed.', ['folder' => $folder]));
         session()->flash('command-log', $result['log']);
 
         $this->redirectRoute('admin.system.software.modules.index');
@@ -90,32 +113,33 @@ class Modules extends Component
         $this->redirectRoute('admin.system.software.modules.index');
     }
 
-    public function openUninstall(string $domain): void
+    public function openUninstall(string $target, string $kind = 'domain'): void
     {
         $this->authorizeManage();
 
-        $this->uninstallTarget = $domain;
+        $this->uninstallTarget = $target;
+        $this->uninstallKind = in_array($kind, ['domain', 'extension'], true) ? $kind : 'domain';
         $this->uninstallPhrase = '';
         $this->resetErrorBag('uninstallPhrase');
     }
 
     public function cancelUninstall(): void
     {
-        $this->reset('uninstallTarget', 'uninstallPhrase');
+        $this->reset('uninstallTarget', 'uninstallPhrase', 'uninstallKind');
         $this->resetErrorBag('uninstallPhrase');
     }
 
-    public function uninstall(DomainInstaller $installer): void
+    public function uninstall(DomainInstaller $domains, ExtensionInstaller $extensions): void
     {
         $this->authorizeManage();
 
-        $domain = $this->uninstallTarget;
+        $target = $this->uninstallTarget;
 
-        if ($domain === null) {
+        if ($target === null) {
             return;
         }
 
-        $dropTables = $this->parseUninstallPhrase($domain);
+        $dropTables = $this->parseUninstallPhrase($target);
 
         if ($dropTables === null) {
             $this->addError('uninstallPhrase', __('Type the exact phrase to confirm.'));
@@ -123,16 +147,18 @@ class Modules extends Component
             return;
         }
 
-        $result = $installer->uninstall($domain, $dropTables);
+        $result = $this->uninstallKind === 'extension'
+            ? $extensions->uninstall($target, $dropTables)
+            : $domains->uninstall($target, $dropTables);
 
         session()->flash('success', $dropTables
-            ? __(':domain uninstalled. :tables table(s) dropped, :ledger migration record(s) removed, :settings setting row(s) deleted.', [
-                'domain' => $domain,
+            ? __(':name uninstalled. :tables table(s) dropped, :ledger migration record(s) removed, :settings setting row(s) deleted.', [
+                'name' => $target,
                 'tables' => count($result['droppedTables']),
                 'ledger' => $result['prunedLedger'],
                 'settings' => $result['deletedSettings'],
             ])
-            : __(':domain uninstalled. Its database state was kept; reinstalling adopts it again, or clean it up under Database Residue.', ['domain' => $domain]));
+            : __(':name uninstalled. Its database state was kept; reinstalling adopts it again, or clean it up under Database Residue.', ['name' => $target]));
 
         $this->flashReloadLog($result['reloadLog']);
 
@@ -149,7 +175,7 @@ class Modules extends Component
         $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
-    public function render(DomainInstaller $installer): View
+    public function render(DomainInstaller $installer, ExtensionInstaller $extensions): View
     {
         $reader = $this->reader();
         $enabledManifests = $reader->all();
@@ -162,6 +188,11 @@ class Modules extends Component
             $installed[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($domain['name'])] ?? [];
         }
 
+        $installedExtensions = $extensions->installed();
+        foreach ($installedExtensions as $index => $extension) {
+            $installedExtensions[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($extension['name'])] ?? [];
+        }
+
         $catalog = app(BelimbingAppCatalogService::class);
         $installedModuleIds = collect($installedManifests)
             ->map(fn (ModuleManifest $manifest): string => $manifest->module)
@@ -170,7 +201,9 @@ class Modules extends Component
 
         return view('livewire.base.foundation.modules', [
             'installed' => $installed,
+            'extensions' => $installedExtensions,
             'available' => $installer->available(),
+            'availableExtensions' => $extensions->available(),
             'dependencyIssues' => $dependencyIssues,
             'catalogEntries' => $catalog->available(),
             'installedModuleIds' => $installedModuleIds,
