@@ -1,6 +1,6 @@
 @php
     $lifecycleTargets = 'install,disable,enable,uninstall';
-    $actionTargets = $lifecycleTargets.',openUninstall,cancelUninstall,refreshCatalog';
+    $actionTargets = $lifecycleTargets.',installExtension,openUninstall,cancelUninstall,refreshCatalog';
 @endphp
 
 <div
@@ -98,7 +98,7 @@
             {{ __('Installed') }}
         </button>
         <button type="button" wire:click="setTab('available')" class="px-3 py-2 text-sm {{ $tab === 'available' ? 'border-b-2 border-accent font-semibold text-ink' : 'text-muted hover:text-ink' }}">
-            {{ __('Available (:n)', ['n' => count($available) + count($catalogEntries)]) }}
+            {{ __('Available (:n)', ['n' => count($available) + count($availableExtensions) + count($catalogEntries)]) }}
         </button>
     </nav>
 
@@ -226,13 +226,13 @@
                                         {{ __('Disable') }}
                                     </x-ui.button>
                                 @endif
-                                <x-ui.button size="sm" variant="danger" wire:click="openUninstall('{{ $domainName }}')" wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
+                                <x-ui.button size="sm" variant="danger" wire:click="openUninstall('{{ $domainName }}', 'domain')" wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
                                     {{ __('Uninstall') }}
                                 </x-ui.button>
                             </div>
                         @endif
 
-                        @if ($uninstallTarget === $domainName)
+                        @if ($uninstallTarget === $domainName && $uninstallKind === 'domain')
                             @php
                                 $phraseName = strtolower($domainName);
                                 $uninstallTitle = __('Uninstalling :name', ['name' => $domainName]);
@@ -275,6 +275,100 @@
             </div>
         </section>
 
+        @if (count($extensions) > 0)
+            <section class="space-y-2">
+                <h2 class="text-lg font-semibold text-ink">{{ __('Installed extensions') }}</h2>
+                <div class="grid gap-4 md:grid-cols-2">
+                    @foreach ($extensions as $extension)
+                        @php $extName = $extension['name']; @endphp
+                        <x-ui.card wire:key="extension-{{ $extName }}" x-data="{ open: false }">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="font-medium text-ink">{{ $extName }}</div>
+                                <div class="flex flex-wrap justify-end gap-1">
+                                    <x-ui.badge variant="info">{{ __('extension') }}</x-ui.badge>
+                                    @unless ($extension['git']['hasGit'])
+                                        <x-ui.badge variant="warning" tooltip="{{ __('No .git directory: this checkout cannot pull updates.') }}">{{ __('no git') }}</x-ui.badge>
+                                    @endunless
+                                </div>
+                            </div>
+
+                            <button type="button" x-on:click="open = ! open" class="mt-1 flex items-center gap-1 text-sm text-muted hover:text-ink">
+                                <x-icon name="heroicon-o-chevron-right" class="h-4 w-4 transition-transform" x-bind:class="open && 'rotate-90'" />
+                                {{ trans_choice('{0} no modules|{1} :count module|[2,*] :count modules', count($extension['modules']), ['count' => count($extension['modules'])]) }}
+                            </button>
+
+                            <div x-show="open" x-collapse class="mt-2 space-y-2">
+                                @forelse ($extension['manifests'] as $m)
+                                    <div class="rounded-lg border border-border-default px-3 py-2 text-xs">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="font-medium text-ink">{{ $m->module ?: $m->name }}</span>
+                                            <span class="rounded-full border border-border-default px-2 py-0.5 text-muted">{{ $m->version ?: __('unversioned') }}</span>
+                                        </div>
+                                        @if ($m->description !== '')
+                                            <p class="mt-1 text-muted">{{ $m->description }}</p>
+                                        @endif
+                                        <div class="mt-1 font-mono text-muted">{{ $m->path }}</div>
+                                    </div>
+                                @empty
+                                    <div class="text-xs text-muted">{{ implode(', ', $extension['modules']) ?: __('No module manifests found for this extension.') }}</div>
+                                @endforelse
+                            </div>
+
+                            @if ($extension['git']['dirty'] || $extension['git']['unpushed'] > 0)
+                                <div class="mt-2 text-xs text-status-warning">
+                                    @if ($extension['git']['dirty']){{ __('Has uncommitted changes.') }}@endif
+                                    @if ($extension['git']['unpushed'] > 0) {{ __(':n unpushed commit(s).', ['n' => $extension['git']['unpushed']]) }}@endif
+                                </div>
+                            @endif
+
+                            @if ($canManage)
+                                <div class="mt-3 flex flex-wrap gap-2">
+                                    <x-ui.button size="sm" variant="danger" wire:click="openUninstall('{{ $extName }}', 'extension')" wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
+                                        {{ __('Uninstall') }}
+                                    </x-ui.button>
+                                </div>
+                            @endif
+
+                            @if ($uninstallTarget === $extName && $uninstallKind === 'extension')
+                                @php
+                                    $phraseName = strtolower($extName);
+                                    $uninstallTitle = __('Uninstalling :name', ['name' => $extName]);
+                                    $uninstallDescription = __('BLB is removing the extension checkout, reloading runtime, and refreshing this page.');
+                                @endphp
+                                <div class="mt-3 space-y-2 rounded-2xl border border-status-danger-border bg-status-danger-subtle p-3">
+                                    <p class="text-sm font-medium text-status-danger">{{ __('Uninstall :name?', ['name' => $extName]) }}</p>
+                                    @if ($extension['git']['dirty'] || $extension['git']['unpushed'] > 0)
+                                        <p class="text-xs text-status-danger">{{ __('Warning: this checkout has uncommitted or unpushed work that will be lost forever.') }}</p>
+                                    @endif
+                                    <p class="text-xs text-status-danger">
+                                        {{ __('Type :phrase to delete the code but keep all database tables, or :dropPhrase to also drop its tables, migration entries, and settings.', [
+                                            'phrase' => '"uninstall '.$phraseName.'"',
+                                            'dropPhrase' => '"uninstall '.$phraseName.' and drop all tables"',
+                                        ]) }}
+                                    </p>
+                                    <x-ui.acknowledge-input
+                                        :phrase="'uninstall '.$phraseName"
+                                        wire:model="uninstallPhrase"
+                                        x-on:keydown.enter.prevent="runUninstall({{ \Illuminate\Support\Js::from($phraseName) }}, {{ \Illuminate\Support\Js::from($uninstallTitle) }}, {{ \Illuminate\Support\Js::from($uninstallDescription) }})"
+                                    />
+                                    <div class="flex gap-2">
+                                        <x-ui.button size="sm" variant="danger"
+                                            x-on:click="runUninstall({{ \Illuminate\Support\Js::from($phraseName) }}, {{ \Illuminate\Support\Js::from($uninstallTitle) }}, {{ \Illuminate\Support\Js::from($uninstallDescription) }})"
+                                            wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
+                                            {{ __('Uninstall') }}
+                                        </x-ui.button>
+                                        <x-ui.button size="sm" variant="secondary" wire:click="cancelUninstall" wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
+                                            {{ __('Cancel') }}
+                                        </x-ui.button>
+                                    </div>
+                                </div>
+                            @endif
+                        </x-ui.card>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <p class="text-xs text-muted">
             {{ __('Database state kept by an uninstall — and any other unclaimed tables or settings — is listed under') }}
             <a href="{{ route('admin.system.database-residue.index') }}" class="text-accent hover:underline" wire:navigate>{{ __('Database Residue') }}</a>.
@@ -302,6 +396,40 @@
                             @if ($canManage)
                                 <x-ui.button size="sm" class="mt-3"
                                     x-on:click="confirmLifecycle({{ \Illuminate\Support\Js::from($installConfirm) }}, {{ \Illuminate\Support\Js::from($installTitle) }}, {{ \Illuminate\Support\Js::from($installDescription) }}, () => $wire.install({{ \Illuminate\Support\Js::from($name) }}))"
+                                    wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
+                                    {{ __('Install') }}
+                                </x-ui.button>
+                            @endif
+                        </x-ui.card>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if (count($availableExtensions) > 0)
+            <section class="space-y-2">
+                <h2 class="text-lg font-semibold text-ink">{{ __('Available extensions') }}</h2>
+                <div class="grid gap-4 md:grid-cols-3">
+                    @foreach ($availableExtensions as $folder => $entry)
+                        @php
+                            $extInstallConfirm = __('Install extension :name? This clones the private repository using its stored GitHub token and runs migrations.', ['name' => $folder]);
+                            $extInstallTitle = __('Installing :name', ['name' => $folder]);
+                            $extInstallDescription = __('BLB is cloning the extension, running migrations, reloading runtime, and refreshing this page.');
+                        @endphp
+                        <x-ui.card wire:key="available-extension-{{ $folder }}">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="font-medium text-ink">{{ $folder }}</div>
+                                @if ($entry['has_token'])
+                                    <x-ui.badge variant="success">{{ __('token ready') }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="warning" tooltip="{{ __('No GitHub token stored for this owner — save one under GitHub Access if the repo is private.') }}">{{ __('no token') }}</x-ui.badge>
+                                @endif
+                            </div>
+                            <p class="mt-1 text-sm text-muted">{{ $entry['description'] }}</p>
+                            <p class="mt-2 text-xs text-muted"><code class="select-all">{{ $entry['repo'] }}</code></p>
+                            @if ($canManage)
+                                <x-ui.button size="sm" class="mt-3"
+                                    x-on:click="confirmLifecycle({{ \Illuminate\Support\Js::from($extInstallConfirm) }}, {{ \Illuminate\Support\Js::from($extInstallTitle) }}, {{ \Illuminate\Support\Js::from($extInstallDescription) }}, () => $wire.installExtension({{ \Illuminate\Support\Js::from($folder) }}))"
                                     wire:loading.attr="disabled" wire:target="{{ $actionTargets }}" x-bind:disabled="lifecycleOpen">
                                     {{ __('Install') }}
                                 </x-ui.button>
