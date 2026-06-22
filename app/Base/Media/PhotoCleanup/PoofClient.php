@@ -9,10 +9,11 @@ use App\Base\Media\PhotoCleanup\Contracts\PhotoCleanupProvider;
 /**
  * Thin client for Poof's Remove Background API (`POST /v1/remove` on
  * `api.poof.bg`). Auth is a single `x-api-key` header; the request is
- * multipart `image_file` plus `size=auto`; the response is the cleaned PNG
+ * multipart `image_file` plus `size=full`; the response is the cleaned PNG
  * body. Poof exposes no documented cheap read or probe endpoint, so this client
- * does not implement `TestsConnection` — its `Ready` state follows from a real
- * cleanup run, and the operator surface offers no "Test connection" for it.
+ * does not implement `TestsConnection` — credential validation happens on the
+ * first real cleanup run, and the operator surface offers no "Test connection"
+ * for it.
  * See docs/plans/media-photo-cleanup-providers.md.
  */
 class PoofClient implements PhotoCleanupProvider

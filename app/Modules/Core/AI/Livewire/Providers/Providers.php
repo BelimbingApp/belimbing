@@ -12,6 +12,7 @@ namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Media\PhotoCleanup\Contracts\ConnectionTestResult;
 use App\Base\Media\PhotoCleanup\PhotoCleanupConnectionTester;
 use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Settings\Contracts\SettingsService;
@@ -40,6 +41,8 @@ class Providers extends Component implements ProvidesLaraPageContext
     use ManagesProviderHelp;
     use ManagesProviders;
     use ManagesSync;
+
+    private const IMAGE_PROVIDER_STATUS_CONFIG_KEY = 'operator_status';
 
     /** Which connected provider row is expanded to show models. */
     public ?int $expandedProviderId = null;
@@ -90,14 +93,11 @@ class Providers extends Component implements ProvidesLaraPageContext
 
     /**
      * Run the per-provider connectivity handshake for a Vision provider and
-     * surface the honest result through the standard notification hub. This is
-     * a one-shot row action: the result goes to `<x-ui.notification-hub>` (a
-     * transient toast on success, a sticky alert on error) rather than an
-     * inline row mutation, so the Vision table layout stays stable across the
-     * call. Only providers whose registered adapter implements
+     * surface the honest result through the standard notification hub and the
+     * row's status line. Only providers whose registered adapter implements
      * TestsConnection (PhotoRoom today) get a real handshake; others get an
-     * honest "no handshake available" result without touching the engine. See
-     * docs/plans/media-photo-cleanup-providers.md.
+     * honest "no handshake available" result if called directly, without
+     * touching the engine. See docs/plans/media-photo-cleanup-providers.md.
      */
     public function testImageConnection(string $providerKey): void
     {
@@ -108,6 +108,7 @@ class Providers extends Component implements ProvidesLaraPageContext
         }
 
         $result = app(PhotoCleanupConnectionTester::class)->test($companyId, $providerKey);
+        $this->rememberImageProviderStatus($companyId, $providerKey, $result);
 
         $message = $result->detail !== null
             ? $result->label.' · '.$result->detail
@@ -295,14 +296,103 @@ class Providers extends Component implements ProvidesLaraPageContext
         // are added. The LLM tab is driven by $providers + the catalog island.
         // See docs/plans/ai-provider-families.md.
         $imageProviders = app(AiProviderFamilyRegistry::class)->family('image')?->providers($companyId) ?? [];
+        $imageProviderTestable = $this->imageProviderTestable($imageProviders);
+        $imageProviderStatusLines = $companyId !== null ? $this->imageProviderStatusLines($companyId) : [];
 
         return view('livewire.admin.ai.providers.providers', [
             'providers' => $providers,
             'expandedModels' => $expandedModels,
             'templateOptions' => $templates,
             'imageProviders' => $imageProviders,
+            'imageProviderTestable' => $imageProviderTestable,
+            'imageProviderStatusLines' => $imageProviderStatusLines,
             'laraActivated' => Employee::laraActivationState() === true,
         ]);
+    }
+
+    private function rememberImageProviderStatus(int $companyId, string $providerKey, ConnectionTestResult $result): void
+    {
+        $provider = AiProvider::query()
+            ->forCompany($companyId)
+            ->image()
+            ->where('name', $providerKey)
+            ->first();
+
+        if ($provider === null) {
+            return;
+        }
+
+        $connectionConfig = is_array($provider->connection_config) ? $provider->connection_config : [];
+        $connectionConfig[self::IMAGE_PROVIDER_STATUS_CONFIG_KEY] = [
+            'checked_at' => now()->toIso8601String(),
+            'ok' => $result->ok,
+            'label' => $result->label,
+            'detail' => $result->detail,
+            'context' => $result->context,
+        ];
+
+        $provider->update(['connection_config' => $connectionConfig]);
+    }
+
+    /**
+     * @param  list<object{providerKey: string}>  $imageProviders
+     * @return array<string, bool>
+     */
+    private function imageProviderTestable(array $imageProviders): array
+    {
+        $tester = app(PhotoCleanupConnectionTester::class);
+        $testable = [];
+
+        foreach ($imageProviders as $summary) {
+            $testable[$summary->providerKey] = $tester->supports($summary->providerKey);
+        }
+
+        return $testable;
+    }
+
+    /** @return array<string, string> */
+    private function imageProviderStatusLines(int $companyId): array
+    {
+        $lines = [];
+
+        $providers = AiProvider::query()
+            ->forCompany($companyId)
+            ->image()
+            ->get(['name', 'connection_config']);
+
+        foreach ($providers as $provider) {
+            $connectionConfig = is_array($provider->connection_config) ? $provider->connection_config : [];
+            $status = $connectionConfig[self::IMAGE_PROVIDER_STATUS_CONFIG_KEY] ?? null;
+
+            if (! is_array($status)) {
+                continue;
+            }
+
+            $line = $this->formatImageProviderStatusLine($status);
+
+            if ($line !== null) {
+                $lines[$provider->name] = $line;
+            }
+        }
+
+        return $lines;
+    }
+
+    /** @param  array<string, mixed>  $status */
+    private function formatImageProviderStatusLine(array $status): ?string
+    {
+        $label = is_string($status['label'] ?? null) ? trim($status['label']) : '';
+        $detail = is_string($status['detail'] ?? null) ? trim($status['detail']) : '';
+
+        if ($detail !== '' && ! (bool) ($status['ok'] ?? false) && $label !== '') {
+            return $label.' · '.$detail;
+        }
+
+        if ($detail !== '') {
+            return $detail;
+        }
+
+        return $label !== '' ? $label : null;
     }
 
     private function getCompanyId(): ?int

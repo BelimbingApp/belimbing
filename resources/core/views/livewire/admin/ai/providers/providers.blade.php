@@ -4,6 +4,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
 
 /** @var Providers $this */
 /** @var bool $laraActivated */
+/** @var array<string, bool> $imageProviderTestable */
+/** @var array<string, string> $imageProviderStatusLines */
 ?>
 <div>
     <x-slot name="title">{{ __('AI Providers') }}</x-slot>
@@ -221,22 +223,34 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                         </x-slot>
 
                         @forelse($imageProviders as $summary)
+                            @php
+                                $statusLine = $imageProviderStatusLines[$summary->providerKey] ?? null;
+                                $testable = $imageProviderTestable[$summary->providerKey] ?? false;
+                            @endphp
                             <tr wire:key="image-provider-{{ $summary->providerKey }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm font-medium text-ink">{{ $summary->displayName }}</td>
                                 <td class="hidden md:table-cell px-table-cell-x py-table-cell-y text-sm text-muted">{{ $summary->description }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <div class="flex items-center gap-1.5">
-                                        @if($summary->active)
-                                            {{-- The operator's chosen photo-cleanup provider. --}}
-                                            <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
-                                        @elseif($summary->connected)
-                                            {{-- Usable now: credentials stored AND a working client wired. --}}
-                                            <x-ui.badge variant="default">{{ __('Ready') }}</x-ui.badge>
-                                        @elseif($summary->configured)
-                                            {{-- Credentials stored, but no cleanup client built yet. --}}
-                                            <x-ui.badge variant="default">{{ __('Key stored') }}</x-ui.badge>
-                                        @else
-                                            <span class="text-xs text-muted">{{ __('No key stored') }}</span>
+                                <td class="px-table-cell-x py-table-cell-y align-top">
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-1.5 whitespace-nowrap">
+                                            @if($summary->active)
+                                                {{-- The operator's chosen photo-cleanup provider. --}}
+                                                <x-ui.badge variant="success">{{ __('Active') }}</x-ui.badge>
+                                            @elseif($summary->connected)
+                                                {{-- Usable now: credentials stored AND a working client wired. --}}
+                                                <x-ui.badge variant="default">{{ __('Ready') }}</x-ui.badge>
+                                            @elseif($summary->configured)
+                                                {{-- Credentials stored, but no cleanup client built yet. --}}
+                                                <x-ui.badge variant="default">{{ __('Key stored') }}</x-ui.badge>
+                                            @else
+                                                <span class="text-xs text-muted">{{ __('No key stored') }}</span>
+                                            @endif
+                                        </div>
+
+                                        @if($statusLine)
+                                            <p class="max-w-[18rem] whitespace-normal text-xs text-muted">
+                                                {{ __('Last test: :status', ['status' => $statusLine]) }}
+                                            </p>
                                         @endif
                                     </div>
                                 </td>
@@ -252,6 +266,8 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
                                                         wire:click="setActiveImageProvider('{{ $summary->providerKey }}')"
                                                     />
                                                 @endunless
+                                            @endif
+                                            @if($testable)
                                                 <x-ui.icon-action
                                                     icon="heroicon-o-signal"
                                                     :label="__('Test :provider connection', ['provider' => $summary->displayName])"

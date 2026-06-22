@@ -4,6 +4,7 @@ use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
+use App\Modules\Core\AI\Models\AiProvider;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -40,6 +41,17 @@ it('does not show Test connection for configured providers without a bound hands
         ->assertDontSee('Test connection');
 });
 
+it('does not show Test connection for a ready provider without a handshake endpoint', function (): void {
+    $user = createAdminUser();
+    configureImageProviderKey('poof', $user->company_id);
+
+    $this->actingAs($user);
+
+    Livewire::test(Providers::class)
+        ->assertSee('Ready')
+        ->assertDontSee('Test connection');
+});
+
 it('runs the photoroom handshake and dispatches a success notification with the plan', function (): void {
     $user = createAdminUser();
     configurePhotoRoom(companyId: $user->company_id);
@@ -63,6 +75,36 @@ it('runs the photoroom handshake and dispatches a success notification with the 
         ->call('testImageConnection', PhotoRoomConfiguration::PROVIDER)
         ->assertHasNoErrors()
         ->assertDispatched('notify', variant: 'success', message: $message);
+});
+
+it('surfaces photoroom usage from the connection test in the shared status column', function (): void {
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
+
+    Http::fake([
+        PHOTOROOM_ACCOUNT_ENDPOINT_LW => Http::response([
+            'images' => ['available' => 83, 'subscription' => 100],
+            'plan' => 'basic',
+        ], 200),
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Providers::class)
+        ->call('testImageConnection', PhotoRoomConfiguration::PROVIDER)
+        ->assertHasNoErrors()
+        ->assertSee('Last test: Plan: basic; 83 of 100 credits available.');
+
+    Http::assertSentCount(1);
+
+    $provider = AiProvider::query()
+        ->forCompany($user->company_id)
+        ->image()
+        ->where('name', PhotoRoomConfiguration::PROVIDER)
+        ->firstOrFail();
+
+    expect(data_get($provider->connection_config, 'operator_status.context.available'))->toBe(83)
+        ->and(data_get($provider->connection_config, 'operator_status.context.subscription'))->toBe(100);
 });
 
 it('dispatches an unauthorized error notification when the key is rejected', function (): void {
