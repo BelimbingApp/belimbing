@@ -136,6 +136,8 @@ class ExtensionInstaller
         $log[] = trim($clone->output."\n".$clone->error);
 
         if (! $clone->ok) {
+            $log[] = (string) __('FAILED — could not clone :folder. Check the repository URL and that a GitHub token is stored for its owner under GitHub Access.', ['folder' => $folder]);
+
             return ['ok' => false, 'log' => implode("\n", array_filter($log))];
         }
 
@@ -147,6 +149,10 @@ class ExtensionInstaller
         $log[] = trim($migrate->output()."\n".$migrate->errorOutput());
 
         $log = array_merge($log, $this->reloadRuntimeLog());
+
+        $log[] = $migrate->successful()
+            ? (string) __('Done — extension :folder installed. Its modules are live from the next page load.', ['folder' => $folder])
+            : (string) __('FAILED — migrations did not complete for :folder; review the output above.', ['folder' => $folder]);
 
         return [
             'ok' => $migrate->successful(),
