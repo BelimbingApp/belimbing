@@ -2,6 +2,7 @@
 
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Modules;
+use App\Base\Foundation\Services\DomainState;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -17,6 +18,8 @@ const MODULES_TABLE = 'zz_managed_table';
 const MODULES_SETTING = 'zz_managed.option';
 const MODULES_PATH = 'Modules/'.MODULES_DOMAIN;
 const MODULES_CATALOG_PAYROLL = 'people/payroll';
+const MODULES_MANIFEST_ID = 'zz-managed/sample';
+const MODULES_MANIFEST_DESCRIPTION = 'ZzManaged sample module.';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -46,6 +49,34 @@ function fakeBelimbingAppCatalogForModules(): void
         ]), 200),
         'https://api.github.com/repos/BelimbingApp/*/branches/main' => Http::response(['commit' => ['sha' => 'abc123']], 200),
     ]);
+}
+
+function writeModulesFakeManifest(): void
+{
+    file_put_contents(app_path(MODULES_PATH.'/Sample/composer.json'), json_encode([
+        'name' => 'test/zz-managed-sample',
+        'extra' => ['blb' => [
+            'module' => MODULES_MANIFEST_ID,
+            'version' => '0.1.0',
+            'description' => MODULES_MANIFEST_DESCRIPTION,
+        ]],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+}
+
+function createModulesDomainWithClaimedTable(): void
+{
+    createFakeDomainCheckout(MODULES_DOMAIN, MODULES_TABLE, MODULES_SETTING);
+    Schema::create(MODULES_TABLE, fn ($table) => $table->id());
+}
+
+function uninstallModulesDomainWithPhrase(string $phrase): void
+{
+    Livewire::test(Modules::class)
+        ->call('openUninstall', MODULES_DOMAIN)
+        ->set('uninstallPhrase', $phrase)
+        ->call('uninstall')
+        ->assertHasNoErrors()
+        ->assertRedirect(route('admin.system.software.modules.index'));
 }
 
 it('renders the Modules page with the installed tab and residue pointer', function (): void {
@@ -82,6 +113,19 @@ it('drills installed domains down to their module manifests', function (): void 
         ->assertSee('people/payroll')
         ->assertSee('people/attendance');
 })->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
+
+it('keeps disabled domain manifests in the installed drill-down', function (): void {
+    $this->actingAs(createAdminUser());
+    createFakeDomainCheckout(MODULES_DOMAIN, MODULES_TABLE, MODULES_SETTING, ['withProvider' => true]);
+    writeModulesFakeManifest();
+    DomainState::disable(MODULES_DOMAIN);
+
+    Livewire::test(Modules::class)
+        ->assertSee('disabled')
+        ->assertSee(MODULES_MANIFEST_ID)
+        ->assertSee(MODULES_MANIFEST_DESCRIPTION)
+        ->assertSee('0.1.0');
+});
 
 it('lists catalog domains on the Available tab', function (): void {
     $this->actingAs(createAdminUser());
@@ -130,12 +174,12 @@ it('disables and re-enables an installed domain', function (): void {
         ->call('disable', MODULES_DOMAIN)
         ->assertSessionHas('command-log')
         ->assertRedirect(route('admin.system.software.modules.index'));
-    expect(\App\Base\Foundation\Services\DomainState::isDisabled(MODULES_DOMAIN))->toBeTrue();
+    expect(DomainState::isDisabled(MODULES_DOMAIN))->toBeTrue();
 
     Livewire::test(Modules::class)
         ->call('enable', MODULES_DOMAIN)
         ->assertRedirect(route('admin.system.software.modules.index'));
-    expect(\App\Base\Foundation\Services\DomainState::isDisabled(MODULES_DOMAIN))->toBeFalse();
+    expect(DomainState::isDisabled(MODULES_DOMAIN))->toBeFalse();
 });
 
 it('refuses to uninstall without the exact typed phrase', function (): void {
@@ -153,15 +197,9 @@ it('refuses to uninstall without the exact typed phrase', function (): void {
 
 it('uninstalls keeping the database when the keep phrase is typed', function (): void {
     $this->actingAs(createAdminUser());
-    createFakeDomainCheckout(MODULES_DOMAIN, MODULES_TABLE, MODULES_SETTING);
-    Schema::create(MODULES_TABLE, fn ($table) => $table->id());
+    createModulesDomainWithClaimedTable();
 
-    Livewire::test(Modules::class)
-        ->call('openUninstall', MODULES_DOMAIN)
-        ->set('uninstallPhrase', 'uninstall zzmanaged')
-        ->call('uninstall')
-        ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.software.modules.index'));
+    uninstallModulesDomainWithPhrase('uninstall zzmanaged');
 
     expect(is_dir(app_path(MODULES_PATH)))->toBeFalse()
         ->and(Schema::hasTable(MODULES_TABLE))->toBeTrue();
@@ -169,15 +207,9 @@ it('uninstalls keeping the database when the keep phrase is typed', function ():
 
 it('uninstalls and drops tables when the drop phrase is typed', function (): void {
     $this->actingAs(createAdminUser());
-    createFakeDomainCheckout(MODULES_DOMAIN, MODULES_TABLE, MODULES_SETTING);
-    Schema::create(MODULES_TABLE, fn ($table) => $table->id());
+    createModulesDomainWithClaimedTable();
 
-    Livewire::test(Modules::class)
-        ->call('openUninstall', MODULES_DOMAIN)
-        ->set('uninstallPhrase', 'uninstall zzmanaged and drop all tables')
-        ->call('uninstall')
-        ->assertHasNoErrors()
-        ->assertRedirect(route('admin.system.software.modules.index'));
+    uninstallModulesDomainWithPhrase('uninstall zzmanaged and drop all tables');
 
     expect(is_dir(app_path(MODULES_PATH)))->toBeFalse()
         ->and(Schema::hasTable(MODULES_TABLE))->toBeFalse();

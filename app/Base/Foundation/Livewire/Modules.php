@@ -9,6 +9,7 @@ use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
+use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
@@ -151,26 +152,18 @@ class Modules extends Component
     public function render(DomainInstaller $installer): View
     {
         $reader = $this->reader();
-        $manifests = $reader->all();
-        $dependencyIssues = $reader->dependencyIssues($manifests);
-
-        // Group module manifests by the domain segment of extra.blb.module
-        // (e.g. "people/payroll" -> "people") so each domain can drill down.
-        $manifestsByDomain = [];
-        foreach ($manifests as $manifest) {
-            $domainKey = strtolower(explode('/', $manifest->module)[0] ?? '');
-            if ($domainKey !== '') {
-                $manifestsByDomain[$domainKey][] = $manifest;
-            }
-        }
+        $enabledManifests = $reader->all();
+        $installedManifests = $reader->allIncludingDisabledDomains();
+        $dependencyIssues = $reader->dependencyIssues($enabledManifests);
+        $manifestsByDomain = $this->manifestsByDomain($installedManifests);
 
         $installed = $installer->installed();
         foreach ($installed as $index => $domain) {
-            $installed[$index]['manifests'] = $manifestsByDomain[strtolower($domain['name'])] ?? [];
+            $installed[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($domain['name'])] ?? [];
         }
 
         $catalog = app(BelimbingAppCatalogService::class);
-        $installedModuleIds = collect($manifests)
+        $installedModuleIds = collect($installedManifests)
             ->map(fn (ModuleManifest $manifest): string => $manifest->module)
             ->filter()
             ->all();
@@ -184,6 +177,24 @@ class Modules extends Component
             'catalogLastFetchedAt' => $catalog->lastFetchedAt(),
             'canManage' => $this->canManage(),
         ]);
+    }
+
+    /**
+     * @param  list<ModuleManifest>  $manifests
+     * @return array<string, list<ModuleManifest>>
+     */
+    private function manifestsByDomain(array $manifests): array
+    {
+        $manifestsByDomain = [];
+
+        foreach ($manifests as $manifest) {
+            $domainKey = strtolower(explode('/', $manifest->module)[0] ?? '');
+            if ($domainKey !== '') {
+                $manifestsByDomain[$domainKey][] = $manifest;
+            }
+        }
+
+        return $manifestsByDomain;
     }
 
     private function reader(): ModuleManifestReader
@@ -207,6 +218,13 @@ class Modules extends Component
             "uninstall {$name} and drop all tables" => true,
             default => null,
         };
+    }
+
+    private function domainManifestKey(string $domain): string
+    {
+        return strtoupper($domain) === $domain
+            ? strtolower($domain)
+            : Str::pascalToKebab($domain);
     }
 
     private function authorizeManage(): void
