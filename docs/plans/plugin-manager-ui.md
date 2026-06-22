@@ -1,7 +1,7 @@
 # plugin-manager-ui
 
-**Status:** Phases 1–3 complete (2026-05-16). Phase 4 (topic tagging + cross-references) is the only remaining work and is mostly operator-side.
-**Last Updated:** 2026-05-16
+**Status:** Phases 1–3 complete (2026-05-16). Superseded in part — the screen is now **System → Software → Bundles**, and the manifest-`role` grouping it describes was removed as unused (YAGNI); see `docs/plans/plugin-term-retirement.md`. Phase 4 (topic tagging + cross-references) remains, retargeted to the `blb-bundle` topic.
+**Last Updated:** 2026-06-21
 **Sources:**
 - `docs/architecture/module-system.md` — the module-system spec this UI surfaces.
 - `app/Base/Foundation/ModuleManifest/ModuleManifestReader.php` — already produces the data the dashboard needs.
@@ -36,7 +36,9 @@ A first-party admin screen that shows what is installed (with manifest metadata 
 
 **BelimbingApp-only sources.** Phase 1 trusts exactly one source: the BelimbingApp GitHub organisation. No "add custom plugin URL" UI. We control everything published under that org; the trust model is the same as trusting the main BLB repo itself. Custom sources reopen the WordPress-class attack surface (typosquatting, social engineering, supply-chain compromise) and add no value until real third-party plugins exist. Revisit when there is demand from a real third party.
 
-**No automated installer.** Out of scope. Automated install is a feature flag away once the catalog ships, but introducing it requires audit logging, rollback handling, queue-job execution, signed manifests, per-environment lockouts, and a security review. Defer until operators ask for it; until then, the documented CLI workflow plus the catalog is enough.
+**No automated installer (on this screen).** Out of scope for the Bundles catalog. Automated install is a feature flag away once the catalog ships, but introducing it requires audit logging, rollback handling, queue-job execution, signed manifests, per-environment lockouts, and a security review. Defer until operators ask for it; until then, the documented CLI workflow plus the catalog is enough.
+
+> **Correction (2026-06-21):** the product is no longer "no install from the UI." **System → Software → Updates** (the Deployment screen) already performs authenticated `git pull` + `composer install` + asset build + `php artisan migrate` + worker reload for every discovered bundle, including private repos via per-owner tokens stored under GitHub Access. The read-only stance is therefore specific to *this catalog screen*, not a product-wide prohibition; the honest remaining manual step is the *initial clone* of a not-yet-present bundle. Tracked in `docs/plans/plugin-term-retirement.md`.
 
 **Anonymous GitHub API access.** The catalog hits public GitHub endpoints with no authentication. Rate limit is 60 requests/hr per server IP, which the 24 h cache renders moot for ~10 plugins. Authenticated mode (operator-supplied token raising the limit to 5,000/hr) is a follow-up if and only if rate limiting becomes a real complaint.
 
@@ -46,7 +48,7 @@ A first-party admin screen that shows what is installed (with manifest metadata 
 
 **Two manifest field additions.** `extra.blb.version` (SemVer string) and `extra.blb.description` (short text) get added to the existing per-module `composer.json` files. Both are zero-risk additions and useful regardless of the UI — every status query benefits from a version and a human-readable description.
 
-**Location in the admin shell.** Lives under `admin/system/plugins` to match the existing `admin/system/*` family (logs, database tables, etc.). Sidebar entry under "System" → "Plugins."
+**Location in the admin shell.** Lives under `admin/system/bundles` (originally `admin/system/plugins`), to match the existing `admin/system/*` family (logs, database tables, etc.). Sidebar entry under **System → Software → Bundles** (the "Software" group also hosts Updates, Business Domains, and GitHub Access).
 
 ## Public Contract
 

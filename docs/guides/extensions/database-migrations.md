@@ -47,7 +47,6 @@ Extension modules may publish a module-root `composer.json` with an `extra.blb` 
     "extra": {
         "blb": {
             "module": "acme/quality",
-            "role": "plugin",
             "version": "0.1.0",
             "description": "ACME quality extension.",
             "requires-modules": {

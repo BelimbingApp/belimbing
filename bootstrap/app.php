@@ -46,8 +46,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // action — reachable so an operator is never locked out by a run that was
         // interrupted before it could lift maintenance (it would otherwise 503 too).
         $middleware->preventRequestsDuringMaintenance(except: [
-            'admin/system/update/deployment',
-            'admin/system/update/online',
+            'admin/system/software/deployment',
+            'admin/system/software/online',
         ]);
 
         // Add database connection recovery middleware to web group

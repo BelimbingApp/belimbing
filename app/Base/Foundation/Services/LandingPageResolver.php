@@ -37,16 +37,12 @@ class LandingPageResolver
             ? ($user->prefsArray()[self::PREF_KEY] ?? null)
             : null;
 
-        if (is_string($preference)) {
-            $preference = $this->normalizePreference($preference);
-
-            if (isset($options[$preference]['href'])) {
-                return $options[$preference]['href'];
-            }
+        if (is_string($preference) && isset($options[$preference]['href'])) {
+            return $options[$preference]['href'];
         }
 
         if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
-            return route('admin.system.update.business-domains.index', absolute: false);
+            return route('admin.system.software.business-domains.index', absolute: false);
         }
 
         return route('dashboard', absolute: false);
@@ -62,19 +58,10 @@ class LandingPageResolver
         return $this->menu->snapshotForUser($user)['flat'];
     }
 
-    private function normalizePreference(string $preference): string
-    {
-        return match ($preference) {
-            'admin.system.domains' => 'admin.system.update.business-domain',
-            'admin.system.update.belimbing' => 'admin.system.update.deployment',
-            default => $preference,
-        };
-    }
-
     private function canViewBusinessDomains(mixed $user): bool
     {
         return $this->authz
-            ->can(Actor::forUser($user), 'admin.system.update.business-domain.view')
+            ->can(Actor::forUser($user), 'admin.system.software.business-domain.view')
             ->allowed;
     }
 }

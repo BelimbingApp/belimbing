@@ -100,8 +100,8 @@ return [
             'parent' => 'admin.system',
         ],
         [
-            'id' => 'admin.system.update',
-            'label' => 'Update',
+            'id' => 'admin.system.software',
+            'label' => 'Software',
             'icon' => 'heroicon-o-arrow-down-circle',
             'parent' => 'admin.system',
         ],
