@@ -11,8 +11,8 @@ use Illuminate\Support\Str;
 /**
  * Produces a BLB-owned `background_removed` derivative of an original media
  * asset via the configured {@see PhotoCleanupProvider}. The original asset is
- * never modified; re-running replaces only the derivative, so "retry" is just
- * calling clean() again.
+ * never modified; re-running a provider replaces only that provider's
+ * derivative.
  */
 class PhotoCleanupService
 {
@@ -37,14 +37,17 @@ class PhotoCleanupService
         $mimeType = (string) ($original->mime_type ?? 'image/jpeg');
 
         $result = $this->provider->removeBackground($bytes, $filename, $mimeType, $companyId);
+        $providerKey = Str::slug($result['provider']) ?: 'provider';
 
-        $existing = $original->backgroundRemoved()->first();
+        $existing = $original->backgroundRemovedDerivatives()
+            ->get()
+            ->first(fn (MediaAsset $asset): bool => data_get($asset->metadata, 'provider') === $result['provider']);
 
         if ($existing instanceof MediaAsset) {
             $this->mediaAssets->delete($existing);
         }
 
-        $storageKey = Str::beforeLast($original->storage_key, '.').'.background_removed.png';
+        $storageKey = Str::beforeLast($original->storage_key, '.').'.'.$providerKey.'.background_removed.png';
 
         return $this->mediaAssets->putDerivativeBytes(
             $original,

@@ -82,7 +82,7 @@ it('creates a background_removed derivative without modifying the original', fun
         ->and($original->fresh()->metadata)->toBeNull();
 });
 
-it('replaces an existing derivative on retry, removing the old file', function (): void {
+it('replaces an existing derivative for the same provider, removing the old file', function (): void {
     $companyId = configurePhotoRoom();
 
     Http::fake([

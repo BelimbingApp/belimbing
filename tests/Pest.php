@@ -144,9 +144,13 @@ function configureImageProviderKey(string $providerKey, int $companyId, string $
  * real photo-cleanup run (deterministic storage key + provenance metadata),
  * without calling the provider. Stand-in for an already-cleaned photo.
  */
-function backgroundRemovedDerivative(MediaAsset $original, string $bytes = 'CLEANED-PNG-BYTES'): MediaAsset
-{
-    $storageKey = Str::beforeLast($original->storage_key, '.').'.background_removed.png';
+function backgroundRemovedDerivative(
+    MediaAsset $original,
+    string $bytes = 'CLEANED-PNG-BYTES',
+    string $provider = PhotoRoomConfiguration::PROVIDER,
+    string $providerLabel = PhotoRoomConfiguration::PROVIDER_LABEL,
+): MediaAsset {
+    $storageKey = Str::beforeLast($original->storage_key, '.').'.'.Str::slug($provider).'.background_removed.png';
 
     return app(MediaAssetStore::class)->putDerivativeBytes(
         $original,
@@ -158,8 +162,8 @@ function backgroundRemovedDerivative(MediaAsset $original, string $bytes = 'CLEA
             'original_filename' => Str::beforeLast((string) $original->original_filename, '.').'.background_removed.png',
             'mime_type' => 'image/png',
             'metadata' => [
-                'provider' => PhotoRoomConfiguration::PROVIDER,
-                'provider_label' => PhotoRoomConfiguration::PROVIDER_LABEL,
+                'provider' => $provider,
+                'provider_label' => $providerLabel,
                 'source_asset_id' => $original->id,
                 'status' => 'ready',
                 'cleaned_at' => now()->toIso8601String(),

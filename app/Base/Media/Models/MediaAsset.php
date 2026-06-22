@@ -37,6 +37,7 @@ use Illuminate\Support\Facades\URL;
  * @property-read MediaAsset|null $parent
  * @property-read Collection<int, MediaAsset> $derivatives
  * @property-read MediaAsset|null $backgroundRemoved
+ * @property-read Collection<int, MediaAsset> $backgroundRemovedDerivatives
  */
 class MediaAsset extends Model
 {
@@ -136,15 +137,28 @@ class MediaAsset extends Model
     }
 
     /**
-     * The single `background_removed` derivative of this asset, if a
-     * photo-cleanup run has produced one. Centralizes the "cleaned child"
-     * predicate so callers never re-state the kind filter.
+     * The latest `background_removed` derivative of this asset, if a
+     * photo-cleanup run has produced one. Multiple providers can each keep one
+     * derivative, so this is only a convenience fallback for older callers.
      *
      * @return HasOne<MediaAsset, $this>
      */
     public function backgroundRemoved(): HasOne
     {
         return $this->hasOne(self::class, 'parent_id')
-            ->where('kind', self::KIND_BACKGROUND_REMOVED);
+            ->where('kind', self::KIND_BACKGROUND_REMOVED)
+            ->latestOfMany();
+    }
+
+    /**
+     * All provider-specific `background_removed` derivatives of this asset.
+     *
+     * @return HasMany<MediaAsset, $this>
+     */
+    public function backgroundRemovedDerivatives(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id')
+            ->where('kind', self::KIND_BACKGROUND_REMOVED)
+            ->orderBy('id');
     }
 }
