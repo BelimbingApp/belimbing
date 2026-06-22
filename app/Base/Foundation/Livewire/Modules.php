@@ -13,7 +13,6 @@ use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -32,7 +31,11 @@ class Modules extends Component
 {
     use InteractsWithNotifications;
 
-    #[Url(as: 'tab')]
+    /**
+     * Active tab. The URL query string is owned by the x-ui.tabs primitive
+     * (persistence="query"); this property stays in sync via setTab() and is
+     * seeded from the request on mount for deep links.
+     */
     public string $tab = 'installed';
 
     /**
@@ -49,6 +52,13 @@ class Modules extends Component
      * What the open uninstall panel targets: 'domain' or 'extension'.
      */
     public string $uninstallKind = 'domain';
+
+    public function mount(?string $tab = null): void
+    {
+        $resolved = $tab ?? request()->query('tab');
+
+        $this->tab = $resolved === 'available' ? 'available' : 'installed';
+    }
 
     public function setTab(string $tab): void
     {

@@ -41,10 +41,31 @@
     }"
     @keydown.escape.window="closeRunLog()"
 >
-    <header class="space-y-1">
-        <h1 class="text-2xl font-semibold text-ink">{{ __('Modules') }}</h1>
-        <p class="text-sm text-muted">{{ __('Manage installed software — business domains and the modules inside them — and install more from BelimbingApp. A fresh Belimbing install ships Base and Core only.') }}</p>
-    </header>
+    <x-ui.page-header
+        :title="__('Modules')"
+        :subtitle="__('Manage installed software and install more from BelimbingApp. Each row is a bundle you install or remove — a business domain or an extension; expand it to see the modules inside. A fresh Belimbing install ships Base and Core only.')"
+    >
+        <x-slot:help>
+            <dl class="space-y-3">
+                <div>
+                    <dt class="font-medium text-ink">{{ __('Bundle') }}</dt>
+                    <dd>{{ __('A unit you install, update, or remove — a business domain (such as People) or an extension. Each row on this page is a bundle.') }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-ink">{{ __('Module') }}</dt>
+                    <dd>{{ __('An ownership boundary inside a bundle (such as People → Payroll). Expand a bundle to see its modules; modules are not installed or removed on their own.') }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-ink">{{ __('Contribution') }}</dt>
+                    <dd>{{ __('Runtime behavior one bundle adds to another module’s extension seam — for example a Malaysia payroll pack contributing to Payroll. A contribution rides along with its bundle.') }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-ink">{{ __('Slot') }}</dt>
+                    <dd>{{ __('A whole-module implementation chosen once per deployment. Switching a slot is a data migration, never a toggle on this page.') }}</dd>
+                </div>
+            </dl>
+        </x-slot:help>
+    </x-ui.page-header>
 
     <x-ui.session-flash />
 
@@ -93,16 +114,19 @@
         </div>
     @endif
 
-    <nav class="flex gap-2 border-b border-border-default">
-        <button type="button" wire:click="setTab('installed')" class="px-3 py-2 text-sm {{ $tab === 'installed' ? 'border-b-2 border-accent font-semibold text-ink' : 'text-muted hover:text-ink' }}">
-            {{ __('Installed') }}
-        </button>
-        <button type="button" wire:click="setTab('available')" class="px-3 py-2 text-sm {{ $tab === 'available' ? 'border-b-2 border-accent font-semibold text-ink' : 'text-muted hover:text-ink' }}">
-            {{ __('Available (:n)', ['n' => count($available) + count($availableExtensions) + count($catalogEntries)]) }}
-        </button>
-    </nav>
+    @php $availableCount = count($available) + count($availableExtensions) + count($catalogEntries); @endphp
 
-    @if ($tab === 'installed')
+    <x-ui.tabs
+        :tabs="[
+            ['id' => 'installed', 'label' => __('Installed')],
+            ['id' => 'available', 'label' => __('Available (:n)', ['n' => $availableCount])],
+        ]"
+        :default="$tab"
+        persistence="query"
+        query-key="tab"
+        wire-action="setTab"
+    >
+        <x-ui.tab id="installed"><div class="space-y-6">
         @if (count($dependencyIssues) > 0)
             <div class="rounded-2xl border border-danger-border bg-danger-surface px-4 py-3 text-sm text-danger-ink">
                 <div class="font-medium">{{ __('Module dependency issues') }}</div>
@@ -373,9 +397,9 @@
             {{ __('Database state kept by an uninstall — and any other unclaimed tables or settings — is listed under') }}
             <a href="{{ route('admin.system.database-residue.index') }}" class="text-accent hover:underline" wire:navigate>{{ __('Database Residue') }}</a>.
         </p>
-    @endif
+        </div></x-ui.tab>
 
-    @if ($tab === 'available')
+        <x-ui.tab id="available"><div class="space-y-6">
         @if (count($available) > 0)
             <section class="space-y-2">
                 <h2 class="text-lg font-semibold text-ink">{{ __('Available business domains') }}</h2>
@@ -492,5 +516,6 @@
                 </div>
             @endif
         </section>
-    @endif
+        </div></x-ui.tab>
+    </x-ui.tabs>
 </div>

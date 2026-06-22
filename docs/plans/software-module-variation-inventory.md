@@ -4,9 +4,8 @@
 **Last Updated:** 2026-06-22
 **Sources:**
 - `docs/architecture/module-system.md` — canonical vocabulary for Module, Distribution Bundle/Bundle, adapter, extension seam, slot, discovery contracts, and the current adapter/slot tension.
-- `resources/core/views/livewire/base/foundation/bundle-manager.blade.php` + `app/Base/Foundation/Livewire/BundleManager.php` — current Bundles inventory/catalog screen.
-- `resources/core/views/livewire/base/foundation/domain-manager.blade.php` + `app/Base/Foundation/Livewire/DomainManager.php` + `app/Base/Foundation/Services/DomainInstaller.php` — current Business Domains lifecycle screen.
-- `resources/core/views/livewire/admin/system/software/deployment/index.blade.php` + `app/Base/Software/Services/DistributionBundleRepository.php` — current Updates/deployment surface and Git-backed Distribution Bundle discovery.
+- `resources/core/views/livewire/base/foundation/modules.blade.php` + `app/Base/Foundation/Livewire/Modules.php` + `app/Base/Foundation/Services/DomainInstaller.php` + `app/Base/Foundation/Services/ExtensionInstaller.php` — current **Modules** screen. PR #152 merged the former Bundles inventory/catalog and Business Domains lifecycle screens into this one; PR #153 added private-extension install.
+- `resources/core/views/livewire/admin/system/software/deployment/index.blade.php` + `app/Base/Software/Services/DistributionBundleRepository.php` — current Updates surface and Git-backed Distribution Bundle discovery.
 - `docs/plans/plugin-manager-ui.md` + `docs/plans/plugin-term-retirement.md` — prior Bundles/catalog decisions and terminology cleanup.
 - `app/Modules/Commerce/Plugins/` — live extension-seam precedent for discovered adapter/data contributions.
 - `app/Modules/People/Payroll/` + `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Country Pack v0 contract and Malaysia as the first adapter-shaped worked example.
@@ -81,7 +80,7 @@ Payroll should not define the whole architecture. The generic decision is: if va
 
 ### System → Software pages
 
-**Inventory** (current Bundles screen, renamed in the UI when grouping lands):
+**Inventory** (the current **Modules** screen — renamed to Inventory only if/when Bundle-grouping lands; see the Phase 2 reconciliation note):
 - Installed tab: grouped by Bundle, with compact table rows or cards and a detail drawer/disclosure for contained modules, dependencies, events, contributions, selected slot status, path/repo/branch, dirty/unpushed state, and dependency warnings.
 - Catalog tab: grouped by intent — Business domains, Add-ons/adapters, Slot implementations. Business-domain entries link to the Business Domains lifecycle flow; add-ons/adapters expose install guidance; slot implementations show selection/migration warnings and no direct switch.
 
@@ -126,13 +125,15 @@ Goal: PR #151 becomes the generic module-variation/UI plan instead of a Payroll-
 
 Goal: the existing Software pages use honest labels before the data model changes.
 
-- [ ] Rename the visible Bundles page to **Software Inventory** or **Inventory** while keeping Bundle as the row/object noun.
-- [ ] Replace local tab/header markup in the current Bundles view with `x-ui.page-header` and `x-ui.tabs` so the page matches the rest of Administration.
-- [ ] Update the Bundles subtitle and summary cards so they do not imply “installed modules” and “installed bundles” are the same thing.
-- [ ] Rename the visible Updates page title from “Deployment” to “Updates”; keep deployment wording in help text for the pull/build/migrate/reload workflow.
-- [ ] Add short inline help that defines Bundle, Module, Contribution, and Slot in operator terms.
+> Reconciliation (2026-06-22): PR #152 had already merged Bundles + Business Domains into one **Modules** screen, so this phase was adapted from "rename the Bundles page" to "modernize the Modules page." Decision: keep the **Modules** name and its `modules` route/menu identifiers; the Bundle-centric **Inventory** rename is deferred to the Phase 3 Bundle-grouping decision rather than re-opening #152. {claud/opus-4.8}
 
-Validation: focused feature tests for page labels/navigation plus a quick visual check of System → Software pages.
+- [x] Keep the merged **Modules** screen name/route; defer the Inventory rename to the Phase 3 Bundle-grouping decision. {claud/opus-4.8}
+- [x] Replace the local `<header>`/`<nav>` markup in the Modules view with `x-ui.page-header` and `x-ui.tabs` (client tabs synced to the server via `wire-action="setTab"`; `#[Url]` dropped in favour of the primitive's `persistence="query"`). {claud/opus-4.8}
+- [x] Rewrite the Modules subtitle so it does not conflate bundles and modules — each row is a bundle (business domain or extension); modules live inside. (No misleading "installed modules / installed bundles" summary cards survived the #152 merge.) {claud/opus-4.8}
+- [x] Updates page title already reads "Updates" (deployment wording kept only as explanatory copy / table caption) — verified, no change needed. {claud/opus-4.8}
+- [x] Add inline help (page-header help slot) defining Bundle, Module, Contribution, and Slot in operator terms. {claud/opus-4.8}
+
+Validation: `ModulesTest`, `UpdateMenuTest`, and `ExtensionInstallTest` pass (21 tests) after the markup migration; both tab panels render server-side, so content assertions stay tab-agnostic.
 
 ### Phase 3 — Installed Software Inventory read model
 
