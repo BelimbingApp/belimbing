@@ -25,7 +25,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
         'blb/people-leave',
         'blb/people-claim',
         'blb/people-settings',
-        'blb/payroll-my',
+        'blb/payroll',
     );
 
     $attendance = collect($manifests)->firstWhere('name', 'blb/people-attendance');
@@ -37,7 +37,7 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
             'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
         );
 
-    $payroll = collect($manifests)->firstWhere('name', 'blb/payroll-my');
+    $payroll = collect($manifests)->firstWhere('name', 'blb/payroll');
 
     expect($payroll->version)->not->toBe('')
         ->and($payroll->description)->not->toBe('')
