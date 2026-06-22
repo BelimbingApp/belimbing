@@ -118,6 +118,28 @@ function configurePhotoRoomSandbox(string $apiKey = 'sandbox-key-123'): int
 }
 
 /**
+ * Store an image-family provider key for a company. Generic over the known
+ * Vision providers used in tests; keeps display_name/base_url honest per
+ * provider so the family summary and credential store see consistent state.
+ */
+function configureImageProviderKey(string $providerKey, int $companyId, string $apiKey = 'test-key'): void
+{
+    $meta = [
+        'photoroom' => ['PhotoRoom', 'https://sdk.photoroom.com'],
+        'poof' => ['Poof', 'https://api.poof.bg/v1'],
+        'claid' => ['Claid AI', 'https://api.claid.ai/v1'],
+        'stability' => ['Stability AI', 'https://api.stability.ai/v2beta/stable-image'],
+    ][$providerKey] ?? ['Provider', 'https://example.test'];
+
+    app(ImageProviderCredentialStore::class)->upsert($companyId, $providerKey, [
+        'display_name' => $meta[0],
+        'base_url' => $meta[1],
+        'credentials' => ['api_key' => $apiKey],
+        'connection_config' => [],
+    ]);
+}
+
+/**
  * Build a `background_removed` derivative of an original asset that mirrors a
  * real photo-cleanup run (deterministic storage key + provenance metadata),
  * without calling the provider. Stand-in for an already-cleaned photo.

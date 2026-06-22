@@ -8,7 +8,7 @@ use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
     <x-ui.modal wire:model="show" class="max-w-lg">
         <div class="p-card-inner">
             <div class="flex items-center justify-between mb-1">
-                <h3 class="text-lg font-medium tracking-tight text-ink">{{ $this->isConfigured ? __('Edit :provider', ['provider' => $displayName]) : __('Connect :provider', ['provider' => $displayName]) }}</h3>
+                <h3 class="text-lg font-medium tracking-tight text-ink">{{ $this->isConfigured ? __('Edit :provider key', ['provider' => $displayName]) : __('Add :provider key', ['provider' => $displayName]) }}</h3>
                 <button wire:click="$set('show', false)" type="button" class="text-muted hover:text-ink" aria-label="{{ __('Close') }}">
                     <x-icon name="heroicon-o-x-mark" class="w-5 h-5" />
                 </button>
@@ -52,7 +52,7 @@ use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
                 <div class="flex items-center justify-end gap-2 pt-2">
                     <x-ui.button variant="ghost" type="button" wire:click="$set('show', false)">{{ __('Cancel') }}</x-ui.button>
                     <x-ui.button type="submit" variant="primary" wire:loading.attr="disabled" wire:target="save">
-                        {{ $this->isConfigured ? __('Update') : __('Connect') }}
+                        {{ $this->isConfigured ? __('Update key') : __('Save key') }}
                     </x-ui.button>
                 </div>
             </form>
@@ -69,7 +69,7 @@ use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
                 </button>
             </div>
 
-            <p class="text-sm text-muted mb-4">{{ __('This deletes the stored credentials for :provider. You can reconnect anytime.', ['provider' => $displayName]) }}</p>
+            <p class="text-sm text-muted mb-4">{{ __('This deletes the stored credentials for :provider. You can add it again anytime.', ['provider' => $displayName]) }}</p>
 
             <div class="flex items-center justify-end gap-2">
                 <x-ui.button variant="ghost" type="button" wire:click="$set('showRemoveConfirm', false)">{{ __('Cancel') }}</x-ui.button>

@@ -208,8 +208,8 @@ class ImageProviderSetup extends Component
         return match ($this->providerKey) {
             PhotoRoomConfiguration::PROVIDER => 'https://app.photoroom.com/api-dashboard',
             AlibabaConfiguration::PROVIDER => 'https://bailian.console.alibabacloud.com/?tab=model#/api-key',
-            ClaidConfiguration::PROVIDER => 'https://app.claid.ai/',
-            PoofConfiguration::PROVIDER => 'https://poof.bg/',
+            ClaidConfiguration::PROVIDER => 'https://claid.ai/account/api',
+            PoofConfiguration::PROVIDER => 'https://dash.poof.bg/',
             StabilityConfiguration::PROVIDER => 'https://platform.stability.ai/account/keys',
             BedrockConfiguration::PROVIDER => 'https://console.aws.amazon.com/bedrock/home#/api-keys/long-term/create',
             default => null,

@@ -21,5 +21,10 @@ final readonly class AiProviderSummary
         public bool $configured = false,
         // One-line description of the provider and what it does.
         public string $description = '',
+        // Whether this provider is the operator's active choice for the
+        // family's work (e.g. the selected photo-cleanup adapter). Only
+        // meaningful when `connected` is true; the operator surface uses this
+        // to mark the active row without re-resolving the adapter.
+        public bool $active = false,
     ) {}
 }

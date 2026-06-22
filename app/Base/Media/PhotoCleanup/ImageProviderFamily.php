@@ -7,10 +7,17 @@ use App\Base\AI\DTO\AiProviderSummary;
 
 /**
  * The image-processing family: AI providers that operate on pixels rather than
- * tokens (background removal, enhancement, upscaling). PhotoRoom is the first
- * member; Claid and others slot in here without touching the LLM family. Unlike
- * LLM providers, image credentials are company-scoped {@see AiProvider} rows
- * (family {@code image}).
+ * tokens (background removal, enhancement, upscaling). PhotoRoom and Poof are
+ * the first members with working cleanup clients; Claid, Stability, DashScope,
+ * and Bedrock can store credentials (configured) but their cleanup clients are
+ * not built yet — they stay `Key stored`, never `Ready`, until an adapter
+ * registers in {@see PhotoCleanupProviderRegistry}. Unlike LLM providers, image
+ * credentials are company-scoped {@see AiProvider} rows (family {@code image}).
+ *
+ * `connected` (the `Ready` badge) follows the registry: a row is `Ready` once
+ * its adapter is bound AND a key is stored — exactly the existing taxonomy. The
+ * operator's active choice ({@see PhotoCleanupSelection}) is marked `active` so
+ * the surface can show which `Ready` provider photo cleanup will run through.
  *
  * See docs/plans/media-photo-cleanup-providers.md for the family's internal
  * provider registry.
@@ -26,6 +33,8 @@ class ImageProviderFamily implements AiProviderFamily
         private readonly PoofConfiguration $poof,
         private readonly StabilityConfiguration $stability,
         private readonly BedrockConfiguration $bedrock,
+        private readonly PhotoCleanupProviderRegistry $registry,
+        private readonly PhotoCleanupSelection $selection,
     ) {}
 
     public function key(): string
@@ -49,58 +58,50 @@ class ImageProviderFamily implements AiProviderFamily
             return [];
         }
 
-        // PhotoRoom is the only image provider with a working cleanup client, so
-        // it is the only one that can be "connected" (usable now). The others can
-        // store credentials (configured) but their clients aren't built yet —
-        // connected stays false. None is "coming soon": all four have a setup
-        // screen.
-        $photoRoom = $this->photoRoom->resolve($companyId);
-        $photoRoomConfigured = $photoRoom['api_key'] !== null;
-
-        $alibaba = $this->alibaba->resolve($companyId);
-        $claid = $this->claid->resolve($companyId);
-        $poof = $this->poof->resolve($companyId);
-        $stability = $this->stability->resolve($companyId);
-        $bedrock = $this->bedrock->resolve($companyId);
+        $activeKey = $this->selection->activeProviderKey($companyId);
 
         $providers = [
-            new AiProviderSummary(
-                familyKey: self::KEY,
-                providerKey: PhotoRoomConfiguration::PROVIDER,
-                displayName: PhotoRoomConfiguration::PROVIDER_LABEL,
-                connected: $photoRoomConfigured,
-                configured: $photoRoomConfigured,
-                description: (string) __('Fast, e-commerce-tuned background removal & product cutouts.'),
+            $this->summary(
+                PhotoRoomConfiguration::PROVIDER,
+                PhotoRoomConfiguration::PROVIDER_LABEL,
+                $this->photoRoom->resolve($companyId)['api_key'] !== null,
+                (string) __('Fast, e-commerce-tuned background removal & product cutouts.'),
+                $activeKey,
             ),
-            $this->credentialOnlySummary(
+            $this->summary(
                 AlibabaConfiguration::PROVIDER,
                 AlibabaConfiguration::PROVIDER_LABEL,
-                $alibaba['api_key'] !== null,
+                $this->alibaba->resolve($companyId)['api_key'] !== null,
                 (string) __('Generative image editing via DashScope (Qwen/Wanxiang) — removal & replacement.'),
+                $activeKey,
             ),
-            $this->credentialOnlySummary(
+            $this->summary(
                 ClaidConfiguration::PROVIDER,
                 ClaidConfiguration::PROVIDER_LABEL,
-                $claid['api_key'] !== null,
+                $this->claid->resolve($companyId)['api_key'] !== null,
                 (string) __('AI image editing — background removal, upscaling & enhancement.'),
+                $activeKey,
             ),
-            $this->credentialOnlySummary(
+            $this->summary(
                 PoofConfiguration::PROVIDER,
                 PoofConfiguration::PROVIDER_LABEL,
-                $poof['api_key'] !== null,
+                $this->poof->resolve($companyId)['api_key'] !== null,
                 (string) __('Low-cost, high-resolution background removal.'),
+                $activeKey,
             ),
-            $this->credentialOnlySummary(
+            $this->summary(
                 StabilityConfiguration::PROVIDER,
                 StabilityConfiguration::PROVIDER_LABEL,
-                $stability['api_key'] !== null,
+                $this->stability->resolve($companyId)['api_key'] !== null,
                 (string) __('Stable Image edit API — background removal, search-and-recolor, erase & more.'),
+                $activeKey,
             ),
-            $this->credentialOnlySummary(
+            $this->summary(
                 BedrockConfiguration::PROVIDER,
                 BedrockConfiguration::PROVIDER_LABEL,
-                $bedrock['api_key'] !== null,
+                $this->bedrock->resolve($companyId)['api_key'] !== null,
                 (string) __('Stability image models (background removal, generation & edit) via Amazon Bedrock.'),
+                $activeKey,
             ),
         ];
 
@@ -111,18 +112,23 @@ class ImageProviderFamily implements AiProviderFamily
     }
 
     /**
-     * A provider whose credentials can be stored but whose cleanup client is
-     * not built yet: configured when a key exists, never "connected" (usable).
+     * One provider summary. `connected` (the `Ready` badge) is honest about the
+     * registry: a row is `Ready` only when a cleanup adapter is registered for
+     * its key AND a key is stored. `active` marks the operator's chosen
+     * provider among the `Ready` ones.
      */
-    private function credentialOnlySummary(string $providerKey, string $label, bool $keyStored, string $description): AiProviderSummary
+    private function summary(string $providerKey, string $label, bool $keyStored, string $description, string $activeKey): AiProviderSummary
     {
+        $connected = $keyStored && $this->registry->supports($providerKey);
+
         return new AiProviderSummary(
             familyKey: self::KEY,
             providerKey: $providerKey,
             displayName: $label,
-            connected: false,
+            connected: $connected,
             configured: $keyStored,
             description: $description,
+            active: $connected && $activeKey === $providerKey,
         );
     }
 }
