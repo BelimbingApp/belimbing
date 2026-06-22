@@ -2,15 +2,11 @@
 
 return [
     'capabilities' => [
-        // Bundle manager UI (admin/system/software/bundles). Read-only by design;
-        // see docs/plans/plugin-manager-ui.md.
-        'admin.system.software.bundles.view',
-        'admin.system.software.bundles.manage',
-
-        // Business domain manager UI (admin/system/software/business-domains).
-        // Code install/uninstall stays in the shell; manage gates the
-        // lifecycle actions while durable-state cleanup stays in Database.
-        'admin.system.software.business-domain.view',
-        'admin.system.software.business-domain.manage',
+        // Modules screen (admin/system/software/modules) — installed software
+        // inventory + domain lifecycle + BelimbingApp catalog. `view` reads the
+        // screen; `manage` gates install/enable/disable/uninstall and catalog
+        // refresh. Durable-state cleanup stays in Database (Database Residue).
+        'admin.system.software.modules.view',
+        'admin.system.software.modules.manage',
     ],
 ];

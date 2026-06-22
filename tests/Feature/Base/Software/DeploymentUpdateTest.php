@@ -99,9 +99,9 @@ test('deployment page lists Distribution Bundles with status for admins', functi
     Http::fake();
 
     $this->actingAs($user)
-        ->get(route('admin.system.software.deployment.index'))
+        ->get(route('admin.system.software.updates.index'))
         ->assertOk()
-        ->assertSee('Deployment')
+        ->assertSee('Updates')
         ->assertSee('Distribution Bundles')
         ->assertSee('Distribution Bundle')
         ->assertSee('A Distribution Bundle is BLB&#039;s installable, versioned code bundle.', false)
@@ -122,7 +122,7 @@ test('failed remote checks name the repos instead of assuming they are private',
     Http::fake();
 
     $this->actingAs($user)
-        ->get(route('admin.system.software.deployment.index'))
+        ->get(route('admin.system.software.updates.index'))
         ->assertOk()
         ->assertSee('Could not check latest commits for these Distribution Bundles: BelimbingApp/belimbing')
         ->assertSee('Public repositories do not need a token')
@@ -138,7 +138,7 @@ test('deployment page reports when git cannot be launched', function (): void {
     Http::fake();
 
     $this->actingAs($user)
-        ->get(route('admin.system.software.deployment.index'))
+        ->get(route('admin.system.software.updates.index'))
         ->assertOk()
         ->assertSee('Could not read Git origin remote')
         ->assertSee('Could not run git')
@@ -411,13 +411,13 @@ test('the update console stays reachable during maintenance and can bring the si
 
     try {
         $this->actingAs($user)
-            ->get(route('admin.system.software.deployment.index'))
+            ->get(route('admin.system.software.updates.index'))
             ->assertOk()
             ->assertSee('The site is in maintenance mode.');
 
         $this->actingAs($user)
             ->post(route('admin.system.software.online'))
-            ->assertRedirect(route('admin.system.software.deployment.index'))
+            ->assertRedirect(route('admin.system.software.updates.index'))
             ->assertSessionHas('status');
 
         expect(app()->isDownForMaintenance())->toBeFalse();

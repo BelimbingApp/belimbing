@@ -76,7 +76,7 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 ### Domain Lifecycle
 
-A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Business Domains** or by equivalent deployment automation.
+A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Modules** or by equivalent deployment automation.
 
 - **Installed:** the domain Distribution Bundle is present and participates in discovery.
 - **Disabled:** the Distribution Bundle remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
@@ -148,7 +148,7 @@ These path contracts are the pluggability contract: a module that satisfies the 
 | Tailwind classes | `@source` entries in `resources/app.css`: `./core/views`, `../app/Modules/*/*/Views`, `../extensions/*/*/Views` | Vite/Tailwind build |
 | Blade hot reload | `resources/core/views/**` · `app/Modules/*/*/Views/**` · `extensions/*/*/Views/**` | `vite.config.js` |
 | Tests | testsuites `Modules` (`app/Modules/*/Tests`, `app/Modules/*/*/Tests`) and `Extensions` (`extensions/*/*/Tests`) | `phpunit.xml` + `tests/Pest.php` |
-| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader`; used by the plugin dashboard and database migration dependency preflight |
+| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader`; used by the Modules screen and database migration dependency preflight |
 
 ---
 
@@ -169,11 +169,11 @@ All module roots use the same internal vocabulary. A module includes only the di
 | `Tests/` | Module-owned tests that travel with the module. |
 | `composer.json` | Optional `extra.blb` manifest for module identity, version, dependencies, published/consumed events, and coarse schema defaults. |
 
-`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the plugin dashboard. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
+`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the Modules screen. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
 
 Module manifests are metadata for installed-module UI, dependency-health warnings, and database migration dependency preflight. They should remain compatible with future Composer Distribution Bundles, but they do not replace Composer's PHP dependency resolution or provider independence.
 
-`extra.blb.module` is the canonical module identity used by slots, dependencies, and the plugin dashboard. `extra.blb.requires-modules` declares hard dependencies by module identity. A required module must be installed and enabled before module-aware migration commands run. A conventional path identity (`base/database`, `core/company`, `people/payroll`, `vendor/module`) can satisfy availability only for modules that have no manifest yet; once a manifest declares `extra.blb.module`, the manifest identity is authoritative and the filesystem identity is not an alias. Non-wildcard version constraints require the required module to publish `extra.blb.version`.
+`extra.blb.module` is the canonical module identity used by slots, dependencies, and the Modules screen. `extra.blb.requires-modules` declares hard dependencies by module identity. A required module must be installed and enabled before module-aware migration commands run. A conventional path identity (`base/database`, `core/company`, `people/payroll`, `vendor/module`) can satisfy availability only for modules that have no manifest yet; once a manifest declares `extra.blb.module`, the manifest identity is authoritative and the filesystem identity is not an alias. Non-wildcard version constraints require the required module to publish `extra.blb.version`.
 
 Nested-git modules and future Composer packages publish schema state through the same module-root manifest. Per-migration schema maturity remains source-local in the migration file (`IncubatingSchema`). The optional `extra.blb.schema` block is only a coarse package default for future composerized plugins, such as `{ "default": "incubating" }` before first release; it must not list individual migration files because that would duplicate the migration-local source of truth.
 

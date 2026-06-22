@@ -1,6 +1,6 @@
 # plugin-manager-ui
 
-**Status:** Phases 1–3 complete (2026-05-16). Superseded in part — the screen is now **System → Software → Bundles**, and the manifest-`role` grouping it describes was removed as unused (YAGNI); see `docs/plans/plugin-term-retirement.md`. Phase 4 (topic tagging + cross-references) remains, retargeted to the `blb-bundle` topic.
+**Status:** Phases 1–3 complete (2026-05-16). Superseded — the standalone Bundles screen was **merged into System → Software → Modules** (`docs/plans/software-modules-screen.md`); the manifest-`role` grouping it describes was removed as unused (`docs/plans/plugin-term-retirement.md`). The inventory + BelimbingApp catalog described here now live on the Modules screen. Phase 4 (topic tagging) remains, retargeted to the `blb-bundle` topic.
 **Last Updated:** 2026-06-21
 **Sources:**
 - `docs/architecture/module-system.md` — the module-system spec this UI surfaces.
@@ -48,7 +48,7 @@ A first-party admin screen that shows what is installed (with manifest metadata 
 
 **Two manifest field additions.** `extra.blb.version` (SemVer string) and `extra.blb.description` (short text) get added to the existing per-module `composer.json` files. Both are zero-risk additions and useful regardless of the UI — every status query benefits from a version and a human-readable description.
 
-**Location in the admin shell.** Lives under `admin/system/bundles` (originally `admin/system/plugins`), to match the existing `admin/system/*` family (logs, database tables, etc.). Sidebar entry under **System → Software → Bundles** (the "Software" group also hosts Updates, Business Domains, and GitHub Access).
+**Location in the admin shell.** Lives under `admin/system/bundles` (originally `admin/system/plugins`), to match the existing `admin/system/*` family (logs, database tables, etc.). Now merged into **System → Software → Modules** (the "Software" group also hosts Updates and GitHub Access).
 
 ## Public Contract
 

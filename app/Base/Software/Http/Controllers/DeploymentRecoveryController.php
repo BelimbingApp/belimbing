@@ -20,7 +20,7 @@ class DeploymentRecoveryController
         Artisan::call('up');
 
         return redirect()
-            ->route('admin.system.software.deployment.index')
+            ->route('admin.system.software.updates.index')
             ->with('status', __('Belimbing is back online.'));
     }
 }

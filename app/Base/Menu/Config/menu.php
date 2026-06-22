@@ -102,7 +102,7 @@ return [
         [
             'id' => 'admin.system.software',
             'label' => 'Software',
-            'icon' => 'heroicon-o-arrow-down-circle',
+            'icon' => 'heroicon-o-cube',
             'parent' => 'admin.system',
         ],
     ],
