@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Scope:** Belimbing's module system — directory layout, Distribution Bundle model, lifecycle, variation (adapters and slots), and discovery contracts
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-06-20
+**Last Updated:** 2026-06-22
 **Related:** `docs/brief.md`, `docs/architecture/database.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ---
@@ -29,7 +29,7 @@ These terms are adjacent and easily conflated. They are not synonyms.
 | **Adapter** | A class that implements a provider/contract so variation registers through discovery — e.g. `MarketplaceChannelProvider` (Shopee, Lazada) or `CommerceReadinessContributor` (Ham auto-parts). This is [Mechanism 1](#mechanism-1--contract--adapters-the-default). An adapter is one *contribution*, not a registry. |
 | **Extension seam (contribution registry)** | A module that *discovers and registers contributions from other modules* into a host domain. `Commerce/Plugins` + `CommercePluginRegistry` is the live example: it collects both adapter classes (channel providers, readiness contributors) **and** data/config contributions (catalog presets, template mappings, workbench panels, insight pages). It is an extension point, **not** an adapter, and the contributions it holds are broader than adapters. The historical `Plugins` directory name predates this glossary; read it as "Commerce's extension seam." |
 
-> **Note on "plugin" (retired on operator surfaces):** the word was overloaded across the codebase, meaning three different things — (1) the inventory **dashboard** of installed *modules* plus an available-bundle catalog; (2) `Commerce/Plugins`, an **extension seam** (above); (3) colloquially, an installable unit, which this spec always calls a **Distribution Bundle** and never "plugin." None of these is an *adapter*. The operator-facing surfaces have dropped "plugin": the admin menu group is **Software**, its inventory/catalog screen is **Bundles**, and the pull/build/migrate/reload screen is **Updates**. The `extra.blb.role` field (which carried `source`/`plugin` values) was removed entirely as unused — a module's role is derivable from its dependency edges and was duplicated by the composer `"type"`. The remaining "plugin" tokens are internal: the `Commerce/Plugins` directory / `CommercePluginRegistry`, and the composer package `"type": "blb-plugin"`. When precision matters, prefer Module, Distribution Bundle (Bundle), adapter, or extension seam over "plugin."
+> **Note on "plugin" (retired on operator surfaces):** the word was overloaded across the codebase, meaning three different things — (1) the inventory **dashboard** of installed *modules* plus an available-bundle catalog; (2) `Commerce/Plugins`, an **extension seam** (above); (3) colloquially, an installable unit, which this spec always calls a **Distribution Bundle** and never "plugin." None of these is an *adapter*. The operator-facing surfaces have dropped "plugin": the admin menu group is **Software**, its combined inventory/catalog and domain lifecycle screen is **Modules**, and the pull/build/migrate/reload screen is **Updates**. The `extra.blb.role` field (which carried `source`/`plugin` values) was removed entirely as unused — a module's role is derivable from its dependency edges and was duplicated by the composer `"type"`. The remaining "plugin" tokens are internal: the `Commerce/Plugins` directory / `CommercePluginRegistry`, and the composer package `"type": "blb-plugin"`. When precision matters, prefer Module, Distribution Bundle (Bundle), adapter, or extension seam over "plugin."
 
 ---
 
@@ -76,7 +76,7 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 ### Domain Lifecycle
 
-A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Business Domains** or by equivalent deployment automation.
+A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Modules** or by equivalent deployment automation.
 
 - **Installed:** the domain Distribution Bundle is present and participates in discovery.
 - **Disabled:** the Distribution Bundle remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
@@ -148,7 +148,7 @@ These path contracts are the pluggability contract: a module that satisfies the 
 | Tailwind classes | `@source` entries in `resources/app.css`: `./core/views`, `../app/Modules/*/*/Views`, `../extensions/*/*/Views` | Vite/Tailwind build |
 | Blade hot reload | `resources/core/views/**` · `app/Modules/*/*/Views/**` · `extensions/*/*/Views/**` | `vite.config.js` |
 | Tests | testsuites `Modules` (`app/Modules/*/Tests`, `app/Modules/*/*/Tests`) and `Extensions` (`extensions/*/*/Tests`) | `phpunit.xml` + `tests/Pest.php` |
-| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader`; used by the plugin dashboard and database migration dependency preflight |
+| Module manifests | `composer.json` with an `extra.blb` block at the module root (optional) | `App\Base\Foundation\ModuleManifest\ModuleManifestReader`; used by the Modules screen and database migration dependency preflight |
 
 ---
 
@@ -169,11 +169,11 @@ All module roots use the same internal vocabulary. A module includes only the di
 | `Tests/` | Module-owned tests that travel with the module. |
 | `composer.json` | Optional `extra.blb` manifest for module identity, version, dependencies, published/consumed events, and coarse schema defaults. |
 
-`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the plugin dashboard. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
+`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the Modules screen. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
 
 Module manifests are metadata for installed-module UI, dependency-health warnings, and database migration dependency preflight. They should remain compatible with future Composer Distribution Bundles, but they do not replace Composer's PHP dependency resolution or provider independence.
 
-`extra.blb.module` is the canonical module identity used by slots, dependencies, and the plugin dashboard. `extra.blb.requires-modules` declares hard dependencies by module identity. A required module must be installed and enabled before module-aware migration commands run. A conventional path identity (`base/database`, `core/company`, `people/payroll`, `vendor/module`) can satisfy availability only for modules that have no manifest yet; once a manifest declares `extra.blb.module`, the manifest identity is authoritative and the filesystem identity is not an alias. Non-wildcard version constraints require the required module to publish `extra.blb.version`.
+`extra.blb.module` is the canonical module identity used by slots, dependencies, and the Modules screen. `extra.blb.requires-modules` declares hard dependencies by module identity. A required module must be installed and enabled before module-aware migration commands run. A conventional path identity (`base/database`, `core/company`, `people/payroll`, `vendor/module`) can satisfy availability only for modules that have no manifest yet; once a manifest declares `extra.blb.module`, the manifest identity is authoritative and the filesystem identity is not an alias. Non-wildcard version constraints require the required module to publish `extra.blb.version`.
 
 Nested-git modules and future Composer packages publish schema state through the same module-root manifest. Per-migration schema maturity remains source-local in the migration file (`IncubatingSchema`). The optional `extra.blb.schema` block is only a coarse package default for future composerized plugins, such as `{ "default": "incubating" }` before first release; it must not list individual migration files because that would duplicate the migration-local source of truth.
 

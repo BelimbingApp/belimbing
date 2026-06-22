@@ -42,7 +42,7 @@ class LandingPageResolver
         }
 
         if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
-            return route('admin.system.software.business-domains.index', absolute: false);
+            return route('admin.system.software.modules.index', absolute: false);
         }
 
         return route('dashboard', absolute: false);
@@ -61,7 +61,7 @@ class LandingPageResolver
     private function canViewBusinessDomains(mixed $user): bool
     {
         return $this->authz
-            ->can(Actor::forUser($user), 'admin.system.software.business-domain.view')
+            ->can(Actor::forUser($user), 'admin.system.software.modules.view')
             ->allowed;
     }
 }

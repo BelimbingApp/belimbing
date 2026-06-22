@@ -4,26 +4,36 @@ namespace App\Base\Foundation\Livewire;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
+use App\Base\Foundation\ModuleManifest\ModuleManifest;
+use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
+use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Admin business-domain manager screen (admin/system/software/business-domains).
+ * Admin Modules screen (admin/system/software/modules).
  *
- * A fresh install ships Base + Core only; this screen is where an operator
- * installs official domains (clone + migrate), disables or re-enables an
- * installed domain, and uninstalls one — GitHub-style: typing
- * "uninstall commerce" deletes the checkout but keeps every table, while
- * "uninstall commerce and drop all tables" also removes the domain's
- * tables, migration-ledger rows, and settings.
+ * The single place to manage installed software. The Installed tab lists
+ * business domains with lifecycle actions (install / enable / disable /
+ * uninstall) and drills down to each domain's module manifests; the Available
+ * tab lists installable domains plus the BelimbingApp catalog.
  *
- * Database state kept by an uninstall is cleaned up later on the
- * Database Residue screen (admin/system/database-residue).
+ * Merges the former Bundles (inventory + catalog) and Business Domains
+ * (lifecycle) screens. Lifecycle goes through DomainInstaller; manifest detail
+ * through ModuleManifestReader; the catalog through BelimbingAppCatalogService.
  */
-class DomainManager extends Component
+class Modules extends Component
 {
+    use InteractsWithNotifications;
+
+    #[Url(as: 'tab')]
+    public string $tab = 'installed';
+
     /**
      * Domain whose uninstall confirmation panel is open.
      */
@@ -33,6 +43,11 @@ class DomainManager extends Component
      * GitHub-style typed confirmation for uninstall.
      */
     public string $uninstallPhrase = '';
+
+    public function setTab(string $tab): void
+    {
+        $this->tab = in_array($tab, ['installed', 'available'], true) ? $tab : 'installed';
+    }
 
     public function install(string $domain, DomainInstaller $installer): void
     {
@@ -48,7 +63,7 @@ class DomainManager extends Component
             : __(':domain install failed.', ['domain' => $domain]));
         session()->flash('command-log', $result['log']);
 
-        $this->redirectRoute('admin.system.software.business-domains.index');
+        $this->redirectRoute('admin.system.software.modules.index');
     }
 
     public function disable(string $domain, DomainInstaller $installer): void
@@ -60,7 +75,7 @@ class DomainManager extends Component
         session()->flash('success', __(':domain disabled. Its code stays on disk and its data stays claimed; discovery skips it from the next page load.', ['domain' => $domain]));
         $this->flashReloadLog($reloadLog);
 
-        $this->redirectRoute('admin.system.software.business-domains.index');
+        $this->redirectRoute('admin.system.software.modules.index');
     }
 
     public function enable(string $domain, DomainInstaller $installer): void
@@ -72,7 +87,7 @@ class DomainManager extends Component
         session()->flash('success', __(':domain enabled.', ['domain' => $domain]));
         $this->flashReloadLog($reloadLog);
 
-        $this->redirectRoute('admin.system.software.business-domains.index');
+        $this->redirectRoute('admin.system.software.modules.index');
     }
 
     public function openUninstall(string $domain): void
@@ -121,15 +136,73 @@ class DomainManager extends Component
 
         $this->flashReloadLog($result['reloadLog']);
 
-        $this->redirectRoute('admin.system.software.business-domains.index');
+        $this->redirectRoute('admin.system.software.modules.index');
+    }
+
+    public function refreshCatalog(): void
+    {
+        $this->authorizeManage();
+
+        app(BelimbingAppCatalogService::class)->refresh();
+        $this->tab = 'available';
+
+        $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
     public function render(DomainInstaller $installer): View
     {
-        return view('livewire.base.foundation.domain-manager', [
+        $reader = $this->reader();
+        $enabledManifests = $reader->all();
+        $installedManifests = $reader->allIncludingDisabledDomains();
+        $dependencyIssues = $reader->dependencyIssues($enabledManifests);
+        $manifestsByDomain = $this->manifestsByDomain($installedManifests);
+
+        $installed = $installer->installed();
+        foreach ($installed as $index => $domain) {
+            $installed[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($domain['name'])] ?? [];
+        }
+
+        $catalog = app(BelimbingAppCatalogService::class);
+        $installedModuleIds = collect($installedManifests)
+            ->map(fn (ModuleManifest $manifest): string => $manifest->module)
+            ->filter()
+            ->all();
+
+        return view('livewire.base.foundation.modules', [
+            'installed' => $installed,
             'available' => $installer->available(),
-            'installed' => $installer->installed(),
+            'dependencyIssues' => $dependencyIssues,
+            'catalogEntries' => $catalog->available(),
+            'installedModuleIds' => $installedModuleIds,
+            'catalogLastFetchedAt' => $catalog->lastFetchedAt(),
             'canManage' => $this->canManage(),
+        ]);
+    }
+
+    /**
+     * @param  list<ModuleManifest>  $manifests
+     * @return array<string, list<ModuleManifest>>
+     */
+    private function manifestsByDomain(array $manifests): array
+    {
+        $manifestsByDomain = [];
+
+        foreach ($manifests as $manifest) {
+            $domainKey = strtolower(explode('/', $manifest->module)[0] ?? '');
+            if ($domainKey !== '') {
+                $manifestsByDomain[$domainKey][] = $manifest;
+            }
+        }
+
+        return $manifestsByDomain;
+    }
+
+    private function reader(): ModuleManifestReader
+    {
+        return new ModuleManifestReader([
+            app_path('Base'),
+            app_path('Modules'),
+            base_path('extensions'),
         ]);
     }
 
@@ -145,6 +218,13 @@ class DomainManager extends Component
             "uninstall {$name} and drop all tables" => true,
             default => null,
         };
+    }
+
+    private function domainManifestKey(string $domain): string
+    {
+        return strtoupper($domain) === $domain
+            ? strtolower($domain)
+            : Str::pascalToKebab($domain);
     }
 
     private function authorizeManage(): void
@@ -163,7 +243,7 @@ class DomainManager extends Component
         }
 
         return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.system.software.business-domain.manage')
+            ->can(Actor::forUser($user), 'admin.system.software.modules.manage')
             ->allowed;
     }
 

@@ -70,7 +70,7 @@ it('reads extension manifests from owner and module depth', function (): void {
                 'version' => '1.2.3',
             ],
         ],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
         $manifests = (new ModuleManifestReader([$root.'/extensions']))->all();
@@ -95,7 +95,7 @@ it('uses manifest module identity instead of also accepting the conventional pat
     file_put_contents($canonical.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => ACME_PAYROLL_MODULE,
         'extra' => ['blb' => ['module' => 'vendor/payroll', 'version' => MODULE_MANIFEST_TEST_VERSION]],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     file_put_contents($dependent.MODULE_MANIFEST_COMPOSER_JSON, json_encode([
         'name' => ACME_DEPENDENT_MODULE,
@@ -104,7 +104,7 @@ it('uses manifest module identity instead of also accepting the conventional pat
             'version' => MODULE_MANIFEST_TEST_VERSION,
             'requires-modules' => [ACME_PAYROLL_MODULE => '*'],
         ]],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
         $reader = new ModuleManifestReader([$root.'/extensions']);
@@ -240,18 +240,28 @@ it('does not count disabled domains as installed dependencies', function (): voi
     File::ensureDirectoryExists($disabledDomain.'/Provider/Database/Migrations');
     File::ensureDirectoryExists($enabledDomain.'/Consumer');
 
+    file_put_contents($disabledDomain.'/Provider/composer.json', json_encode([
+        'name' => 'test/disabled-provider',
+        'extra' => ['blb' => [
+            'module' => 'zz-disabled-for-manifest-test/provider',
+            'version' => MODULE_MANIFEST_TEST_VERSION,
+        ]],
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+
     file_put_contents($enabledDomain.'/Consumer/composer.json', json_encode([
         'name' => 'test/enabled-consumer',
         'extra' => ['blb' => [
             'module' => 'zz-enabled-for-manifest-test/consumer',
             'requires-modules' => ['zz-disabled-for-manifest-test/provider' => '*'],
         ]],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
         $reader = new ModuleManifestReader([app_path('Modules')]);
 
-        expect($reader->moduleRoots())->not->toHaveKey('zz-disabled-for-manifest-test/provider')
+        expect(collect($reader->all())->pluck('module')->all())->not->toContain('zz-disabled-for-manifest-test/provider')
+            ->and(collect($reader->allIncludingDisabledDomains())->pluck('module')->all())->toContain('zz-disabled-for-manifest-test/provider')
+            ->and($reader->moduleRoots())->not->toHaveKey('zz-disabled-for-manifest-test/provider')
             ->and($reader->verifyRequiredModules($reader->all()))->toContain([
                 'requiring' => 'test/enabled-consumer',
                 'missing' => 'zz-disabled-for-manifest-test/provider',

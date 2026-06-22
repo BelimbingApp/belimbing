@@ -10,7 +10,7 @@ use App\Base\Support\Str;
  * `extra.blb` block and returns parsed manifests.
  *
  * Operates on filesystem paths — does not require composer's autoloader
- * to be aware of the modules. Used by the plugin dashboard and the database
+ * to be aware of the modules. Used by the Modules screen and the database
  * migration preflight to verify required-module dependencies.
  */
 class ModuleManifestReader
@@ -31,16 +31,21 @@ class ModuleManifestReader
      */
     public function all(): array
     {
-        $manifests = [];
+        return $this->readManifests($this->manifestPaths());
+    }
 
-        foreach ($this->manifestPaths() as $path) {
-            $manifest = $this->parse($path);
-            if ($manifest !== null) {
-                $manifests[] = $manifest;
-            }
-        }
-
-        return $manifests;
+    /**
+     * Read every manifest present on disk, including disabled domains.
+     *
+     * Disabled domains are intentionally excluded from dependency checks and
+     * runtime discovery, but installed-inventory UI still needs their metadata
+     * while showing the checkout as disabled.
+     *
+     * @return list<ModuleManifest>
+     */
+    public function allIncludingDisabledDomains(): array
+    {
+        return $this->readManifests($this->manifestPaths(filterDisabledDomains: false));
     }
 
     /**
@@ -184,11 +189,11 @@ class ModuleManifestReader
     /**
      * @return list<string>
      */
-    private function manifestPaths(): array
+    private function manifestPaths(bool $filterDisabledDomains = true): array
     {
         $paths = [];
 
-        foreach ($this->discoverModuleRoots() as $root) {
+        foreach ($this->discoverModuleRoots($filterDisabledDomains) as $root) {
             $path = $root.DIRECTORY_SEPARATOR.'composer.json';
 
             if (is_file($path)) {
@@ -202,9 +207,27 @@ class ModuleManifestReader
     }
 
     /**
+     * @param  list<string>  $paths
+     * @return list<ModuleManifest>
+     */
+    private function readManifests(array $paths): array
+    {
+        $manifests = [];
+
+        foreach ($paths as $path) {
+            $manifest = $this->parse($path);
+            if ($manifest !== null) {
+                $manifests[] = $manifest;
+            }
+        }
+
+        return $manifests;
+    }
+
+    /**
      * @return list<string>
      */
-    private function discoverModuleRoots(): array
+    private function discoverModuleRoots(bool $filterDisabledDomains = true): array
     {
         $roots = [];
 
@@ -220,7 +243,11 @@ class ModuleManifestReader
             }
         }
 
-        $roots = DomainState::filterPaths(array_values(array_unique($roots)));
+        $roots = array_values(array_unique($roots));
+
+        if ($filterDisabledDomains) {
+            $roots = DomainState::filterPaths($roots);
+        }
 
         sort($roots);
 
