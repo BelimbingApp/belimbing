@@ -5,6 +5,7 @@ namespace App\Base\Software\Services;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainState;
+use App\Base\Software\Inventory\ContributionSummary;
 use App\Base\Software\Inventory\InstalledBundle;
 use App\Base\Software\Inventory\InstalledModule;
 
@@ -20,7 +21,10 @@ use App\Base\Software\Inventory\InstalledModule;
  */
 class SoftwareInventoryService
 {
-    public function __construct(private readonly DistributionBundleRepository $bundles) {}
+    public function __construct(
+        private readonly DistributionBundleRepository $bundles,
+        private readonly InventoryContributionRegistry $contributions,
+    ) {}
 
     /**
      * @return list<InstalledBundle>
@@ -34,6 +38,7 @@ class SoftwareInventoryService
             $reader->allIncludingDisabledDomains(),
             $reader->dependencyIssues($reader->all()),
             array_values(DomainState::disabled()),
+            $this->contributions->contributions(),
         );
     }
 
@@ -46,13 +51,14 @@ class SoftwareInventoryService
      * @param  list<ModuleManifest>  $manifests  every installed manifest, including disabled domains
      * @param  list<array<string, mixed>>  $dependencyIssues  rows from ModuleManifestReader::dependencyIssues()
      * @param  list<string>  $disabledDomains  disabled business-domain names
+     * @param  list<ContributionSummary>  $contributions  discovered runtime contributions
      * @return list<InstalledBundle>
      */
-    public function assemble(array $bundleStatuses, array $manifests, array $dependencyIssues, array $disabledDomains = []): array
+    public function assemble(array $bundleStatuses, array $manifests, array $dependencyIssues, array $disabledDomains = [], array $contributions = []): array
     {
         $byKey = [];
         foreach ($bundleStatuses as $status) {
-            $byKey[$status['key']] = ['status' => $status, 'modules' => [], 'issues' => []];
+            $byKey[$status['key']] = ['status' => $status, 'modules' => [], 'issues' => [], 'contributions' => []];
         }
 
         // Match each module to the deepest bundle that contains it: longest path first.
@@ -61,6 +67,7 @@ class SoftwareInventoryService
             <=> strlen($this->normalizePath((string) $byKey[$a]['status']['absolutePath'])));
 
         $manifestBundleKey = [];
+        $moduleBundleKey = [];
 
         foreach ($manifests as $manifest) {
             $bundleKey = $this->nearestBundleKey($this->normalizePath($manifest->path), $sortedKeys, $byKey);
@@ -82,6 +89,10 @@ class SoftwareInventoryService
             );
 
             $manifestBundleKey[$manifest->name] = $bundleKey;
+
+            if ($manifest->module !== '') {
+                $moduleBundleKey[$manifest->module] = $bundleKey;
+            }
         }
 
         // Dependency issues surface at the row of the Bundle that owns the requiring module.
@@ -90,6 +101,30 @@ class SoftwareInventoryService
 
             if ($key !== null) {
                 $byKey[$key]['issues'][] = $issue;
+            }
+        }
+
+        // Contributions surface under the Bundle that delivers the providing module —
+        // by exact module manifest when available, else by the module's domain bundle
+        // (so a domain like Commerce that ships no per-module manifests still attributes).
+        $domainKeyByName = [];
+        foreach ($byKey as $bundleKey => $data) {
+            $kind = $this->classifyKind((string) $bundleKey, (string) $data['status']['path']);
+            $lifecycleName = $this->lifecycleName($kind, (string) $data['status']['absolutePath']);
+
+            if ($kind === InstalledBundle::KIND_BUSINESS_DOMAIN && $lifecycleName !== null) {
+                $domainKeyByName[strtolower($lifecycleName)] = $bundleKey;
+            }
+        }
+
+        foreach ($contributions as $contribution) {
+            $module = $contribution->attributedModule();
+            $key = $moduleBundleKey[$module]
+                ?? $domainKeyByName[strtolower(explode('/', $module)[0] ?? '')]
+                ?? null;
+
+            if ($key !== null) {
+                $byKey[$key]['contributions'][] = $contribution;
             }
         }
 
@@ -116,6 +151,7 @@ class SoftwareInventoryService
                 modules: $this->sortModules($data['modules']),
                 dependencyIssues: $data['issues'],
                 lifecycleName: $lifecycleName,
+                contributions: $data['contributions'],
             );
         }
 

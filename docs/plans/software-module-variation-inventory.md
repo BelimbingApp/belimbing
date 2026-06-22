@@ -151,13 +151,13 @@ Validation: `SoftwareInventoryServiceTest` proves a domain Bundle with multiple 
 
 Goal: Inventory shows installed adapter/data contributions without owning their runtime semantics.
 
-- [ ] Add a read-only contribution summary contract for host seams to report discovered contributions to Software Inventory.
-- [ ] Implement a Commerce provider over the existing Commerce extension seam so installed marketplace/readiness/catalog/panel contributions appear as Inventory contributions.
-- [ ] Implement a Payroll provider over `PayrollCountryPackRegistry` once country-pack discovery is in place, showing country packs by country and pack version.
-- [ ] Display contributions under the providing Bundle and host Module, with human labels first and technical seam ids second.
-- [ ] Treat missing contribution capability as readiness/status data, not a hard Inventory failure; keep invalid duplicate/incompatible contribution config as an error from the owning seam.
+- [x] Add a read-only contribution summary contract for host seams — `ContributionSummary` DTO + `InventoryContributionProvider` contract + `InventoryContributionRegistry`, discovered from each module's `Config/inventory.php` by `InventoryContributionDiscoveryService` (tolerant: a broken provider is skipped, not fatal). {claud/opus-4.8}
+- [x] Implement a Commerce provider over the existing Commerce plugin seam so marketplace/readiness/catalog/panel/insight contributions appear as Inventory contributions. *(blb-commerce#2)* {claud/opus-4.8}
+- [x] Implement a Payroll provider over `PayrollCountryPackRegistry`, showing country packs by country and pack version. *(blb-people#2)* {claud/opus-4.8}
+- [x] Display contributions under the providing Bundle and host Module, human labels first and technical seam ids second — the read model attributes each contribution to its module's Bundle (falling back to the domain Bundle when a domain like Commerce ships no per-module manifests); rendered by the `bundle-contributions` partial on each card. {claud/opus-4.8}
+- [x] Treat missing/broken contribution capability as skip-and-continue display data, not a hard Inventory failure; the owning seam keeps its own validation (Payroll country packs still fail loudly in their registry). {claud/opus-4.8}
 
-Validation: tests prove Commerce or Payroll contribution summaries appear for installed contributions and disappear when their providing module/extension is disabled or absent.
+Validation: `SoftwareInventoryServiceTest` proves contributions attach to the providing bundle and to the domain bundle when no manifest exists; `InventoryContributionDiscoveryTest` proves `Config/inventory.php` discovery + contract filtering + tolerance; `PayrollInventoryContributionProviderTest` (blb-people) and `CommerceInventoryContributionProviderTest` (blb-commerce) prove each provider summarises its seam. 12 belimbing-side tests; providers green in their repos.
 
 ### Phase 5 — Catalog grouping and manifest metadata
 

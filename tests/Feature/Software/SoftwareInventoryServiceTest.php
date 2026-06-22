@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
+use App\Base\Software\Inventory\ContributionSummary;
 use App\Base\Software\Inventory\InstalledBundle;
 use App\Base\Software\Services\SoftwareInventoryService;
 
@@ -38,9 +39,9 @@ function inventoryManifest(string $module, string $relativePath, string $name, a
 /**
  * @return array<string, InstalledBundle>
  */
-function assembleByKey(array $bundleStatuses, array $manifests, array $dependencyIssues = [], array $disabled = []): array
+function assembleByKey(array $bundleStatuses, array $manifests, array $dependencyIssues = [], array $disabled = [], array $contributions = []): array
 {
-    $bundles = app(SoftwareInventoryService::class)->assemble($bundleStatuses, $manifests, $dependencyIssues, $disabled);
+    $bundles = app(SoftwareInventoryService::class)->assemble($bundleStatuses, $manifests, $dependencyIssues, $disabled, $contributions);
 
     return collect($bundles)->keyBy('key')->all();
 }
@@ -123,6 +124,56 @@ it('marks a disabled business domain bundle', function (): void {
 
     expect($byKey['app-Modules-People']->disabled)->toBeTrue()
         ->and($byKey['platform']->disabled)->toBeFalse();
+});
+
+it('attaches contributions to the bundle that delivers the providing module', function (): void {
+    $byKey = assembleByKey(
+        [
+            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
+            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
+        ],
+        [inventoryManifest('people/payroll', 'app/Modules/People/Payroll', 'blb/payroll-my')],
+        [],
+        [],
+        [
+            new ContributionSummary(
+                hostModule: 'people/payroll',
+                seam: 'payroll.country-pack',
+                kind: ContributionSummary::KIND_ADAPTER,
+                label: 'Malaysia payroll rules',
+                providerModule: 'people/payroll',
+                metadata: ['country' => 'MY'],
+            ),
+        ],
+    );
+
+    expect($byKey['app-Modules-People']->hasContributions())->toBeTrue()
+        ->and($byKey['app-Modules-People']->contributions[0]->label)->toBe('Malaysia payroll rules')
+        ->and($byKey['app-Modules-People']->contributions[0]->metadata['country'])->toBe('MY')
+        ->and($byKey['platform']->hasContributions())->toBeFalse();
+});
+
+it('attributes a contribution to its domain bundle when the host module has no manifest', function (): void {
+    $byKey = assembleByKey(
+        [
+            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
+            inventoryBundleStatus('app-Modules-Commerce', 'app/Modules/Commerce', 'BelimbingApp/blb-commerce'),
+        ],
+        [], // Commerce ships no per-module manifests
+        [],
+        [],
+        [
+            new ContributionSummary(
+                hostModule: 'commerce/marketplace',
+                seam: 'commerce.marketplace.channel',
+                kind: ContributionSummary::KIND_CHANNEL,
+                label: 'Shopee channel',
+            ),
+        ],
+    );
+
+    expect($byKey['app-Modules-Commerce']->hasContributions())->toBeTrue()
+        ->and($byKey['app-Modules-Commerce']->contributions[0]->label)->toBe('Shopee channel');
 });
 
 it('reports working-tree dirty and unpushed state per bundle', function (): void {

@@ -173,6 +173,7 @@
                         @endforeach
                     </div>
                 @endif
+                @include('livewire.base.foundation.partials.bundle-contributions', ['contributions' => $platformBundle->contributions])
             @endif
         </x-ui.card>
 
@@ -253,6 +254,9 @@
                         @php $bundle = $bundlesByLifecycle[$domainName] ?? null; @endphp
                         @if ($bundle && $bundle->repo)
                             <p class="mt-2 font-mono text-xs text-muted">{{ $bundle->repo }} · {{ $bundle->branch }}@if (! empty($bundle->commit['short'])) · {{ $bundle->commit['short'] }}@endif</p>
+                        @endif
+                        @if ($bundle)
+                            @include('livewire.base.foundation.partials.bundle-contributions', ['contributions' => $bundle->contributions])
                         @endif
 
                         @if ($domain['git']['dirty'] || $domain['git']['unpushed'] > 0)
@@ -369,6 +373,9 @@
                             @if ($bundle && $bundle->repo)
                                 <p class="mt-2 font-mono text-xs text-muted">{{ $bundle->repo }} · {{ $bundle->branch }}@if (! empty($bundle->commit['short'])) · {{ $bundle->commit['short'] }}@endif</p>
                             @endif
+                            @if ($bundle)
+                                @include('livewire.base.foundation.partials.bundle-contributions', ['contributions' => $bundle->contributions])
+                            @endif
 
                             @if ($extension['git']['dirty'] || $extension['git']['unpushed'] > 0)
                                 <div class="mt-2 text-xs text-status-warning">
@@ -454,6 +461,7 @@
                                     </div>
                                 @endforeach
                             </div>
+                            @include('livewire.base.foundation.partials.bundle-contributions', ['contributions' => $slot->contributions])
                         </x-ui.card>
                     @endforeach
                 </div>

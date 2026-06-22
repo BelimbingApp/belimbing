@@ -26,6 +26,7 @@ final readonly class InstalledBundle
      * @param  array<string, mixed>|null  $commit
      * @param  list<InstalledModule>  $modules
      * @param  list<array{issue: string, requiring: string, requiring_module: string, required: string, constraint: string, installed_version?: string}>  $dependencyIssues
+     * @param  list<ContributionSummary>  $contributions  runtime contributions this bundle delivers to host seams
      */
     public function __construct(
         public string $key,
@@ -41,6 +42,7 @@ final readonly class InstalledBundle
         public array $modules,
         public array $dependencyIssues = [],
         public ?string $lifecycleName = null,
+        public array $contributions = [],
     ) {}
 
     public function moduleCount(): int
@@ -66,6 +68,11 @@ final readonly class InstalledBundle
     public function hasDependencyIssues(): bool
     {
         return $this->dependencyIssues !== [];
+    }
+
+    public function hasContributions(): bool
+    {
+        return $this->contributions !== [];
     }
 
     /**
