@@ -15,22 +15,6 @@ it('lands on the user-preferred menu item when it is still visible', function ()
         ->assertRedirect(route('admin.system.software.business-domains.index'));
 });
 
-it('lands legacy update menu preferences on their renamed pages', function (): void {
-    $user = createAdminUser();
-
-    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.domains']]);
-
-    $this->actingAs($user)
-        ->get('/')
-        ->assertRedirect(route('admin.system.software.business-domains.index'));
-
-    $user->update(['prefs' => [LandingPageResolver::PREF_KEY => 'admin.system.update.belimbing']]);
-
-    $this->actingAs($user)
-        ->get('/')
-        ->assertRedirect(route('admin.system.software.deployment.index'));
-});
-
 it('falls back to the dashboard when the preference is unknown or inaccessible', function (): void {
     $user = User::factory()->create([
         'prefs' => [LandingPageResolver::PREF_KEY => 'zz.no.such.item'],

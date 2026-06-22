@@ -37,12 +37,8 @@ class LandingPageResolver
             ? ($user->prefsArray()[self::PREF_KEY] ?? null)
             : null;
 
-        if (is_string($preference)) {
-            $preference = $this->normalizePreference($preference);
-
-            if (isset($options[$preference]['href'])) {
-                return $options[$preference]['href'];
-            }
+        if (is_string($preference) && isset($options[$preference]['href'])) {
+            return $options[$preference]['href'];
         }
 
         if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
@@ -60,15 +56,6 @@ class LandingPageResolver
     public function optionsFor(mixed $user): array
     {
         return $this->menu->snapshotForUser($user)['flat'];
-    }
-
-    private function normalizePreference(string $preference): string
-    {
-        return match ($preference) {
-            'admin.system.domains' => 'admin.system.software.business-domain',
-            'admin.system.update.belimbing' => 'admin.system.software.deployment',
-            default => $preference,
-        };
     }
 
     private function canViewBusinessDomains(mixed $user): bool
