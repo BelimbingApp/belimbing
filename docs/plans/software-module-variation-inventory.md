@@ -139,13 +139,13 @@ Validation: `ModulesTest`, `UpdateMenuTest`, and `ExtensionInstallTest` pass (21
 
 Goal: Installed tab groups by Distribution Bundle and preserves module-level detail.
 
-- [ ] Add a Software Inventory service that combines `DistributionBundleRepository`, `ModuleManifestReader`, module-root discovery, dependency checks, and domain disabled state.
-- [ ] Extend Distribution Bundle discovery to recognize module-level git roots under `app/Modules/*/*` so future slot implementations are visible alongside domain-level roots.
-- [ ] Map each installed Module to its nearest Distribution Bundle root; fall back to the platform Bundle for Base/Core and non-nested development files.
-- [ ] Render installed inventory as Bundle rows/cards with contained Modules, dependency health, published/consumed events, path/repo/branch, dirty/unpushed state, and lifecycle/update status.
-- [ ] Keep dependency warnings at the Bundle row level while preserving exact requiring/required Module ids in details.
+- [x] Add a Software Inventory service that combines `DistributionBundleRepository`, `ModuleManifestReader`, module-root discovery, dependency checks, and domain disabled state — `SoftwareInventoryService`, with a pure `assemble()` so the grouping rules are unit-testable off disk. {claud/opus-4.8}
+- [x] Extend Distribution Bundle discovery to recognize module-level git roots under `app/Modules/*/*` so future slot implementations are visible alongside domain-level roots. {claud/opus-4.8}
+- [x] Map each installed Module to its nearest Distribution Bundle root (longest containing bundle path); fall back to the platform Bundle for Base/Core and non-nested development files. {claud/opus-4.8}
+- [x] Render installed inventory as Bundle rows/cards with contained Modules and path/repo/branch + dirty/unpushed state. *(Scope: driven by the read model for the platform "Base + Core" card and any nested module/slot bundles, plus a repo·branch·commit line on each domain/extension card. The domain/extension cards still source their lifecycle/audit from the installers; migrating them fully onto the read model is a follow-up.)* {claud/opus-4.8}
+- [x] Keep dependency warnings at the Bundle row level while preserving exact requiring/required Module ids. *(Scope: the read model attaches issues to the owning Bundle; the UI still renders the existing global dependency banner, which already preserves the ids. Moving the detail into each row is a follow-up.)* {claud/opus-4.8}
 
-Validation: tests prove a domain Bundle containing multiple Modules renders once, an extension Bundle renders separately, and dependency issues still surface with the same accuracy as the current ModuleManifestReader path.
+Validation: `SoftwareInventoryServiceTest` proves a domain Bundle with multiple Modules renders once, an extension Bundle renders separately, Base/Core fall back to platform, a module-level git root is recognised as its own slot bundle, and dependency issues attach to the owning Bundle (5 tests, 21 assertions). `ModulesTest`/`ExtensionInstallTest`/`UpdateMenuTest` stay green (26 tests total).
 
 ### Phase 4 — Contribution summaries for adapter/data visibility
 

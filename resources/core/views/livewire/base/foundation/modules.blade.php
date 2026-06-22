@@ -146,12 +146,34 @@
             </div>
         @endif
 
-        <x-ui.card>
+        <x-ui.card x-data="{ open: false }">
             <div class="flex items-start justify-between gap-2">
                 <div class="font-medium text-ink">{{ __('Base + Core') }}</div>
-                <x-ui.badge variant="info">{{ __('framework') }}</x-ui.badge>
+                <x-ui.badge variant="info">{{ __('platform') }}</x-ui.badge>
             </div>
-            <p class="mt-1 text-sm text-muted">{{ __('Framework foundations. Always installed; not removable.') }}</p>
+            <p class="mt-1 text-sm text-muted">{{ __('Framework foundations and Core modules. Always installed; not removable.') }}</p>
+            @if ($platformBundle)
+                @if ($platformBundle->repo)
+                    <p class="mt-2 font-mono text-xs text-muted">{{ $platformBundle->repo }} · {{ $platformBundle->branch }}@if (! empty($platformBundle->commit['short'])) · {{ $platformBundle->commit['short'] }}@endif</p>
+                @endif
+                @if ($platformBundle->moduleCount() > 0)
+                    <button type="button" x-on:click="open = ! open" class="mt-2 flex items-center gap-1 text-sm text-muted hover:text-ink">
+                        <x-icon name="heroicon-o-chevron-right" class="h-4 w-4 transition-transform" x-bind:class="open && 'rotate-90'" />
+                        {{ trans_choice('{1} :count module|[2,*] :count modules', $platformBundle->moduleCount(), ['count' => $platformBundle->moduleCount()]) }}
+                    </button>
+                    <div x-show="open" x-collapse class="mt-2 grid gap-2 md:grid-cols-2">
+                        @foreach ($platformBundle->modules as $m)
+                            <div class="rounded-lg border border-border-default px-3 py-2 text-xs">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-medium text-ink">{{ $m->label() }}</span>
+                                    <span class="rounded-full border border-border-default px-2 py-0.5 text-muted">{{ $m->version ?: __('unversioned') }}</span>
+                                </div>
+                                <div class="mt-1 font-mono text-muted">{{ $m->path }}</div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            @endif
         </x-ui.card>
 
         <section class="space-y-2">
@@ -226,6 +248,11 @@
                                     @endif
                                 </dd>
                             </dl>
+                        @endif
+
+                        @php $bundle = $bundlesByLifecycle[$domainName] ?? null; @endphp
+                        @if ($bundle && $bundle->repo)
+                            <p class="mt-2 font-mono text-xs text-muted">{{ $bundle->repo }} · {{ $bundle->branch }}@if (! empty($bundle->commit['short'])) · {{ $bundle->commit['short'] }}@endif</p>
                         @endif
 
                         @if ($domain['git']['dirty'] || $domain['git']['unpushed'] > 0)
@@ -338,6 +365,11 @@
                                 @endforelse
                             </div>
 
+                            @php $bundle = $bundlesByLifecycle[$extName] ?? null; @endphp
+                            @if ($bundle && $bundle->repo)
+                                <p class="mt-2 font-mono text-xs text-muted">{{ $bundle->repo }} · {{ $bundle->branch }}@if (! empty($bundle->commit['short'])) · {{ $bundle->commit['short'] }}@endif</p>
+                            @endif
+
                             @if ($extension['git']['dirty'] || $extension['git']['unpushed'] > 0)
                                 <div class="mt-2 text-xs text-status-warning">
                                     @if ($extension['git']['dirty']){{ __('Has uncommitted changes.') }}@endif
@@ -387,6 +419,41 @@
                                     </div>
                                 </div>
                             @endif
+                        </x-ui.card>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
+        @if (count($slotBundles) > 0)
+            <section class="space-y-2">
+                <h2 class="text-lg font-semibold text-ink">{{ __('Slot implementations') }}</h2>
+                <p class="text-sm text-muted">{{ __('Whole-module implementations shipped as their own nested repository. The selected implementation fills its module path for this deployment; switching one is a data migration, not a control here.') }}</p>
+                <div class="grid gap-4 md:grid-cols-2">
+                    @foreach ($slotBundles as $slot)
+                        <x-ui.card wire:key="slot-{{ $slot->key }}" x-data="{ open: false }">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="font-medium text-ink">{{ $slot->path }}</div>
+                                <x-ui.badge variant="info">{{ __('slot') }}</x-ui.badge>
+                            </div>
+                            @if ($slot->repo)
+                                <p class="mt-1 font-mono text-xs text-muted">{{ $slot->repo }} · {{ $slot->branch }}@if (! empty($slot->commit['short'])) · {{ $slot->commit['short'] }}@endif</p>
+                            @endif
+                            <button type="button" x-on:click="open = ! open" class="mt-2 flex items-center gap-1 text-sm text-muted hover:text-ink">
+                                <x-icon name="heroicon-o-chevron-right" class="h-4 w-4 transition-transform" x-bind:class="open && 'rotate-90'" />
+                                {{ trans_choice('{0} no modules|{1} :count module|[2,*] :count modules', $slot->moduleCount(), ['count' => $slot->moduleCount()]) }}
+                            </button>
+                            <div x-show="open" x-collapse class="mt-2 space-y-2">
+                                @foreach ($slot->modules as $m)
+                                    <div class="rounded-lg border border-border-default px-3 py-2 text-xs">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="font-medium text-ink">{{ $m->label() }}</span>
+                                            <span class="rounded-full border border-border-default px-2 py-0.5 text-muted">{{ $m->version ?: __('unversioned') }}</span>
+                                        </div>
+                                        <div class="mt-1 font-mono text-muted">{{ $m->path }}</div>
+                                    </div>
+                                @endforeach
+                            </div>
                         </x-ui.card>
                     @endforeach
                 </div>

@@ -63,6 +63,33 @@ class DistributionBundleRepository
     }
 
     /**
+     * Per-bundle LOCAL state only — no network calls, unlike status(). The Software
+     * Inventory read model reports what is really on disk (branch, working tree,
+     * current commit) without paying a GitHub round-trip per bundle on every render.
+     *
+     * @return list<array{key: string, label: string, path: string, absolutePath: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null}>
+     */
+    public function localStatus(): array
+    {
+        return array_map(function (array $dist): array {
+            $isRepo = $this->isRepositoryPath($dist['path']);
+            [$owner, $name] = $this->remoteIdentity($dist['path']);
+
+            return [
+                'key' => $dist['key'],
+                'label' => $dist['label'],
+                'path' => $dist['relative'],
+                'absolutePath' => $dist['path'],
+                'owner' => $owner,
+                'repo' => $owner !== null ? $owner.'/'.$name : null,
+                'branch' => $isRepo ? ($this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD']) ?? 'main') : null,
+                'working_tree' => $isRepo ? $this->workingTree($dist['path']) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
+                'current' => $this->localCommit($dist['path']),
+            ];
+        }, $this->distributions());
+    }
+
+    /**
      * @return list<array{owner: string, repos: list<string>, has_token: bool}>
      */
     public function owners(): array
@@ -224,6 +251,17 @@ class DistributionBundleRepository
         foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
             if ($this->isRepositoryPath($dir)) {
                 $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
+            }
+        }
+
+        // Module-level git roots (app/Modules/{Domain}/{Module}) make a future slot
+        // implementation — a whole module shipped as its own repo nested inside a
+        // domain — visible alongside domain-level roots. isRepositoryPath() checks for
+        // a `.git` at the path itself, so a plain module folder inside a domain
+        // checkout (no nested `.git`) is never mistaken for its own bundle.
+        foreach (glob(base_path('app/Modules/*/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            if ($this->isRepositoryPath($dir)) {
+                $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename(dirname($dir)).'/'.basename($dir)]));
             }
         }
 
