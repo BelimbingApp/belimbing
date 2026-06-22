@@ -175,12 +175,12 @@ Validation: catalog tests cover one business domain, one adapter add-on, and one
 
 Goal: Payroll validates the generic adapter path without becoming the generic architecture.
 
-- [ ] Add Payroll country-pack discovery through a `Config/payroll.php` contribution file, modelled on Commerce discovery but stricter for financial/regulatory code.
-- [ ] Move Malaysia registration from direct ServiceProvider wiring to the discovered Payroll seam while Malaysia remains internal.
-- [ ] Neutralize the Payroll engine manifest so `people/payroll` describes the country-neutral engine, not Malaysia.
+- [x] Add Payroll country-pack discovery through a `Config/payroll.php` contribution file, modelled on Commerce discovery but stricter (registration failures throw rather than silently no-op). {claud/opus-4.8 — blb-people#1}
+- [x] Move Malaysia registration from direct ServiceProvider wiring to the discovered Payroll seam while Malaysia remains internal. {claud/opus-4.8 — blb-people#1}
+- [ ] Neutralize the Payroll engine manifest so `people/payroll` describes the country-neutral engine, not Malaysia. *(cross-repo: belimbing `ModuleManifestReaderTest` and blb-people contract test assert `blb/payroll-my` — coordinate both.)*
 - [ ] Ensure country-pack classification/calculation flows through the `PayrollCountryPack` contract facets.
 - [ ] Surface “missing pack for company country” as Payroll readiness data; block final approval/close/export where statutory payroll would otherwise look complete.
-- [ ] Add a second-country fake/spike test proving MY and SG companies resolve different packs in one deployment.
+- [x] Spike proving MY and SG resolve different packs in one deployment (registry-level, reusing the contract-test pack double; a discovery-based variant with a named fake pack is a later refinement). {claud/opus-4.8 — blb-people#1}
 
 Validation: targeted Payroll tests prove discovered pack registration, duplicate/incompatible pack failure, per-company pack resolution, and missing-pack readiness behavior.
 
