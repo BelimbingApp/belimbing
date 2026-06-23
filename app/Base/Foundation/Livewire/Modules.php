@@ -10,10 +10,11 @@ use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\ExtensionInstaller;
+use App\Base\Software\Inventory\InstalledBundle;
+use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
-use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
@@ -32,7 +33,11 @@ class Modules extends Component
 {
     use InteractsWithNotifications;
 
-    #[Url(as: 'tab')]
+    /**
+     * Active tab. The URL query string is owned by the x-ui.tabs primitive
+     * (persistence="query"); this property stays in sync via setTab() and is
+     * seeded from the request on mount for deep links.
+     */
     public string $tab = 'installed';
 
     /**
@@ -49,6 +54,13 @@ class Modules extends Component
      * What the open uninstall panel targets: 'domain' or 'extension'.
      */
     public string $uninstallKind = 'domain';
+
+    public function mount(?string $tab = null): void
+    {
+        $resolved = $tab ?? request()->query('tab');
+
+        $this->tab = $resolved === 'available' ? 'available' : 'installed';
+    }
 
     public function setTab(string $tab): void
     {
@@ -175,7 +187,7 @@ class Modules extends Component
         $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
-    public function render(DomainInstaller $installer, ExtensionInstaller $extensions): View
+    public function render(DomainInstaller $installer, ExtensionInstaller $extensions, SoftwareInventoryService $inventory): View
     {
         $reader = $this->reader();
         $enabledManifests = $reader->all();
@@ -193,6 +205,20 @@ class Modules extends Component
             $installedExtensions[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($extension['name'])] ?? [];
         }
 
+        // Software Inventory read model (grouped by Distribution Bundle). Drives the
+        // platform (Base + Core) and any nested module/slot bundle cards, and lets each
+        // domain/extension card show its bundle's repo / branch / commit identity.
+        $bundles = $inventory->installedBundles();
+        $platformBundle = collect($bundles)->firstWhere('kind', InstalledBundle::KIND_PLATFORM);
+        $slotBundles = collect($bundles)
+            ->where('kind', InstalledBundle::KIND_SLOT_IMPLEMENTATION)
+            ->values()
+            ->all();
+        $bundlesByLifecycle = collect($bundles)
+            ->filter(fn (InstalledBundle $bundle): bool => $bundle->lifecycleName !== null)
+            ->keyBy('lifecycleName')
+            ->all();
+
         $catalog = app(BelimbingAppCatalogService::class);
         $installedModuleIds = collect($installedManifests)
             ->map(fn (ModuleManifest $manifest): string => $manifest->module)
@@ -202,6 +228,9 @@ class Modules extends Component
         return view('livewire.base.foundation.modules', [
             'installed' => $installed,
             'extensions' => $installedExtensions,
+            'platformBundle' => $platformBundle,
+            'slotBundles' => $slotBundles,
+            'bundlesByLifecycle' => $bundlesByLifecycle,
             'available' => $installer->available(),
             'availableExtensions' => $extensions->available(),
             'dependencyIssues' => $dependencyIssues,
