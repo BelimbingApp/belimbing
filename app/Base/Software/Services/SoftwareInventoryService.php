@@ -66,6 +66,38 @@ class SoftwareInventoryService
         usort($sortedKeys, fn (string $a, string $b): int => strlen($this->normalizePath((string) $byKey[$b]['status']['absolutePath']))
             <=> strlen($this->normalizePath((string) $byKey[$a]['status']['absolutePath'])));
 
+        $moduleKeys = $this->attachModules($byKey, $manifests, $sortedKeys);
+
+        // Dependency issues surface at the row of the Bundle that owns the requiring module.
+        foreach ($dependencyIssues as $issue) {
+            $key = $moduleKeys['manifest'][$issue['requiring'] ?? ''] ?? null;
+
+            if ($key !== null) {
+                $byKey[$key]['issues'][] = $issue;
+            }
+        }
+
+        $this->attachContributions($byKey, $contributions, $moduleKeys['module']);
+
+        $bundles = [];
+        foreach ($byKey as $key => $data) {
+            $bundles[] = $this->buildBundle((string) $key, $data, $disabledDomains);
+        }
+
+        return $bundles;
+    }
+
+    /**
+     * Place each manifest's Module under its nearest Bundle and return the
+     * manifest-name and module-id → bundle-key maps used for attribution.
+     *
+     * @param  array<string, array<string, mixed>>  $byKey
+     * @param  list<ModuleManifest>  $manifests
+     * @param  list<string>  $sortedKeys  bundle keys ordered longest-path-first
+     * @return array{manifest: array<string, string>, module: array<string, string>}
+     */
+    private function attachModules(array &$byKey, array $manifests, array $sortedKeys): array
+    {
         $manifestBundleKey = [];
         $moduleBundleKey = [];
 
@@ -95,18 +127,20 @@ class SoftwareInventoryService
             }
         }
 
-        // Dependency issues surface at the row of the Bundle that owns the requiring module.
-        foreach ($dependencyIssues as $issue) {
-            $key = $manifestBundleKey[$issue['requiring'] ?? ''] ?? null;
+        return ['manifest' => $manifestBundleKey, 'module' => $moduleBundleKey];
+    }
 
-            if ($key !== null) {
-                $byKey[$key]['issues'][] = $issue;
-            }
-        }
-
-        // Contributions surface under the Bundle that delivers the providing module —
-        // by exact module manifest when available, else by the module's domain bundle
-        // (so a domain like Commerce that ships no per-module manifests still attributes).
+    /**
+     * Surface contributions under the Bundle that delivers the providing module —
+     * by exact module manifest when available, else by the module's domain bundle
+     * (so a domain like Commerce that ships no per-module manifests still attributes).
+     *
+     * @param  array<string, array<string, mixed>>  $byKey
+     * @param  list<ContributionSummary>  $contributions
+     * @param  array<string, string>  $moduleBundleKey
+     */
+    private function attachContributions(array &$byKey, array $contributions, array $moduleBundleKey): void
+    {
         $domainKeyByName = [];
         foreach ($byKey as $bundleKey => $data) {
             $kind = $this->classifyKind((string) $bundleKey, (string) $data['status']['path']);
@@ -127,35 +161,36 @@ class SoftwareInventoryService
                 $byKey[$key]['contributions'][] = $contribution;
             }
         }
+    }
 
-        $bundles = [];
+    /**
+     * @param  array{status: array<string, mixed>, modules: list<InstalledModule>, issues: list<array<string, mixed>>, contributions: list<ContributionSummary>}  $data
+     * @param  list<string>  $disabledDomains
+     */
+    private function buildBundle(string $key, array $data, array $disabledDomains): InstalledBundle
+    {
+        $status = $data['status'];
+        $kind = $this->classifyKind($key, (string) $status['path']);
+        $lifecycleName = $this->lifecycleName($kind, (string) $status['absolutePath']);
 
-        foreach ($byKey as $key => $data) {
-            $status = $data['status'];
-            $kind = $this->classifyKind((string) $key, (string) $status['path']);
-            $lifecycleName = $this->lifecycleName($kind, (string) $status['absolutePath']);
-
-            $bundles[] = new InstalledBundle(
-                key: (string) $key,
-                label: (string) $status['label'],
-                kind: $kind,
-                path: (string) $status['path'],
-                hasGit: $status['branch'] !== null,
-                repo: $status['repo'],
-                branch: $status['branch'],
-                commit: $status['current'],
-                workingTree: $status['working_tree'],
-                disabled: $kind === InstalledBundle::KIND_BUSINESS_DOMAIN
-                    && $lifecycleName !== null
-                    && in_array($lifecycleName, $disabledDomains, true),
-                modules: $this->sortModules($data['modules']),
-                dependencyIssues: $data['issues'],
-                lifecycleName: $lifecycleName,
-                contributions: $data['contributions'],
-            );
-        }
-
-        return $bundles;
+        return new InstalledBundle(
+            key: $key,
+            label: (string) $status['label'],
+            kind: $kind,
+            path: (string) $status['path'],
+            hasGit: $status['branch'] !== null,
+            repo: $status['repo'],
+            branch: $status['branch'],
+            commit: $status['current'],
+            workingTree: $status['working_tree'],
+            disabled: $kind === InstalledBundle::KIND_BUSINESS_DOMAIN
+                && $lifecycleName !== null
+                && in_array($lifecycleName, $disabledDomains, true),
+            modules: $this->sortModules($data['modules']),
+            dependencyIssues: $data['issues'],
+            lifecycleName: $lifecycleName,
+            contributions: $data['contributions'],
+        );
     }
 
     /**

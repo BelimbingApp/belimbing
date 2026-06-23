@@ -50,21 +50,37 @@ class InventoryContributionDiscoveryService
 
         foreach ($this->scanPatterns ?? $this->defaultScanPatterns() as $pattern) {
             foreach (glob($pattern) ?: [] as $file) {
-                $config = require $file;
-
-                if (! is_array($config)) {
-                    continue;
-                }
-
-                foreach ($config['contribution_providers'] ?? [] as $class) {
-                    if (is_string($class) && is_subclass_of($class, InventoryContributionProvider::class)) {
-                        $classes[$class] = $class;
-                    }
+                foreach ($this->providersInFile($file) as $class) {
+                    $classes[$class] = $class;
                 }
             }
         }
 
         return array_values($classes);
+    }
+
+    /**
+     * Provider classes declared in one `Config/inventory.php` file.
+     *
+     * @return list<class-string<InventoryContributionProvider>>
+     */
+    private function providersInFile(string $file): array
+    {
+        $config = require $file;
+
+        if (! is_array($config)) {
+            return [];
+        }
+
+        $classes = [];
+
+        foreach ($config['contribution_providers'] ?? [] as $class) {
+            if (is_string($class) && is_subclass_of($class, InventoryContributionProvider::class)) {
+                $classes[] = $class;
+            }
+        }
+
+        return $classes;
     }
 
     /**
