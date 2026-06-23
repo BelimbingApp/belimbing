@@ -18,12 +18,12 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
 
 ### Core Principles
 
-- **Low Entropy:** system-wide, not ticket-only. Drift noticed anywhere (even off-task): fix or plan now — no silent deferral.
+- **Low Entropy:** system-wide, not ticket-only. Drift noticed anywhere (even off-task): fix or plan now — no silent deferral. Do not let development cost block entropy reduction.
   - **Small corrections:** fix immediately; do not defer.
   - **Larger corrections:** add a plan under `docs/plans/` in this pass; implementation may follow later, but the plan must exist now.
   - **Completeness:** when modifying an artifact, consider its full purpose. Ask "what else belongs here?"
 - **Strategic Programming (Ousterhout):** invest 10–20% extra effort in design over the tactical path. When plurality is on the roadmap — not speculation — and cost-now is small while cost-later requires a data migration over existing rows, design for it now. Speculative or expensive-to-carry items still get deferred.
-- **Progressive Evolution:** build the best design current knowledge justifies. Refactor, simplify, dedup,  delete, relocate, rename, improve abstractions, and make schema maturity explicit to reduce entropy as understanding improves.
+- **Progressive Evolution:** build the best design current knowledge justifies. As understanding improves, refactor, simplify, dedup, delete, relocate, rename, improve abstractions, make schema maturity explicit, and reduce entropy.
 - **Deep Modules (Ousterhout):** powerful functionality through simple interfaces. Hide complexity; do not leak implementation details. Define errors out of existence where the type system can carry the proof.
 - **Exceptional Experience:** Treat UX and UI quality as first-class architecture; every interface must honor `DESIGN.md`.
 - **Information Architecture:** organize UI by user workflow; organize code by ownership and change boundary. Bridge explicitly when they differ.
