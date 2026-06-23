@@ -147,17 +147,13 @@ class SoftwareInventoryService
 
         $rel = trim(str_replace('\\', '/', $relativePath), '/');
 
-        if (str_starts_with($rel, 'extensions/')) {
-            return InstalledBundle::KIND_EXTENSION;
-        }
-
-        if (str_starts_with($rel, 'app/Modules/')) {
-            return count(explode('/', $rel)) >= 4
+        return match (true) {
+            str_starts_with($rel, 'extensions/') => InstalledBundle::KIND_EXTENSION,
+            str_starts_with($rel, 'app/Modules/') => count(explode('/', $rel)) >= 4
                 ? InstalledBundle::KIND_SLOT_IMPLEMENTATION
-                : InstalledBundle::KIND_BUSINESS_DOMAIN;
-        }
-
-        return InstalledBundle::KIND_PLATFORM;
+                : InstalledBundle::KIND_BUSINESS_DOMAIN,
+            default => InstalledBundle::KIND_PLATFORM,
+        };
     }
 
     private function lifecycleName(string $kind, string $absolutePath): ?string

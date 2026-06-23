@@ -241,42 +241,66 @@ class DistributionBundleRepository
      */
     public function distributions(): array
     {
-        $found = [[
-            'key' => 'platform',
-            'label' => (string) __('Belimbing (platform)'),
-            'path' => base_path(),
-            'relative' => '.',
-        ]];
-
-        foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
-            if ($this->isRepositoryPath($dir)) {
-                $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
-            }
-        }
-
         // Module-level git roots (app/Modules/{Domain}/{Module}) make a future slot
         // implementation — a whole module shipped as its own repo nested inside a
         // domain — visible alongside domain-level roots. isRepositoryPath() checks for
         // a `.git` at the path itself, so a plain module folder inside a domain
         // checkout (no nested `.git`) is never mistaken for its own bundle.
-        foreach (glob(base_path('app/Modules/*/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+        return [
+            [
+                'key' => 'platform',
+                'label' => (string) __('Belimbing (platform)'),
+                'path' => base_path(),
+                'relative' => '.',
+            ],
+            ...$this->repositoriesIn('app/Modules/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename($dir)])),
+            ...$this->repositoriesIn('app/Modules/*/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename(dirname($dir)).'/'.basename($dir)])),
+            ...$this->extensionDistributions(),
+        ];
+    }
+
+    /**
+     * Git-backed distributions for directories matching a base-relative glob.
+     *
+     * @param  callable(string): string  $labeller
+     * @return list<array{key: string, label: string, path: string, relative: string}>
+     */
+    private function repositoriesIn(string $glob, callable $labeller): array
+    {
+        $found = [];
+
+        foreach (glob(base_path($glob), GLOB_ONLYDIR) ?: [] as $dir) {
             if ($this->isRepositoryPath($dir)) {
-                $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename(dirname($dir)).'/'.basename($dir)]));
+                $found[] = $this->distribution($dir, $labeller($dir));
             }
         }
 
+        return $found;
+    }
+
+    /**
+     * Extensions are either a single repo at `extensions/{name}` or repos one level
+     * deeper at `extensions/{group}/{name}`.
+     *
+     * @return list<array{key: string, label: string, path: string, relative: string}>
+     */
+    private function extensionDistributions(): array
+    {
+        $found = [];
+
         foreach (glob(base_path('extensions/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            $group = basename($dir);
+
             if ($this->isRepositoryPath($dir)) {
-                $found[] = $this->distribution($dir, (string) __('Extension: :name', ['name' => basename($dir)]));
+                $found[] = $this->distribution($dir, (string) __('Extension: :name', ['name' => $group]));
 
                 continue;
             }
 
-            foreach (glob($dir.'/*', GLOB_ONLYDIR) ?: [] as $sub) {
-                if ($this->isRepositoryPath($sub)) {
-                    $found[] = $this->distribution($sub, (string) __('Extension: :name', ['name' => basename($dir).'/'.basename($sub)]));
-                }
-            }
+            $found = [
+                ...$found,
+                ...$this->repositoriesIn('extensions/'.$group.'/*', fn (string $sub): string => (string) __('Extension: :name', ['name' => $group.'/'.basename($sub)])),
+            ];
         }
 
         return $found;
