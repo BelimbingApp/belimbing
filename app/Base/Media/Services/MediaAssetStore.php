@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Media\Services;
 
 use App\Base\Media\Exceptions\MediaStorageException;
@@ -104,6 +105,8 @@ class MediaAssetStore
      */
     private function collectAssetLocations(MediaAsset $asset): array
     {
+        $asset->loadMissing('derivatives');
+
         $locations = [[$asset->disk, $asset->storage_key]];
 
         foreach ($asset->derivatives as $derivative) {
