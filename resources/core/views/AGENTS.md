@@ -1,12 +1,12 @@
 # UI Authoring Rules
 
-Shared framework UI rules for Blade, Livewire 4, Tailwind CSS 4, and Alpine.js 3.
+Shared UI authoring rules for Blade, Livewire 4, Tailwind CSS 4, and Alpine.js 3 — Core `resources/core/views/`, domain module `Views/`, and extension `Views/`.
 
 Authority stack:
 - `DESIGN.md`: product intent
 - `resources/core/css/tokens.css`: token values
 - `Administration > System > UI Reference`: rendered behavior
-- `resources/core/views/AGENTS.md`: authoring rules
+- **This file**: authoring rules
 
 ## View Placement
 

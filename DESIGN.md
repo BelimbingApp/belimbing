@@ -8,48 +8,57 @@ description: Professional, compact, warm workflow UI for long operational sessio
 
 ## Overview
 
-BLB should feel professional, compact, warm, and trustworthy. It is workflow software for long sessions: dense enough for operations, calm enough for judgment, and polished enough that users trust it. The UI should be deliberate product software, not a marketing site or consumer novelty.
+BLB should feel professional, compact, warm, and trustworthy. It is workflow software for long sessions: dense enough for operations, calm enough for judgment, and polished enough that users trust it. Success means users finish real work faster and leave — not more time in the app. The interface is the brand: deliberate product software with intentional taste, not a marketing site, consumer novelty, or generic enterprise gray.
 
-## Colors
+Less is more, but better — every surface, label, and control must earn its place.
 
-Use semantic color roles, not raw palette classes, in Blade. The warm Arid palette gives pages a calm operational base; accent is reserved for primary action emphasis; status colors are for real feedback only. Runtime token authority lives in `resources/core/css/tokens.css`.
+## Semantic color roles
 
-## Typography
+Semantic roles only in Blade; warm operational base, accent for primary action, status for real feedback. Values: `resources/core/css/tokens.css`.
 
-Use Instrument Sans only. Typography should feel compact and competent: medium-weight headings, small disciplined labels, plain operational body copy, and tabular numerals where alignment improves scanning. Avoid decorative type treatments.
+## Compact typography
 
-## Layout
+Instrument Sans only; compact, competent type; tabular numerals where scanning matters.
 
-Default to compact, high-signal layouts that preserve hierarchy. Group related work with clear surfaces, keep labels close to controls, avoid oversized whitespace, and make every page responsive on narrow screens. Compact does not mean cramped.
+## Compact layout
 
-## Elevation & Depth
+Compact, high-signal layouts; responsive on narrow screens. Compact does not mean cramped.
 
-Depth should be subtle: surface contrast, borders, restrained shadows, clear focus rings, and modest hover states. Use motion only to clarify state, preferably opacity or transform changes that can hold 60fps.
+## Subtle depth
 
-## Shapes
+Subtle contrast, borders, and shadows; motion clarifies state at 60fps.
 
-Use a coherent rounded shape language: compact rounded controls, slightly larger card and overlay radii, and fully rounded badges when they behave as pills. Do not mix unrelated corner styles in one view.
+## Coherent shapes
 
-## Components
+Coherent rounded language; no mixed corner styles in one view.
 
-Component semantics stay in the framework. Reuse `x-ui.*` primitives and `<x-icon>` before creating new markup. Concrete Blade, Livewire, Tailwind, spacing, accessibility, and component rules live in `resources/core/views/AGENTS.md`; rendered examples live in `Administration > System > UI Reference`.
+## Reuse components
 
-## Links
+Reuse `x-ui.*` and `<x-icon>` before inventing new markup.
 
-Links signal *context change* through a closed icon vocabulary: each behavior — same-tab navigation, new tab, external site, in-page anchor, download, overlay — maps to exactly one glyph, so the icon replaces the word ("open", "new tab", "download") without ambiguity. Things that *move* you are links; things that *change data* are buttons. The dictionary and `x-ui.link` contract live in `resources/core/views/AGENTS.md`.
+## Gestalt grouping
 
-## Detail Pages (Read-First)
+- **proximity** — related controls and labels stay close
+- **similarity** — same role shares look and behavior
+- **common region** — related work lives inside one surface
+- **visual hierarchy** — the primary path reads first at a glance
 
-Detail/show pages default to **facts first**. Editing is exposed deliberately:
-- Use **edit-in-place** for independent low-risk facts.
-- Use **grouped inline editors** for coupled facts that need review + Apply/Cancel.
-- Use **modal/full forms** when editing is a workflow, high-risk, or requires confirmation.
+## Scan before reading
 
-## Do's and Don'ts
+Users scan before they read. Favor bullets, short paragraphs, and meaningful icons so key facts and actions surface at a glance — dense, not verbose.
 
-- Do make every surface, label, action, icon, and motion cue earn its place.
-- Do keep UI beautiful, accessible, fast, responsive, and truthful.
-- Do use semantic tokens and established components.
-- Don't introduce one-off color values, raw repeated controls, or arbitrary styling in Blade.
-- Don't overload accent or status colors until hierarchy collapses.
-- Don't use cinematic motion, visual clutter, or interaction friction as decoration.
+## Stay consistent
+
+Same thing, same look, same place — reuse established patterns, placement, and labels across modules; variation needs a user-visible reason.
+
+## Norman feedback
+
+Users always know what's happening and what happened. Show work in flight — loading, waiting, blocked; give every action visible, timely response; outcomes stay honest and transparent; never fail silently.
+
+## Reduce anxiety
+
+Calm software reduces anxiety; it does not manufacture urgency or FOMO. No nagging, badge spam, false scarcity, or engagement dark patterns — trust comes from steady, honest state, not stimulation.
+
+## Write for humans
+
+Make it human: plain, respectful operational language. Write for the person doing the work, not for enterprise theater or system internals.

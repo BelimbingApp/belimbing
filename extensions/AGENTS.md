@@ -13,3 +13,8 @@
 - Owner/module path segments use kebab-case.
 - Module-owned Blade views live in `Views/`; do not create
   `resources/extensions/{owner}/`.
+
+## UI
+
+- Module `Views/` follow the same standards as Core: `DESIGN.md` (intent),
+  `resources/core/views/AGENTS.md` (authoring rules).

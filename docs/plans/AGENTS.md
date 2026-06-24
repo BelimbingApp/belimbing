@@ -4,6 +4,12 @@
 
 A plan is the **whiteboard** of a live discussion: capture what's agreed and why so future readers see it. `docs/plans/` is the in-repo single source of truth, the **status surface** (no parallel observability doc), and the coordination sheet when work spans agents or sessions. Early on it holds intent; as the *how* firms up it **becomes the task list** (Phases checklists) in place. Plans should let a capable agent work autonomously after the user says to build: record contracts, invariants, coordination state, and proof of done rather than line-by-line instructions. **Prose only** for design — no code/patches/full-file dumps. Recommendation-driven copy, stable section names, a preamble for quick orientation.
 
+## Problem first
+
+Plans are problem-first, not feature-first. State what is broken, missing, or risky before naming solutions. When the user leads with a solution, backfill the problem and check it still fits.
+
+In **Design Decisions**: name 2–3 real options, weigh trade-offs plainly, then recommend one and say why it wins under root `AGENTS.md` (entropy, strategic cost, deep modules, honesty, UX, module boundaries). Prefer solutions that optimize real operational work — not demo breadth, hypothetical configurability, or feature checklists. Do not open with implementation tasks or a preferred stack before **Problem Essence** and **Desired Outcome** exist.
+
 ## Workflow
 
 1. User opens a discussion (problem, goal, constraint).
@@ -37,7 +43,7 @@ Status describes current reality; it is not a permission gate. Keep it short and
 1. **Problem Essence** (required) — 1–2 sentences.
 2. **Desired Outcome** (required) — what "done" achieves.
 3. **Top-Level Components** — nameable responsibilities.
-4. **Design Decisions** — chosen direction + why.
+4. **Design Decisions** — 2–3 real options, trade-offs, recommended direction, and why it wins under root `AGENTS.md`.
 5. **Public Contract** — surface/promises once clear.
 6. **Phases** — chunked work. (Use `Build Sequence` only to match an external artifact's wording; otherwise always `Phases`.)
 
@@ -60,7 +66,18 @@ Write tasks as observable outcomes. Use stable anchors such as classes, methods,
 
 ## Hard Rules
 
-No questionnaire plans or chat prompts; no neutral option-padding when a recommendation exists; no observability-only sections duplicating this doc; no plan kept only in session state unless explicitly asked; no autopush/autocommit; no treating a prior commit request as standing permission for later work; no stale/contradictory content; no prose-only Phases when steps are concrete (use checkboxes); no code in the plan; no artificial permission/status gates beyond explicit user approval and project hard rules; no line-by-line implementation scripts when contracts, invariants, and acceptance criteria would give a capable agent more useful freedom.
+- No questionnaire plans or chat prompts.
+- No neutral option-padding when a recommendation exists.
+- No solution-first or feature-first plans before **Problem Essence** and **Desired Outcome**.
+- No observability-only sections duplicating this doc.
+- No plan kept only in session state unless explicitly asked.
+- No autopush/autocommit.
+- No treating a prior commit request as standing permission for later work.
+- No stale or contradictory content.
+- No prose-only **Phases** when steps are concrete — use checkboxes.
+- No code in the plan.
+- No artificial permission/status gates beyond explicit user approval and project hard rules.
+- No line-by-line implementation scripts when contracts, invariants, and acceptance criteria would give a capable agent more useful freedom.
 
 ## Litmus
 

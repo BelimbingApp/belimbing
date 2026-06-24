@@ -28,6 +28,7 @@ Initialization phase — design freedom, not a license to shortcut. Build produc
 - **Exceptional Experience:** Treat UX and UI quality as first-class architecture; every interface must honor `DESIGN.md`.
 - **Information Architecture:** organize UI by user workflow; organize code by ownership and change boundary. Bridge explicitly when they differ.
 - **Honesty:** names, persisted values, APIs, docs, UI copy must be truthful and grounded in code/data. Prefer shared types and existing rules over ad hoc strings or duplicated logic.
+- **Opinionated defaults:** at the framework and product-contract layer, prefer one good blessed path over configurable demos, feature flags for hypotheticals, or option sprawl — kill options when the rubric picks a winner. Business logic and modules remain customizable; opinionation guards the shared shell, UX contract, and platform conventions.
 
 ## 3. Plan Docs
 Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of truth.
@@ -44,7 +45,7 @@ Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of
 Verify placement against `docs/architecture/module-system.md` before creating module assets (config, migrations, seeders, views, tests). When in doubt, stop and check first.
 
 - **Base and Core are framework-owned.** Shared application shell, reusable Blade components, and framework-wide tokens live under `resources/core`.
-- **Pluggable domains are full-stack modules.** For non-Core domains (`People`, `Commerce`, `Operation`, future `Finance`, `Sales`, `Procurement`, etc.) and `extensions/{owner}/{module}`, keep module-owned Blade views under the module root in `Views/`; do not scatter them under `resources/`.
+- **Pluggable domains are full-stack modules.** For non-Core domains (`People`, `Commerce`, `Operation`, future `Finance`, `Sales`, `Procurement`, etc.) and `extensions/{owner}/{module}`, keep module-owned Blade views under the module root in `Views/`; do not scatter them under `resources/`. Those views use the same UI standards as Core: `DESIGN.md` (intent) and `resources/core/views/AGENTS.md` (authoring rules).
 - **Module assets are explicit.** If a non-Core module genuinely needs owned CSS or JavaScript, keep source under that module's `Assets/` directory and wire it through an explicit reviewed Vite entry/import. Do not inject global scripts/styles or create new `resources/*` trees.
 - **Promote deliberately.** If a module view reveals a reusable framework component, extract the shared component to `resources/core` and keep the module screen in the module.
 

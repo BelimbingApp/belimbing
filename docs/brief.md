@@ -2,7 +2,7 @@
 
 **Document Type:** Project Brief
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
-**Last Updated:** 2026-06-04
+**Last Updated:** 2026-06-23
 
 ---
 
@@ -32,7 +32,7 @@ Belimbing is a **general application platform** designed to democratize enterpri
 
 **Core Philosophy:**
 
-Belimbing is a **long-term commitment** to changing how businesses implement operational systems. We reject the "move fast and break things" mentality in favor of building with patience, excellence, and unwavering commitment to our core principles. Quality and architectural integrity take precedence over speed to market.
+Belimbing is a **long-term commitment** to changing how businesses implement operational systems. We reject the "move fast and break things" mentality in favor of building with patience, excellence, and unwavering commitment to our core principles. Quality and architectural integrity take precedence over speed to market. Product ethos shares Basecamp/Rails DNA — calm, opinionated workflow software built for the long haul; detail in `DESIGN.md` and root `AGENTS.md`.
 
 ---
 
@@ -46,6 +46,7 @@ Belimbing is a **long-term commitment** to changing how businesses implement ope
 | Topic | Read |
 |-------|------|
 | Agent philosophy, PHP conventions, progressive evolution | Root `AGENTS.md` |
+| UI and product intent | `DESIGN.md` |
 | Architecture (layers, database, modules, AI) | `docs/architecture/` |
 | Migrations, seeding, incubating schema | `app/Base/Database/AGENTS.md` |
 | Active planning | `docs/plans/` (`docs/plans/AGENTS.md`) |
