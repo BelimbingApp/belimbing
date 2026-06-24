@@ -267,6 +267,7 @@ return [
             'CADDY_LOG_DIR' => env('CADDY_LOG_DIR'),
             'CADDY_SCHEME' => env('CADDY_SCHEME'),
             'HTTPS_PORT' => env('HTTPS_PORT'),
+            'CADDY_SERVER_ADMIN_HOST' => env('CADDY_SERVER_ADMIN_HOST'),
             'CADDY_SERVER_ADMIN_PORT' => env('CADDY_SERVER_ADMIN_PORT'),
             'VITE_PORT' => env('VITE_PORT'),
             'VITE_HOST' => env('VITE_HOST'),

@@ -1,12 +1,13 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Support\PhpCli;
 use App\Base\Software\Livewire\Deployment\Index;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\DistributionBundleRepository;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Support\PhpCli;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -453,6 +454,47 @@ test('the worker reload reads its admin port from the octane server-state file',
         ['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]],
         fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643/config/apps/frankenphp')
     );
+});
+
+test('the worker reload retries once when the FrankenPHP admin API times out', function (): void {
+    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv('CADDY_SERVER_ADMIN_PORT=2643');
+
+    fakeDeploymentUpdateProcesses();
+
+    $getAttempts = 0;
+
+    try {
+        Http::fake(function ($request) use (&$getAttempts) {
+            $url = 'http://127.0.0.1:2643/config/apps/frankenphp';
+
+            if ($request->url() !== $url) {
+                return Http::response('', 500);
+            }
+
+            if ($request->method() === 'GET') {
+                $getAttempts++;
+
+                if ($getAttempts === 1) {
+                    throw new ConnectionException(
+                        'cURL error 28: Operation timed out after 10008 milliseconds with 0 bytes received for '.$url
+                    );
+                }
+
+                return Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200);
+            }
+
+            return Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200);
+        });
+
+        $log = app(DeploymentService::class)->reload();
+
+        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED)
+            ->and($getAttempts)->toBe(2);
+    } finally {
+        putenv('CADDY_SERVER_ADMIN_HOST');
+        putenv('CADDY_SERVER_ADMIN_PORT');
+    }
 });
 
 test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {

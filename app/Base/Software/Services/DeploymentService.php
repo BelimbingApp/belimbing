@@ -3,8 +3,11 @@
 namespace App\Base\Software\Services;
 
 use App\Base\Support\PhpCli;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -26,6 +29,10 @@ use Illuminate\Support\Facades\Process;
  */
 class DeploymentService
 {
+    private const ADMIN_CONNECT_TIMEOUT_SECONDS = 2;
+
+    private const ADMIN_REQUEST_TIMEOUT_SECONDS = 10;
+
     public function __construct(
         private readonly DistributionBundleRepository $bundles,
         private readonly DeploymentBuildRunner $buildRunner,
@@ -265,35 +272,59 @@ class DeploymentService
         $webReloaded = false;
         $reloadMessage = '';
         $adminUrl = '';
+        $candidates = $this->adminEndpoints->candidates();
 
-        foreach ($this->adminEndpoints->candidates() as [$host, $port]) {
+        Log::debug('FrankenPHP worker reload probing admin API candidates.', [
+            'candidates' => array_map(
+                static fn (array $candidate): string => "{$candidate[0]}:{$candidate[1]}",
+                $candidates,
+            ),
+        ]);
+
+        foreach ($candidates as [$host, $port]) {
             $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
 
             try {
-                $config = Http::connectTimeout(1)->timeout(3)->get($adminUrl);
+                $config = $this->sendFrankenPhpAdminRequest(
+                    fn (): Response => $this->frankenPhpAdminHttp()->get($adminUrl),
+                );
 
                 if ($config->successful() && trim($config->body()) !== '') {
-                    $patch = Http::withBody($config->body(), 'application/json')
-                        ->withHeaders(['Cache-Control' => 'must-revalidate'])
-                        ->connectTimeout(1)
-                        ->timeout(3)
-                        ->patch($adminUrl);
+                    $patch = $this->sendFrankenPhpAdminRequest(
+                        fn (): Response => $this->frankenPhpAdminHttp()
+                            ->withBody($config->body(), 'application/json')
+                            ->withHeaders(['Cache-Control' => 'must-revalidate'])
+                            ->patch($adminUrl),
+                    );
 
                     if ($patch->successful()) {
                         $webReloaded = true;
                         $reloadMessage = (string) __('Web workers reloaded.');
+                        Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $adminUrl]);
 
                         break;
                     }
 
                     $reloadMessage = (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $patch->status()]);
+                    Log::debug('FrankenPHP worker reload PATCH failed.', [
+                        'admin_url' => $adminUrl,
+                        'status' => $patch->status(),
+                    ]);
 
                     continue;
                 }
 
                 $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $adminUrl]);
+                Log::debug('FrankenPHP worker reload GET returned no config.', [
+                    'admin_url' => $adminUrl,
+                    'status' => $config->status(),
+                ]);
             } catch (\Throwable $exception) {
                 $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]);
+                Log::debug('FrankenPHP worker reload request failed.', [
+                    'admin_url' => $adminUrl,
+                    'message' => $exception->getMessage(),
+                ]);
             }
         }
 
@@ -304,6 +335,36 @@ class DeploymentService
         $this->history->rememberReload($webReloaded, $reloadMessage, $adminUrl);
 
         return $log;
+    }
+
+    private function frankenPhpAdminHttp(): PendingRequest
+    {
+        return Http::connectTimeout(self::ADMIN_CONNECT_TIMEOUT_SECONDS)
+            ->timeout(self::ADMIN_REQUEST_TIMEOUT_SECONDS);
+    }
+
+    /**
+     * @param  callable(): Response  $request
+     */
+    private function sendFrankenPhpAdminRequest(callable $request): Response
+    {
+        try {
+            return $request();
+        } catch (\Throwable $exception) {
+            if (! $this->isHttpTimeout($exception)) {
+                throw $exception;
+            }
+
+            return $request();
+        }
+    }
+
+    private function isHttpTimeout(\Throwable $exception): bool
+    {
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'cURL error 28')
+            || str_contains(strtolower($message), 'timed out');
     }
 
     private function clearRuntimeCaches(): string

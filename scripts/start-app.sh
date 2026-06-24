@@ -628,6 +628,7 @@ export_caddy_env() {
     # Use a different admin port to avoid conflict with system Caddy (default 2019)
     local caddy_admin_port
     caddy_admin_port=$(next_free_port 2020)
+    export CADDY_SERVER_ADMIN_HOST='127.0.0.1'
     export CADDY_SERVER_ADMIN_PORT="$caddy_admin_port"
 
     if [[ "$BLB_INGRESS_MODE" = "$BLB_INGRESS_MODE_SHARED" ]] || [[ "$system_caddy_running" = true ]]; then
