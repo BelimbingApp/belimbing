@@ -1,4 +1,10 @@
 <div class="flex flex-col gap-6">
+    @if ($showSessionExpiredNotice)
+        <x-ui.alert variant="warning">
+            {{ __('Your session expired. Sign in again to continue.') }}
+        </x-ui.alert>
+    @endif
+
     <!-- Session Status -->
     <x-auth-session-status class="text-center" :status="session('status')" />
 

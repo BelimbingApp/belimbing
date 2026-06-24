@@ -90,5 +90,5 @@ it('rejects invalid mode values', function (): void {
 
 it('requires authentication', function (): void {
     $this->postJson(route('timezone.set'), ['mode' => 'utc'])
-        ->assertUnauthorized();
+        ->assertRedirect(route('login'));
 });

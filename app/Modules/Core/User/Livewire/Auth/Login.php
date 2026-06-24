@@ -23,6 +23,13 @@ class Login extends Component
     #[Validate('required|string')]
     public string $password = '';
 
+    public bool $showSessionExpiredNotice = false;
+
+    public function mount(): void
+    {
+        $this->showSessionExpiredNotice = (bool) session()->pull('session_expired', false);
+    }
+
     /**
      * Handle an incoming authentication request.
      */

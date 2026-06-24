@@ -55,6 +55,8 @@ return Application::configure(basePath: dirname(__DIR__))
             DatabaseConnectionRecovery::class,
             ApplyLocaleContext::class,
         ]);
+
+        $middleware->redirectGuestsTo(fn () => route('login'));
     })
     ->withSchedule(function (Schedule $schedule) {
         $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
@@ -80,28 +82,47 @@ return Application::configure(basePath: dirname(__DIR__))
             || $request->hasHeader('X-Livewire-Navigate')
             || str_starts_with($request->path(), 'livewire/');
 
-        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($isLivewireInteraction) {
+        $fromSameAppReferer = static function (Request $request): bool {
+            $referer = (string) $request->headers->get('referer', '');
+
+            return $referer !== ''
+                && str_starts_with($referer, $request->getSchemeAndHttpHost());
+        };
+
+        $flashSessionExpiredWhenAppropriate = static function (Request $request) use ($isLivewireInteraction, $fromSameAppReferer): void {
+            $shouldFlash = $request->expectsJson()
+                || $isLivewireInteraction($request)
+                || $fromSameAppReferer($request);
+
+            if ($shouldFlash && $request->hasSession()) {
+                $request->session()->flash('session_expired', true);
+            }
+        };
+
+        $redirectToLogin = static function (Request $request, ?string $redirectTo = null) use ($flashSessionExpiredWhenAppropriate) {
+            $flashSessionExpiredWhenAppropriate($request);
+
+            return redirect()->guest($redirectTo ?? route('login'));
+        };
+
+        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($redirectToLogin) {
+            return $redirectToLogin($request, $exception->redirectTo($request));
+        });
+
+        $exceptions->render(function (TokenMismatchException $exception, Request $request) use ($isLivewireInteraction, $redirectToLogin) {
             if (! $isLivewireInteraction($request)) {
                 return null;
             }
 
-            return redirect()->guest(route('login'));
+            return $redirectToLogin($request);
         });
 
-        $exceptions->render(function (TokenMismatchException $exception, Request $request) use ($isLivewireInteraction) {
-            if (! $isLivewireInteraction($request)) {
-                return null;
-            }
-
-            return redirect()->guest(route('login'));
-        });
-
-        $exceptions->render(function (HttpException $exception, Request $request) use ($isLivewireInteraction) {
+        $exceptions->render(function (HttpException $exception, Request $request) use ($isLivewireInteraction, $redirectToLogin) {
             if ($exception->getStatusCode() !== 401 || ! $isLivewireInteraction($request)) {
                 return null;
             }
 
-            return redirect()->guest(route('login'));
+            return $redirectToLogin($request);
         });
 
         $exceptions->report(function (BlbException $exception): void {
