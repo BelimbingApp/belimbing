@@ -5,7 +5,6 @@
         tabs     — Array of tab definitions: [['id' => 'general', 'label' => 'General'], ...]
                    Each item must have 'id' and 'label'; optional 'icon' for a Heroicon name.
         default  — ID of the initially active tab (falls back to first tab)
-        variant  — Visual style: 'underline' (default) or 'pill'
         size     — Density: 'md' (default) or 'sm'
         persistence — 'hash' (default), 'query', or 'none'
         queryKey — query string key when persistence is 'query'
@@ -34,7 +33,6 @@
 @props([
     'tabs' => [],
     'default' => null,
-    'variant' => 'underline',
     'size' => 'md',
     'persistence' => 'hash', // 'hash' (default), 'query', or 'none'
     'queryKey' => 'tab',
@@ -49,35 +47,23 @@
 
     $sizeClasses = match($size) {
         'sm' => [
-            'pill_list' => 'p-0.5 rounded-xl',
-            'pill_tab' => 'px-3.5 py-1 rounded-lg text-sm',
-            'underline_tab' => 'px-3.5 py-1 text-sm',
+            'tab' => 'px-3.5 py-1 text-sm',
             'icon' => 'w-4 h-4',
             'panels' => 'mt-3',
         ],
         default => [
-            'pill_list' => 'p-1 rounded-2xl',
-            'pill_tab' => 'px-3.5 py-1.5 rounded-xl text-sm',
-            'underline_tab' => 'px-3.5 py-2 text-sm',
+            'tab' => 'px-3.5 py-2 text-sm',
             'icon' => 'w-4 h-4',
             'panels' => 'mt-4',
         ],
     };
 
-    $variantClasses = match($variant) {
-        'pill' => [
-            'list' => 'flex gap-1 bg-surface-subtle '.$sizeClasses['pill_list'],
-            'tab' => $sizeClasses['pill_tab'].' font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1',
-            'active' => 'bg-surface-card text-ink shadow-sm',
-            'inactive' => 'text-muted hover:text-ink',
-        ],
-        default => [
-            'list' => 'flex gap-0 border-b border-border-default',
-            'tab' => 'relative '.$sizeClasses['underline_tab'].' font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset',
-            'active' => 'text-ink',
-            'inactive' => 'text-muted hover:text-ink',
-        ],
-    };
+    $variantClasses = [
+        'list' => 'flex gap-0 border-b border-border-default',
+        'tab' => 'relative '.$sizeClasses['tab'].' font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset',
+        'active' => 'text-ink',
+        'inactive' => 'text-muted hover:text-ink',
+    ];
 @endphp
 
 <div
@@ -223,13 +209,11 @@
                     {{ $tab['label'] }}
                 @endif
 
-                {{-- Underline indicator (underline variant only) --}}
-                @if($variant === 'underline')
-                    <span
-                        x-show="isActive('{{ $tab['id'] }}')"
-                        class="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full"
-                    ></span>
-                @endif
+                {{-- Active underline indicator --}}
+                <span
+                    x-show="isActive('{{ $tab['id'] }}')"
+                    class="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full"
+                ></span>
             </button>
         @endforeach
     </div>

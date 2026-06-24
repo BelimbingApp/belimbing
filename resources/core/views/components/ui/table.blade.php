@@ -1,6 +1,6 @@
 @props([
     'caption' => null,
-    'captionPosition' => 'sr-only', // sr-only | top | bottom
+    'captionPosition' => 'sr-only', // sr-only | top
     'container' => 'bordered', // bordered | card | flush | plain
     'size' => 'sm', // xs | sm
     'stickyHeader' => false,
@@ -28,7 +28,6 @@
     $tableClasses = 'min-w-full '.$tableText.($divided ? ' divide-y divide-border-default' : '');
     $captionClasses = match ($captionPosition) {
         'top' => 'caption-top px-table-cell-x py-table-cell-y text-left text-sm font-medium text-ink',
-        'bottom' => 'caption-bottom px-table-cell-x py-table-cell-y text-left text-sm text-muted',
         default => 'sr-only',
     };
     $headClasses = 'bg-surface-subtle/80'.($stickyHeader ? ' sticky top-0 z-10 backdrop-blur' : '');
