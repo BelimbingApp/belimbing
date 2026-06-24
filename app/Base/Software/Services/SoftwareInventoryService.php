@@ -16,8 +16,8 @@ use App\Base\Software\Inventory\InstalledModule;
  * manifests (ModuleManifestReader) so the UI can say which Bundles are installed,
  * which Modules each contains, and each Bundle's git/dependency health — without the
  * page re-deriving the filesystem. Each Module is attributed to its *nearest* Bundle
- * root (the longest bundle path that contains it); Base/Core and other non-nested
- * code fall back to the platform Bundle.
+ * root (the longest bundle path that contains it); Platform Baseline modules
+ * (Base/Core) and other non-nested code fall back to the platform Bundle.
  */
 class SoftwareInventoryService
 {

@@ -1,9 +1,9 @@
 # Module System
 
 **Document Type:** Architecture Specification
-**Scope:** Belimbing's module system — directory layout, Distribution Bundle model, lifecycle, variation (adapters and slots), and discovery contracts
+**Scope:** Belimbing's module system — platform baseline, directory layout, Distribution Bundle model, lifecycle, variation (adapters and slots), and discovery contracts
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-06-22
+**Last Updated:** 2026-06-24
 **Related:** `docs/brief.md`, `docs/architecture/database.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ---
@@ -12,8 +12,9 @@
 
 This document defines the module system that supports Belimbing's core principles:
 
+- **Platform Baseline** — the bare BLB platform is `Base` + `Core`. `Base` is framework infrastructure; `Core` is mandatory platform-owned module shape for required business foundations. Both ship with the main repository, are always installed, and are not add-in Distribution Bundles operators install, disable, or uninstall.
 - **Modules as Ownership Boundaries** — the module directory owns its full stack; everything below it is module internals
-- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain Distribution Bundles, extension modules, and swappable slots (one of N variants fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` never plug — they are the framework
+- **Pluggable Where Exercised** — plug-in behavior is real at three points: domain Distribution Bundles, extension modules, and swappable slots (one of N variants fills a module path; see [Module Variation](#module-variation-adapters-and-slots)). `Base` and `Core` form the Platform Baseline; they never plug and are not add-ins
 - **Extension Modules** — licensee-owned extension modules grouped under one licensee Distribution Bundle
 - **Discovery by Convention** — provider discovery is glob-based; artifact discovery is path-contract based per artifact. A module that satisfies the relevant [discovery contracts](#discovery-contracts) is integrated with no central registration step
 - **Quality-Obsessed** — deep modules with simple interfaces
@@ -24,7 +25,8 @@ These terms are adjacent and easily conflated. They are not synonyms.
 
 | Term | Meaning |
 |------|---------|
-| **Module** | The *ownership boundary* — a filesystem path that owns its full stack (code, DB artifacts, config, routes, views, tests, discovery contract). |
+| **Platform Baseline** | The mandatory bare BLB platform shipped by the main repository: `Base` + `Core`. It is built-in, always installed, and not an add-in lifecycle unit. |
+| **Module** | The *ownership boundary* — a filesystem path that owns its full stack (code, DB artifacts, config, routes, views, tests, discovery contract). Module does not mean optional add-in; Core modules are mandatory platform modules. |
 | **Distribution Bundle** (operator-facing: **Bundle**) | The *delivery/versioning unit* — the installable, versioned code bundle (git remote/branch/tag/commit today, Composer later). One bundle may contain several modules; a licensee extension bundle is the common case. **Bundle** is the operator-facing short form, used by the admin UI in place of the retired word "plugin." See [Distribution Bundle Model](#distribution-bundle-model). |
 | **Adapter** | A class that implements a provider/contract so variation registers through discovery — e.g. `MarketplaceChannelProvider` (Shopee, Lazada) or `CommerceReadinessContributor` (Ham auto-parts). This is [Mechanism 1](#mechanism-1--contract--adapters-the-default). An adapter is one *contribution*, not a registry. |
 | **Extension seam (contribution registry)** | A module that *discovers and registers contributions from other modules* into a host domain. `Commerce/Plugins` + `CommercePluginRegistry` is the live example: it collects both adapter classes (channel providers, readiness contributors) **and** data/config contributions (catalog presets, template mappings, workbench panels, insight pages). It is an extension point, **not** an adapter, and the contributions it holds are broader than adapters. The historical `Plugins` directory name predates this glossary; read it as "Commerce's extension seam." |
@@ -37,11 +39,13 @@ These terms are adjacent and easily conflated. They are not synonyms.
 
 The module boundary is the filesystem path plus its discovery contract. The current default delivery mechanism is nested git; Composer/package installation remains valid if it preserves the same path, namespace, and artifact contracts.
 
+The Platform Baseline uses the first two layers below. `Base` owns infrastructure; `Core` owns mandatory platform modules. Everything below `Domain`, `Slot`, or `Extension` is add-in composition.
+
 | Layer | Path shape | Distribution Bundle | Notes |
 |------|------------|--------------|-------|
-| Base | `app/Base/{Module}/` | Main repo | Framework infrastructure. Shallow; no domain grouping. Not pluggable. |
-| Core | `app/Modules/Core/{Module}/` | Main repo | Required business foundations. Not pluggable. |
-| Domain | `app/Modules/{Domain}/{Module}/` | One installable Distribution Bundle per non-Core domain | Domain-level `Config/` and `Tests/` may sit beside modules. A module can later become a slot. |
+| Base | `app/Base/{Module}/` | Main repo | Platform infrastructure. Shallow; no domain grouping. Not pluggable. |
+| Core | `app/Modules/Core/{Module}/` | Main repo | Mandatory platform modules for required business foundations. Module-shaped ownership boundaries; not pluggable. |
+| Domain | `app/Modules/{Domain}/{Module}/` | One installable Distribution Bundle per add-in non-Core domain | Domain-level `Config/` and `Tests/` may sit beside modules. A module can later become a slot. |
 | Slot | `app/Modules/{Domain}/{Module}/` | One selected variant Distribution Bundle | Same path and namespace as the slot contract; only the provider Distribution Bundle changes. |
 | Extension | `extensions/{licensee}/{module}/` | One licensee Distribution Bundle containing one or more modules | Licensee and module path segments use kebab-case and map to `Extensions\{Licensee}\{Module}`. |
 
@@ -66,7 +70,7 @@ A **Distribution Bundle** is BLB's installable, versioned code bundle. It lands 
 
 The Distribution Bundle is the delivery unit, not the ownership boundary. The module path owns the code, database artifacts, config, routes, views, assets, tests, and discovery contract; the Distribution Bundle records how that code is shipped and versioned.
 
-Current BLB deployments use nested git repositories for non-Core domains, licensee extensions, and slot variants. `Base` and `Core` ship in the main Belimbing platform repository; installed Distribution Bundles keep their own history. Deployment composition is the platform repo plus the installed Distribution Bundles and their versions, recorded today by Git remotes, branches or tags, and commits.
+Current BLB deployments use nested git repositories for non-Core domains, licensee extensions, and slot variants. The Platform Baseline (`Base` + `Core`) ships in the main Belimbing platform repository; installed Distribution Bundles keep their own history. Deployment composition is the platform repo plus the installed Distribution Bundles and their versions, recorded today by Git remotes, branches or tags, and commits.
 
 A future Composer/package delivery path is valid if it preserves the same module identity, namespace, manifest, views/assets/config/tests, and discovery surface. The package manager may change; the path and discovery contract must not.
 
@@ -76,7 +80,7 @@ For the full private-repo workflow (creating the repo, remotes, daily commands),
 
 ### Domain Lifecycle
 
-A fresh Belimbing clone runs with Base + Core. Optional business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Modules** or by equivalent deployment automation.
+A fresh Belimbing clone runs with the Platform Baseline: `Base` + `Core`. Optional add-in business domains can be installed, disabled, or uninstalled from **Administration → System → Software → Modules** or by equivalent deployment automation.
 
 - **Installed:** the domain Distribution Bundle is present and participates in discovery.
 - **Disabled:** the Distribution Bundle remains present, but its providers, routes, menus, settings, authz, migrations, tests, and UI surfaces are excluded from discovery; persistent data is retained.
@@ -169,7 +173,7 @@ All module roots use the same internal vocabulary. A module includes only the di
 | `Tests/` | Module-owned tests that travel with the module. |
 | `composer.json` | Optional `extra.blb` manifest for module identity, version, dependencies, published/consumed events, and coarse schema defaults. |
 
-`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the Modules screen. Current filesystem contents are authoritative for Base/Core inventory; this document does not try to maintain a duplicate module list.
+`Foundation` is the Base module that carries cross-cutting module-system plumbing: `ProviderRegistry`, the `Extensions\` autoloader, and `ModuleManifest` parsing for the Modules screen. Current filesystem contents are authoritative for Platform Baseline inventory (`Base`/`Core`); this document does not try to maintain a duplicate module list.
 
 Module manifests are metadata for installed-module UI, dependency-health warnings, and database migration dependency preflight. They should remain compatible with future Composer Distribution Bundles, but they do not replace Composer's PHP dependency resolution or provider independence.
 
@@ -195,7 +199,7 @@ Module-owned tests live inside the module; the root `tests/` tree hosts framewor
 
 ## Framework Frontend Structure (`resources/`)
 
-`resources/core/` is framework-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for non-Core domains and extensions live in the owning module's `Views/` directory, not under `resources/core/views`.
+`resources/core/` is platform-owned shared presentation: shell layouts, auth layouts, reusable Blade components, design tokens, and JavaScript used by the framework shell. Module-owned pages for non-Core domains and extensions live in the owning module's `Views/` directory, not under `resources/core/views`.
 
 Shared components promoted out of a module belong under `resources/core/views/components/`. The Vite entry point (`resources/app.css`) imports framework tokens/components and scans Core, module, and extension view paths for Tailwind classes.
 
@@ -248,6 +252,6 @@ A module declares nothing centrally. Placing a conforming Distribution Bundle in
 
 ### 3. Single Source of Truth
 
-- Code: versioned Distribution Bundles (main repo plus installed domains, slots, and extensions)
+- Code: versioned Distribution Bundles (the main repo Platform Baseline plus installed domains, slots, and extensions)
 - Runtime settings: database (`base_settings`)
 - Environment: only bootstrap values

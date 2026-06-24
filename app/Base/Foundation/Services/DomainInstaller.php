@@ -15,11 +15,12 @@ use InvalidArgumentException;
 /**
  * Installs, disables, and uninstalls non-Core domains.
  *
- * A fresh Belimbing clone ships Base + Core only. Each domain is a nested
- * git checkout mounted at app/Modules/{Domain}; installing clones the repo
- * from the catalog (config: domains.catalog) and runs pending migrations,
- * uninstalling deletes the checkout and — only when explicitly requested —
- * drops the tables, ledger rows, and settings the deleted code claimed.
+ * A fresh Belimbing clone ships the Platform Baseline (Base + Core). Each
+ * add-in domain is a nested git checkout mounted at app/Modules/{Domain};
+ * installing clones the repo from the catalog (config: domains.catalog) and
+ * runs pending migrations; uninstalling deletes the checkout and — only when
+ * explicitly requested — drops the tables, ledger rows, and settings the
+ * deleted code claimed.
  *
  * Uninstall cleanup goes through DomainResidueScanner's re-validating
  * mutators, so anything still claimed by other installed code survives

@@ -7,10 +7,10 @@ return [
     | Domain Catalog
     |--------------------------------------------------------------------------
     |
-    | Official BelimbingApp domain repos installable from the Business Domains admin
-    | screen. Keys are the PascalCase mount directory under app/Modules.
-    | A fresh Belimbing clone ships Base + Core only; everything below is
-    | opt-in per deployment.
+    | Official BelimbingApp add-in domain repos installable from the Software >
+    | Modules admin screen. Keys are the PascalCase mount directory under
+    | app/Modules. A fresh Belimbing clone ships the Platform Baseline
+    | (Base + Core); everything below is opt-in per deployment.
     |
     */
     'catalog' => [

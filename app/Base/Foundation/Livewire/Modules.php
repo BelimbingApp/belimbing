@@ -206,8 +206,8 @@ class Modules extends Component
         }
 
         // Software Inventory read model (grouped by Distribution Bundle). Drives the
-        // platform (Base + Core) and any nested module/slot bundle cards, and lets each
-        // domain/extension card show its bundle's repo / branch / commit identity.
+        // Platform Baseline (Base + Core) and any nested module/slot bundle cards, and
+        // lets each domain/extension card show its bundle's repo / branch / commit identity.
         $bundles = $inventory->installedBundles();
         $platformBundle = collect($bundles)->firstWhere('kind', InstalledBundle::KIND_PLATFORM);
         $slotBundles = collect($bundles)

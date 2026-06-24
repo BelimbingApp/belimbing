@@ -43,17 +43,21 @@
 >
     <x-ui.page-header
         :title="__('Modules')"
-        :subtitle="__('Manage installed software and install more from BelimbingApp. Each row is a bundle you install or remove — a business domain or an extension; expand it to see the modules inside. A fresh Belimbing install ships Base and Core only.')"
+        :subtitle="__('Manage add-in software and install more from BelimbingApp. Domain and extension rows are bundles you install or remove; expand a bundle to see its modules. The built-in Platform Baseline ships with Base and Core and is always installed.')"
     >
         <x-slot:help>
             <dl class="space-y-3">
                 <div>
+                    <dt class="font-medium text-ink">{{ __('Platform Baseline') }}</dt>
+                    <dd>{{ __('The built-in BLB platform: Base infrastructure plus mandatory Core modules. It ships with the main repo and cannot be installed, disabled, or removed here.') }}</dd>
+                </div>
+                <div>
                     <dt class="font-medium text-ink">{{ __('Bundle') }}</dt>
-                    <dd>{{ __('A unit you install, update, or remove — a business domain (such as People) or an extension. Each row on this page is a bundle.') }}</dd>
+                    <dd>{{ __('A delivered unit of software. Add-in bundles are business domains (such as People) or extensions that operators install or remove; the Platform Baseline is read-only here.') }}</dd>
                 </div>
                 <div>
                     <dt class="font-medium text-ink">{{ __('Module') }}</dt>
-                    <dd>{{ __('An ownership boundary inside a bundle (such as People → Payroll). Expand a bundle to see its modules; modules are not installed or removed on their own.') }}</dd>
+                    <dd>{{ __('An ownership boundary inside delivered software (such as People → Payroll). Core uses the same module shape for mandatory platform modules; modules are not installed or removed on their own.') }}</dd>
                 </div>
                 <div>
                     <dt class="font-medium text-ink">{{ __('Contribution') }}</dt>
@@ -148,10 +152,10 @@
 
         <x-ui.card x-data="{ open: false }">
             <div class="flex items-start justify-between gap-2">
-                <div class="font-medium text-ink">{{ __('Base + Core') }}</div>
-                <x-ui.badge variant="info">{{ __('platform') }}</x-ui.badge>
+                <div class="font-medium text-ink">{{ __('Built-in Platform') }}</div>
+                <x-ui.badge variant="info">{{ __('baseline') }}</x-ui.badge>
             </div>
-            <p class="mt-1 text-sm text-muted">{{ __('Framework foundations and Core modules. Always installed; not removable.') }}</p>
+            <p class="mt-1 text-sm text-muted">{{ __('The Platform Baseline: Base infrastructure plus mandatory Core modules. Always installed; cannot be disabled or removed.') }}</p>
             @if ($platformBundle)
                 @if ($platformBundle->repo)
                     <p class="mt-2 font-mono text-xs text-muted">{{ $platformBundle->repo }} · {{ $platformBundle->branch }}@if (! empty($platformBundle->commit['short'])) · {{ $platformBundle->commit['short'] }}@endif</p>
@@ -178,7 +182,7 @@
         </x-ui.card>
 
         <section class="space-y-2">
-            <h2 class="text-lg font-semibold text-ink">{{ __('Installed business domains') }}</h2>
+            <h2 class="text-lg font-semibold text-ink">{{ __('Installed add-in business domains') }}</h2>
             <div class="grid gap-4 md:grid-cols-2">
                 @forelse ($installed as $domain)
                     @php
@@ -477,7 +481,7 @@
         <x-ui.tab id="available"><div class="space-y-6">
         @if (count($available) > 0)
             <section class="space-y-2">
-                <h2 class="text-lg font-semibold text-ink">{{ __('Available business domains') }}</h2>
+                <h2 class="text-lg font-semibold text-ink">{{ __('Available add-in business domains') }}</h2>
                 <div class="grid gap-4 md:grid-cols-3">
                     @foreach ($available as $name => $entry)
                         @php
