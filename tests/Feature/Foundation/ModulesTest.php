@@ -85,8 +85,8 @@ it('renders the Modules page with the installed tab and residue pointer', functi
     $this->get(route('admin.system.software.modules.index'))
         ->assertOk()
         ->assertSee('Modules')
-        ->assertSee('Installed business domains')
-        ->assertSee('Base + Core')
+        ->assertSee('Installed add-in business domains')
+        ->assertSee('Built-in Platform')
         ->assertSee(route('admin.system.database-residue.index'));
 });
 
@@ -132,7 +132,7 @@ it('lists catalog domains on the Available tab', function (): void {
     modulesCatalog();
 
     Livewire::test(Modules::class, ['tab' => 'available'])
-        ->assertSee('Available business domains')
+        ->assertSee('Available add-in business domains')
         ->assertSee(MODULES_DOMAIN)
         ->assertSee(MODULES_DESCRIPTION);
 });
