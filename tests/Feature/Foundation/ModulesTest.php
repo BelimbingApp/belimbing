@@ -20,6 +20,7 @@ const MODULES_PATH = 'Modules/'.MODULES_DOMAIN;
 const MODULES_CATALOG_PAYROLL = 'people/payroll';
 const MODULES_MANIFEST_ID = 'zz-managed/sample';
 const MODULES_MANIFEST_DESCRIPTION = 'ZzManaged sample module.';
+const MODULES_TEST_VERSION = '0.1.0';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -45,7 +46,7 @@ function fakeBelimbingAppCatalogForModules(): void
         ], 200),
         'https://raw.githubusercontent.com/BelimbingApp/blb-payroll-my/main/composer.json' => Http::response(json_encode([
             'name' => 'blb/payroll-my',
-            'extra' => ['blb' => ['module' => MODULES_CATALOG_PAYROLL, 'version' => '0.1.0', 'description' => 'Payroll — Malaysia.']],
+            'extra' => ['blb' => ['module' => MODULES_CATALOG_PAYROLL, 'version' => MODULES_TEST_VERSION, 'description' => 'Payroll — Malaysia.']],
         ]), 200),
         'https://api.github.com/repos/BelimbingApp/*/branches/main' => Http::response(['commit' => ['sha' => 'abc123']], 200),
     ]);
@@ -57,7 +58,7 @@ function writeModulesFakeManifest(): void
         'name' => 'test/zz-managed-sample',
         'extra' => ['blb' => [
             'module' => MODULES_MANIFEST_ID,
-            'version' => '0.1.0',
+            'version' => MODULES_TEST_VERSION,
             'description' => MODULES_MANIFEST_DESCRIPTION,
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
@@ -124,7 +125,7 @@ it('keeps disabled domain manifests in the installed drill-down', function (): v
         ->assertSee('disabled')
         ->assertSee(MODULES_MANIFEST_ID)
         ->assertSee(MODULES_MANIFEST_DESCRIPTION)
-        ->assertSee('0.1.0');
+        ->assertSee(MODULES_TEST_VERSION);
 });
 
 it('lists catalog domains on the Available tab', function (): void {
