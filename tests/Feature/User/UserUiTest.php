@@ -51,12 +51,12 @@ test('user can be created from create page component', function (): void {
     $this->actingAs($actor);
 
     Livewire::test('admin.users.create')
+        ->set('companyId', null)
         ->set('name', 'Jane Doe')
         ->set('email', 'jane@example.com')
         ->set('password', TEST_PASSWORD)
         ->set('passwordConfirmation', TEST_PASSWORD)
-        ->call('store')
-        ->assertRedirect(route('admin.users.index'));
+        ->call('store');
 
     $user = User::query()->where('email', 'jane@example.com')->first();
 
@@ -67,19 +67,37 @@ test('user can be created from create page component', function (): void {
         ->and(Hash::check(TEST_PASSWORD, $user->password))->toBeTrue();
 });
 
+test('user create page defaults company to authenticated user company', function (): void {
+    $actor = createAdminUser();
+    $this->actingAs($actor);
+
+    Livewire::test('admin.users.create')
+        ->assertSet('companyId', $actor->company_id)
+        ->set('name', 'Default Co User')
+        ->set('email', 'default-co@example.com')
+        ->set('password', TEST_PASSWORD)
+        ->set('passwordConfirmation', TEST_PASSWORD)
+        ->call('store');
+
+    $user = User::query()->where('email', 'default-co@example.com')->first();
+
+    expect($user)
+        ->not()->toBeNull()
+        ->and($user->company_id)->toBe($actor->company_id);
+});
+
 test('user can be created with company', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();
     $this->actingAs($actor);
 
     Livewire::test('admin.users.create')
-        ->set('companyId', (string) $company->id)
+        ->set('companyId', $company->id)
         ->set('name', 'John Smith')
         ->set('email', 'john@example.com')
         ->set('password', TEST_PASSWORD)
         ->set('passwordConfirmation', TEST_PASSWORD)
-        ->call('store')
-        ->assertRedirect(route('admin.users.index'));
+        ->call('store');
 
     $user = User::query()->where('email', 'john@example.com')->first();
 
@@ -87,6 +105,19 @@ test('user can be created with company', function (): void {
         ->not()->toBeNull()
         ->and($user->company_id)->toBe($company->id)
         ->and(Hash::check(TEST_PASSWORD, $user->password))->toBeTrue();
+});
+
+test('user create redirects to show page after creation', function (): void {
+    $actor = createAdminUser();
+    $this->actingAs($actor);
+
+    Livewire::test('admin.users.create')
+        ->set('name', 'Redirect User')
+        ->set('email', 'redirect@example.com')
+        ->set('password', TEST_PASSWORD)
+        ->set('passwordConfirmation', TEST_PASSWORD)
+        ->call('store')
+        ->assertRedirect(route('admin.users.show', User::query()->where('email', 'redirect@example.com')->firstOrFail()));
 });
 
 test('user fields can be inline edited from show page', function (): void {

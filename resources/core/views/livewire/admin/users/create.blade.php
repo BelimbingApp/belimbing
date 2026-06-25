@@ -15,7 +15,7 @@
             <form wire:submit="store" class="space-y-6">
                 <x-ui.select
                     id="user-company"
-                    wire:model="companyId"
+                    wire:model.live="companyId"
                     label="{{ __('Company') }}"
                     :error="$errors->first('companyId')"
                 >
