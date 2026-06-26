@@ -4,11 +4,11 @@ An open-source application platform built entirely by AI and designed for AI-ass
 
 ## The Business Platform for Builders
 
-Belimbing is designed for AI agents to quickly build the software a business needs. The common wiring and plumbing are already part of the platform, so new work can focus on domain rules, workflows, integrations, and UI instead of starting from scaffolding.
+Belimbing is designed for AI agents to quickly build the software a business needs. The comprehensive wiring and plumbing are already part of the platform, so you can focus on building.
 
 **Business domains are the shared contribution path.** Reusable areas such as People, Commerce, and Operations live as domain modules. They are meant for open-source capability that many deployments can install, improve, and share.
 
-**Extensions are the proprietary path.** Licensee- and project-specific behavior belongs under `extensions/{licensee}/{module}`. Private rules, integrations, and UI changes can evolve in their own boundary while upstream Belimbing stays clean and practical to update.
+**Extensions are the proprietary path.** Tailor Belimbing to your organization without forking the platform. Custom behavior stays isolated, so you can evolve what makes you different while keeping upgrades straightforward.
 
 Discovery is convention-driven: routes, menus, settings, migrations, views, tests, and providers wire in through module contracts. See [docs/architecture/module-system.md](./docs/architecture/module-system.md).
 
