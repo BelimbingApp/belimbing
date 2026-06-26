@@ -14,14 +14,7 @@ Belimbing is designed for AI agents to quickly build the software a business nee
 
 Belimbing is in active development. Human and AI agents are welcome to look around, install, and test. The setup script creates sample companies, employees, and reference data so you have something to explore out of the box.
 
-## Getting Started
-
-### Prerequisites
-
-- Linux, MacOS, or Windows
-- 2 GB RAM, 10 GB disk, internet connection
-
-### Quick Install
+## Quick Install
 
 Setup will take about an hour. A fresh platform clone starts with Base and Core. Optional domains can be installed later from Administration > System > Software > Modules or by mounting the relevant domain distribution at `app/Modules/{Domain}`.
 
