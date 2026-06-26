@@ -180,7 +180,15 @@ const applyNavigateSwapShellState = () => {
 }
 
 const markActiveMenu = () => {
-    const norm = (path) => (path.replace(/\/+$/, '') || '/')
+    const norm = (path) => {
+        let end = path.length
+
+        while (end > 1 && path.codePointAt(end - 1) === 47) {
+            end -= 1
+        }
+
+        return path.slice(0, end) || '/'
+    }
     const cur = norm(location.pathname)
     const links = [...document.querySelectorAll('aside nav a[href]')]
     let best = -1

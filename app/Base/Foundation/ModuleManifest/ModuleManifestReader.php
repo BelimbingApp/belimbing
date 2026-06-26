@@ -140,7 +140,9 @@ class ModuleManifestReader
 
                 $installedVersion = $versions[$required] ?? '';
 
-                if (! $this->versions()->satisfies($installedVersion, $constraint)) {
+                $versionConstraint = $this->versionConstraint ?? new ModuleVersionConstraint;
+
+                if (! $versionConstraint->satisfies($installedVersion, $constraint)) {
                     $issues[] = [
                         'issue' => 'incompatible',
                         'requiring' => $manifest->name,
@@ -329,11 +331,6 @@ class ModuleManifestReader
     private function normalizePath(string $path): string
     {
         return rtrim(str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path), DIRECTORY_SEPARATOR);
-    }
-
-    private function versions(): ModuleVersionConstraint
-    {
-        return $this->versionConstraint ?? new ModuleVersionConstraint;
     }
 
     /**

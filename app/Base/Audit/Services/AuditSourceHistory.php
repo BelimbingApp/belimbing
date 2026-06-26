@@ -37,6 +37,7 @@ final class AuditSourceHistory
 
     public function __construct(
         private readonly AuditLogPresenter $presenter,
+        private readonly AuditSearchSql $searchSql,
     ) {}
 
     /**
@@ -53,8 +54,9 @@ final class AuditSourceHistory
         string $sortDir = 'desc',
     ): array {
         $normalizedAuditableId = $this->idOrNull($auditableId);
+        $normalizedSubjects = $this->normalizedSubjects($subjects);
 
-        if ($subjects === [] && ($auditableType === null || $normalizedAuditableId === null)) {
+        if ($normalizedSubjects === [] && ($auditableType === null || $normalizedAuditableId === null)) {
             return $this->emptyHistory($limit);
         }
 
@@ -67,7 +69,7 @@ final class AuditSourceHistory
                     ->where('base_audit_mutations.actor_type', '=', PrincipalType::USER->value);
             })
             ->select('base_audit_mutations.*', 'users.name as actor_name')
-            ->where(fn (Builder $query): Builder => $this->applyRecordScope($query, $subjects, $auditableType, $normalizedAuditableId))
+            ->where(fn (Builder $query): Builder => $this->applyRecordScope($query, $normalizedSubjects, $auditableType, $normalizedAuditableId))
             ->tap(fn (Builder $query): Builder => $this->applySearch($query, $search));
 
         $total = (clone $query)->count('base_audit_mutations.id');
@@ -86,7 +88,7 @@ final class AuditSourceHistory
         $hasMore = $rows->count() > $limit;
 
         return [
-            'entries' => $rows->take($limit)->map(fn (AuditMutation $mutation): array => $this->entry($mutation, $subjects, $auditableType, $normalizedAuditableId))->values()->all(),
+            'entries' => $rows->take($limit)->map(fn (AuditMutation $mutation): array => $this->entry($mutation, $normalizedSubjects, $auditableType, $normalizedAuditableId))->values()->all(),
             'has_more' => $hasMore,
             'limit' => $limit,
             'total' => $total,
@@ -94,7 +96,7 @@ final class AuditSourceHistory
     }
 
     /**
-     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     * @param  list<array{name: string, id: string, identifier: string|null}>  $subjects
      */
     private function applyRecordScope(Builder $query, array $subjects, ?string $auditableType, ?string $auditableId): Builder
     {
@@ -112,31 +114,26 @@ final class AuditSourceHistory
     }
 
     /**
-     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     * @param  list<array{name: string, id: string, identifier: string|null}>  $subjects
      */
     private function applySubjectScopes(Builder $query, array $subjects): void
     {
         foreach ($subjects as $subject) {
-            $name = $this->stringOrNull($subject['name'] ?? null);
-            $id = $this->idOrNull($subject['id'] ?? null);
+            $query->orWhere(function (Builder $subjectQuery) use ($subject): void {
+                $subjectQuery->where('base_audit_mutations.subject_name', $subject['name'])
+                    ->where('base_audit_mutations.subject_id', $subject['id']);
 
-            if ($name === null || $id === null) {
-                continue;
-            }
-
-            $query->orWhere(function (Builder $subjectQuery) use ($name, $id, $subject): void {
-                $subjectQuery->where('base_audit_mutations.subject_name', $name)
-                    ->where('base_audit_mutations.subject_id', $id);
-
-                $identifier = $this->stringOrNull($subject['identifier'] ?? null);
-                if ($identifier !== null) {
-                    $subjectQuery->where('base_audit_mutations.subject_identifier', $identifier);
+                if ($subject['identifier'] !== null) {
+                    $subjectQuery->where('base_audit_mutations.subject_identifier', $subject['identifier']);
                 }
             });
         }
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * @param  list<array{name: string, id: string, identifier: string|null}>  $subjects
+     * @return array<string, mixed>
+     */
     private function entry(AuditMutation $mutation, array $subjects, ?string $auditableType, ?string $auditableId): array
     {
         $auditable = class_basename((string) $mutation->auditable_type).'#'.$mutation->auditable_id;
@@ -170,7 +167,7 @@ final class AuditSourceHistory
 
         $like = '%'.strtolower($search).'%';
         $trace = $this->presenter->normalizeTrace($search);
-        $subjectHandle = $this->parseSubjectHandle($search);
+        $subjectHandle = $this->searchSql->parseSubjectHandle($search);
 
         return $query->where(function (Builder $searchQuery) use ($like, $trace, $subjectHandle): void {
             $this->applyTextSearch($searchQuery, $like);
@@ -208,13 +205,13 @@ final class AuditSourceHistory
     private function searchExpressions(): array
     {
         return [
-            ...array_map($this->lowerCoalescedExpression(...), self::SEARCH_TEXT_COLUMNS),
-            ...array_map($this->lowerTextExpression(...), self::SEARCH_CAST_COLUMNS),
+            ...array_map($this->searchSql->lowerCoalescedExpression(...), self::SEARCH_TEXT_COLUMNS),
+            ...array_map($this->searchSql->lowerTextExpression(...), self::SEARCH_CAST_COLUMNS),
         ];
     }
 
     /**
-     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     * @param  list<array{name: string, id: string, identifier: string|null}>  $subjects
      */
     private function targetLabel(AuditMutation $mutation, array $subjects, ?string $auditableType, ?string $auditableId, string $summary, string $auditable): ?string
     {
@@ -233,19 +230,12 @@ final class AuditSourceHistory
     }
 
     /**
-     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     * @param  list<array{name: string, id: string, identifier: string|null}>  $subjects
      */
     private function matchesCurrentSubject(AuditMutation $mutation, array $subjects): bool
     {
         foreach ($subjects as $subject) {
-            $name = $this->stringOrNull($subject['name'] ?? null);
-            $id = $this->idOrNull($subject['id'] ?? null);
-
-            if ($name === null || $id === null) {
-                continue;
-            }
-
-            if ($mutation->subject_name === $name && (string) $mutation->subject_id === $id) {
+            if ($mutation->subject_name === $subject['name'] && (string) $mutation->subject_id === $subject['id']) {
                 return true;
             }
         }
@@ -282,35 +272,30 @@ final class AuditSourceHistory
         return null;
     }
 
-    /** @return array{name: string, id: string}|null */
-    private function parseSubjectHandle(string $search): ?array
+    /**
+     * @param  list<array{name: string, id: int|string, identifier?: string|null}>  $subjects
+     * @return list<array{name: string, id: string, identifier: string|null}>
+     */
+    private function normalizedSubjects(array $subjects): array
     {
-        if (! str_contains($search, '#')) {
-            return null;
+        $normalized = [];
+
+        foreach ($subjects as $subject) {
+            $name = $this->stringOrNull($subject['name'] ?? null);
+            $id = $this->idOrNull($subject['id'] ?? null);
+
+            if ($name === null || $id === null) {
+                continue;
+            }
+
+            $normalized[] = [
+                'name' => $name,
+                'id' => $id,
+                'identifier' => $this->stringOrNull($subject['identifier'] ?? null),
+            ];
         }
 
-        [$name, $id] = array_pad(explode('#', $search, 2), 2, '');
-        $name = strtolower(trim($name));
-        $id = trim($id);
-
-        if ($name === '' || $id === '') {
-            return null;
-        }
-
-        return ['name' => $name, 'id' => $id];
-    }
-
-    private function lowerTextExpression(string $column): string
-    {
-        return match (config('database.default')) {
-            'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
-            default => 'lower(cast('.$column.' as text))',
-        };
-    }
-
-    private function lowerCoalescedExpression(string $column): string
-    {
-        return 'lower(coalesce('.$column.', \'\'))';
+        return $normalized;
     }
 
     /** @return array{entries: list<array<string, mixed>>, has_more: bool, limit: int, total: int} */

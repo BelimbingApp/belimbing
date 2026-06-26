@@ -5,6 +5,7 @@ namespace App\Base\Audit\Livewire\AuditLog;
 use App\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithTraceTimeline;
 use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditLogPresenter;
+use App\Base\Audit\Services\AuditSearchSql;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -86,26 +87,29 @@ class Mutations extends Component
                 $query->where(function ($q) use ($search): void {
                     $like = '%'.strtolower($search).'%';
                     $trace = app(AuditLogPresenter::class)->normalizeTrace((string) $search);
-                    $subjectHandle = $this->parseSubjectHandle((string) $search);
+                    $searchSql = app(AuditSearchSql::class);
+                    $subjectHandle = $searchSql->parseSubjectHandle((string) $search);
 
                     $q->whereRaw('lower(coalesce(users.name, \'\')) like ?', [$like])
                         ->orWhereRaw('lower(base_audit_mutations.auditable_type) like ?', [$like])
                         ->orWhereRaw('lower(base_audit_mutations.event) like ?', [$like])
                         ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) like ?', [$like])
                         ->orWhereRaw('lower(coalesce(base_audit_mutations.subject_identifier, \'\')) like ?', [$like])
-                        ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
-                        ->orWhereRaw($this->lowerTextExpression('base_audit_mutations.subject_id').' like ?', [$like]);
+                        ->orWhereRaw($searchSql->lowerTextExpression('base_audit_mutations.auditable_id').' like ?', [$like])
+                        ->orWhereRaw($searchSql->lowerTextExpression('base_audit_mutations.subject_id').' like ?', [$like]);
 
                     if ($trace !== '') {
                         $q->orWhereRaw('base_audit_mutations.trace_id like ?', ['%'.$trace.'%']);
                     }
 
                     if ($subjectHandle !== null) {
+                        $subjectNameExpression = $searchSql->lowerCoalescedExpression('base_audit_mutations.subject_name');
+
                         $q->orWhere(function (Builder $handle) use ($subjectHandle): void {
                             $handle->whereRaw('lower(base_audit_mutations.auditable_type) like ?', ['%'.$subjectHandle['name'].'%'])
                                 ->where('base_audit_mutations.auditable_id', $subjectHandle['id']);
-                        })->orWhere(function (Builder $handle) use ($subjectHandle): void {
-                            $handle->whereRaw('lower(coalesce(base_audit_mutations.subject_name, \'\')) = ?', [$subjectHandle['name']])
+                        })->orWhere(function (Builder $handle) use ($subjectHandle, $subjectNameExpression): void {
+                            $handle->whereRaw($subjectNameExpression.' = ?', [$subjectHandle['name']])
                                 ->where('base_audit_mutations.subject_id', $subjectHandle['id']);
                         });
                     }
@@ -117,31 +121,5 @@ class Mutations extends Component
             ->orderBy($sortColumn, $this->sortDir)
             ->orderByDesc('base_audit_mutations.id')
             ->paginate(20);
-    }
-
-    /** @return array{name: string, id: string}|null */
-    private function parseSubjectHandle(string $search): ?array
-    {
-        if (! str_contains($search, '#')) {
-            return null;
-        }
-
-        [$name, $id] = array_pad(explode('#', $search, 2), 2, '');
-        $name = strtolower(trim($name));
-        $id = trim($id);
-
-        if ($name === '' || $id === '') {
-            return null;
-        }
-
-        return ['name' => $name, 'id' => $id];
-    }
-
-    private function lowerTextExpression(string $column): string
-    {
-        return match (config('database.default')) {
-            'mysql', 'mariadb' => 'lower(cast('.$column.' as char))',
-            default => 'lower(cast('.$column.' as text))',
-        };
     }
 }
