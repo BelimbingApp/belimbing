@@ -50,7 +50,6 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
              ready for connection. See docs/plans/ai-provider-families.md.
              ═══════════════════════════════════════════════════ --}}
         <x-ui.tabs
-            variant="underline"
             default="llm"
             :tabs="[
                 ['id' => 'llm', 'label' => __('LLM'), 'icon' => 'heroicon-o-chat-bubble-left-right'],

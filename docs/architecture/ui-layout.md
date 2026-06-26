@@ -112,7 +112,7 @@ Complex models use tabs to group related attributes within a page:
 - **Components:** `<x-ui.tabs>` (container) with `<x-ui.tab>` (panel) children.
 - **Purpose:** Organize dense forms and detail views (e.g., a customer record with General, Addresses, Contacts, Financial, Notes tabs).
 - **Behavior:** Client-side tab switching (Alpine.js). Active tab persisted in URL hash (`#tab-id`) via `history.replaceState` so it survives refresh. Responds to browser back/forward via `hashchange` listener.
-- **Variants:** `underline` (default — bottom border with accent indicator) or `pill` (rounded background toggle).
+- **Style:** Single underline style — bottom border with an accent indicator on the active tab. Density via `size` (`md` default, `sm`).
 - **ARIA:** Full WAI-ARIA Tabs Pattern — `role="tablist"` / `role="tab"` / `role="tabpanel"`, `aria-selected`, `aria-controls`, `aria-labelledby`. Keyboard navigation: Arrow Left/Right to cycle, Home/End for first/last.
 - **Not application-level tabs.** These do not represent multiple open screens. Each page manages its own tabs independently.
 
