@@ -86,5 +86,14 @@
     "User deleted successfully.": "User deleted successfully.",
     "User updated successfully.": "User updated successfully.",
     "You cannot delete your own account": "You cannot delete your own account",
-    "You cannot delete your own account.": "You cannot delete your own account."
+    "You cannot delete your own account.": "You cannot delete your own account.",
+    "Zoom out": "Zoom out",
+    "Zoom in": "Zoom in",
+    "Reset zoom": "Reset zoom",
+    "Listed": "Listed",
+    "List photo": "List photo",
+    "Listed — click to unlist this photo": "Listed — click to unlist this photo",
+    "Click to list this photo": "Click to list this photo",
+    "Click to use the original": "Click to use the original",
+    "Click to use this cleaned version": "Click to use this cleaned version"
 }
