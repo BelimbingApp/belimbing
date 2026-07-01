@@ -19,6 +19,7 @@ const DEPLOYMENT_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const DEPLOYMENT_UPDATE_COMMIT_TRAILER = "\x1fCI\x1fCurrent";
 const DEPLOYMENT_UPDATE_FRONTEND_BUILT = 'Frontend assets built.';
 const DEPLOYMENT_UPDATE_LAST_RUN_LABEL = 'Last run';
+const DEPLOYMENT_UPDATE_VERIFIED_PLATFORM = 'Verified: Belimbing (platform) is at deadbee and matches main.';
 const DEPLOYMENT_UPDATE_COMPLETE = 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.';
 const DEPLOYMENT_UPDATE_REMOTE = 'https://github.com/BelimbingApp/belimbing.git';
 const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
@@ -54,7 +55,7 @@ function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
 {
     Http::fake([
         '127.0.0.1:*' => $reloadOk
-            ? Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200)
+            ? Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200)
             : Http::response('', 500),
         '*' => Http::response([], 200),
     ]);
@@ -79,18 +80,19 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
     }
 }
 
-function expectDeploymentReloadUsesAdminEndpoint(string $url): void
+function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
 {
     fakeDeploymentUpdateProcesses();
     Http::fake([
-        $url => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+        $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
+        $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
         '*' => Http::response('', 500),
     ]);
 
     $log = app(DeploymentService::class)->reload();
 
     expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
-    Http::assertSent(fn ($request): bool => $request->url() === $url);
+    Http::assertSent(fn ($request): bool => $request->url() === $baseUrl.'/frankenphp/workers/restart');
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
 }
 
@@ -154,12 +156,13 @@ test('reload only triggers a graceful worker reload and records a log', function
     $this->actingAs($user);
     fakeDeploymentUpdateProcesses();
     Http::fake([
-        '127.0.0.1:*' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+        '127.0.0.1:*' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
         '*' => Http::response([], 200),
     ]);
 
     $component = Livewire::test(Index::class)
         ->call('reloadOnly')
+        ->assertDispatched('run-finished', status: 'success', refresh: true)
         ->assertHasNoErrors();
 
     expect($component->get('log'))->not->toBeEmpty();
@@ -215,7 +218,7 @@ test('domain runtime reload command reloads workers without clearing runtime cac
 test('the worker reload probes the Windows launcher admin port before the stock Caddy port', function (): void {
     withDeploymentOctaneState(
         null,
-        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2020/config/apps/frankenphp')
+        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2020')
     );
 });
 
@@ -239,7 +242,7 @@ test('the previous run log persists at its rest location across page visits', fu
     $this->actingAs($user);
     fakeDeploymentUpdateProcesses();
     Http::fake([
-        '127.0.0.1:*' => Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200),
+        '127.0.0.1:*' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
         '*' => Http::response([], 200),
     ]);
 
@@ -254,8 +257,11 @@ test('the previous run log persists at its rest location across page visits', fu
     Livewire::test(Index::class)
         ->assertSet('log', $log)
         ->assertSee('run-finished.window', false)
+        ->assertSee('data-deployment-run-recorded', false)
+        ->assertSee('window.location.reload()', false)
+        ->assertSee('Refreshing bundle status so commits and actions match the code on disk.')
         ->assertSee('runLogOpen', false)
-        ->assertSee('runLogOpen && ! dismissed', false)
+        ->assertSee('isFloating()', false)
         ->assertSee('h-72', false)
         ->assertSee('scrollToEnd', false);
 });
@@ -328,7 +334,7 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
 
     expect($log)->toContain('Building frontend assets…')
         ->and($log)->toContain(DEPLOYMENT_UPDATE_FRONTEND_BUILT)
-        ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
+        ->and($log)->toContain(DEPLOYMENT_UPDATE_VERIFIED_PLATFORM)
         ->and($log)->toContain(DEPLOYMENT_UPDATE_COMPLETE);
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY]);
@@ -437,9 +443,9 @@ test('update reports reload problems as warnings instead of clean completion', f
     try {
         $log = app(DeploymentService::class)->update(['platform']);
 
-        expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
-            ->and($log)->toContain('Verified: selected Distribution Bundles are up to date.')
-            ->and($log)->toContain('Update finished with warnings. Code may be updated, but one or more follow-up checks need attention.')
+        expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
+            ->and($log)->toContain(DEPLOYMENT_UPDATE_VERIFIED_PLATFORM)
+            ->and($log)->toContain('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.')
             ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
     } finally {
         putenv('CADDY_SERVER_ADMIN_HOST');
@@ -452,7 +458,7 @@ test('the worker reload reads its admin port from the octane server-state file',
     // stock Caddy default of 2019 (which is the wrong port for our deployments).
     withDeploymentOctaneState(
         ['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]],
-        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643/config/apps/frankenphp')
+        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643')
     );
 });
 
@@ -467,8 +473,9 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
     try {
         Http::fake(function ($request) use (&$getAttempts) {
             $url = 'http://127.0.0.1:2643/config/apps/frankenphp';
+            $restartUrl = 'http://127.0.0.1:2643/frankenphp/workers/restart';
 
-            if ($request->url() !== $url) {
+            if (! in_array($request->url(), [$url, $restartUrl], true)) {
                 return Http::response('', 500);
             }
 
@@ -481,10 +488,10 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
                     );
                 }
 
-                return Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200);
+                return Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200);
             }
 
-            return Http::response(['apps' => ['frankenphp' => ['x' => true]]], 200);
+            return Http::response('', 200);
         });
 
         $log = app(DeploymentService::class)->reload();

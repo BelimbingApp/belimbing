@@ -57,10 +57,13 @@ class Index extends Component
     private function runAction(DeploymentRunHistory $history, callable $work): void
     {
         $this->authorizeManage();
+        set_time_limit(0);
         $this->startRunLog();
         $this->log = $work();
-        $history->rememberDeploymentRun($this->log, $this->runOutcome());
-        $this->dispatch('run-finished');
+        $outcome = $this->runOutcome();
+        $history->rememberDeploymentRun($this->log, $outcome);
+        $this->streamRunRecordedMarker($outcome);
+        $this->dispatch('run-finished', status: $outcome, refresh: true);
     }
 
     public function render(DeploymentService $deployment, DeploymentRunHistory $history): View
@@ -127,6 +130,14 @@ class Index extends Component
         $classAttribute = $class !== '' ? ' class="'.$class.'"' : '';
 
         $this->stream('<div'.$classAttribute.'>'.e($line).'</div>', to: 'runLog');
+    }
+
+    private function streamRunRecordedMarker(string $outcome): void
+    {
+        $this->stream(
+            '<span class="hidden" aria-hidden="true" data-deployment-run-recorded="true" data-run-outcome="'.e($outcome).'"></span>',
+            to: 'runLog',
+        );
     }
 
     private function runOutcome(): string

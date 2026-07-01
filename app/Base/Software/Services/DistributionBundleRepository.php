@@ -212,6 +212,12 @@ class DistributionBundleRepository
             }
 
             if ($entry['up_to_date'] === true) {
+                $lines[] = (string) __('Verified: :label is at :current and matches :branch.', [
+                    'label' => $target['label'],
+                    'current' => $entry['current']['short'] ?? __('unknown'),
+                    'branch' => $entry['branch'] ?? __('the selected branch'),
+                ]);
+
                 continue;
             }
 
@@ -231,9 +237,7 @@ class DistributionBundleRepository
             ]);
         }
 
-        return $lines === []
-            ? [(string) __('Verified: selected Distribution Bundles are up to date.')]
-            : $lines;
+        return $lines;
     }
 
     /**

@@ -238,12 +238,13 @@ return [
     |--------------------------------------------------------------------------
     |
     | The following setting configures the maximum execution time for requests
-    | being handled by Octane. You may set this value to 0 to indicate that
-    | there isn't a specific time limit on Octane request execution time.
+    | being handled by Octane. Keep this finite for FrankenPHP on Windows: BLB's
+    | update console can legitimately run for minutes, while a zero-second
+    | request budget has produced fatal timeouts in long streamed requests.
     |
     */
 
-    'max_execution_time' => 0,
+    'max_execution_time' => env('OCTANE_MAX_EXECUTION_TIME', 1800),
 
     /*
     |--------------------------------------------------------------------------

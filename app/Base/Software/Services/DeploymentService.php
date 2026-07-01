@@ -253,9 +253,9 @@ class DeploymentService
     }
 
     /**
-     * Graceful, non-elevated worker reload: PATCH the Caddy admin config back to
-     * force FrankenPHP to respawn the worker pool (what octane:reload does under
-     * the hood), then queue:restart. The scheduler self-refreshes per run.
+     * Graceful, non-elevated worker reload: probe the Caddy admin API for a
+     * FrankenPHP worker config, POST FrankenPHP's worker restart endpoint, then
+     * queue:restart. The scheduler self-refreshes per run.
      *
      * @return list<string>
      */
@@ -282,41 +282,41 @@ class DeploymentService
         ]);
 
         foreach ($candidates as [$host, $port]) {
-            $adminUrl = "http://{$host}:{$port}/config/apps/frankenphp";
+            $configUrl = "http://{$host}:{$port}/config/apps/frankenphp";
+            $restartUrl = "http://{$host}:{$port}/frankenphp/workers/restart";
+            $adminUrl = $configUrl;
 
             try {
                 $config = $this->sendFrankenPhpAdminRequest(
-                    fn (): Response => $this->frankenPhpAdminHttp()->get($adminUrl),
+                    fn (): Response => $this->frankenPhpAdminHttp()->get($configUrl),
                 );
 
-                if ($config->successful() && trim($config->body()) !== '') {
-                    $patch = $this->sendFrankenPhpAdminRequest(
-                        fn (): Response => $this->frankenPhpAdminHttp()
-                            ->withBody($config->body(), 'application/json')
-                            ->withHeaders(['Cache-Control' => 'must-revalidate'])
-                            ->patch($adminUrl),
+                if ($this->frankenPhpWorkerConfigPresent($config)) {
+                    $adminUrl = $restartUrl;
+                    $restart = $this->sendFrankenPhpAdminRequest(
+                        fn (): Response => $this->frankenPhpAdminHttp()->post($restartUrl),
                     );
 
-                    if ($patch->successful()) {
+                    if ($restart->successful()) {
                         $webReloaded = true;
                         $reloadMessage = (string) __('Web workers reloaded.');
-                        Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $adminUrl]);
+                        Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
 
                         break;
                     }
 
-                    $reloadMessage = (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $patch->status()]);
-                    Log::debug('FrankenPHP worker reload PATCH failed.', [
-                        'admin_url' => $adminUrl,
-                        'status' => $patch->status(),
+                    $reloadMessage = (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $restart->status()]);
+                    Log::debug('FrankenPHP worker restart failed.', [
+                        'admin_url' => $restartUrl,
+                        'status' => $restart->status(),
                     ]);
 
                     continue;
                 }
 
-                $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not respond with config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $adminUrl]);
-                Log::debug('FrankenPHP worker reload GET returned no config.', [
-                    'admin_url' => $adminUrl,
+                $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $configUrl]);
+                Log::debug('FrankenPHP worker reload GET returned no worker config.', [
+                    'admin_url' => $configUrl,
                     'status' => $config->status(),
                 ]);
             } catch (\Throwable $exception) {
@@ -341,6 +341,17 @@ class DeploymentService
     {
         return Http::connectTimeout(self::ADMIN_CONNECT_TIMEOUT_SECONDS)
             ->timeout(self::ADMIN_REQUEST_TIMEOUT_SECONDS);
+    }
+
+    private function frankenPhpWorkerConfigPresent(Response $response): bool
+    {
+        if (! $response->successful()) {
+            return false;
+        }
+
+        $config = $response->json();
+
+        return is_array($config) && array_key_exists('workers', $config);
     }
 
     /**
@@ -411,7 +422,11 @@ class DeploymentService
         }
 
         if ($this->hasWarning($log)) {
-            return (string) __('Update finished with warnings. Code may be updated, but one or more follow-up checks need attention.');
+            if ($this->hasVerificationWarning($log)) {
+                return (string) __('Update finished with warnings. One or more selected Distribution Bundles could not be verified at the branch head; review the lines above before trusting the table.');
+            }
+
+            return (string) __('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.');
         }
 
         return (string) __('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
@@ -439,6 +454,15 @@ class DeploymentService
     {
         return collect($log)->contains(fn (string $line): bool => str_starts_with($line, 'Warning:')
             || str_starts_with($line, 'Still behind:')
+            || str_starts_with($line, 'Could not verify'));
+    }
+
+    /**
+     * @param  list<string>  $log
+     */
+    private function hasVerificationWarning(array $log): bool
+    {
+        return collect($log)->contains(fn (string $line): bool => str_starts_with($line, 'Still behind:')
             || str_starts_with($line, 'Could not verify'));
     }
 }
