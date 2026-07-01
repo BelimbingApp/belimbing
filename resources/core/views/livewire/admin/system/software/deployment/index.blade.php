@@ -9,8 +9,17 @@
             dismissed: false,
             refreshing: false,
             refreshTimer: null,
+            finishedStatus: null,
+            justRefreshed: false,
+            storageKey: 'belimbing.deployment.run-log-after-refresh',
+            init() {
+                this.restoreAfterRefresh();
+            },
             isFloating() {
                 return this.runLogOpen && ! this.dismissed;
+            },
+            statusIs(status) {
+                return this.finishedStatus === status;
             },
             openRunLog() {
                 if (this.refreshTimer) {
@@ -19,11 +28,15 @@
                 }
                 this.running = true;
                 this.refreshing = false;
+                this.finishedStatus = null;
+                this.justRefreshed = false;
                 this.runLogOpen = true;
                 this.dismissed = false;
+                this.forgetAfterRefresh();
             },
             finishRun(detail = {}) {
                 this.running = false;
+                this.finishedStatus = detail.status || this.finishedStatus || 'success';
 
                 if (detail.refresh !== false) {
                     this.scheduleStatusRefresh();
@@ -35,15 +48,61 @@
                 }
 
                 this.refreshing = true;
-                this.refreshTimer = window.setTimeout(() => window.location.reload(), 2200);
+                this.rememberAfterRefresh();
+                this.refreshTimer = window.setTimeout(() => window.location.reload(), 1600);
             },
             closeRunLog() {
-                if (this.running) {
+                if (this.running || this.refreshing) {
                     return;
                 }
 
                 this.dismissed = true;
                 this.runLogOpen = false;
+                this.justRefreshed = false;
+                this.forgetAfterRefresh();
+            },
+            rememberAfterRefresh() {
+                try {
+                    window.sessionStorage.setItem(this.storageKey, JSON.stringify({
+                        status: this.finishedStatus,
+                        at: Date.now(),
+                    }));
+                } catch (error) {
+                    // Storage may be unavailable in hardened browser contexts.
+                }
+            },
+            restoreAfterRefresh() {
+                try {
+                    const raw = window.sessionStorage.getItem(this.storageKey);
+
+                    if (! raw) {
+                        return;
+                    }
+
+                    window.sessionStorage.removeItem(this.storageKey);
+
+                    const payload = JSON.parse(raw);
+
+                    if (! payload?.at || Date.now() - payload.at > 300000) {
+                        return;
+                    }
+
+                    this.running = false;
+                    this.refreshing = false;
+                    this.finishedStatus = payload.status || null;
+                    this.justRefreshed = true;
+                    this.runLogOpen = true;
+                    this.dismissed = false;
+                } catch (error) {
+                    this.forgetAfterRefresh();
+                }
+            },
+            forgetAfterRefresh() {
+                try {
+                    window.sessionStorage.removeItem(this.storageKey);
+                } catch (error) {
+                    // Storage may be unavailable in hardened browser contexts.
+                }
             },
         }"
         @run-finished.window="finishRun($event.detail || {})"
@@ -285,16 +344,27 @@
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h2 id="deployment-run-log-title" class="text-base font-medium text-ink">
                                         <span x-show="running">{{ __('Run in progress') }}</span>
-                                        <span x-show="! running">{{ __('Last run') }}</span>
+                                        <span x-show="! running && refreshing">{{ __('Run finished') }}</span>
+                                        <span x-show="! running && ! refreshing && justRefreshed">{{ __('Run complete') }}</span>
+                                        <span x-show="! running && ! refreshing && ! justRefreshed">{{ __('Last run') }}</span>
                                     </h2>
 
                                     <x-ui.badge variant="info" x-show="running" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
                                         {{ __('Running') }}
                                     </x-ui.badge>
+                                    <x-ui.badge variant="success" x-show="! running && refreshing && statusIs('success')" x-cloak>
+                                        {{ __('Complete') }}
+                                    </x-ui.badge>
+                                    <x-ui.badge variant="warning" x-show="! running && refreshing && statusIs('warning')" x-cloak>
+                                        {{ __('Warnings') }}
+                                    </x-ui.badge>
+                                    <x-ui.badge variant="danger" x-show="! running && refreshing && statusIs('error')" x-cloak>
+                                        {{ __('Needs action') }}
+                                    </x-ui.badge>
                                     <x-ui.badge variant="info" x-show="refreshing && ! running" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
-                                        {{ __('Refreshing status') }}
+                                        {{ __('Refreshing table') }}
                                     </x-ui.badge>
                                     @if ($runStatus !== 'idle')
                                         <x-ui.badge :variant="$runVariant" x-show="! running && ! refreshing">{{ $runLabel }}</x-ui.badge>
@@ -302,7 +372,8 @@
                                 </div>
 
                                 <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. Keep this tab open until the status refresh starts.') }}</p>
-                                <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Refreshing bundle status so commits and actions match the code on disk.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Reloading this page so commits and actions match the code on disk.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="justRefreshed && ! running && ! refreshing" x-cloak>{{ __('Status refreshed. Current commits and actions now reflect the code on disk.') }}</p>
                                 @if ($runAt)
                                     <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing">
                                         {{ __('Last run') }} <x-ui.datetime :value="$runAt" />@if ($runSummary !== '') · {{ $runSummary }}@endif
