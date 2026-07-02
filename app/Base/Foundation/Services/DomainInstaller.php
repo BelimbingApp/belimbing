@@ -63,7 +63,7 @@ class DomainInstaller
      *
      * @return list<array{name: string, modules: list<string>, disabled: bool, installation: array{occurred_at: string, actor_type: string, actor_id: int, actor_name: string|null, actor_email: string|null, status: string|null}|null, git: array{hasGit: bool, dirty: bool, unpushed: int}}>
      */
-    public function installed(): array
+    public function installed(bool $includeGit = true): array
     {
         $domains = [];
 
@@ -84,7 +84,7 @@ class DomainInstaller
                 'modules' => $modules,
                 'disabled' => DomainState::isDisabled($name),
                 'installation' => null,
-                'git' => $this->gitState->inspect($path),
+                'git' => $includeGit ? $this->gitState->inspect($path) : $this->gitState->presence($path),
             ];
         }
 

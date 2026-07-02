@@ -3,6 +3,7 @@
 
     <div
         class="space-y-section-gap"
+        wire:init="loadLatestStatus"
         x-data="{
             running: false,
             runLogOpen: false,
@@ -220,12 +221,19 @@
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
                                 <div class="text-xs text-muted">{{ $s['latest']['ago'] }}</div>
+                            @elseif ($s['error'] === null && ! $latestStatusLoaded)
+                                <span class="inline-flex items-center gap-1.5 text-xs text-muted">
+                                    <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
+                                    {{ __('Checking latest…') }}
+                                </span>
                             @else
                                 <span class="text-xs text-muted">{{ $s['error'] }}</span>
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-right">
-                            @if ($s['up_to_date'] === true)
+                            @if ($s['error'] === null && ! $latestStatusLoaded)
+                                <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
+                            @elseif ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
                                 <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing" wire:target="updateRepo('{{ $s['key'] }}')">

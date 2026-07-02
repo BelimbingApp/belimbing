@@ -68,6 +68,19 @@ class SoftwareInventoryService
     }
 
     /**
+     * Module dependency diagnostics for pages that should not pay the Git inventory
+     * scan. This reads only manifests and dependency declarations.
+     *
+     * @return list<array{issue: 'missing'|'incompatible', requiring: string, requiring_module: string, required: string, constraint: string, installed_version?: string}>
+     */
+    public function dependencyIssuesForStatusDiagnostics(): array
+    {
+        $reader = $this->reader();
+
+        return $reader->dependencyIssues($reader->all());
+    }
+
+    /**
      * Pure assembly of the read model from already-gathered inputs. Kept separate from
      * the git/filesystem gathering above so the grouping rules are unit-testable without
      * touching disk.

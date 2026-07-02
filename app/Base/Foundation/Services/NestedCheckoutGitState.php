@@ -14,16 +14,28 @@ class NestedCheckoutGitState
         $repo = new GitRepository($path);
 
         if (! $repo->isRepository()) {
-            return ['hasGit' => false, 'dirty' => false, 'unpushed' => 0];
+            return $this->presence($path);
         }
 
-        $status = $repo->run(['status', '--porcelain'], timeout: 30);
+        $summary = $repo->statusSummary(timeout: 30);
         $unpushed = $repo->run(['rev-list', '--count', '--branches', '--not', '--remotes'], timeout: 30);
 
         return [
             'hasGit' => true,
-            'dirty' => $status->ok && $status->output !== '',
+            'dirty' => ($summary['dirty'] ?? 0) > 0,
             'unpushed' => $unpushed->ok ? (int) $unpushed->output : 0,
+        ];
+    }
+
+    /**
+     * @return array{hasGit: bool, dirty: bool, unpushed: int}
+     */
+    public function presence(string $path): array
+    {
+        return [
+            'hasGit' => file_exists($path.DIRECTORY_SEPARATOR.'.git'),
+            'dirty' => false,
+            'unpushed' => 0,
         ];
     }
 }

@@ -67,7 +67,7 @@ class ExtensionInstaller
      *
      * @return list<array{name: string, modules: list<string>, git: array{hasGit: bool, dirty: bool, unpushed: int}}>
      */
-    public function installed(): array
+    public function installed(bool $includeGit = true): array
     {
         $extensions = [];
 
@@ -84,7 +84,7 @@ class ExtensionInstaller
             $extensions[] = [
                 'name' => basename($path),
                 'modules' => $modules,
-                'git' => $this->gitState->inspect($path),
+                'git' => $includeGit ? $this->gitState->inspect($path) : $this->gitState->presence($path),
             ];
         }
 

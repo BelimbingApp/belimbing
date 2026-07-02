@@ -7,7 +7,10 @@ use App\Base\Support\Git\GitRepository;
 use App\Base\Support\Git\GitResult;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
+use Throwable;
 
 /**
  * Discovers git-backed Distribution Bundles and reads their local/remote state.
@@ -16,50 +19,113 @@ class DistributionBundleRepository
 {
     private const TOKEN_PREFIX = 'integrations.github.token.';
 
+    private const REMOTE_STATUS_CACHE_SECONDS = 60;
+
+    /**
+     * @var array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     */
+    private array $latestCommitRuntimeCache = [];
+
     public function __construct(private readonly SettingsService $settings) {}
 
     /**
      * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
      */
-    public function status(): array
+    public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
-        return array_map(function (array $dist): array {
-            [$owner, $name, $remoteError] = $this->remoteIdentity($dist['path']);
-            $branch = $this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD']) ?? 'main';
+        $entries = [];
+        $latestRequests = [];
+        $latestRequestAliases = [];
+        $requestKeyByCacheKey = [];
 
-            $entry = [
+        foreach ($this->distributions() as $dist) {
+            [$owner, $name, $remoteError] = $this->remoteIdentity($dist['path']);
+            $snapshot = $this->localSnapshot($dist['path']);
+            $branch = $snapshot['branch'] ?? 'main';
+
+            $entries[$dist['key']] = [
                 'key' => $dist['key'],
                 'label' => $dist['label'],
                 'path' => $dist['relative'],
                 'owner' => $owner,
                 'repo' => $owner !== null ? $owner.'/'.$name : null,
                 'branch' => $branch,
-                'working_tree' => $this->workingTree($dist['path']),
-                'current' => $this->localCommit($dist['path']),
+                'working_tree' => $snapshot['working_tree'],
+                'current' => $snapshot['current'],
                 'latest' => null,
                 'up_to_date' => null,
                 'error' => null,
             ];
 
             if ($owner === null) {
-                $entry['error'] = $remoteError ?? (string) __('No GitHub origin remote.');
+                $entries[$dist['key']]['error'] = $remoteError ?? (string) __('No GitHub origin remote.');
 
-                return $entry;
+                continue;
             }
 
-            [$latest, $error] = $this->latestCommit($dist['path'], $owner, $name, $branch);
-
-            if ($latest === null) {
-                $entry['error'] = $error;
-
-                return $entry;
+            if (! $includeRemote) {
+                continue;
             }
 
-            $entry['latest'] = $latest;
-            $entry['up_to_date'] = $entry['current'] !== null && $entry['current']['sha'] === $latest['sha'];
+            $cacheKey = $this->latestCommitCacheKey($owner, $name, $branch);
+            $cached = $useRemoteCache
+                ? ($this->latestCommitRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
+                : null;
 
-            return $entry;
-        }, $this->distributions());
+            if (is_array($cached)) {
+                $this->applyLatestCommit($entries[$dist['key']], $cached[0] ?? null, $cached[1] ?? null);
+
+                continue;
+            }
+
+            if (isset($requestKeyByCacheKey[$cacheKey])) {
+                $latestRequestAliases[$dist['key']] = $requestKeyByCacheKey[$cacheKey];
+
+                continue;
+            }
+
+            $requestKeyByCacheKey[$cacheKey] = $dist['key'];
+            $latestRequests[$dist['key']] = [
+                'path' => $dist['path'],
+                'owner' => $owner,
+                'name' => $name,
+                'branch' => $branch,
+                'cache_key' => $cacheKey,
+                'use_cache' => $useRemoteCache,
+            ];
+        }
+
+        $latestResults = $this->fetchLatestCommits($latestRequests);
+
+        foreach ($latestResults as $key => $latestResult) {
+            if (! isset($entries[$key])) {
+                continue;
+            }
+
+            [$latest, $error] = $latestResult;
+            $this->applyLatestCommit($entries[$key], $latest, $error);
+
+            if ($latest !== null && ($latestRequests[$key]['use_cache'] ?? false) === true) {
+                $this->latestCommitRuntimeCache[(string) $latestRequests[$key]['cache_key']] = [$latest, $error];
+
+                Cache::put(
+                    (string) $latestRequests[$key]['cache_key'],
+                    [$latest, $error],
+                    self::REMOTE_STATUS_CACHE_SECONDS,
+                );
+            }
+        }
+
+        foreach ($latestRequestAliases as $key => $sourceKey) {
+            if (! isset($entries[$key], $latestResults[$sourceKey])) {
+                continue;
+            }
+
+            [$latest, $error] = $latestResults[$sourceKey];
+            $this->applyLatestCommit($entries[$key], $latest, $error);
+        }
+
+        return array_values($entries);
     }
 
     /**
@@ -72,9 +138,13 @@ class DistributionBundleRepository
     public function localStatus(bool $includePlatformWorkingTree = true, int $gitTimeoutSeconds = 60): array
     {
         return array_map(function (array $dist) use ($includePlatformWorkingTree, $gitTimeoutSeconds): array {
-            $isRepo = $this->isRepositoryPath($dist['path']);
+            $repo = new GitRepository($dist['path']);
+            $isRepo = $repo->isRepository();
             $readWorkingTree = $isRepo && ($includePlatformWorkingTree || $dist['key'] !== 'platform');
-            [$owner, $name] = $this->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds);
+            [$owner, $name] = $isRepo
+                ? $this->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds)
+                : [null, null];
+            $snapshot = $this->localSnapshot($dist['path'], readWorkingTree: $readWorkingTree, timeout: $gitTimeoutSeconds);
 
             return [
                 'key' => $dist['key'],
@@ -83,9 +153,9 @@ class DistributionBundleRepository
                 'absolutePath' => $dist['path'],
                 'owner' => $owner,
                 'repo' => $owner !== null ? $owner.'/'.$name : null,
-                'branch' => $isRepo ? ($this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD'], timeout: $gitTimeoutSeconds) ?? 'main') : null,
-                'working_tree' => $readWorkingTree ? $this->workingTree($dist['path'], timeout: $gitTimeoutSeconds) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
-                'current' => $this->localCommit($dist['path'], timeout: $gitTimeoutSeconds),
+                'branch' => $snapshot['branch'],
+                'working_tree' => $snapshot['working_tree'],
+                'current' => $snapshot['current'],
             ];
         }, $this->distributions());
     }
@@ -200,7 +270,7 @@ class DistributionBundleRepository
      */
     public function verifyTargets(array $targets): array
     {
-        $status = collect($this->status())->keyBy('key');
+        $status = collect($this->status(useRemoteCache: false))->keyBy('key');
         $lines = [];
 
         foreach ($targets as $target) {
@@ -327,17 +397,52 @@ class DistributionBundleRepository
     }
 
     /**
+     * @return array{branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null}
+     */
+    private function localSnapshot(string $path, bool $readWorkingTree = true, int $timeout = 60): array
+    {
+        $repo = new GitRepository($path);
+
+        if (! $repo->isRepository()) {
+            return [
+                'branch' => null,
+                'working_tree' => $this->cleanWorkingTree(),
+                'current' => null,
+            ];
+        }
+
+        $summary = $readWorkingTree ? $repo->statusSummary(timeout: $timeout) : null;
+
+        return [
+            'branch' => $summary['branch'] ?? $repo->currentBranch(timeout: $timeout) ?? 'main',
+            'working_tree' => $readWorkingTree ? $this->workingTree($path, timeout: $timeout, summary: $summary) : $this->cleanWorkingTree(),
+            'current' => $this->localCommit($path, timeout: $timeout),
+        ];
+    }
+
+    /**
      * Local working-tree state for a bundle: count of uncommitted changes and how far
      * the branch is ahead of / behind its upstream. This is what makes changes another
      * tool writes into a bundle (e.g. schema incubation rewriting migration files)
      * visible — each bundle is its own nested git repo, so they never surface in the
      * platform repo's `git status`.
      *
+     * @param  array{branch: string|null, dirty: int, ahead: int, behind: int}|null  $summary
      * @return array{dirty: int, ahead: int, behind: int}
      */
-    private function workingTree(string $path, int $timeout = 60): array
+    private function workingTree(string $path, int $timeout = 60, ?array $summary = null): array
     {
         $repo = new GitRepository($path);
+        $summary ??= $repo->statusSummary(timeout: $timeout);
+
+        if ($summary !== null) {
+            return [
+                'dirty' => $summary['dirty'],
+                'ahead' => $summary['ahead'],
+                'behind' => $summary['behind'],
+            ];
+        }
+
         $aheadBehind = $repo->aheadBehind(timeout: $timeout);
 
         return [
@@ -345,6 +450,14 @@ class DistributionBundleRepository
             'ahead' => $aheadBehind['ahead'],
             'behind' => $aheadBehind['behind'],
         ];
+    }
+
+    /**
+     * @return array{dirty: int, ahead: int, behind: int}
+     */
+    private function cleanWorkingTree(): array
+    {
+        return ['dirty' => 0, 'ahead' => 0, 'behind' => 0];
     }
 
     private function localCommit(string $path, int $timeout = 60): ?array
@@ -360,26 +473,102 @@ class DistributionBundleRepository
         return $this->commit($sha, $date, $author, $subject);
     }
 
+    private function latestCommitCacheKey(string $owner, string $name, string $branch): string
+    {
+        return 'software.bundle.latest.'.hash('sha256', strtolower($owner.'/'.$name).'|'.$branch);
+    }
+
+    /**
+     * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     */
+    private function fetchLatestCommits(array $requests): array
+    {
+        if ($requests === []) {
+            return [];
+        }
+
+        try {
+            $poolResults = Process::concurrently(function ($pool) use ($requests): void {
+                foreach ($requests as $key => $request) {
+                    $repo = new GitRepository($request['path'], $this->tokenFor($request['owner']));
+
+                    $pool->as($key)
+                        ->path($request['path'])
+                        ->timeout(30)
+                        ->command($repo->command([
+                            'ls-remote',
+                            '--exit-code',
+                            'origin',
+                            'refs/heads/'.$request['branch'],
+                        ], authenticated: true));
+                }
+            });
+        } catch (Throwable $exception) {
+            return array_map(
+                fn (array $request): array => [null, (string) __('Could not start Git remote status checks: :error', ['error' => $exception->getMessage()])],
+                $requests,
+            );
+        }
+
+        $latest = [];
+        foreach ($requests as $key => $request) {
+            $result = $poolResults[$key] ?? null;
+            $gitResult = $result !== null
+                ? new GitResult(
+                    ok: $result->successful(),
+                    output: trim($result->output()),
+                    error: trim($result->errorOutput()),
+                    exitCode: $result->exitCode() ?? -1,
+                )
+                : new GitResult(ok: false, output: '', error: (string) __('git process did not return a result'), exitCode: -1);
+
+            $latest[$key] = $this->parseLatestCommitResult(
+                $request['path'],
+                $request['owner'],
+                $request['name'],
+                $request['branch'],
+                $gitResult,
+            );
+        }
+
+        return $latest;
+    }
+
     /**
      * @return array{0: array<string, mixed>|null, 1: string|null}
      */
-    private function latestCommit(string $path, string $owner, string $name, string $branch): array
+    private function parseLatestCommitResult(string $path, string $owner, string $name, string $branch, GitResult $result): array
     {
         $repo = "{$owner}/{$name}";
-        $result = (new GitRepository($path, $this->tokenFor($owner)))->lsRemoteHead($branch);
 
         if (! $result->ok) {
             return [null, $this->remoteCommitError($repo, $branch, $result)];
         }
 
-        $line = $result->output;
-        $sha = (string) strtok($line, " \t");
+        $sha = (string) strtok($result->output, " \t");
 
         if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
             return [null, (string) __('Git remote response for :repo@:branch did not include a commit SHA.', ['repo' => $repo, 'branch' => $branch])];
         }
 
         return [$this->remoteCommit($path, $sha), null];
+    }
+
+    /**
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}  $entry
+     * @param  array<string, mixed>|null  $latest
+     */
+    private function applyLatestCommit(array &$entry, ?array $latest, ?string $error): void
+    {
+        if ($latest === null) {
+            $entry['error'] = $error;
+
+            return;
+        }
+
+        $entry['latest'] = $latest;
+        $entry['up_to_date'] = $entry['current'] !== null && $entry['current']['sha'] === $latest['sha'];
     }
 
     private function remoteCommit(string $path, string $sha): array
@@ -449,20 +638,26 @@ class DistributionBundleRepository
             return [null, null, (string) __('No git repository found at :path.', ['path' => $path])];
         }
 
-        $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
+        $remoteUrl = $repo->configuredRemoteUrl('origin');
 
-        if (! $remote->ok) {
-            return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
-                'path' => $path,
-                'detail' => $remote->message(),
-            ])];
+        if ($remoteUrl === null) {
+            $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
+
+            if (! $remote->ok) {
+                return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
+                    'path' => $path,
+                    'detail' => $remote->message(),
+                ])];
+            }
+
+            $remoteUrl = $remote->output;
         }
 
-        if (preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#', $remote->output, $matches) === 1) {
+        if (preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#', $remoteUrl, $matches) === 1) {
             return [$matches[1], $matches[2], null];
         }
 
-        return [null, null, (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remote->output])];
+        return [null, null, (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remoteUrl])];
     }
 
     /**

@@ -27,12 +27,20 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             return [];
         }
 
+        if ($this->isModulesInventoryPage()) {
+            return [];
+        }
+
+        if ($this->isSoftwareUpdatesPage()) {
+            return $this->updatePageDependencyDiagnostics();
+        }
+
         $bundles = $this->inventory->installedBundlesForStatusDiagnostics();
         $diagnostics = [];
 
         $dependencyIssueCount = $this->dependencyIssueCount($bundles);
         if ($dependencyIssueCount > 0) {
-            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $bundles);
+            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $this->dependencyBundleLabels($bundles));
         }
 
         $driftedBundles = $this->driftedAddInBundles($bundles);
@@ -41,6 +49,23 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
         }
 
         return $diagnostics;
+    }
+
+    /**
+     * @return list<StatusBarDiagnostic>
+     */
+    private function updatePageDependencyDiagnostics(): array
+    {
+        $issues = $this->inventory->dependencyIssuesForStatusDiagnostics();
+        $issueCount = count($issues);
+
+        if ($issueCount === 0) {
+            return [];
+        }
+
+        return [
+            $this->dependencyDiagnostic($issueCount, $this->dependencyIssueLabels($issues)),
+        ];
     }
 
     /**
@@ -55,9 +80,9 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     }
 
     /**
-     * @param  list<InstalledBundle>  $bundles
+     * @param  list<string>  $affectedLabels
      */
-    private function dependencyDiagnostic(int $issueCount, array $bundles): StatusBarDiagnostic
+    private function dependencyDiagnostic(int $issueCount, array $affectedLabels): StatusBarDiagnostic
     {
         return new StatusBarDiagnostic(
             id: 'software.module-dependencies',
@@ -70,7 +95,7 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             target: $this->modulesUrl(),
             metadata: [
                 'dependency_issues' => $issueCount,
-                'affected_bundles' => $this->dependencyBundleLabels($bundles),
+                'affected_bundles' => $affectedLabels,
             ],
         );
     }
@@ -85,6 +110,18 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             fn (InstalledBundle $bundle): string => $bundle->label,
             array_filter($bundles, fn (InstalledBundle $bundle): bool => $bundle->hasDependencyIssues()),
         ));
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $issues
+     * @return list<string>
+     */
+    private function dependencyIssueLabels(array $issues): array
+    {
+        return array_values(array_unique(array_map(
+            fn (array $issue): string => (string) ($issue['requiring'] ?? $issue['requiring_module'] ?? __('Unknown module')),
+            $issues,
+        )));
     }
 
     /**
@@ -142,6 +179,24 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             return $this->authorizationService
                 ->can(Actor::forUser($user), 'admin.system.software.modules.view')
                 ->allowed;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function isModulesInventoryPage(): bool
+    {
+        try {
+            return request()->routeIs('admin.system.software.modules.index');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function isSoftwareUpdatesPage(): bool
+    {
+        try {
+            return request()->routeIs('admin.system.software.updates.index');
         } catch (\Throwable) {
             return false;
         }

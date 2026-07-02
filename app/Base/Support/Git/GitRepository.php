@@ -37,6 +37,50 @@ final class GitRepository
         return $this->output(['remote', 'get-url', $remote], timeout: $timeout);
     }
 
+    public function configuredRemoteUrl(string $remote = 'origin'): ?string
+    {
+        foreach ($this->gitConfigPaths() as $configPath) {
+            $url = $this->remoteUrlFromConfig($configPath, $remote);
+
+            if ($url !== null) {
+                return $url;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Branch, dirty count, and upstream divergence from one git process.
+     *
+     * `git status --porcelain=v1 --branch` is stable machine output and avoids
+     * paying separately for `rev-parse`, `status --porcelain`, and `rev-list`.
+     *
+     * @return array{branch: string|null, dirty: int, ahead: int, behind: int}|null
+     */
+    public function statusSummary(int $timeout = 60): ?array
+    {
+        $status = $this->output(['status', '--porcelain=v1', '--branch'], timeout: $timeout);
+
+        if ($status === null || $status === '') {
+            return null;
+        }
+
+        $lines = preg_split('/\R/', $status) ?: [];
+        $branchLine = array_shift($lines);
+
+        if (! is_string($branchLine) || ! str_starts_with($branchLine, '## ')) {
+            return null;
+        }
+
+        return [
+            'branch' => $this->parseStatusBranch($branchLine),
+            'dirty' => count(array_filter($lines, fn (string $line): bool => trim($line) !== '')),
+            'ahead' => $this->parseStatusCount($branchLine, 'ahead'),
+            'behind' => $this->parseStatusCount($branchLine, 'behind'),
+        ];
+    }
+
     /**
      * Number of uncommitted (staged + unstaged + untracked) entries.
      */
@@ -97,6 +141,29 @@ final class GitRepository
     }
 
     /**
+     * Build a scoped git command for callers that need to run it through a pool.
+     *
+     * @param  list<string>  $args
+     * @return list<string>
+     */
+    public function command(array $args, bool $authenticated = false): array
+    {
+        $explicitExecutable = $this->executable !== null && $this->executable !== '';
+        $command = [
+            $explicitExecutable ? (string) $this->executable : $this->configuredExecutable(),
+            '-c',
+            'safe.directory='.$this->safeDirectory(),
+        ];
+
+        if ($authenticated && $this->token !== null) {
+            $command[] = '-c';
+            $command[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$this->token);
+        }
+
+        return array_merge($command, $args);
+    }
+
+    /**
      * Run git and return trimmed stdout on success, or null on failure.
      *
      * @param  list<string>  $args
@@ -113,21 +180,8 @@ final class GitRepository
      */
     public function run(array $args, bool $authenticated = false, int $timeout = 60): GitResult
     {
-        $explicitExecutable = $this->executable !== null && $this->executable !== '';
-        $executable = $explicitExecutable ? (string) $this->executable : $this->configuredExecutable();
-        $command = [
-            $executable,
-            '-c',
-            'safe.directory='.$this->safeDirectory(),
-        ];
-
-        if ($authenticated && $this->token !== null) {
-            $command[] = '-c';
-            $command[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$this->token);
-        }
-
         try {
-            $result = Process::path($this->path)->timeout($timeout)->run(array_merge($command, $args));
+            $result = Process::path($this->path)->timeout($timeout)->run($this->command($args, authenticated: $authenticated));
         } catch (Throwable $exception) {
             return new GitResult(
                 ok: false,
@@ -175,5 +229,126 @@ final class GitRepository
         $path = realpath($this->path) ?: $this->path;
 
         return str_replace('\\', '/', $path);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function gitConfigPaths(): array
+    {
+        $gitDirectory = $this->gitDirectory();
+
+        if ($gitDirectory === null) {
+            return [];
+        }
+
+        $paths = [$gitDirectory.DIRECTORY_SEPARATOR.'config'];
+        $commonDirectory = $this->commonGitDirectory($gitDirectory);
+
+        if ($commonDirectory !== null) {
+            $paths[] = $commonDirectory.DIRECTORY_SEPARATOR.'config';
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    private function gitDirectory(): ?string
+    {
+        $dotGit = $this->path.DIRECTORY_SEPARATOR.'.git';
+
+        if (is_dir($dotGit)) {
+            return realpath($dotGit) ?: $dotGit;
+        }
+
+        if (! is_file($dotGit)) {
+            return null;
+        }
+
+        $contents = file_get_contents($dotGit);
+
+        if (! is_string($contents) || preg_match('/^gitdir:\s*(.+)$/i', trim($contents), $matches) !== 1) {
+            return null;
+        }
+
+        $gitDirectory = trim($matches[1]);
+
+        if (! preg_match('/^(?:[A-Za-z]:[\/\\\\]|\/|\\\\\\\\)/', $gitDirectory)) {
+            $gitDirectory = dirname($dotGit).DIRECTORY_SEPARATOR.$gitDirectory;
+        }
+
+        return realpath($gitDirectory) ?: $gitDirectory;
+    }
+
+    private function commonGitDirectory(string $gitDirectory): ?string
+    {
+        $commonDirPath = $gitDirectory.DIRECTORY_SEPARATOR.'commondir';
+
+        if (! is_file($commonDirPath)) {
+            return null;
+        }
+
+        $commonDirectory = trim((string) file_get_contents($commonDirPath));
+
+        if ($commonDirectory === '') {
+            return null;
+        }
+
+        if (! preg_match('/^(?:[A-Za-z]:[\/\\\\]|\/|\\\\\\\\)/', $commonDirectory)) {
+            $commonDirectory = $gitDirectory.DIRECTORY_SEPARATOR.$commonDirectory;
+        }
+
+        return realpath($commonDirectory) ?: $commonDirectory;
+    }
+
+    private function remoteUrlFromConfig(string $configPath, string $remote): ?string
+    {
+        if (! is_file($configPath) || ! is_readable($configPath)) {
+            return null;
+        }
+
+        $lines = file($configPath, FILE_IGNORE_NEW_LINES);
+
+        if (! is_array($lines)) {
+            return null;
+        }
+
+        $inRemoteSection = false;
+
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*\[remote\s+"([^"]+)"\]\s*$/', $line, $matches) === 1) {
+                $inRemoteSection = $matches[1] === $remote;
+
+                continue;
+            }
+
+            if ($inRemoteSection && preg_match('/^\s*url\s*=\s*(.+?)\s*$/', $line, $matches) === 1) {
+                return $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    private function parseStatusBranch(string $branchLine): ?string
+    {
+        $summary = trim(substr($branchLine, 3));
+        $summary = preg_replace('/\s+\[[^\]]+\]$/', '', $summary) ?? $summary;
+
+        if (str_contains($summary, '...')) {
+            $summary = explode('...', $summary, 2)[0];
+        }
+
+        if (preg_match('/^No commits yet on (.+)$/', $summary, $matches) === 1) {
+            $summary = $matches[1];
+        }
+
+        return $summary !== '' ? $summary : null;
+    }
+
+    private function parseStatusCount(string $branchLine, string $name): int
+    {
+        return preg_match('/\b'.preg_quote($name, '/').'\s+(\d+)\b/', $branchLine, $matches) === 1
+            ? (int) $matches[1]
+            : 0;
     }
 }

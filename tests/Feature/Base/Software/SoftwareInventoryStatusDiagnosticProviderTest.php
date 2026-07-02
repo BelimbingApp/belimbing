@@ -6,6 +6,7 @@ use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Http\Request;
 
 function softwareDiagnosticBundle(
     string $key,
@@ -36,6 +37,15 @@ function fakeSoftwareInventory(array $bundles): void
     $inventory->shouldReceive('installedBundlesForStatusDiagnostics')->andReturn($bundles);
 
     app()->instance(SoftwareInventoryService::class, $inventory);
+}
+
+function setSoftwareDiagnosticRoute(string $routeName): void
+{
+    $request = Request::create(route($routeName), 'GET');
+    $route = app('router')->getRoutes()->match($request);
+    $request->setRouteResolver(fn () => $route);
+
+    app()->instance('request', $request);
 }
 
 it('reports module dependency issues for users who can view modules', function (): void {
@@ -112,4 +122,41 @@ it('surfaces software diagnostics through the status bar aggregator', function (
     $response->assertOk()
         ->assertSee('1 add-in bundle has local drift')
         ->assertSee('href="'.route('admin.system.software.modules.index').'#add-in-bundle-drift"', false);
+});
+
+it('suppresses software diagnostics on the modules inventory page', function (): void {
+    setSoftwareDiagnosticRoute('admin.system.software.modules.index');
+
+    $inventory = Mockery::mock(SoftwareInventoryService::class);
+    $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');
+    $inventory->shouldNotReceive('dependencyIssuesForStatusDiagnostics');
+    app()->instance(SoftwareInventoryService::class, $inventory);
+
+    expect(collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser())))->toBeEmpty();
+});
+
+it('keeps dependency diagnostics on the updates page without running inventory git checks', function (): void {
+    setSoftwareDiagnosticRoute('admin.system.software.updates.index');
+
+    $inventory = Mockery::mock(SoftwareInventoryService::class);
+    $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');
+    $inventory->shouldReceive('dependencyIssuesForStatusDiagnostics')->once()->andReturn([
+        [
+            'issue' => 'missing',
+            'requiring' => 'blb/payroll-my',
+            'requiring_module' => 'people/payroll',
+            'required' => 'people/attendance',
+            'constraint' => '*',
+        ],
+    ]);
+    app()->instance(SoftwareInventoryService::class, $inventory);
+
+    $diagnostics = collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
+
+    expect($diagnostics)->toHaveCount(1)
+        ->and($diagnostics[0]->id)->toBe('software.module-dependencies')
+        ->and($diagnostics[0]->metadata)->toMatchArray([
+            'dependency_issues' => 1,
+            'affected_bundles' => ['blb/payroll-my'],
+        ]);
 });

@@ -195,16 +195,6 @@ class Modules extends Component
         $dependencyIssues = $reader->dependencyIssues($enabledManifests);
         $manifestsByDomain = $this->manifestsByDomain($installedManifests);
 
-        $installed = $installer->installed();
-        foreach ($installed as $index => $domain) {
-            $installed[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($domain['name'])] ?? [];
-        }
-
-        $installedExtensions = $extensions->installed();
-        foreach ($installedExtensions as $index => $extension) {
-            $installedExtensions[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($extension['name'])] ?? [];
-        }
-
         // Software Inventory read model (grouped by Distribution Bundle). Drives the
         // Platform Baseline (Base + Core) and any nested module/slot bundle cards, and
         // lets each domain/extension card show its bundle's repo / branch / commit identity.
@@ -223,6 +213,24 @@ class Modules extends Component
                 && ($bundle->isDirty() || $bundle->unpushed() > 0))
             ->values()
             ->all();
+
+        $installed = $installer->installed(includeGit: false);
+        foreach ($installed as $index => $domain) {
+            $installed[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($domain['name'])] ?? [];
+            $installed[$index]['git'] = $this->gitStateForBundle(
+                $bundlesByLifecycle[$domain['name']] ?? null,
+                $domain['git'],
+            );
+        }
+
+        $installedExtensions = $extensions->installed(includeGit: false);
+        foreach ($installedExtensions as $index => $extension) {
+            $installedExtensions[$index]['manifests'] = $manifestsByDomain[$this->domainManifestKey($extension['name'])] ?? [];
+            $installedExtensions[$index]['git'] = $this->gitStateForBundle(
+                $bundlesByLifecycle[$extension['name']] ?? null,
+                $extension['git'],
+            );
+        }
 
         $catalog = app(BelimbingAppCatalogService::class);
         $installedModuleIds = collect($installedManifests)
@@ -272,6 +280,23 @@ class Modules extends Component
             app_path('Modules'),
             base_path('extensions'),
         ]);
+    }
+
+    /**
+     * @param  array{hasGit: bool, dirty: bool, unpushed: int}  $fallback
+     * @return array{hasGit: bool, dirty: bool, unpushed: int}
+     */
+    private function gitStateForBundle(?InstalledBundle $bundle, array $fallback): array
+    {
+        if ($bundle === null) {
+            return $fallback;
+        }
+
+        return [
+            'hasGit' => $bundle->hasGit,
+            'dirty' => $bundle->isDirty(),
+            'unpushed' => $bundle->unpushed(),
+        ];
     }
 
     /**

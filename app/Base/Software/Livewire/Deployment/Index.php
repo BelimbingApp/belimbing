@@ -24,6 +24,13 @@ class Index extends Component
     #[Session('admin.system.software.updates.run_log')]
     public array $log = [];
 
+    public bool $latestStatusLoaded = false;
+
+    public function loadLatestStatus(): void
+    {
+        $this->latestStatusLoaded = true;
+    }
+
     public function updateRepo(
         string $key,
         DeploymentService $deployment,
@@ -88,7 +95,9 @@ class Index extends Component
 
     public function render(DeploymentService $deployment, DeploymentRunHistory $history): View
     {
-        $status = $deployment->status();
+        $status = $this->latestStatusLoaded
+            ? $deployment->status()
+            : $deployment->localStatus();
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
@@ -101,6 +110,7 @@ class Index extends Component
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
             'behind' => collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false),
+            'latestStatusLoaded' => $this->latestStatusLoaded,
             'checkFailures' => collect($status)
                 ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
                 ->map(fn (array $s): string => $s['repo'] ?? $s['path'])

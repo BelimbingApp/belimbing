@@ -28,6 +28,10 @@ const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
 
 final class DeploymentUpdateGitLaunchException extends RuntimeException {}
 
+beforeEach(function (): void {
+    Cache::flush();
+});
+
 function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
 {
     Process::fake(function ($process) use ($sha, $remoteError) {
@@ -39,6 +43,7 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
 {
     return match (gitCommandWithoutConfig($command)) {
         ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
+        ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## main...origin/main'),
         ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
         ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
         ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
@@ -116,6 +121,7 @@ test('deployment page lists Distribution Bundles with status for admins', functi
         ->assertSee('No reload has been recorded yet.')
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform bundle's Git repository
+        ->assertSee('Checking latest')
         ->assertSee('Reload FrankenPHP')
         ->assertSee('Streaming live output. You can dismiss this window; the run continues.')
         ->assertSee('x-show="isFloating()"', false)
@@ -128,14 +134,43 @@ test('deployment page lists Distribution Bundles with status for admins', functi
     Http::assertSentCount(0);
 });
 
-test('failed remote checks name the repos instead of assuming they are private', function (): void {
+test('deployment page defers remote latest checks until livewire init', function (): void {
     $user = createAdminUser();
-    fakeDeploymentUpdateProcesses(remoteError: 'fatal: unable to access repository');
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
     Http::fake();
 
     $this->actingAs($user)
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
+        ->assertSee('Checking latest')
+        ->assertDontSee('Up to date');
+
+    expect($lsRemoteCount)->toBe(0);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Up to date');
+
+    expect($lsRemoteCount)->toBeGreaterThan(0);
+});
+
+test('failed remote checks name the repos instead of assuming they are private', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses(remoteError: 'fatal: unable to access repository');
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
         ->assertSee('Could not check latest commits for these Distribution Bundles: BelimbingApp/belimbing')
         ->assertSee('Public repositories do not need a token')
         ->assertSee('Could not read latest commit for BelimbingApp/belimbing@main via git ls-remote (fatal: unable to access repository)')
@@ -144,20 +179,76 @@ test('failed remote checks name the repos instead of assuming they are private',
     Http::assertSentCount(0);
 });
 
-test('deployment page reports when git cannot be launched', function (): void {
-    $user = createAdminUser();
+test('deployment local status tolerates git launch failures', function (): void {
     Process::fake(fn () => throw new DeploymentUpdateGitLaunchException('git executable was not found'));
-    Http::fake();
 
-    $this->actingAs($user)
-        ->get(route('admin.system.software.updates.index'))
-        ->assertOk()
-        ->assertSee('Could not read Git origin remote')
-        ->assertSee('Could not run git')
-        ->assertSee('git executable was not found')
-        ->assertDontSee('No GitHub origin remote');
+    $status = app(DeploymentService::class)->localStatus();
 
-    Http::assertSentCount(0);
+    expect($status)->toHaveCount(6)
+        ->and(collect($status)->pluck('current')->filter()->all())->toBe([])
+        ->and(collect($status)->pluck('latest')->filter()->all())->toBe([]);
+});
+
+test('deployment status reports remote process pool failures as row errors', function (): void {
+    Process::fake(function ($process) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            throw new DeploymentUpdateGitLaunchException('process pool unavailable');
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    $status = app(DistributionBundleRepository::class)->status(useRemoteCache: false);
+
+    expect(collect($status)->pluck('error')->filter()->first())
+        ->toContain('Could not start Git remote status checks: process pool unavailable');
+});
+
+test('deployment status does not cache transient remote failures', function (): void {
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+
+            return Process::result(errorOutput: 'temporary network failure', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    $repository = app(DistributionBundleRepository::class);
+
+    $first = $repository->status();
+    $repository->status();
+
+    expect($lsRemoteCount)->toBe(count($first) * 2);
+});
+
+test('deployment status deduplicates remote latest checks in each render', function (): void {
+    $lsRemoteCount = 0;
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    $repository = app(DistributionBundleRepository::class);
+    $first = $repository->status();
+
+    expect($lsRemoteCount)->toBe(count($first));
+
+    $repository->status();
+
+    expect($lsRemoteCount)->toBe(count($first));
+
+    $beforeBypass = $lsRemoteCount;
+    $repository->status(useRemoteCache: false);
+
+    expect($lsRemoteCount - $beforeBypass)->toBe(count($first))
+        ->and($first)->toHaveCount(6);
 });
 
 test('reload only schedules a graceful worker reload and records a log', function (): void {
@@ -605,8 +696,17 @@ function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
 {
     return function ($process) use ($porcelain, $leftRightCount) {
         $command = gitCommandWithoutConfig($process->command);
+        [$behind, $ahead] = array_map('intval', explode("\t", $leftRightCount));
+        $branchStatus = '## main...origin/main'.match (true) {
+            $ahead > 0 && $behind > 0 => " [ahead {$ahead}, behind {$behind}]",
+            $ahead > 0 => " [ahead {$ahead}]",
+            $behind > 0 => " [behind {$behind}]",
+            default => '',
+        };
+        $statusOutput = $porcelain !== '' ? $branchStatus."\n".$porcelain : $branchStatus;
 
         return match (true) {
+            $command === ['git', 'status', '--porcelain=v1', '--branch'] => Process::result($statusOutput),
             $command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
             in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
             $command === ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
@@ -619,7 +719,7 @@ function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
 }
 
 test('bundle status surfaces a dirty and diverged working tree', function (): void {
-    // git rev-list --left-right --count @{u}...HEAD => "<behind>\t<ahead>"
+    // git status --porcelain=v1 --branch reports "[ahead N, behind N]" on the branch header.
     Process::fake(fakeBundleGit(" M a.php\n?? b.php\n D c.php", "4\t2"));
 
     $platform = collect(app(DistributionBundleRepository::class)->status())->firstWhere('key', 'platform');
