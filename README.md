@@ -1,10 +1,10 @@
 # Belimbing
 
-An open-source application platform built entirely by AI and designed for AI-assisted development.
+An open-source, adaptable application platform built entirely by AI for creating ownable business systems.
 
 ## The Business Platform for Builders
 
-Belimbing is designed for AI agents to quickly build the software a business needs.
+Belimbing helps builders and AI agents create the software a business needs without surrendering ownership or quality.
 
 - **Build your own business application.** Belimbing ships as a platform baseline today, not a full domain catalog. `AGENTS.md` files across the repo guide AI agents on principles and conventions so new modules integrate cleanly and stay consistent with the platform.
 - **Automate with AI pipelines and workflows.** Connect providers, register tools, and define task models so agents can automate business work under the same permission model as human users.

@@ -16,7 +16,7 @@ Belimbing is an application platform for businesses. All code is written by AI c
 
 ## Executive Summary
 
-Belimbing is a **general application platform** designed to democratize enterprise-grade capabilities for businesses. Business software is expensive, often inflexible, and carries vendor lock-in — Belimbing is an open-source, AI-native platform that empowers businesses to build, customize, and own their operational systems, removing the SMB digitization bottleneck so it is practical to ship production-grade systems without hiring a large software team.
+Belimbing is an **open-source, adaptable application platform** built entirely by AI for creating ownable business systems. Business software is expensive, often inflexible, and carries vendor lock-in; Belimbing empowers businesses to build, customize, and own their operational systems, removing the SMB digitization bottleneck so it is practical to ship production-grade systems without hiring a large software team.
 
 **What Belimbing Is:**
 - An **application platform** for building customizable business processes (ERP, CRM, HR, logistics, or custom processes)
