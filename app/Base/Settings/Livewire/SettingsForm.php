@@ -13,8 +13,12 @@ use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 /**
- * Base Livewire form for editing one settings group registered in
- * `config('settings.editable')`. Subclasses pin the group via group().
+ * Base Livewire form for editing settings registered in `config('settings.editable')`.
+ *
+ * A subclass pins one group via group(). To edit several related groups on one
+ * screen, override groups() with an ordered list; the view then renders each group
+ * as a tab and a single Save persists them together. Field keys are globally unique,
+ * so all groups share one `values` bag without collision.
  */
 abstract class SettingsForm extends Component
 {
@@ -29,7 +33,7 @@ abstract class SettingsForm extends Component
     {
         $scope = $this->companyScope();
 
-        foreach ($this->fields() as $field) {
+        foreach ($this->allFields() as $field) {
             if ($this->isReadonlyField($field)) {
                 continue;
             }
@@ -66,7 +70,7 @@ abstract class SettingsForm extends Component
         $validated = $this->validate($this->rules());
         $scope = $this->companyScope();
 
-        foreach ($this->fields() as $field) {
+        foreach ($this->allFields() as $field) {
             if ($this->isReadonlyField($field)) {
                 continue;
             }
@@ -172,38 +176,92 @@ abstract class SettingsForm extends Component
 
     public function render(): View
     {
-        $group = $this->groupConfig();
+        $groups = array_map(
+            fn (string $groupId): array => [
+                'id' => $groupId,
+                'config' => $this->groupConfigFor($groupId),
+            ],
+            $this->groups(),
+        );
 
         return view('livewire.settings.form', [
-            'groupId' => $this->group(),
-            'group' => $group,
-            'pageTitle' => __(':label Settings', ['label' => $group['label'] ?? __('Module')]),
-            'pageSubtitle' => __($group['description'] ?? 'Operator-editable module settings stored in base_settings.'),
+            'groups' => $groups,
+            'multiGroup' => count($groups) > 1,
+            'pageTitle' => $this->pageTitle(),
+            'pageSubtitle' => $this->pageSubtitle(),
         ]);
     }
 
     /**
      * Settings group key (e.g. 'commerce_marketplace_ebay'). Must match an entry in
-     * `config('settings.editable')`.
+     * `config('settings.editable')`. For a single-group page this is the whole form;
+     * for a multi-group page it is the primary group used for default titling.
      */
     abstract protected function group(): string;
 
     /**
+     * Ordered settings group keys rendered by this form. Defaults to the single
+     * primary group; override to edit several related groups as tabs.
+     *
+     * @return list<string>
+     */
+    protected function groups(): array
+    {
+        return [$this->group()];
+    }
+
+    protected function pageTitle(): string
+    {
+        return __(':label Settings', ['label' => $this->groupConfig()['label'] ?? __('Module')]);
+    }
+
+    protected function pageSubtitle(): string
+    {
+        return __($this->groupConfig()['description'] ?? 'Operator-editable module settings stored in base_settings.');
+    }
+
+    /**
+     * Config for the primary group. Subclasses may override to enrich fields
+     * (e.g. inject dynamic option lists) before rendering.
+     *
      * @return array<string, mixed>
      */
     protected function groupConfig(): array
     {
-        $groups = config('settings.editable', []);
-
-        return $groups[$this->group()] ?? [];
+        return config('settings.editable', [])[$this->group()] ?? [];
     }
 
     /**
+     * Config for a specific group. The primary group routes through groupConfig()
+     * so subclass enrichment still applies; other groups read config directly.
+     *
+     * @return array<string, mixed>
+     */
+    protected function groupConfigFor(string $groupId): array
+    {
+        return $groupId === $this->group()
+            ? $this->groupConfig()
+            : (config('settings.editable', [])[$groupId] ?? []);
+    }
+
+    /**
+     * All editable fields across every group on this form, flattened. Field keys
+     * are globally unique, so hydration, validation, and save can treat them as
+     * one set.
+     *
      * @return list<array<string, mixed>>
      */
-    private function fields(): array
+    private function allFields(): array
     {
-        return $this->groupConfig()['fields'] ?? [];
+        $fields = [];
+
+        foreach ($this->groups() as $groupId) {
+            foreach ($this->groupConfigFor($groupId)['fields'] ?? [] as $field) {
+                $fields[] = $field;
+            }
+        }
+
+        return $fields;
     }
 
     /**
@@ -213,7 +271,7 @@ abstract class SettingsForm extends Component
     {
         $rules = [];
 
-        foreach ($this->fields() as $field) {
+        foreach ($this->allFields() as $field) {
             if ($this->isReadonlyField($field)) {
                 continue;
             }
