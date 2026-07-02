@@ -52,10 +52,6 @@
                 this.refreshTimer = window.setTimeout(() => window.location.reload(), 1600);
             },
             closeRunLog() {
-                if (this.running || this.refreshing) {
-                    return;
-                }
-
                 this.dismissed = true;
                 this.runLogOpen = false;
                 this.justRefreshed = false;
@@ -65,6 +61,7 @@
                 try {
                     window.sessionStorage.setItem(this.storageKey, JSON.stringify({
                         status: this.finishedStatus,
+                        dismissed: this.dismissed,
                         at: Date.now(),
                     }));
                 } catch (error) {
@@ -90,9 +87,9 @@
                     this.running = false;
                     this.refreshing = false;
                     this.finishedStatus = payload.status || null;
-                    this.justRefreshed = true;
-                    this.runLogOpen = true;
-                    this.dismissed = false;
+                    this.justRefreshed = ! payload.dismissed;
+                    this.runLogOpen = ! payload.dismissed;
+                    this.dismissed = Boolean(payload.dismissed);
                 } catch (error) {
                     this.forgetAfterRefresh();
                 }
@@ -371,7 +368,7 @@
                                     @endif
                                 </div>
 
-                                <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. Keep this window open until the status refresh starts.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. You can dismiss this window; the run continues.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Reloading this page so commits and actions match the code on disk.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="justRefreshed && ! running && ! refreshing" x-cloak>{{ __('Status refreshed. Current commits and actions now reflect the code on disk.') }}</p>
                                 @if ($runAt)
@@ -383,10 +380,10 @@
                                 @endif
                             </div>
 
-                            {{-- Close exists only while floating; once it rests inline there is nothing to close. --}}
+                            {{-- Close only dismisses the floating shell; an in-flight backend run keeps going. --}}
                             <button
                                 type="button"
-                                x-show="isFloating() && ! running && ! refreshing"
+                                x-show="isFloating()"
                                 x-on:click="closeRunLog()"
                                 class="rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
                                 aria-label="{{ __('Dismiss run log') }}"

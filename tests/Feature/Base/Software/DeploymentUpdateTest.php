@@ -117,7 +117,10 @@ test('deployment page lists Distribution Bundles with status for admins', functi
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform bundle's Git repository
         ->assertSee('Reload FrankenPHP')
-        ->assertSee('Streaming live output. Keep this window open until the status refresh starts.')
+        ->assertSee('Streaming live output. You can dismiss this window; the run continues.')
+        ->assertSee('x-show="isFloating()"', false)
+        ->assertDontSee('isFloating() && ! running && ! refreshing', false)
+        ->assertDontSee('if (this.running || this.refreshing)', false)
         ->assertDontSee('Keep this tab open')
         ->assertSee('does not pull code, install dependencies, build assets, or run migrations')
         ->assertDontSee('Code repositories');
@@ -329,6 +332,8 @@ test('the previous run log persists at its rest location across page visits', fu
         ->assertSee('belimbing.deployment.run-log-after-refresh')
         ->assertSee('Run log saved. Reloading this page so commits and actions match the code on disk.')
         ->assertSee('Status refreshed. Current commits and actions now reflect the code on disk.')
+        ->assertSee('dismissed: this.dismissed', false)
+        ->assertSee('this.runLogOpen = ! payload.dismissed', false)
         ->assertSee('runLogOpen', false)
         ->assertSee('isFloating()', false)
         ->assertSee('h-72', false)
