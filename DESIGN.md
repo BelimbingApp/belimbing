@@ -34,7 +34,11 @@ Coherent rounded language; no mixed corner styles in one view.
 
 ## Reuse components
 
-Reuse `x-ui.*` and `<x-icon>` before inventing new markup.
+Reuse `x-ui.*` and `<x-icon>` before inventing new markup. Inventory:
+`resources/core/views/AGENTS.md` and UI Reference.
+
+- `x-ui.datetime` for every user-visible date, time, or timestamp; use `format="date"` for date-only values.
+- `x-ui.record-history` for audit history on auditable detail pages.
 
 ## Gestalt grouping
 

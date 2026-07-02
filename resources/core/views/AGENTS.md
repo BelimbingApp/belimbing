@@ -206,6 +206,7 @@ Rules:
 - Use grouped inline editors for coupled fields needing Apply/Cancel.
 - Use modal/full form for workflows, high-risk changes, permissions, associations, or cross-field validation.
 - Livewire page owns draft state, validation, authorization, persistence, and side effects.
+- Auditable detail pages expose mutation history with `x-ui.record-history`; do not make users infer recent changes from timestamps alone.
 - Do not force create/setup/import/modal-entry flows into read-first mode.
 
 ## Form Control IDs
