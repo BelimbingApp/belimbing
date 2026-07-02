@@ -21,6 +21,8 @@ use App\Base\Software\Inventory\InstalledModule;
  */
 class SoftwareInventoryService
 {
+    private const STATUS_DIAGNOSTIC_GIT_TIMEOUT_SECONDS = 3;
+
     public function __construct(
         private readonly DistributionBundleRepository $bundles,
         private readonly InventoryContributionRegistry $contributions,
@@ -54,7 +56,10 @@ class SoftwareInventoryService
         $reader = $this->reader();
 
         return $this->assemble(
-            $this->bundles->localStatus(includePlatformWorkingTree: false),
+            $this->bundles->localStatus(
+                includePlatformWorkingTree: false,
+                gitTimeoutSeconds: self::STATUS_DIAGNOSTIC_GIT_TIMEOUT_SECONDS,
+            ),
             $reader->allIncludingDisabledDomains(),
             $reader->dependencyIssues($reader->all()),
             array_values(DomainState::disabled()),

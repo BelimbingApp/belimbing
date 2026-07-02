@@ -111,7 +111,7 @@
     >
         <x-ui.page-header
             :title="__('Updates')"
-            :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully (a brief maintenance page may show).')"
+            :subtitle="__('Pull the latest code per Distribution Bundle and reload — the in-app deploy. Each bundle updates from its branch, then migrations run and workers reload gracefully in the background (a brief maintenance page may show).')"
         />
 
         @if (session('status'))
@@ -151,7 +151,7 @@
                             <h2 class="text-base font-medium text-ink">{{ __('Distribution Bundles') }}</h2>
                             <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
                         </div>
-                        <p class="mt-1 text-sm text-muted">{{ __('Update pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, then gracefully reloads workers. Private repositories use the token set in') }}
+                        <p class="mt-1 text-sm text-muted">{{ __('Update pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, then schedules a graceful worker reload. Private repositories use the token set in') }}
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
@@ -309,7 +309,7 @@
                                 </x-ui.badge>
                             @endif
                         </div>
-                        <p class="mt-1 text-xs text-muted">{{ __('Respawns web workers through the FrankenPHP/Caddy admin API and signals queue workers to restart — it does not pull code, install dependencies, build assets, or run migrations. Use it when deployed code is already in place but running workers may still serve old PHP state.') }}</p>
+                        <p class="mt-1 text-xs text-muted">{{ __('Schedules web workers to respawn through the FrankenPHP/Caddy admin API and signals queue workers to restart — it does not pull code, install dependencies, build assets, or run migrations. Use it when deployed code is already in place but running workers may still serve old PHP state.') }}</p>
                         @if ($lastReload !== null)
                             <p class="mt-1 text-xs text-muted">
                                 {{ __('Last run') }} <x-ui.datetime :value="$lastReload['attempted_at']" /> · {{ $lastReload['message'] }}
@@ -371,7 +371,7 @@
                                     @endif
                                 </div>
 
-                                <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. Keep this tab open until the status refresh starts.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. Keep this window open until the status refresh starts.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Reloading this page so commits and actions match the code on disk.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="justRefreshed && ! running && ! refreshing" x-cloak>{{ __('Status refreshed. Current commits and actions now reflect the code on disk.') }}</p>
                                 @if ($runAt)
@@ -402,7 +402,7 @@
                                     this.$nextTick(() => { this.$el.scrollTop = this.$el.scrollHeight });
                                 },
                                 detectRecordedRun() {
-                                    if (this.markerSeen) {
+                                    if (! this.running || this.markerSeen) {
                                         return;
                                     }
 
@@ -437,6 +437,9 @@
                                 @foreach ($displayLog as $line)
                                     <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
                                 @endforeach
+                                @if ($runStatus !== 'idle' && $displayLog !== [])
+                                    <span class="hidden" aria-hidden="true" data-deployment-run-recorded="true" data-run-outcome="{{ $runStatus }}"></span>
+                                @endif
                             </div>
                         </div>
                     </x-ui.card>

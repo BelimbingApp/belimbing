@@ -10,9 +10,11 @@ use Throwable;
 
 class DomainRuntimeReloadCommand extends Command
 {
-    protected $signature = 'blb:domain-runtime:reload {--delay=2 : Seconds to wait before reloading workers.}';
+    protected $signature = 'blb:domain-runtime:reload
+        {--delay=2 : Seconds to wait before reloading workers.}
+        {--clear-runtime-caches : Clear runtime caches before reloading workers.}';
 
-    protected $description = 'Reload FrankenPHP workers after a business-domain lifecycle change.';
+    protected $description = 'Reload FrankenPHP workers after a deferred runtime change.';
 
     public function handle(DeploymentService $deployment): int
     {
@@ -23,7 +25,7 @@ class DomainRuntimeReloadCommand extends Command
         }
 
         try {
-            foreach ($deployment->reload(clearRuntimeCaches: false) as $line) {
+            foreach ($deployment->reload(clearRuntimeCaches: (bool) $this->option('clear-runtime-caches')) as $line) {
                 $this->line($line);
             }
 

@@ -4,6 +4,11 @@ use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Process;
+
+beforeEach(function (): void {
+    Process::fake();
+});
 
 it('links the inactive Lara status-bar action to AI Providers with setup guidance', function (): void {
     $this->actingAs(createAdminUser());

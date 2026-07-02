@@ -10,7 +10,6 @@ use App\Base\Support\PhpCli;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Livewire\Livewire;
@@ -59,6 +58,11 @@ function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
             : Http::response('', 500),
         '*' => Http::response([], 200),
     ]);
+}
+
+function deploymentCommandContains(array $command, string $needle): bool
+{
+    return collect($command)->contains(fn (string $part): bool => str_contains($part, $needle));
 }
 
 function withDeploymentOctaneState(?array $state, Closure $callback): void
@@ -113,6 +117,8 @@ test('deployment page lists Distribution Bundles with status for admins', functi
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform bundle's Git repository
         ->assertSee('Reload FrankenPHP')
+        ->assertSee('Streaming live output. Keep this window open until the status refresh starts.')
+        ->assertDontSee('Keep this tab open')
         ->assertSee('does not pull code, install dependencies, build assets, or run migrations')
         ->assertDontSee('Code repositories');
 
@@ -151,32 +157,28 @@ test('deployment page reports when git cannot be launched', function (): void {
     Http::assertSentCount(0);
 });
 
-test('reload only triggers a graceful worker reload and records a log', function (): void {
+test('reload only schedules a graceful worker reload and records a log', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
     fakeDeploymentUpdateProcesses();
-    Http::fake([
-        '127.0.0.1:*' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
-        '*' => Http::response([], 200),
-    ]);
+    Http::fake();
 
-    $component = Livewire::test(Index::class)
-        ->call('reloadOnly')
-        ->assertDispatched('run-finished', status: 'success', refresh: true)
-        ->assertHasNoErrors();
+    try {
+        $component = Livewire::test(Index::class)
+            ->call('reloadOnly')
+            ->assertDispatched('run-finished', status: 'success', refresh: true)
+            ->assertHasNoErrors();
 
-    expect($component->get('log'))->not->toBeEmpty();
-    expect($component->get('log'))->toContain('Runtime caches cleared.');
-    expect($component->get('log'))->toContain('Runtime bootstrap warmed.');
+        expect($component->get('log'))->toBe(['Runtime reload scheduled in the background.'])
+            ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeTrue();
 
-    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
-
-    expect(DB::table('base_settings')->where('key', 'system.update.frankenphp.last_reload')->exists())->toBeTrue()
-        ->and($stored)->toBeArray()
-        ->and($stored['ok'])->toBeTrue()
-        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED);
-
-    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+        Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
+            && deploymentCommandContains($process->command, '--clear-runtime-caches'));
+        Http::assertNothingSent();
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
 });
 
 test('domain runtime reload starts in a detached background command', function (): void {
@@ -188,11 +190,27 @@ test('domain runtime reload starts in a detached background command', function (
 
         expect($log)->toContain('Domain runtime reload scheduled in the background.');
 
-        Process::assertRan(fn ($process): bool => collect($process->command)
-            ->contains(fn (string $part): bool => str_contains($part, 'blb:domain-runtime:reload')));
+        Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
+            && ! deploymentCommandContains($process->command, '--clear-runtime-caches'));
 
         expect(app(FrankenPhpDomainRuntimeReloader::class)->reloadAfterDomainChange())
             ->toContain('Domain runtime reload is already scheduled.');
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
+});
+
+test('software update runtime reload starts in a detached background command with cache clearing', function (): void {
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    Process::fake();
+
+    try {
+        $log = app(FrankenPhpDomainRuntimeReloader::class)->reloadAfterSoftwareUpdate();
+
+        expect($log)->toContain('Runtime reload scheduled in the background.');
+
+        Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
+            && deploymentCommandContains($process->command, '--clear-runtime-caches'));
     } finally {
         Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
     }
@@ -213,6 +231,54 @@ test('domain runtime reload command reloads workers without clearing runtime cac
         ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
 
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+});
+
+test('software update runtime reload command reloads workers after clearing runtime caches', function (): void {
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
+
+    $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0, '--clear-runtime-caches' => true]);
+    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
+
+    expect($status)->toBe(0)
+        ->and($stored)->toBeArray()
+        ->and($stored['ok'])->toBeTrue()
+        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
+        ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
+
+    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+});
+
+test('component updates record completion before scheduling the runtime reload', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    try {
+        Livewire::test(Index::class)
+            ->call('updateRepo', 'platform')
+            ->assertDispatched('run-finished', status: 'success', refresh: true)
+            ->assertHasNoErrors();
+
+        $run = app(DeploymentRunHistory::class)->lastDeploymentRun();
+
+        expect($run)->toBeArray()
+            ->and($run['status'])->toBe('success')
+            ->and($run['summary'])->toBe('Runtime reload scheduled in the background.')
+            ->and($run['log'])->toContain('Update complete. Selected Distribution Bundles are up to date; runtime reload still needs to run separately.')
+            ->and($run['log'])->toContain('Runtime reload scheduled in the background.')
+            ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeTrue();
+
+        Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
+            && deploymentCommandContains($process->command, '--clear-runtime-caches'));
+        Http::assertNothingSent();
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+        Artisan::call('up');
+    }
 });
 
 test('the worker reload probes the Windows launcher admin port before the stock Caddy port', function (): void {
@@ -252,8 +318,9 @@ test('the previous run log persists at its rest location across page visits', fu
 
     expect($log)->not->toBeEmpty();
 
-    // A fresh visit still shows the last run at rest (it is session-persisted); the
-    // floating panel is purely client-side and never appears on a plain page load.
+    // A fresh visit still shows the last run at rest (it is session-persisted).
+    // The hidden completion marker is harmless because its Alpine detector ignores
+    // markers unless the browser still believes a run is active.
     Livewire::test(Index::class)
         ->assertSet('log', $log)
         ->assertSee('run-finished.window', false)

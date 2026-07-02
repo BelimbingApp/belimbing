@@ -6,6 +6,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
+use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Session;
@@ -23,24 +24,43 @@ class Index extends Component
     #[Session('admin.system.software.updates.run_log')]
     public array $log = [];
 
-    public function updateRepo(string $key, DeploymentService $deployment, DeploymentRunHistory $history): void
-    {
-        $this->runAction($history, fn (): array => $deployment->update([$key], fn (string $line) => $this->streamRunLine($line)));
+    public function updateRepo(
+        string $key,
+        DeploymentService $deployment,
+        DeploymentRunHistory $history,
+        FrankenPhpDomainRuntimeReloader $runtimeReloader,
+    ): void {
+        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
+            $deployment->update([$key], fn (string $line) => $this->streamRunLine($line), reloadWorkers: false),
+            $runtimeReloader,
+        ));
     }
 
-    public function updateAll(DeploymentService $deployment, DeploymentRunHistory $history): void
-    {
-        $this->runAction($history, fn (): array => $deployment->update([], fn (string $line) => $this->streamRunLine($line)));
+    public function updateAll(
+        DeploymentService $deployment,
+        DeploymentRunHistory $history,
+        FrankenPhpDomainRuntimeReloader $runtimeReloader,
+    ): void {
+        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
+            $deployment->update([], fn (string $line) => $this->streamRunLine($line), reloadWorkers: false),
+            $runtimeReloader,
+        ));
     }
 
-    public function reloadOnly(DeploymentService $deployment, DeploymentRunHistory $history): void
+    public function reloadOnly(DeploymentRunHistory $history, FrankenPhpDomainRuntimeReloader $runtimeReloader): void
     {
-        $this->runAction($history, fn (): array => $deployment->reload());
+        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule([], $runtimeReloader));
     }
 
-    public function rebuildPhp(DeploymentService $deployment, DeploymentRunHistory $history): void
-    {
-        $this->runAction($history, fn (): array => $deployment->rebuildPhp());
+    public function rebuildPhp(
+        DeploymentService $deployment,
+        DeploymentRunHistory $history,
+        FrankenPhpDomainRuntimeReloader $runtimeReloader,
+    ): void {
+        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
+            $deployment->rebuildPhp(reloadWorkers: false),
+            $runtimeReloader,
+        ));
     }
 
     public function rebuildAssets(DeploymentService $deployment, DeploymentRunHistory $history): void
@@ -140,12 +160,38 @@ class Index extends Component
         );
     }
 
+    /**
+     * @param  list<string>  $log
+     * @return list<string>
+     */
+    private function appendRuntimeReloadSchedule(array $log, FrankenPhpDomainRuntimeReloader $runtimeReloader): array
+    {
+        if ($this->logOutcome($log) === 'error') {
+            return $log;
+        }
+
+        foreach ($runtimeReloader->reloadAfterSoftwareUpdate() as $line) {
+            $log[] = $line;
+            $this->streamRunLine($line);
+        }
+
+        return $log;
+    }
+
     private function runOutcome(): string
     {
+        return $this->logOutcome($this->log);
+    }
+
+    /**
+     * @param  list<string>  $log
+     */
+    private function logOutcome(array $log): string
+    {
         return match (true) {
-            $this->log === [] => 'idle',
-            collect($this->log)->contains(fn (string $line): bool => $this->isErrorLine($line)) => 'error',
-            collect($this->log)->contains(fn (string $line): bool => $this->isWarningLine($line)) => 'warning',
+            $log === [] => 'idle',
+            collect($log)->contains(fn (string $line): bool => $this->isErrorLine($line)) => 'error',
+            collect($log)->contains(fn (string $line): bool => $this->isWarningLine($line)) => 'warning',
             default => 'success',
         };
     }

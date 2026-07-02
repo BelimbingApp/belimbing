@@ -17,17 +17,44 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
      */
     public function reloadAfterDomainChange(): array
     {
+        return $this->scheduleBackgroundReload(
+            clearRuntimeCaches: false,
+            scheduledMessage: (string) __('Domain runtime reload scheduled in the background.'),
+            alreadyScheduledMessage: (string) __('Domain runtime reload is already scheduled.'),
+            failureMessage: (string) __('Warning: domain runtime reload could not be scheduled: :message'),
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function reloadAfterSoftwareUpdate(): array
+    {
+        return $this->scheduleBackgroundReload(
+            clearRuntimeCaches: true,
+            scheduledMessage: (string) __('Runtime reload scheduled in the background.'),
+            alreadyScheduledMessage: (string) __('Runtime reload is already scheduled.'),
+            failureMessage: (string) __('Warning: runtime reload could not be scheduled: :message'),
+        );
+    }
+
+    private function scheduleBackgroundReload(
+        bool $clearRuntimeCaches,
+        string $scheduledMessage,
+        string $alreadyScheduledMessage,
+        string $failureMessage,
+    ): array {
         if (! Cache::add(self::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinutes(2))) {
             return [
-                (string) __('Domain runtime reload is already scheduled.'),
+                $alreadyScheduledMessage,
             ];
         }
 
-        $result = $this->launchBackgroundReload();
+        $result = $this->launchBackgroundReload($clearRuntimeCaches);
 
         if ($result->successful()) {
             return [
-                (string) __('Domain runtime reload scheduled in the background.'),
+                $scheduledMessage,
             ];
         }
 
@@ -36,18 +63,22 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
         $output = trim($result->output()."\n".$result->errorOutput());
 
         return [
-            (string) __('Warning: domain runtime reload could not be scheduled: :message', [
-                'message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $result->exitCode()]),
+            strtr($failureMessage, [
+                ':message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $result->exitCode()]),
             ]),
         ];
     }
 
-    private function launchBackgroundReload(): ProcessResult
+    private function launchBackgroundReload(bool $clearRuntimeCaches): ProcessResult
     {
         $command = PhpCli::current()->artisan([
             'blb:domain-runtime:reload',
             '--delay=2',
         ]);
+
+        if ($clearRuntimeCaches) {
+            $command[] = '--clear-runtime-caches';
+        }
 
         $out = storage_path('logs/domain-runtime-reload.out.log');
         $err = storage_path('logs/domain-runtime-reload.err.log');

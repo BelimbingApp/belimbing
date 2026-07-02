@@ -69,12 +69,12 @@ class DistributionBundleRepository
      *
      * @return list<array{key: string, label: string, path: string, absolutePath: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null}>
      */
-    public function localStatus(bool $includePlatformWorkingTree = true): array
+    public function localStatus(bool $includePlatformWorkingTree = true, int $gitTimeoutSeconds = 60): array
     {
-        return array_map(function (array $dist): array {
+        return array_map(function (array $dist) use ($includePlatformWorkingTree, $gitTimeoutSeconds): array {
             $isRepo = $this->isRepositoryPath($dist['path']);
             $readWorkingTree = $isRepo && ($includePlatformWorkingTree || $dist['key'] !== 'platform');
-            [$owner, $name] = $this->remoteIdentity($dist['path']);
+            [$owner, $name] = $this->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds);
 
             return [
                 'key' => $dist['key'],
@@ -83,9 +83,9 @@ class DistributionBundleRepository
                 'absolutePath' => $dist['path'],
                 'owner' => $owner,
                 'repo' => $owner !== null ? $owner.'/'.$name : null,
-                'branch' => $isRepo ? ($this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD']) ?? 'main') : null,
-                'working_tree' => $readWorkingTree ? $this->workingTree($dist['path']) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
-                'current' => $this->localCommit($dist['path']),
+                'branch' => $isRepo ? ($this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD'], timeout: $gitTimeoutSeconds) ?? 'main') : null,
+                'working_tree' => $readWorkingTree ? $this->workingTree($dist['path'], timeout: $gitTimeoutSeconds) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
+                'current' => $this->localCommit($dist['path'], timeout: $gitTimeoutSeconds),
             ];
         }, $this->distributions());
     }
@@ -335,21 +335,21 @@ class DistributionBundleRepository
      *
      * @return array{dirty: int, ahead: int, behind: int}
      */
-    private function workingTree(string $path): array
+    private function workingTree(string $path, int $timeout = 60): array
     {
         $repo = new GitRepository($path);
-        $aheadBehind = $repo->aheadBehind();
+        $aheadBehind = $repo->aheadBehind(timeout: $timeout);
 
         return [
-            'dirty' => $repo->uncommittedCount(),
+            'dirty' => $repo->uncommittedCount(timeout: $timeout),
             'ahead' => $aheadBehind['ahead'],
             'behind' => $aheadBehind['behind'],
         ];
     }
 
-    private function localCommit(string $path): ?array
+    private function localCommit(string $path, int $timeout = 60): ?array
     {
-        $line = $this->git($path, ['log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s']);
+        $line = $this->git($path, ['log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'], timeout: $timeout);
 
         if ($line === null || $line === '') {
             return null;
@@ -441,7 +441,7 @@ class DistributionBundleRepository
     /**
      * @return array{0: string|null, 1: string|null, 2: string|null}
      */
-    private function remoteIdentity(string $path): array
+    private function remoteIdentity(string $path, int $timeout = 60): array
     {
         $repo = new GitRepository($path);
 
@@ -449,7 +449,7 @@ class DistributionBundleRepository
             return [null, null, (string) __('No git repository found at :path.', ['path' => $path])];
         }
 
-        $remote = $repo->run(['remote', 'get-url', 'origin']);
+        $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
 
         if (! $remote->ok) {
             return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
@@ -468,9 +468,9 @@ class DistributionBundleRepository
     /**
      * @param  list<string>  $args
      */
-    private function git(string $path, array $args): ?string
+    private function git(string $path, array $args, int $timeout = 60): ?string
     {
-        return (new GitRepository($path))->output($args);
+        return (new GitRepository($path))->output($args, timeout: $timeout);
     }
 
     private function isRepositoryPath(string $path): bool

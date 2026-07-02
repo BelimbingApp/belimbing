@@ -27,22 +27,22 @@ final class GitRepository
         return file_exists($this->path.DIRECTORY_SEPARATOR.'.git');
     }
 
-    public function currentBranch(): ?string
+    public function currentBranch(int $timeout = 60): ?string
     {
-        return $this->output(['rev-parse', '--abbrev-ref', 'HEAD']);
+        return $this->output(['rev-parse', '--abbrev-ref', 'HEAD'], timeout: $timeout);
     }
 
-    public function remoteUrl(string $remote = 'origin'): ?string
+    public function remoteUrl(string $remote = 'origin', int $timeout = 60): ?string
     {
-        return $this->output(['remote', 'get-url', $remote]);
+        return $this->output(['remote', 'get-url', $remote], timeout: $timeout);
     }
 
     /**
      * Number of uncommitted (staged + unstaged + untracked) entries.
      */
-    public function uncommittedCount(): int
+    public function uncommittedCount(int $timeout = 60): int
     {
-        $porcelain = $this->output(['status', '--porcelain']);
+        $porcelain = $this->output(['status', '--porcelain'], timeout: $timeout);
 
         return $porcelain === null || $porcelain === '' ? 0 : count(explode("\n", $porcelain));
     }
@@ -53,9 +53,9 @@ final class GitRepository
      *
      * @return array{ahead: int, behind: int}
      */
-    public function aheadBehind(): array
+    public function aheadBehind(int $timeout = 60): array
     {
-        $counts = $this->output(['rev-list', '--left-right', '--count', '@{u}...HEAD']);
+        $counts = $this->output(['rev-list', '--left-right', '--count', '@{u}...HEAD'], timeout: $timeout);
 
         if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
             return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
@@ -101,9 +101,9 @@ final class GitRepository
      *
      * @param  list<string>  $args
      */
-    public function output(array $args): ?string
+    public function output(array $args, int $timeout = 60): ?string
     {
-        $result = $this->run($args);
+        $result = $this->run($args, timeout: $timeout);
 
         return $result->ok ? $result->output : null;
     }

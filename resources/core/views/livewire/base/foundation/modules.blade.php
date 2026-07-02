@@ -92,7 +92,7 @@
                         <x-icon name="heroicon-o-arrow-path" class="h-4 w-4 animate-spin" />
                         <span>{{ __('Working. The browser may show a refresh spinner near the end; that is expected.') }}</span>
                     </div>
-                    <div class="mt-3 text-muted">{{ __('Keep this tab open until the run log appears.') }}</div>
+                    <div class="mt-3 text-muted">{{ __('Keep this window open until the run log appears.') }}</div>
                 </div>
             </x-ui.card>
         </div>

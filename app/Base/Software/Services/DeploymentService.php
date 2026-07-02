@@ -82,7 +82,7 @@ class DeploymentService
      * @param  (callable(string): void)|null  $progress
      * @return list<string>
      */
-    public function update(array $keys = [], ?callable $progress = null): array
+    public function update(array $keys = [], ?callable $progress = null, bool $reloadWorkers = true): array
     {
         $byKey = collect($this->bundles->distributions())->keyBy('key');
         $targets = $keys === [] ? $byKey->values()->all() : $byKey->only($keys)->values()->all();
@@ -151,15 +151,17 @@ class DeploymentService
             Artisan::call('up');
         }
 
-        foreach ($this->reload() as $line) {
-            $record($line);
+        if ($reloadWorkers) {
+            foreach ($this->reload() as $line) {
+                $record($line);
+            }
         }
 
         foreach ($this->bundles->verifyTargets($targets) as $line) {
             $record($line);
         }
 
-        $record($this->completionLine($log));
+        $record($this->completionLine($log, $reloadWorkers));
 
         return $log;
     }
@@ -170,9 +172,13 @@ class DeploymentService
      *
      * @return list<string>
      */
-    public function rebuildPhp(): array
+    public function rebuildPhp(bool $reloadWorkers = true): array
     {
         $log = [(string) __('Installing PHP dependencies…'), $this->runComposerInstall()];
+
+        if (! $reloadWorkers) {
+            return array_merge($log, [(string) __('PHP dependencies installed; runtime reload must still run before workers use the refreshed vendor tree.')]);
+        }
 
         return array_merge($log, $this->reload(), [(string) __('Done.')]);
     }
@@ -415,7 +421,7 @@ class DeploymentService
     /**
      * @param  list<string>  $log
      */
-    private function completionLine(array $log): string
+    private function completionLine(array $log, bool $reloadWorkers): string
     {
         if ($this->hasError($log)) {
             return (string) __('Update finished with errors. Some steps did not complete; the Distribution Bundle table and log show what still needs attention.');
@@ -427,6 +433,10 @@ class DeploymentService
             }
 
             return (string) __('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.');
+        }
+
+        if (! $reloadWorkers) {
+            return (string) __('Update complete. Selected Distribution Bundles are up to date; runtime reload still needs to run separately.');
         }
 
         return (string) __('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
