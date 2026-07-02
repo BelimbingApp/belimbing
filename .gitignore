@@ -52,6 +52,8 @@ package-lock.json
 
 # Project specific
 database/database.sqlite
+database/database.sqlite-shm
+database/database.sqlite-wal
 /.caddy
 /certs
 /auth.json
