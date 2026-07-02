@@ -45,5 +45,7 @@ it('renders tagged diagnostics in the status bar detail surface', function (): v
         ->assertSee('1 diagnostic')
         ->assertSee('Synthetic warning')
         ->assertSee('Diagnostic detail')
-        ->assertSee('href="'.route('admin.system.menu-inspector.index').'"', false);
+        ->assertSee('href="'.route('admin.system.menu-inspector.index').'"', false)
+        ->assertSee('aria-label="Open related diagnostics"', false)
+        ->assertDontSee('Open details');
 });

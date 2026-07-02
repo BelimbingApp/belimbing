@@ -116,7 +116,6 @@ class Index extends Component
      *     source: string,
      *     summary: string,
      *     detail: string,
-     *     targetLabel: string,
      * }>
      */
     private function statusBarDiagnosticPreview(): array
@@ -127,21 +126,18 @@ class Index extends Component
                 'source' => 'Updates',
                 'summary' => 'FrankenPHP worker reload needs attention',
                 'detail' => 'The last worker reload did not complete after deployment work. Web workers may still be serving old code until FrankenPHP reloads.',
-                'targetLabel' => 'Open Updates',
             ],
             [
                 'severity' => StatusVariant::Warning,
                 'source' => 'Menu',
                 'summary' => 'Menu item hidden: Supplier Research',
                 'detail' => 'Route commerce.supplier-research.show cannot be generated. Source: app/Modules/Commerce/Config/menu.php.',
-                'targetLabel' => 'Open Menu Inspector',
             ],
             [
                 'severity' => StatusVariant::Warning,
                 'source' => 'Queue',
                 'summary' => '1 failed job needs attention',
                 'detail' => 'Open Failed Jobs to inspect, retry, or delete failed work.',
-                'targetLabel' => 'Open Failed Jobs',
             ],
         ];
     }

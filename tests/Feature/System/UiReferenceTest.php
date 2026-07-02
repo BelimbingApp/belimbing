@@ -10,5 +10,6 @@ it('documents status bar diagnostics in the feedback reference', function (): vo
         ->assertSee('System diagnostics')
         ->assertSee('FrankenPHP worker reload needs attention')
         ->assertSee('Menu item hidden: Supplier Research')
-        ->assertSee('Open Menu Inspector');
+        ->assertSee('aria-label="Open related diagnostics"', false)
+        ->assertDontSee('Open Menu Inspector');
 });

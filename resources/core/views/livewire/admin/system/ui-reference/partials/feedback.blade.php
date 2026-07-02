@@ -57,7 +57,7 @@
         <div class="space-y-4">
             <div>
                 <h2 class="text-sm font-medium text-ink">{{ __('Status Bar Diagnostics') }}</h2>
-                <p class="text-xs text-muted">{{ __('Shell-level diagnostics stay compact in the status bar, then expand into a bounded detail surface with owner, summary, explanation, and a remediation link.') }}</p>
+                <p class="text-xs text-muted">{{ __('Shell-level diagnostics stay compact in the status bar, then expand into a bounded detail surface with owner, summary, explanation, and a remediation link icon.') }}</p>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-border-default bg-surface-page">
@@ -107,11 +107,16 @@
                                                 <span class="text-[11px] font-medium uppercase {{ $diagnosticClasses['text'] }}">{{ $diagnostic['source'] }}</span>
                                                 <span class="min-w-0 text-sm font-medium text-ink">{{ $diagnostic['summary'] }}</span>
                                             </div>
-                                            <p class="mt-0.5 text-xs leading-snug text-muted">{{ $diagnostic['detail'] }}</p>
-                                            <span class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
-                                                {{ $diagnostic['targetLabel'] }}
-                                                <x-icon name="heroicon-o-arrow-right" class="h-3 w-3" />
-                                            </span>
+                                            <p class="mt-0.5 text-xs leading-snug text-muted">
+                                                {{ $diagnostic['detail'] }}
+                                                <span
+                                                    class="ml-1 inline-flex align-text-bottom text-accent"
+                                                    title="{{ __('Open related diagnostics') }}"
+                                                    aria-label="{{ __('Open related diagnostics') }}"
+                                                >
+                                                    <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
+                                                </span>
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

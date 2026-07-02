@@ -119,12 +119,29 @@
                                                 <span class="min-w-0 text-sm font-medium text-ink">{{ $diagnostic->summary }}</span>
                                             </div>
                                             @if ($diagnostic->detail !== null)
-                                                <p class="mt-0.5 text-xs leading-snug text-muted">{{ $diagnostic->detail }}</p>
-                                            @endif
-                                            @if ($diagnostic->target !== null)
-                                                <a href="{{ $diagnostic->target }}" wire:navigate class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
-                                                    {{ __('Open details') }}
-                                                    <x-icon name="heroicon-o-arrow-right" class="w-3 h-3" />
+                                                <p class="mt-0.5 text-xs leading-snug text-muted">
+                                                    {{ $diagnostic->detail }}
+                                                    @if ($diagnostic->target !== null)
+                                                        <a
+                                                            href="{{ $diagnostic->target }}"
+                                                            wire:navigate
+                                                            class="ml-1 inline-flex align-text-bottom text-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                                                            title="{{ __('Open related diagnostics') }}"
+                                                            aria-label="{{ __('Open related diagnostics') }}"
+                                                        >
+                                                            <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
+                                                        </a>
+                                                    @endif
+                                                </p>
+                                            @elseif ($diagnostic->target !== null)
+                                                <a
+                                                    href="{{ $diagnostic->target }}"
+                                                    wire:navigate
+                                                    class="mt-0.5 inline-flex text-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                                                    title="{{ __('Open related diagnostics') }}"
+                                                    aria-label="{{ __('Open related diagnostics') }}"
+                                                >
+                                                    <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
                                                 </a>
                                             @endif
                                         </div>
