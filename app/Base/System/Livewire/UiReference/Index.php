@@ -123,6 +123,13 @@ class Index extends Component
     {
         return [
             [
+                'severity' => StatusVariant::Error,
+                'source' => 'Updates',
+                'summary' => 'FrankenPHP worker reload needs attention',
+                'detail' => 'The last worker reload did not complete after deployment work. Web workers may still be serving old code until FrankenPHP reloads.',
+                'targetLabel' => 'Open Updates',
+            ],
+            [
                 'severity' => StatusVariant::Warning,
                 'source' => 'Menu',
                 'summary' => 'Menu item hidden: Supplier Research',
@@ -130,11 +137,11 @@ class Index extends Component
                 'targetLabel' => 'Open Menu Inspector',
             ],
             [
-                'severity' => StatusVariant::Info,
-                'source' => 'Updates',
-                'summary' => '1 add-in bundle has local changes',
-                'detail' => 'Review the software inventory before pulling updates so local work is not overwritten.',
-                'targetLabel' => 'Open Modules',
+                'severity' => StatusVariant::Warning,
+                'source' => 'Queue',
+                'summary' => '1 failed job needs attention',
+                'detail' => 'Open Failed Jobs to inspect, retry, or delete failed work.',
+                'targetLabel' => 'Open Failed Jobs',
             ],
         ];
     }

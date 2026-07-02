@@ -183,7 +183,7 @@ Modes are mutually exclusive (stored in Alpine + `localStorage`):
 - **Resolution model:** diagnostics are live state, not tickets. A warning disappears when its provider no longer emits it; acknowledgement/snooze must not be treated as resolution.
 - **Visibility:** providers must enforce the authorization rule for the diagnostic detail they expose. The menu provider requires `admin.system.menu-inspector.view`.
 - **Noise control:** repeated server logs should be throttled at the producer boundary with a diagnostic-specific fingerprint rather than a global log deduplicator.
-- **Current producers:** menu link resolution failures and queue failure health. Broken menu items are hidden from the shell, logged with source context, and surfaced as a status-bar warning linking to Menu Inspector. Queue diagnostics link to Failed Jobs when recent failures or failed job rows need operator attention.
+- **Current producers:** menu link resolution failures, queue failure health, and FrankenPHP worker reload health. Broken menu items are hidden from the shell, logged with source context, and surfaced as a status-bar warning linking to Menu Inspector. Queue diagnostics link to Failed Jobs when recent failures or failed job rows need operator attention. FrankenPHP reload diagnostics link to Updates when a reload is pending or the last worker reload failed.
 
 ## Alpine.js Application State
 

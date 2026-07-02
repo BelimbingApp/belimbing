@@ -42,7 +42,7 @@ it('renders tagged diagnostics in the status bar detail surface', function (): v
     $response = $this->get(route('admin.system.info.index'));
 
     $response->assertOk()
-        ->assertSee('warning')
+        ->assertSee('1 diagnostic')
         ->assertSee('Synthetic warning')
         ->assertSee('Diagnostic detail')
         ->assertSee('href="'.route('admin.system.menu-inspector.index').'"', false);

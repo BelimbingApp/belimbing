@@ -67,7 +67,7 @@
                         <span>{{ __('Debug Mode') }}</span>
                         <span class="inline-flex min-w-0 items-center gap-1 {{ $topStatusBarClasses['text'] }}">
                             <x-icon :name="$topStatusBarVariant->icon()" class="h-3.5 w-3.5 shrink-0" />
-                            <span class="truncate">{{ trans_choice(':count warning|:count warnings', count($statusBarDiagnosticPreview), ['count' => count($statusBarDiagnosticPreview)]) }}</span>
+                            <span class="truncate">{{ trans_choice(':count diagnostic|:count diagnostics', count($statusBarDiagnosticPreview), ['count' => count($statusBarDiagnosticPreview)]) }}</span>
                         </span>
                     </div>
                     <div class="flex items-center gap-4">

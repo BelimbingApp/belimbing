@@ -76,7 +76,7 @@
                     >
                         <x-icon name="{{ $statusDiagnosticIcon }}" class="w-3.5 h-3.5 shrink-0" />
                         <span class="truncate">
-                            {{ trans_choice(':count warning|:count warnings', $statusDiagnosticCount, ['count' => $statusDiagnosticCount]) }}
+                            {{ trans_choice(':count diagnostic|:count diagnostics', $statusDiagnosticCount, ['count' => $statusDiagnosticCount]) }}
                         </span>
                     </button>
 
