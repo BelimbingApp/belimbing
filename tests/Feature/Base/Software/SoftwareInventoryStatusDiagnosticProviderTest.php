@@ -81,6 +81,7 @@ it('reports dirty and unpushed add-in bundles as one aggregate warning', functio
     expect($diagnostics[0]->id)->toBe('software.bundle-drift')
         ->and($diagnostics[0]->severity)->toBe(StatusVariant::Warning)
         ->and($diagnostics[0]->summary)->toBe('2 add-in bundles have local drift')
+        ->and($diagnostics[0]->target)->toBe(route('admin.system.software.modules.index').'#add-in-bundle-drift')
         ->and($diagnostics[0]->metadata)->toMatchArray([
             'affected_bundles' => ['People', 'Kiat'],
             'dirty_bundles' => 1,
@@ -110,5 +111,5 @@ it('surfaces software diagnostics through the status bar aggregator', function (
 
     $response->assertOk()
         ->assertSee('1 add-in bundle has local drift')
-        ->assertSee('href="'.route('admin.system.software.modules.index').'"', false);
+        ->assertSee('href="'.route('admin.system.software.modules.index').'#add-in-bundle-drift"', false);
 });

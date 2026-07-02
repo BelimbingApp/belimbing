@@ -117,8 +117,8 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             summary: trans_choice(':count add-in bundle has local drift|:count add-in bundles have local drift', count($bundles), [
                 'count' => count($bundles),
             ]),
-            detail: __('One or more add-in bundles have uncommitted changes or unpushed commits. Open Modules before updating, disabling, or uninstalling add-ins.'),
-            target: $this->modulesUrl(),
+            detail: __('One or more add-in bundles have uncommitted changes or unpushed commits. Open Modules to see the affected checkout paths and resolve them before updating or changing add-ins.'),
+            target: $this->modulesUrl('#add-in-bundle-drift'),
             metadata: [
                 'affected_bundles' => array_map(fn (InstalledBundle $bundle): string => $bundle->label, $bundles),
                 'dirty_bundles' => $dirty,
@@ -127,11 +127,13 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
         );
     }
 
-    private function modulesUrl(): ?string
+    private function modulesUrl(string $fragment = ''): ?string
     {
-        return Route::has('admin.system.software.modules.index')
-            ? route('admin.system.software.modules.index')
-            : null;
+        if (! Route::has('admin.system.software.modules.index')) {
+            return null;
+        }
+
+        return route('admin.system.software.modules.index').$fragment;
     }
 
     private function canViewModules(Authenticatable $user): bool

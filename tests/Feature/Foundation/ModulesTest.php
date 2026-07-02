@@ -3,6 +3,9 @@
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Livewire\Modules;
 use App\Base\Foundation\Services\DomainState;
+use App\Base\Foundation\Services\NestedCheckoutGitState;
+use App\Base\Software\Inventory\InstalledBundle;
+use App\Base\Software\Services\SoftwareInventoryService;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -103,6 +106,50 @@ it('reports satisfied module dependencies on the installed tab', function (): vo
         ->assertOk()
         ->assertSee('All required module dependencies are satisfied.')
         ->assertDontSee('Module dependency issues');
+});
+
+it('shows actionable local checkout drift for installed add-ins', function (): void {
+    $this->actingAs(createAdminUser());
+    app()->instance(NestedCheckoutGitState::class, new class extends NestedCheckoutGitState
+    {
+        public function inspect(string $path): array
+        {
+            return ['hasGit' => false, 'dirty' => false, 'unpushed' => 0];
+        }
+    });
+    app()->instance(SoftwareInventoryService::class, new class extends SoftwareInventoryService
+    {
+        public function __construct() {}
+
+        public function installedBundles(): array
+        {
+            return [
+                new InstalledBundle(
+                    key: 'app-Modules-'.MODULES_DOMAIN,
+                    label: MODULES_DOMAIN,
+                    kind: InstalledBundle::KIND_BUSINESS_DOMAIN,
+                    path: 'app/Modules/'.MODULES_DOMAIN,
+                    hasGit: true,
+                    repo: 'BelimbingApp/zz-managed',
+                    branch: 'main',
+                    commit: null,
+                    workingTree: ['dirty' => 1, 'ahead' => 0, 'behind' => 0],
+                    disabled: false,
+                    modules: [],
+                    lifecycleName: MODULES_DOMAIN,
+                ),
+            ];
+        }
+    });
+
+    Livewire::test(Modules::class)
+        ->assertSee('id="add-in-bundle-drift"', false)
+        ->assertSee('Add-in bundle has local checkout drift')
+        ->assertSee('Commit, push, or remove the local changes in the nested Git checkout before updating or changing the add-in.')
+        ->assertSee(MODULES_DOMAIN)
+        ->assertSee('app/Modules/'.MODULES_DOMAIN)
+        ->assertSee('uncommitted change')
+        ->assertSee('git -C "app/Modules/'.MODULES_DOMAIN.'" status --short', false);
 });
 
 it('drills installed domains down to their module manifests', function (): void {

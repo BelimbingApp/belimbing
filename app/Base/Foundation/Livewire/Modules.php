@@ -218,6 +218,11 @@ class Modules extends Component
             ->filter(fn (InstalledBundle $bundle): bool => $bundle->lifecycleName !== null)
             ->keyBy('lifecycleName')
             ->all();
+        $driftedAddInBundles = collect($bundles)
+            ->filter(fn (InstalledBundle $bundle): bool => $bundle->kind !== InstalledBundle::KIND_PLATFORM
+                && ($bundle->isDirty() || $bundle->unpushed() > 0))
+            ->values()
+            ->all();
 
         $catalog = app(BelimbingAppCatalogService::class);
         $installedModuleIds = collect($installedManifests)
@@ -231,6 +236,7 @@ class Modules extends Component
             'platformBundle' => $platformBundle,
             'slotBundles' => $slotBundles,
             'bundlesByLifecycle' => $bundlesByLifecycle,
+            'driftedAddInBundles' => $driftedAddInBundles,
             'available' => $installer->available(),
             'availableExtensions' => $extensions->available(),
             'dependencyIssues' => $dependencyIssues,

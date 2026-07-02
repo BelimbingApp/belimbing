@@ -150,6 +150,35 @@
             </div>
         @endif
 
+        @if (count($driftedAddInBundles) > 0)
+            <section id="add-in-bundle-drift" class="scroll-mt-6 rounded-2xl border border-status-warning-border bg-status-warning-subtle px-4 py-3 text-sm text-status-warning">
+                <div class="font-medium">{{ trans_choice('{1} Add-in bundle has local checkout drift|[2,*] Add-in bundles have local checkout drift', count($driftedAddInBundles)) }}</div>
+                <p class="mt-1">{{ __('Commit, push, or remove the local changes in the nested Git checkout before updating or changing the add-in. The diagnostic clears after the checkout is clean, local commits are pushed, and this page is refreshed.') }}</p>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    @foreach ($driftedAddInBundles as $bundle)
+                        <div class="rounded-lg border border-status-warning-border bg-surface-card px-3 py-2 text-xs text-muted">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="font-medium text-ink">{{ $bundle->label }}</span>
+                                @if ($bundle->isDirty())
+                                    <x-ui.badge variant="warning">{{ trans_choice('{1} :count uncommitted change|[2,*] :count uncommitted changes', (int) $bundle->workingTree['dirty'], ['count' => $bundle->workingTree['dirty']]) }}</x-ui.badge>
+                                @endif
+                                @if ($bundle->unpushed() > 0)
+                                    <x-ui.badge variant="warning">{{ trans_choice('{1} :count unpushed commit|[2,*] :count unpushed commits', $bundle->unpushed(), ['count' => $bundle->unpushed()]) }}</x-ui.badge>
+                                @endif
+                            </div>
+                            <div class="mt-1 font-mono">{{ $bundle->path }}</div>
+                            <div class="mt-2 space-y-1 font-mono text-[11px] text-ink">
+                                <div>git -C "{{ $bundle->path }}" status --short</div>
+                                @if ($bundle->unpushed() > 0)
+                                    <div>git -C "{{ $bundle->path }}" log --oneline @@{u}..HEAD</div>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </section>
+        @endif
+
         <x-ui.card x-data="{ open: false }">
             <div class="flex items-start justify-between gap-2">
                 <div class="font-medium text-ink">{{ __('Built-in Platform') }}</div>
