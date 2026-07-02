@@ -43,6 +43,26 @@ class SoftwareInventoryService
     }
 
     /**
+     * Same grouping model as installedBundles(), but avoids the expensive platform
+     * working-tree scan. Status-bar diagnostics only care about add-in drift and
+     * dependency health, so platform checkout dirtiness is intentionally out of scope.
+     *
+     * @return list<InstalledBundle>
+     */
+    public function installedBundlesForStatusDiagnostics(): array
+    {
+        $reader = $this->reader();
+
+        return $this->assemble(
+            $this->bundles->localStatus(includePlatformWorkingTree: false),
+            $reader->allIncludingDisabledDomains(),
+            $reader->dependencyIssues($reader->all()),
+            array_values(DomainState::disabled()),
+            $this->contributions->contributions(),
+        );
+    }
+
+    /**
      * Pure assembly of the read model from already-gathered inputs. Kept separate from
      * the git/filesystem gathering above so the grouping rules are unit-testable without
      * touching disk.

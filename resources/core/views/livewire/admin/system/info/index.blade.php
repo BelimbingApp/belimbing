@@ -116,6 +116,27 @@
                     </div>
                 </dl>
             </x-ui.card>
+
+            {{-- Filesystem --}}
+            <x-ui.card>
+                <h3 class="text-sm font-medium text-ink mb-3">{{ __('Filesystem') }}</h3>
+                <dl class="space-y-2 text-sm">
+                    @foreach ($filesystem['writable_paths'] as $path)
+                        <div class="flex items-start justify-between gap-3">
+                            <dt class="text-muted">{{ $path['label'] }}</dt>
+                            <dd>
+                                @if ($path['exists'] && $path['writable'])
+                                    <x-ui.badge variant="success">{{ __('Writable') }}</x-ui.badge>
+                                @elseif (! $path['exists'])
+                                    <x-ui.badge variant="danger">{{ __('Missing') }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge variant="danger">{{ __('Not writable') }}</x-ui.badge>
+                                @endif
+                            </dd>
+                        </div>
+                    @endforeach
+                </dl>
+            </x-ui.card>
         </div>
 
         {{-- PHP Extensions --}}

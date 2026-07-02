@@ -69,10 +69,11 @@ class DistributionBundleRepository
      *
      * @return list<array{key: string, label: string, path: string, absolutePath: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null}>
      */
-    public function localStatus(): array
+    public function localStatus(bool $includePlatformWorkingTree = true): array
     {
         return array_map(function (array $dist): array {
             $isRepo = $this->isRepositoryPath($dist['path']);
+            $readWorkingTree = $isRepo && ($includePlatformWorkingTree || $dist['key'] !== 'platform');
             [$owner, $name] = $this->remoteIdentity($dist['path']);
 
             return [
@@ -83,7 +84,7 @@ class DistributionBundleRepository
                 'owner' => $owner,
                 'repo' => $owner !== null ? $owner.'/'.$name : null,
                 'branch' => $isRepo ? ($this->git($dist['path'], ['rev-parse', '--abbrev-ref', 'HEAD']) ?? 'main') : null,
-                'working_tree' => $isRepo ? $this->workingTree($dist['path']) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
+                'working_tree' => $readWorkingTree ? $this->workingTree($dist['path']) : ['dirty' => 0, 'ahead' => 0, 'behind' => 0],
                 'current' => $this->localCommit($dist['path']),
             ];
         }, $this->distributions());

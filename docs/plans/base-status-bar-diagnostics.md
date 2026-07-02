@@ -1,6 +1,6 @@
 # base-status-bar-diagnostics
 
-**Status:** Phase 1 and provider surface implemented; Phase 3 sweep documented
+**Status:** Phase 1-4 core providers implemented; noisy candidates rejected or deferred
 **Last Updated:** 2026-07-02
 **Sources:** `resources/core/views/components/layouts/status-bar.blade.php`; `docs/architecture/ui-layout.md`; `app/Base/Menu/Services/VisibleNavMenuItemsFlat.php`; user discussion on surfacing menu route diagnostics
 **Agents:** Codex/GPT-5
@@ -107,10 +107,10 @@ Validation: The audit produces a short candidate table in this plan, not code ch
 | Candidate | Source paths | Classification | Owner / auth | Remediation target | Decision |
 | --- | --- | --- | --- | --- | --- |
 | Queue failure-rate warning | `app/Providers/AppServiceProvider.php`; `app/Base/Queue/Config/menu.php`; `app/Base/Queue/Routes/web.php` | Status-bar diagnostic | Queue / `admin.system.failed-job.list` | Failed Jobs (`admin.system.failed-jobs.index`) | Implemented. Live check reads the existing `queue_failures` counter and failed job count, emits warning for failed jobs and danger above the existing high-rate threshold, and clears when those counts clear. |
-| Software bundle drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/modules.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic candidate | Foundation/Software / `admin.system.software.modules.view` | Modules (`admin.system.software.modules.index`) | Accept for Phase 4. Emit only actionable aggregate diagnostics for dirty/unpushed add-in bundles and dependency issues; avoid per-bundle spam in the bar. |
+| Software bundle drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/modules.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic | Foundation/Software / `admin.system.software.modules.view` | Modules (`admin.system.software.modules.index`) | Implemented. Emits an error for module dependency issues and one aggregate warning for dirty/unpushed add-in bundles; platform checkout drift is ignored because it belongs to normal development/deployment workflow, not add-in lifecycle safety. |
 | FrankenPHP worker reload pending/failed | `app/Base/Software/Services/FrankenPhpDomainRuntimeReloader.php`; `app/Base/Software/Services/DeploymentRunHistory.php`; `app/Base/Software/Services/DeploymentService.php`; `app/Base/Software/Routes/web.php` | Status-bar diagnostic | Software / `admin.system.software.updates.manage` | Updates (`admin.system.software.updates.index`) | Implemented. Emit warning while the background reload cache key is pending, and danger when the last recorded FrankenPHP worker reload failed. Clears when the pending reload finishes or a later reload succeeds. |
-| Storage writability and basic system health | `app/Modules/Core/AI/Tools/SystemInfoTool.php` | Status-bar diagnostic candidate | System / `admin.system.info.view` | System Info (`admin.system.info.index`) | Accept for Phase 4 only for checks that can be evaluated cheaply during shell render, such as `storage/app` not writable. Database outage is not reliable for the status bar because the shell may not render. |
-| AI control-plane health snapshots | `app/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Modules/Core/AI/Livewire/ControlPlane.php` | Candidate requiring noise policy | AI / `admin.ai.control-plane.view` | AI Control Plane | Defer to Phase 4 evaluation. Only promote failing/degraded active production-critical providers or Lara runtime health; tool-level unknown/stale states would be too noisy. |
+| Storage writability and basic system health | `app/Base/System/Services/SystemHealthProbe.php`; `app/Base/System/Livewire/Info/Index.php` | Status-bar diagnostic | System / `admin.system.info.view` | System Info (`admin.system.info.index`) | Implemented for required filesystem paths only: `storage/app`, `storage/logs`, `storage/framework/cache`, `storage/framework/sessions`, `storage/framework/views`, and `bootstrap/cache`. Database outage remains rejected because the shell may not render. |
+| AI control-plane health snapshots | `app/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Modules/Core/AI/Livewire/ControlPlane.php` | Page-local/control-plane feedback | AI / `admin.ai.control-plane.view` | AI Control Plane | Rejected for status bar now. Current health snapshots intentionally produce unknown/stale/degraded states for tools, providers, and sessions; promoting those globally would create permanent noise without a single remediation path. Reconsider only when an active production-critical provider/runtime has a persisted failing state and a clear operator action. |
 | eBay endpoint diagnostics | `app/Modules/Commerce/Marketplace/Ebay/EbayDiagnosticsService.php`; `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php` | Page-local feedback | Marketplace settings | eBay Settings page | Reject for shared status bar now. The diagnostics are scoped to a manual settings workflow and already have immediate page remediation. |
 | Provider connect/model sync warnings | `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`; `app/Modules/Core/AI/Livewire/Concerns/ManagesSync.php` | Page-local feedback plus logs | AI setup | Provider setup pages | Reject for shared status bar now. Promote only if a separate live provider-health source can prove ongoing outage for an active provider. |
 | Cache warming failed | `app/Providers/AppServiceProvider.php` | Log-only transient | Platform boot | None | Reject. It is a boot-time opportunistic warmup with no durable live state; keep log-only unless a persisted cache-health source is added. |
@@ -123,10 +123,16 @@ Goal: Promote existing health checks into the shared surface only where they are
 
 - [x] Add queue failure-rate provider backed by `queue_failures` / failed job count, linked to Failed Jobs. {Codex/GPT-5}
 - [x] Add FrankenPHP worker reload provider backed by pending reload state and last reload history, linked to Updates. {Codex/GPT-5}
-- [ ] Add software bundle drift/dependency provider backed by `SoftwareInventoryService`, linked to Modules.
-- [ ] Add cheap system-health provider for storage writability and similar shell-safe checks, linked to System Info.
-- [ ] Evaluate AI control-plane health and reject tool-level unknown/stale states unless they are actionable and production-critical.
-- [ ] Evaluate scheduler/browser contributors and reject any that create noisy permanent warnings.
+- [x] Add software bundle drift/dependency provider backed by `SoftwareInventoryService`, linked to Modules. {Codex/GPT-5}
+- [x] Add cheap system-health provider for storage writability and similar shell-safe checks, linked to System Info. {Codex/GPT-5}
+- [x] Evaluate AI control-plane health and reject tool-level unknown/stale states unless they are actionable and production-critical. {Codex/GPT-5}
+- [x] Evaluate scheduler/browser contributors and reject any that create noisy permanent warnings. {Codex/GPT-5}
 - [ ] Add suppression or acknowledgement only if repeated diagnostics become noisy in real use.
 
 Validation: Each added source has a clear remediation link and does not duplicate a page-specific banner.
+
+#### Phase 4 Evaluation Notes
+
+- AI control-plane snapshots stay page-local because readiness/health/presence intentionally distinguish unknown, stale, and degraded confidence states. None currently proves a production outage with a single remediation action.
+- Scheduled-task and browser-session state is already inspectable through dedicated operational pages/commands, and the current sources do not expose a cheap global "scheduler is not running" or "browser pool is unhealthy" signal. Do not promote stale sessions or old schedule timestamps until there is a persisted health heartbeat and a remediation page.
+- Filesystem checks are intentionally limited to local path existence/writability. Database connectivity, external provider reachability, and cache warmup failures remain out of the status bar unless a persisted, rate-limited live health source is added.

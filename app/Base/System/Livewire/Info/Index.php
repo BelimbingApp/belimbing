@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\System\Livewire\Info;
 
+use App\Base\System\Services\SystemHealthProbe;
 use Illuminate\Contracts\View\View;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Number;
@@ -8,7 +10,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
-    public function render(): View
+    public function render(SystemHealthProbe $health): View
     {
         return view('livewire.admin.system.info.index', [
             'php' => [
@@ -40,6 +42,9 @@ class Index extends Component
                 'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? __('CLI'),
                 'disk_free' => Number::fileSize(disk_free_space(base_path())),
                 'disk_total' => Number::fileSize(disk_total_space(base_path())),
+            ],
+            'filesystem' => [
+                'writable_paths' => $health->writablePaths(),
             ],
         ]);
     }
