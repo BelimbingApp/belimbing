@@ -106,7 +106,7 @@ Validation: The audit produces a short candidate table in this plan, not code ch
 
 | Candidate | Source paths | Classification | Owner / auth | Remediation target | Decision |
 | --- | --- | --- | --- | --- | --- |
-| Queue failure-rate warning | `app/Providers/AppServiceProvider.php`; `app/Base/Queue/Config/menu.php`; `app/Base/Queue/Routes/web.php` | Status-bar diagnostic candidate | Queue / `admin.system.failed-job.list` | Failed Jobs (`admin.system.failed-jobs.index`) | Accept for Phase 4. Live check should read the existing `queue_failures` counter and/or failed job count, emit warning above a low threshold and danger above the existing high-rate threshold, and clear when the count falls. |
+| Queue failure-rate warning | `app/Providers/AppServiceProvider.php`; `app/Base/Queue/Config/menu.php`; `app/Base/Queue/Routes/web.php` | Status-bar diagnostic | Queue / `admin.system.failed-job.list` | Failed Jobs (`admin.system.failed-jobs.index`) | Implemented. Live check reads the existing `queue_failures` counter and failed job count, emits warning for failed jobs and danger above the existing high-rate threshold, and clears when those counts clear. |
 | Software bundle drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/modules.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic candidate | Foundation/Software / `admin.system.software.modules.view` | Modules (`admin.system.software.modules.index`) | Accept for Phase 4. Emit only actionable aggregate diagnostics for dirty/unpushed add-in bundles and dependency issues; avoid per-bundle spam in the bar. |
 | Storage writability and basic system health | `app/Modules/Core/AI/Tools/SystemInfoTool.php` | Status-bar diagnostic candidate | System / `admin.system.info.view` | System Info (`admin.system.info.index`) | Accept for Phase 4 only for checks that can be evaluated cheaply during shell render, such as `storage/app` not writable. Database outage is not reliable for the status bar because the shell may not render. |
 | AI control-plane health snapshots | `app/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Modules/Core/AI/Livewire/ControlPlane.php` | Candidate requiring noise policy | AI / `admin.ai.control-plane.view` | AI Control Plane | Defer to Phase 4 evaluation. Only promote failing/degraded active production-critical providers or Lara runtime health; tool-level unknown/stale states would be too noisy. |
@@ -120,7 +120,7 @@ Validation: The audit produces a short candidate table in this plan, not code ch
 
 Goal: Promote existing health checks into the shared surface only where they are actionable from the shell.
 
-- [ ] Add queue failure-rate provider backed by `queue_failures` / failed job count, linked to Failed Jobs.
+- [x] Add queue failure-rate provider backed by `queue_failures` / failed job count, linked to Failed Jobs. {Codex/GPT-5}
 - [ ] Add software bundle drift/dependency provider backed by `SoftwareInventoryService`, linked to Modules.
 - [ ] Add cheap system-health provider for storage writability and similar shell-safe checks, linked to System Info.
 - [ ] Evaluate AI control-plane health and reject tool-level unknown/stale states unless they are actionable and production-critical.
