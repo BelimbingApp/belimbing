@@ -4,6 +4,7 @@ namespace App\Modules\Core\Geonames\Livewire\Countries;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\CountrySeeder;
 use App\Modules\Core\Geonames\Models\Country;
@@ -15,6 +16,7 @@ class Index extends Component
 {
     use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
@@ -23,6 +25,24 @@ class Index extends Component
     public string $sortBy = 'country';
 
     public string $sortDir = 'asc';
+
+    /**
+     * Preserve the historical default page size for the countries list.
+     * Applied by the {@see SelectsPerPage} mount hook only when the URL does
+     * not supply `?perPage=`.
+     */
+    protected function defaultPerPage(): int
+    {
+        return 20;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function perPageOptions(): array
+    {
+        return [20, 50, 100, 300];
+    }
 
     /** Allowed sort columns mapped to their DB column names. */
     private const SORTABLE = [
@@ -64,7 +84,7 @@ class Index extends Component
                 })
                 ->orderBy($dbColumn, $this->sortDir)
                 ->orderBy('geonames_countries.iso')
-                ->paginate(20),
+                ->paginate($this->clampedPerPage()),
         ];
     }
 

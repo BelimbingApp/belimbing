@@ -116,7 +116,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $admin1s->links() }}
+                <x-ui.pagination :paginator="$admin1s" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>

@@ -8,6 +8,7 @@ use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Services\NullDomainLifecycleLedger;
 use App\Base\Foundation\Services\NullDomainRuntimeReloader;
 use App\Base\Foundation\Services\NullSemanticActionRecorder;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -19,5 +20,14 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->bindIf(DomainLifecycleLedger::class, NullDomainLifecycleLedger::class);
         $this->app->bindIf(DomainRuntimeReloader::class, NullDomainRuntimeReloader::class);
         $this->app->bindIf(SemanticActionRecorder::class, NullSemanticActionRecorder::class);
+    }
+
+    public function boot(): void
+    {
+        // Route every `->links()` call through BLB's owned `x-ui` pagination
+        // chrome (x-icon glyphs, whole-sentence translations) instead of the
+        // framework's vendor-published views.
+        Paginator::defaultView('ui.pagination-links');
+        Paginator::defaultSimpleView('ui.pagination-simple-links');
     }
 }

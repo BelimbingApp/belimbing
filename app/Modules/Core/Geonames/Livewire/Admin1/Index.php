@@ -4,6 +4,7 @@ namespace App\Modules\Core\Geonames\Livewire\Admin1;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\Admin1Seeder;
 use App\Modules\Core\Geonames\Models\Admin1;
@@ -16,6 +17,7 @@ class Index extends Component
 {
     use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
@@ -26,6 +28,24 @@ class Index extends Component
     public string $sortBy = 'country_name';
 
     public string $sortDir = 'asc';
+
+    /**
+     * Preserve the historical default page size for the admin1 list.
+     * Applied by the {@see SelectsPerPage} mount hook only when the URL does
+     * not supply `?perPage=`.
+     */
+    protected function defaultPerPage(): int
+    {
+        return 20;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function perPageOptions(): array
+    {
+        return [20, 50, 100, 300];
+    }
 
     private const SORTABLE = [
         'country_name' => 'country_name',
@@ -89,7 +109,7 @@ class Index extends Component
             ->pluck('country', 'iso');
 
         return [
-            'admin1s' => $query->paginate(20),
+            'admin1s' => $query->paginate($this->clampedPerPage()),
             'importedCountries' => $countryNames,
         ];
     }

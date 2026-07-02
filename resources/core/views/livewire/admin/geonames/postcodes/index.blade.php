@@ -204,7 +204,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $postcodes->links() }}
+                <x-ui.pagination :paginator="$postcodes" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>

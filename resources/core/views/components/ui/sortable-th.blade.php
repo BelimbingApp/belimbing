@@ -5,6 +5,8 @@
     'action' => null,
     'method' => 'sort',
     'align' => 'left', // left | right
+    'numeric' => false, // right-align + tabular-nums for numeric columns
+    'nowrap' => false, // prevent header content wrapping
     'inactiveIcon' => 'heroicon-m-chevron-up-down',
     'activeIconAsc' => 'heroicon-m-chevron-up',
     'activeIconDesc' => 'heroicon-m-chevron-down',
@@ -13,6 +15,7 @@
 ])
 
 @php
+    $effectiveAlign = $numeric ? 'right' : $align;
     $isActive = $sortBy === $column;
     $isAsc = $sortDir === 'asc';
     $ariaSort = $isActive ? ($isAsc ? 'ascending' : 'descending') : 'none';
@@ -24,11 +27,14 @@
     $iconClass = 'w-3 h-3'.($isActive ? '' : ' opacity-40');
 
     $thBase = 'px-table-cell-x py-table-header-y text-[11px] uppercase tracking-wider font-semibold text-muted';
-    $thAlign = $align === 'right' ? ' text-right' : ' text-left';
+    $thAlign = $effectiveAlign === 'right' ? ' text-right' : ' text-left';
+    $thBase .= $nowrap ? ' whitespace-nowrap' : '';
+    $thBase .= $numeric ? ' tabular-nums' : '';
 
-    $cellBase = $align === 'right' ? 'flex items-center justify-end gap-1' : 'inline-flex items-center gap-1';
+    $cellBase = $effectiveAlign === 'right' ? 'flex items-center justify-end gap-1' : 'inline-flex items-center gap-1';
 
     $btnBase = 'inline-flex items-center gap-1 rounded-sm hover:text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-subtle';
+    $btnBase .= $numeric ? ' tabular-nums' : '';
     $btnActive = $isActive ? ' text-ink' : '';
 
     $fallbackLabel = $label ?? trim(strip_tags((string) $slot));

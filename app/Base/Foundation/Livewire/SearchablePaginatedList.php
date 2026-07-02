@@ -1,17 +1,21 @@
 <?php
+
 namespace App\Base\Foundation\Livewire;
 
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 abstract class SearchablePaginatedList extends Component
 {
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
@@ -26,10 +30,13 @@ abstract class SearchablePaginatedList extends Component
      */
     protected const array SEARCH_COLUMNS = [];
 
+    #[Url]
     public string $search = '';
 
+    #[Url]
     public string $sortBy = '';
 
+    #[Url]
     public string $sortDir = 'asc';
 
     public function mount(): void
@@ -156,7 +163,7 @@ abstract class SearchablePaginatedList extends Component
 
     protected function perPage(): int
     {
-        return 25;
+        return $this->clampedPerPage();
     }
 
     /**

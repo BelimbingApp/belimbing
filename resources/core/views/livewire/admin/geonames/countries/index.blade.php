@@ -127,7 +127,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $countries->links() }}
+                <x-ui.pagination :paginator="$countries" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>

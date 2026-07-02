@@ -7,6 +7,7 @@ use App\Base\Audit\Models\AuditMutation;
 use App\Base\Audit\Services\AuditLogPresenter;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
@@ -19,6 +20,7 @@ class Mutations extends Component
 {
     use InteractsWithTraceTimeline;
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
@@ -30,6 +32,26 @@ class Mutations extends Component
     public string $sortBy = 'occurred_at';
 
     public string $sortDir = 'desc';
+
+    /**
+     * Audit default page size (tuned for dense, long-retained rows). Applied by
+     * the {@see SelectsPerPage} trait's mount hook only when the URL does not
+     * supply `?perPage=`, so shared/bookmarked URLs keep their page size.
+     */
+    protected function defaultPerPage(): int
+    {
+        return 20;
+    }
+
+    /**
+     * Per-page options for the audit log.
+     *
+     * @return list<int>
+     */
+    public function perPageOptions(): array
+    {
+        return [10, 20, 50, 100];
+    }
 
     private const SORTABLE = [
         'occurred_at' => 'base_audit_mutations.occurred_at',
@@ -116,7 +138,7 @@ class Mutations extends Component
             })
             ->orderBy($sortColumn, $this->sortDir)
             ->orderByDesc('base_audit_mutations.id')
-            ->paginate(20);
+            ->paginate($this->clampedPerPage());
     }
 
     /** @return array{name: string, id: string}|null */

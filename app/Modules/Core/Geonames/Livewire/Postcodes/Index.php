@@ -4,6 +4,7 @@ namespace App\Modules\Core\Geonames\Livewire\Postcodes;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Geonames\Database\Seeders\PostcodeSeeder;
 use App\Modules\Core\Geonames\Models\Country;
@@ -18,6 +19,7 @@ class Index extends Component
 {
     use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
@@ -35,6 +37,24 @@ class Index extends Component
     public string $sortBy = 'country_name';
 
     public string $sortDir = 'asc';
+
+    /**
+     * Preserve the historical default page size for the postcodes list.
+     * Applied by the {@see SelectsPerPage} mount hook only when the URL does
+     * not supply `?perPage=`.
+     */
+    protected function defaultPerPage(): int
+    {
+        return 20;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function perPageOptions(): array
+    {
+        return [20, 50, 100, 300];
+    }
 
     private const SORTABLE = [
         'country_name' => 'country_name',
@@ -124,7 +144,7 @@ class Index extends Component
         }
 
         return [
-            'postcodes' => $query->paginate(20),
+            'postcodes' => $query->paginate($this->clampedPerPage()),
             'allCountries' => $allCountries,
             'importedIsos' => $importedIsos,
             'hasData' => $hasData,

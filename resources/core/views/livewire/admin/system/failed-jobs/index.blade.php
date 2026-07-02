@@ -95,7 +95,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $failedJobs->links() }}
+                <x-ui.pagination :paginator="$failedJobs" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>

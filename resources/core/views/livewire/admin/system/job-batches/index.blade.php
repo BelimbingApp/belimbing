@@ -106,7 +106,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $batches->links() }}
+                <x-ui.pagination :paginator="$batches" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>

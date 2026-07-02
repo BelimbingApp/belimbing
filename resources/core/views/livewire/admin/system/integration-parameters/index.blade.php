@@ -75,7 +75,7 @@ use App\Base\Settings\Models\Setting;
                 </x-ui.table>
 
                 <div class="mt-4">
-                    {{ $parameters->links() }}
+                    <x-ui.pagination :paginator="$parameters" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
                 </div>
             @endif
         </x-ui.card>

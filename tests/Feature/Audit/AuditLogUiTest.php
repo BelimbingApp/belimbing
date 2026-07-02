@@ -25,6 +25,7 @@ use App\Modules\Core\Address\Models\Addressable;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -832,4 +833,30 @@ it('does not mount the record history bridge without audit permission', function
         ->assertDontSee('Record history')
         ->assertDontSeeHtml('sourceHistoryDrawerOpen')
         ->assertDontSeeHtml(AUDIT_LOG_UI_OPEN_WIRE_ACTION);
+});
+
+it('honors a URL-supplied perPage over the audit default on initial mount', function (): void {
+    auditLogUiInsertMutation(['trace_id' => 'PERPAGEURL01']);
+
+    Livewire::withQueryParams(['perPage' => 50])
+        ->test(Mutations::class)
+        ->assertSet('perPage', 50)
+        ->assertViewHas('mutations', fn (LengthAwarePaginator $p): bool => $p->perPage() === 50);
+});
+
+it('clamps a stale out-of-range URL perPage to the largest audit option on initial mount', function (): void {
+    auditLogUiInsertMutation(['trace_id' => 'PERPAGEURL02']);
+
+    Livewire::withQueryParams(['perPage' => 9999])
+        ->test(Mutations::class)
+        ->assertSet('perPage', 100)
+        ->assertViewHas('mutations', fn (LengthAwarePaginator $p): bool => $p->perPage() === 100);
+});
+
+it('falls back to the audit default perPage when the URL does not supply one', function (): void {
+    auditLogUiInsertMutation(['trace_id' => 'PERPAGEURL03']);
+
+    Livewire::test(Mutations::class)
+        ->assertSet('perPage', 20)
+        ->assertViewHas('mutations', fn (LengthAwarePaginator $p): bool => $p->perPage() === 20);
 });

@@ -128,7 +128,7 @@
             </x-ui.table>
 
             <div class="mt-2">
-                {{ $mutations->links(data: ['scrollTo' => false]) }}
+                <x-ui.pagination :paginator="$mutations" :perPageOptions="$this->perPageOptions()" :perPage="$perPage" />
             </div>
         </x-ui.card>
     </div>
