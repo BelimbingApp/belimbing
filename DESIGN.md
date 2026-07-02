@@ -39,6 +39,7 @@ Reuse `x-ui.*` and `<x-icon>` before inventing new markup. Inventory:
 
 - `x-ui.datetime` for every user-visible date, time, or timestamp; use `format="date"` for date-only values.
 - `x-ui.record-history` for audit history on auditable detail pages.
+- `x-ui.sortable-th` for table columns users naturally compare or scan by.
 
 ## Gestalt grouping
 

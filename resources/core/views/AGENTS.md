@@ -165,6 +165,7 @@ If a primitive is missing, create it under `components/ui/` with `@props`, `$att
 
 - Use `x-ui.table` for application tables.
 - Use `x-ui.sortable-th` for sortable headers; use `x-ui.th` for static headers.
+- Sort useful indexed or already-query-backed columns by default, especially names, dates, statuses, and numeric totals; skip tiny static tables where order is obvious and sort state adds noise.
 - Caller owns sorting, pagination, row identity, links, inline editing, actions, and domain formatting.
 - Prefer explicit caller-owned `<tr>/<td>` markup.
 - Specialized non-application tables can stay local.
