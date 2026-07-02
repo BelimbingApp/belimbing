@@ -171,7 +171,19 @@ Modes are mutually exclusive (stored in Alpine + `localStorage`):
   - **Impersonation** (`text-status-danger`): Active impersonation with stop action.
   - **Licensee not set** (`text-status-danger`): Link to licensee setup when missing.
   - **Locale** (`text-status-warning`, when authorized): Unconfirmed or inferred locale — link to localization admin.
+  - **System diagnostics** (`text-status-danger` / `text-status-warning` / `text-status-info`, when authorized): Aggregated operator diagnostics with count, highest severity icon, and a click-to-view detail surface.
 - **Right:** Lara entry point — if Lara is activated, a button opens chat (`open-agent-chat`) and shows busy pulse when `laraBusy`; otherwise an **Activate Lara** link to setup. App version string.
+
+#### Status Bar Diagnostics
+
+- **Aggregator:** `App\Base\System\Services\StatusBarDiagnostics`
+- **Provider contract:** `App\Base\System\Contracts\StatusBarDiagnosticProvider`, tagged with `StatusBarDiagnosticProvider::CONTAINER_TAG`
+- **Message DTO:** `App\Base\System\DTO\StatusBarDiagnostic`
+- **Fields:** stable `id`, `severity`, `source`, `summary`, optional `detail`, optional `target`, and non-secret `metadata`.
+- **Resolution model:** diagnostics are live state, not tickets. A warning disappears when its provider no longer emits it; acknowledgement/snooze must not be treated as resolution.
+- **Visibility:** providers must enforce the authorization rule for the diagnostic detail they expose. The menu provider requires `admin.system.menu-inspector.view`.
+- **Noise control:** repeated server logs should be throttled at the producer boundary with a diagnostic-specific fingerprint rather than a global log deduplicator.
+- **Current producer:** menu link resolution failures. Broken menu items are hidden from the shell, logged with source context, and surfaced as a status-bar warning linking to Menu Inspector.
 
 ## Alpine.js Application State
 
@@ -361,6 +373,6 @@ global view override path.
 - **Plugins are removable.** Removing a pluggable module removes its views with its code.
 - **No hidden override layer.** Core UI changes happen in core; module UI is namespaced by the module provider.
 
-## Open Questions
+## Future Status Signals
 
-- Should the Status Bar grow to include more operational indicators (e.g., queue health, active jobs)?
+Additional operational indicators should enter through the status-bar diagnostics provider contract only when they are actionable, authorization-aware, and live-resolving. Candidate sweeps belong in `docs/plans/base-status-bar-diagnostics.md`.

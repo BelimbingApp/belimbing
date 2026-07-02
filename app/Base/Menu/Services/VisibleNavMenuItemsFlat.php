@@ -17,7 +17,8 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
     public function __construct(
         private readonly MenuRegistry $registry,
         private readonly MenuAccessChecker $menuAccessChecker,
-        private readonly MenuDiscoveryService $discovery,
+        private readonly MenuRegistryLoader $loader,
+        private readonly MenuLinkResolver $linkResolver,
         private readonly PinMetadataNormalizer $pinMetadataNormalizer,
     ) {}
 
@@ -26,7 +27,7 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
      */
     public function snapshotForUser(mixed $user): array
     {
-        $this->ensureMenuRegistryIsLoaded();
+        $this->loader->ensureLoaded();
 
         $filtered = $this->registry
             ->getAll()
@@ -37,9 +38,12 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
                 ),
             );
 
+        $resolvedHrefs = [];
+        $filtered = $this->withoutUnresolvableLinks($filtered, $resolvedHrefs);
+
         return [
             'filtered' => $filtered,
-            'flat' => $this->buildFlat($filtered),
+            'flat' => $this->buildFlat($filtered, $resolvedHrefs),
         ];
     }
 
@@ -47,54 +51,56 @@ final class VisibleNavMenuItemsFlat implements NavigableMenuSnapshot
      * @param  Collection<int, MenuItem>  $filteredItems
      * @return array<string, array{label: string, pinLabel: string, icon: string, href: string|null, route: string|null}>
      */
-    private function buildFlat(Collection $filteredItems): array
+    private function buildFlat(Collection $filteredItems, array $resolvedHrefs): array
     {
         return $filteredItems
             ->filter(fn (MenuItem $item) => $item->hasRoute())
-            ->mapWithKeys(
-                fn (MenuItem $item) => [
+            ->mapWithKeys(function (MenuItem $item) use ($resolvedHrefs): array {
+                $href = $resolvedHrefs[$item->id]
+                    ?? $this->linkResolver->resolve($item)->href;
+
+                if ($href === null) {
+                    return [];
+                }
+
+                return [
                     $item->id => [
                         'label' => $item->label,
                         'pinLabel' => $this->pinMetadataNormalizer->normalizeLabel(
                             $item->label,
                         ),
                         'icon' => $item->icon ?? 'heroicon-o-squares-2x2',
-                        'href' => $item->href(),
+                        'href' => $href,
                         'route' => $item->route,
                     ],
-                ],
-            )
+                ];
+            })
             ->all();
     }
 
-    private function ensureMenuRegistryIsLoaded(): void
+    /**
+     * @param  Collection<int, MenuItem>  $items
+     * @param  array<string, string>  $resolvedHrefs
+     * @return Collection<int, MenuItem>
+     */
+    private function withoutUnresolvableLinks(Collection $items, array &$resolvedHrefs): Collection
     {
-        // Cache the discovered + validated registry in the cache store keyed by a
-        // config fingerprint. Octane gives each request a fresh container, so the
-        // in-memory singleton can't be reused — but the cache store persists, so
-        // discover()+validate() runs only when a menu config actually changes
-        // (auto-invalidating in both dev and production; no manual cache clear).
-        $fingerprint = $this->discovery->configFingerprint();
+        return $items->reject(function (MenuItem $item) use (&$resolvedHrefs): bool {
+            if (! $item->hasRoute()) {
+                return false;
+            }
 
-        if ($this->registry->loadFromCache($fingerprint)) {
-            return;
-        }
+            $resolution = $this->linkResolver->resolve($item);
 
-        $this->refreshMenuRegistry(persist: true, fingerprint: $fingerprint);
-    }
+            if ($resolution->isResolved()) {
+                $resolvedHrefs[$item->id] = $resolution->href;
 
-    private function refreshMenuRegistry(bool $persist, ?string $fingerprint = null): void
-    {
-        $this->registry->registerFromDiscovery($this->discovery->discover());
+                return false;
+            }
 
-        $errors = $this->registry->validate();
+            $this->linkResolver->logUnresolvable($item, $resolution);
 
-        if (! empty($errors)) {
-            logger()->error('Menu validation errors', ['errors' => $errors]);
-        }
-
-        if ($persist) {
-            $this->registry->persist($fingerprint);
-        }
+            return true;
+        });
     }
 }

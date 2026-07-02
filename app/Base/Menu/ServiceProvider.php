@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
@@ -6,9 +7,13 @@ use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Base\Menu\Services\DefaultMenuAccessChecker;
 use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
+use App\Base\Menu\Services\MenuLinkResolver;
+use App\Base\Menu\Services\MenuRegistryLoader;
+use App\Base\Menu\Services\MenuStatusDiagnosticProvider;
 use App\Base\Menu\Services\PagePinResolver;
 use App\Base\Menu\Services\PinMetadataNormalizer;
 use App\Base\Menu\Services\VisibleNavMenuItemsFlat;
+use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -21,11 +26,15 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->app->singleton(MenuDiscoveryService::class);
         $this->app->singleton(MenuRegistry::class);
+        $this->app->singleton(MenuRegistryLoader::class);
         $this->app->singleton(MenuBuilder::class);
         $this->app->singleton(MenuConditionRegistry::class);
+        $this->app->singleton(MenuLinkResolver::class);
+        $this->app->singleton(MenuStatusDiagnosticProvider::class);
         $this->app->singleton(PagePinResolver::class);
         $this->app->singleton(PinMetadataNormalizer::class);
         $this->app->singleton(VisibleNavMenuItemsFlat::class);
+        $this->app->tag(MenuStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->bind(NavigableMenuSnapshot::class, VisibleNavMenuItemsFlat::class);
         $this->app->bindIf(
             MenuAccessChecker::class,

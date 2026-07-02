@@ -6,7 +6,9 @@
 
     $laraActivated = \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
 
+    $user = null;
     $canManageLocalization = false;
+    $statusDiagnostics = collect();
 
     if (auth()->check()) {
         $user = auth()->user();
@@ -14,12 +16,21 @@
         $canManageLocalization = app(\App\Base\Authz\Contracts\AuthorizationService::class)
             ->can($actor, 'admin.system.localization.manage')
             ->allowed;
+        $statusDiagnostics = app(\App\Base\System\Services\StatusBarDiagnostics::class)
+            ->forUser($user);
     }
+
+    $statusDiagnosticCount = $statusDiagnostics->count();
+    $statusDiagnosticTop = $statusDiagnostics->first();
+    $statusDiagnosticVariant = $statusDiagnosticTop?->severity;
+    $statusDiagnosticClasses = $statusDiagnosticVariant?->classes() ?? [];
+    $statusDiagnosticTextClass = $statusDiagnosticClasses['text'] ?? 'text-muted';
+    $statusDiagnosticIcon = $statusDiagnosticVariant?->icon() ?? 'heroicon-o-information-circle';
 @endphp
 
 <div class="h-6 bg-surface-bar border-t border-border-default flex items-center justify-between px-4 text-xs text-muted shrink-0">
     {{-- Left: Environment Info + Warnings (highest severity first) --}}
-    <div class="flex items-center gap-4">
+    <div class="flex items-center gap-4 min-w-0 overflow-hidden">
         <span>{{ config('app.env') }}</span>
         @if(config('app.debug'))
             <span>{{ __('Debug Mode') }}</span>
@@ -50,6 +61,79 @@
                         {{ __('Locale not confirmed') }}
                     @endif
                 </a>
+            @endif
+            @if ($statusDiagnosticCount > 0)
+                <div x-data="{ open: false }" class="relative inline-flex min-w-0">
+                    <button
+                        type="button"
+                        @click="open = !open"
+                        @keydown.escape.window="open = false"
+                        class="{{ $statusDiagnosticTextClass }} hover:underline inline-flex items-center gap-1 min-w-0"
+                        title="{{ __('System diagnostics') }}"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        :aria-expanded="open.toString()"
+                    >
+                        <x-icon name="{{ $statusDiagnosticIcon }}" class="w-3.5 h-3.5 shrink-0" />
+                        <span class="truncate">
+                            {{ trans_choice(':count warning|:count warnings', $statusDiagnosticCount, ['count' => $statusDiagnosticCount]) }}
+                        </span>
+                    </button>
+
+                    <div
+                        x-cloak
+                        x-show="open"
+                        x-transition.opacity.duration.100ms
+                        @click.outside="open = false"
+                        class="fixed bottom-7 left-4 z-50 w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border-default bg-surface-card text-ink shadow-lg"
+                        role="dialog"
+                        aria-label="{{ __('System diagnostics') }}"
+                    >
+                        <div class="flex items-center justify-between gap-3 border-b border-border-default px-3 py-2">
+                            <div class="flex min-w-0 items-center gap-2">
+                                <x-icon name="{{ $statusDiagnosticIcon }}" class="w-4 h-4 shrink-0 {{ $statusDiagnosticTextClass }}" />
+                                <span class="truncate text-sm font-medium text-ink">{{ __('System diagnostics') }}</span>
+                            </div>
+                            <button
+                                type="button"
+                                @click="window.location.reload()"
+                                class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink"
+                                title="{{ __('Refresh diagnostics') }}"
+                                aria-label="{{ __('Refresh diagnostics') }}"
+                            >
+                                <x-icon name="heroicon-o-arrow-path" class="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div class="max-h-80 overflow-y-auto py-1">
+                            @foreach ($statusDiagnostics as $diagnostic)
+                                @php
+                                    $diagnosticClasses = $diagnostic->severity->classes();
+                                @endphp
+                                <div class="border-b border-border-default px-3 py-2 last:border-b-0">
+                                    <div class="flex items-start gap-2">
+                                        <x-icon name="{{ $diagnostic->severity->icon() }}" class="mt-0.5 w-4 h-4 shrink-0 {{ $diagnosticClasses['text'] }}" />
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                                <span class="text-[11px] font-medium uppercase {{ $diagnosticClasses['text'] }}">{{ $diagnostic->source }}</span>
+                                                <span class="min-w-0 text-sm font-medium text-ink">{{ $diagnostic->summary }}</span>
+                                            </div>
+                                            @if ($diagnostic->detail !== null)
+                                                <p class="mt-0.5 text-xs leading-snug text-muted">{{ $diagnostic->detail }}</p>
+                                            @endif
+                                            @if ($diagnostic->target !== null)
+                                                <a href="{{ $diagnostic->target }}" wire:navigate class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+                                                    {{ __('Open details') }}
+                                                    <x-icon name="heroicon-o-arrow-right" class="w-3 h-3" />
+                                                </a>
+                                            @endif
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
             @endif
 
         @endauth

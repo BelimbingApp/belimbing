@@ -1,10 +1,11 @@
 <?php
+
 namespace App\Base\System\Livewire\MenuInspector;
 
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
-use App\Base\Menu\Services\MenuDiscoveryService;
+use App\Base\Menu\Services\MenuRegistryLoader;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -55,13 +56,11 @@ class Index extends Component
         $checker = app(MenuAccessChecker::class);
         $user = Auth::user();
 
-        // The registry is normally populated by the layout view composer
-        // (VisibleNavMenuItemsFlat::ensureMenuRegistryIsLoaded). When Livewire
-        // re-renders this component on an interaction, the singleton may be
-        // empty if the composer has not run for this request — load on demand.
+        // The registry is normally populated by the layout view composer. When
+        // Livewire re-renders this component on an interaction, the singleton
+        // may be empty if the composer has not run for this request.
         if ($registry->getAll()->isEmpty()) {
-            $discovery = app(MenuDiscoveryService::class);
-            $registry->registerFromDiscovery($discovery->discover());
+            app(MenuRegistryLoader::class)->ensureLoaded();
         }
 
         $items = $registry->getAll()
