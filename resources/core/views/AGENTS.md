@@ -150,6 +150,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.table` | Application table shell |
 | `x-ui.th` / `x-ui.sortable-th` | Table headers |
 | `x-ui.record-history` | Audit/history summaries |
+| `x-ui.stat-strip` + `x-ui.stat` | Key-figure strips: uppercase label, large right-aligned value, small sub-line, hairline dividers |
 
 ### Composite / Shell
 
