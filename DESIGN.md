@@ -1,5 +1,5 @@
 ---
-version: alpha
+version: beta
 name: Belimbing
 description: Professional, compact, warm workflow UI for long operational sessions.
 ---
@@ -11,6 +11,8 @@ description: Professional, compact, warm workflow UI for long operational sessio
 BLB should feel professional, compact, warm, and trustworthy. It is workflow software for long sessions: dense enough for operations, calm enough for judgment, and polished enough that users trust it. Success means users finish real work faster and leave — not more time in the app. The interface is the brand: deliberate product software with intentional taste, not a marketing site, consumer novelty, or generic enterprise gray.
 
 Less is more, but better — every surface, label, and control must earn its place.
+
+Before designing a page, invoke DHH. Ask what he would cut, what he would make obvious, what he would refuse to configure, and where the page should feel more like a confident product than a pile of components. Do not answer with a predictable rubric; sit with the page until a simpler, warmer, more opinionated shape appears.
 
 ## Semantic color roles
 
