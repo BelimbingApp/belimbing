@@ -2,6 +2,7 @@
 
 namespace App\Base\System\Livewire\UiReference;
 
+use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\System\Enums\UiReferenceSection;
 use Illuminate\Contracts\View\View;
@@ -105,7 +106,37 @@ class Index extends Component
             'tableRows' => $this->tableRows(),
             'demoPaginator' => $this->demoPaginator(),
             'secretInputVariants' => $this->secretInputVariants(),
+            'statusBarDiagnosticPreview' => $this->statusBarDiagnosticPreview(),
         ]);
+    }
+
+    /**
+     * @return list<array{
+     *     severity: StatusVariant,
+     *     source: string,
+     *     summary: string,
+     *     detail: string,
+     *     targetLabel: string,
+     * }>
+     */
+    private function statusBarDiagnosticPreview(): array
+    {
+        return [
+            [
+                'severity' => StatusVariant::Warning,
+                'source' => 'Menu',
+                'summary' => 'Menu item hidden: Supplier Research',
+                'detail' => 'Route commerce.supplier-research.show cannot be generated. Source: app/Modules/Commerce/Config/menu.php.',
+                'targetLabel' => 'Open Menu Inspector',
+            ],
+            [
+                'severity' => StatusVariant::Info,
+                'source' => 'Updates',
+                'summary' => '1 add-in bundle has local changes',
+                'detail' => 'Review the software inventory before pulling updates so local work is not overwritten.',
+                'targetLabel' => 'Open Modules',
+            ],
+        ];
     }
 
     /**

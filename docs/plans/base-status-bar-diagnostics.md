@@ -1,6 +1,6 @@
 # base-status-bar-diagnostics
 
-**Status:** Phase 1 implemented; additional diagnostic sources planned
+**Status:** Phase 1 and provider surface implemented; Phase 3 sweep documented
 **Last Updated:** 2026-07-02
 **Sources:** `resources/core/views/components/layouts/status-bar.blade.php`; `docs/architecture/ui-layout.md`; `app/Base/Menu/Services/VisibleNavMenuItemsFlat.php`; user discussion on surfacing menu route diagnostics
 **Agents:** Codex/GPT-5
@@ -86,29 +86,45 @@ Goal: The status bar can aggregate multiple operator-facing health signals witho
 - [x] Add de-duplication and severity ordering rules. {Codex/GPT-5}
 - [x] Add per-provider authorization checks. {Codex/GPT-5}
 - [x] Document the provider contract in `docs/architecture/ui-layout.md`. {Codex/GPT-5}
-- [ ] Add UI Reference coverage for status bar diagnostics.
+- [x] Add UI Reference coverage for status bar diagnostics. {Codex/GPT-5}
 
-Validation: Menu diagnostics and a synthetic tagged provider can be displayed together with stable ordering and correct visibility. UI Reference coverage remains open.
+Validation: Menu diagnostics and a synthetic tagged provider can be displayed together with stable ordering and correct visibility. UI Reference includes a rendered status-bar diagnostics preview under Feedback.
 
 ### Phase 3: Codebase Diagnostic Opportunity Audit
 
 Goal: Identify existing warnings, health checks, and admin-only status signals that belong in the shared status bar diagnostic surface.
 
-- [ ] Sweep existing `Log::warning`, `logger()->warning`, `session()->flash('warning')`, health snapshot, dependency health, and diagnostic services.
-- [ ] Classify each candidate as status-bar diagnostic, page-local feedback, log-only, notification, or no-op/noise.
-- [ ] Require each status-bar candidate to have an owner, severity, remediation path, authorization rule, and live-resolution check.
-- [ ] Add accepted candidates to Phase 4 with source paths and proof expectations.
-- [ ] Document rejected categories so future agents do not promote noisy or page-specific warnings.
+- [x] Sweep existing `Log::warning`, `logger()->warning`, `session()->flash('warning')`, health snapshot, dependency health, and diagnostic services. {Codex/GPT-5}
+- [x] Classify each candidate as status-bar diagnostic, page-local feedback, log-only, notification, or no-op/noise. {Codex/GPT-5}
+- [x] Require each status-bar candidate to have an owner, severity, remediation path, authorization rule, and live-resolution check. {Codex/GPT-5}
+- [x] Add accepted candidates to Phase 4 with source paths and proof expectations. {Codex/GPT-5}
+- [x] Document rejected categories so future agents do not promote noisy or page-specific warnings. {Codex/GPT-5}
 
 Validation: The audit produces a short candidate table in this plan, not code changes, and every accepted candidate has a clear user action or remediation link.
+
+#### Sweep Results
+
+| Candidate | Source paths | Classification | Owner / auth | Remediation target | Decision |
+| --- | --- | --- | --- | --- | --- |
+| Queue failure-rate warning | `app/Providers/AppServiceProvider.php`; `app/Base/Queue/Config/menu.php`; `app/Base/Queue/Routes/web.php` | Status-bar diagnostic candidate | Queue / `admin.system.failed-job.list` | Failed Jobs (`admin.system.failed-jobs.index`) | Accept for Phase 4. Live check should read the existing `queue_failures` counter and/or failed job count, emit warning above a low threshold and danger above the existing high-rate threshold, and clear when the count falls. |
+| Software bundle drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/modules.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic candidate | Foundation/Software / `admin.system.software.modules.view` | Modules (`admin.system.software.modules.index`) | Accept for Phase 4. Emit only actionable aggregate diagnostics for dirty/unpushed add-in bundles and dependency issues; avoid per-bundle spam in the bar. |
+| Storage writability and basic system health | `app/Modules/Core/AI/Tools/SystemInfoTool.php` | Status-bar diagnostic candidate | System / `admin.system.info.view` | System Info (`admin.system.info.index`) | Accept for Phase 4 only for checks that can be evaluated cheaply during shell render, such as `storage/app` not writable. Database outage is not reliable for the status bar because the shell may not render. |
+| AI control-plane health snapshots | `app/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Modules/Core/AI/Livewire/ControlPlane.php` | Candidate requiring noise policy | AI / `admin.ai.control-plane.view` | AI Control Plane | Defer to Phase 4 evaluation. Only promote failing/degraded active production-critical providers or Lara runtime health; tool-level unknown/stale states would be too noisy. |
+| eBay endpoint diagnostics | `app/Modules/Commerce/Marketplace/Ebay/EbayDiagnosticsService.php`; `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php` | Page-local feedback | Marketplace settings | eBay Settings page | Reject for shared status bar now. The diagnostics are scoped to a manual settings workflow and already have immediate page remediation. |
+| Provider connect/model sync warnings | `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`; `app/Modules/Core/AI/Livewire/Concerns/ManagesSync.php` | Page-local feedback plus logs | AI setup | Provider setup pages | Reject for shared status bar now. Promote only if a separate live provider-health source can prove ongoing outage for an active provider. |
+| Cache warming failed | `app/Providers/AppServiceProvider.php` | Log-only transient | Platform boot | None | Reject. It is a boot-time opportunistic warmup with no durable live state; keep log-only unless a persisted cache-health source is added. |
+| Plugin contribution load warnings | `app/Modules/Commerce/Plugins/Services/CommercePluginDiscoveryService.php` | Log-only developer/config warning | Commerce plugins | None yet | Reject until Commerce owns a user-facing plugin diagnostics page. |
+| Database connection recovery warning | `app/Base/Database/Middleware/DatabaseConnectionRecovery.php` | Log-only auto-recovery event | Database | Database tools | Reject for now. Auto-recovered transient failures should not become persistent shell warnings without a rate-limited live counter and remediation path. |
 
 ### Phase 4: Operational Health Sources
 
 Goal: Promote existing health checks into the shared surface only where they are actionable from the shell.
 
-- [ ] Evaluate module dependency health as a status bar contributor.
-- [ ] Evaluate deployment/update warning state as a status bar contributor.
-- [ ] Evaluate queue/scheduler/browser/AI health contributors and reject any that create noisy permanent warnings.
+- [ ] Add queue failure-rate provider backed by `queue_failures` / failed job count, linked to Failed Jobs.
+- [ ] Add software bundle drift/dependency provider backed by `SoftwareInventoryService`, linked to Modules.
+- [ ] Add cheap system-health provider for storage writability and similar shell-safe checks, linked to System Info.
+- [ ] Evaluate AI control-plane health and reject tool-level unknown/stale states unless they are actionable and production-critical.
+- [ ] Evaluate scheduler/browser contributors and reject any that create noisy permanent warnings.
 - [ ] Add suppression or acknowledgement only if repeated diagnostics become noisy in real use.
 
 Validation: Each added source has a clear remediation link and does not duplicate a page-specific banner.
