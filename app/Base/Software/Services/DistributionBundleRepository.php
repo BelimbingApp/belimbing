@@ -493,5 +493,4 @@ class DistributionBundleRepository
 
         return $response;
     }
-
 }
