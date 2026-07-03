@@ -6,7 +6,6 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Support\Git\GitRepository;
 use App\Base\Support\Git\GitResult;
 use Illuminate\Http\Client\Response;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -26,7 +25,12 @@ class DistributionBundleRepository
      */
     private array $latestCommitRuntimeCache = [];
 
-    public function __construct(private readonly SettingsService $settings) {}
+    private readonly DistributionBundleGitReader $gitReader;
+
+    public function __construct(private readonly SettingsService $settings, ?DistributionBundleGitReader $gitReader = null)
+    {
+        $this->gitReader = $gitReader ?? new DistributionBundleGitReader;
+    }
 
     /**
      * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
@@ -39,8 +43,8 @@ class DistributionBundleRepository
         $requestKeyByCacheKey = [];
 
         foreach ($this->distributions() as $dist) {
-            [$owner, $name, $remoteError] = $this->remoteIdentity($dist['path']);
-            $snapshot = $this->localSnapshot($dist['path']);
+            [$owner, $name, $remoteError] = $this->gitReader->remoteIdentity($dist['path']);
+            $snapshot = $this->gitReader->localSnapshot($dist['path']);
             $branch = $snapshot['branch'] ?? 'main';
 
             $entries[$dist['key']] = [
@@ -138,13 +142,9 @@ class DistributionBundleRepository
     public function localStatus(bool $includePlatformWorkingTree = true, int $gitTimeoutSeconds = 60): array
     {
         return array_map(function (array $dist) use ($includePlatformWorkingTree, $gitTimeoutSeconds): array {
-            $repo = new GitRepository($dist['path']);
-            $isRepo = $repo->isRepository();
-            $readWorkingTree = $isRepo && ($includePlatformWorkingTree || $dist['key'] !== 'platform');
-            [$owner, $name] = $isRepo
-                ? $this->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds)
-                : [null, null];
-            $snapshot = $this->localSnapshot($dist['path'], readWorkingTree: $readWorkingTree, timeout: $gitTimeoutSeconds);
+            $readWorkingTree = $includePlatformWorkingTree || $dist['key'] !== 'platform';
+            [$owner, $name] = $this->gitReader->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds);
+            $snapshot = $this->gitReader->localSnapshot($dist['path'], readWorkingTree: $readWorkingTree, timeout: $gitTimeoutSeconds);
 
             return [
                 'key' => $dist['key'],
@@ -168,7 +168,7 @@ class DistributionBundleRepository
         $byOwner = [];
 
         foreach ($this->distributions() as $dist) {
-            [$owner, $name] = $this->remoteIdentity($dist['path']);
+            [$owner, $name] = $this->gitReader->remoteIdentity($dist['path']);
 
             if ($owner === null) {
                 continue;
@@ -194,7 +194,7 @@ class DistributionBundleRepository
         $results = [];
 
         foreach ($this->distributions() as $dist) {
-            [$repoOwner, $name] = $this->remoteIdentity($dist['path']);
+            [$repoOwner, $name] = $this->gitReader->remoteIdentity($dist['path']);
 
             if ($repoOwner === null || strtolower($repoOwner) !== strtolower($owner)) {
                 continue;
@@ -239,7 +239,7 @@ class DistributionBundleRepository
      */
     public function pull(array $dist): string
     {
-        [$owner] = $this->remoteIdentity($dist['path']);
+        [$owner] = $this->gitReader->remoteIdentity($dist['path']);
         $token = $owner !== null ? $this->tokenFor($owner) : null;
 
         $result = (new GitRepository($dist['path'], $token))->pull();
@@ -316,11 +316,8 @@ class DistributionBundleRepository
      */
     public function distributions(): array
     {
-        // Module-level git roots (app/Modules/{Domain}/{Module}) make a future slot
-        // implementation — a whole module shipped as its own repo nested inside a
-        // domain — visible alongside domain-level roots. isRepositoryPath() checks for
-        // a `.git` at the path itself, so a plain module folder inside a domain
-        // checkout (no nested `.git`) is never mistaken for its own bundle.
+        // Domain roots are installable bundles even when tests or local checkouts lack
+        // `.git`; nested module roots still need `.git` to represent slot implementations.
         return [
             [
                 'key' => 'platform',
@@ -328,10 +325,28 @@ class DistributionBundleRepository
                 'path' => base_path(),
                 'relative' => '.',
             ],
-            ...$this->repositoriesIn('app/Modules/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename($dir)])),
+            ...$this->domainDistributions(),
             ...$this->repositoriesIn('app/Modules/*/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename(dirname($dir)).'/'.basename($dir)])),
             ...$this->extensionDistributions(),
         ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, path: string, relative: string}>
+     */
+    private function domainDistributions(): array
+    {
+        $found = [];
+
+        foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            if (basename($dir) === 'Core') {
+                continue;
+            }
+
+            $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
+        }
+
+        return $found;
     }
 
     /**
@@ -345,7 +360,7 @@ class DistributionBundleRepository
         $found = [];
 
         foreach (glob(base_path($glob), GLOB_ONLYDIR) ?: [] as $dir) {
-            if ($this->isRepositoryPath($dir)) {
+            if ($this->gitReader->isRepositoryPath($dir)) {
                 $found[] = $this->distribution($dir, $labeller($dir));
             }
         }
@@ -366,7 +381,7 @@ class DistributionBundleRepository
         foreach (glob(base_path('extensions/*'), GLOB_ONLYDIR) ?: [] as $dir) {
             $group = basename($dir);
 
-            if ($this->isRepositoryPath($dir)) {
+            if ($this->gitReader->isRepositoryPath($dir)) {
                 $found[] = $this->distribution($dir, (string) __('Extension: :name', ['name' => $group]));
 
                 continue;
@@ -394,83 +409,6 @@ class DistributionBundleRepository
             'path' => $path,
             'relative' => str_replace('\\', '/', $relative),
         ];
-    }
-
-    /**
-     * @return array{branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null}
-     */
-    private function localSnapshot(string $path, bool $readWorkingTree = true, int $timeout = 60): array
-    {
-        $repo = new GitRepository($path);
-
-        if (! $repo->isRepository()) {
-            return [
-                'branch' => null,
-                'working_tree' => $this->cleanWorkingTree(),
-                'current' => null,
-            ];
-        }
-
-        $summary = $readWorkingTree ? $repo->statusSummary(timeout: $timeout) : null;
-
-        return [
-            'branch' => $summary['branch'] ?? $repo->currentBranch(timeout: $timeout) ?? 'main',
-            'working_tree' => $readWorkingTree ? $this->workingTree($path, timeout: $timeout, summary: $summary) : $this->cleanWorkingTree(),
-            'current' => $this->localCommit($path, timeout: $timeout),
-        ];
-    }
-
-    /**
-     * Local working-tree state for a bundle: count of uncommitted changes and how far
-     * the branch is ahead of / behind its upstream. This is what makes changes another
-     * tool writes into a bundle (e.g. schema incubation rewriting migration files)
-     * visible — each bundle is its own nested git repo, so they never surface in the
-     * platform repo's `git status`.
-     *
-     * @param  array{branch: string|null, dirty: int, ahead: int, behind: int}|null  $summary
-     * @return array{dirty: int, ahead: int, behind: int}
-     */
-    private function workingTree(string $path, int $timeout = 60, ?array $summary = null): array
-    {
-        $repo = new GitRepository($path);
-        $summary ??= $repo->statusSummary(timeout: $timeout);
-
-        if ($summary !== null) {
-            return [
-                'dirty' => $summary['dirty'],
-                'ahead' => $summary['ahead'],
-                'behind' => $summary['behind'],
-            ];
-        }
-
-        $aheadBehind = $repo->aheadBehind(timeout: $timeout);
-
-        return [
-            'dirty' => $repo->uncommittedCount(timeout: $timeout),
-            'ahead' => $aheadBehind['ahead'],
-            'behind' => $aheadBehind['behind'],
-        ];
-    }
-
-    /**
-     * @return array{dirty: int, ahead: int, behind: int}
-     */
-    private function cleanWorkingTree(): array
-    {
-        return ['dirty' => 0, 'ahead' => 0, 'behind' => 0];
-    }
-
-    private function localCommit(string $path, int $timeout = 60): ?array
-    {
-        $line = $this->git($path, ['log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'], timeout: $timeout);
-
-        if ($line === null || $line === '') {
-            return null;
-        }
-
-        [$sha, $date, $author, $subject] = array_pad(explode("\x1f", $line), 4, '');
-
-        return $this->commit($sha, $date, $author, $subject);
     }
 
     private function latestCommitCacheKey(string $owner, string $name, string $branch): string
@@ -523,7 +461,7 @@ class DistributionBundleRepository
                 )
                 : new GitResult(ok: false, output: '', error: (string) __('git process did not return a result'), exitCode: -1);
 
-            $latest[$key] = $this->parseLatestCommitResult(
+            $latest[$key] = $this->gitReader->parseLatestCommitResult(
                 $request['path'],
                 $request['owner'],
                 $request['name'],
@@ -533,26 +471,6 @@ class DistributionBundleRepository
         }
 
         return $latest;
-    }
-
-    /**
-     * @return array{0: array<string, mixed>|null, 1: string|null}
-     */
-    private function parseLatestCommitResult(string $path, string $owner, string $name, string $branch, GitResult $result): array
-    {
-        $repo = "{$owner}/{$name}";
-
-        if (! $result->ok) {
-            return [null, $this->remoteCommitError($repo, $branch, $result)];
-        }
-
-        $sha = (string) strtok($result->output, " \t");
-
-        if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
-            return [null, (string) __('Git remote response for :repo@:branch did not include a commit SHA.', ['repo' => $repo, 'branch' => $branch])];
-        }
-
-        return [$this->remoteCommit($path, $sha), null];
     }
 
     /**
@@ -571,45 +489,6 @@ class DistributionBundleRepository
         $entry['up_to_date'] = $entry['current'] !== null && $entry['current']['sha'] === $latest['sha'];
     }
 
-    private function remoteCommit(string $path, string $sha): array
-    {
-        $line = $this->git($path, ['show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', $sha]);
-
-        if ($line !== null && $line !== '') {
-            [$commitSha, $date, $author, $subject] = array_pad(explode("\x1f", $line), 4, '');
-
-            return $this->commit($commitSha, $date, $author, $subject);
-        }
-
-        return $this->commit($sha, '', '', (string) __('Remote branch head'));
-    }
-
-    private function remoteCommitError(string $repo, string $branch, GitResult $result): string
-    {
-        return (string) __('Could not read latest commit for :repo@:branch via git ls-remote (:detail). Public repositories do not need a token; check the repo name, branch, or network access. If this repo is private, add a token in GitHub Access.', [
-            'repo' => $repo,
-            'branch' => $branch,
-            'detail' => $result->message(),
-        ]);
-    }
-
-    /**
-     * @return array{sha: string, short: string, date: string|null, ago: string|null, author: string, subject: string}
-     */
-    private function commit(string $sha, string $date, string $author, string $subject): array
-    {
-        $when = $date !== '' ? Carbon::parse($date) : null;
-
-        return [
-            'sha' => $sha,
-            'short' => substr($sha, 0, 7),
-            'date' => $when?->toIso8601String(),
-            'ago' => $when?->diffForHumans(['parts' => 2]),
-            'author' => $author,
-            'subject' => $subject,
-        ];
-    }
-
     private function githubGet(string $owner, string $name, string $path, ?string $token): Response
     {
         $url = "/repos/{$owner}/{$name}{$path}";
@@ -625,51 +504,5 @@ class DistributionBundleRepository
         }
 
         return $response;
-    }
-
-    /**
-     * @return array{0: string|null, 1: string|null, 2: string|null}
-     */
-    private function remoteIdentity(string $path, int $timeout = 60): array
-    {
-        $repo = new GitRepository($path);
-
-        if (! $repo->isRepository()) {
-            return [null, null, (string) __('No git repository found at :path.', ['path' => $path])];
-        }
-
-        $remoteUrl = $repo->configuredRemoteUrl('origin');
-
-        if ($remoteUrl === null) {
-            $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
-
-            if (! $remote->ok) {
-                return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
-                    'path' => $path,
-                    'detail' => $remote->message(),
-                ])];
-            }
-
-            $remoteUrl = $remote->output;
-        }
-
-        if (preg_match('#github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?$#', $remoteUrl, $matches) === 1) {
-            return [$matches[1], $matches[2], null];
-        }
-
-        return [null, null, (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remoteUrl])];
-    }
-
-    /**
-     * @param  list<string>  $args
-     */
-    private function git(string $path, array $args, int $timeout = 60): ?string
-    {
-        return (new GitRepository($path))->output($args, timeout: $timeout);
-    }
-
-    private function isRepositoryPath(string $path): bool
-    {
-        return (new GitRepository($path))->isRepository();
     }
 }

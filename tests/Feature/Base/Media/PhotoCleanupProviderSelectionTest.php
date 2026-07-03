@@ -15,6 +15,7 @@ use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Support\Facades\Http;
 
+const PHOTO_CLEANUP_TEST_JPEG = 'image/jpeg';
 const POOF_REMOVE_ENDPOINT = 'https://api.poof.bg/v1/remove';
 
 function configurePoof(string $apiKey = 'poof-key', ?int $companyId = null): int
@@ -95,7 +96,7 @@ it('delegates cleanup through the bound proxy to the active adapter per company'
         POOF_REMOVE_ENDPOINT => Http::response('POOF-PNG-BYTES', 200, ['Content-Type' => 'image/png']),
     ]);
 
-    $result = app(PhotoCleanupProvider::class)->removeBackground('image-bytes', 'photo.jpg', 'image/jpeg', $companyId);
+    $result = app(PhotoCleanupProvider::class)->removeBackground('image-bytes', 'photo.jpg', PHOTO_CLEANUP_TEST_JPEG, $companyId);
 
     expect($result)
         ->toBeArray()
@@ -123,7 +124,7 @@ it('runs poof background removal and returns cleaned bytes with poof provenance'
         POOF_REMOVE_ENDPOINT => Http::response('CLEAN-PNG', 200, ['Content-Type' => 'image/png']),
     ]);
 
-    $result = app(PoofClient::class)->removeBackground('img', 'p.jpg', 'image/jpeg', $companyId);
+    $result = app(PoofClient::class)->removeBackground('img', 'p.jpg', PHOTO_CLEANUP_TEST_JPEG, $companyId);
 
     expect($result['bytes'])->toBe('CLEAN-PNG')
         ->and($result['provider'])->toBe('poof')
@@ -133,7 +134,7 @@ it('runs poof background removal and returns cleaned bytes with poof provenance'
 it('reports not configured for poof when no key is stored', function (): void {
     $companyId = Company::factory()->create()->id;
 
-    expect(fn () => app(PoofClient::class)->removeBackground('img', 'p.jpg', 'image/jpeg', $companyId))
+    expect(fn () => app(PoofClient::class)->removeBackground('img', 'p.jpg', PHOTO_CLEANUP_TEST_JPEG, $companyId))
         ->toThrow(function (PhotoCleanupException $e): void {
             expect($e->getMessage())->toContain('Poof')->toContain('not configured');
         });
@@ -146,7 +147,7 @@ it('reports request failed with the poof label on a provider error', function ()
         POOF_REMOVE_ENDPOINT => Http::response('boom', 500),
     ]);
 
-    expect(fn () => app(PoofClient::class)->removeBackground('img', 'p.jpg', 'image/jpeg', $companyId))
+    expect(fn () => app(PoofClient::class)->removeBackground('img', 'p.jpg', PHOTO_CLEANUP_TEST_JPEG, $companyId))
         ->toThrow(function (PhotoCleanupException $e): void {
             expect($e->getMessage())->toContain('Poof')->toContain('500');
         });

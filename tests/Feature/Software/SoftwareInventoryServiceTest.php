@@ -5,6 +5,17 @@ use App\Base\Software\Inventory\ContributionSummary;
 use App\Base\Software\Inventory\InstalledBundle;
 use App\Base\Software\Services\SoftwareInventoryService;
 
+const SOFTWARE_INVENTORY_PLATFORM_REPO = 'BelimbingApp/belimbing';
+const SOFTWARE_INVENTORY_PEOPLE_REPO = 'BelimbingApp/blb-people';
+const SOFTWARE_INVENTORY_PEOPLE_PATH = 'app/Modules/People';
+const SOFTWARE_INVENTORY_PAYROLL_PACKAGE = 'blb/payroll-my';
+const SOFTWARE_INVENTORY_PAYROLL_MODULE = 'people/payroll';
+const SOFTWARE_INVENTORY_PAYROLL_PATH = 'app/Modules/People/Payroll';
+const SOFTWARE_INVENTORY_LEAVE_PACKAGE = 'blb/people-leave';
+const SOFTWARE_INVENTORY_LEAVE_MODULE = 'people/leave';
+const SOFTWARE_INVENTORY_LEAVE_PATH = 'app/Modules/People/Leave';
+const SOFTWARE_INVENTORY_SAMPLE_PACKAGE = 'kiat/sample';
+
 /**
  * @param  array{dirty?: int, ahead?: int, behind?: int}  $workingTree
  * @return array<string, mixed>
@@ -49,60 +60,60 @@ function assembleByKey(array $bundleStatuses, array $manifests, array $dependenc
 it('groups modules under their nearest distribution bundle and falls Base/Core back to platform', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
-            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
+            inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
             inventoryBundleStatus('extensions-kiat', 'extensions/kiat', 'kiatng/blb-kiat'),
         ],
         [
             inventoryManifest('base/database', 'app/Base/Database', 'blb/base-database'),
             inventoryManifest('core/company', 'app/Modules/Core/Company', 'blb/core-company'),
-            inventoryManifest('people/payroll', 'app/Modules/People/Payroll', 'blb/payroll-my'),
-            inventoryManifest('people/leave', 'app/Modules/People/Leave', 'blb/people-leave'),
-            inventoryManifest('kiat/sample', 'extensions/kiat/Sample', 'kiat/sample'),
+            inventoryManifest(SOFTWARE_INVENTORY_PAYROLL_MODULE, SOFTWARE_INVENTORY_PAYROLL_PATH, SOFTWARE_INVENTORY_PAYROLL_PACKAGE),
+            inventoryManifest(SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_LEAVE_PATH, SOFTWARE_INVENTORY_LEAVE_PACKAGE),
+            inventoryManifest(SOFTWARE_INVENTORY_SAMPLE_PACKAGE, 'extensions/kiat/Sample', SOFTWARE_INVENTORY_SAMPLE_PACKAGE),
         ],
     );
 
     expect(collect($byKey['app-Modules-People']->modules)->pluck('module')->all())
-        ->toBe(['people/leave', 'people/payroll'])
+        ->toBe([SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_PAYROLL_MODULE])
         ->and($byKey['app-Modules-People']->kind)->toBe(InstalledBundle::KIND_BUSINESS_DOMAIN)
         ->and($byKey['app-Modules-People']->lifecycleName)->toBe('People')
         ->and(collect($byKey['platform']->modules)->pluck('module')->all())
         ->toContain('base/database', 'core/company')
         ->and($byKey['platform']->kind)->toBe(InstalledBundle::KIND_PLATFORM)
-        ->and(collect($byKey['extensions-kiat']->modules)->pluck('module')->all())->toBe(['kiat/sample'])
+        ->and(collect($byKey['extensions-kiat']->modules)->pluck('module')->all())->toBe([SOFTWARE_INVENTORY_SAMPLE_PACKAGE])
         ->and($byKey['extensions-kiat']->kind)->toBe(InstalledBundle::KIND_EXTENSION);
 });
 
 it('recognizes a module-level git root as its own slot-implementation bundle', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
-            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
-            inventoryBundleStatus('app-Modules-People-Payroll', 'app/Modules/People/Payroll', 'BelimbingApp/blb-payroll-variant'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
+            inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
+            inventoryBundleStatus('app-Modules-People-Payroll', SOFTWARE_INVENTORY_PAYROLL_PATH, 'BelimbingApp/blb-payroll-variant'),
         ],
         [
-            inventoryManifest('people/payroll', 'app/Modules/People/Payroll', 'blb/payroll-variant'),
-            inventoryManifest('people/leave', 'app/Modules/People/Leave', 'blb/people-leave'),
+            inventoryManifest(SOFTWARE_INVENTORY_PAYROLL_MODULE, SOFTWARE_INVENTORY_PAYROLL_PATH, 'blb/payroll-variant'),
+            inventoryManifest(SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_LEAVE_PATH, SOFTWARE_INVENTORY_LEAVE_PACKAGE),
         ],
     );
 
     expect($byKey['app-Modules-People-Payroll']->kind)->toBe(InstalledBundle::KIND_SLOT_IMPLEMENTATION)
-        ->and(collect($byKey['app-Modules-People-Payroll']->modules)->pluck('module')->all())->toBe(['people/payroll'])
+        ->and(collect($byKey['app-Modules-People-Payroll']->modules)->pluck('module')->all())->toBe([SOFTWARE_INVENTORY_PAYROLL_MODULE])
         ->and($byKey['app-Modules-People-Payroll']->lifecycleName)->toBeNull()
-        ->and(collect($byKey['app-Modules-People']->modules)->pluck('module')->all())->toBe(['people/leave']);
+        ->and(collect($byKey['app-Modules-People']->modules)->pluck('module')->all())->toBe([SOFTWARE_INVENTORY_LEAVE_MODULE]);
 });
 
 it('attaches dependency issues to the bundle that owns the requiring module', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
-            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
+            inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
         ],
         [
-            inventoryManifest('people/payroll', 'app/Modules/People/Payroll', 'blb/payroll-my', ['people/attendance' => '*']),
+            inventoryManifest(SOFTWARE_INVENTORY_PAYROLL_MODULE, SOFTWARE_INVENTORY_PAYROLL_PATH, SOFTWARE_INVENTORY_PAYROLL_PACKAGE, ['people/attendance' => '*']),
         ],
         [
-            ['issue' => 'missing', 'requiring' => 'blb/payroll-my', 'requiring_module' => 'people/payroll', 'required' => 'people/attendance', 'constraint' => '*'],
+            ['issue' => 'missing', 'requiring' => SOFTWARE_INVENTORY_PAYROLL_PACKAGE, 'requiring_module' => SOFTWARE_INVENTORY_PAYROLL_MODULE, 'required' => 'people/attendance', 'constraint' => '*'],
         ],
     );
 
@@ -114,10 +125,10 @@ it('attaches dependency issues to the bundle that owns the requiring module', fu
 it('marks a disabled business domain bundle', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
-            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
+            inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
         ],
-        [inventoryManifest('people/leave', 'app/Modules/People/Leave', 'blb/people-leave')],
+        [inventoryManifest(SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_LEAVE_PATH, SOFTWARE_INVENTORY_LEAVE_PACKAGE)],
         [],
         ['People'],
     );
@@ -129,19 +140,19 @@ it('marks a disabled business domain bundle', function (): void {
 it('attaches contributions to the bundle that delivers the providing module', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
-            inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
+            inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
         ],
-        [inventoryManifest('people/payroll', 'app/Modules/People/Payroll', 'blb/payroll-my')],
+        [inventoryManifest(SOFTWARE_INVENTORY_PAYROLL_MODULE, SOFTWARE_INVENTORY_PAYROLL_PATH, SOFTWARE_INVENTORY_PAYROLL_PACKAGE)],
         [],
         [],
         [
             new ContributionSummary(
-                hostModule: 'people/payroll',
+                hostModule: SOFTWARE_INVENTORY_PAYROLL_MODULE,
                 seam: 'payroll.country-pack',
                 kind: ContributionSummary::KIND_ADAPTER,
                 label: 'Malaysia payroll rules',
-                providerModule: 'people/payroll',
+                providerModule: SOFTWARE_INVENTORY_PAYROLL_MODULE,
                 metadata: ['country' => 'MY'],
             ),
         ],
@@ -156,7 +167,7 @@ it('attaches contributions to the bundle that delivers the providing module', fu
 it('attributes a contribution to its domain bundle when the host module has no manifest', function (): void {
     $byKey = assembleByKey(
         [
-            inventoryBundleStatus('platform', '.', 'BelimbingApp/belimbing'),
+            inventoryBundleStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
             inventoryBundleStatus('app-Modules-Commerce', 'app/Modules/Commerce', 'BelimbingApp/blb-commerce'),
         ],
         [], // Commerce ships no per-module manifests
@@ -178,12 +189,12 @@ it('attributes a contribution to its domain bundle when the host module has no m
 
 it('reports working-tree dirty and unpushed state per bundle', function (): void {
     $byKey = assembleByKey(
-        [inventoryBundleStatus('app-Modules-People', 'app/Modules/People', 'BelimbingApp/blb-people', 'main', ['dirty' => 3, 'ahead' => 2])],
-        [inventoryManifest('people/leave', 'app/Modules/People/Leave', 'blb/people-leave')],
+        [inventoryBundleStatus('app-Modules-People', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO, 'main', ['dirty' => 3, 'ahead' => 2])],
+        [inventoryManifest(SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_LEAVE_PATH, SOFTWARE_INVENTORY_LEAVE_PACKAGE)],
     );
 
     expect($byKey['app-Modules-People']->isDirty())->toBeTrue()
         ->and($byKey['app-Modules-People']->unpushed())->toBe(2)
         ->and($byKey['app-Modules-People']->branch)->toBe('main')
-        ->and($byKey['app-Modules-People']->repo)->toBe('BelimbingApp/blb-people');
+        ->and($byKey['app-Modules-People']->repo)->toBe(SOFTWARE_INVENTORY_PEOPLE_REPO);
 });

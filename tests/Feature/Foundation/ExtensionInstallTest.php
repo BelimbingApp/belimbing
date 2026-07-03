@@ -21,6 +21,7 @@ const EXTENSION_INSTALL_TABLE = 'zzkiat_table';
 const EXTENSION_INSTALL_SETTING = 'zzkiat.option';
 const EXTENSION_INSTALL_MIGRATION = '2099_01_01_000000_create_zzkiat_table_table';
 const EXTENSION_INSTALL_RELOAD_SCHEDULED = 'Domain runtime reload scheduled in the background.';
+const EXTENSION_INSTALL_BASE_PATH = 'extensions/';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -31,12 +32,12 @@ beforeEach(function (): void {
 });
 
 afterEach(function (): void {
-    File::deleteDirectory(base_path('extensions/'.EXTENSION_INSTALL_FOLDER));
+    File::deleteDirectory(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER));
 });
 
 function createExtensionInstallFakeCheckout(): string
 {
-    $base = base_path('extensions/'.EXTENSION_INSTALL_FOLDER);
+    $base = base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER);
     $module = $base.'/Sample';
 
     File::ensureDirectoryExists($module.'/Database/Migrations');
@@ -131,7 +132,7 @@ it('clones an extension with the stored github token and redirects', function ()
 
     Process::assertRan(fn ($process): bool => in_array('clone', $process->command, true)
         && in_array(EXTENSION_INSTALL_REPO, $process->command, true)
-        && in_array(base_path('extensions/'.EXTENSION_INSTALL_FOLDER), $process->command, true)
+        && in_array(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER), $process->command, true)
         && in_array($expectedAuthHeader, $process->command, true));
 });
 
@@ -152,7 +153,7 @@ it('uninstalls an extension while keeping database state', function (): void {
 
     $result = app(ExtensionInstaller::class)->uninstall(EXTENSION_INSTALL_FOLDER, dropTables: false);
 
-    expect(is_dir(base_path('extensions/'.EXTENSION_INSTALL_FOLDER)))->toBeFalse()
+    expect(is_dir(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER)))->toBeFalse()
         ->and($result['droppedTables'])->toBe([])
         ->and($result['reloadLog'])->toContain(EXTENSION_INSTALL_RELOAD_SCHEDULED)
         ->and(Schema::hasTable(EXTENSION_INSTALL_TABLE))->toBeTrue()
