@@ -15,14 +15,6 @@ final class DistributionBundleGitReader
     {
         $repo = new GitRepository($path);
 
-        if (! $repo->isRepository()) {
-            return [
-                'branch' => null,
-                'working_tree' => $this->cleanWorkingTree(),
-                'current' => null,
-            ];
-        }
-
         $summary = $readWorkingTree ? $repo->statusSummary(timeout: $timeout) : null;
 
         return [
@@ -122,30 +114,23 @@ final class DistributionBundleGitReader
     public function remoteIdentity(string $path, int $timeout = 60): array
     {
         $repo = new GitRepository($path);
+        $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
 
-        if (! $repo->isRepository()) {
-            $error = (string) __('No git repository found at :path.', ['path' => $path]);
+        if ($remote->ok) {
+            $remoteUrl = $remote->output;
         } else {
             $remoteUrl = $repo->configuredRemoteUrl('origin');
 
             if ($remoteUrl === null) {
-                $remote = $repo->run(['remote', 'get-url', 'origin'], timeout: $timeout);
-
-                if (! $remote->ok) {
-                    return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
-                        'path' => $path,
-                        'detail' => $remote->message(),
-                    ])];
-                }
-
-                $remoteUrl = $remote->output;
+                return [null, null, (string) __('Could not read Git origin remote for :path: :detail', [
+                    'path' => $path,
+                    'detail' => $remote->message(),
+                ])];
             }
-
-            $identity = $this->githubRemoteIdentity($remoteUrl);
-            $error = (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remoteUrl]);
         }
 
-        return $identity ?? [null, null, $error];
+        return $this->githubRemoteIdentity($remoteUrl)
+            ?? [null, null, (string) __('Git origin remote is not a GitHub repository: :remote', ['remote' => $remoteUrl])];
     }
 
     /**

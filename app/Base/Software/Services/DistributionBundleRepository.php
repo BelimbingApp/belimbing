@@ -142,11 +142,8 @@ class DistributionBundleRepository
     public function localStatus(bool $includePlatformWorkingTree = true, int $gitTimeoutSeconds = 60): array
     {
         return array_map(function (array $dist) use ($includePlatformWorkingTree, $gitTimeoutSeconds): array {
-            $isRepo = $this->gitReader->isRepositoryPath($dist['path']);
-            $readWorkingTree = $isRepo && ($includePlatformWorkingTree || $dist['key'] !== 'platform');
-            [$owner, $name] = $isRepo
-                ? $this->gitReader->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds)
-                : [null, null];
+            $readWorkingTree = $includePlatformWorkingTree || $dist['key'] !== 'platform';
+            [$owner, $name] = $this->gitReader->remoteIdentity($dist['path'], timeout: $gitTimeoutSeconds);
             $snapshot = $this->gitReader->localSnapshot($dist['path'], readWorkingTree: $readWorkingTree, timeout: $gitTimeoutSeconds);
 
             return [
@@ -319,11 +316,8 @@ class DistributionBundleRepository
      */
     public function distributions(): array
     {
-        // Module-level git roots (app/Modules/{Domain}/{Module}) make a future slot
-        // implementation — a whole module shipped as its own repo nested inside a
-        // domain — visible alongside domain-level roots. isRepositoryPath() checks for
-        // a `.git` at the path itself, so a plain module folder inside a domain
-        // checkout (no nested `.git`) is never mistaken for its own bundle.
+        // Domain roots are installable bundles even when tests or local checkouts lack
+        // `.git`; nested module roots still need `.git` to represent slot implementations.
         return [
             [
                 'key' => 'platform',
@@ -331,10 +325,28 @@ class DistributionBundleRepository
                 'path' => base_path(),
                 'relative' => '.',
             ],
-            ...$this->repositoriesIn('app/Modules/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename($dir)])),
+            ...$this->domainDistributions(),
             ...$this->repositoriesIn('app/Modules/*/*', fn (string $dir): string => (string) __('Module: :name', ['name' => basename(dirname($dir)).'/'.basename($dir)])),
             ...$this->extensionDistributions(),
         ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, path: string, relative: string}>
+     */
+    private function domainDistributions(): array
+    {
+        $found = [];
+
+        foreach (glob(base_path('app/Modules/*'), GLOB_ONLYDIR) ?: [] as $dir) {
+            if (basename($dir) === 'Core') {
+                continue;
+            }
+
+            $found[] = $this->distribution($dir, (string) __('Module: :name', ['name' => basename($dir)]));
+        }
+
+        return $found;
     }
 
     /**
