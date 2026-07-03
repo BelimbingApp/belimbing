@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
 const PHOTOROOM_ACCOUNT_ENDPOINT_LW = 'https://image-api.photoroom.com/*';
+const IMAGE_PROVIDER_TEST_CONNECTION_LABEL = 'Test connection';
+const IMAGE_PROVIDER_REQUEST_FAILED_LABEL = 'Request failed';
 
 it('shows a Test connection action for the connected photoroom provider', function (): void {
     $user = createAdminUser();
@@ -17,7 +19,7 @@ it('shows a Test connection action for the connected photoroom provider', functi
     $this->actingAs($user);
 
     Livewire::test(Providers::class)
-        ->assertSee('Test connection');
+        ->assertSee(IMAGE_PROVIDER_TEST_CONNECTION_LABEL);
 });
 
 it('does not show Test connection for configured providers without a bound handshake client', function (): void {
@@ -38,7 +40,7 @@ it('does not show Test connection for configured providers without a bound hands
     $this->actingAs($user);
 
     Livewire::test(Providers::class)
-        ->assertDontSee('Test connection');
+        ->assertDontSee(IMAGE_PROVIDER_TEST_CONNECTION_LABEL);
 });
 
 it('does not show Test connection for a ready provider without a handshake endpoint', function (): void {
@@ -49,7 +51,7 @@ it('does not show Test connection for a ready provider without a handshake endpo
 
     Livewire::test(Providers::class)
         ->assertSee('Ready')
-        ->assertDontSee('Test connection');
+        ->assertDontSee(IMAGE_PROVIDER_TEST_CONNECTION_LABEL);
 });
 
 it('runs the photoroom handshake and dispatches a success notification with the plan', function (): void {
@@ -134,7 +136,7 @@ it('dispatches a request failed error notification on a non-401 error', function
 
     $this->actingAs($user);
 
-    $message = __('Request failed').' · '.__('The provider returned HTTP :status.', ['status' => 503]);
+    $message = __(IMAGE_PROVIDER_REQUEST_FAILED_LABEL).' · '.__('The provider returned HTTP :status.', ['status' => 503]);
 
     Livewire::test(Providers::class)
         ->call('testImageConnection', PhotoRoomConfiguration::PROVIDER)

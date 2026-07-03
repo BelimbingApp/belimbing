@@ -46,15 +46,13 @@ class PhotoRoomClient implements PhotoCleanupProvider, TestsConnection
     {
         $config = $this->configuration->requireConfigured($companyId);
 
-        $response = $this->sendSegment(
+        $response = $this->sendSegment(PhotoRoomSegmentRequest::cleanup(
             imageBytes: $imageBytes,
             filename: $filename,
             mimeType: $mimeType,
-            apiKey: $config['api_key'],
-            apiBaseUrl: $config['api_base_url'],
+            config: $config,
             companyId: $companyId,
-            operation: 'media.photo_cleanup.remove_background',
-        );
+        ));
 
         if ($response->failed()) {
             throw PhotoCleanupException::requestFailed(
@@ -77,49 +75,39 @@ class PhotoRoomClient implements PhotoCleanupProvider, TestsConnection
      * when set: the cleanup leaves it unset to use the API default (`full`),
      * the probe pins it to `preview` to keep the watermarked response tiny.
      */
-    private function sendSegment(
-        string $imageBytes,
-        string $filename,
-        string $mimeType,
-        string $apiKey,
-        string $apiBaseUrl,
-        ?int $companyId,
-        string $operation,
-        ?string $size = null,
-        int $timeoutSeconds = 60,
-        int $retryTimes = 1,
-    ): IntegrationResponse {
+    private function sendSegment(PhotoRoomSegmentRequest $request): IntegrationResponse
+    {
         $boundary = 'PhotoRoom'.bin2hex(random_bytes(16));
         $body = "--{$boundary}\r\n"
-            ."Content-Disposition: form-data; name=\"image_file\"; filename=\"{$filename}\"\r\n"
-            ."Content-Type: {$mimeType}\r\n\r\n"
-            .$imageBytes."\r\n";
+            ."Content-Disposition: form-data; name=\"image_file\"; filename=\"{$request->filename}\"\r\n"
+            ."Content-Type: {$request->mimeType}\r\n\r\n"
+            .$request->imageBytes."\r\n";
 
-        if ($size !== null) {
+        if ($request->size !== null) {
             $body .= "--{$boundary}\r\n"
                 ."Content-Disposition: form-data; name=\"size\"\r\n\r\n"
-                ."{$size}\r\n";
+                ."{$request->size}\r\n";
         }
 
         $body .= "--{$boundary}--\r\n";
 
         return $this->integration->send(new IntegrationRequest(
             system: PhotoRoomConfiguration::PROVIDER,
-            operation: $operation,
+            operation: $request->operation,
             method: 'POST',
-            endpoint: rtrim($apiBaseUrl, '/').self::SEGMENT_ENDPOINT,
+            endpoint: rtrim($request->apiBaseUrl, '/').self::SEGMENT_ENDPOINT,
             protocol: 'rest',
             protocolOperation: 'remove_background',
             provider: PhotoRoomConfiguration::PROVIDER,
             headers: [
-                'x-api-key' => $apiKey,
+                'x-api-key' => $request->apiKey,
                 'Content-Type' => 'multipart/form-data; boundary='.$boundary,
             ],
             body: $body,
-            ownerType: $companyId !== null ? 'company' : null,
-            ownerId: $companyId,
-            timeoutSeconds: $timeoutSeconds,
-            retryTimes: $retryTimes,
+            ownerType: $request->companyId !== null ? 'company' : null,
+            ownerId: $request->companyId,
+            timeoutSeconds: $request->timeoutSeconds,
+            retryTimes: $request->retryTimes,
             asJson: false,
         ));
     }
@@ -158,18 +146,12 @@ class PhotoRoomClient implements PhotoCleanupProvider, TestsConnection
      */
     private function testSandboxConnection(string $apiKey, string $apiBaseUrl, ?int $companyId): ConnectionTestResult
     {
-        $response = $this->sendSegment(
-            imageBytes: base64_decode(self::PROBE_IMAGE_B64, true),
-            filename: 'photoroom-connection-probe.png',
-            mimeType: 'image/png',
+        $response = $this->sendSegment(PhotoRoomSegmentRequest::sandboxProbe(
+            imageBytes: (string) base64_decode(self::PROBE_IMAGE_B64, true),
             apiKey: $apiKey,
             apiBaseUrl: $apiBaseUrl,
             companyId: $companyId,
-            operation: 'media.photo_cleanup.test_connection',
-            size: 'preview',
-            timeoutSeconds: 15,
-            retryTimes: 0,
-        );
+        ));
 
         if ($response->failed()) {
             return in_array($response->status, [401, 403], true)

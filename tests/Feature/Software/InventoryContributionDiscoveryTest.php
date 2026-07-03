@@ -6,16 +6,19 @@ use App\Base\Software\Services\InventoryContributionDiscoveryService;
 use App\Base\Software\Services\InventoryContributionRegistry;
 use Illuminate\Support\Facades\File;
 
+const INVENTORY_CONFIG_SCAN_PATTERN = '/*/*/Config/inventory.php';
+const INVENTORY_CONFIG_PAYROLL_MODULE = 'people/payroll';
+
 class FakeInventoryContributionProvider implements InventoryContributionProvider
 {
     public function contributions(): array
     {
         return [new ContributionSummary(
-            hostModule: 'people/payroll',
+            hostModule: INVENTORY_CONFIG_PAYROLL_MODULE,
             seam: 'payroll.country-pack',
             kind: ContributionSummary::KIND_ADAPTER,
             label: 'Fake MY pack',
-            providerModule: 'people/payroll',
+            providerModule: INVENTORY_CONFIG_PAYROLL_MODULE,
         )];
     }
 }
@@ -43,7 +46,7 @@ it('discovers and registers contribution providers declared in Config/inventory.
 
     try {
         $registry = new InventoryContributionRegistry;
-        (new InventoryContributionDiscoveryService([$root.'/*/*/Config/inventory.php']))->discoverInto($registry);
+        (new InventoryContributionDiscoveryService([$root.INVENTORY_CONFIG_SCAN_PATTERN]))->discoverInto($registry);
 
         expect($registry->contributions())->toHaveCount(1)
             ->and($registry->contributions()[0]->label)->toBe('Fake MY pack');
@@ -57,7 +60,7 @@ it('ignores classes that do not implement the provider contract', function (): v
 
     try {
         $registry = new InventoryContributionRegistry;
-        (new InventoryContributionDiscoveryService([$root.'/*/*/Config/inventory.php']))->discoverInto($registry);
+        (new InventoryContributionDiscoveryService([$root.INVENTORY_CONFIG_SCAN_PATTERN]))->discoverInto($registry);
 
         expect($registry->contributions())->toBe([]);
     } finally {
@@ -70,7 +73,7 @@ it('skips a config that declares no providers', function (): void {
 
     try {
         $registry = new InventoryContributionRegistry;
-        (new InventoryContributionDiscoveryService([$root.'/*/*/Config/inventory.php']))->discoverInto($registry);
+        (new InventoryContributionDiscoveryService([$root.INVENTORY_CONFIG_SCAN_PATTERN]))->discoverInto($registry);
 
         expect($registry->contributions())->toBe([]);
     } finally {

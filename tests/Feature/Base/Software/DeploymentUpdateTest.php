@@ -182,9 +182,10 @@ test('failed remote checks name the repos instead of assuming they are private',
 test('deployment local status tolerates git launch failures', function (): void {
     Process::fake(fn () => throw new DeploymentUpdateGitLaunchException('git executable was not found'));
 
+    $expectedBundleCount = count(app(DistributionBundleRepository::class)->distributions());
     $status = app(DeploymentService::class)->localStatus();
 
-    expect($status)->toHaveCount(6)
+    expect($status)->toHaveCount($expectedBundleCount)
         ->and(collect($status)->pluck('current')->filter()->all())->toBe([])
         ->and(collect($status)->pluck('latest')->filter()->all())->toBe([]);
 });
@@ -248,7 +249,7 @@ test('deployment status deduplicates remote latest checks in each render', funct
     $repository->status(useRemoteCache: false);
 
     expect($lsRemoteCount - $beforeBypass)->toBe(count($first))
-        ->and($first)->toHaveCount(6);
+        ->and($first)->toHaveCount(count($repository->distributions()));
 });
 
 test('reload only schedules a graceful worker reload and records a log', function (): void {

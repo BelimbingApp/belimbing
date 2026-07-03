@@ -1,7 +1,5 @@
 <?php
 
-use App\Base\Menu\Contracts\MenuAccessChecker;
-use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
 use App\Base\Menu\Services\MenuLinkResolver;
@@ -9,10 +7,10 @@ use App\Base\Menu\Services\MenuRegistryLoader;
 use App\Base\Menu\Services\PinMetadataNormalizer;
 use App\Base\Menu\Services\VisibleNavMenuItemsFlat;
 use App\Modules\Core\User\Models\User;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Tests\Support\MenuTestFixtures;
 
 it('hides unresolvable menu links instead of failing the app shell', function (): void {
     Cache::flush();
@@ -26,43 +24,17 @@ it('hides unresolvable menu links instead of failing the app shell', function ()
     $discovery = Mockery::mock(MenuDiscoveryService::class);
     $discovery->shouldReceive('configFingerprint')->once()->andReturn('test-menu-links');
     $discovery->shouldReceive('discover')->once()->andReturn(collect([
-        [
-            'id' => 'ok',
-            'label' => 'Ok',
-            'route' => 'test.menu.ok',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'missing',
-            'label' => 'Missing',
-            'route' => 'test.menu.missing',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'needs-param',
-            'label' => 'Needs Param',
-            'route' => 'test.menu.param',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'literal',
-            'label' => 'Literal',
-            'url' => '/literal',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
+        MenuTestFixtures::routeItem('ok', 'Ok', 'test.menu.ok'),
+        MenuTestFixtures::routeItem('missing', 'Missing', 'test.menu.missing'),
+        MenuTestFixtures::routeItem('needs-param', 'Needs Param', 'test.menu.param'),
+        MenuTestFixtures::urlItem('literal', 'Literal', '/literal'),
     ]));
 
     $registry = new MenuRegistry;
 
     $snapshot = new VisibleNavMenuItemsFlat(
         $registry,
-        new class implements MenuAccessChecker
-        {
-            public function canView(MenuItem $item, Authenticatable $user): bool
-            {
-                return true;
-            }
-        },
+        MenuTestFixtures::accessChecker(),
         new MenuRegistryLoader($registry, $discovery),
         new MenuLinkResolver,
         new PinMetadataNormalizer,

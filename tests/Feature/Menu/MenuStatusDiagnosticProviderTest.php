@@ -3,15 +3,13 @@
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
-use App\Base\Menu\Contracts\MenuAccessChecker;
-use App\Base\Menu\MenuItem;
 use App\Base\Menu\MenuRegistry;
 use App\Base\Menu\Services\MenuDiscoveryService;
 use App\Base\Menu\Services\MenuLinkResolver;
 use App\Base\Menu\Services\MenuRegistryLoader;
 use App\Base\Menu\Services\MenuStatusDiagnosticProvider;
-use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Route;
+use Tests\Support\MenuTestFixtures;
 
 it('reports unresolved visible menu links for authorized menu inspectors', function (): void {
     Route::get('/_test/status-menu-ok', fn (): string => 'ok')->name('test.status-menu.ok');
@@ -20,48 +18,16 @@ it('reports unresolved visible menu links for authorized menu inspectors', funct
 
     $registry = new MenuRegistry;
     $registry->registerFromDiscovery(collect([
-        [
-            'id' => 'ok',
-            'label' => 'Ok',
-            'route' => 'test.status-menu.ok',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'missing',
-            'label' => 'Missing',
-            'route' => 'test.status-menu.missing',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'needs-param',
-            'label' => 'Needs Param',
-            'route' => 'test.status-menu.param',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'hidden',
-            'label' => 'Hidden',
-            'route' => 'test.status-menu.missing-hidden',
-            'permission' => 'hidden.permission',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
-        [
-            'id' => 'literal',
-            'label' => 'Literal',
-            'url' => '/literal',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
+        MenuTestFixtures::routeItem('ok', 'Ok', 'test.status-menu.ok'),
+        MenuTestFixtures::routeItem('missing', 'Missing', 'test.status-menu.missing'),
+        MenuTestFixtures::routeItem('needs-param', 'Needs Param', 'test.status-menu.param'),
+        MenuTestFixtures::routeItem('hidden', 'Hidden', 'test.status-menu.missing-hidden', 'hidden.permission'),
+        MenuTestFixtures::urlItem('literal', 'Literal', '/literal'),
     ]));
 
     $provider = new MenuStatusDiagnosticProvider(
         $registry,
-        new class implements MenuAccessChecker
-        {
-            public function canView(MenuItem $item, Authenticatable $user): bool
-            {
-                return $item->id !== 'hidden';
-            }
-        },
+        MenuTestFixtures::accessChecker('hidden'),
         new MenuRegistryLoader($registry, Mockery::mock(MenuDiscoveryService::class)),
         new MenuLinkResolver,
         authorizedForMenuInspector(),
@@ -94,23 +60,12 @@ it('reports unresolved visible menu links for authorized menu inspectors', funct
 it('hides menu diagnostics when the user cannot inspect menus', function (): void {
     $registry = new MenuRegistry;
     $registry->registerFromDiscovery(collect([
-        [
-            'id' => 'missing',
-            'label' => 'Missing',
-            'route' => 'test.status-menu.missing',
-            '_source' => ['file' => 'tests/menu.php', 'module_name' => 'Tests'],
-        ],
+        MenuTestFixtures::routeItem('missing', 'Missing', 'test.status-menu.missing'),
     ]));
 
     $provider = new MenuStatusDiagnosticProvider(
         $registry,
-        new class implements MenuAccessChecker
-        {
-            public function canView(MenuItem $item, Authenticatable $user): bool
-            {
-                return true;
-            }
-        },
+        MenuTestFixtures::accessChecker(),
         new MenuRegistryLoader($registry, Mockery::mock(MenuDiscoveryService::class)),
         new MenuLinkResolver,
         deniedForMenuInspector(),
