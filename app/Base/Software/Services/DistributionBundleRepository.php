@@ -71,32 +71,19 @@ class DistributionBundleRepository
                 continue;
             }
 
-            $cacheKey = $this->latestCommitCacheKey($owner, $name, $branch);
-            $cached = $useRemoteCache
-                ? ($this->latestCommitRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
-                : null;
-
-            if (is_array($cached)) {
-                $this->applyLatestCommit($entries[$dist['key']], $cached[0] ?? null, $cached[1] ?? null);
-
-                continue;
-            }
-
-            if (isset($requestKeyByCacheKey[$cacheKey])) {
-                $latestRequestAliases[$dist['key']] = $requestKeyByCacheKey[$cacheKey];
-
-                continue;
-            }
-
-            $requestKeyByCacheKey[$cacheKey] = $dist['key'];
-            $latestRequests[$dist['key']] = [
-                'path' => $dist['path'],
-                'owner' => $owner,
-                'name' => $name,
-                'branch' => $branch,
-                'cache_key' => $cacheKey,
-                'use_cache' => $useRemoteCache,
-            ];
+            $this->queueLatestCommitRequest(
+                $latestRequests,
+                $latestRequestAliases,
+                $requestKeyByCacheKey,
+                $entries[$dist['key']],
+                [
+                    'dist' => $dist,
+                    'owner' => $owner,
+                    'name' => $name,
+                    'branch' => $branch,
+                    'use_cache' => $useRemoteCache,
+                ],
+            );
         }
 
         $latestResults = $this->fetchLatestCommits($latestRequests);
@@ -414,6 +401,49 @@ class DistributionBundleRepository
     private function latestCommitCacheKey(string $owner, string $name, string $branch): string
     {
         return 'software.bundle.latest.'.hash('sha256', strtolower($owner.'/'.$name).'|'.$branch);
+    }
+
+    /**
+     * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
+     * @param  array<string, string>  $latestRequestAliases
+     * @param  array<string, string>  $requestKeyByCacheKey
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}  $entry
+     * @param  array{dist: array{key: string, label: string, path: string, relative: string}, owner: string, name: string, branch: string, use_cache: bool}  $request
+     */
+    private function queueLatestCommitRequest(
+        array &$latestRequests,
+        array &$latestRequestAliases,
+        array &$requestKeyByCacheKey,
+        array &$entry,
+        array $request,
+    ): void {
+        $dist = $request['dist'];
+        $cacheKey = $this->latestCommitCacheKey($request['owner'], $request['name'], $request['branch']);
+        $cached = $request['use_cache']
+            ? ($this->latestCommitRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
+            : null;
+
+        if (is_array($cached)) {
+            $this->applyLatestCommit($entry, $cached[0] ?? null, $cached[1] ?? null);
+
+            return;
+        }
+
+        if (isset($requestKeyByCacheKey[$cacheKey])) {
+            $latestRequestAliases[$dist['key']] = $requestKeyByCacheKey[$cacheKey];
+
+            return;
+        }
+
+        $requestKeyByCacheKey[$cacheKey] = $dist['key'];
+        $latestRequests[$dist['key']] = [
+            'path' => $dist['path'],
+            'owner' => $request['owner'],
+            'name' => $request['name'],
+            'branch' => $request['branch'],
+            'cache_key' => $cacheKey,
+            'use_cache' => $request['use_cache'],
+        ];
     }
 
     /**

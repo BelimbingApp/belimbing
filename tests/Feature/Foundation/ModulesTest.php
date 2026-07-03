@@ -120,7 +120,10 @@ it('shows actionable local checkout drift for installed add-ins', function (): v
     });
     app()->instance(SoftwareInventoryService::class, new class extends SoftwareInventoryService
     {
-        public function __construct() {}
+        public function __construct()
+        {
+            // Parent dependencies are unused by this test double.
+        }
 
         public function installedBundles(): array
         {
