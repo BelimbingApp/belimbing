@@ -111,10 +111,33 @@ document.addEventListener('DOMContentLoaded', async function() {
     setStatus('Rendering...');
     for (const uuid of uuids) template = template.split(uuid).join(blobUrls[uuid]);
 
+    const stripAttribute = (markup, attribute) => {
+      let output = '';
+      let cursor = 0;
+      const lower = markup.toLowerCase();
+      const needle = attribute.toLowerCase() + '="';
+
+      while (cursor < markup.length) {
+        const attr = lower.indexOf(needle, cursor);
+        if (attr === -1) return output + markup.slice(cursor);
+
+        let start = attr;
+        while (start > cursor && [' ', '\t', '\n', '\r', '\f'].includes(markup[start - 1])) start -= 1;
+
+        const end = markup.indexOf('"', attr + needle.length);
+        if (end === -1) return output + markup.slice(cursor);
+
+        output += markup.slice(cursor, start);
+        cursor = end + 1;
+      }
+
+      return output;
+    };
+
     // Strip integrity + crossorigin — blob URLs from a file:// document inherit
     // a null origin, so crossorigin forces a CORS fetch that SRI then rejects.
     // The manifest bytes are ours; SRI protects against CDN compromise, not this.
-    template = template.replace(/\s+integrity="[^"]*"/gi, '').replace(/\s+crossorigin="[^"]*"/gi, '');
+    template = stripAttribute(stripAttribute(template, 'integrity'), 'crossorigin');
 
     const resourceScript = '<script>globalThis.__resources = ' +
       JSON.stringify(resourceMap).split('</' + 'script>').join('<\\/' + 'script>') +

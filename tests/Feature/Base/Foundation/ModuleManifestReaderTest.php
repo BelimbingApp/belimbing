@@ -12,6 +12,7 @@ const ACME_DEPENDENT_MODULE = 'acme/dependent';
 const ACME_REQUIRED_MODULE = 'acme/required';
 const MODULE_MANIFEST_TEST_VERSION = '1.0.0';
 const REQUIRED_MODULE_SUFFIX = '/required';
+const DISABLED_MANIFEST_PROVIDER = 'zz-disabled-for-manifest-test/provider';
 
 it('reads extra.blb metadata from People sub-module composer.json files', function (): void {
     $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
@@ -121,7 +122,7 @@ it('uses manifest module identity instead of also accepting the conventional pat
 
 it('uses the filesystem identity and manifest version when the module id is omitted', function (): void {
     $owner = 'zz-manifest-conventional-'.bin2hex(random_bytes(4));
-    $root = base_path('extensions/'.$owner);
+    $root = base_path(trim(MODULE_MANIFEST_EXTENSIONS_SEGMENT, '/').'/'.$owner);
     $required = $root.REQUIRED_MODULE_SUFFIX;
     $dependent = $root.'/dependent';
 
@@ -243,7 +244,7 @@ it('does not count disabled domains as installed dependencies', function (): voi
     file_put_contents($disabledDomain.'/Provider/composer.json', json_encode([
         'name' => 'test/disabled-provider',
         'extra' => ['blb' => [
-            'module' => 'zz-disabled-for-manifest-test/provider',
+            'module' => DISABLED_MANIFEST_PROVIDER,
             'version' => MODULE_MANIFEST_TEST_VERSION,
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
@@ -252,19 +253,19 @@ it('does not count disabled domains as installed dependencies', function (): voi
         'name' => 'test/enabled-consumer',
         'extra' => ['blb' => [
             'module' => 'zz-enabled-for-manifest-test/consumer',
-            'requires-modules' => ['zz-disabled-for-manifest-test/provider' => '*'],
+            'requires-modules' => [DISABLED_MANIFEST_PROVIDER => '*'],
         ]],
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
         $reader = new ModuleManifestReader([app_path('Modules')]);
 
-        expect(collect($reader->all())->pluck('module')->all())->not->toContain('zz-disabled-for-manifest-test/provider')
-            ->and(collect($reader->allIncludingDisabledDomains())->pluck('module')->all())->toContain('zz-disabled-for-manifest-test/provider')
-            ->and($reader->moduleRoots())->not->toHaveKey('zz-disabled-for-manifest-test/provider')
+        expect(collect($reader->all())->pluck('module')->all())->not->toContain(DISABLED_MANIFEST_PROVIDER)
+            ->and(collect($reader->allIncludingDisabledDomains())->pluck('module')->all())->toContain(DISABLED_MANIFEST_PROVIDER)
+            ->and($reader->moduleRoots())->not->toHaveKey(DISABLED_MANIFEST_PROVIDER)
             ->and($reader->verifyRequiredModules($reader->all()))->toContain([
                 'requiring' => 'test/enabled-consumer',
-                'missing' => 'zz-disabled-for-manifest-test/provider',
+                'missing' => DISABLED_MANIFEST_PROVIDER,
             ]);
     } finally {
         File::deleteDirectory($disabledDomain);

@@ -18,7 +18,96 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+
+$isLivewireInteraction = static fn (Request $request): bool => $request->hasHeader('X-Livewire')
+    || $request->hasHeader('X-Livewire-Navigate')
+    || str_starts_with($request->path(), 'livewire/');
+
+$fromSameAppReferer = static function (Request $request): bool {
+    $referer = (string) $request->headers->get('referer', '');
+
+    return $referer !== ''
+        && str_starts_with($referer, $request->getSchemeAndHttpHost());
+};
+
+$flashSessionExpiredWhenAppropriate = static function (Request $request) use ($isLivewireInteraction, $fromSameAppReferer): void {
+    $shouldFlash = $request->expectsJson()
+        || $isLivewireInteraction($request)
+        || $fromSameAppReferer($request);
+
+    if ($shouldFlash && $request->hasSession()) {
+        $request->session()->flash('session_expired', true);
+    }
+};
+
+$redirectToLogin = static function (Request $request, ?string $redirectTo = null) use ($flashSessionExpiredWhenAppropriate): Response {
+    $flashSessionExpiredWhenAppropriate($request);
+
+    return redirect()->guest($redirectTo ?? route('login'));
+};
+
+$renderAuthenticationException = static function (AuthenticationException $exception, Request $request) use ($redirectToLogin): Response {
+    return $redirectToLogin($request, $exception->redirectTo($request));
+};
+
+$renderTokenMismatchException = static function (TokenMismatchException $_, Request $request) use ($isLivewireInteraction, $redirectToLogin): ?Response {
+    if (! $isLivewireInteraction($request)) {
+        return null;
+    }
+
+    return $redirectToLogin($request);
+};
+
+$renderUnauthorizedLivewireException = static function (HttpException $exception, Request $request) use ($isLivewireInteraction, $redirectToLogin): ?Response {
+    if ($exception->getStatusCode() !== 401 || ! $isLivewireInteraction($request)) {
+        return null;
+    }
+
+    return $redirectToLogin($request);
+};
+
+$reportBlbException = static function (BlbException $exception): void {
+    Log::error('BLB platform exception', [
+        'exception' => $exception::class,
+        'reason_code' => $exception->reasonCode->value,
+        'context' => $exception->context,
+    ]);
+};
+
+$renderBlbException = static function (BlbException $exception, Request $request) {
+    if (! $request->expectsJson()) {
+        return null;
+    }
+
+    $status = match ($exception->reasonCode) {
+        FoundationErrorCode::BLB_DATA_CONTRACT,
+        AIErrorCode::LARA_AGENT_ID_TYPE_INVALID,
+        AuthzErrorCode::AUTHZ_UNKNOWN_CAPABILITY => 422,
+        AuthzErrorCode::AUTHZ_DENIED => 403,
+        FoundationErrorCode::BLB_INVARIANT_VIOLATION,
+        DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
+        CompanyErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
+        EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
+        default => 500,
+    };
+
+    $debug = (bool) config('app.debug', false);
+
+    $payload = [
+        'message' => $debug
+            ? $exception->getMessage()
+            : __('An internal Belimbing error occurred.'),
+        'reason_code' => $exception->reasonCode->value,
+    ];
+
+    if ($debug && $exception->context !== []) {
+        $payload['context'] = $exception->context;
+    }
+
+    return response()->json($payload, $status);
+};
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -77,92 +166,16 @@ return Application::configure(basePath: dirname(__DIR__))
             ->cron((string) config('commerce-marketplace.metadata_refresh_cron', '0 3 * * *'))
             ->withoutOverlapping();
     })
-    ->withExceptions(function (Exceptions $exceptions) {
-        $isLivewireInteraction = static fn (Request $request): bool => $request->hasHeader('X-Livewire')
-            || $request->hasHeader('X-Livewire-Navigate')
-            || str_starts_with($request->path(), 'livewire/');
-
-        $fromSameAppReferer = static function (Request $request): bool {
-            $referer = (string) $request->headers->get('referer', '');
-
-            return $referer !== ''
-                && str_starts_with($referer, $request->getSchemeAndHttpHost());
-        };
-
-        $flashSessionExpiredWhenAppropriate = static function (Request $request) use ($isLivewireInteraction, $fromSameAppReferer): void {
-            $shouldFlash = $request->expectsJson()
-                || $isLivewireInteraction($request)
-                || $fromSameAppReferer($request);
-
-            if ($shouldFlash && $request->hasSession()) {
-                $request->session()->flash('session_expired', true);
-            }
-        };
-
-        $redirectToLogin = static function (Request $request, ?string $redirectTo = null) use ($flashSessionExpiredWhenAppropriate) {
-            $flashSessionExpiredWhenAppropriate($request);
-
-            return redirect()->guest($redirectTo ?? route('login'));
-        };
-
-        $exceptions->render(function (AuthenticationException $exception, Request $request) use ($redirectToLogin) {
-            return $redirectToLogin($request, $exception->redirectTo($request));
-        });
-
-        $exceptions->render(function (TokenMismatchException $exception, Request $request) use ($isLivewireInteraction, $redirectToLogin) {
-            if (! $isLivewireInteraction($request)) {
-                return null;
-            }
-
-            return $redirectToLogin($request);
-        });
-
-        $exceptions->render(function (HttpException $exception, Request $request) use ($isLivewireInteraction, $redirectToLogin) {
-            if ($exception->getStatusCode() !== 401 || ! $isLivewireInteraction($request)) {
-                return null;
-            }
-
-            return $redirectToLogin($request);
-        });
-
-        $exceptions->report(function (BlbException $exception): void {
-            Log::error('BLB platform exception', [
-                'exception' => $exception::class,
-                'reason_code' => $exception->reasonCode->value,
-                'context' => $exception->context,
-            ]);
-        });
-
-        $exceptions->render(function (BlbException $exception, Request $request) {
-            if (! $request->expectsJson()) {
-                return null;
-            }
-
-            $status = match ($exception->reasonCode) {
-                FoundationErrorCode::BLB_DATA_CONTRACT,
-                AIErrorCode::LARA_AGENT_ID_TYPE_INVALID,
-                AuthzErrorCode::AUTHZ_UNKNOWN_CAPABILITY => 422,
-                AuthzErrorCode::AUTHZ_DENIED => 403,
-                FoundationErrorCode::BLB_INVARIANT_VIOLATION,
-                DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
-                CompanyErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
-                EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
-                default => 500,
-            };
-
-            $debug = (bool) config('app.debug', false);
-
-            $payload = [
-                'message' => $debug
-                    ? $exception->getMessage()
-                    : __('An internal Belimbing error occurred.'),
-                'reason_code' => $exception->reasonCode->value,
-            ];
-
-            if ($debug && $exception->context !== []) {
-                $payload['context'] = $exception->context;
-            }
-
-            return response()->json($payload, $status);
-        });
+    ->withExceptions(function (Exceptions $exceptions) use (
+        $renderAuthenticationException,
+        $renderTokenMismatchException,
+        $renderUnauthorizedLivewireException,
+        $reportBlbException,
+        $renderBlbException,
+    ) {
+        $exceptions->render($renderAuthenticationException);
+        $exceptions->render($renderTokenMismatchException);
+        $exceptions->render($renderUnauthorizedLivewireException);
+        $exceptions->report($reportBlbException);
+        $exceptions->render($renderBlbException);
     })->create();

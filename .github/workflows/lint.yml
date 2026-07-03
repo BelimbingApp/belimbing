@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: Testing
     steps:
-      - uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+      - uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
         with:
           fetch-depth: 0
 

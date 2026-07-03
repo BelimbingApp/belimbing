@@ -13,29 +13,15 @@ beforeEach(function (): void {
 
 describe('countries list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        GeonamesSeeder::countries(5);
-
-        Livewire::test(CountriesIndex::class)
-            ->assertSet('perPage', 20)
-            ->assertViewHas('countries', fn (LengthAwarePaginator $p): bool => $p->perPage() === 20);
+        assertGeonamesPerPage(CountriesIndex::class, 'countries', GeonamesSeeder::countries(...), null, 20);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
-        GeonamesSeeder::countries(5);
-
-        Livewire::withQueryParams(['perPage' => 50])
-            ->test(CountriesIndex::class)
-            ->assertSet('perPage', 50)
-            ->assertViewHas('countries', fn (LengthAwarePaginator $p): bool => $p->perPage() === 50);
+        assertGeonamesPerPage(CountriesIndex::class, 'countries', GeonamesSeeder::countries(...), 50, 50);
     });
 
     it('clamps a stale out-of-range URL perPage to the largest option', function (): void {
-        GeonamesSeeder::countries(5);
-
-        Livewire::withQueryParams(['perPage' => 9999])
-            ->test(CountriesIndex::class)
-            ->assertSet('perPage', 300)
-            ->assertViewHas('countries', fn (LengthAwarePaginator $p): bool => $p->perPage() === 300);
+        assertGeonamesPerPage(CountriesIndex::class, 'countries', GeonamesSeeder::countries(...), 9999, 300);
     });
 
     it('reloads with the new page size when the per-page selector changes', function (): void {
@@ -50,56 +36,45 @@ describe('countries list', function (): void {
 
 describe('admin1 list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        GeonamesSeeder::admin1(5);
-
-        Livewire::test(Admin1Index::class)
-            ->assertSet('perPage', 20)
-            ->assertViewHas('admin1s', fn (LengthAwarePaginator $p): bool => $p->perPage() === 20);
+        assertGeonamesPerPage(Admin1Index::class, 'admin1s', GeonamesSeeder::admin1(...), null, 20);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
-        GeonamesSeeder::admin1(5);
-
-        Livewire::withQueryParams(['perPage' => 50])
-            ->test(Admin1Index::class)
-            ->assertSet('perPage', 50)
-            ->assertViewHas('admin1s', fn (LengthAwarePaginator $p): bool => $p->perPage() === 50);
+        assertGeonamesPerPage(Admin1Index::class, 'admin1s', GeonamesSeeder::admin1(...), 50, 50);
     });
 
     it('clamps a stale out-of-range URL perPage to the largest option', function (): void {
-        GeonamesSeeder::admin1(5);
-
-        Livewire::withQueryParams(['perPage' => 9999])
-            ->test(Admin1Index::class)
-            ->assertSet('perPage', 300)
-            ->assertViewHas('admin1s', fn (LengthAwarePaginator $p): bool => $p->perPage() === 300);
+        assertGeonamesPerPage(Admin1Index::class, 'admin1s', GeonamesSeeder::admin1(...), 9999, 300);
     });
 });
 
 describe('postcodes list', function (): void {
     it('falls back to the default page size when the URL does not supply perPage', function (): void {
-        GeonamesSeeder::postcodes(5);
-
-        Livewire::test(PostcodesIndex::class)
-            ->assertSet('perPage', 20)
-            ->assertViewHas('postcodes', fn (LengthAwarePaginator $p): bool => $p->perPage() === 20);
+        assertGeonamesPerPage(PostcodesIndex::class, 'postcodes', GeonamesSeeder::postcodes(...), null, 20);
     });
 
     it('honors a URL-supplied perPage over the default', function (): void {
-        GeonamesSeeder::postcodes(5);
-
-        Livewire::withQueryParams(['perPage' => 50])
-            ->test(PostcodesIndex::class)
-            ->assertSet('perPage', 50)
-            ->assertViewHas('postcodes', fn (LengthAwarePaginator $p): bool => $p->perPage() === 50);
+        assertGeonamesPerPage(PostcodesIndex::class, 'postcodes', GeonamesSeeder::postcodes(...), 50, 50);
     });
 
     it('clamps a stale out-of-range URL perPage to the largest option', function (): void {
-        GeonamesSeeder::postcodes(5);
-
-        Livewire::withQueryParams(['perPage' => 9999])
-            ->test(PostcodesIndex::class)
-            ->assertSet('perPage', 300)
-            ->assertViewHas('postcodes', fn (LengthAwarePaginator $p): bool => $p->perPage() === 300);
+        assertGeonamesPerPage(PostcodesIndex::class, 'postcodes', GeonamesSeeder::postcodes(...), 9999, 300);
     });
 });
+
+/**
+ * @param  class-string  $component
+ * @param  callable(int): void  $seed
+ */
+function assertGeonamesPerPage(string $component, string $viewDataKey, callable $seed, ?int $queryPerPage, int $expectedPerPage): void
+{
+    $seed(5);
+
+    $test = $queryPerPage === null
+        ? Livewire::test($component)
+        : Livewire::withQueryParams(['perPage' => $queryPerPage])->test($component);
+
+    $test
+        ->assertSet('perPage', $expectedPerPage)
+        ->assertViewHas($viewDataKey, fn (LengthAwarePaginator $p): bool => $p->perPage() === $expectedPerPage);
+}
