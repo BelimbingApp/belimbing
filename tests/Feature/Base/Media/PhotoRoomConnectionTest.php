@@ -15,6 +15,8 @@ const PHOTOROOM_ACCOUNT_ENDPOINT_V2 = 'https://image-api.photoroom.com/v2/accoun
 
 const PHOTOROOM_ACCOUNT_ENDPOINT_V1 = 'https://image-api.photoroom.com/v1/account';
 
+const PHOTOROOM_REQUEST_FAILED_LABEL = 'Request failed';
+
 beforeEach(function (): void {
     $this->companyId = configurePhotoRoom('sandbox-key-123');
 });
@@ -69,7 +71,7 @@ it('reports request failed on a non-401 error', function (): void {
     $result = app(PhotoRoomClient::class)->testConnection($this->companyId);
 
     expect($result->ok)->toBeFalse()
-        ->and($result->label)->toBe('Request failed')
+        ->and($result->label)->toBe(PHOTOROOM_REQUEST_FAILED_LABEL)
         ->and($result->detail)->toContain('500')
         ->and($result->context['status'])->toBe(500);
 });
@@ -168,7 +170,7 @@ it('reports request failed when the sandbox probe errors with a non-auth status'
     $result = app(PhotoRoomClient::class)->testConnection($this->companyId);
 
     expect($result->ok)->toBeFalse()
-        ->and($result->label)->toBe('Request failed')
+        ->and($result->label)->toBe(PHOTOROOM_REQUEST_FAILED_LABEL)
         ->and($result->detail)->toContain('400')
         ->and($result->context['status'])->toBe(400);
 });
@@ -202,7 +204,7 @@ it('reports request failed when the /v1/account fallback also fails', function (
     $result = app(PhotoRoomClient::class)->testConnection($this->companyId);
 
     expect($result->ok)->toBeFalse()
-        ->and($result->label)->toBe('Request failed')
+        ->and($result->label)->toBe(PHOTOROOM_REQUEST_FAILED_LABEL)
         ->and($result->detail)->toContain('500')
         ->and($result->context['status'])->toBe(500);
 });
