@@ -11,6 +11,7 @@ Use this file to decide whether a change needs docs and where those docs belong.
 | Architecture docs under `docs/architecture/` | `docs/architecture/AGENTS.md` |
 | Tutorials and crash-course docs under `docs/tutorials/` | `docs/tutorials/AGENTS.md` |
 | Database CLI (`migrate`, `--seed`, `--module`, `--seeder`) | `app/Base/Database/AGENTS.md` |
+| Module contribution surfaces (menus, authz, dashboard widgets) | `app/Modules/AGENTS.md` |
 | UI / Blade / Tailwind / Alpine | `resources/core/views/AGENTS.md` |
 
 ## Place Docs Here

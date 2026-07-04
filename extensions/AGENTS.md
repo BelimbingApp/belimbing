@@ -18,3 +18,9 @@
 
 - Module `Views/` follow the same standards as Core: `DESIGN.md` (intent),
   `resources/core/views/AGENTS.md` (authoring rules).
+
+## Contribution Surfaces
+
+- Extension modules contribute menus, authz capabilities, and dashboard
+  widgets through the same `Config/*.php` discovery contracts as internal
+  modules — see `app/Modules/AGENTS.md`.

@@ -37,6 +37,7 @@ $iconPaths = [
     'mdi-import' => ['viewBox' => '0 0 24 24', 'fill' => 'currentColor', 'path' => 'M14,12L10,8V11H2V13H10V16M20,18V6C20,4.89 19.1,4 18,4H6A2,2 0 0,0 4,6V9H6V6H18V18H6V15H4V18A2,2 0 0,0 6,20H18A2,2 0 0,0 20,18Z'],
     'heroicon-o-arrow-trending-up' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941'],
     'heroicon-o-arrow-down' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M12 4.5v15m0 0 6-6m-6 6-6-6'],
+    'heroicon-o-arrow-up' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M12 19.5v-15m0 0-6 6m6-6 6 6'],
     'heroicon-o-arrow-down-tray' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M3 16.5V18.75C3 19.9926 4.00736 21 5.25 21H18.75C19.9926 21 21 19.9926 21 18.75V16.5M16.5 12L12 16.5M12 16.5L7.5 12M12 16.5V3'],
     'heroicon-o-save' => ['viewBox' => '0 0 24 24', 'fill' => 'currentColor', 'path' => 'M5 21h14a2 2 0 0 0 2-2V8a1 1 0 0 0-.29-.71l-4-4A1 1 0 0 0 16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2zm10-2H9v-5h6zM13 7h-2V5h2zM5 5h2v4h8V5h.59L19 8.41V19h-2v-5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v5H5z'],
     'heroicon-o-arrow-left' => ['viewBox' => '0 0 24 24', 'fill' => 'none', 'path' => 'M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18'],
