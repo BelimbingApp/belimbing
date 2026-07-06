@@ -137,11 +137,12 @@ Evidence: `EbayAccountDeletionHardeningTest.php` (oversized-body truncation, log
 ### Phase 6 — Media stored-XSS hardening (H3)
 Goal: user-uploaded media cannot execute in the app origin.
 Scope: `MediaAssetStore::putUploadedFile`, `MediaAssetController::stream`.
+Evidence: `tests/Feature/Media/MediaStreamSecurityTest.php` (inline raster, SVG/HTML forced to download, SVG upload rejected, normal upload still stored); existing `tests/Feature/Base/Media/*` still green (49).
 
-- [ ] Enforce a strict upload MIME/extension allowlist (no raw SVG, or sanitize server-side) at the upload boundary.
-- [ ] Serve streamed assets `attachment` unless a proven-safe raster type; set a locked-down per-response CSP (`default-src 'none'; sandbox`) — the middleware already preserves a controller-set CSP.
-- [ ] Consider a separate cookieless asset host; add per-actor authorization to `stream()` beyond the signed URL (M4).
-- [ ] Add tests: SVG upload rejected/sanitized; streamed asset carries nosniff + attachment.
+- [x] `stream()` serves only a strict raster allowlist (jpeg/png/gif/webp) inline; everything else (SVG, HTML, PDFs, unknown) is forced to download as `application/octet-stream`, with `X-Content-Type-Options: nosniff` and a per-response `default-src 'none'; sandbox` CSP the global middleware preserves — claude/claude-fable-5
+- [x] Reject script-capable upload types (SVG, HTML, XHTML/XML) at the `putUploadedFile` boundary so active markup never lands in storage — claude/claude-fable-5
+- [x] Filename is escaped by Laravel's RFC 6266 disposition builder, so a crafted filename cannot inject response headers — claude/claude-fable-5
+- [ ] Residual (M4): add per-actor authorization to `stream()` beyond the signed URL, and consider a separate cookieless asset host.
 
 ### Phase 7 — Secure defaults & supply chain (M1, M2, L3, L5)
 Goal: insecure config cannot ship to production silently; dependencies and secrets are scanned in CI.
