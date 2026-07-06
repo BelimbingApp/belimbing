@@ -87,6 +87,16 @@ return [
     |
     */
     'tools' => [
+        'bash' => [
+            // The bash tool runs arbitrary shell commands with the app's OS
+            // privileges — the most powerful tool in the agent surface. It is
+            // gated by the admin.ai.tool.bash.execute capability AND this flag,
+            // which defaults OFF in production so a prompt injection reaching a
+            // privileged agent cannot silently become remote code execution.
+            // Enable deliberately (ideally alongside an OS-level sandbox) via
+            // AI_BASH_TOOL_ENABLED=true.
+            'enabled' => env('AI_BASH_TOOL_ENABLED', env('APP_ENV', 'production') !== 'production'),
+        ],
         'web_search' => [
             'provider' => env('AI_WEB_SEARCH_PROVIDER', 'parallel'),
             'parallel' => [

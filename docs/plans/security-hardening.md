@@ -1,6 +1,6 @@
 # docs/plans/security-hardening.md
 
-Status: In progress — response-header/CORS and proxy-trust phases complete; AI shell, SSRF, webhook, and hygiene phases open.
+Status: In progress — response-header/CORS and proxy-trust phases complete; AI shell production kill-switch landed (sandbox/audit items open); SSRF, webhook, and hygiene phases open.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
 Agents: claude/claude-fable-5
@@ -107,8 +107,9 @@ Evidence: `tests/Feature/Foundation/TrustedProxiesTest.php` (2 passing); `.env.e
 ### Phase 3 — AI shell tool sandbox & gating (C1)
 Goal: the Bash tool cannot be an unsandboxed RCE path; it is off unless an operator knowingly enables it, and every command is audited.
 Scope: `BashTool`, `ShellCommandRunner`, `AgentToolRegistry::currentUserCanUse()`, `DetachedProcessLauncher`.
+Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `config('ai.tools.bash.enabled')`; `.env.example` documents `AI_BASH_TOOL_ENABLED`.
 
-- [ ] Gate execution behind an explicit per-environment opt-in in addition to `admin.ai.tool.bash.execute`; disabled in production by default.
+- [x] Gate execution behind an explicit per-environment opt-in (`ai.tools.bash.enabled`, default OFF in production) in addition to `admin.ai.tool.bash.execute`; enforced as a hard kill-switch in both the sync and streaming execution paths — claude/claude-fable-5
 - [ ] Verify the actor is threaded through queued/Octane agent runs rather than read from request-scoped `auth()` (no ambient authority in background workers).
 - [ ] Run the shell backend as a distinct least-privileged OS user / sandbox with a scratch working dir; scope down `-ExecutionPolicy Bypass` where feasible.
 - [ ] Audit-log actor, command, and exit code before execution; add a per-user rate limit.
