@@ -26,7 +26,7 @@ Route::middleware(['auth'])->group(function () {
     // Turn event replay (JSON for resume and gap-fill)
     Route::get('api/ai/chat/turns/{runId}/events', RunEventStreamController::class)
         ->name('ai.chat.turn.events');
-    // Direct streaming for interactive chat turns (NDJSON)
+    // Queue-backed event stream for interactive chat turns (NDJSON)
     Route::get('api/ai/chat/turns/{runId}/stream', RunStreamController::class)
         ->name('ai.chat.turn.stream');
     // Session attachment retrieval (images/files referenced from transcript meta)
