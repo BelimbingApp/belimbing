@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Http\Controllers;
 
 use App\Modules\Core\AI\Models\AiRun;
@@ -10,9 +11,8 @@ use Illuminate\Support\Facades\Auth;
 /**
  * HTTP endpoint for replaying a run's persisted event stream.
  *
- * Returns all events after `after_seq` as a JSON array. The direct
- * streaming endpoint handles fresh chat runs; this endpoint covers replay
- * and gap-fill for already-persisted events:
+ * Returns all events after `after_seq` as a JSON array. Chat clients use this
+ * endpoint for fresh runs, replay, and reconnect gap-fill:
  *
  * 1. **Page-load replay** — client fetches missed events for an active run.
  * 2. **Reconnect gap-fill** — client provides `after_seq` to fetch

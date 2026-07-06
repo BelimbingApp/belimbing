@@ -329,6 +329,9 @@ $frontendDomain = Get-EnvValue $envPath 'FRONTEND_DOMAIN' 'local.blb.lara'
 $backendDomain = Get-EnvValue $envPath 'BACKEND_DOMAIN' 'local.api.blb.lara'
 $appPortValue = Get-EnvValue $envPath 'APP_PORT' "$AppPort"
 $vitePortValue = Get-EnvValue $envPath 'VITE_PORT' "$VitePort"
+# HTTPS listener port. Pin HTTPS_PORT in .env when an external ingress
+# (e.g. a cloudflared tunnel) dials the origin on a fixed non-443 port.
+$httpsPortValue = Get-EnvValue $envPath 'HTTPS_PORT' '443'
 $AppPort = [int] $appPortValue
 $VitePort = [int] $vitePortValue
 
@@ -340,7 +343,7 @@ $env:BACKEND_DOMAIN = $backendDomain
 $env:APP_PORT = "$AppPort"
 $env:VITE_PORT = "$VitePort"
 $env:VITE_HOST = '127.0.0.1'
-$env:HTTPS_PORT = '443'
+$env:HTTPS_PORT = "$([int] $httpsPortValue)"
 $env:APP_BIND_HOST = '127.0.0.1'
 $env:CADDY_SCHEME = 'https'
 $env:CADDY_SERVER_ADMIN_HOST = '127.0.0.1'

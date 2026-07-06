@@ -20,9 +20,9 @@ use App\Modules\Core\Employee\Models\Employee;
 /**
  * Handles streaming chat run preparation and finalization.
  *
- * Uses direct-streaming architecture: creates a AiRun with runtime_meta,
- * returns a stream URL so Alpine can open a persistent fetch connection.
- * The streaming controller runs the agentic runtime inline.
+ * Uses queue-backed streaming architecture: creates an AiRun with runtime_meta,
+ * dispatches a worker job, and returns a replay URL so Alpine can poll durable
+ * events while the queue owns execution.
  */
 trait HandlesStreaming
 {
@@ -31,11 +31,11 @@ trait HandlesStreaming
     private const STALE_RUNNING_STOP_MINUTES = 30;
 
     /**
-     * Prepare a streaming run: persist user message, create turn, return stream URL.
+     * Prepare a streaming run: persist user message, create turn, return event URLs.
      *
-     * Creates a AiRun with runtime_meta containing model override, page
-     * context, and execution mode. Returns the turn ID and stream URL so
-     * Alpine can open a persistent fetch connection to the streaming controller.
+     * Creates an AiRun with runtime_meta containing model override, page
+     * context, and execution mode. Returns the turn ID and replay URL so
+     * Alpine can observe durable run events without holding a long HTTP request.
      *
      * @return array{
      *     status: 'started'|'session_busy',

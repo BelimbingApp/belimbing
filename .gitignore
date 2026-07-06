@@ -48,6 +48,7 @@ package-lock.json
 # the framework repo tracks only Base and Core. See
 # docs/architecture/module-system.md "Nested-Git Distribution".
 /app/Modules/*
+!/app/Modules/AGENTS.md
 !/app/Modules/Core
 
 # Project specific

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Console\Commands;
 
 use App\Modules\Core\AI\Enums\AiRunStatus;
@@ -49,6 +50,7 @@ class SweepStaleTurnsCommand extends Command
             Carbon::now()->subMinutes($runningMinutes),
             'stale_running',
             'This turn ran longer than expected and was stopped. The worker may have crashed.',
+            requireQuietEvents: true,
         );
 
         $total = $queuedCount + $runningCount;
@@ -73,19 +75,29 @@ class SweepStaleTurnsCommand extends Command
         Carbon $cutoff,
         string $errorType,
         string $message,
+        bool $requireQuietEvents = false,
     ): int {
         $statusValues = array_map(fn (AiRunStatus $s): string => $s->value, $statuses);
 
-        $staleTurns = AiRun::query()
+        $query = AiRun::query()
             ->whereIn('status', $statusValues)
-            ->where('created_at', '<', $cutoff)
-            ->get();
+            ->where('created_at', '<', $cutoff);
+
+        if ($requireQuietEvents) {
+            $query->whereDoesntHave('events', fn ($events) => $events->where('created_at', '>=', $cutoff));
+        }
+
+        $staleTurns = $query->get();
 
         $count = 0;
 
         foreach ($staleTurns as $turn) {
             // Double-check the turn is still active (concurrent safety)
             if ($turn->isTerminal()) {
+                continue;
+            }
+
+            if ($requireQuietEvents && $turn->events()->where('created_at', '>=', $cutoff)->exists()) {
                 continue;
             }
 
