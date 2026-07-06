@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 /**
@@ -47,6 +48,44 @@ class UrlSafetyGuard
         }
 
         return $ipRangeError ?? true;
+    }
+
+    /**
+     * Resolve a hostname to a single validated public IP to pin the outbound
+     * connection to, closing the DNS-rebinding window between validation and
+     * fetch: {@see validate()} resolves DNS to decide safety, but a second
+     * resolution at connect time could return a different (internal) address.
+     * The caller connects to this exact IP so no re-resolution can occur.
+     *
+     * Returns null when pinning is unnecessary or must be skipped: an IP-literal
+     * host (already concrete), an allowlisted host, or when private networks are
+     * explicitly permitted. Returns null too when resolution yields no public
+     * address — {@see validate()} is responsible for turning that into a block.
+     *
+     * @param  list<string>  $hostnameAllowlist
+     */
+    public function pinnedIpFor(
+        string $host,
+        bool $allowPrivateNetwork = false,
+        array $hostnameAllowlist = [],
+    ): ?string {
+        $host = strtolower($host);
+
+        if ($allowPrivateNetwork || $this->matchesAllowlist($host, $hostnameAllowlist)) {
+            return null;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            return null;
+        }
+
+        foreach ($this->resolveHostIps($host) as $ip) {
+            if ($this->validateResolvedIp($ip, $host) === null) {
+                return $ip;
+            }
+        }
+
+        return null;
     }
 
     /**

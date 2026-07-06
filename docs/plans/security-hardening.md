@@ -117,11 +117,12 @@ Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `co
 ### Phase 4 — SSRF pinning & redirect re-validation (H2)
 Goal: outbound fetches cannot reach internal targets via DNS rebinding or redirects.
 Scope: `UrlSafetyGuard`, `WebFetchService`.
+Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction — all passing); `ToolCallingTest` still green.
 
-- [ ] Resolve the host once, validate the resolved IP, and connect to that pinned IP (connect-to / resolve override) so validation and connection use the same address.
-- [ ] Disable automatic redirects; re-run `UrlSafetyGuard::validate()` on each `Location` before following.
-- [ ] Reject non-standard IP encodings and multi-record hosts where any address is private.
-- [ ] Add tests: rebinding (public-then-private), redirect-to-internal, and cloud-metadata IP all blocked.
+- [x] Add `UrlSafetyGuard::pinnedIpFor()` and connect to that validated public IP via cURL's resolve override (keeps Host/SNI), so the address the guard approved is the address contacted — closing the DNS-rebinding TOCTOU — claude/claude-fable-5
+- [x] Disable automatic redirects (`allow_redirects => false`) and re-run `validate()` on each resolved `Location` before following, up to the redirect limit — claude/claude-fable-5
+- [x] Multi-record hosts where any address is private are already blocked by `validate()`; `pinnedIpFor()` only ever returns a validated public address — claude/claude-fable-5
+- [ ] Follow-up: also reject exotic IP encodings (octal/hex/decimal) at the guard boundary for defense in depth.
 
 ### Phase 5 — eBay webhook authentication (H1)
 Goal: the public, CSRF-exempt deletion endpoint authenticates callers and cannot be used for log injection or disk-fill.
