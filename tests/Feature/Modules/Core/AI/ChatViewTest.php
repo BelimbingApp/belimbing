@@ -1,5 +1,8 @@
 <?php
 
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -101,7 +104,50 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('restoreRunState(runId)')
         ->toContain('activeTurnSummaries:')
         ->toContain('startSummaryPolling()')
+        ->toContain('isActiveSummary(sessionId)')
         ->toContain('clearSummary($event.detail.sessionId, $event.detail?.runId || null)');
+});
+
+it('renders compact Lara composer controls and uses replay polling for new turns', function (): void {
+    $user = createChatViewFixture();
+    setupAuthzRoles();
+
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+    PrincipalRole::query()->create([
+        'company_id' => $user->company_id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    test()->actingAs($user);
+
+    $session = app(SessionManager::class)->create(Employee::LARA_ID);
+
+    AiRun::query()->create([
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => $session->id,
+        'acting_for_user_id' => $user->id,
+        'source' => 'chat',
+        'status' => AiRunStatus::Running,
+        'current_phase' => RunPhase::AwaitingLlm,
+        'current_label' => RunPhase::AwaitingLlm->label(),
+    ]);
+
+    $html = Livewire::test(Chat::class)
+        ->set('selectedSessionId', $session->id)
+        ->html();
+    $viewSource = File::get(resource_path('core/views/livewire/ai/chat.blade.php'));
+
+    expect($html)
+        ->toContain('Control Panel')
+        ->toContain('aria-label="New session"')
+        ->not->toContain('Open in Control Plane')
+        ->not->toContain('<span>New session</span>');
+
+    expect($viewSource)
+        ->toContain('this.startReplayPolling(result.runId, scrollContainer);')
+        ->not->toContain('this.startPersistentFetch(result.runId, result.streamUrl, scrollContainer);');
 });
 
 it('renders empty-session quick prompts for the active page url', function (): void {

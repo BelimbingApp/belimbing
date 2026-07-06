@@ -1,7 +1,8 @@
 <?php
 
-use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunEventType;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\Company\Models\Company;
@@ -86,6 +87,34 @@ describe('SweepStaleTurnsCommand', function () {
 
         $turn->refresh();
         expect($turn->status)->toBe(AiRunStatus::Failed);
+    });
+
+    it('does not fail old running turns with fresh progress events', function () {
+        $turn = AiRun::query()->create([
+            'employee_id' => Employee::LARA_ID,
+            'session_id' => SWEEP_STALE_SESSION,
+            'acting_for_user_id' => $this->actingForUserId,
+            'status' => AiRunStatus::Running,
+            'current_phase' => RunPhase::AwaitingLlm,
+        ]);
+
+        AiRun::query()->where('id', $turn->id)->update([
+            'created_at' => now()->subMinutes(45),
+        ]);
+
+        AiRunEvent::query()->create([
+            'run_id' => $turn->id,
+            'seq' => 1,
+            'event_type' => RunEventType::Heartbeat,
+            'payload' => ['elapsed_ms' => 1],
+            'created_at' => now()->subMinute(),
+        ]);
+
+        $this->artisan('blb:ai:turns:sweep-stale', ['--running-minutes' => 30])
+            ->assertSuccessful()
+            ->expectsOutputToContain('No stale turns');
+
+        expect($turn->fresh()->status)->toBe(AiRunStatus::Running);
     });
 
     it('does not touch turns within the threshold', function () {

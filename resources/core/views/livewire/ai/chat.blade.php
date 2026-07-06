@@ -51,15 +51,40 @@
             return fallback;
         },
 
+        isTerminalSummary(summary) {
+            return !!summary?.status && this.terminalTurnStatuses.includes(summary.status);
+        },
+
+        isActiveSummary(sessionId) {
+            const summary = (this.activeTurnSummaries ?? {})[sessionId] || null;
+
+            return !!summary && !this.isTerminalSummary(summary);
+        },
+
+        pruneTerminalSummaries() {
+            Object.entries(this.activeTurnSummaries ?? {}).forEach(([sessionId, summary]) => {
+                if (this.isTerminalSummary(summary)) {
+                    this.clearSummary(sessionId, summary?.runId || null);
+                }
+            });
+        },
+
         syncSummary(sessionId, patch) {
             const summaries = this.activeTurnSummaries ?? {};
             const current = summaries[sessionId] || {};
+            const merged = {
+                ...current,
+                ...patch,
+            };
+
+            if (this.isTerminalSummary(merged)) {
+                this.clearSummary(sessionId, merged.runId || null);
+                return;
+            }
+
             this.activeTurnSummaries = {
                 ...summaries,
-                [sessionId]: {
-                    ...current,
-                    ...patch,
-                },
+                [sessionId]: merged,
             };
         },
 
@@ -134,6 +159,8 @@
         },
 
         startSummaryPolling() {
+            this.pruneTerminalSummaries();
+
             if (this._summaryPollTimer || Object.keys(this.activeTurnSummaries ?? {}).length === 0) {
                 return;
             }
@@ -215,6 +242,7 @@
                 localStorage.removeItem($data._draftKey);
             }
         });
+        $data.pruneTerminalSummaries();
         if (Object.keys($data.activeTurnSummaries ?? {}).length > 0) {
             $data.startSummaryPolling();
         }
@@ -508,7 +536,7 @@
                                             </div>
                                         @endif
                                         <div
-                                            x-show="activeTurnSummaries['{{ $session->id }}']"
+                                            x-show="isActiveSummary('{{ $session->id }}')"
                                             x-cloak
                                             class="mt-0.5 flex items-center gap-1.5 min-w-0 text-[10px] text-accent"
                                         >
@@ -525,7 +553,7 @@
                                     </div>
                                     <button
                                         type="button"
-                                        x-show="activeTurnSummaries['{{ $session->id }}']"
+                                        x-show="isActiveSummary('{{ $session->id }}')"
                                         x-cloak
                                         x-on:click.stop="
                                             const summary = activeTurnSummaries['{{ $session->id }}'];
@@ -546,7 +574,7 @@
                                     </button>
                                     <button
                                         type="button"
-                                        x-show="!activeTurnSummaries['{{ $session->id }}']"
+                                        x-show="!isActiveSummary('{{ $session->id }}')"
                                         x-cloak
                                         wire:click.stop="deleteSession('{{ $session->id }}')"
                                         class="text-muted hover:text-ink p-1 shrink-0"
@@ -584,6 +612,10 @@
                     waitingForWorkerLabel: @js(__('Waiting for worker…')),
                     runFailedMessage: @js(__('Turn failed')),
                     connectionLostMessage: @js(__('Connection lost. Please try again.')),
+                    reconnectingLabel: @js(__('Connection interrupted. Reconnecting…')),
+                    reasoningLabel: @js(__('Reasoning…')),
+                    writingLabel: @js(__('Writing…')),
+                    runningToolLabelTemplate: @js(__('Running :tool…')),
                     replayUrlTemplate: @js(route('ai.chat.turn.events', ['runId' => '__TURN__'])),
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
@@ -931,8 +963,8 @@
                             wire:navigate
                             class="ml-auto inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-0.5 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle transition-colors shrink-0"
                         >
-                            <x-icon name="heroicon-o-adjustments-horizontal" class="h-3 w-3" />
-                            <span>{{ __('Open in Control Plane') }}</span>
+                            <span>{{ __('Control Panel') }}</span>
+                            <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3 w-3" />
                         </a>
                     @endif
                     <button
@@ -954,7 +986,6 @@
                         <div class="flex items-center gap-2 min-w-0">
                             @if ($canSelectModel && count($availableModels) > 0)
                                 <div class="flex items-center gap-1 min-w-0">
-                                    <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 text-muted shrink-0" />
                                     <x-ai.model-selector
                                         :models="$availableModels"
                                         wire:model.live="selectedModel"
@@ -964,14 +995,19 @@
                                 </div>
                             @else
                                 <div class="inline-flex items-center gap-1 text-[11px] text-muted min-w-0">
-                                    <x-icon name="heroicon-o-cpu-chip" class="w-3 h-3 shrink-0" />
                                     <span class="truncate max-w-[12rem]">{{ $currentModel }}</span>
                                 </div>
                             @endif
 
-                            <x-ui.button variant="ghost" size="sm" wire:click="createSession" class="shrink-0">
+                            <x-ui.button
+                                variant="ghost"
+                                size="sm"
+                                wire:click="createSession"
+                                class="shrink-0 !px-2"
+                                title="{{ __('New session') }}"
+                                aria-label="{{ __('New session') }}"
+                            >
                                 <x-icon name="heroicon-o-plus" class="w-3 h-3" />
-                                <span>{{ __('New session') }}</span>
                             </x-ui.button>
                         </div>
 
@@ -1134,7 +1170,7 @@
                     return;
                 }
 
-                if (result && result.runId && result.streamUrl) {
+                if (result && result.runId && result.replayUrl) {
                     this.resetRunState();
                     this.pendingMessage = null;
                     this.restoreRunState(result.runId) || this.ensureRunState(result.runId);
@@ -1146,16 +1182,16 @@
                         scrollContainer,
                     });
                     this.startElapsedTimer(result.runId, result.started_at || result.created_at || null);
-                    this.startPersistentFetch(result.runId, result.streamUrl, scrollContainer);
+                    this.startReplayPolling(result.runId, scrollContainer);
                     textarea.value = '';
-                    textarea.style.height = 'auto';
+                    window.sharedChatComposerResetHeight?.(textarea);
                     localStorage.removeItem(this.draftKey);
                     return;
                 }
 
                 this.pendingMessage = null;
                 textarea.value = '';
-                textarea.style.height = 'auto';
+                window.sharedChatComposerResetHeight?.(textarea);
                 localStorage.removeItem(this.draftKey);
             } catch (e) {
                 this.ensureRunState(this.selectedRunId)?.streamEntries.push({
@@ -1179,7 +1215,12 @@
         waitingForWorkerLabel: config.waitingForWorkerLabel ?? 'Waiting for worker…',
         runFailedMessage: config.runFailedMessage ?? 'Turn failed',
         connectionLostMessage: config.connectionLostMessage ?? 'Connection lost. Please try again.',
+        reconnectingLabel: config.reconnectingLabel ?? 'Connection interrupted. Reconnecting…',
+        reasoningLabel: config.reasoningLabel ?? 'Reasoning…',
+        writingLabel: config.writingLabel ?? 'Writing…',
+        runningToolLabelTemplate: config.runningToolLabelTemplate ?? 'Running :tool…',
         replayUrlTemplate: config.replayUrlTemplate ?? '',
+        terminalTurnStatuses: ['succeeded', 'failed', 'cancelled', 'timed_out'],
 
         get isBusy() {
             return !!this.pendingMessage || !!this.selectedRunId;
@@ -1234,6 +1275,8 @@
                 replayPollTimer: null,
                 replayPromise: null,
                 pendingReplayAfterSeq: null,
+                replayFailureCount: 0,
+                replayWarningShown: false,
                 abortController: null,
                 fetchReader: null,
                 elapsedTimer: null,
@@ -1459,10 +1502,25 @@
                     return;
                 }
 
-                this.requestReplay(state.lastSeq, scrollContainer, runId).catch(() => {
-                    this.stopReplayPolling(runId);
-                    state.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
-                    this.finalizeTurnStream(runId);
+                this.requestReplay(state.lastSeq, scrollContainer, runId).then(() => {
+                    const liveState = this.runRegistry[runId];
+
+                    if (liveState) {
+                        liveState.replayFailureCount = 0;
+                    }
+                }).catch(() => {
+                    const liveState = this.runRegistry[runId];
+                    if (!liveState) {
+                        return;
+                    }
+
+                    liveState.replayFailureCount++;
+                    liveState.runLabel = this.reconnectingLabel;
+
+                    if (liveState.replayFailureCount >= 3 && !liveState.replayWarningShown) {
+                        liveState.streamEntries.push({ type: 'error', message: this.connectionLostMessage });
+                        liveState.replayWarningShown = true;
+                    }
                 });
             };
 
@@ -1478,6 +1536,15 @@
                 this.resetRunState(true);
             } else if (finalizedTurnId) {
                 this.forgetRunState(finalizedTurnId);
+            }
+
+            if (finalizedSessionId || finalizedTurnId) {
+                window.dispatchEvent(new CustomEvent('agent-chat-response-ready', {
+                    detail: {
+                        runId: finalizedTurnId,
+                        sessionId: finalizedSessionId,
+                    },
+                }));
             }
 
             this.$wire.finalizeStreamingRun(finalizedTurnId, finalizedSessionId);
@@ -1686,7 +1753,7 @@
             if (!replayTurnId) return null;
 
             const replayUrl = this.replayUrlTemplate.replace('__TURN__', replayTurnId) + '?after_seq=' + afterSeq;
-            const resp = await fetch(replayUrl);
+            const resp = await fetch(replayUrl, { credentials: 'same-origin' });
             if (!resp.ok) return null;
 
             const json = await resp.json();
@@ -1728,6 +1795,11 @@
                 if (this.selectedRunId !== replayTurnId) {
                     break;
                 }
+            }
+
+            if (this.terminalTurnStatuses.includes(json.status) && this.selectedRunId === replayTurnId) {
+                this.removeThinkingEntries(replayTurnId);
+                this.finalizeTurnStream(replayTurnId);
             }
 
             return json;
@@ -1777,9 +1849,6 @@
 
                 case 'run.phase_changed':
                     this.onPhaseChanged(data, activeTurnId);
-                    break;
-
-                case 'run.started':
                     break;
 
                 case 'assistant.thinking_started':
@@ -1863,7 +1932,7 @@
             state.runLabel = label;
 
             // Update the most recent thinking entry description when we have a richer label.
-            if (phase === 'awaiting_llm' && label && label !== this.phaseLabels.awaiting_llm) {
+            if (phase === 'awaiting_llm' && label && label !== this.phaseLabels?.awaiting_llm) {
                 for (let i = state.streamEntries.length - 1; i >= 0; i--) {
                     if (state.streamEntries[i].type === 'thinking') {
                         state.streamEntries[i].description = label.replace(/^(?:Thinking|Working|Awaiting model response)\s*—\s*/u, '');
@@ -1876,7 +1945,14 @@
         onThinkingStarted(data, runId) {
             const payload = data?.payload || data || {};
             const description = payload.description || null;
-            this.ensureRunState(runId)?.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
+            const state = this.ensureRunState(runId);
+            if (!state) {
+                return;
+            }
+
+            state.runPhase = 'awaiting_llm';
+            state.runLabel = this.reasoningLabel;
+            state.streamEntries.push({ type: 'thinking', active: true, description, thinkingContent: '' });
         },
 
         onThinkingDelta(data, runId) {
@@ -1887,6 +1963,9 @@
             if (!state) {
                 return;
             }
+
+            state.runPhase = 'awaiting_llm';
+            state.runLabel = this.reasoningLabel;
 
             // Append to the last thinking entry
             let entry = null;
@@ -1918,6 +1997,9 @@
             }
 
             const payload = data.payload || data;
+            state.runPhase = 'running_tool';
+            state.runLabel = this.labelForRunningTool(payload.tool || '');
+
             const idx = state.streamEntries.length;
             const toolKey = payload.tool_call_index ?? idx;
             state.toolMap[toolKey] = idx;
@@ -1953,6 +2035,8 @@
             entry.resultLength = payload.result_length || 0;
             entry.errorPayload = payload.error_payload || null;
             state.completedToolCount++;
+            state.runPhase = 'awaiting_llm';
+            state.runLabel = this.labelForPhase('awaiting_llm', this.phaseLabels?.awaiting_llm || 'Awaiting model response…');
         },
 
         onToolStdoutDelta(data, runId) {
@@ -1997,6 +2081,8 @@
             }
 
             this.deactivateThinking(runId);
+            state.runPhase = 'streaming_answer';
+            state.runLabel = this.writingLabel;
 
             const payload = data.payload || data;
             const text = payload.delta || payload.text || '';
@@ -2022,6 +2108,14 @@
                 message: payload.message || this.runFailedMessage,
             });
             this.finalizeTurnStream(runId);
+        },
+
+        labelForRunningTool(tool) {
+            if (!tool) {
+                return this.labelForPhase('running_tool', 'Running tool…');
+            }
+
+            return this.runningToolLabelTemplate.replace(':tool', tool);
         },
 
         deactivateThinking(runId = null) {

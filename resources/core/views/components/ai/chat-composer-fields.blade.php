@@ -56,6 +56,7 @@
                 x-on:paste="window.sharedChatComposerPasteFiles($event, $refs.attachmentInput, $wire, '{{ $attachmentsModel }}')"
                 x-on:input="window.sharedChatComposerAutoResize($el)"
                 x-init="window.sharedChatComposerAutoResize($el)"
+                data-composer-height-key="{{ $composerRef }}:{{ $messageModel }}"
                 placeholder="{{ $placeholder }}"
                 aria-label="{{ __('Message') }}"
                 autocomplete="off"
@@ -75,13 +76,41 @@
     <script>
         if (! window.sharedChatComposerAutoResize) {
             window.sharedChatComposerAutoResize = (el) => {
+                window.sharedChatComposerHeightState ??= {};
+
+                const key = el.dataset.composerHeightKey || 'default';
                 el.style.height = 'auto';
                 const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 20;
                 const maxHeight = lineHeight * 6;
                 const minHeight = 36;
-                const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
+                const previousHeight = Math.min(Number(window.sharedChatComposerHeightState[key] || 0), maxHeight);
+                const measuredHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
+                const needsMultipleLines = (el.value || '').includes('\n') || el.scrollHeight > minHeight + Math.floor(lineHeight / 2);
+                const newHeight = needsMultipleLines
+                    ? Math.max(measuredHeight, previousHeight)
+                    : measuredHeight;
+
                 el.style.height = newHeight + 'px';
                 el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+
+                if (needsMultipleLines) {
+                    window.sharedChatComposerHeightState[key] = newHeight;
+                } else {
+                    delete window.sharedChatComposerHeightState[key];
+                }
+            };
+        }
+
+        if (! window.sharedChatComposerResetHeight) {
+            window.sharedChatComposerResetHeight = (el) => {
+                if (!el) {
+                    return;
+                }
+
+                window.sharedChatComposerHeightState ??= {};
+                delete window.sharedChatComposerHeightState[el.dataset.composerHeightKey || 'default'];
+                el.style.height = 'auto';
+                window.sharedChatComposerAutoResize?.(el);
             };
         }
 
