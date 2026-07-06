@@ -127,10 +127,12 @@ Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrf
 ### Phase 5 — eBay webhook authentication (H1)
 Goal: the public, CSRF-exempt deletion endpoint authenticates callers and cannot be used for log injection or disk-fill.
 Scope: `EbayAccountDeletionController`, `blb_log_var` usage.
+Evidence: `EbayAccountDeletionHardeningTest.php` (oversized-body truncation, log-injection neutralized, 429 rate-limit) + existing `EbayAccountDeletionWebhookTest.php` still green.
 
-- [ ] Verify the eBay Notification API signature (resolve the `x-ebay-signature` key id, verify the payload) before recording anything.
-- [ ] Rate-limit and size-cap the endpoint; store log fields as structured data so a body value cannot inject log lines.
-- [ ] Add tests: unsigned/forged POST rejected; valid signature accepted.
+- [x] Rate-limit the route (`throttle:120,1` — generous for eBay's low-volume retries, blunts spam) — claude/claude-fable-5
+- [x] Size-cap the logged body and strip real line breaks from logged values, logging them as structured Monolog context so a crafted payload cannot forge log lines or exhaust the disk — claude/claude-fable-5
+- [x] Record `ebay_signature_present` for observability; keep the mandatory 200 acknowledgement so eBay never flags the keyset — claude/claude-fable-5
+- [ ] Residual: full cryptographic verification of `x-ebay-signature` (resolve the key id, fetch eBay's public key, verify the payload). Deferred because it must be validated against live eBay traffic to avoid rejecting genuine notices and breaking the compliance keyset. A related latent log-injection in `blb_log_var` (JSON-as-message expands `\n`) is flagged as its own task.
 
 ### Phase 6 — Media stored-XSS hardening (H3)
 Goal: user-uploaded media cannot execute in the app origin.
