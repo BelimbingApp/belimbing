@@ -28,8 +28,25 @@
 	admin {$CADDY_SERVER_ADMIN_HOST:localhost}:{$CADDY_SERVER_ADMIN_PORT:2019}
 }
 
+# Defense-in-depth security headers for responses FrankenPHP serves directly
+# (favicon, built assets) that never pass through Laravel's SecurityHeaders
+# middleware. The `?` prefix sets each header only if absent, so PHP responses
+# keep the app's own (richer, config-driven) Content-Security-Policy. Keep this
+# CSP in sync with config/security.php.
+(security_headers) {
+	header {
+		?X-Content-Type-Options "nosniff"
+		?X-Frame-Options "DENY"
+		?Referrer-Policy "strict-origin-when-cross-origin"
+		?Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		?Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; font-src 'self' https://fonts.bunny.net data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	}
+}
+
 {$CADDY_SCHEME:http}://{$APP_DOMAIN:local.blb.lara}:{$HTTPS_PORT:443} {
 	{$TLS_DIRECTIVE}
+
+	import security_headers
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log
@@ -64,6 +81,8 @@
 
 {$CADDY_SCHEME:http}://{$BACKEND_DOMAIN:local.api.blb.lara}:{$HTTPS_PORT:443} {
 	{$TLS_DIRECTIVE}
+
+	import security_headers
 
 	log {
 		output file {$CADDY_LOG_DIR:.caddy/logs}/access.log

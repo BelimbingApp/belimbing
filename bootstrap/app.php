@@ -6,6 +6,7 @@ use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Database\Middleware\DatabaseConnectionRecovery;
 use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
+use App\Base\Foundation\Http\Middleware\SecurityHeaders;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
 use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Company\Enums\CompanyErrorCode;
@@ -143,6 +144,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             DatabaseConnectionRecovery::class,
             ApplyLocaleContext::class,
+            SecurityHeaders::class,
         ]);
 
         $middleware->redirectGuestsTo(fn () => route('login'));
