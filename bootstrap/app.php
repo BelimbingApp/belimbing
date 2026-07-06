@@ -119,8 +119,32 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         // Trust reverse proxy headers (Caddy) so Laravel can correctly detect HTTPS
-        // and generate https:// URLs behind the proxy.
-        $middleware->trustProxies(at: '*');
+        // and generate https:// URLs behind the proxy — but only from the proxy hop,
+        // never from arbitrary clients. Trusting '*' would let any client forge
+        // X-Forwarded-For, which spoofs request()->ip() and defeats IP-based login
+        // throttling (Login::throttleKey) and IP audit logging.
+        //
+        // Caddy/FrankenPHP (and a cloudflared tunnel, when used) run on the same host
+        // as PHP, so the forwarding hop is loopback/private by default. Override with
+        // TRUSTED_PROXIES (comma-separated IPs/CIDRs) when a distinct L7 proxy fronts
+        // the app; set it to '*' only if that proxy strips inbound forwarded headers.
+        $configuredProxies = trim((string) env('TRUSTED_PROXIES', ''));
+
+        $middleware->trustProxies(at: match (true) {
+            $configuredProxies === '*' => '*',
+            $configuredProxies !== '' => array_values(array_filter(
+                array_map(trim(...), explode(',', $configuredProxies)),
+                static fn (string $proxy): bool => $proxy !== '',
+            )),
+            default => [
+                '127.0.0.1',
+                '::1',
+                '10.0.0.0/8',
+                '172.16.0.0/12',
+                '192.168.0.0/16',
+                'fc00::/7',
+            ],
+        });
 
         $middleware->alias([
             'authz' => AuthorizeCapability::class,

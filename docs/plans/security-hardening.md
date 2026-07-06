@@ -1,6 +1,6 @@
 # docs/plans/security-hardening.md
 
-Status: In progress — response-header/CORS phase complete; AI shell, SSRF, webhook, and hygiene phases open.
+Status: In progress — response-header/CORS and proxy-trust phases complete; AI shell, SSRF, webhook, and hygiene phases open.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
 Agents: claude/claude-fable-5
@@ -98,9 +98,11 @@ Evidence: `tests/Feature/Foundation/SecurityHeadersTest.php` (6 passing, 16 asse
 ### Phase 2 — Client-spoofed IP / throttle bypass (C2)
 Goal: `request()->ip()` reflects the real client so login throttling and IP audit logs cannot be defeated by a forged `X-Forwarded-For`.
 Scope: `bootstrap/app.php` `trustProxies`, verify against `Login::throttleKey()`.
+Evidence: `tests/Feature/Foundation/TrustedProxiesTest.php` (2 passing); `.env.example` documents `TRUSTED_PROXIES`.
 
-- [ ] Replace `trustProxies(at: '*')` with the concrete Caddy/Cloudflare CIDR(s) (or trusted bridge network); if fronted by Cloudflare, trust its ranges and prefer `CF-Connecting-IP`.
-- [ ] Add a test asserting a spoofed forwarded header does not change the throttle bucket.
+- [x] Replace `trustProxies(at: '*')` with a `TRUSTED_PROXIES`-driven list defaulting to loopback + private ranges (correct for same-host Caddy / cloudflared); `*` remains available only when the fronting proxy strips inbound forwarded headers — claude/claude-fable-5
+- [x] Add a test asserting a forged forwarded header from an untrusted peer does not change `request()->ip()` (the throttle-key input) — claude/claude-fable-5
+- [ ] Follow-up: if a Cloudflare tunnel terminates remotely in some deployment, document trusting its ranges and preferring `CF-Connecting-IP` there.
 
 ### Phase 3 — AI shell tool sandbox & gating (C1)
 Goal: the Bash tool cannot be an unsandboxed RCE path; it is off unless an operator knowingly enables it, and every command is audited.
