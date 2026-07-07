@@ -45,6 +45,40 @@ final class DetachedProcessLauncher
         ?string $stdoutPath,
         ?string $stderrPath,
     ): bool {
+        $launcher = $this->locator->find('nohup') ?? 'nohup';
+
+        $commandLine = $this->buildUnixCommandLine(
+            $launcher,
+            $command,
+            $workingDirectory,
+            $environment,
+            $stdoutPath,
+            $stderrPath,
+        );
+
+        exec($commandLine, result_code: $exitCode);
+
+        return $exitCode === 0;
+    }
+
+    /**
+     * Build the detached `cd && nohup … &` command line for exec(). Detachment
+     * requires a shell string (Symfony Process cannot background), so every
+     * interpolated value — the launcher, each command token, env values, the
+     * working directory, and redirect paths — is escapeshellarg-quoted here so
+     * shell metacharacters in any of them cannot break out of their argument.
+     *
+     * @param  list<string>  $command
+     * @param  array<string, string>  $environment
+     */
+    public function buildUnixCommandLine(
+        string $launcher,
+        array $command,
+        string $workingDirectory,
+        array $environment,
+        ?string $stdoutPath,
+        ?string $stderrPath,
+    ): string {
         $quotedCommand = implode(' ', array_map(escapeshellarg(...), $command));
         $envPrefix = implode(' ', array_map(
             fn (string $key, string $value): string => $key.'='.escapeshellarg($value),
@@ -61,8 +95,7 @@ final class DetachedProcessLauncher
             default => '2>/dev/null',
         };
 
-        $launcher = $this->locator->find('nohup') ?? 'nohup';
-        $commandLine = trim(implode(' ', array_filter([
+        return trim(implode(' ', array_filter([
             'cd '.escapeshellarg($workingDirectory),
             '&&',
             escapeshellarg($launcher),
@@ -73,10 +106,6 @@ final class DetachedProcessLauncher
             '</dev/null',
             '&',
         ])));
-
-        exec($commandLine, result_code: $exitCode);
-
-        return $exitCode === 0;
     }
 
     /**

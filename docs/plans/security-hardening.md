@@ -1,9 +1,9 @@
 # docs/plans/security-hardening.md
 
-Status: In progress — response-header/CORS phase complete; AI shell, SSRF, webhook, and hygiene phases open.
+Status: In progress — response-header/CORS, proxy trust, AI shell code gates, SSRF pinning, media stored-XSS hardening, and secure-defaults/CI are code-complete; eBay webhook hardening remains pending in the commerce repo, with shell ops, media authz, and nested-repo CI residuals tracked below.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
-Agents: claude/claude-fable-5
+Agents: claude/claude-fable-5, codex/gpt-5
 
 ## Problem Essence
 
@@ -98,28 +98,32 @@ Evidence: `tests/Feature/Foundation/SecurityHeadersTest.php` (6 passing, 16 asse
 ### Phase 2 — Client-spoofed IP / throttle bypass (C2)
 Goal: `request()->ip()` reflects the real client so login throttling and IP audit logs cannot be defeated by a forged `X-Forwarded-For`.
 Scope: `bootstrap/app.php` `trustProxies`, verify against `Login::throttleKey()`.
+Evidence: `tests/Feature/Foundation/TrustedProxiesTest.php` (2 passing); `.env.example` documents `TRUSTED_PROXIES`.
 
-- [ ] Replace `trustProxies(at: '*')` with the concrete Caddy/Cloudflare CIDR(s) (or trusted bridge network); if fronted by Cloudflare, trust its ranges and prefer `CF-Connecting-IP`.
-- [ ] Add a test asserting a spoofed forwarded header does not change the throttle bucket.
+- [x] Replace `trustProxies(at: '*')` with a `TRUSTED_PROXIES`-driven list defaulting to loopback + private ranges (correct for same-host Caddy / cloudflared); `*` remains available only when the fronting proxy strips inbound forwarded headers — claude/claude-fable-5
+- [x] Add a test asserting a forged forwarded header from an untrusted peer does not change `request()->ip()` (the throttle-key input) — claude/claude-fable-5
+- [ ] Follow-up: if a Cloudflare tunnel terminates remotely in some deployment, document trusting its ranges and preferring `CF-Connecting-IP` there.
 
 ### Phase 3 — AI shell tool sandbox & gating (C1)
 Goal: the Bash tool cannot be an unsandboxed RCE path; it is off unless an operator knowingly enables it, and every command is audited.
 Scope: `BashTool`, `ShellCommandRunner`, `AgentToolRegistry::currentUserCanUse()`, `DetachedProcessLauncher`.
+Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `config('ai.tools.bash.enabled')`; `.env.example` documents `AI_BASH_TOOL_ENABLED`.
 
-- [ ] Gate execution behind an explicit per-environment opt-in in addition to `admin.ai.tool.bash.execute`; disabled in production by default.
-- [ ] Verify the actor is threaded through queued/Octane agent runs rather than read from request-scoped `auth()` (no ambient authority in background workers).
-- [ ] Run the shell backend as a distinct least-privileged OS user / sandbox with a scratch working dir; scope down `-ExecutionPolicy Bypass` where feasible.
-- [ ] Audit-log actor, command, and exit code before execution; add a per-user rate limit.
-- [ ] Harden `DetachedProcessLauncher`: prefer an argument-vector `Process` over an assembled shell string; add a test asserting shell metacharacters in inputs are neutralized.
+- [x] Gate execution behind an explicit per-environment opt-in (`ai.tools.bash.enabled`, default OFF in production) in addition to `admin.ai.tool.bash.execute`; enforced as a hard kill-switch in both the sync and streaming execution paths — claude/claude-fable-5
+- [x] Verify the actor is threaded through queued/Octane agent runs — the runtime jobs establish it explicitly via `Auth::loginUsingId($…->acting_for_user_id)` (`RunAgentTaskJob`, `RunChatTurnJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`), so `AgentToolRegistry::currentUserCanUse()` resolves the real actor and fails closed when absent. No ambient-authority gap. — claude/claude-fable-5
+- [x] Harden `DetachedProcessLauncher`: extract the detached command-line builder (detachment needs a shell string, so a pure `Process` arg-vector is not viable) and cover it with a test asserting command tokens, env values, and redirect paths are all shell-escaped — claude/claude-fable-5
+- [ ] Residual (infra/ops, out of code scope): run the shell backend as a distinct least-privileged OS user / sandbox with a scratch working dir; scope down `-ExecutionPolicy Bypass`. Deferred defense-in-depth: audit-log actor/command/exit-code before execution and add a per-user rate limit.
 
 ### Phase 4 — SSRF pinning & redirect re-validation (H2)
 Goal: outbound fetches cannot reach internal targets via DNS rebinding or redirects.
 Scope: `UrlSafetyGuard`, `WebFetchService`.
+Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction, cURL resolve pinning, unpinnable rebinding fallback — all passing); `ToolCallingTest` still green.
 
-- [ ] Resolve the host once, validate the resolved IP, and connect to that pinned IP (connect-to / resolve override) so validation and connection use the same address.
-- [ ] Disable automatic redirects; re-run `UrlSafetyGuard::validate()` on each `Location` before following.
-- [ ] Reject non-standard IP encodings and multi-record hosts where any address is private.
-- [ ] Add tests: rebinding (public-then-private), redirect-to-internal, and cloud-metadata IP all blocked.
+- [x] Add `UrlSafetyGuard::pinnedIpFor()` and connect to that validated public IP via cURL's resolve override (keeps Host/SNI), so the address the guard approved is the address contacted — closing the DNS-rebinding TOCTOU — claude/claude-fable-5
+- [x] Treat a DNS hostname that validates but cannot be pinned on the connection-time lookup as blocked, never as an unpinned fallback fetch — codex/gpt-5
+- [x] Disable automatic redirects (`allow_redirects => false`) and re-run `validate()` on each resolved `Location` before following, up to the redirect limit — claude/claude-fable-5
+- [x] Multi-record hosts where any address is private are already blocked by `validate()`; `pinnedIpFor()` only ever returns a validated public address — claude/claude-fable-5
+- [ ] Follow-up: also reject exotic IP encodings (octal/hex/decimal) at the guard boundary for defense in depth.
 
 ### Phase 5 — eBay webhook authentication (H1)
 Goal: the public, CSRF-exempt deletion endpoint authenticates callers and cannot be used for log injection or disk-fill.
@@ -132,19 +136,22 @@ Scope: `EbayAccountDeletionController`, `blb_log_var` usage.
 ### Phase 6 — Media stored-XSS hardening (H3)
 Goal: user-uploaded media cannot execute in the app origin.
 Scope: `MediaAssetStore::putUploadedFile`, `MediaAssetController::stream`.
+Evidence: `tests/Feature/Media/MediaStreamSecurityTest.php` (inline raster, SVG/HTML forced to download, SVG upload rejected, normal upload still stored); existing `tests/Feature/Base/Media/*` still green (49).
 
-- [ ] Enforce a strict upload MIME/extension allowlist (no raw SVG, or sanitize server-side) at the upload boundary.
-- [ ] Serve streamed assets `attachment` unless a proven-safe raster type; set a locked-down per-response CSP (`default-src 'none'; sandbox`) — the middleware already preserves a controller-set CSP.
-- [ ] Consider a separate cookieless asset host; add per-actor authorization to `stream()` beyond the signed URL (M4).
-- [ ] Add tests: SVG upload rejected/sanitized; streamed asset carries nosniff + attachment.
+- [x] `stream()` serves only a strict raster allowlist (jpeg/png/gif/webp) inline; everything else (SVG, HTML, PDFs, unknown) is forced to download as `application/octet-stream`, with `X-Content-Type-Options: nosniff` and a per-response `default-src 'none'; sandbox` CSP the global middleware preserves — claude/claude-fable-5
+- [x] Reject script-capable upload types (SVG, HTML, XHTML/XML) at the `putUploadedFile` boundary so active markup never lands in storage — claude/claude-fable-5
+- [x] Filename is escaped by Laravel's RFC 6266 disposition builder, so a crafted filename cannot inject response headers — claude/claude-fable-5
+- [ ] Residual (M4): add per-actor authorization to `stream()` beyond the signed URL, and consider a separate cookieless asset host.
 
 ### Phase 7 — Secure defaults & supply chain (M1, M2, L3, L5)
 Goal: insecure config cannot ship to production silently; dependencies and secrets are scanned in CI.
+Evidence: `tests/Feature/System/SecurityCheckCommandTest.php` (5 passing); `.github/workflows/security.yml`; `docs/security-advisories.md`.
 
-- [ ] Default `.env.example` to `APP_DEBUG=false`, `LOG_LEVEL=warning`; document `SESSION_SECURE_COOKIE=true` and `SESSION_ENCRYPT=true` for TLS deployments.
-- [ ] Add a deploy/CI gate that fails when `APP_DEBUG` is truthy in production.
-- [ ] Document (with a review date) the `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4`.
-- [ ] Add `composer audit`, `bun audit`, and a secret scanner as required CI gates; extend coverage to the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
+- [x] `blb:security:check` command fails a production deploy on `APP_DEBUG` on, missing `APP_KEY`, insecure session cookie, or wildcard proxy trust (warns for the same outside production) — a stronger guard than an example default, since the `.env.example` is deliberately a local template — claude/claude-fable-5
+- [x] Document `APP_DEBUG`/`SESSION_ENCRYPT` production expectations in `.env.example` and add a documented `SESSION_SECURE_COOKIE` line — claude/claude-fable-5
+- [x] Remove the stale `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4`; current `composer.lock` has `phpunit/phpunit` 12.5.30, beyond the patched 12.5.22 release for CVE-2026-41570 — codex/gpt-5
+- [x] Add `.github/workflows/security.yml` running `composer audit`, `bun audit`, and a gitleaks secret scan on push/PR and weekly — claude/claude-fable-5
+- [ ] Residual: extend the same CI security scans into the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
 
 ## What looked healthy
 - SQL access uses Eloquent / bound `whereRaw` placeholders — no injection found in audited code.

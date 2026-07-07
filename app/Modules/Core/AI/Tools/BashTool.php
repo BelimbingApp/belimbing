@@ -18,8 +18,11 @@ use App\Base\AI\Tools\ToolResult;
  * Implements StreamableTool to yield incremental stdout/stderr as the
  * command runs, enabling real-time output in the agent console UI.
  *
- * Safety: Timeout enforced per execution. Authz gating is the primary
- * control — only users with explicit bash capability can trigger this.
+ * Safety: two independent gates must both pass. The `ai.tools.bash.enabled`
+ * config flag (default OFF in production) is a hard kill-switch so a prompt
+ * injection cannot become RCE on a live deployment, and the
+ * `admin.ai.tool.bash.execute` capability restricts which users may trigger it.
+ * A per-execution timeout bounds runtime.
  */
 class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 {
@@ -87,6 +90,10 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     protected function handle(array $arguments): ToolResult
     {
+        if (($disabled = $this->disabledResult()) !== null) {
+            return $disabled;
+        }
+
         $command = $this->requireString($arguments, 'command');
 
         try {
@@ -109,6 +116,10 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
      */
     public function executeStreaming(array $arguments): \Generator
     {
+        if (($disabled = $this->disabledResult()) !== null) {
+            return $disabled;
+        }
+
         $command = $this->requireString($arguments, 'command');
 
         $opened = $this->openBashStreamingPipes($command);
@@ -250,6 +261,25 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
         }
 
         return ToolResult::success($stdout !== '' ? $stdout : $stderr);
+    }
+
+    /**
+     * Hard kill-switch, independent of authz. When the bash tool is disabled
+     * (default in production) no command runs, whatever capability the actor
+     * holds. Returns an unavailable result to surface in both the sync and
+     * streaming paths, or null when execution may proceed.
+     */
+    private function disabledResult(): ?ToolResult
+    {
+        if ((bool) config('ai.tools.bash.enabled', false)) {
+            return null;
+        }
+
+        return ToolResult::unavailable(
+            'bash_disabled',
+            'The shell tool is disabled on this environment.',
+            'Set AI_BASH_TOOL_ENABLED=true to enable it — ideally only alongside an OS-level sandbox for the shell backend.',
+        );
     }
 
     private function shell(): ShellCommandRunner
