@@ -63,11 +63,29 @@
                 </a>
             @endif
             @if ($statusDiagnosticCount > 0)
-                <div x-data="{ open: false }" class="relative inline-flex min-w-0">
+                <div
+                    x-data="{
+                        open: false,
+                        openDialog() {
+                            this.open = true;
+                            this.$nextTick(() => this.$refs.diagnosticsDialog.show());
+                        },
+                        closeDialog() {
+                            this.open = false;
+                            if (this.$refs.diagnosticsDialog.open) {
+                                this.$refs.diagnosticsDialog.close();
+                            }
+                        },
+                        toggleDialog() {
+                            this.open ? this.closeDialog() : this.openDialog();
+                        },
+                    }"
+                    class="relative inline-flex min-w-0"
+                >
                     <button
                         type="button"
-                        @click="open = !open"
-                        @keydown.escape.window="open = false"
+                        @click="toggleDialog()"
+                        @keydown.escape.window="closeDialog()"
                         class="{{ $statusDiagnosticTextClass }} hover:underline inline-flex items-center gap-1 min-w-0"
                         title="{{ __('System diagnostics') }}"
                         aria-haspopup="dialog"
@@ -80,13 +98,12 @@
                         </span>
                     </button>
 
-                    <div
+                    <dialog
+                        x-ref="diagnosticsDialog"
                         x-cloak
-                        x-show="open"
-                        x-transition.opacity.duration.100ms
-                        @click.outside="open = false"
-                        class="fixed bottom-7 left-4 z-50 w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border-default bg-surface-card text-ink shadow-lg"
-                        role="dialog"
+                        @click.self="closeDialog()"
+                        @close="open = false"
+                        class="fixed bottom-7 left-4 z-50 m-0 w-[min(32rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-border-default bg-surface-card p-0 text-ink shadow-lg backdrop:bg-transparent"
                         aria-label="{{ __('System diagnostics') }}"
                     >
                         <div class="flex items-center justify-between gap-3 border-b border-border-default px-3 py-2">
@@ -149,7 +166,7 @@
                                 </div>
                             @endforeach
                         </div>
-                    </div>
+                    </dialog>
                 </div>
             @endif
 

@@ -1,0 +1,17 @@
+# Imported inside the frontend site block by Caddyfile when the development
+# launcher starts Vite/HMR.
+
+# Vite HMR WebSocket (separate Vite process)
+@vite_ws {
+	path /
+	expression `header({'Connection':'*Upgrade*','Upgrade':'websocket'}) || header({':protocol':'websocket'})`
+}
+handle @vite_ws {
+	reverse_proxy {$VITE_HOST:127.0.0.1}:{$VITE_PORT:5173}
+}
+
+# Vite dev assets (separate Vite process)
+@vite_dev path /@vite/* /@fs/* /node_modules/* /resources/*
+handle @vite_dev {
+	reverse_proxy {$VITE_HOST:127.0.0.1}:{$VITE_PORT:5173}
+}

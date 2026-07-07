@@ -2,7 +2,12 @@
 
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Queue\Services\QueueStatusDiagnosticProvider;
+use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
+use App\Modules\Core\AI\Jobs\RunChatTurnJob;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +31,40 @@ it('reports failed jobs to users who can inspect the queue', function (): void {
         ->and($diagnostics[0]->summary)->toBe('1 failed job needs attention')
         ->and($diagnostics[0]->target)->toBe(route('admin.system.failed-jobs.index'))
         ->and($diagnostics[0]->metadata)->toMatchArray(['failed_jobs' => 1]);
+});
+
+it('does not count terminal AI chat turn failures as failed jobs needing attention', function (): void {
+    $user = createAdminUser();
+    Employee::provisionLara();
+
+    $turn = AiRun::query()->create([
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => 'queue-diagnostics',
+        'acting_for_user_id' => $user->id,
+        'source' => 'chat',
+        'execution_mode' => 'interactive',
+        'status' => AiRunStatus::Failed,
+        'current_phase' => RunPhase::Finalizing,
+    ]);
+
+    $job = new RunChatTurnJob($turn->id);
+
+    DB::table('failed_jobs')->insert([
+        'uuid' => (string) Str::uuid(),
+        'connection' => 'database',
+        'queue' => RunChatTurnJob::QUEUE,
+        'payload' => json_encode([
+            'displayName' => $job->displayName(),
+            'data' => [
+                'commandName' => RunChatTurnJob::class,
+                'command' => serialize($job),
+            ],
+        ]),
+        'exception' => 'Terminal chat turn failure',
+        'failed_at' => now(),
+    ]);
+
+    expect(collect(app(QueueStatusDiagnosticProvider::class)->diagnosticsFor($user)))->toBeEmpty();
 });
 
 it('reports high recent queue failure rate as danger', function (): void {
