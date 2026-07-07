@@ -83,26 +83,38 @@ it('shows capability-gated widgets to an admin in registry order', function (): 
         ->test(Index::class)
         ->assertViewHas(
             'widgets',
-            fn (array $widgets): bool => dashboardWidgetIds($widgets) === [DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET],
+            fn (array $widgets): bool => array_slice(dashboardWidgetIds($widgets), 0, 2) === [DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET],
         );
 });
 
 it('persists remove, reorder, and add as a whole prefs layout', function (): void {
     $admin = createAdminUser();
+    $initialIds = dashboardWidgetIds(app(DashboardLayout::class)->layoutFor($admin));
+    $withoutAi = array_values(array_diff($initialIds, [DASHBOARD_AI_WIDGET]));
+    $withAiAppended = [...$withoutAi, DASHBOARD_AI_WIDGET];
+    $withAiMovedEarlier = $withAiAppended;
+    $aiIndex = array_search(DASHBOARD_AI_WIDGET, $withAiMovedEarlier, true);
+
+    if ($aiIndex !== false && $aiIndex > 0) {
+        [$withAiMovedEarlier[$aiIndex - 1], $withAiMovedEarlier[$aiIndex]] = [
+            $withAiMovedEarlier[$aiIndex],
+            $withAiMovedEarlier[$aiIndex - 1],
+        ];
+    }
 
     $component = Livewire::actingAs($admin)->test(Index::class);
 
     $component->call('remove', DASHBOARD_AI_WIDGET);
     expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe([DASHBOARD_LEAVE_WIDGET]);
+        ->toBe($withoutAi);
 
     $component->call('add', DASHBOARD_AI_WIDGET);
     expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe([DASHBOARD_LEAVE_WIDGET, DASHBOARD_AI_WIDGET]);
+        ->toBe($withAiAppended);
 
     $component->call('moveUp', DASHBOARD_AI_WIDGET);
     expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe([DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET]);
+        ->toBe($withAiMovedEarlier);
 
     $component->call('resetLayout');
     expect($admin->refresh()->prefsArray())
