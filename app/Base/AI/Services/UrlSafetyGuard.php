@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 /**
@@ -12,6 +13,13 @@ namespace App\Base\AI\Services;
  */
 class UrlSafetyGuard
 {
+    /**
+     * @param  (\Closure(string): list<string>)|null  $resolver
+     */
+    public function __construct(
+        private readonly ?\Closure $resolver = null,
+    ) {}
+
     /**
      * Validate whether a URL is safe to fetch.
      *
@@ -47,6 +55,55 @@ class UrlSafetyGuard
         }
 
         return $ipRangeError ?? true;
+    }
+
+    /**
+     * Resolve a hostname to a single validated public IP to pin the outbound
+     * connection to, closing the DNS-rebinding window between validation and
+     * fetch: {@see validate()} resolves DNS to decide safety, but a second
+     * resolution at connect time could return a different (internal) address.
+     * The caller connects to this exact IP so no re-resolution can occur.
+     *
+     * Returns null when pinning is unnecessary or must be skipped: an IP-literal
+     * host (already concrete), an allowlisted host, or when private networks are
+     * explicitly permitted. Returns null too when resolution yields no public
+     * address — {@see validate()} is responsible for turning that into a block.
+     *
+     * @param  list<string>  $hostnameAllowlist
+     */
+    public function pinnedIpFor(
+        string $host,
+        bool $allowPrivateNetwork = false,
+        array $hostnameAllowlist = [],
+    ): ?string {
+        $host = strtolower($host);
+        $pinnedIp = null;
+
+        if ($this->pinningRequiredFor($host, $allowPrivateNetwork, $hostnameAllowlist)) {
+            foreach ($this->resolveHostIps($host) as $ip) {
+                if ($this->validateResolvedIp($ip, $host) === null) {
+                    $pinnedIp = $ip;
+                    break;
+                }
+            }
+        }
+
+        return $pinnedIp;
+    }
+
+    /**
+     * @param  list<string>  $hostnameAllowlist
+     */
+    public function pinningRequiredFor(
+        string $host,
+        bool $allowPrivateNetwork = false,
+        array $hostnameAllowlist = [],
+    ): bool {
+        $host = strtolower($host);
+
+        return ! $allowPrivateNetwork
+            && ! $this->matchesAllowlist($host, $hostnameAllowlist)
+            && filter_var($host, FILTER_VALIDATE_IP) === false;
     }
 
     /**
@@ -108,6 +165,10 @@ class UrlSafetyGuard
      */
     private function resolveHostIps(string $host): array
     {
+        if ($this->resolver !== null) {
+            return ($this->resolver)($host);
+        }
+
         $records = @dns_get_record($host, DNS_A + DNS_AAAA);
 
         if ($records === false || $records === []) {
