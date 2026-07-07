@@ -15,4 +15,9 @@ class MediaStorageException extends RuntimeException
     {
         return new self('External media asset is missing a valid http(s) public_url.');
     }
+
+    public static function disallowedType(string $mimeType): self
+    {
+        return new self("Media type [{$mimeType}] is not allowed for upload.");
+    }
 }
