@@ -50,6 +50,11 @@ function Resolve-FrankenPhpHome {
         return $env:FRANKENPHP_INSTALL
     }
 
+    $configured = Get-EnvValue (Join-Path $ProjectRootPath '.env') 'BLB_FRANKENPHP_HOME' ''
+    if ($configured) {
+        return $configured
+    }
+
     $frankenPhpCommand = Get-Command frankenphp -CommandType Application -ErrorAction SilentlyContinue |
         Select-Object -First 1
     if ($frankenPhpCommand) {
@@ -313,6 +318,19 @@ function Write-OctaneServerState {
 }
 
 $envPath = Join-Path $ProjectRootPath '.env'
+$appEnv = (Get-EnvValue $envPath 'APP_ENV' 'local').ToLowerInvariant()
+if ($appEnv -in @('staging', 'production')) {
+    if ($NoQueue -or $NoVite -or $Watch) {
+        Write-Warning 'APP_ENV is staging/production; development flags are ignored because the supervised runtime owns the process model.'
+    }
+
+    & (Join-Path $ScriptDir 'runtime\windows\ensure-runtime.ps1')
+    if (-not $?) {
+        exit 1
+    }
+    return
+}
+
 $frankenPhpHome = Resolve-FrankenPhpHome
 $phpExe = Join-Path $frankenPhpHome 'php.exe'
 $frankenPhpExe = Join-Path $frankenPhpHome 'frankenphp.exe'
@@ -332,23 +350,30 @@ $vitePortValue = Get-EnvValue $envPath 'VITE_PORT' "$VitePort"
 # HTTPS listener port. Pin HTTPS_PORT in .env when an external ingress
 # (e.g. a cloudflared tunnel) dials the origin on a fixed non-443 port.
 $httpsPortValue = Get-EnvValue $envPath 'HTTPS_PORT' '443'
+$caddyAdminPortValue = Get-EnvValue $envPath 'CADDY_SERVER_ADMIN_PORT' "$CaddyAdminPort"
+$bindHost = Get-EnvValue $envPath 'APP_BIND_HOST' '127.0.0.1'
+$caddyBindAddress = Get-EnvValue $envPath 'CADDY_BIND_ADDRESS' $bindHost
 $AppPort = [int] $appPortValue
 $VitePort = [int] $vitePortValue
+$CaddyAdminPort = [int] $caddyAdminPortValue
 
 $env:Path = "$frankenPhpHome;$env:Path"
 $env:PHPRC = $PhpConfigDir
 $env:PHP_BINARY = $phpExe
+$env:APP_ENV = $appEnv
 $env:APP_DOMAIN = $frontendDomain
 $env:BACKEND_DOMAIN = $backendDomain
 $env:APP_PORT = "$AppPort"
 $env:VITE_PORT = "$VitePort"
 $env:VITE_HOST = '127.0.0.1'
 $env:HTTPS_PORT = "$([int] $httpsPortValue)"
-$env:APP_BIND_HOST = '127.0.0.1'
+$env:APP_BIND_HOST = $bindHost
+$env:CADDY_BIND_ADDRESS = $caddyBindAddress
 $env:CADDY_SCHEME = 'https'
 $env:CADDY_SERVER_ADMIN_HOST = '127.0.0.1'
 $env:CADDY_SERVER_ADMIN_PORT = "$CaddyAdminPort"
 $env:CADDY_LOG_DIR = Join-Path $ProjectRootPath '.caddy\logs'
+$env:CADDY_VITE_SNIPPET = if ($NoVite) { 'scripts/caddy-snippets/vite-disabled.caddy' } else { 'scripts/caddy-snippets/vite-enabled.caddy' }
 $env:APP_PUBLIC_PATH = Join-Path $ProjectRootPath 'public'
 $env:APP_BASE_PATH = $ProjectRootPath
 $env:LARAVEL_OCTANE = '1'
@@ -399,7 +424,7 @@ try {
     }
 
     if (-not $NoQueue) {
-        $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @('artisan', 'queue:work', '--queue=ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')
+        $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'queue:work', '--queue=ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')
     }
 
     if (-not $NoVite) {

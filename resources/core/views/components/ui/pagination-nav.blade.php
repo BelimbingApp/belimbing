@@ -39,7 +39,7 @@
                         <span class="inline-flex items-center justify-center min-w-[2rem] px-3 py-input-y -ml-px text-sm font-medium text-accent-on bg-accent border border-accent cursor-default leading-5 tabular-nums">{{ $page }}</span>
                     </span>
                 @else
-                    <a href="{{ url($url) }}" wire:click.prevent="gotoPage({{ $page }}, '{{ $paginator->getPageName() }}')" class="inline-flex items-center justify-center min-w-[2rem] px-3 py-input-y -ml-px text-sm font-medium text-ink bg-surface-card border border-border-default leading-5 tabular-nums hover:text-ink hover:bg-surface-subtle transition ease-in-out duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-card active:bg-surface-subtle active:text-ink" aria-label="{{ __('Go to page :page', ['page' => $page]) }}">
+                    <a href="{{ url($url) }}" wire:click.prevent="gotoPage({{ $page }}, '{{ $paginator->getPageName() }}')" class="inline-flex items-center justify-center min-w-[2rem] px-3 py-input-y -ml-px text-sm font-medium text-ink bg-surface-card border border-border-default leading-5 tabular-nums hover:text-ink hover:bg-surface-subtle transition ease-in-out duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-card active:bg-surface-subtle active:text-ink" title="{{ __('Go to page :page', ['page' => $page]) }}">
                         {{ $page }}
                     </a>
                 @endif

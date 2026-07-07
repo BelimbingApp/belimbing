@@ -143,10 +143,51 @@ class ServiceProvider extends BaseServiceProvider
         }
 
         if (isset($moduleConfig['roles'])) {
-            $config->set('authz.roles', array_merge(
-                $config->get('authz.roles', []),
-                $moduleConfig['roles']
-            ));
+            $roles = $config->get('authz.roles', []);
+
+            foreach ($moduleConfig['roles'] as $roleCode => $roleDefinition) {
+                if (isset($roles[$roleCode])) {
+                    $roles[$roleCode] = $this->mergeRoleDefinition($roles[$roleCode], $roleDefinition);
+                } else {
+                    $roles[$roleCode] = $roleDefinition;
+                }
+            }
+
+            $config->set('authz.roles', $roles);
         }
+    }
+
+    /**
+     * Merge a module role definition into an existing system role.
+     *
+     * Modules may contribute additional capabilities to shared roles such as
+     * tenant_owner without replacing the platform baseline definition.
+     *
+     * @param  array<string, mixed>  $base
+     * @param  array<string, mixed>  $extension
+     * @return array<string, mixed>
+     */
+    private function mergeRoleDefinition(array $base, array $extension): array
+    {
+        $merged = $base;
+
+        foreach ($extension as $key => $value) {
+            if ($key !== 'capabilities' && ! array_key_exists($key, $merged)) {
+                $merged[$key] = $value;
+            }
+        }
+
+        if (isset($base['capabilities'], $extension['capabilities'])
+            && is_array($base['capabilities'])
+            && is_array($extension['capabilities'])) {
+            $merged['capabilities'] = array_values(array_unique([
+                ...$base['capabilities'],
+                ...$extension['capabilities'],
+            ]));
+        } elseif (isset($extension['capabilities']) && is_array($extension['capabilities'])) {
+            $merged['capabilities'] = $extension['capabilities'];
+        }
+
+        return $merged;
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Livewire\Employees\Show;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
@@ -41,4 +42,23 @@ it('links user accounts from the employee detail page through users.employee_id'
         ->call('saveUser', null);
 
     expect($user->refresh()->employee_id)->toBeNull();
+});
+it('does not link a user account from another tenant on the employee detail page', function (): void {
+    $tenantCompany = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $tenantOwner = createTenantOwnerUser($tenantCompany->id);
+
+    $employee = Employee::factory()->create([
+        'company_id' => $tenantCompany->id,
+    ]);
+    $otherUser = User::factory()->create([
+        'company_id' => $otherCompany->id,
+        'employee_id' => null,
+    ]);
+
+    Livewire::actingAs($tenantOwner)
+        ->test(Show::class, ['employee' => $employee])
+        ->call('saveUser', $otherUser->id);
+
+    expect($otherUser->refresh()->employee_id)->toBeNull();
 });
