@@ -71,18 +71,7 @@ return [
             'name' => 'Tenant Owner',
             'description' => 'Full control within a single tenant: commerce, AI, messaging, company, employees, and addresses. No platform administration.',
             'capabilities' => [
-                // Commerce operations
-                'commerce.catalog.manage',
-                'commerce.catalog.view',
-                'commerce.inventory.item.create',
-                'commerce.inventory.item.list',
-                'commerce.inventory.item.update',
-                'commerce.inventory.item.view',
-                'commerce.inventory.manage',
-                'commerce.marketplace.list',
-                'commerce.marketplace.execute',
-                'commerce.marketplace.manage',
-
+                // Commerce capabilities are contributed by the Commerce domain when installed.
                 // Tenant self-management (company/employee data is scoped to the tenant by UI)
                 'admin.company.view',
                 'admin.company.list',
