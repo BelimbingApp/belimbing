@@ -22,6 +22,22 @@ use InvalidArgumentException;
 class MediaAssetStore
 {
     /**
+     * MIME types that can execute script when a browser renders them. They are
+     * refused at the upload boundary regardless of extension — the serving
+     * layer also forces non-raster assets to download, but rejecting these
+     * outright keeps active markup out of storage entirely.
+     *
+     * @var list<string>
+     */
+    private const DISALLOWED_UPLOAD_MIME_TYPES = [
+        'image/svg+xml',
+        'text/html',
+        'application/xhtml+xml',
+        'application/xml',
+        'text/xml',
+    ];
+
+    /**
      * Persist an uploaded file to disk and register it as an original asset.
      *
      * @param  array<string, mixed>|null  $metadata
@@ -34,6 +50,8 @@ class MediaAssetStore
         $filename = $file->getClientOriginalName();
         $mimeType = $file->getMimeType();
         $fileSize = $file->getSize();
+
+        $this->guardUploadType($mimeType);
 
         $storageKey = $file->store($directory, ['disk' => $disk]);
 
@@ -171,6 +189,15 @@ class MediaAssetStore
     {
         if (trim($value) === '') {
             throw new InvalidArgumentException("MediaAsset {$field} must be a non-empty string.");
+        }
+    }
+
+    private function guardUploadType(?string $mimeType): void
+    {
+        $normalized = strtolower(trim((string) $mimeType));
+
+        if (in_array($normalized, self::DISALLOWED_UPLOAD_MIME_TYPES, true)) {
+            throw MediaStorageException::disallowedType($normalized);
         }
     }
 }

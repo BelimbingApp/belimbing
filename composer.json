@@ -95,11 +95,6 @@
         }
     },
     "config": {
-        "audit": {
-            "ignore": [
-                "PKSA-5jz8-6tcw-pbk4"
-            ]
-        },
         "optimize-autoloader": true,
         "preferred-install": "dist",
         "sort-packages": true,
