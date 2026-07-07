@@ -380,10 +380,10 @@ function Get-BLBTaskNames {
 
 function Get-BLBOriginUrl {
     $scheme = $script:CaddyScheme
-    $host = $script:FrontendDomain
+    $originHost = $script:FrontendDomain
     $port = $script:HttpsPort
 
-    return "${scheme}://${host}:${port}/"
+    return "${scheme}://${originHost}:${port}/"
 }
 
 function Get-BLBOriginCheckAddress {

@@ -32,7 +32,13 @@ try {
             Write-BLBOctaneServerState
             Write-BLBRuntimeLog -Role 'server' -Message "Starting FrankenPHP for $script:AppEnv/$script:InstanceName on $env:CADDY_BIND_ADDRESS`:$script:HttpsPort (admin $script:CaddyAdminHost`:$script:CaddyAdminPort)."
 
-            & $script:FrankenPhpExe run --config Caddyfile --adapter caddyfile >> $serverLog 2>&1
+            $previousErrorActionPreference = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $script:FrankenPhpExe run --config Caddyfile --adapter caddyfile >> $serverLog 2>&1
+            } finally {
+                $ErrorActionPreference = $previousErrorActionPreference
+            }
             $exitCode = $LASTEXITCODE
             Write-BLBRuntimeLog -Role 'server' -Message "FrankenPHP exited with code $exitCode; restarting in 5 seconds."
         } catch {

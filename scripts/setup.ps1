@@ -338,6 +338,18 @@ function Invoke-Php {
     }
 }
 
+function Invoke-PhpProbe {
+    param([string[]] $Arguments)
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        return (& $script:PhpExe @Arguments 2>$null | Out-String).Trim()
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+}
+
 function Invoke-Composer {
     param([string[]] $Arguments)
     $composerArguments = @($ComposerPath) + $Arguments
@@ -504,7 +516,7 @@ variables_order=EGPCS
 
     $missingExtensions = @()
     foreach ($extension in @('ctype', 'dom', 'fileinfo', 'filter', 'intl', 'mbstring', 'openssl', 'pdo', 'pdo_sqlite', 'session', 'sodium', 'tokenizer', 'xml', 'zip')) {
-        $loaded = & $script:PhpExe -r "echo extension_loaded('$extension') ? 'yes' : 'no';" 2>$null
+        $loaded = Invoke-PhpProbe -Arguments @('-r', "echo extension_loaded('$extension') ? 'yes' : 'no';")
         if ($loaded -ne 'yes') {
             $missingExtensions += $extension
         }
@@ -525,8 +537,8 @@ variables_order=EGPCS
     # cleared so we see FrankenPHP's default, not the project ini.
     $savedPhprc = $env:PHPRC
     $env:PHPRC = $null
-    $cliIni = (& $script:PhpExe -r "echo (string) php_ini_loaded_file();" 2>$null | Out-String).Trim()
-    $cliHasSodium = ((& $script:PhpExe -r "echo extension_loaded('sodium') ? 'yes' : 'no';" 2>$null | Out-String).Trim() -eq 'yes')
+    $cliIni = Invoke-PhpProbe -Arguments @('-r', 'echo (string) php_ini_loaded_file();')
+    $cliHasSodium = (Invoke-PhpProbe -Arguments @('-r', "echo extension_loaded('sodium') ? 'yes' : 'no';") -eq 'yes')
     $env:PHPRC = $savedPhprc
 
     if ($cliHasSodium) {
@@ -580,7 +592,9 @@ variables_order=EGPCS
         Get-DefaultInstanceName $Environment
     }
     $resolvedInstanceName = ConvertTo-TaskToken $instanceNameSeed
-    $resolvedHttpsPort = if ($HttpsPort -gt 0) {
+    $resolvedHttpsPort = if ($HttpsPort -gt 0 -and $existingHttpsPort -eq $HttpsPort) {
+        $HttpsPort
+    } elseif ($HttpsPort -gt 0) {
         Assert-TcpPortAvailable -Port $HttpsPort -Purpose 'BLB HTTPS origin'
     } elseif ($Environment -in @('staging', 'production') -and $existingHttpsPort -gt 0) {
         $existingHttpsPort
@@ -589,7 +603,9 @@ variables_order=EGPCS
     } else {
         443
     }
-    $resolvedCaddyAdminPort = if ($CaddyAdminPort -gt 0) {
+    $resolvedCaddyAdminPort = if ($CaddyAdminPort -gt 0 -and $existingCaddyAdminPort -eq $CaddyAdminPort) {
+        $CaddyAdminPort
+    } elseif ($CaddyAdminPort -gt 0) {
         Assert-TcpPortAvailable -Port $CaddyAdminPort -Purpose 'BLB Caddy admin'
     } elseif ($Environment -in @('staging', 'production') -and $existingCaddyAdminPort -gt 0) {
         $existingCaddyAdminPort

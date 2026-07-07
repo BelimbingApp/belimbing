@@ -72,9 +72,9 @@ Unregister-ScheduledTask -TaskName $tasks.Health -Confirm:$false -ErrorAction Si
 $healthAction = New-ScheduledTaskAction -Execute $psExe `
     -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -File `"$(Join-Path $script:RuntimeDir 'health-check.ps1')`"" `
     -WorkingDirectory $script:RuntimeDir
-$healthTrigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).Date.AddMinutes(1))
-$healthTrigger.Repetition.Interval = 'PT5M'
-$healthTrigger.Repetition.Duration = 'P3650D'
+$healthTrigger = New-ScheduledTaskTrigger -Once -At ((Get-Date).Date.AddMinutes(1)) `
+    -RepetitionInterval (New-TimeSpan -Minutes 5) `
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 $healthSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
     -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
 Register-ScheduledTask -TaskName $tasks.Health -Action $healthAction -Trigger $healthTrigger -Principal $systemPrincipal -Settings $healthSettings | Out-Null
