@@ -111,6 +111,8 @@ class ServiceProvider extends BaseServiceProvider
         $patterns = [
             app_path('Base/*/Config/authz.php'),
             app_path('Modules/*/*/Config/authz.php'),
+            base_path('extensions/*/Config/authz.php'),
+            base_path('extensions/*/*/Config/authz.php'),
         ];
 
         foreach ($patterns as $pattern) {
