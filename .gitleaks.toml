@@ -1,0 +1,10 @@
+title = "Belimbing Gitleaks configuration"
+
+[[allowlists]]
+description = "Documented command placeholders and fake test credentials"
+paths = [
+  '''^\.agents/skills/sonarqube-fix/SKILL\.md$''',
+  '''^tests/Feature/AI/ModelNotificationFeedbackTest\.php$''',
+  '''^tests/Feature/AI/ProvidersUiTest\.php$''',
+  '''^tests/Feature/Audit/AuditableTraitTest\.php$''',
+]

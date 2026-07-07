@@ -1,0 +1,65 @@
+name: security
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # Weekly, so newly-disclosed advisories against pinned deps surface even
+    # without a push.
+    - cron: '0 6 * * 1'
+
+jobs:
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
+        with:
+          php-version: '8.5'
+          tools: composer:v2
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2 # NOSONAR — well-known community Bun action; tag pinning is acceptable for internal projects
+        with:
+          bun-version: '1.3.10'
+          no-cache: true
+
+      # Fails on any known vulnerability in a required package. Advisories that
+      # are reviewed and accepted are listed under config.audit.ignore in
+      # composer.json (see docs/security-advisories.md).
+      - name: Composer audit
+        run: composer audit --locked --no-interaction
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Bun audit
+        run: bun audit
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+
+      - name: Gitleaks
+        run: gitleaks dir --config .gitleaks.toml --redact --verbose .
