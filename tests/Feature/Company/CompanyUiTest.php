@@ -39,7 +39,7 @@ test('company isLicensee returns true for id 1 and false for others', function (
 });
 
 test('company can be created from create page component', function (): void {
-    $user = User::factory()->create();
+    $user = createAdminUser();
     $this->actingAs($user);
 
     Livewire::test('admin.companies.create')

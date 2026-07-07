@@ -8,21 +8,20 @@ final class DeploymentAdminEndpointResolver
 
     private const DEFAULT_ADMIN_PORT = '2019';
 
-    private const WINDOWS_LAUNCHER_ADMIN_PORT = '2020';
-
     /**
      * Candidate host+port pairs for the FrankenPHP/Caddy admin API.
      *
      * octane:start records it in its server-state file, so we read it from there
      * rather than guessing. Explicit env vars still win; otherwise probe the
-     * Windows launcher's default 2020 before Caddy's stock 2019.
+     * detected state before Caddy's stock 2019. Do not guess Windows launcher
+     * ports: they may belong to another instance or WSL relay.
      *
      * @return list<array{0: string, 1: string}>
      */
     public function candidates(): array
     {
-        $host = getenv('CADDY_SERVER_ADMIN_HOST') ?: null;
-        $port = getenv('CADDY_SERVER_ADMIN_PORT') ?: null;
+        $host = env('CADDY_SERVER_ADMIN_HOST') ?: (getenv('CADDY_SERVER_ADMIN_HOST') ?: null);
+        $port = env('CADDY_SERVER_ADMIN_PORT') ?: (getenv('CADDY_SERVER_ADMIN_PORT') ?: null);
         [$stateHost, $statePort] = $this->octaneAdminEndpoint();
 
         if ($host !== null || $port !== null) {
@@ -71,7 +70,6 @@ final class DeploymentAdminEndpointResolver
     private function defaultAdminEndpoints(): array
     {
         return [
-            [self::LOCAL_ADMIN_HOST, self::WINDOWS_LAUNCHER_ADMIN_PORT],
             [self::LOCAL_ADMIN_HOST, self::DEFAULT_ADMIN_PORT],
         ];
     }

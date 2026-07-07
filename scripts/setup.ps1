@@ -7,7 +7,7 @@
     Prepares a Windows development environment using FrankenPHP's bundled PHP,
     SQLite, Composer, and Bun/npm frontend dependencies.
 
-    Re-running this script is safe — it is idempotent. User-configurable values
+    Re-running this script is safe - it is idempotent. User-configurable values
     (.env domains, ports, company name) are only written when absent unless the
     corresponding parameter is explicitly provided. Infrastructure values
     (DB_CONNECTION, SESSION_DRIVER, etc.) are always applied.
@@ -26,6 +26,11 @@ param(
     [string] $BackendDomain = 'local.api.blb.lara',
     [int] $AppPort = 8000,
     [int] $VitePort = 5173,
+    [ValidateSet('direct', 'shared', 'tunnel', 'proxy', 'standalone', 'private')]
+    [string] $IngressMode = 'shared',
+    [int] $HttpsPort = 0,
+    [int] $CaddyAdminPort = 0,
+    [string] $InstanceName = '',
 
     [string] $LicenseeCompanyName = 'My Company',
     [string] $LicenseeCompanyCode = '',
@@ -39,7 +44,7 @@ param(
     [switch] $SkipMigrate,
 
     # Force admin credential reset even when an admin already exists.
-    # Without this flag the provisioner re-asserts roles only — password is untouched.
+    # Without this flag the provisioner re-asserts roles only - password is untouched.
     [switch] $ResetAdmin
 )
 
@@ -339,6 +344,106 @@ function Invoke-Composer {
     Invoke-Php -Arguments $composerArguments
 }
 
+function Get-PortOwnerSummary {
+    param([int] $Port)
+
+    $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique)
+    if ($listeners.Count -eq 0) {
+        return ''
+    }
+
+    $owners = foreach ($processId in $listeners) {
+        $process = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
+        if ($process) {
+            "$($process.Name) PID $processId"
+        } else {
+            "PID $processId"
+        }
+    }
+
+    return ($owners -join ', ')
+}
+
+function Find-AvailableTcpPort {
+    param(
+        [int] $PreferredPort,
+        [string] $Purpose
+    )
+
+    for ($port = $PreferredPort; $port -le 65535; $port++) {
+        $owner = Get-PortOwnerSummary -Port $port
+        if (-not $owner) {
+            if ($port -ne $PreferredPort) {
+                Write-Warn "$Purpose port $PreferredPort is busy; using $port instead."
+            }
+            return $port
+        }
+
+        if ($port -eq $PreferredPort) {
+            Write-Warn "$Purpose port $PreferredPort is busy ($owner). Looking for an available port."
+        }
+    }
+
+    throw "Could not find an available TCP port for $Purpose starting at $PreferredPort."
+}
+
+function Assert-TcpPortAvailable {
+    param(
+        [int] $Port,
+        [string] $Purpose
+    )
+
+    $owner = Get-PortOwnerSummary -Port $Port
+    if ($owner) {
+        throw "$Purpose port $Port is busy ($owner). Stop that process or choose a different port explicitly."
+    }
+
+    return $Port
+}
+
+function Get-ExistingTcpPort {
+    param(
+        [string] $Path,
+        [string] $Key
+    )
+
+    $value = Get-EnvValue -Path $Path -Key $Key
+    if (-not $value) {
+        return 0
+    }
+
+    if ($value -notmatch '^\d+$') {
+        throw "$Key in .env must be a TCP port number, got '$value'."
+    }
+
+    $port = [int] $value
+    if ($port -lt 1 -or $port -gt 65535) {
+        throw "$Key in .env must be between 1 and 65535, got $port."
+    }
+
+    return $port
+}
+
+function Get-DefaultInstanceName {
+    param([string] $Environment)
+
+    switch ($Environment) {
+        'production' { return 'Prod' }
+        'staging' { return 'Stage' }
+        'testing' { return 'Test' }
+        default { return 'Local' }
+    }
+}
+
+function ConvertTo-TaskToken {
+    param([string] $Value)
+
+    $token = ($Value -replace '[^A-Za-z0-9-]+', '-') -replace '^-+|-+$', ''
+    if ($token) { return $token }
+    return 'Instance'
+}
+
 # Capture which params were explicitly provided so we can distinguish
 # "user changed this" from "default value that should not stomp .env".
 $explicitEnvironment    = $PSBoundParameters.ContainsKey('Environment')
@@ -346,6 +451,10 @@ $explicitFrontendDomain = $PSBoundParameters.ContainsKey('FrontendDomain')
 $explicitBackendDomain  = $PSBoundParameters.ContainsKey('BackendDomain')
 $explicitAppPort        = $PSBoundParameters.ContainsKey('AppPort')
 $explicitVitePort       = $PSBoundParameters.ContainsKey('VitePort')
+$explicitIngressMode    = $PSBoundParameters.ContainsKey('IngressMode')
+$explicitHttpsPort      = $PSBoundParameters.ContainsKey('HttpsPort')
+$explicitCaddyAdminPort = $PSBoundParameters.ContainsKey('CaddyAdminPort')
+$explicitInstanceName   = $PSBoundParameters.ContainsKey('InstanceName')
 $explicitCompanyName    = $PSBoundParameters.ContainsKey('LicenseeCompanyName')
 $explicitCompanyCode    = $PSBoundParameters.ContainsKey('LicenseeCompanyCode')
 
@@ -463,12 +572,41 @@ variables_order=EGPCS
     }
 
     $databaseForEnv = $DatabasePath.Replace('\', '/')
+    $existingHttpsPort = Get-ExistingTcpPort -Path $envPath -Key 'HTTPS_PORT'
+    $existingCaddyAdminPort = Get-ExistingTcpPort -Path $envPath -Key 'CADDY_SERVER_ADMIN_PORT'
+    $instanceNameSeed = if ($InstanceName) {
+        $InstanceName
+    } else {
+        Get-DefaultInstanceName $Environment
+    }
+    $resolvedInstanceName = ConvertTo-TaskToken $instanceNameSeed
+    $resolvedHttpsPort = if ($HttpsPort -gt 0) {
+        Assert-TcpPortAvailable -Port $HttpsPort -Purpose 'BLB HTTPS origin'
+    } elseif ($Environment -in @('staging', 'production') -and $existingHttpsPort -gt 0) {
+        $existingHttpsPort
+    } elseif ($Environment -in @('staging', 'production')) {
+        Find-AvailableTcpPort -PreferredPort 8643 -Purpose 'BLB HTTPS origin'
+    } else {
+        443
+    }
+    $resolvedCaddyAdminPort = if ($CaddyAdminPort -gt 0) {
+        Assert-TcpPortAvailable -Port $CaddyAdminPort -Purpose 'BLB Caddy admin'
+    } elseif ($Environment -in @('staging', 'production') -and $existingCaddyAdminPort -gt 0) {
+        $existingCaddyAdminPort
+    } elseif ($Environment -eq 'production') {
+        Find-AvailableTcpPort -PreferredPort 2643 -Purpose 'BLB Caddy admin'
+    } elseif ($Environment -eq 'staging') {
+        Find-AvailableTcpPort -PreferredPort 2644 -Purpose 'BLB Caddy admin'
+    } else {
+        2020
+    }
+    $debugValue = if ($Environment -in @('staging', 'production')) { 'false' } else { 'true' }
 
-    # Infrastructure values — BLB's architecture decisions, always applied.
+    # Infrastructure values - BLB's architecture decisions, always applied.
     Set-EnvValueBatch -Path $envPath -Entries @(
-        [pscustomobject]@{ Key = 'APP_DEBUG';        Value = 'true' },
+        [pscustomobject]@{ Key = 'APP_DEBUG';        Value = $debugValue },
         [pscustomobject]@{ Key = 'APP_SCHEME';       Value = 'https' },
-        [pscustomobject]@{ Key = 'BLB_INGRESS_MODE'; Value = 'direct' },
+        [pscustomobject]@{ Key = 'BLB_INGRESS_MODE'; Value = $IngressMode; OnlyIfAbsent = (-not $explicitIngressMode) },
         [pscustomobject]@{ Key = 'DB_CONNECTION';    Value = 'sqlite' },
         [pscustomobject]@{ Key = 'DB_DATABASE';      Value = $databaseForEnv },
         [pscustomobject]@{ Key = 'SESSION_DRIVER';   Value = 'database' },
@@ -481,10 +619,17 @@ variables_order=EGPCS
     if (-not $gitExe) {
         throw "Git is required for BLB but was not found on PATH. Install Git from https://git-scm.com/download/win, restart PowerShell, then re-run scripts/setup.ps1."
     }
+    Set-EnvValue $envPath 'BLB_FRANKENPHP_HOME' $frankenPhpHome
     Set-EnvValue $envPath 'BLB_GIT_EXECUTABLE' $gitExe
     Write-Ok "Git: $gitExe"
 
-    # User-configurable values — written only when absent unless the param was
+    $bunExe = Resolve-BunPath
+    if ($bunExe) {
+        Set-EnvValue $envPath 'BLB_BUN_EXECUTABLE' $bunExe
+        Write-Ok "Bun: $bunExe"
+    }
+
+    # User-configurable values - written only when absent unless the param was
     # explicitly provided on this invocation.
     if (-not $LicenseeCompanyCode) {
         $LicenseeCompanyCode = Get-DefaultCompanyCode $LicenseeCompanyName
@@ -496,9 +641,51 @@ variables_order=EGPCS
         [pscustomobject]@{ Key = 'BACKEND_DOMAIN';        Value = $BackendDomain;          OnlyIfAbsent = (-not $explicitBackendDomain) },
         [pscustomobject]@{ Key = 'APP_PORT';              Value = "$AppPort";              OnlyIfAbsent = (-not $explicitAppPort) },
         [pscustomobject]@{ Key = 'VITE_PORT';             Value = "$VitePort";             OnlyIfAbsent = (-not $explicitVitePort) },
+        [pscustomobject]@{ Key = 'BLB_INSTANCE_NAME';     Value = $resolvedInstanceName;   OnlyIfAbsent = (-not $explicitInstanceName) },
         [pscustomobject]@{ Key = 'LICENSEE_COMPANY_NAME'; Value = $LicenseeCompanyName;    OnlyIfAbsent = (-not $explicitCompanyName) },
         [pscustomobject]@{ Key = 'LICENSEE_COMPANY_CODE'; Value = $LicenseeCompanyCode;    OnlyIfAbsent = (-not $explicitCompanyCode) }
     )
+    if ($Environment -in @('staging', 'production') -or $explicitHttpsPort) {
+        if ($explicitHttpsPort) {
+            Set-EnvValue $envPath 'HTTPS_PORT' "$resolvedHttpsPort"
+        } else {
+            Set-EnvValue $envPath 'HTTPS_PORT' "$resolvedHttpsPort" -OnlyIfAbsent
+        }
+    }
+    if ($Environment -in @('staging', 'production') -or $explicitCaddyAdminPort) {
+        if ($explicitCaddyAdminPort) {
+            Set-EnvValue $envPath 'CADDY_SERVER_ADMIN_PORT' "$resolvedCaddyAdminPort"
+        } else {
+            Set-EnvValue $envPath 'CADDY_SERVER_ADMIN_PORT' "$resolvedCaddyAdminPort" -OnlyIfAbsent
+        }
+    }
+
+    $installState = [ordered]@{
+        schema = 1
+        generatedAt = (Get-Date).ToString('o')
+        projectRoot = $ProjectRootPath
+        environment = $Environment
+        instanceName = $resolvedInstanceName
+        ingressMode = $IngressMode
+        frontendDomain = $FrontendDomain
+        backendDomain = $BackendDomain
+        appPort = $AppPort
+        vitePort = $VitePort
+        httpsPort = $resolvedHttpsPort
+        caddyAdminPort = $resolvedCaddyAdminPort
+        frankenphpHome = $frankenPhpHome
+        phpIniPath = $PhpIniPath
+        git = $gitExe
+        bun = $bunExe
+        composer = $ComposerPath
+        skipped = [ordered]@{
+            hosts = [bool] $SkipHosts
+            composerInstall = [bool] $SkipComposerInstall
+            nodeInstall = [bool] $SkipNodeInstall
+            migrate = [bool] $SkipMigrate
+        }
+    }
+    $installState | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $DevopsDir 'install-state.json') -Encoding UTF8
 
     Write-Ok "SQLite database: $DatabasePath"
 
@@ -508,20 +695,16 @@ variables_order=EGPCS
     if (-not $SkipComposerInstall) {
         Write-Step "Installing Composer locally if needed"
         if (Test-Path $ComposerPath) {
-            Write-Ok "Composer already present — checking for updates"
-            try {
-                Invoke-Php @($ComposerPath, 'self-update', '--quiet')
-            } catch {
-                Write-Warning "Composer self-update failed — continuing with existing version"
+            Write-Ok "Composer already present - checking for updates"
+            & $script:PhpExe $ComposerPath self-update --quiet
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Composer self-update failed - continuing with existing version"
             }
         } else {
             $installer = Join-Path $env:TEMP "composer-setup-$PID.php"
             Invoke-WebRequest -Uri 'https://getcomposer.org/installer' -OutFile $installer -TimeoutSec 30
-            try {
-                Invoke-Php @($installer, '--install-dir', $DevopsDir, '--filename', 'composer.phar')
-            } finally {
-                Remove-Item $installer -Force -ErrorAction SilentlyContinue
-            }
+            Invoke-Php @($installer, '--install-dir', $DevopsDir, '--filename', 'composer.phar')
+            Remove-Item $installer -Force -ErrorAction SilentlyContinue
         }
         Write-Ok "Composer: $ComposerPath"
 
@@ -534,7 +717,10 @@ variables_order=EGPCS
 
     if (-not $SkipNodeInstall) {
         Write-Step "Installing frontend dependencies"
-        $bun = Resolve-BunPath
+        $bun = Get-EnvValue -Path $envPath -Key 'BLB_BUN_EXECUTABLE'
+        if (-not $bun) {
+            $bun = Resolve-BunPath
+        }
         if ($bun) {
             & $bun install --backend copyfile
             if ($LASTEXITCODE -ne 0) {
@@ -567,7 +753,7 @@ variables_order=EGPCS
                 Write-Warning "$($tool.Name) installed but not yet on PATH. Restart your shell or add the winget install path to PATH."
             }
         } else {
-            Write-Warning "$($tool.Name) not found and winget is unavailable — install manually: https://github.com/$($tool.WingetId.ToLower())"
+            Write-Warning "$($tool.Name) not found and winget is unavailable - install manually: https://github.com/$($tool.WingetId.ToLower())"
         }
     }
 
@@ -583,14 +769,14 @@ variables_order=EGPCS
         if (-not $SkipMigrate) {
             # Only bootstrap admin credentials on first run or when explicitly requested.
             # Skipping the bootstrap file lets FrameworkPrimitivesProvisioner use the
-            # canonical anchor path — re-asserts roles without touching the password.
+            # canonical anchor path - re-asserts roles without touching the password.
             $adminExists = Test-AdminExists -DatabasePath $databaseForEnv
             $needsBootstrap = (-not $adminExists) -or $ResetAdmin
 
             if ($adminExists -and $ResetAdmin) {
-                Write-Output "  -ResetAdmin specified — admin credentials will be overwritten"
+                Write-Output "  -ResetAdmin specified - admin credentials will be overwritten"
             } elseif ($adminExists) {
-                Write-Ok "Admin user already exists — skipping credential bootstrap"
+                Write-Ok "Admin user already exists - skipping credential bootstrap"
             }
 
             $adminBootstrapFile = $null
@@ -614,6 +800,8 @@ variables_order=EGPCS
                 } else {
                     Invoke-Php @('artisan', 'migrate', '--seed', '--force')
                 }
+            } catch {
+                throw
             } finally {
                 if ($null -eq $previousCompanyName) {
                     Remove-Item Env:\LICENSEE_COMPANY_NAME -ErrorAction SilentlyContinue
