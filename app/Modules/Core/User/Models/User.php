@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class User extends Authenticatable implements CompanyScoped
@@ -324,6 +325,36 @@ class User extends Authenticatable implements CompanyScoped
             ->agent()
             ->whereKey($employeeId)
             ->where('supervisor_id', $supervisorId)
+            ->exists();
+    }
+
+    /**
+     * Whether the user is a platform administrator who can see cross-tenant data.
+     *
+     * Platform administration is an authz role decision, not mutable employee
+     * metadata. A grant-all role assigned globally or for the user's active
+     * company is the source of truth.
+     */
+    public function isPlatformAdmin(): bool
+    {
+        if (! $this->exists) {
+            return false;
+        }
+
+        return DB::table('base_authz_principal_roles')
+            ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
+            ->where('base_authz_principal_roles.principal_type', PrincipalType::USER->value)
+            ->where('base_authz_principal_roles.principal_id', $this->getKey())
+            ->where('base_authz_roles.grant_all', true)
+            ->where(function ($query): void {
+                $companyId = $this->getCompanyId();
+
+                $query->whereNull('base_authz_principal_roles.company_id');
+
+                if ($companyId !== null) {
+                    $query->orWhere('base_authz_principal_roles.company_id', $companyId);
+                }
+            })
             ->exists();
     }
 }

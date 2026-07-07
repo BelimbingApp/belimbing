@@ -5,6 +5,7 @@ namespace App\Base\Settings\Livewire;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Support\SettingsFieldValue;
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -39,7 +40,7 @@ abstract class SettingsForm extends Component
             }
 
             $key = $field['key'];
-            $formKey = $this->formKey($key);
+            $formKey = SettingsFieldValue::formKey($key);
 
             if ($field['encrypted'] ?? false) {
                 $fieldScope = $this->scopeForField($field, $scope);
@@ -60,7 +61,7 @@ abstract class SettingsForm extends Component
             $value = $settings->get($key, $field['default'] ?? '', $this->scopeForField($field, $scope));
 
             $this->values[$formKey] = ($field['type'] ?? 'text') === 'checkbox-list'
-                ? $this->checkboxListValues($value, $field)
+                ? SettingsFieldValue::checkboxList($value, $field)
                 : (string) $value;
         }
     }
@@ -76,7 +77,7 @@ abstract class SettingsForm extends Component
             }
 
             $key = $field['key'];
-            $formKey = $this->formKey($key);
+            $formKey = SettingsFieldValue::formKey($key);
             $value = $validated['values'][$formKey] ?? null;
 
             if ($field['encrypted'] ?? false) {
@@ -276,10 +277,10 @@ abstract class SettingsForm extends Component
                 continue;
             }
 
-            $rules['values.'.$this->formKey($field['key'])] = $field['rules'] ?? ['nullable', 'string'];
+            $rules['values.'.SettingsFieldValue::formKey($field['key'])] = $field['rules'] ?? ['nullable', 'string'];
 
             if (($field['type'] ?? 'text') === 'checkbox-list' && ($field['options'] ?? []) !== []) {
-                $rules['values.'.$this->formKey($field['key']).'.*'] = [
+                $rules['values.'.SettingsFieldValue::formKey($field['key']).'.*'] = [
                     Rule::in(array_keys($field['options'])),
                 ];
             }
@@ -304,7 +305,7 @@ abstract class SettingsForm extends Component
         if (($field['type'] ?? 'text') === 'checkbox-list') {
             $allowed = array_keys($field['options'] ?? []);
 
-            return $this->checkboxListValues($value, $field, $allowed);
+            return SettingsFieldValue::checkboxList($value, $field, $allowed);
         }
 
         return $value;
@@ -331,31 +332,6 @@ abstract class SettingsForm extends Component
         return ($field['scope'] ?? 'global') === 'company'
             ? $companyScope
             : null;
-    }
-
-    private function formKey(string $settingKey): string
-    {
-        return str_replace('.', '__', $settingKey);
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     * @param  list<string>|null  $allowed
-     * @return list<string>
-     */
-    private function checkboxListValues(mixed $value, array $field, ?array $allowed = null): array
-    {
-        $allowed ??= array_keys($field['options'] ?? []);
-        $items = is_string($value)
-            ? preg_split('/[\s,]+/', trim($value))
-            : (array) $value;
-
-        return collect($items ?: [])
-            ->filter(fn (mixed $item): bool => is_scalar($item))
-            ->map(fn (mixed $item): string => trim((string) $item))
-            ->filter(fn (string $item): bool => $item !== '' && ($allowed === [] || in_array($item, $allowed, true)))
-            ->values()
-            ->all();
     }
 
     /**

@@ -9,9 +9,7 @@ use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
-use Illuminate\Support\Facades\Schema;
 
 final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
@@ -19,6 +17,7 @@ final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 
     public function __construct(
         private readonly AuthorizationService $authorizationService,
+        private readonly ActionableFailedJobRepository $failedJobs,
     ) {}
 
     /**
@@ -91,15 +90,7 @@ final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 
     private function failedJobCount(): ?int
     {
-        try {
-            if (! Schema::hasTable('failed_jobs')) {
-                return null;
-            }
-
-            return (int) DB::table('failed_jobs')->count();
-        } catch (\Throwable) {
-            return null;
-        }
+        return $this->failedJobs->count();
     }
 
     private function failedJobsUrl(): ?string

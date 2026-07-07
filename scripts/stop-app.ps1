@@ -81,7 +81,8 @@ function Stop-BelimbingProcess {
 function Stop-BelimbingPortListener {
     param(
         [string] $Name,
-        [int] $Port
+        [int] $Port,
+        [string[]] $AllowedProcessNames = @()
     )
 
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue |
@@ -92,6 +93,13 @@ function Stop-BelimbingPortListener {
     }
 
     foreach ($processId in $listeners) {
+        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+        $processName = if ($process) { $process.ProcessName } else { '' }
+        if ($AllowedProcessNames.Count -gt 0 -and $processName -notin $AllowedProcessNames) {
+            Write-Warning "$Name port $Port is owned by '$processName' (PID $processId), not by this Belimbing launcher. Leaving it running."
+            continue
+        }
+
         $target = "$Name (PID $processId, port $Port)"
         if ($PSCmdlet.ShouldProcess($target, 'Stop process')) {
             Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
@@ -100,21 +108,34 @@ function Stop-BelimbingPortListener {
     }
 }
 
+$appEnv = (Get-EnvValue $envPath 'APP_ENV' 'local').ToLowerInvariant()
+if ($appEnv -in @('staging', 'production')) {
+    Write-Output "Stopping supervised Belimbing runtime for $ProjectRootPath..."
+    & (Join-Path $ScriptDir 'runtime\windows\stop-runtime.ps1')
+    if (-not $?) {
+        exit 1
+    }
+    return
+}
+
 $vitePortValue = Get-EnvValue $envPath 'VITE_PORT' "$VitePort"
+$caddyAdminPortValue = Get-EnvValue $envPath 'CADDY_SERVER_ADMIN_PORT' "$CaddyAdminPort"
 $VitePort = [int] $vitePortValue
+$CaddyAdminPort = [int] $caddyAdminPortValue
 
 Write-Output "Stopping Belimbing processes for $ProjectRootPath..."
 
-Stop-BelimbingPortListener -Name 'Vite' -Port $VitePort
+Stop-BelimbingPortListener -Name 'Vite' -Port $VitePort -AllowedProcessNames @('bun', 'node', 'npm')
 
 Stop-BelimbingProcess -Name 'Queue worker' -Predicate {
     param($process)
 
     Test-CommandLineContains $process.CommandLine @(
+        $ProjectRootPath,
         'artisan',
         'queue:work',
         'ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default'
     )
 }
 
-Stop-BelimbingPortListener -Name 'FrankenPHP / Octane' -Port $CaddyAdminPort
+Stop-BelimbingPortListener -Name 'FrankenPHP / Octane' -Port $CaddyAdminPort -AllowedProcessNames @('frankenphp')

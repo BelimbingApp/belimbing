@@ -6,6 +6,7 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -62,7 +63,15 @@ class Index extends Component
 
     public function delete(int $companyId): void
     {
+        if (! auth()->user()?->can('admin.company.delete')) {
+            abort(403);
+        }
+
         $company = Company::query()->withCount('children')->findOrFail($companyId);
+
+        if (! auth()->user()?->isPlatformAdmin() && $company->id !== auth()->user()?->getCompanyId()) {
+            abort(403);
+        }
 
         if ($company->id === Company::LICENSEE_ID) {
             $this->notifyError(__('The licensee company cannot be deleted.'));
@@ -85,9 +94,13 @@ class Index extends Component
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'companies.name';
 
+        /** @var User $user */
+        $user = auth()->user();
+
         return view('livewire.admin.companies.index', [
             'companies' => Company::query()
                 ->with('parent')
+                ->when(! $user->isPlatformAdmin(), fn (Builder $q) => $q->where('companies.id', $user->getCompanyId()))
                 ->when($this->statusFilter !== 'all', fn (Builder $q) => $q->where('companies.status', $this->statusFilter))
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function (Builder $q) use ($search): void {

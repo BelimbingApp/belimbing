@@ -3,6 +3,7 @@
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Company Management')">
+            @can('admin.company.create')
             <x-slot name="actions">
                 <x-ui.button
                     variant="primary"
@@ -14,6 +15,7 @@
                     {{ __('Create Company') }}
                 </x-ui.button>
             </x-slot>
+            @endcan
         </x-ui.page-header>
 
         <x-ui.session-flash />
@@ -84,16 +86,18 @@
                                         @if ($company->isLicensee())
                                             <x-ui.badge variant="default">{{ __('Licensee') }}</x-ui.badge>
                                         @else
-                                            <x-ui.button
-                                                variant="danger-ghost"
-                                                size="sm"
-                                                wire:click="delete({{ $company->id }})"
-                                                wire:confirm="{{ __('Are you sure you want to delete this company?') }}"
-                                                :title="__('Delete company')"
-                                            >
-                                                <x-icon name="heroicon-o-trash" class="w-4 h-4" />
-                                                <span class="sr-only">{{ __('Delete') }}</span>
-                                            </x-ui.button>
+                                            @can('admin.company.delete')
+                                                <x-ui.button
+                                                    variant="danger-ghost"
+                                                    size="sm"
+                                                    wire:click="delete({{ $company->id }})"
+                                                    wire:confirm="{{ __('Are you sure you want to delete this company?') }}"
+                                                    :title="__('Delete company')"
+                                                >
+                                                    <x-icon name="heroicon-o-trash" class="w-4 h-4" />
+                                                    <span class="sr-only">{{ __('Delete') }}</span>
+                                                </x-ui.button>
+                                            @endcan
                                         @endif
                                     </div>
                                 </td>

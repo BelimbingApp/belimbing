@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\DecodesJsonFields;
@@ -40,8 +41,19 @@ class Create extends Component
 
     public string $metadataJson = '';
 
+    public function mount(): void
+    {
+        if (! auth()->user()?->can('admin.company.create')) {
+            abort(403);
+        }
+    }
+
     public function store(): void
     {
+        if (! auth()->user()?->can('admin.company.create')) {
+            abort(403);
+        }
+
         $validated = $this->validate($this->rules());
 
         $payload = [

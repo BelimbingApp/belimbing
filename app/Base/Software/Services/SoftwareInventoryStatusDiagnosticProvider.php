@@ -151,7 +151,7 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             id: 'software.bundle-drift',
             severity: StatusVariant::Warning,
             source: __('Software'),
-            summary: trans_choice(':count add-in bundle has local drift|:count add-in bundles have local drift', count($bundles), [
+            summary: trans_choice('{1} :count add-in bundle has local drift|[2,*] :count add-in bundles have local drift', count($bundles), [
                 'count' => count($bundles),
             ]),
             detail: __('One or more add-in bundles have uncommitted changes or unpushed commits. Open Modules to see the affected checkout paths and resolve them before updating or changing add-ins.'),

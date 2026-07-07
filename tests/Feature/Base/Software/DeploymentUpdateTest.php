@@ -70,6 +70,15 @@ function deploymentCommandContains(array $command, string $needle): bool
     return collect($command)->contains(fn (string $part): bool => str_contains($part, $needle));
 }
 
+function deploymentUniqueRemoteCheckCount(array $status): int
+{
+    return collect($status)
+        ->filter(fn (array $entry): bool => is_string($entry['repo'] ?? null) && is_string($entry['branch'] ?? null))
+        ->map(fn (array $entry): string => $entry['repo'].'|'.$entry['branch'])
+        ->unique()
+        ->count();
+}
+
 function withDeploymentOctaneState(?array $state, Closure $callback): void
 {
     putenv('CADDY_SERVER_ADMIN_HOST');
@@ -223,7 +232,9 @@ test('deployment status does not cache transient remote failures', function (): 
     $first = $repository->status();
     $repository->status();
 
-    expect($lsRemoteCount)->toBe(count($first) * 2);
+    $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
+
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks * 2);
 });
 
 test('deployment status deduplicates remote latest checks in each render', function (): void {
@@ -238,17 +249,18 @@ test('deployment status deduplicates remote latest checks in each render', funct
 
     $repository = app(DistributionBundleRepository::class);
     $first = $repository->status();
+    $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
 
-    expect($lsRemoteCount)->toBe(count($first));
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
 
     $repository->status();
 
-    expect($lsRemoteCount)->toBe(count($first));
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
 
     $beforeBypass = $lsRemoteCount;
     $repository->status(useRemoteCache: false);
 
-    expect($lsRemoteCount - $beforeBypass)->toBe(count($first))
+    expect($lsRemoteCount - $beforeBypass)->toBe($uniqueRemoteChecks)
         ->and($first)->toHaveCount(count($repository->distributions()));
 });
 
@@ -374,13 +386,6 @@ test('component updates record completion before scheduling the runtime reload',
         Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
         Artisan::call('up');
     }
-});
-
-test('the worker reload probes the Windows launcher admin port before the stock Caddy port', function (): void {
-    withDeploymentOctaneState(
-        null,
-        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2020')
-    );
 });
 
 test('deployment page shows the last frankenphp reload', function (): void {
@@ -626,6 +631,20 @@ test('the worker reload reads its admin port from the octane server-state file',
         ['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]],
         fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643')
     );
+});
+
+test('the worker reload does not guess the Windows launcher admin port', function (): void {
+    withDeploymentOctaneState(null, function (): void {
+        fakeDeploymentUpdateProcesses();
+        Http::fake([
+            'http://127.0.0.1:2019/config/apps/frankenphp' => Http::response([], 200),
+            '*' => Http::response('', 500),
+        ]);
+
+        app(DeploymentService::class)->reload();
+
+        Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2020/'));
+    });
 });
 
 test('the worker reload retries once when the FrankenPHP admin API times out', function (): void {
