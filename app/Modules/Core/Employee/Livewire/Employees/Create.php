@@ -72,12 +72,13 @@ class Create extends Component
             'status' => $validated['status'],
             'employment_start' => $validated['employmentStart'],
             'employment_end' => $validated['employmentEnd'],
-            'metadata' => $this->decodeJsonField($validated['metadataJson'] ?? null),
+            'metadata' => $this->decodeJsonField(auth()->user()?->isPlatformAdmin() ? ($validated['metadataJson'] ?? null) : null),
         ]);
 
         if ($validated['userId'] !== null) {
             User::query()
                 ->whereKey($validated['userId'])
+                ->where('company_id', $employee->company_id)
                 ->whereNull('employee_id')
                 ->update(['employee_id' => $employee->id]);
         }
@@ -89,14 +90,36 @@ class Create extends Component
 
     protected function rules(): array
     {
+        /** @var User $user */
+        $user = auth()->user();
+
         return [
-            'companyId' => ['required', 'integer', Rule::exists(Company::class, 'id')],
-            'departmentId' => ['nullable', 'integer', 'exists:company_departments,id'],
-            'userId' => ['nullable', 'integer', 'exists:users,id'],
+            'companyId' => [
+                'required',
+                'integer',
+                Rule::exists(Company::class, 'id'),
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    if (! $user->isPlatformAdmin() && (int) $value !== $user->getCompanyId()) {
+                        $fail(__('The selected company is not available for this tenant.'));
+                    }
+                },
+            ],
+            'departmentId' => [
+                'nullable',
+                'integer',
+                Rule::exists(Department::class, 'id')->where('company_id', $this->companyId),
+            ],
+            'userId' => [
+                'nullable',
+                'integer',
+                Rule::exists(User::class, 'id')
+                    ->where('company_id', $this->companyId)
+                    ->whereNull('employee_id'),
+            ],
             'supervisorId' => [
                 $this->employeeType === 'agent' ? 'required' : 'nullable',
                 'integer',
-                Rule::exists(Employee::class, 'id'),
+                Rule::exists(Employee::class, 'id')->where('company_id', $this->companyId),
             ],
             'employeeNumber' => ['required', 'string', 'max:255', Rule::unique('employees')->where('company_id', $this->companyId)],
             'fullName' => ['required', 'string', 'max:255'],
@@ -109,28 +132,47 @@ class Create extends Component
             'status' => ['required', 'in:pending,probation,active,inactive,terminated'],
             'employmentStart' => ['nullable', 'date'],
             'employmentEnd' => ['nullable', 'date'],
-            'metadataJson' => ['nullable', 'json'],
+            'metadataJson' => [
+                'nullable',
+                'json',
+                function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
+                    if (! $user->isPlatformAdmin() && filled($value)) {
+                        $fail(__('Employee metadata can only be set by a platform administrator.'));
+                    }
+                },
+            ],
         ];
     }
 
     public function render(): View
     {
+        /** @var User $user */
+        $user = auth()->user();
+
+        $companyScope = fn ($query) => $user->isPlatformAdmin()
+            ? $query
+            : $query->where('company_id', $user->getCompanyId());
+
         return view('livewire.admin.employees.create', [
             'companies' => Company::query()
+                ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('id', $user->getCompanyId()))
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'departments' => Department::query()
                 ->with('type')
+                ->when(! $user->isPlatformAdmin(), $companyScope)
                 ->orderBy('department_type_id')
                 ->get(['id', 'company_id', 'department_type_id']),
             'supervisors' => Employee::query()
+                ->when(! $user->isPlatformAdmin(), $companyScope)
                 ->orderBy('full_name')
                 ->get(['id', 'full_name', 'company_id']),
             'employeeTypes' => EmployeeType::query()->global()->orderBy('code')->get(['id', 'code', 'label', 'is_system']),
             'users' => User::query()
                 ->whereNull('employee_id')
+                ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('company_id', $user->getCompanyId()))
                 ->orderBy('name')
-                ->get(['id', 'name', 'employee_id']),
+                ->get(['id', 'name', 'company_id', 'employee_id']),
         ]);
     }
 }

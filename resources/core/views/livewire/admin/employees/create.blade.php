@@ -161,14 +161,16 @@
                     @endif
                 </div>
 
-                <x-ui.textarea
-                    id="employee-metadata"
-                    wire:model="metadataJson"
-                    label="{{ __('Metadata (JSON)') }}"
-                    rows="6"
-                    placeholder="{{ __('{\"notes\":\"Additional employee information\"}') }}"
-                    :error="$errors->first('metadataJson')"
-                />
+                @if(auth()->user()?->isPlatformAdmin())
+                    <x-ui.textarea
+                        id="employee-metadata"
+                        wire:model="metadataJson"
+                        label="{{ __('Metadata (JSON)') }}"
+                        rows="6"
+                        placeholder="{{ __('{\"notes\":\"Additional employee information\"}') }}"
+                        :error="$errors->first('metadataJson')"
+                    />
+                @endif
 
                 <div class="flex items-center gap-4">
                     <x-ui.button type="submit" variant="primary">

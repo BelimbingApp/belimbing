@@ -119,6 +119,9 @@ The setup script will:
 - copy `.env.example` to `.env` when missing
 - set `APP_URL=https://local.blb.lara`
 - set `DB_CONNECTION=sqlite`
+- write durable runtime choices such as `APP_ENV`, ingress mode, pinned ports,
+  and instance name to `.env`
+- write setup provenance to `storage/app/.devops/install-state.json`
 - create `database/database.sqlite`
 - install local Composer when missing
 - install PHP dependencies
@@ -171,7 +174,15 @@ The launcher starts three processes:
 - Laravel queue worker
 - Vite
 
-Open:
+For `APP_ENV=staging` or `APP_ENV=production`, the same command is the start
+front door but the process model changes: it ensures the supervised Windows
+runtime tasks are installed/running, verifies the local origin, and prints task
+state plus log locations. It does not start Vite or a foreground FrankenPHP
+process. If the tasks have not been installed yet, run the printed
+`scripts\runtime\windows\install-services.ps1 -StartNow` command once from an
+elevated PowerShell.
+
+For local development, open:
 
 ```text
 https://local.blb.lara
@@ -195,6 +206,48 @@ with:
 Get-Process frankenphp,php,bun -ErrorAction SilentlyContinue
 Stop-Process -Name frankenphp,php,bun -Force -ErrorAction SilentlyContinue
 ```
+
+### Staging and production supervised runtime
+
+For staging or production, run setup once with the intended environment and
+ingress mode, then keep using the same start command:
+
+```powershell
+.\scripts\setup.ps1 -Environment production -IngressMode tunnel -HttpsPort 8643 -CaddyAdminPort 2643 -InstanceName Prod
+.\scripts\start-app.ps1
+```
+
+Ingress modes are provider-neutral:
+
+- `tunnel` — Cloudflare Tunnel or another tunnel dials BLB on the pinned local
+  origin port.
+- `proxy` — IIS/nginx/Caddy/Apache or a provider proxy forwards to the pinned
+  local origin port.
+- `standalone` — BLB intentionally owns the LAN/public HTTPS listener.
+- `private` — current-machine or LAN-only access with no public ingress
+  assumption.
+- `shared` — a system Caddy instance owns `:80`/`:443` and proxies to BLB.
+
+Root `.env` is the runtime contract: `APP_ENV`, domains, `BLB_INGRESS_MODE`,
+`HTTPS_PORT`, `CADDY_SERVER_ADMIN_PORT`, and pinned Windows tool paths live
+there. Setup provenance lives under `storage/app/.devops/install-state.json` and
+is not a second runtime env file.
+
+The first staging/production start may ask for an elevated install step. Run the
+printed command from an Administrator PowerShell once:
+
+```powershell
+.\scripts\runtime\windows\install-services.ps1 -StartNow
+```
+
+After that, `.\scripts\start-app.ps1` starts or reports the supervised tasks.
+Use `.\scripts\stop-app.ps1` to stop the instance deliberately, and use
+`.\scripts\runtime\windows\deploy.ps1` for routine code updates so assets,
+migrations, worker reload, and `queue:restart` stay together.
+
+For ingress verification, public health checks, triage commands, and backup
+operations, use the Windows runtime runbook:
+`docs/runbooks/windows-runtime.md`.
 
 ## Performance (Important)
 
@@ -439,8 +492,10 @@ Add it to `C:\Windows\System32\drivers\etc\hosts` as Administrator.
 ### Port 443 is already in use
 
 Another local web server may already be using HTTPS. Stop the other service, or
-change the launcher's `HTTPS_PORT` environment before starting and browse to the
-matching URL.
+set `HTTPS_PORT` in `.env` before starting and browse to the matching URL. For
+staging/production behind a tunnel or reverse proxy, setup pins a high origin
+port in `.env`; start verifies that port and reports the owning process if it is
+busy instead of silently choosing another port.
 
 `-AppPort` changes the internal Octane listener. It does not move the public
 `https://local.blb.lara` listener away from port `443`.

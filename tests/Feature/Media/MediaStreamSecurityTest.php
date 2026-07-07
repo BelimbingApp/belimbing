@@ -8,12 +8,14 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\HeaderBag;
 
-function streamAsset(string $key, string $mime, string $filename): HeaderBag
+const MEDIA_STREAM_SECURITY_DISK = 'media';
+
+function mediaStreamSecurityHeadersFor(string $key, string $mime, string $filename): HeaderBag
 {
-    Storage::disk('media')->put($key, 'bytes');
+    Storage::disk(MEDIA_STREAM_SECURITY_DISK)->put($key, 'bytes');
 
     $asset = MediaAsset::query()->create([
-        'disk' => 'media',
+        'disk' => MEDIA_STREAM_SECURITY_DISK,
         'storage_key' => $key,
         'kind' => MediaAsset::KIND_ORIGINAL,
         'original_filename' => $filename,
@@ -23,31 +25,32 @@ function streamAsset(string $key, string $mime, string $filename): HeaderBag
     return (new MediaAssetController)->stream($asset)->headers;
 }
 
-beforeEach(fn () => Storage::fake('media'));
-
-it('serves a safe raster image inline', function (): void {
-    $headers = streamAsset('items/pic.png', 'image/png', 'pic.png');
-
-    expect($headers->get('Content-Type'))->toContain('image/png')
-        ->and($headers->get('Content-Disposition'))->toContain('inline')
+function expectMediaStreamHeaders(HeaderBag $headers, string $contentType, string $disposition): void
+{
+    expect($headers->get('Content-Type'))->toContain($contentType)
+        ->and($headers->get('Content-Disposition'))->toContain($disposition)
         ->and($headers->get('X-Content-Type-Options'))->toBe('nosniff')
         ->and($headers->get('Content-Security-Policy'))->toContain('sandbox');
+}
+
+beforeEach(fn () => Storage::fake(MEDIA_STREAM_SECURITY_DISK));
+
+it('serves a safe raster image inline', function (): void {
+    $headers = mediaStreamSecurityHeadersFor('items/pic.png', 'image/png', 'pic.png');
+
+    expectMediaStreamHeaders($headers, 'image/png', 'inline');
 });
 
 it('forces an SVG to download as an opaque octet-stream', function (): void {
-    $headers = streamAsset('items/x.svg', 'image/svg+xml', 'x.svg');
+    $headers = mediaStreamSecurityHeadersFor('items/x.svg', 'image/svg+xml', 'x.svg');
 
-    expect($headers->get('Content-Type'))->toContain('application/octet-stream')
-        ->and($headers->get('Content-Disposition'))->toContain('attachment')
-        ->and($headers->get('X-Content-Type-Options'))->toBe('nosniff')
-        ->and($headers->get('Content-Security-Policy'))->toContain('sandbox');
+    expectMediaStreamHeaders($headers, 'application/octet-stream', 'attachment');
 });
 
 it('forces an unknown/HTML type to download', function (): void {
-    $headers = streamAsset('docs/page.html', 'text/html', 'page.html');
+    $headers = mediaStreamSecurityHeadersFor('docs/page.html', 'text/html', 'page.html');
 
-    expect($headers->get('Content-Type'))->toContain('application/octet-stream')
-        ->and($headers->get('Content-Disposition'))->toContain('attachment');
+    expectMediaStreamHeaders($headers, 'application/octet-stream', 'attachment');
 });
 
 it('refuses to store an SVG upload', function (): void {
@@ -67,7 +70,7 @@ it('still stores a normal image upload', function (): void {
     );
     $png = UploadedFile::fake()->createWithContent('photo.png', $pngBytes);
 
-    $asset = app(MediaAssetStore::class)->putUploadedFile('media', 'uploads', $png);
+    $asset = app(MediaAssetStore::class)->putUploadedFile(MEDIA_STREAM_SECURITY_DISK, 'uploads', $png);
 
     expect($asset->exists)->toBeTrue()
         ->and($asset->mime_type)->toContain('image/');

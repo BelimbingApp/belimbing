@@ -5,10 +5,47 @@ use App\Base\Dashboard\Livewire\Index;
 use App\Base\Dashboard\Services\DashboardLayout;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
 const DASHBOARD_LEAVE_WIDGET = 'people.leave.pending-approvals';
 const DASHBOARD_AI_WIDGET = 'ai.operations-status';
+const DASHBOARD_TEST_LEAVE_CONFIG = 'app/Modules/People/Leave/Config/dashboard.php';
+
+beforeEach(function (): void {
+    installDashboardLeaveFixture();
+});
+
+afterEach(function (): void {
+    File::delete(base_path(DASHBOARD_TEST_LEAVE_CONFIG));
+    @rmdir(base_path('app/Modules/People/Leave/Config'));
+    @rmdir(base_path('app/Modules/People/Leave'));
+    @rmdir(base_path('app/Modules/People'));
+});
+
+function installDashboardLeaveFixture(): void
+{
+    $path = base_path(DASHBOARD_TEST_LEAVE_CONFIG);
+
+    File::ensureDirectoryExists(dirname($path));
+    File::put($path, <<<'PHP'
+<?php
+
+return [
+    'widgets' => [
+        [
+            'id' => 'people.leave.pending-approvals',
+            'label' => 'Leave Approvals',
+            'description' => 'Pending leave approvals.',
+            'icon' => 'heroicon-o-calendar-days',
+            'permission' => 'admin.ai.agent.view',
+            'component' => 'ai.widgets.operations-status',
+            'size' => 1,
+        ],
+    ],
+];
+PHP);
+}
 
 function dashboardWidgetIds(array $widgets): array
 {

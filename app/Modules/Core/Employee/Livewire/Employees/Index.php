@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\Employee\Models\Employee;
+use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Component;
@@ -83,12 +84,16 @@ class Index extends Component implements ProvidesLaraPageContext
     {
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'employees.full_name';
 
+        /** @var User $user */
+        $user = auth()->user();
+
         return view('livewire.admin.employees.index', [
             'employees' => Employee::query()
                 ->select('employees.*')
                 ->with('company', 'department.type', 'employeeType')
                 ->leftJoin('companies', 'employees.company_id', '=', 'companies.id')
                 ->leftJoin('employee_types', 'employees.employee_type', '=', 'employee_types.code')
+                ->when(! $user->isPlatformAdmin(), fn (Builder $q) => $q->where('employees.company_id', $user->getCompanyId()))
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function (Builder $q) use ($search): void {
                         $q->where('employees.full_name', 'like', '%'.$search.'%')
