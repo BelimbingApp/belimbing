@@ -62,4 +62,4 @@ jobs:
           sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
 
       - name: Gitleaks
-        run: gitleaks dir --redact --verbose .
+        run: gitleaks dir --config .gitleaks.toml --redact --verbose .
