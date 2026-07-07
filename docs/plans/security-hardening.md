@@ -3,7 +3,7 @@
 Status: In progress — response-header/CORS and proxy-trust phases complete; AI shell production kill-switch landed (sandbox/audit items open); SSRF, webhook, and hygiene phases open.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
-Agents: claude/claude-fable-5
+Agents: claude/claude-fable-5, codex/gpt-5
 
 ## Problem Essence
 
@@ -117,9 +117,10 @@ Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `co
 ### Phase 4 — SSRF pinning & redirect re-validation (H2)
 Goal: outbound fetches cannot reach internal targets via DNS rebinding or redirects.
 Scope: `UrlSafetyGuard`, `WebFetchService`.
-Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction — all passing); `ToolCallingTest` still green.
+Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction, cURL resolve pinning, unpinnable rebinding fallback — all passing); `ToolCallingTest` still green.
 
 - [x] Add `UrlSafetyGuard::pinnedIpFor()` and connect to that validated public IP via cURL's resolve override (keeps Host/SNI), so the address the guard approved is the address contacted — closing the DNS-rebinding TOCTOU — claude/claude-fable-5
+- [x] Treat a DNS hostname that validates but cannot be pinned on the connection-time lookup as blocked, never as an unpinned fallback fetch — codex/gpt-5
 - [x] Disable automatic redirects (`allow_redirects => false`) and re-run `validate()` on each resolved `Location` before following, up to the redirect limit — claude/claude-fable-5
 - [x] Multi-record hosts where any address is private are already blocked by `validate()`; `pinnedIpFor()` only ever returns a validated public address — claude/claude-fable-5
 - [ ] Follow-up: also reject exotic IP encodings (octal/hex/decimal) at the guard boundary for defense in depth.

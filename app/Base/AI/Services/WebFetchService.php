@@ -98,34 +98,37 @@ class WebFetchService
         array $hostnameAllowlist,
     ): array {
         $currentUrl = $url;
+        $result = ['request_error' => 'Too many redirects (limit '.self::MAX_REDIRECTS.').'];
 
         for ($hop = 0; $hop <= self::MAX_REDIRECTS; $hop++) {
-            $safeCheck = $this->urlSafetyGuard->validate(
-                url: $currentUrl,
-                allowPrivateNetwork: $allowPrivateNetwork,
-                hostnameAllowlist: $hostnameAllowlist,
+            $pinning = $this->validatedPinnedIpForUrl(
+                $currentUrl,
+                $allowPrivateNetwork,
+                $hostnameAllowlist,
             );
 
-            if ($safeCheck !== true) {
-                return ['validation_error' => $safeCheck];
+            if (isset($pinning['validation_error'])) {
+                $result = ['validation_error' => $pinning['validation_error']];
+                break;
             }
 
             try {
                 $response = $this->sendPinned(
                     $currentUrl,
                     $timeoutSeconds,
-                    $allowPrivateNetwork,
-                    $hostnameAllowlist,
+                    $pinning['pinned_ip'] ?? null,
                 );
             } catch (\Throwable $e) {
-                return ['request_error' => $e->getMessage()];
+                $result = ['request_error' => $e->getMessage()];
+                break;
             }
 
-            if (in_array($response->status(), self::REDIRECT_STATUSES, true)) {
+            if ($this->isRedirect($response)) {
                 $location = $response->header('Location');
 
                 if ($location === null || $location === '') {
-                    return ['http_status' => $response->status()];
+                    $result = ['http_status' => $response->status()];
+                    break;
                 }
 
                 $currentUrl = (string) UriResolver::resolve(new Uri($currentUrl), new Uri($location));
@@ -133,48 +136,85 @@ class WebFetchService
                 continue;
             }
 
-            if (! $response->successful()) {
-                return ['http_status' => $response->status()];
-            }
-
-            return ['response' => $response];
+            $result = $response->successful()
+                ? ['response' => $response]
+                : ['http_status' => $response->status()];
+            break;
         }
 
-        return ['request_error' => 'Too many redirects (limit '.self::MAX_REDIRECTS.').'];
+        return $result;
+    }
+
+    /**
+     * @param  list<string>  $hostnameAllowlist
+     * @return array{pinned_ip?: string|null, validation_error?: string}
+     */
+    private function validatedPinnedIpForUrl(
+        string $url,
+        bool $allowPrivateNetwork,
+        array $hostnameAllowlist,
+    ): array {
+        $safeCheck = $this->urlSafetyGuard->validate(
+            url: $url,
+            allowPrivateNetwork: $allowPrivateNetwork,
+            hostnameAllowlist: $hostnameAllowlist,
+        );
+
+        if ($safeCheck !== true) {
+            return ['validation_error' => $safeCheck];
+        }
+
+        $parsed = parse_url($url);
+        $host = is_array($parsed) ? strtolower((string) ($parsed['host'] ?? '')) : '';
+
+        if (! $this->urlSafetyGuard->pinningRequiredFor($host, $allowPrivateNetwork, $hostnameAllowlist)) {
+            return ['pinned_ip' => null];
+        }
+
+        $pinnedIp = $this->urlSafetyGuard->pinnedIpFor($host, $allowPrivateNetwork, $hostnameAllowlist);
+
+        return $pinnedIp === null
+            ? ['validation_error' => "Blocked: unable to pin hostname {$host} to a public IP address."]
+            : ['pinned_ip' => $pinnedIp];
     }
 
     /**
      * Issue a single request with redirects disabled and the connection pinned
      * to a validated IP for DNS hostnames (via cURL's resolve override, which
      * keeps the original Host/SNI while forcing the target address).
-     *
-     * @param  list<string>  $hostnameAllowlist
      */
     private function sendPinned(
         string $url,
         int $timeoutSeconds,
-        bool $allowPrivateNetwork,
-        array $hostnameAllowlist,
+        ?string $pinnedIp,
     ): Response {
         $request = Http::timeout($timeoutSeconds)
             ->withHeaders(['User-Agent' => 'Belimbing/1.0 (Agent)'])
             ->withOptions(['allow_redirects' => false]);
 
-        $parsed = parse_url($url);
-        $host = is_array($parsed) ? strtolower((string) ($parsed['host'] ?? '')) : '';
-        $pinnedIp = $host === ''
-            ? null
-            : $this->urlSafetyGuard->pinnedIpFor($host, $allowPrivateNetwork, $hostnameAllowlist);
-
         if ($pinnedIp !== null) {
+            $parsed = parse_url($url);
+            $host = is_array($parsed) ? strtolower((string) ($parsed['host'] ?? '')) : '';
             $scheme = strtolower((string) ($parsed['scheme'] ?? 'https'));
             $port = (int) ($parsed['port'] ?? ($scheme === 'http' ? 80 : 443));
             $request = $request->withOptions([
-                'curl' => [CURLOPT_RESOLVE => [$host.':'.$port.':'.$pinnedIp]],
+                'curl' => [CURLOPT_RESOLVE => [$this->curlResolveEntry($host, $port, $pinnedIp)]],
             ]);
         }
 
         return $request->get($url);
+    }
+
+    private function isRedirect(Response $response): bool
+    {
+        return in_array($response->status(), self::REDIRECT_STATUSES, true);
+    }
+
+    private function curlResolveEntry(string $host, int $port, string $ip): string
+    {
+        $address = str_contains($ip, ':') ? '['.$ip.']' : $ip;
+
+        return $host.':'.$port.':'.$address;
     }
 
     private function extractHtml(string $html, string $mode): string
