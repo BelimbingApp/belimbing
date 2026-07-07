@@ -1,6 +1,6 @@
 # docs/plans/security-hardening.md
 
-Status: In progress — response-header/CORS and proxy-trust phases complete; AI shell production kill-switch landed (sandbox/audit items open); SSRF, webhook, and hygiene phases open.
+Status: In progress — all seven phases have their code-scoped work landed (headers/CORS, proxy trust, AI shell gate + launcher hardening, SSRF pinning, eBay webhook hardening, media XSS, secure-defaults/CI). Remaining open items are infra/ops residuals (shell OS sandbox + audit/rate-limit, full eBay signature crypto, per-actor media authz, nested-repo CI scans), tracked per phase.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
 Agents: claude/claude-fable-5
@@ -146,11 +146,13 @@ Evidence: `tests/Feature/Media/MediaStreamSecurityTest.php` (inline raster, SVG/
 
 ### Phase 7 — Secure defaults & supply chain (M1, M2, L3, L5)
 Goal: insecure config cannot ship to production silently; dependencies and secrets are scanned in CI.
+Evidence: `tests/Feature/System/SecurityCheckCommandTest.php` (5 passing); `.github/workflows/security.yml`; `docs/security-advisories.md`.
 
-- [ ] Default `.env.example` to `APP_DEBUG=false`, `LOG_LEVEL=warning`; document `SESSION_SECURE_COOKIE=true` and `SESSION_ENCRYPT=true` for TLS deployments.
-- [ ] Add a deploy/CI gate that fails when `APP_DEBUG` is truthy in production.
-- [ ] Document (with a review date) the `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4`.
-- [ ] Add `composer audit`, `bun audit`, and a secret scanner as required CI gates; extend coverage to the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
+- [x] `blb:security:check` command fails a production deploy on `APP_DEBUG` on, missing `APP_KEY`, insecure session cookie, or wildcard proxy trust (warns for the same outside production) — a stronger guard than an example default, since the `.env.example` is deliberately a local template — claude/claude-fable-5
+- [x] Document `APP_DEBUG`/`SESSION_ENCRYPT` production expectations in `.env.example` and add a documented `SESSION_SECURE_COOKIE` line — claude/claude-fable-5
+- [x] Document the `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4` with a review date in `docs/security-advisories.md` — claude/claude-fable-5
+- [x] Add `.github/workflows/security.yml` running `composer audit`, `bun audit`, and a gitleaks secret scan on push/PR and weekly — claude/claude-fable-5
+- [ ] Residual: extend the same CI security scans into the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
 
 ## What looked healthy
 - SQL access uses Eloquent / bound `whereRaw` placeholders — no injection found in audited code.

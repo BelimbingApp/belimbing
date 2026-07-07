@@ -5,6 +5,7 @@ namespace App\Base\System;
 use App\Base\System\Console\Commands\KeyGenerateCommand;
 use App\Base\System\Console\Commands\KeyRotateCommand;
 use App\Base\System\Console\Commands\PageWeightAuditCommand;
+use App\Base\System\Console\Commands\SecurityCheckCommand;
 use App\Base\System\Console\Commands\TestCommand;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\Services\StatusBarDiagnostics;
@@ -30,6 +31,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->commands([
             KeyRotateCommand::class,
             PageWeightAuditCommand::class,
+            SecurityCheckCommand::class,
         ]);
     }
 }
