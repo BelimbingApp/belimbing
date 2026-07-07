@@ -1,0 +1,3 @@
+# Imported inside the frontend site block by Caddyfile for staging/production.
+# Intentionally empty: built assets are served from public/build, and dev-only
+# Vite routes such as /@fs must not proxy to another instance's dev server.

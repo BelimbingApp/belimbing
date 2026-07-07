@@ -106,6 +106,10 @@ class Index extends Component
         $hasSessionLog = $this->log !== [];
         $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
         $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
+        $lastLogKey = array_key_last($this->log);
+        $sessionRunSummary = $lastLogKey !== null
+            ? (string) $this->log[$lastLogKey]
+            : (string) __('No update has run in this session.');
 
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
@@ -120,7 +124,7 @@ class Index extends Component
             'runStatus' => $runStatus,
             'runLabel' => $this->statusLabel($runStatus),
             'runVariant' => $this->statusVariant($runStatus),
-            'runSummary' => $hasSessionLog ? $this->runSummary() : ($lastRun['summary'] ?? ''),
+            'runSummary' => $hasSessionLog ? $sessionRunSummary : ($lastRun['summary'] ?? ''),
             'runAt' => $lastRun['attempted_at'] ?? null,
             'displayLog' => $displayLog,
             'lastReload' => $history->lastReload(),
@@ -224,15 +228,6 @@ class Index extends Component
             'success' => 'success',
             default => 'default',
         };
-    }
-
-    private function runSummary(): string
-    {
-        $lastKey = array_key_last($this->log);
-
-        return $lastKey !== null
-            ? (string) $this->log[$lastKey]
-            : (string) __('No update has run in this session.');
     }
 
     private function isErrorLine(string $line): bool

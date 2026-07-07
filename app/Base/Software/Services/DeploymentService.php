@@ -2,13 +2,7 @@
 
 namespace App\Base\Software\Services;
 
-use App\Base\Support\PhpCli;
-use Illuminate\Http\Client\PendingRequest;
-use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Artisan;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Process;
 
 /**
  * Reads the deployment's git state and compares it to GitHub so the operator can
@@ -29,16 +23,17 @@ use Illuminate\Support\Facades\Process;
  */
 class DeploymentService
 {
-    private const ADMIN_CONNECT_TIMEOUT_SECONDS = 2;
-
-    private const ADMIN_REQUEST_TIMEOUT_SECONDS = 10;
+    private readonly DeploymentWorkerReloader $workerReloader;
 
     public function __construct(
         private readonly DistributionBundleRepository $bundles,
         private readonly DeploymentBuildRunner $buildRunner,
         private readonly DeploymentAdminEndpointResolver $adminEndpoints,
         private readonly DeploymentRunHistory $history,
-    ) {}
+        ?DeploymentWorkerReloader $workerReloader = null,
+    ) {
+        $this->workerReloader = $workerReloader ?? new DeploymentWorkerReloader($this->adminEndpoints, $this->history);
+    }
 
     /**
      * Per-Distribution Bundle version status for the Deployment page.
@@ -95,8 +90,7 @@ class DeploymentService
      */
     public function update(array $keys = [], ?callable $progress = null, bool $reloadWorkers = true): array
     {
-        $byKey = collect($this->bundles->distributions())->keyBy('key');
-        $targets = $keys === [] ? $byKey->values()->all() : $byKey->only($keys)->values()->all();
+        $targets = $this->updateTargets($keys);
 
         if ($targets === []) {
             $line = (string) __('Nothing to update.');
@@ -119,31 +113,18 @@ class DeploymentService
         Artisan::call('down', ['--retry' => 5]);
 
         try {
-            foreach ($targets as $dist) {
-                $record((string) __('Pulling :label…', ['label' => $dist['label']]));
-                $record($this->bundles->pull($dist));
-            }
+            $this->pullTargets($targets, $record);
+            $this->refreshPhpDependencies($composerBefore, $record);
 
-            // PHP dependencies: a changed composer.lock means a full install; otherwise
-            // just refresh the optimized autoloader for any new/moved classes.
-            if ($this->buildRunner->composerLockHash() !== $composerBefore) {
-                $record((string) __('PHP dependencies changed — running composer install…'));
-                $record($this->runComposerInstall());
-            } else {
-                $record((string) __('Refreshing autoloader…'));
-                $record($this->buildRunner->composerDumpAutoload());
-            }
-
-            if ($this->hasError($log)) {
+            if (DeploymentLogClassifier::hasError($log)) {
                 $record((string) __('FAILED: dependency refresh did not complete; deployment halted before migrations and reload.'));
 
                 return $log;
             }
 
-            $record((string) __('Building frontend assets…'));
-            $log = array_merge($log, $this->runFrontendBuild($progress));
+            $this->buildFrontendAssets($log, $record, $progress);
 
-            if ($this->hasError($log)) {
+            if (DeploymentLogClassifier::hasError($log)) {
                 $record((string) __('FAILED: frontend assets did not build; deployment halted before migrations and reload.'));
 
                 return $log;
@@ -175,6 +156,58 @@ class DeploymentService
         $record($this->completionLine($log, $reloadWorkers));
 
         return $log;
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return list<array{key: string, label: string, path: string, relative: string}>
+     */
+    private function updateTargets(array $keys): array
+    {
+        $byKey = collect($this->bundles->distributions())->keyBy('key');
+
+        return $keys === [] ? $byKey->values()->all() : $byKey->only($keys)->values()->all();
+    }
+
+    /**
+     * @param  list<array{key: string, label: string, path: string, relative: string}>  $targets
+     * @param  callable(string): void  $record
+     */
+    private function pullTargets(array $targets, callable $record): void
+    {
+        foreach ($targets as $dist) {
+            $record((string) __('Pulling :label…', ['label' => $dist['label']]));
+            $record($this->bundles->pull($dist));
+        }
+    }
+
+    /**
+     * @param  callable(string): void  $record
+     */
+    private function refreshPhpDependencies(?string $composerBefore, callable $record): void
+    {
+        // A changed composer.lock means a full install; otherwise just refresh
+        // the optimized autoloader for any new or moved classes.
+        if ($this->buildRunner->composerLockHash() !== $composerBefore) {
+            $record((string) __('PHP dependencies changed — running composer install…'));
+            $record($this->runComposerInstall());
+
+            return;
+        }
+
+        $record((string) __('Refreshing autoloader…'));
+        $record($this->buildRunner->composerDumpAutoload());
+    }
+
+    /**
+     * @param  list<string>  $log
+     * @param  callable(string): void  $record
+     * @param  (callable(string): void)|null  $progress
+     */
+    private function buildFrontendAssets(array &$log, callable $record, ?callable $progress): void
+    {
+        $record((string) __('Building frontend assets…'));
+        $log = array_merge($log, $this->runFrontendBuild($progress));
     }
 
     /**
@@ -235,7 +268,7 @@ class DeploymentService
     {
         $message = $this->buildRunner->composerInstall();
 
-        $this->history->rememberComposerRun(! $this->hasError([$message]), $message);
+        $this->history->rememberComposerRun(! DeploymentLogClassifier::hasError([$message]), $message);
 
         return $message;
     }
@@ -249,7 +282,7 @@ class DeploymentService
         $log = $this->buildRunner->buildAssets($progress);
 
         $this->history->rememberFrontendRun(
-            ! $this->hasError($log),
+            ! DeploymentLogClassifier::hasError($log),
             $this->lastFrontendBuildMessage($log),
             $this->frontendPackageManager(),
         );
@@ -269,164 +302,9 @@ class DeploymentService
             : (string) __('Frontend build produced no output.');
     }
 
-    /**
-     * Graceful, non-elevated worker reload: probe the Caddy admin API for a
-     * FrankenPHP worker config, POST FrankenPHP's worker restart endpoint, then
-     * queue:restart. The scheduler self-refreshes per run.
-     *
-     * @return list<string>
-     */
     public function reload(bool $clearRuntimeCaches = true): array
     {
-        $log = [];
-
-        if ($clearRuntimeCaches) {
-            $log[] = $this->clearRuntimeCaches();
-        }
-
-        $log[] = $this->warmRuntimeBootstrap();
-
-        $webReloaded = false;
-        $reloadMessage = '';
-        $adminUrl = '';
-        $candidates = $this->adminEndpoints->candidates();
-
-        Log::debug('FrankenPHP worker reload probing admin API candidates.', [
-            'candidates' => array_map(
-                static fn (array $candidate): string => "{$candidate[0]}:{$candidate[1]}",
-                $candidates,
-            ),
-        ]);
-
-        foreach ($candidates as [$host, $port]) {
-            $configUrl = "http://{$host}:{$port}/config/apps/frankenphp";
-            $restartUrl = "http://{$host}:{$port}/frankenphp/workers/restart";
-            $adminUrl = $configUrl;
-
-            try {
-                $config = $this->sendFrankenPhpAdminRequest(
-                    fn (): Response => $this->frankenPhpAdminHttp()->get($configUrl),
-                );
-
-                if ($this->frankenPhpWorkerConfigPresent($config)) {
-                    $adminUrl = $restartUrl;
-                    $restart = $this->sendFrankenPhpAdminRequest(
-                        fn (): Response => $this->frankenPhpAdminHttp()->post($restartUrl),
-                    );
-
-                    if ($restart->successful()) {
-                        $webReloaded = true;
-                        $reloadMessage = (string) __('Web workers reloaded.');
-                        Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
-
-                        break;
-                    }
-
-                    $reloadMessage = (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $restart->status()]);
-                    Log::debug('FrankenPHP worker restart failed.', [
-                        'admin_url' => $restartUrl,
-                        'status' => $restart->status(),
-                    ]);
-
-                    continue;
-                }
-
-                $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $configUrl]);
-                Log::debug('FrankenPHP worker reload GET returned no worker config.', [
-                    'admin_url' => $configUrl,
-                    'status' => $config->status(),
-                ]);
-            } catch (\Throwable $exception) {
-                $reloadMessage = (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]);
-                Log::debug('FrankenPHP worker reload request failed.', [
-                    'admin_url' => $adminUrl,
-                    'message' => $exception->getMessage(),
-                ]);
-            }
-        }
-
-        $log[] = $reloadMessage;
-
-        Artisan::call('queue:restart');
-        $log[] = (string) __('Queue restart signaled.');
-        $this->history->rememberReload($webReloaded, $reloadMessage, $adminUrl);
-
-        return $log;
-    }
-
-    private function frankenPhpAdminHttp(): PendingRequest
-    {
-        return Http::connectTimeout(self::ADMIN_CONNECT_TIMEOUT_SECONDS)
-            ->timeout(self::ADMIN_REQUEST_TIMEOUT_SECONDS);
-    }
-
-    private function frankenPhpWorkerConfigPresent(Response $response): bool
-    {
-        if (! $response->successful()) {
-            return false;
-        }
-
-        $config = $response->json();
-
-        return is_array($config) && array_key_exists('workers', $config);
-    }
-
-    /**
-     * @param  callable(): Response  $request
-     */
-    private function sendFrankenPhpAdminRequest(callable $request): Response
-    {
-        try {
-            return $request();
-        } catch (\Throwable $exception) {
-            if (! $this->isHttpTimeout($exception)) {
-                throw $exception;
-            }
-
-            return $request();
-        }
-    }
-
-    private function isHttpTimeout(\Throwable $exception): bool
-    {
-        $message = $exception->getMessage();
-
-        return str_contains($message, 'cURL error 28')
-            || str_contains(strtolower($message), 'timed out');
-    }
-
-    private function clearRuntimeCaches(): string
-    {
-        Artisan::call('optimize:clear');
-
-        if (function_exists('opcache_reset')) {
-            @opcache_reset();
-        }
-
-        return (string) __('Runtime caches cleared.');
-    }
-
-    /**
-     * FrankenPHP boots many workers concurrently. When the provider list changes
-     * (for example, enabling/disabling a domain), letting every worker compile
-     * bootstrap/cache/services.php at once is unreliable on Windows. Warm it once
-     * in a normal CLI process before asking FrankenPHP to respawn the pool.
-     */
-    private function warmRuntimeBootstrap(): string
-    {
-        $warm = Process::path(base_path())
-            ->timeout(60)
-            ->run(PhpCli::current()->artisan(['about', '--only=environment']));
-
-        if ($warm->successful()) {
-            return (string) __('Runtime bootstrap warmed.');
-        }
-
-        $output = trim($warm->output()."\n".$warm->errorOutput());
-
-        return (string) __('Warning: runtime bootstrap warmup failed before worker reload: :message', [
-            'message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $warm->exitCode()]),
-        ]);
+        return $this->workerReloader->reload($clearRuntimeCaches);
     }
 
     /**
@@ -434,12 +312,12 @@ class DeploymentService
      */
     private function completionLine(array $log, bool $reloadWorkers): string
     {
-        if ($this->hasError($log)) {
+        if (DeploymentLogClassifier::hasError($log)) {
             return (string) __('Update finished with errors. Some steps did not complete; the Distribution Bundle table and log show what still needs attention.');
         }
 
-        if ($this->hasWarning($log)) {
-            if ($this->hasVerificationWarning($log)) {
+        if (DeploymentLogClassifier::hasWarning($log)) {
+            if (DeploymentLogClassifier::hasVerificationWarning($log)) {
                 return (string) __('Update finished with warnings. One or more selected Distribution Bundles could not be verified at the branch head; review the lines above before trusting the table.');
             }
 
@@ -451,39 +329,5 @@ class DeploymentService
         }
 
         return (string) __('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
-    }
-
-    /**
-     * @param  list<string>  $log
-     */
-    private function hasError(array $log): bool
-    {
-        return collect($log)->contains(function (string $line): bool {
-            $lower = strtolower($line);
-
-            return str_starts_with($line, 'FAILED:')
-                || str_contains($lower, ' install failed:')
-                || str_contains($lower, ' build failed:')
-                || str_contains($lower, ' refresh failed:');
-        });
-    }
-
-    /**
-     * @param  list<string>  $log
-     */
-    private function hasWarning(array $log): bool
-    {
-        return collect($log)->contains(fn (string $line): bool => str_starts_with($line, 'Warning:')
-            || str_starts_with($line, 'Still behind:')
-            || str_starts_with($line, 'Could not verify'));
-    }
-
-    /**
-     * @param  list<string>  $log
-     */
-    private function hasVerificationWarning(array $log): bool
-    {
-        return collect($log)->contains(fn (string $line): bool => str_starts_with($line, 'Still behind:')
-            || str_starts_with($line, 'Could not verify'));
     }
 }

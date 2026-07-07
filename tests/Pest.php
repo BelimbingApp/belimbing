@@ -5,6 +5,7 @@ use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Media\Models\MediaAsset;
@@ -75,6 +76,51 @@ function createAdminUser(): User
         'principal_id' => $user->id,
         'role_id' => $role->id,
     ]);
+
+    return $user;
+}
+
+/**
+ * Create a non-platform tenant owner user for tenant-boundary tests.
+ */
+function createTenantOwnerUser(?int $companyId = null): User
+{
+    setupAuthzRoles();
+
+    $companyId ??= Company::factory()->create()->id;
+    $role = Role::query()->where('code', 'tenant_owner')->whereNull('company_id')->firstOrFail();
+    $user = User::factory()->create(['company_id' => $companyId]);
+
+    PrincipalRole::query()->create([
+        'company_id' => $companyId,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    return $user;
+}
+
+/**
+ * Create a user authorized to access the Kiat investment extension.
+ */
+function createKiatUser(?int $companyId = null): User
+{
+    setupAuthzRoles();
+
+    $companyId ??= Company::factory()->create()->id;
+
+    $user = User::factory()->create(['company_id' => $companyId]);
+
+    foreach (['kiat.investment.view', 'kiat.investment.manage'] as $capability) {
+        PrincipalCapability::query()->create([
+            'company_id' => $companyId,
+            'principal_type' => PrincipalType::USER->value,
+            'principal_id' => $user->id,
+            'capability_key' => $capability,
+            'is_allowed' => true,
+        ]);
+    }
 
     return $user;
 }

@@ -64,6 +64,13 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function mount(Employee $employee): void
     {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if (! $user->isPlatformAdmin() && $employee->company_id !== $user->getCompanyId()) {
+            abort(403);
+        }
+
         $this->employee = $employee->load([
             'company',
             'department.type',
@@ -162,6 +169,12 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveDepartment(?int $departmentId): void
     {
+        if ($departmentId !== null && ! $this->belongsToSameCompany(Department::class, $departmentId)) {
+            $this->notifyError(__('The selected department is not available for this tenant.'));
+
+            return;
+        }
+
         $this->employee->department_id = $departmentId ?: null;
         $this->employee->save();
         $this->employee->load('department.type');
@@ -170,10 +183,33 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveSupervisor(?int $supervisorId): void
     {
+        if ($supervisorId !== null && ! $this->belongsToSameCompany(Employee::class, $supervisorId)) {
+            $this->notifyError(__('The selected supervisor is not available for this tenant.'));
+
+            return;
+        }
+
         $this->employee->supervisor_id = $supervisorId ?: null;
         $this->employee->save();
         $this->employee->load('supervisor');
         $this->notify(__('Supervisor assignment updated.'));
+    }
+
+    /**
+     * Verify a related model belongs to the same company as this employee.
+     */
+    private function belongsToSameCompany(string $modelClass, int $modelId): bool
+    {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if ($user->isPlatformAdmin()) {
+            return true;
+        }
+
+        $model = $modelClass::query()->find($modelId);
+
+        return $model !== null && $model->company_id === $this->employee->company_id;
     }
 
     public function saveUser(?int $userId): void
@@ -186,6 +222,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
         if ($userId !== null) {
             $user = User::query()
                 ->whereKey($userId)
+                ->where('company_id', $this->employee->company_id)
                 ->where(function ($query): void {
                     $query->whereNull('employee_id')
                         ->orWhere('employee_id', $this->employee->id);

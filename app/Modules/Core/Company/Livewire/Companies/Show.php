@@ -14,6 +14,7 @@ use App\Modules\Core\Company\Livewire\Concerns\SortsExternalAccesses;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\LegalEntityType;
 use App\Modules\Core\Geonames\Models\Country;
+use App\Modules\Core\User\Models\User;
 use DateTimeZone;
 use Illuminate\Contracts\View\View;
 
@@ -83,6 +84,13 @@ class Show extends AbstractAddressForm
 
     public function mount(Company $company): void
     {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if (! $user->isPlatformAdmin() && $company->id !== $user->getCompanyId()) {
+            abort(403);
+        }
+
         $this->company = $company->load([
             'parent',
             'legalEntityType',
@@ -151,6 +159,15 @@ class Show extends AbstractAddressForm
 
     public function saveParent(?int $parentId): void
     {
+        /** @var User $user */
+        $user = auth()->user();
+
+        if (! $user->isPlatformAdmin() && $parentId !== null) {
+            $this->notifyError(__('Only platform administrators can assign a parent company.'));
+
+            return;
+        }
+
         $this->company->parent_id = $parentId ?: null;
         $this->company->save();
         $this->company->load('parent');

@@ -7,13 +7,15 @@ rather than ignored.
 
 ## Composer
 
-Ignored advisories live under `config.audit.ignore` in `composer.json`.
+There are no accepted Composer advisories at this time.
 
-| Advisory | Status | Rationale | Review by |
-|----------|--------|-----------|-----------|
-| `PKSA-5jz8-6tcw-pbk4` | Ignored | Pre-existing ignore carried in `composer.json`. Rationale to be confirmed by maintainers (which package/CVE, and why it is not exploitable here). | 2026-10-07 |
+`PKSA-5jz8-6tcw-pbk4` / CVE-2026-41570 was previously ignored, but the ignore
+is no longer needed: the affected PHPUnit 12 line is `12.5.21`, the first
+patched 12.x release is `12.5.22`, and this repository is locked to
+`phpunit/phpunit` 12.5.30.
 
 When adding an entry, record the affected package, why it is not exploitable in
 Belimbing's usage (or the remediation timeline), and a concrete review date.
-Remove the entry — and the `composer.json` ignore — once the dependency is
-upgraded past the advisory.
+Accepted advisories must live under `config.audit.ignore` in `composer.json`;
+remove the entry here and the ignore once the dependency is upgraded past the
+advisory.

@@ -1,9 +1,9 @@
 # docs/plans/security-hardening.md
 
-Status: In progress — all seven phases have their code-scoped work landed (headers/CORS, proxy trust, AI shell gate + launcher hardening, SSRF pinning, eBay webhook hardening, media XSS, secure-defaults/CI). Remaining open items are infra/ops residuals (shell OS sandbox + audit/rate-limit, full eBay signature crypto, per-actor media authz, nested-repo CI scans), tracked per phase.
+Status: In progress — response-header/CORS, proxy trust, AI shell code gates, SSRF pinning, media stored-XSS hardening, and secure-defaults/CI are code-complete; eBay webhook hardening remains pending in the commerce repo, with shell ops, media authz, and nested-repo CI residuals tracked below.
 Last Updated: 2026-07-07
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
-Agents: claude/claude-fable-5
+Agents: claude/claude-fable-5, codex/gpt-5
 
 ## Problem Essence
 
@@ -117,9 +117,10 @@ Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `co
 ### Phase 4 — SSRF pinning & redirect re-validation (H2)
 Goal: outbound fetches cannot reach internal targets via DNS rebinding or redirects.
 Scope: `UrlSafetyGuard`, `WebFetchService`.
-Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction — all passing); `ToolCallingTest` still green.
+Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrfTest.php` (redirect-to-internal, redirect limit, initial-internal, extraction, cURL resolve pinning, unpinnable rebinding fallback — all passing); `ToolCallingTest` still green.
 
 - [x] Add `UrlSafetyGuard::pinnedIpFor()` and connect to that validated public IP via cURL's resolve override (keeps Host/SNI), so the address the guard approved is the address contacted — closing the DNS-rebinding TOCTOU — claude/claude-fable-5
+- [x] Treat a DNS hostname that validates but cannot be pinned on the connection-time lookup as blocked, never as an unpinned fallback fetch — codex/gpt-5
 - [x] Disable automatic redirects (`allow_redirects => false`) and re-run `validate()` on each resolved `Location` before following, up to the redirect limit — claude/claude-fable-5
 - [x] Multi-record hosts where any address is private are already blocked by `validate()`; `pinnedIpFor()` only ever returns a validated public address — claude/claude-fable-5
 - [ ] Follow-up: also reject exotic IP encodings (octal/hex/decimal) at the guard boundary for defense in depth.
@@ -127,12 +128,10 @@ Evidence: `tests/Unit/AI/UrlSafetyGuardTest.php`, `tests/Feature/AI/WebFetchSsrf
 ### Phase 5 — eBay webhook authentication (H1)
 Goal: the public, CSRF-exempt deletion endpoint authenticates callers and cannot be used for log injection or disk-fill.
 Scope: `EbayAccountDeletionController`, `blb_log_var` usage.
-Evidence: `EbayAccountDeletionHardeningTest.php` (oversized-body truncation, log-injection neutralized, 429 rate-limit) + existing `EbayAccountDeletionWebhookTest.php` still green.
 
-- [x] Rate-limit the route (`throttle:120,1` — generous for eBay's low-volume retries, blunts spam) — claude/claude-fable-5
-- [x] Size-cap the logged body and strip real line breaks from logged values, logging them as structured Monolog context so a crafted payload cannot forge log lines or exhaust the disk — claude/claude-fable-5
-- [x] Record `ebay_signature_present` for observability; keep the mandatory 200 acknowledgement so eBay never flags the keyset — claude/claude-fable-5
-- [ ] Residual: full cryptographic verification of `x-ebay-signature` (resolve the key id, fetch eBay's public key, verify the payload). Deferred because it must be validated against live eBay traffic to avoid rejecting genuine notices and breaking the compliance keyset. A related latent log-injection in `blb_log_var` (JSON-as-message expands `\n`) is flagged as its own task.
+- [ ] Verify the eBay Notification API signature (resolve the `x-ebay-signature` key id, verify the payload) before recording anything.
+- [ ] Rate-limit and size-cap the endpoint; store log fields as structured data so a body value cannot inject log lines.
+- [ ] Add tests: unsigned/forged POST rejected; valid signature accepted.
 
 ### Phase 6 — Media stored-XSS hardening (H3)
 Goal: user-uploaded media cannot execute in the app origin.
@@ -150,7 +149,7 @@ Evidence: `tests/Feature/System/SecurityCheckCommandTest.php` (5 passing); `.git
 
 - [x] `blb:security:check` command fails a production deploy on `APP_DEBUG` on, missing `APP_KEY`, insecure session cookie, or wildcard proxy trust (warns for the same outside production) — a stronger guard than an example default, since the `.env.example` is deliberately a local template — claude/claude-fable-5
 - [x] Document `APP_DEBUG`/`SESSION_ENCRYPT` production expectations in `.env.example` and add a documented `SESSION_SECURE_COOKIE` line — claude/claude-fable-5
-- [x] Document the `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4` with a review date in `docs/security-advisories.md` — claude/claude-fable-5
+- [x] Remove the stale `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4`; current `composer.lock` has `phpunit/phpunit` 12.5.30, beyond the patched 12.5.22 release for CVE-2026-41570 — codex/gpt-5
 - [x] Add `.github/workflows/security.yml` running `composer audit`, `bun audit`, and a gitleaks secret scan on push/PR and weekly — claude/claude-fable-5
 - [ ] Residual: extend the same CI security scans into the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
 

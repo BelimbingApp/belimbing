@@ -14,6 +14,13 @@ namespace App\Base\AI\Services;
 class UrlSafetyGuard
 {
     /**
+     * @param  (\Closure(string): list<string>)|null  $resolver
+     */
+    public function __construct(
+        private readonly ?\Closure $resolver = null,
+    ) {}
+
+    /**
      * Validate whether a URL is safe to fetch.
      *
      * @param  string  $url  URL to validate
@@ -70,22 +77,33 @@ class UrlSafetyGuard
         array $hostnameAllowlist = [],
     ): ?string {
         $host = strtolower($host);
+        $pinnedIp = null;
 
-        if ($allowPrivateNetwork || $this->matchesAllowlist($host, $hostnameAllowlist)) {
-            return null;
-        }
-
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            return null;
-        }
-
-        foreach ($this->resolveHostIps($host) as $ip) {
-            if ($this->validateResolvedIp($ip, $host) === null) {
-                return $ip;
+        if ($this->pinningRequiredFor($host, $allowPrivateNetwork, $hostnameAllowlist)) {
+            foreach ($this->resolveHostIps($host) as $ip) {
+                if ($this->validateResolvedIp($ip, $host) === null) {
+                    $pinnedIp = $ip;
+                    break;
+                }
             }
         }
 
-        return null;
+        return $pinnedIp;
+    }
+
+    /**
+     * @param  list<string>  $hostnameAllowlist
+     */
+    public function pinningRequiredFor(
+        string $host,
+        bool $allowPrivateNetwork = false,
+        array $hostnameAllowlist = [],
+    ): bool {
+        $host = strtolower($host);
+
+        return ! $allowPrivateNetwork
+            && ! $this->matchesAllowlist($host, $hostnameAllowlist)
+            && filter_var($host, FILTER_VALIDATE_IP) === false;
     }
 
     /**
@@ -147,6 +165,10 @@ class UrlSafetyGuard
      */
     private function resolveHostIps(string $host): array
     {
+        if ($this->resolver !== null) {
+            return ($this->resolver)($host);
+        }
+
         $records = @dns_get_record($host, DNS_A + DNS_AAAA);
 
         if ($records === false || $records === []) {
