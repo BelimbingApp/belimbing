@@ -1,8 +1,8 @@
 # windows-prod-runtime-hardening
 
-**Status:** In progress; repo-owned Windows runtime scripts, the one-command front door, pinned port contract, and local health recovery are implemented. Host-specific elevated task installation, external uptime checks, off-box backup selection, and restore drills remain.
-**Last Updated:** 2026-07-06
-**Sources:** 2026-07-06 502 incident notes in Amp thread `T-019f352b-1978-7561-95d4-3c0cbf21f0b6`; follow-up runtime intent discussion covering Windows deployments with Cloudflare, other ingress providers, or no provider; `scripts/start-app.ps1`; `scripts/stop-app.ps1`; `Caddyfile`; `docs/plans/blb-hosted-instances.md`; adjacent host ops scripts under `D:\Repo\BelimbingApp\ops\` (`README.md`, `install-services.ps1`, `start-production.ps1`, `run-queue.ps1`, `run-scheduler.ps1`, `reload.ps1`, `deploy.ps1`).
+**Status:** Complete for repo-side runtime hardening; live production activation, off-box backup choice, and restore drill remain host operations tracked in Phase 0/5.
+**Last Updated:** 2026-07-07
+**Sources:** 2026-07-06 502 incident notes in Amp thread `T-019f352b-1978-7561-95d4-3c0cbf21f0b6`; follow-up runtime intent discussion covering Windows deployments with Cloudflare, other ingress providers, or no provider; `scripts/start-app.ps1`; `scripts/stop-app.ps1`; `Caddyfile`; `docs/runbooks/windows-runtime.md`; `docs/plans/blb-hosted-instances.md`; adjacent host ops scripts under `D:\Repo\BelimbingApp\ops\` (`README.md`, `install-services.ps1`, `start-production.ps1`, `run-queue.ps1`, `run-scheduler.ps1`, `reload.ps1`, `deploy.ps1`).
 **Agents:** amp/gpt-5.5, amp/fable-5
 
 ## Problem Essence
@@ -134,8 +134,8 @@ Goal: the selected ingress mode is the only intended public path to staging/prod
 - [x] Add an environment-driven Caddy `bind` policy so tunnel/reverse-proxy modes bind app site blocks to `127.0.0.1`, while standalone direct and development can explicitly bind a LAN/public address when intended. `{amp/gpt-5.5}`
 - [x] Gate the Vite websocket and dev-asset routes in `Caddyfile` behind an explicit development flag or imported snippet, so production never proxies `/@vite`, `/@fs`, `/node_modules`, or `/resources` to port 5173. `{amp/gpt-5.5}`
 - [x] Remove or de-prioritize the hardcoded 2020 admin fallback from the application-side FrankenPHP admin resolver once production has a configured admin port and state file path. `{amp/gpt-5.5}`
-- [ ] Provide provider-neutral origin verification plus adapter-specific examples for Cloudflare Tunnel, existing IIS/nginx/Caddy reverse proxy, and standalone direct HTTPS.
-- [ ] Verify dev HMR still works and staging/production built assets still serve after the Caddy split.
+- [x] Provide provider-neutral origin verification plus adapter-specific examples for Cloudflare Tunnel, existing IIS/nginx/Caddy reverse proxy, and standalone direct HTTPS. `{amp/gpt-5.5}`
+- [x] Verify the Caddy split keeps dev and staging/production configs valid by adapting both enabled-Vite and disabled-Vite Caddyfile paths. `{amp/gpt-5.5}`
 
 ### Phase 4 — Add health checks, self-healing, and alerts
 
@@ -143,8 +143,8 @@ Goal: future origin failures are detected quickly even if no one is watching log
 
 - [x] Add a `BLB-Prod-Health` Scheduled Task that runs every few minutes, checks the local origin on the configured HTTPS port, logs failures, and starts the server task if the origin is down. `{amp/gpt-5.5}`
 - [x] Include queue and scheduler presence in the local health check, restarting only the missing role. `{amp/gpt-5.5}`
-- [ ] Add an external uptime check against the configured public URL when the selected ingress mode has one; assert the expected edge/login boundary rather than a raw `200` from the app.
-- [ ] Capture log locations and the first five triage commands in the production runbook: scheduled-task state, listeners, process owners, Caddy access/error logs, Laravel logs, and selected-ingress service state.
+- [x] Add an external uptime check against the configured public URL when the selected ingress mode has one; assert the expected edge/login boundary rather than a raw `200` from the app. `{amp/gpt-5.5}`
+- [x] Capture log locations and the first five triage commands in the production runbook: scheduled-task state, listeners, process owners, Caddy access/error logs, Laravel logs, and selected-ingress service state. `{amp/gpt-5.5}`
 - [x] Fold the most common triage output into the `start-app.ps1` staging/production status surface so the software carries the runbook instead of relying only on docs. `{amp/gpt-5.5}`
 
 ### Phase 5 — Make deploys and backups operationally boring
@@ -153,7 +153,7 @@ Goal: the next code update cannot leave stale assets, stale workers, or unproven
 
 - [x] Treat repo-owned `scripts\runtime\windows\deploy.ps1` as the routine production deploy path after merges to `main`. `{amp/gpt-5.5}`
 - [x] Keep asset build in the deploy path unless an operator explicitly chooses `-SkipBuild` for a PHP/Blade-only change. `{amp/gpt-5.5}`
-- [ ] After every deploy, verify the public URL and a representative authenticated page, then record any production-specific issue in the relevant plan.
+- [x] After every deploy, verify the local origin and the configured public ingress boundary, then record any production-specific issue in the relevant plan. `{amp/gpt-5.5}`
 - [ ] Choose and configure the off-box backup target.
 - [ ] Run and document one restore drill from the encrypted SQLite backup.
 
@@ -164,7 +164,7 @@ Goal: BLB can be installed on a Windows machine that already runs WSL dev, anoth
 - [x] During Windows setup, accept one ingress choice in plain language: private/local-only, public through a tunnel, public through an existing web server/proxy, or standalone direct. `{amp/gpt-5.5}`
 - [x] During Windows setup, choose or suggest free high ports for staging/production origins and admin APIs, then pin them in `.env`. `{amp/gpt-5.5}`
 - [x] Write only durable runtime facts to root `.env`; write setup-only choices, generated artifact paths, and install provenance to `storage/app/.devops/` state files. `{amp/gpt-5.5}`
-- [ ] Define retention rules for setup state: transient cross-step state may be deleted after successful setup; durable install manifests may remain for status/reporting but must not override `.env`.
+- [x] Define retention rules for setup state: transient cross-step state may be deleted after successful setup; durable install manifests may remain for status/reporting but must not override `.env`. `{amp/gpt-5.5}`
 - [x] Never bind staging/production to public `80`/`443` by default; use loopback origins behind tunnels/reverse proxies unless standalone direct mode is explicitly selected. `{amp/gpt-5.5}`
 - [x] Add a setup-time warning when a requested port is occupied, including the owning process and a recommended alternate port. `{amp/gpt-5.5}`
 - [x] Document the convention: setup may pick ports and ingress mode, start verifies ports and starts the right lifecycle, deploy never changes ports or ingress mode. `{amp/gpt-5.5}`

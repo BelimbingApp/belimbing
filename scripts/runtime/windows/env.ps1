@@ -425,7 +425,7 @@ function Invoke-BLBPublicHealthCheck {
     try {
         $status = (& curl.exe -sS -k --max-time "$TimeoutSeconds" -o $bodyPath -w '%{http_code}' $url 2>$null | Out-String).Trim()
         if ($status -notmatch $statusPattern) {
-            Write-BLBRuntimeLog -Role 'health' -Message "Public health check failed for $url: HTTP $status did not match $statusPattern."
+            Write-BLBRuntimeLog -Role 'health' -Message "Public health check failed for ${url}: HTTP $status did not match $statusPattern."
 
             return $false
         }
@@ -433,7 +433,7 @@ function Invoke-BLBPublicHealthCheck {
         if ($bodyPattern) {
             $body = if (Test-Path $bodyPath) { Get-Content -Path $bodyPath -Raw } else { '' }
             if ($body -notmatch $bodyPattern) {
-                Write-BLBRuntimeLog -Role 'health' -Message "Public health check failed for $url: body did not match configured pattern."
+                Write-BLBRuntimeLog -Role 'health' -Message "Public health check failed for ${url}: body did not match configured pattern."
 
                 return $false
             }

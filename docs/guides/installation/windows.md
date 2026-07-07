@@ -245,6 +245,10 @@ Use `.\scripts\stop-app.ps1` to stop the instance deliberately, and use
 `.\scripts\runtime\windows\deploy.ps1` for routine code updates so assets,
 migrations, worker reload, and `queue:restart` stay together.
 
+For ingress verification, public health checks, triage commands, and backup
+operations, use the Windows runtime runbook:
+`docs/runbooks/windows-runtime.md`.
+
 ## Performance (Important)
 
 Native Windows can feel several seconds slower per page than the same app on
