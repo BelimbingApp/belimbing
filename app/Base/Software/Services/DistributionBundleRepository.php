@@ -88,8 +88,7 @@ class DistributionBundleRepository
 
         $latestResults = $this->fetchLatestCommits($latestRequests);
 
-        $this->applyLatestCommitResults($entries, $latestRequests, $latestResults);
-        $this->applyLatestCommitAliases($entries, $latestRequestAliases, $latestResults);
+        $this->applyLatestCommitResults($entries, $latestRequests, $latestRequestAliases, $latestResults);
 
         return array_values($entries);
     }
@@ -373,11 +372,6 @@ class DistributionBundleRepository
         ];
     }
 
-    private function latestCommitCacheKey(string $owner, string $name, string $branch): string
-    {
-        return 'software.bundle.latest.'.hash('sha256', strtolower($owner.'/'.$name).'|'.$branch);
-    }
-
     /**
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
      * @param  array<string, string>  $latestRequestAliases
@@ -393,7 +387,7 @@ class DistributionBundleRepository
         array $request,
     ): void {
         $dist = $request['dist'];
-        $cacheKey = $this->latestCommitCacheKey($request['owner'], $request['name'], $request['branch']);
+        $cacheKey = 'software.bundle.latest.'.hash('sha256', strtolower($request['owner'].'/'.$request['name']).'|'.$request['branch']);
         $cached = $request['use_cache']
             ? ($this->latestCommitRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
             : null;
@@ -424,9 +418,10 @@ class DistributionBundleRepository
     /**
      * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>  $entries
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
+     * @param  array<string, string>  $latestRequestAliases
      * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latestResults
      */
-    private function applyLatestCommitResults(array &$entries, array $latestRequests, array $latestResults): void
+    private function applyLatestCommitResults(array &$entries, array $latestRequests, array $latestRequestAliases, array $latestResults): void
     {
         foreach ($latestResults as $key => $latestResult) {
             if (! isset($entries[$key])) {
@@ -437,18 +432,13 @@ class DistributionBundleRepository
             $this->applyLatestCommit($entries[$key], $latest, $error);
 
             if ($latest !== null && ($latestRequests[$key]['use_cache'] ?? false) === true) {
-                $this->rememberLatestCommit((string) $latestRequests[$key]['cache_key'], $latest, $error);
+                $cacheKey = (string) $latestRequests[$key]['cache_key'];
+
+                $this->latestCommitRuntimeCache[$cacheKey] = [$latest, $error];
+                Cache::put($cacheKey, [$latest, $error], self::REMOTE_STATUS_CACHE_SECONDS);
             }
         }
-    }
 
-    /**
-     * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>  $entries
-     * @param  array<string, string>  $latestRequestAliases
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latestResults
-     */
-    private function applyLatestCommitAliases(array &$entries, array $latestRequestAliases, array $latestResults): void
-    {
         foreach ($latestRequestAliases as $key => $sourceKey) {
             if (! isset($entries[$key], $latestResults[$sourceKey])) {
                 continue;
@@ -457,16 +447,6 @@ class DistributionBundleRepository
             [$latest, $error] = $latestResults[$sourceKey];
             $this->applyLatestCommit($entries[$key], $latest, $error);
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $latest
-     */
-    private function rememberLatestCommit(string $cacheKey, array $latest, ?string $error): void
-    {
-        $this->latestCommitRuntimeCache[$cacheKey] = [$latest, $error];
-
-        Cache::put($cacheKey, [$latest, $error], self::REMOTE_STATUS_CACHE_SECONDS);
     }
 
     /**
