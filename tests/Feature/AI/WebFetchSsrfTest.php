@@ -10,6 +10,11 @@ const WEB_FETCH_SSRF_NEXT_URL = 'https://start.test/next';
 const WEB_FETCH_SSRF_PUBLIC_IP = '93.184.'.'216.34';
 const WEB_FETCH_SSRF_PRIVATE_IP = '127.0.'.'0.1';
 
+function webFetchSsrfCurlOptResolve(): int
+{
+    return defined('CURLOPT_RESOLVE') ? (int) constant('CURLOPT_RESOLVE') : 10203;
+}
+
 /**
  * @param  list<string>  $hostnameAllowlist
  * @return array{validation_error?: string, request_error?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}
@@ -87,7 +92,7 @@ it('pins DNS fetches to the validated public IP', function (): void {
     $result = webFetchSsrfFetch(new WebFetchService($guard), hostnameAllowlist: []);
 
     expect($result['content'] ?? null)->toBe('Pinned body')
-        ->and($optionsSeen['curl'][CURLOPT_RESOLVE][0] ?? null)
+        ->and($optionsSeen['curl'][webFetchSsrfCurlOptResolve()][0] ?? null)
         ->toBe('start.test:443:'.WEB_FETCH_SSRF_PUBLIC_IP);
 });
 

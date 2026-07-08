@@ -13,6 +13,8 @@ const SWEEP_STALE_SESSION = 'sess_stale_test';
 
 const SWEEP_EXPECT_ONE_STALE_LINE = '1 stale turn';
 
+const SWEEP_EXPECT_NO_STALE_TURNS = 'No stale turns';
+
 function createSweepFixture(): int
 {
     Company::provisionLicensee('Test Company');
@@ -112,7 +114,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--running-minutes' => 30])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
 
         expect($turn->fresh()->status)->toBe(AiRunStatus::Running);
     });
@@ -128,7 +130,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
     });
 
     it('does not touch completed turns', function () {
@@ -146,7 +148,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
     });
 
     it('emits run.failed event for each swept turn', function () {

@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\Http;
  */
 class WebFetchService
 {
+    private const CURL_OPT_RESOLVE = 10203;
+
     private const MAX_REDIRECTS = 5;
 
     private const REDIRECT_STATUSES = [301, 302, 303, 307, 308];
@@ -198,7 +200,7 @@ class WebFetchService
             $scheme = strtolower((string) ($parsed['scheme'] ?? 'https'));
             $port = (int) ($parsed['port'] ?? ($scheme === 'http' ? 80 : 443));
             $request = $request->withOptions([
-                'curl' => [CURLOPT_RESOLVE => [$this->curlResolveEntry($host, $port, $pinnedIp)]],
+                'curl' => [$this->curlResolveOption() => [$this->curlResolveEntry($host, $port, $pinnedIp)]],
             ]);
         }
 
@@ -215,6 +217,11 @@ class WebFetchService
         $address = str_contains($ip, ':') ? '['.$ip.']' : $ip;
 
         return $host.':'.$port.':'.$address;
+    }
+
+    private function curlResolveOption(): int
+    {
+        return defined('CURLOPT_RESOLVE') ? (int) constant('CURLOPT_RESOLVE') : self::CURL_OPT_RESOLVE;
     }
 
     private function extractHtml(string $html, string $mode): string
