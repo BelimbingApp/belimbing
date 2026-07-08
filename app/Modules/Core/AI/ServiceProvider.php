@@ -88,6 +88,7 @@ use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
 use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
+use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionContributor;
 use App\Modules\Core\AI\Services\Scheduling\ScheduleDefinitionService;
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
 use App\Modules\Core\AI\Services\SessionManager;
@@ -230,6 +231,7 @@ class ServiceProvider extends BaseServiceProvider
         // Scheduling subsystem
         $this->app->singleton(ScheduleDefinitionService::class);
         $this->app->singleton(SchedulePlanner::class);
+        $this->app->tag(ScheduleDefinitionContributor::class, 'scheduling.contributors');
 
         // Background command subsystem
         $this->app->singleton(BackgroundCommandService::class);
