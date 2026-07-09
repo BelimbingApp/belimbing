@@ -773,7 +773,7 @@ test('the worker reload does not guess the Windows launcher admin port', functio
     withDeploymentOctaneState(null, function (): void {
         fakeDeploymentUpdateProcesses();
         Http::fake([
-            deploymentAdminConfigUrl('http://'.DEPLOYMENT_UPDATE_ADMIN_HOST.':2019') => Http::response([], 200),
+            deploymentAdminConfigUrl(str_replace(':2643', ':2019', DEPLOYMENT_UPDATE_ADMIN_BASE_URL)) => Http::response([], 200),
             '*' => Http::response('', 500),
         ]);
 
