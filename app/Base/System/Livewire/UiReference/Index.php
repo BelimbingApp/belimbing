@@ -4,7 +4,6 @@ namespace App\Base\System\Livewire\UiReference;
 
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
-use App\Base\Foundation\View\IconRegistry;
 use App\Base\System\Enums\UiReferenceSection;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -102,7 +101,6 @@ class Index extends Component
             'spacingTokens' => $this->spacingTokens(),
             'typeSamples' => $this->typeSamples(),
             'iconSamples' => $this->iconSamples(),
-            'iconCatalog' => $this->iconCatalog(),
             'statusOptions' => $this->statusOptions(),
             'comboboxOptions' => $this->comboboxOptions(),
             'tableRows' => $this->tableRows(),
@@ -255,41 +253,6 @@ class Index extends Component
             ['name' => 'heroicon-m-chevron-down', 'usage' => 'Mini icon for dense inline controls'],
             ['name' => 'heroicon-m-check', 'usage' => 'Mini confirmation in dense layouts'],
         ];
-    }
-
-    /**
-     * Every registered icon, grouped by naming family, for the full catalog grid.
-     *
-     * @return list<array{label: string, note: string, icons: list<string>}>
-     */
-    private function iconCatalog(): array
-    {
-        $families = [
-            'heroicon-o-' => ['label' => 'Heroicons — Outline', 'note' => 'heroicon-o-*, 24×24 stroke'],
-            'heroicon-m-' => ['label' => 'Heroicons — Mini', 'note' => 'heroicon-m-*, 20×20 filled'],
-            'heroicon-s-' => ['label' => 'Heroicons — Solid', 'note' => 'heroicon-s-*, 24×24 filled'],
-            'mdi-' => ['label' => 'Material Design Icons', 'note' => 'mdi-*'],
-            'codicon-' => ['label' => 'Codicons', 'note' => 'codicon-*'],
-        ];
-
-        $groups = array_map(static fn (array $family): array => [...$family, 'icons' => []], $families);
-        $other = ['label' => 'Other / Brand', 'note' => 'Custom marks that do not follow a family prefix', 'icons' => []];
-
-        foreach (IconRegistry::names() as $name) {
-            $prefix = collect($families)->keys()->first(static fn (string $prefix): bool => str_starts_with($name, $prefix));
-
-            if ($prefix === null) {
-                $other['icons'][] = $name;
-
-                continue;
-            }
-
-            $groups[$prefix]['icons'][] = $name;
-        }
-
-        $groups['other'] = $other;
-
-        return array_values(array_filter($groups, static fn (array $group): bool => $group['icons'] !== []));
     }
 
     /**
