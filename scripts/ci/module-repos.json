@@ -1,17 +1,21 @@
 {
-    "_comment": "Maps a BLB module domain to the Distribution Bundle repo that owns it and the contract path it mounts at in the composed app. Used by scripts/ci/compose-module.php to check out cross-domain dependencies during module CI. Keys are the domain segment of a module id (people/attendance -> people). The 'core' domain is intentionally absent: it ships in the platform repo and is always present. Extensions are intentionally excluded: they are mostly private licensee repos and are not run by this shared CI.",
+    "_comment": "Maps a BLB module domain to the Distribution Bundle repo that owns it and the contract path it mounts at in the composed app. Used by scripts/ci/compose-module.php to check out cross-domain dependencies during module CI, and by scripts/ci/setup-sonar.php for SonarCloud project + SONAR_TOKEN bootstrap. Keys are the domain segment of a module id (people/attendance -> people). The 'core' domain is intentionally absent: it ships in the platform repo and is always present. Extensions are intentionally excluded: they are mostly private licensee repos and are not run by this shared CI.",
+    "sonar_organization": "belimbingapp",
     "modules": {
         "people": {
             "repo": "BelimbingApp/blb-people",
-            "path": "app/Modules/People"
+            "path": "app/Modules/People",
+            "sonar_project_key": "BelimbingApp_blb-people"
         },
         "commerce": {
             "repo": "BelimbingApp/blb-commerce",
-            "path": "app/Modules/Commerce"
+            "path": "app/Modules/Commerce",
+            "sonar_project_key": "BelimbingApp_blb-commerce"
         },
         "operation": {
             "repo": "BelimbingApp/blb-operation",
-            "path": "app/Modules/Operation"
+            "path": "app/Modules/Operation",
+            "sonar_project_key": "BelimbingApp_blb-operation"
         }
     }
 }

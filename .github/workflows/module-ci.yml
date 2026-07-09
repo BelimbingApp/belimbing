@@ -44,7 +44,7 @@ on:
         default: '1.3.10'
     secrets:
       SONAR_TOKEN:
-        description: 'SonarCloud analysis token for this module project.'
+        description: 'SonarCloud org analysis token. Prefer the BelimbingApp organization secret (scripts/ci/setup-sonar.php); caller workflows pass secrets.SONAR_TOKEN from the org or repo store.'
         required: true
 
 concurrency:
