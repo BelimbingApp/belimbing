@@ -8,11 +8,14 @@ use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
+    private const STALE_PENDING_MINUTES = 5;
+
     public function __construct(
         private readonly AuthorizationService $authorizationService,
         private readonly DeploymentRunHistory $history,
@@ -27,10 +30,27 @@ final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnos
             return [];
         }
 
-        $pendingSince = $this->pendingReloadSince();
+        $reloadState = $this->history->reloadState();
 
-        if ($pendingSince !== null) {
-            return [$this->pendingReloadDiagnostic($pendingSince)];
+        if ($this->reloadStateIsPending($reloadState)) {
+            if ($this->reloadStateIsStale($reloadState)) {
+                return [$this->stalledReloadDiagnostic($reloadState)];
+            }
+
+            return [$this->pendingReloadDiagnostic($reloadState)];
+        }
+
+        if ($reloadState === null) {
+            $pendingSince = $this->pendingReloadSince();
+
+            if ($pendingSince !== null) {
+                return [$this->pendingReloadDiagnostic([
+                    'attempted_at' => $pendingSince,
+                    'status' => 'pending',
+                    'message' => (string) __('Runtime reload is pending.'),
+                    'admin_url' => null,
+                ])];
+            }
         }
 
         $lastReload = $this->history->lastReload();
@@ -42,17 +62,42 @@ final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnos
         return [];
     }
 
-    private function pendingReloadDiagnostic(string $pendingSince): StatusBarDiagnostic
+    /**
+     * @param  array{attempted_at: string, status: string, message: string, admin_url: string|null}  $reloadState
+     */
+    private function pendingReloadDiagnostic(array $reloadState): StatusBarDiagnostic
     {
         return new StatusBarDiagnostic(
             id: 'software.frankenphp-worker-reload.pending',
             severity: StatusVariant::Warning,
             source: __('Updates'),
             summary: __('FrankenPHP worker reload pending'),
-            detail: __('A worker reload was scheduled after a domain or software change. Running workers may keep old code until the reload finishes.'),
+            detail: __('A worker reload was scheduled after a domain or software change. BLB will record the final result when the background reload finishes.'),
             target: $this->updatesUrl(),
             metadata: [
-                'pending_since' => $pendingSince,
+                'pending_since' => $reloadState['attempted_at'],
+                'status' => $reloadState['status'],
+                'message' => $reloadState['message'],
+            ],
+        );
+    }
+
+    /**
+     * @param  array{attempted_at: string, status: string, message: string, admin_url: string|null}  $reloadState
+     */
+    private function stalledReloadDiagnostic(array $reloadState): StatusBarDiagnostic
+    {
+        return new StatusBarDiagnostic(
+            id: 'software.frankenphp-worker-reload.stalled',
+            severity: StatusVariant::Error,
+            source: __('Updates'),
+            summary: __('FrankenPHP worker reload needs attention'),
+            detail: __('A worker reload was scheduled but no completion was recorded. Running workers may still be serving old code, or the background reload command may have failed.'),
+            target: $this->updatesUrl(),
+            metadata: [
+                'pending_since' => $reloadState['attempted_at'],
+                'status' => $reloadState['status'],
+                'message' => $reloadState['message'],
             ],
         );
     }
@@ -86,6 +131,27 @@ final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnos
         }
 
         return is_string($pending) && $pending !== '' ? $pending : null;
+    }
+
+    /**
+     * @param  array{attempted_at: string, status: string, message: string, admin_url: string|null}|null  $reloadState
+     */
+    private function reloadStateIsPending(?array $reloadState): bool
+    {
+        return in_array($reloadState['status'] ?? null, ['pending', 'running'], true);
+    }
+
+    /**
+     * @param  array{attempted_at: string, status: string, message: string, admin_url: string|null}  $reloadState
+     */
+    private function reloadStateIsStale(array $reloadState): bool
+    {
+        try {
+            return Carbon::parse($reloadState['attempted_at'])
+                ->lessThan(now()->subMinutes(self::STALE_PENDING_MINUTES));
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     private function updatesUrl(): ?string

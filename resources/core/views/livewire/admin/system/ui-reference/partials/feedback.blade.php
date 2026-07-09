@@ -57,7 +57,7 @@
         <div class="space-y-4">
             <div>
                 <h2 class="text-sm font-medium text-ink">{{ __('Status Bar Diagnostics') }}</h2>
-                <p class="text-xs text-muted">{{ __('Shell-level diagnostics stay compact in the status bar, then expand into a bounded detail surface with owner, summary, explanation, and a remediation link icon.') }}</p>
+                <p class="text-xs text-muted">{{ __('Shell-level diagnostics stay compact in the status bar, then expand into a bounded detail surface with owner, summary, explanation, close/refresh actions, and a clear remediation link.') }}</p>
             </div>
 
             <div class="overflow-hidden rounded-lg border border-border-default bg-surface-page">
@@ -86,14 +86,24 @@
                                 <x-icon :name="$topStatusBarVariant->icon()" class="h-4 w-4 shrink-0 {{ $topStatusBarClasses['text'] }}" />
                                 <span class="truncate text-sm font-medium text-ink">{{ __('System diagnostics') }}</span>
                             </div>
-                            <button
-                                type="button"
-                                class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink"
-                                title="{{ __('Refresh diagnostics') }}"
-                                aria-label="{{ __('Refresh diagnostics') }}"
-                            >
-                                <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                            </button>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink"
+                                    title="{{ __('Refresh diagnostics') }}"
+                                    aria-label="{{ __('Refresh diagnostics') }}"
+                                >
+                                    <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink"
+                                    title="{{ __('Close diagnostics') }}"
+                                    aria-label="{{ __('Close diagnostics') }}"
+                                >
+                                    <x-icon name="heroicon-o-x-mark" class="h-4 w-4" />
+                                </button>
+                            </div>
                         </div>
 
                         <div class="divide-y divide-border-default">
@@ -109,14 +119,11 @@
                                             </div>
                                             <p class="mt-0.5 text-xs leading-snug text-muted">
                                                 {{ $diagnostic['detail'] }}
-                                                <span
-                                                    class="ml-1 inline-flex align-text-bottom text-accent"
-                                                    title="{{ __('Open related diagnostics') }}"
-                                                    aria-label="{{ __('Open related diagnostics') }}"
-                                                >
-                                                    <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
-                                                </span>
                                             </p>
+                                            <span class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
+                                                <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
+                                                {{ __('Open related page') }}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

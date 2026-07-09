@@ -23,6 +23,28 @@ it('reports a pending frankenphp worker reload', function (): void {
         ->and($diagnostics[0]->metadata)->toMatchArray(['pending_since' => $pendingSince]);
 });
 
+it('reports a stale pending frankenphp worker reload as needing attention', function (): void {
+    $pendingSince = now()->subMinutes(6)->utc()->toIso8601String();
+
+    app(SettingsService::class)->set('system.update.frankenphp.reload_state', [
+        'attempted_at' => $pendingSince,
+        'status' => 'running',
+        'message' => 'Runtime reload is running.',
+        'admin_url' => null,
+    ]);
+
+    $diagnostics = collect(app(FrankenPhpWorkerStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
+
+    expect($diagnostics)->toHaveCount(1);
+    expect($diagnostics[0]->id)->toBe('software.frankenphp-worker-reload.stalled')
+        ->and($diagnostics[0]->severity)->toBe(StatusVariant::Error)
+        ->and($diagnostics[0]->summary)->toBe('FrankenPHP worker reload needs attention')
+        ->and($diagnostics[0]->metadata)->toMatchArray([
+            'pending_since' => $pendingSince,
+            'status' => 'running',
+        ]);
+});
+
 it('reports a failed last frankenphp worker reload', function (): void {
     app(DeploymentRunHistory::class)->rememberReload(
         ok: false,
@@ -87,4 +109,5 @@ it('surfaces frankenphp reload diagnostics through the status bar aggregator', f
 afterEach(function (): void {
     Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
     app(SettingsService::class)->forget('system.update.frankenphp.last_reload');
+    app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });

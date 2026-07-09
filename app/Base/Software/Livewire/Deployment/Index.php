@@ -90,7 +90,7 @@ class Index extends Component
         $outcome = $this->runOutcome();
         $history->rememberDeploymentRun($this->log, $outcome);
         $this->streamRunRecordedMarker($outcome);
-        $this->dispatch('run-finished', status: $outcome, refresh: true);
+        $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending');
     }
 
     public function render(DeploymentService $deployment, DeploymentRunHistory $history): View
@@ -103,6 +103,7 @@ class Index extends Component
         // and otherwise falls back to the durable last-run record so its outcome and
         // time are still there on a fresh visit (or after an interrupted run).
         $lastRun = $history->lastDeploymentRun();
+        $reloadState = $history->reloadState();
         $hasSessionLog = $this->log !== [];
         $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
         $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
@@ -128,6 +129,7 @@ class Index extends Component
             'runAt' => $lastRun['attempted_at'] ?? null,
             'displayLog' => $displayLog,
             'lastReload' => $history->lastReload(),
+            'reloadState' => $reloadState,
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $history->lastComposerRun(),
             'lastFrontendRun' => $history->lastFrontendRun(),
@@ -205,6 +207,7 @@ class Index extends Component
         return match (true) {
             $log === [] => 'idle',
             collect($log)->contains(fn (string $line): bool => $this->isErrorLine($line)) => 'error',
+            collect($log)->contains(fn (string $line): bool => $this->isPendingLine($line)) => 'pending',
             collect($log)->contains(fn (string $line): bool => $this->isWarningLine($line)) => 'warning',
             default => 'success',
         };
@@ -215,6 +218,7 @@ class Index extends Component
         return match ($status) {
             'error' => (string) __('Needs action'),
             'warning' => (string) __('Warnings'),
+            'pending' => (string) __('Reload pending'),
             'success' => (string) __('Complete'),
             default => (string) __('No run yet'),
         };
@@ -225,6 +229,7 @@ class Index extends Component
         return match ($status) {
             'error' => 'danger',
             'warning' => 'warning',
+            'pending' => 'warning',
             'success' => 'success',
             default => 'default',
         };
@@ -247,5 +252,13 @@ class Index extends Component
             || str_starts_with($line, 'Still behind:')
             || str_starts_with($line, 'Could not verify')
             || str_contains(strtolower($line), 'finished with warnings');
+    }
+
+    private function isPendingLine(string $line): bool
+    {
+        $lower = strtolower($line);
+
+        return str_contains($lower, 'runtime reload scheduled')
+            || str_contains($lower, 'runtime reload is already scheduled');
     }
 }

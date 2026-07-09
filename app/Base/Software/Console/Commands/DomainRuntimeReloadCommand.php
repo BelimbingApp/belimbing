@@ -2,6 +2,7 @@
 
 namespace App\Base\Software\Console\Commands;
 
+use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Console\Command;
@@ -16,13 +17,15 @@ class DomainRuntimeReloadCommand extends Command
 
     protected $description = 'Reload FrankenPHP workers after a deferred runtime change.';
 
-    public function handle(DeploymentService $deployment): int
+    public function handle(DeploymentService $deployment, DeploymentRunHistory $history): int
     {
         $delay = max(0, min(30, (int) $this->option('delay')));
 
         if ($delay > 0) {
             sleep($delay);
         }
+
+        $history->rememberReloadRunning((string) __('Runtime reload is running.'));
 
         try {
             foreach ($deployment->reload(clearRuntimeCaches: (bool) $this->option('clear-runtime-caches')) as $line) {
@@ -31,6 +34,11 @@ class DomainRuntimeReloadCommand extends Command
 
             return self::SUCCESS;
         } catch (Throwable $exception) {
+            $history->rememberReload(
+                false,
+                (string) __('Warning: runtime reload failed before completion: :message', ['message' => $exception->getMessage()]),
+                '',
+            );
             $this->error($exception->getMessage());
 
             return self::FAILURE;
