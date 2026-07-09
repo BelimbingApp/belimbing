@@ -42,5 +42,11 @@ Migration path: kiat's `CommandRunRecorder` + `kiat_investment_command_runs` are
 
 ## Open Questions
 
-- Retention policy for `schedule_runs` (proposal: 90 days, pruned by the scheduler itself).
-- Whether pause/resume of Laravel scheduler entries is worth persisting (needs a suppression table the ServiceProviders consult) or Phase-2 scope creep.
+- Retention: resolved — 90 days, pruned opportunistically by the recorder.
+- Pause/resume: resolved and built (2026-07-09) — `base_schedule_suppressions`
+  keyed by recorder-normalized name; a `CommandStarting` hook on
+  `schedule:run/work/test` attaches skip filters after all providers boot, so
+  no ServiceProvider changes are needed anywhere. Page gains Pause/Resume for
+  scheduler-source rows; contributor sources keep their own toggles.
+- Related follow-up plan: `ai-agent-execution-convergence.md` (one execution
+  contract over AgenticRuntime + headless CLI runner).

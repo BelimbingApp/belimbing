@@ -37,6 +37,7 @@ $duration = function ($start, $end): string {
                         <x-ui.th>{{ __('Cron') }}</x-ui.th>
                         <x-ui.th>{{ __('Next run') }}</x-ui.th>
                         <x-ui.th>{{ __('Last status') }}</x-ui.th>
+                        <x-ui.th align="right"></x-ui.th>
                     </tr>
                 </x-slot:head>
                 <x-slot:body>
@@ -52,10 +53,12 @@ $duration = function ($start, $end): string {
                             <td class="px-table-cell-x py-table-cell-y text-sm"><x-ui.badge variant="{{ $item->source === 'scheduler' ? 'default' : 'info' }}">{{ $item->source }}</x-ui.badge></td>
                             <td class="px-table-cell-x py-table-cell-y font-mono text-sm text-muted">{{ $item->cron }}</td>
                             <td class="px-table-cell-x py-table-cell-y text-sm text-ink">
-                                @if($item->nextRunAt !== null)
+                                @if($item->paused)
+                                    <x-ui.badge variant="warning">{{ __('paused') }}</x-ui.badge>
+                                @elseif($item->nextRunAt !== null)
                                     <x-ui.datetime :value="$item->nextRunAt" /> <span class="text-xs text-muted">({{ $item->nextRunAt->diffForHumans() }})</span>
                                 @else
-                                    <span class="text-muted">{{ __('paused') }}</span>
+                                    <span class="text-muted">{{ __('disabled') }}</span>
                                 @endif
                             </td>
                             <td class="px-table-cell-x py-table-cell-y text-sm">
@@ -63,6 +66,15 @@ $duration = function ($start, $end): string {
                                     <x-ui.badge variant="{{ $statusVariant($item->lastStatus) }}">{{ $item->lastStatus }}</x-ui.badge>
                                 @else
                                     <span class="text-muted">—</span>
+                                @endif
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y text-right text-sm">
+                                @if($item->source === 'scheduler')
+                                    @if($item->paused)
+                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="resume('{{ $item->name }}')">{{ __('Resume') }}</x-ui.button>
+                                    @else
+                                        <x-ui.button type="button" size="sm" variant="ghost" wire:click="pause('{{ $item->name }}')">{{ __('Pause') }}</x-ui.button>
+                                    @endif
                                 @endif
                             </td>
                         </tr>

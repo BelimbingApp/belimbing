@@ -6,6 +6,7 @@ use App\Base\Scheduling\Contracts\SchedulingContributor;
 use App\Base\Scheduling\DTO\RecordedRun;
 use App\Base\Scheduling\DTO\UpcomingRun;
 use App\Base\Scheduling\Models\ScheduleRun;
+use App\Base\Scheduling\Models\ScheduleSuppression;
 use Cron\CronExpression;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
@@ -32,6 +33,9 @@ class SchedulingBoard
     public function upcoming(): array
     {
         $rows = [];
+        $suppressed = Schema::hasTable('base_schedule_suppressions')
+            ? ScheduleSuppression::query()->pluck('name')->flip()
+            : collect();
 
         foreach ($this->schedule->events() as $event) {
             $name = $this->recorder->name($event);
@@ -47,6 +51,7 @@ class SchedulingBoard
                 lastStatus: Schema::hasTable('base_schedule_runs')
                     ? ScheduleRun::query()->where('name', $name)->latest('started_at')->value('status')
                     : null,
+                paused: $suppressed->has($name),
             );
         }
 

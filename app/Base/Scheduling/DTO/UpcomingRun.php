@@ -16,5 +16,6 @@ final readonly class UpcomingRun
         public ?CarbonInterface $nextRunAt,
         public ?string $lastStatus = null,
         public ?string $url = null,
+        public bool $paused = false,
     ) {}
 }

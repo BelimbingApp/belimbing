@@ -3,14 +3,19 @@
 use App\Base\Scheduling\Contracts\SchedulingContributor;
 use App\Base\Scheduling\DTO\RecordedRun;
 use App\Base\Scheduling\DTO\UpcomingRun;
+use App\Base\Scheduling\Livewire\Index;
 use App\Base\Scheduling\Models\ScheduleRun;
+use App\Base\Scheduling\Models\ScheduleSuppression;
 use App\Base\Scheduling\Services\ScheduleRunRecorder;
 use App\Base\Scheduling\Services\SchedulingBoard;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Output\NullOutput;
 
 uses(RefreshDatabase::class);
 
@@ -70,6 +75,37 @@ test('the board merges scheduler events with tagged contributors, soonest first'
         ->and($times->values()->all())->toBe($times->sort()->values()->all()); // soonest first
 
     expect(collect($board->recentRuns())->pluck('name'))->toContain('weekly digest');
+});
+
+test('pausing a scheduler entry suppresses it at tick time; resuming clears it', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $event = schedulingTestEvent();
+    $name = app(ScheduleRunRecorder::class)->name($event);
+
+    Livewire\Livewire::test(Index::class)
+        ->call('pause', $name);
+
+    expect(ScheduleSuppression::query()->where('name', $name)->exists())->toBeTrue();
+
+    // The CommandStarting hook attaches a skip filter to the suppressed entry.
+    event(new CommandStarting(
+        'schedule:run',
+        new ArgvInput([]),
+        new NullOutput,
+    ));
+
+    expect($event->filtersPass(app()))->toBeFalse();
+
+    // The board flags it paused; resume clears the suppression.
+    $paused = collect(app(SchedulingBoard::class)->upcoming())->firstWhere('name', $name);
+
+    expect($paused->paused)->toBeTrue();
+
+    Livewire\Livewire::test(Index::class)
+        ->call('resume', $name);
+
+    expect(ScheduleSuppression::query()->where('name', $name)->exists())->toBeFalse();
 });
 
 test('admin sees the scheduling page; others are denied', function (): void {

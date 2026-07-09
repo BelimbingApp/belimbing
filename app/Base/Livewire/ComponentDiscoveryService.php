@@ -15,11 +15,20 @@ class ComponentDiscoveryService
     /**
      * Glob patterns for Livewire class directory discovery.
      *
-     * Supports Base modules, Core modules, and extensions.
+     * Supports Base modules and Core modules.
      */
     protected array $scanPatterns = [
         'app/Base/*/Livewire',
         'app/Modules/*/*/Livewire',
+    ];
+
+    /**
+     * Extension Livewire directories. Extension component names are prefixed
+     * with their view namespace ("kiat-investment.widgets.foo") so different
+     * extensions can never collide with each other or with core components.
+     */
+    protected array $extensionScanPatterns = [
+        'extensions/*/*/Livewire',
     ];
 
     /**
@@ -45,6 +54,14 @@ class ComponentDiscoveryService
             }
         }
 
+        foreach ($this->extensionScanPatterns as $pattern) {
+            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
+
+            foreach ($directories as $directory) {
+                $this->scanDirectory($directory, $components, prefixViewNamespace: true);
+            }
+        }
+
         return $components;
     }
 
@@ -54,7 +71,7 @@ class ComponentDiscoveryService
      * @param  string  $directory  Absolute path to scan
      * @param  array<string, class-string<Component>>  $components  Accumulated mapping (mutated)
      */
-    protected function scanDirectory(string $directory, array &$components): void
+    protected function scanDirectory(string $directory, array &$components, bool $prefixViewNamespace = false): void
     {
         $iterator = new RecursiveIteratorIterator(
             new RecursiveDirectoryIterator($directory, RecursiveDirectoryIterator::SKIP_DOTS)
@@ -81,7 +98,7 @@ class ComponentDiscoveryService
                 continue;
             }
 
-            $name = $this->resolveComponentName($file->getPathname());
+            $name = $this->resolveComponentName($file->getPathname(), $prefixViewNamespace);
 
             if ($name !== null) {
                 $components[$name] = $class;
@@ -103,7 +120,7 @@ class ComponentDiscoveryService
      *
      * @param  string  $filePath  Absolute path to the PHP class file
      */
-    protected function resolveComponentName(string $filePath): ?string
+    protected function resolveComponentName(string $filePath, bool $prefixViewNamespace = false): ?string
     {
         $source = file_get_contents($filePath);
 
@@ -116,10 +133,14 @@ class ComponentDiscoveryService
         // Match the first view('livewire.xxx') or view('namespace::livewire.xxx') call in the file.
         // This covers: view('livewire.xxx'), view('namespace::livewire.xxx', [...]), view('livewire.xxx', $this->with())
         // Fallback: check for VIEW_NAME constant with optional namespace and 'livewire.' prefix.
-        if (preg_match("/view\(\s*'(?:[\w.\-]+::)?(livewire\.[\w.\-]+)'/", $source, $matches)
-            || preg_match("/const\s+string\s+VIEW_NAME\s*=\s*'(?:[\w.\-]+::)?(livewire\.[\w.\-]+)'/", $source, $matches)
+        if (preg_match("/view\(\s*'(?:([\w.\-]+)::)?(livewire\.[\w.\-]+)'/", $source, $matches)
+            || preg_match("/const\s+string\s+VIEW_NAME\s*=\s*'(?:([\w.\-]+)::)?(livewire\.[\w.\-]+)'/", $source, $matches)
         ) {
-            $name = BlbStr::afterPrefix($matches[1], 'livewire.', false);
+            $name = BlbStr::afterPrefix($matches[2], 'livewire.', false);
+
+            if ($prefixViewNamespace && $matches[1] !== '') {
+                $name = $matches[1].'.'.$name;
+            }
         }
 
         return $name;
@@ -128,12 +149,36 @@ class ComponentDiscoveryService
     /**
      * Convert an absolute file path to a fully-qualified class name.
      *
-     * Assumes PSR-4 mapping: app/ => App\
+     * app/ maps to App\ (PSR-4); extensions/{owner}/{module}/ maps to
+     * Extensions\{Owner}\{Module}\ per ExtensionAutoloader's kebab-to-Pascal
+     * convention.
      *
      * @param  string  $path  Absolute file path
      */
     protected function classFromPath(string $path): ?string
     {
-        return AppPath::toClass($path);
+        return AppPath::toClass($path) ?? $this->extensionClassFromPath($path);
+    }
+
+    private function extensionClassFromPath(string $path): ?string
+    {
+        $normalized = str_replace('\\', '/', $path);
+        $base = rtrim(str_replace('\\', '/', base_path('extensions')), '/').'/';
+
+        if (! str_starts_with($normalized, $base)) {
+            return null;
+        }
+
+        $segments = explode('/', substr($normalized, strlen($base)));
+
+        if (count($segments) < 3) {
+            return null;
+        }
+
+        $owner = str()->studly(array_shift($segments));
+        $module = str()->studly(array_shift($segments));
+        $rest = str_replace('.php', '', implode('\\', $segments));
+
+        return 'Extensions\\'.$owner.'\\'.$module.'\\'.$rest;
     }
 }
