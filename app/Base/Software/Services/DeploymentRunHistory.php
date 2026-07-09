@@ -3,13 +3,18 @@
 namespace App\Base\Software\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
+use Illuminate\Support\Carbon;
 
 /**
  * Stores the durable run records shown on the Deployment update page.
  */
 class DeploymentRunHistory
 {
+    public const RELOAD_STALE_AFTER_MINUTES = 5;
+
     private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
+
+    private const RELOAD_STATE_KEY = 'system.update.frankenphp.reload_state';
 
     private const COMPOSER_RUN_KEY = 'system.update.composer.last_run';
 
@@ -29,9 +34,20 @@ class DeploymentRunHistory
         $this->rememberRun(self::FRONTEND_RUN_KEY, $ok, $message, ['pm' => $packageManager]);
     }
 
+    public function rememberReloadScheduled(string $message): void
+    {
+        $this->rememberReloadState('pending', $message);
+    }
+
+    public function rememberReloadRunning(string $message): void
+    {
+        $this->rememberReloadState('running', $message);
+    }
+
     public function rememberReload(bool $ok, string $message, string $adminUrl): void
     {
         $this->rememberRun(self::LAST_RELOAD_KEY, $ok, $message, ['admin_url' => $adminUrl]);
+        $this->rememberReloadState($ok ? 'success' : 'failed', $message, $adminUrl);
     }
 
     /**
@@ -40,6 +56,56 @@ class DeploymentRunHistory
     public function lastReload(): ?array
     {
         return $this->readRun(self::LAST_RELOAD_KEY, ['admin_url' => true]);
+    }
+
+    /**
+     * @return array{attempted_at: string, status: string, message: string, admin_url: string|null}|null
+     */
+    public function reloadState(): ?array
+    {
+        $record = $this->settings->get(self::RELOAD_STATE_KEY);
+
+        if (! is_array($record)) {
+            return null;
+        }
+
+        $attemptedAt = $record['attempted_at'] ?? null;
+        $status = $record['status'] ?? null;
+        $message = $record['message'] ?? null;
+
+        if (! is_string($attemptedAt) || ! is_string($status) || ! is_string($message)) {
+            return null;
+        }
+
+        $adminUrl = $record['admin_url'] ?? null;
+
+        return [
+            'attempted_at' => $attemptedAt,
+            'status' => $status,
+            'message' => $message,
+            'admin_url' => is_string($adminUrl) ? $adminUrl : null,
+        ];
+    }
+
+    /**
+     * @param  array{attempted_at?: string, status?: string, message?: string, admin_url?: string|null}|null  $reloadState
+     */
+    public function reloadStateIsStale(?array $reloadState = null): bool
+    {
+        if (! in_array($reloadState['status'] ?? null, ['pending', 'running'], true)) {
+            return false;
+        }
+
+        if (! is_string($reloadState['attempted_at'] ?? null) || $reloadState['attempted_at'] === '') {
+            return true;
+        }
+
+        try {
+            return Carbon::parse($reloadState['attempted_at'])
+                ->lessThan(now()->subMinutes(self::RELOAD_STALE_AFTER_MINUTES));
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     /**
@@ -113,6 +179,16 @@ class DeploymentRunHistory
             'ok' => $ok,
             'message' => $message,
         ], $extra));
+    }
+
+    private function rememberReloadState(string $status, string $message, ?string $adminUrl = null): void
+    {
+        $this->settings->set(self::RELOAD_STATE_KEY, [
+            'attempted_at' => now()->utc()->toIso8601String(),
+            'status' => $status,
+            'message' => $message,
+            'admin_url' => $adminUrl,
+        ]);
     }
 
     /**

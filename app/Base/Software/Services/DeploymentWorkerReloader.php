@@ -16,6 +16,14 @@ final class DeploymentWorkerReloader
 
     private const ADMIN_REQUEST_TIMEOUT_SECONDS = 10;
 
+    private const HEALTH_CONNECT_TIMEOUT_SECONDS = 1;
+
+    private const HEALTH_REQUEST_TIMEOUT_SECONDS = 2;
+
+    private const HEALTH_CHECK_ATTEMPTS = 8;
+
+    private const HEALTH_CHECK_INTERVAL_MICROSECONDS = 250_000;
+
     public function __construct(
         private readonly DeploymentAdminEndpointResolver $adminEndpoints,
         private readonly DeploymentRunHistory $history,
@@ -67,9 +75,21 @@ final class DeploymentWorkerReloader
                     );
 
                     if ($restart->successful()) {
-                        $webReloaded = true;
-                        $reloadMessage = (string) __('Web workers reloaded.');
-                        Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
+                        $healthFailure = $this->waitForApplicationHealth();
+
+                        if ($healthFailure === null) {
+                            $webReloaded = true;
+                            $reloadMessage = (string) __('Web workers reloaded.');
+                            Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
+
+                            break;
+                        }
+
+                        $reloadMessage = (string) __('Warning: web workers restart was accepted, but the application health check did not recover: :message', ['message' => $healthFailure]);
+                        Log::debug('FrankenPHP worker reload health check failed.', [
+                            'admin_url' => $restartUrl,
+                            'message' => $healthFailure,
+                        ]);
 
                         break;
                     }
@@ -179,5 +199,41 @@ final class DeploymentWorkerReloader
         return (string) __('Warning: runtime bootstrap warmup failed before worker reload: :message', [
             'message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $warm->exitCode()]),
         ]);
+    }
+
+    private function waitForApplicationHealth(): ?string
+    {
+        $urls = $this->adminEndpoints->healthCheckUrls();
+        $lastFailure = null;
+
+        for ($attempt = 1; $attempt <= self::HEALTH_CHECK_ATTEMPTS; $attempt++) {
+            foreach ($urls as $url) {
+                try {
+                    $response = Http::connectTimeout(self::HEALTH_CONNECT_TIMEOUT_SECONDS)
+                        ->timeout(self::HEALTH_REQUEST_TIMEOUT_SECONDS)
+                        ->get($url);
+
+                    if ($response->successful()) {
+                        return null;
+                    }
+
+                    $lastFailure = (string) __(':url returned HTTP :status', [
+                        'url' => $url,
+                        'status' => $response->status(),
+                    ]);
+                } catch (\Throwable $exception) {
+                    $lastFailure = (string) __(':url failed: :message', [
+                        'url' => $url,
+                        'message' => $exception->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($attempt < self::HEALTH_CHECK_ATTEMPTS) {
+                usleep(self::HEALTH_CHECK_INTERVAL_MICROSECONDS);
+            }
+        }
+
+        return $lastFailure ?? (string) __('health endpoint did not respond');
     }
 }

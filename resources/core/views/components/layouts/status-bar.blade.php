@@ -80,6 +80,7 @@
                             this.open ? this.closeDialog() : this.openDialog();
                         },
                     }"
+                    x-on:livewire:navigating.window="closeDialog()"
                     class="relative inline-flex min-w-0"
                 >
                     <button
@@ -111,15 +112,26 @@
                                 <x-icon name="{{ $statusDiagnosticIcon }}" class="w-4 h-4 shrink-0 {{ $statusDiagnosticTextClass }}" />
                                 <span class="truncate text-sm font-medium text-ink">{{ __('System diagnostics') }}</span>
                             </div>
-                            <button
-                                type="button"
-                                @click="window.location.reload()"
-                                class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink"
-                                title="{{ __('Refresh diagnostics') }}"
-                                aria-label="{{ __('Refresh diagnostics') }}"
-                            >
-                                <x-icon name="heroicon-o-arrow-path" class="w-4 h-4" />
-                            </button>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button
+                                    type="button"
+                                    @click="window.location.reload()"
+                                    class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                                    title="{{ __('Refresh diagnostics') }}"
+                                    aria-label="{{ __('Refresh diagnostics') }}"
+                                >
+                                    <x-icon name="heroicon-o-arrow-path" class="w-4 h-4" />
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="closeDialog()"
+                                    class="inline-flex size-7 items-center justify-center rounded-md text-muted hover:bg-surface-subtle hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                                    title="{{ __('Close diagnostics') }}"
+                                    aria-label="{{ __('Close diagnostics') }}"
+                                >
+                                    <x-icon name="heroicon-o-x-mark" class="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
 
                         <div class="max-h-80 overflow-y-auto py-1">
@@ -138,28 +150,18 @@
                                             @if ($diagnostic->detail !== null)
                                                 <p class="mt-0.5 text-xs leading-snug text-muted">
                                                     {{ $diagnostic->detail }}
-                                                    @if ($diagnostic->target !== null)
-                                                        <a
-                                                            href="{{ $diagnostic->target }}"
-                                                            wire:navigate
-                                                            class="ml-1 inline-flex align-text-bottom text-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-                                                            title="{{ __('Open related diagnostics') }}"
-                                                            aria-label="{{ __('Open related diagnostics') }}"
-                                                        >
-                                                            <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
-                                                        </a>
-                                                    @endif
                                                 </p>
-                                            @elseif ($diagnostic->target !== null)
-                                                <a
+                                            @endif
+
+                                            @if ($diagnostic->target !== null)
+                                                <x-ui.link
+                                                    @click="closeDialog()"
+                                                    kind="internal"
                                                     href="{{ $diagnostic->target }}"
-                                                    wire:navigate
-                                                    class="mt-0.5 inline-flex text-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
-                                                    title="{{ __('Open related diagnostics') }}"
-                                                    aria-label="{{ __('Open related diagnostics') }}"
+                                                    class="mt-1 text-xs font-medium"
                                                 >
-                                                    <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
-                                                </a>
+                                                    {{ __('Open related page') }}
+                                                </x-ui.link>
                                             @endif
                                         </div>
                                     </div>

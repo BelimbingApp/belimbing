@@ -12,6 +12,8 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
 {
     public const PENDING_CACHE_KEY = 'domain-runtime.reload.pending';
 
+    public function __construct(private readonly DeploymentRunHistory $history) {}
+
     /**
      * @return list<string>
      */
@@ -53,6 +55,8 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
         $result = $this->launchBackgroundReload($clearRuntimeCaches);
 
         if ($result->successful()) {
+            $this->history->rememberReloadScheduled($scheduledMessage);
+
             return [
                 $scheduledMessage,
             ];
@@ -61,12 +65,13 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
         Cache::forget(self::PENDING_CACHE_KEY);
 
         $output = trim($result->output()."\n".$result->errorOutput());
+        $message = strtr($failureMessage, [
+            ':message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $result->exitCode()]),
+        ]);
 
-        return [
-            strtr($failureMessage, [
-                ':message' => $output !== '' ? $output : __('process exited with code :code', ['code' => $result->exitCode()]),
-            ]),
-        ];
+        $this->history->rememberReload(false, $message, '');
+
+        return [$message];
     }
 
     private function launchBackgroundReload(bool $clearRuntimeCaches): ProcessResult

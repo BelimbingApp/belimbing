@@ -30,6 +30,7 @@ final class DeploymentUpdateGitLaunchException extends RuntimeException {}
 
 beforeEach(function (): void {
     Cache::flush();
+    app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });
 
 function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
@@ -101,9 +102,12 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
 function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
 {
     fakeDeploymentUpdateProcesses();
+    $healthUrl = rtrim((string) config('app.url'), '/').'/up';
+
     Http::fake([
         $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
         $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+        $healthUrl => Http::response('', 200),
         '*' => Http::response('', 500),
     ]);
 
@@ -274,11 +278,16 @@ test('reload only schedules a graceful worker reload and records a log', functio
     try {
         $component = Livewire::test(Index::class)
             ->call('reloadOnly')
-            ->assertDispatched('run-finished', status: 'success', refresh: true)
+            ->assertDispatched('run-finished', status: 'pending', refresh: false)
             ->assertHasNoErrors();
 
         expect($component->get('log'))->toBe(['Runtime reload scheduled in the background.'])
             ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeTrue();
+
+        expect(app(DeploymentRunHistory::class)->reloadState())->toMatchArray([
+            'status' => 'pending',
+            'message' => 'Runtime reload scheduled in the background.',
+        ]);
 
         Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
             && deploymentCommandContains($process->command, '--clear-runtime-caches'));
@@ -330,11 +339,13 @@ test('domain runtime reload command reloads workers without clearing runtime cac
 
     $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0]);
     $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
+    $state = app(DeploymentRunHistory::class)->reloadState();
 
     expect($status)->toBe(0)
         ->and($stored)->toBeArray()
         ->and($stored['ok'])->toBeTrue()
         ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
+        ->and($state)->toMatchArray(['status' => 'success', 'message' => DEPLOYMENT_UPDATE_RELOADED])
         ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
 
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
@@ -347,11 +358,13 @@ test('software update runtime reload command reloads workers after clearing runt
 
     $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0, '--clear-runtime-caches' => true]);
     $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
+    $state = app(DeploymentRunHistory::class)->reloadState();
 
     expect($status)->toBe(0)
         ->and($stored)->toBeArray()
         ->and($stored['ok'])->toBeTrue()
         ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
+        ->and($state)->toMatchArray(['status' => 'success', 'message' => DEPLOYMENT_UPDATE_RELOADED])
         ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
 
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
@@ -367,13 +380,13 @@ test('component updates record completion before scheduling the runtime reload',
     try {
         Livewire::test(Index::class)
             ->call('updateRepo', 'platform')
-            ->assertDispatched('run-finished', status: 'success', refresh: true)
+            ->assertDispatched('run-finished', status: 'pending', refresh: false)
             ->assertHasNoErrors();
 
         $run = app(DeploymentRunHistory::class)->lastDeploymentRun();
 
         expect($run)->toBeArray()
-            ->and($run['status'])->toBe('success')
+            ->and($run['status'])->toBe('pending')
             ->and($run['summary'])->toBe('Runtime reload scheduled in the background.')
             ->and($run['log'])->toContain('Update complete. Selected Distribution Bundles are up to date; runtime reload still needs to run separately.')
             ->and($run['log'])->toContain('Runtime reload scheduled in the background.')
@@ -401,6 +414,35 @@ test('deployment page shows the last frankenphp reload', function (): void {
         ->assertSee(DEPLOYMENT_UPDATE_LAST_RUN_LABEL)
         ->assertSee('Workers reloaded')
         ->assertSee(DEPLOYMENT_UPDATE_RELOADED);
+});
+
+test('deployment page allows retry when a reload state is stale', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    app(SettingsService::class)->set('system.update.frankenphp.reload_state', [
+        'attempted_at' => now()->subMinutes(6)->utc()->toIso8601String(),
+        'status' => 'running',
+        'message' => 'Runtime reload is running.',
+        'admin_url' => null,
+    ]);
+
+    $component = Livewire::test(Index::class)
+        ->assertSee('Reload stalled')
+        ->assertSee('Retry reload');
+
+    $html = $component->html();
+    $retryLabelPosition = strpos($html, 'Retry reload');
+    $buttonStartPosition = strrpos(substr($html, 0, $retryLabelPosition), '<button');
+    $buttonEndPosition = strpos($html, '</button>', $buttonStartPosition);
+    $reloadButton = substr($html, $buttonStartPosition, $buttonEndPosition - $buttonStartPosition);
+
+    expect($reloadButton)
+        ->toContain('wire:click="reloadOnly"')
+        ->toContain('x-bind:disabled="running || refreshing || reloadInProgress"')
+        ->not->toContain('disabled="disabled"');
 });
 
 test('the previous run log persists at its rest location across page visits', function (): void {
@@ -547,7 +589,7 @@ test('a run records a durable deployment last-run with its time and outcome', fu
     $run = app(DeploymentRunHistory::class)->lastDeploymentRun();
 
     expect($run)->toBeArray()
-        ->and($run['status'])->toBe('success')
+        ->and($run['status'])->toBe('pending')
         ->and($run['attempted_at'])->toBeString()
         ->and($run['log'])->not->toBeEmpty();
 });
@@ -633,6 +675,38 @@ test('the worker reload reads its admin port from the octane server-state file',
     );
 });
 
+test('the worker reload prefers the local octane listener for application health checks', function (): void {
+    withDeploymentOctaneState(
+        ['state' => [
+            'host' => '127.0.0.1',
+            'port' => 8100,
+            'adminHost' => '127.0.0.1',
+            'adminPort' => 2643,
+        ]],
+        function (): void {
+            fakeDeploymentUpdateProcesses();
+
+            $baseUrl = 'http://127.0.0.1:2643';
+            $localHealthUrl = 'http://127.0.0.1:8100/up';
+            $appHealthUrl = rtrim((string) config('app.url'), '/').'/up';
+
+            Http::fake([
+                $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
+                $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+                $localHealthUrl => Http::response('', 200),
+                $appHealthUrl => Http::response('', 503),
+                '*' => Http::response('', 500),
+            ]);
+
+            $log = app(DeploymentService::class)->reload();
+
+            expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
+            Http::assertSent(fn ($request): bool => $request->url() === $localHealthUrl);
+            Http::assertNotSent(fn ($request): bool => $request->url() === $appHealthUrl);
+        }
+    );
+});
+
 test('the worker reload does not guess the Windows launcher admin port', function (): void {
     withDeploymentOctaneState(null, function (): void {
         fakeDeploymentUpdateProcesses();
@@ -661,6 +735,10 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
             $restartUrl = 'http://127.0.0.1:2643/frankenphp/workers/restart';
 
             if (! in_array($request->url(), [$url, $restartUrl], true)) {
+                if ($request->url() === rtrim((string) config('app.url'), '/').'/up') {
+                    return Http::response('', 200);
+                }
+
                 return Http::response('', 500);
             }
 
@@ -683,6 +761,37 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
 
         expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED)
             ->and($getAttempts)->toBe(2);
+    } finally {
+        putenv('CADDY_SERVER_ADMIN_HOST');
+        putenv('CADDY_SERVER_ADMIN_PORT');
+    }
+});
+
+test('the worker reload records a warning when application health does not recover', function (): void {
+    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv('CADDY_SERVER_ADMIN_PORT=2643');
+
+    fakeDeploymentUpdateProcesses();
+
+    $baseUrl = 'http://127.0.0.1:2643';
+    $healthUrl = rtrim((string) config('app.url'), '/').'/up';
+
+    try {
+        Http::fake([
+            $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
+            $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+            $healthUrl => Http::response('', 503),
+            '*' => Http::response('', 500),
+        ]);
+
+        $log = app(DeploymentService::class)->reload();
+        $stored = app(DeploymentRunHistory::class)->lastReload();
+
+        expect($log)->toContain("Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503")
+            ->and($stored)->toMatchArray([
+                'ok' => false,
+                'message' => "Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503",
+            ]);
     } finally {
         putenv('CADDY_SERVER_ADMIN_HOST');
         putenv('CADDY_SERVER_ADMIN_PORT');
