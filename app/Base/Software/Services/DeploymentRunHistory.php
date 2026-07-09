@@ -96,12 +96,17 @@ class DeploymentRunHistory
             return false;
         }
 
-        if (! is_string($reloadState['attempted_at'] ?? null) || $reloadState['attempted_at'] === '') {
+        return $this->reloadAttemptIsStale($reloadState['attempted_at'] ?? null);
+    }
+
+    private function reloadAttemptIsStale(mixed $attemptedAt): bool
+    {
+        if (! is_string($attemptedAt) || $attemptedAt === '') {
             return true;
         }
 
         try {
-            return Carbon::parse($reloadState['attempted_at'])
+            return Carbon::parse($attemptedAt)
                 ->lessThan(now()->subMinutes(self::RELOAD_STALE_AFTER_MINUTES));
         } catch (\Throwable) {
             return true;

@@ -25,6 +25,11 @@ const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
 const DEPLOYMENT_UPDATE_LOG_FORMAT = '--format=%H%x1f%cI%x1f%an%x1f%s';
 const DEPLOYMENT_UPDATE_FF_ONLY = '--ff-only';
 const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
+const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
+const DEPLOYMENT_UPDATE_ADMIN_HOST_ENV = 'CADDY_SERVER_ADMIN_HOST='.DEPLOYMENT_UPDATE_ADMIN_HOST;
+const DEPLOYMENT_UPDATE_ADMIN_BASE_URL = 'http://127.0.0.1:2643';
+const DEPLOYMENT_UPDATE_ADMIN_CONFIG_PATH = '/config/apps/frankenphp';
+const DEPLOYMENT_UPDATE_WORKERS_RESTART_PATH = '/frankenphp/workers/restart';
 
 final class DeploymentUpdateGitLaunchException extends RuntimeException {}
 
@@ -59,8 +64,8 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
 function fakeDeploymentUpdateHttp(bool $reloadOk = true): void
 {
     Http::fake([
-        '127.0.0.1:*' => $reloadOk
-            ? Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200)
+        DEPLOYMENT_UPDATE_ADMIN_HOST.':*' => $reloadOk
+            ? deploymentWorkerConfigResponse()
             : Http::response('', 500),
         '*' => Http::response([], 200),
     ]);
@@ -105,8 +110,8 @@ function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
     $healthUrl = rtrim((string) config('app.url'), '/').'/up';
 
     Http::fake([
-        $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
-        $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+        deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
+        deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
         $healthUrl => Http::response('', 200),
         '*' => Http::response('', 500),
     ]);
@@ -114,8 +119,65 @@ function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
     $log = app(DeploymentService::class)->reload();
 
     expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
-    Http::assertSent(fn ($request): bool => $request->url() === $baseUrl.'/frankenphp/workers/restart');
+    Http::assertSent(fn ($request): bool => $request->url() === deploymentAdminRestartUrl($baseUrl));
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
+}
+
+function deploymentAdminConfigUrl(string $baseUrl): string
+{
+    return $baseUrl.DEPLOYMENT_UPDATE_ADMIN_CONFIG_PATH;
+}
+
+function deploymentAdminRestartUrl(string $baseUrl): string
+{
+    return $baseUrl.DEPLOYMENT_UPDATE_WORKERS_RESTART_PATH;
+}
+
+function deploymentWorkerConfigResponse(): mixed
+{
+    return Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200);
+}
+
+function fakeDeploymentTimedOutAdminApiResponse(
+    string $requestUrl,
+    string $requestMethod,
+    int &$getAttempts,
+): mixed {
+    if (! deploymentIsAdminApiReloadUrl($requestUrl)) {
+        return fakeDeploymentReloadFallbackResponse($requestUrl);
+    }
+
+    if ($requestMethod !== 'GET') {
+        return Http::response('', 200);
+    }
+
+    $getAttempts++;
+
+    if ($getAttempts === 1) {
+        throw new ConnectionException(
+            'cURL error 28: Operation timed out after 10008 milliseconds with 0 bytes received for '.
+            deploymentAdminConfigUrl(DEPLOYMENT_UPDATE_ADMIN_BASE_URL)
+        );
+    }
+
+    return deploymentWorkerConfigResponse();
+}
+
+function deploymentIsAdminApiReloadUrl(string $requestUrl): bool
+{
+    return in_array($requestUrl, [
+        deploymentAdminConfigUrl(DEPLOYMENT_UPDATE_ADMIN_BASE_URL),
+        deploymentAdminRestartUrl(DEPLOYMENT_UPDATE_ADMIN_BASE_URL),
+    ], true);
+}
+
+function fakeDeploymentReloadFallbackResponse(string $requestUrl): mixed
+{
+    if ($requestUrl === rtrim((string) config('app.url'), '/').'/up') {
+        return Http::response('', 200);
+    }
+
+    return Http::response('', 500);
 }
 
 test('deployment page lists Distribution Bundles with status for admins', function (): void {
@@ -450,7 +512,7 @@ test('the previous run log persists at its rest location across page visits', fu
     $this->actingAs($user);
     fakeDeploymentUpdateProcesses();
     Http::fake([
-        '127.0.0.1:*' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
+        DEPLOYMENT_UPDATE_ADMIN_HOST.':*' => deploymentWorkerConfigResponse(),
         '*' => Http::response([], 200),
     ]);
 
@@ -647,7 +709,7 @@ test('the update console stays reachable during maintenance and can bring the si
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {
-    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
     putenv('CADDY_SERVER_ADMIN_PORT=2019');
 
     fakeDeploymentUpdateProcesses();
@@ -670,29 +732,29 @@ test('the worker reload reads its admin port from the octane server-state file',
     // No env override → the port must come from octane's recorded state, not the
     // stock Caddy default of 2019 (which is the wrong port for our deployments).
     withDeploymentOctaneState(
-        ['state' => ['adminHost' => '127.0.0.1', 'adminPort' => 2643]],
-        fn () => expectDeploymentReloadUsesAdminEndpoint('http://127.0.0.1:2643')
+        ['state' => ['adminHost' => DEPLOYMENT_UPDATE_ADMIN_HOST, 'adminPort' => 2643]],
+        fn () => expectDeploymentReloadUsesAdminEndpoint(DEPLOYMENT_UPDATE_ADMIN_BASE_URL)
     );
 });
 
 test('the worker reload prefers the local octane listener for application health checks', function (): void {
     withDeploymentOctaneState(
         ['state' => [
-            'host' => '127.0.0.1',
+            'host' => DEPLOYMENT_UPDATE_ADMIN_HOST,
             'port' => 8100,
-            'adminHost' => '127.0.0.1',
+            'adminHost' => DEPLOYMENT_UPDATE_ADMIN_HOST,
             'adminPort' => 2643,
         ]],
         function (): void {
             fakeDeploymentUpdateProcesses();
 
-            $baseUrl = 'http://127.0.0.1:2643';
+            $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
             $localHealthUrl = 'http://127.0.0.1:8100/up';
             $appHealthUrl = rtrim((string) config('app.url'), '/').'/up';
 
             Http::fake([
-                $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
-                $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+                deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
+                deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
                 $localHealthUrl => Http::response('', 200),
                 $appHealthUrl => Http::response('', 503),
                 '*' => Http::response('', 500),
@@ -711,7 +773,7 @@ test('the worker reload does not guess the Windows launcher admin port', functio
     withDeploymentOctaneState(null, function (): void {
         fakeDeploymentUpdateProcesses();
         Http::fake([
-            'http://127.0.0.1:2019/config/apps/frankenphp' => Http::response([], 200),
+            deploymentAdminConfigUrl('http://'.DEPLOYMENT_UPDATE_ADMIN_HOST.':2019') => Http::response([], 200),
             '*' => Http::response('', 500),
         ]);
 
@@ -722,7 +784,7 @@ test('the worker reload does not guess the Windows launcher admin port', functio
 });
 
 test('the worker reload retries once when the FrankenPHP admin API times out', function (): void {
-    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
     putenv('CADDY_SERVER_ADMIN_PORT=2643');
 
     fakeDeploymentUpdateProcesses();
@@ -731,30 +793,7 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
 
     try {
         Http::fake(function ($request) use (&$getAttempts) {
-            $url = 'http://127.0.0.1:2643/config/apps/frankenphp';
-            $restartUrl = 'http://127.0.0.1:2643/frankenphp/workers/restart';
-
-            if (! in_array($request->url(), [$url, $restartUrl], true)) {
-                if ($request->url() === rtrim((string) config('app.url'), '/').'/up') {
-                    return Http::response('', 200);
-                }
-
-                return Http::response('', 500);
-            }
-
-            if ($request->method() === 'GET') {
-                $getAttempts++;
-
-                if ($getAttempts === 1) {
-                    throw new ConnectionException(
-                        'cURL error 28: Operation timed out after 10008 milliseconds with 0 bytes received for '.$url
-                    );
-                }
-
-                return Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200);
-            }
-
-            return Http::response('', 200);
+            return fakeDeploymentTimedOutAdminApiResponse($request->url(), $request->method(), $getAttempts);
         });
 
         $log = app(DeploymentService::class)->reload();
@@ -768,18 +807,18 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
 });
 
 test('the worker reload records a warning when application health does not recover', function (): void {
-    putenv('CADDY_SERVER_ADMIN_HOST=127.0.0.1');
+    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
     putenv('CADDY_SERVER_ADMIN_PORT=2643');
 
     fakeDeploymentUpdateProcesses();
 
-    $baseUrl = 'http://127.0.0.1:2643';
+    $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
     $healthUrl = rtrim((string) config('app.url'), '/').'/up';
 
     try {
         Http::fake([
-            $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
-            $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+            deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
+            deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
             $healthUrl => Http::response('', 503),
             '*' => Http::response('', 500),
         ]);

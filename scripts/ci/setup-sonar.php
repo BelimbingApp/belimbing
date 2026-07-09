@@ -22,6 +22,8 @@ const SONAR_HOST = 'https://sonarcloud.io';
 const DEFAULT_ORG = 'belimbingapp';
 const PROJECT_KEY_PREFIX = 'BelimbingApp_';
 
+final class SonarSetupException extends RuntimeException {}
+
 /**
  * @return array{verify-only: bool, registry: string, github-org: string}
  */
@@ -174,7 +176,7 @@ function sonarRequestBinary(string $token, string $method, string $path, ?string
     $url = SONAR_HOST.$path;
     $responseFile = tempnam(sys_get_temp_dir(), 'sonar-response-');
     if ($responseFile === false) {
-        throw new RuntimeException('Unable to create temp file for SonarCloud response.');
+        throw new SonarSetupException('Unable to create temp file for SonarCloud response.');
     }
 
     $command = curlBinary()
@@ -200,18 +202,18 @@ function sonarRequestBinary(string $token, string $method, string $path, ?string
     @unlink($responseFile);
 
     if ($exit !== 0) {
-        throw new RuntimeException('SonarCloud curl request failed.');
+        throw new SonarSetupException('SonarCloud curl request failed.');
     }
 
     $decoded = json_decode($response, true);
     if (! is_array($decoded)) {
-        throw new RuntimeException("SonarCloud returned non-JSON (HTTP {$status}): {$response}");
+        throw new SonarSetupException("SonarCloud returned non-JSON (HTTP {$status}): {$response}");
     }
 
     if ($status >= 400) {
         $message = $decoded['errors'][0]['msg'] ?? $decoded['message'] ?? $response;
 
-        throw new RuntimeException("SonarCloud HTTP {$status}: {$message}");
+        throw new SonarSetupException("SonarCloud HTTP {$status}: {$message}");
     }
 
     return $decoded;
@@ -224,7 +226,7 @@ function sonarRequestPhpCurl(string $token, string $method, string $path, ?strin
 {
     $curl = curl_init(SONAR_HOST.$path);
     if ($curl === false) {
-        throw new RuntimeException('Unable to initialize SonarCloud request.');
+        throw new SonarSetupException('Unable to initialize SonarCloud request.');
     }
 
     curl_setopt_array($curl, [
@@ -244,18 +246,18 @@ function sonarRequestPhpCurl(string $token, string $method, string $path, ?strin
     curl_close($curl);
 
     if (! is_string($response)) {
-        throw new RuntimeException('SonarCloud request failed: '.$curlError);
+        throw new SonarSetupException('SonarCloud request failed: '.$curlError);
     }
 
     $decoded = json_decode($response, true);
     if (! is_array($decoded)) {
-        throw new RuntimeException("SonarCloud returned non-JSON (HTTP {$status}): {$response}");
+        throw new SonarSetupException("SonarCloud returned non-JSON (HTTP {$status}): {$response}");
     }
 
     if ($status >= 400) {
         $message = $decoded['errors'][0]['msg'] ?? $decoded['message'] ?? $response;
 
-        throw new RuntimeException("SonarCloud HTTP {$status}: {$message}");
+        throw new SonarSetupException("SonarCloud HTTP {$status}: {$message}");
     }
 
     return $decoded;
@@ -265,7 +267,7 @@ function validateSonarToken(string $token): void
 {
     $result = sonarRequest($token, 'GET', '/api/authentication/validate');
     if (($result['valid'] ?? false) !== true) {
-        throw new RuntimeException('SONAR_TOKEN is not valid on SonarCloud.');
+        throw new SonarSetupException('SONAR_TOKEN is not valid on SonarCloud.');
     }
 }
 
@@ -347,20 +349,37 @@ function publishGitHubSecret(string $token, string $githubOrg, array $repos): ar
     }
 
     if (ghSupportsOrgSecrets()) {
-        $command = sprintf(
-            'gh secret set SONAR_TOKEN --org %s --visibility all --body %s 2>&1',
-            escapeshellarg($githubOrg),
-            escapeshellarg($token),
-        );
-        exec($command, $output, $exit);
-
-        if ($exit === 0) {
-            return ['ok' => true, 'mode' => 'org', 'message' => "Published SONAR_TOKEN to org {$githubOrg} (all repositories)."];
-        }
-
-        return ['ok' => false, 'mode' => 'org', 'message' => implode("\n", $output)];
+        return publishGitHubOrgSecret($token, $githubOrg);
     }
 
+    return publishGitHubRepoSecrets($token, $repos);
+}
+
+/**
+ * @return array{ok: bool, mode: string, message: string}
+ */
+function publishGitHubOrgSecret(string $token, string $githubOrg): array
+{
+    $command = sprintf(
+        'gh secret set SONAR_TOKEN --org %s --visibility all --body %s 2>&1',
+        escapeshellarg($githubOrg),
+        escapeshellarg($token),
+    );
+    exec($command, $output, $exit);
+
+    if ($exit === 0) {
+        return ['ok' => true, 'mode' => 'org', 'message' => "Published SONAR_TOKEN to org {$githubOrg} (all repositories)."];
+    }
+
+    return ['ok' => false, 'mode' => 'org', 'message' => implode("\n", $output)];
+}
+
+/**
+ * @param  list<string>  $repos
+ * @return array{ok: bool, mode: string, message: string}
+ */
+function publishGitHubRepoSecrets(string $token, array $repos): array
+{
     $failures = [];
     foreach ($repos as $repo) {
         $command = sprintf(
