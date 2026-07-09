@@ -125,6 +125,7 @@ use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use App\Modules\Core\AI\Tools\WriteJsTool;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -286,6 +287,17 @@ class ServiceProvider extends BaseServiceProvider
                 CodexAuthListenCommand::class,
             ]);
         }
+
+        // Register on booted() (not bootstrap/app.php withSchedule): Laravel's
+        // withSchedule only attaches when Artisan starts, so the admin Scheduled
+        // Tasks page would otherwise omit these while schedule:list still showed them.
+        $this->app->booted(function (): void {
+            $schedule = $this->app->make(Schedule::class);
+
+            $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
+            $schedule->command('blb:ai:turns:sweep-stale')->everyFiveMinutes();
+            $schedule->command('blb:ai:pricing:refresh')->dailyAt('02:30')->withoutOverlapping();
+        });
     }
 
     /**
