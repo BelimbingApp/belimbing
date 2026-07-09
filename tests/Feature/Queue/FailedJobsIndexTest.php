@@ -12,6 +12,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 
+const FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE = 'Terminal chat turn failure';
+
+const FAILED_JOBS_QUEUED_CHAT_TURN_FAILURE = 'Queued chat turn failure';
+
 function failedJobsIndexCreateChatTurn(User $user, AiRunStatus $status, RunPhase $phase): AiRun
 {
     return AiRun::query()->create([
@@ -57,8 +61,8 @@ it('hides terminal AI chat turn failures from failed jobs', function (): void {
     $terminalTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Failed, RunPhase::Finalizing);
     $queuedTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Queued, RunPhase::WaitingForWorker);
 
-    failedJobsIndexInsertChatTurnFailure($terminalTurn->id, 'Terminal chat turn failure');
-    failedJobsIndexInsertChatTurnFailure($queuedTurn->id, 'Queued chat turn failure');
+    failedJobsIndexInsertChatTurnFailure($terminalTurn->id, FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE);
+    failedJobsIndexInsertChatTurnFailure($queuedTurn->id, FAILED_JOBS_QUEUED_CHAT_TURN_FAILURE);
 
     DB::table('failed_jobs')->insert([
         'uuid' => (string) Str::uuid(),
@@ -71,8 +75,8 @@ it('hides terminal AI chat turn failures from failed jobs', function (): void {
 
     Livewire::actingAs($user)
         ->test(FailedJobsIndex::class)
-        ->assertDontSee('Terminal chat turn failure')
-        ->assertSee('Queued chat turn failure')
+        ->assertDontSee(FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE)
+        ->assertSee(FAILED_JOBS_QUEUED_CHAT_TURN_FAILURE)
         ->assertSee('Ordinary queue failure');
 });
 
@@ -81,7 +85,7 @@ it('does not retry terminal AI chat turn failures', function (): void {
     Employee::provisionLara();
 
     $terminalTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Failed, RunPhase::Finalizing);
-    $uuid = failedJobsIndexInsertChatTurnFailure($terminalTurn->id, 'Terminal chat turn failure');
+    $uuid = failedJobsIndexInsertChatTurnFailure($terminalTurn->id, FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE);
 
     Artisan::shouldReceive('call')->never();
 
@@ -97,8 +101,8 @@ it('retries only actionable failed jobs from retry all', function (): void {
     $terminalTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Failed, RunPhase::Finalizing);
     $queuedTurn = failedJobsIndexCreateChatTurn($user, AiRunStatus::Queued, RunPhase::WaitingForWorker);
 
-    failedJobsIndexInsertChatTurnFailure($terminalTurn->id, 'Terminal chat turn failure');
-    $queuedUuid = failedJobsIndexInsertChatTurnFailure($queuedTurn->id, 'Queued chat turn failure');
+    failedJobsIndexInsertChatTurnFailure($terminalTurn->id, FAILED_JOBS_TERMINAL_CHAT_TURN_FAILURE);
+    $queuedUuid = failedJobsIndexInsertChatTurnFailure($queuedTurn->id, FAILED_JOBS_QUEUED_CHAT_TURN_FAILURE);
 
     Artisan::shouldReceive('call')
         ->once()

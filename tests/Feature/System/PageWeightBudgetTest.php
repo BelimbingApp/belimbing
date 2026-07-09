@@ -25,6 +25,9 @@ test('full-page Livewire components stay within the HTML budget', function (): v
         // hotspot; the create modal already includes only the active form). Marginal
         // overage on a higher-risk Commerce page. See plan Phase 4.
         'commerce/catalog',
+        // ~353 KB: UI Reference foundations renders the full icon registry catalog.
+        // Admin-only design reference; tracked for section/lazy split in plan Phase 6.
+        'admin/system/ui-reference',
     ];
 
     $exit = Artisan::call('blb:perf:page-weights', [

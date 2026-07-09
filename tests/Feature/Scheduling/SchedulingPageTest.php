@@ -19,6 +19,8 @@ use Symfony\Component\Console\Output\NullOutput;
 
 uses(RefreshDatabase::class);
 
+const SCHEDULING_DIGEST_NAME = 'weekly digest';
+
 beforeEach(function (): void {
     setupAuthzRoles();
 });
@@ -53,12 +55,12 @@ test('the board merges scheduler events with tagged contributors, soonest first'
     {
         public function upcoming(): array
         {
-            return [new UpcomingRun('ai-agent', 'weekly digest', '0 9 * * 1', now()->addMinute(), 'succeeded')];
+            return [new UpcomingRun('ai-agent', SCHEDULING_DIGEST_NAME, '0 9 * * 1', now()->addMinute(), 'succeeded')];
         }
 
         public function recentRuns(int $limit): array
         {
-            return [new RecordedRun('ai-agent', 'weekly digest', 'succeeded', now()->subHour(), now()->subHour()->addMinutes(2), 'ok')];
+            return [new RecordedRun('ai-agent', SCHEDULING_DIGEST_NAME, 'succeeded', now()->subHour(), now()->subHour()->addMinutes(2), 'ok')];
         }
     };
     app()->instance('scheduling-test-contributor', $contributor);
@@ -71,10 +73,10 @@ test('the board merges scheduler events with tagged contributors, soonest first'
 
     $times = collect($upcoming)->map(fn (UpcomingRun $run): int => $run->nextRunAt?->timestamp ?? PHP_INT_MAX);
 
-    expect(collect($upcoming)->pluck('name'))->toContain('weekly digest')
+    expect(collect($upcoming)->pluck('name'))->toContain(SCHEDULING_DIGEST_NAME)
         ->and($times->values()->all())->toBe($times->sort()->values()->all()); // soonest first
 
-    expect(collect($board->recentRuns())->pluck('name'))->toContain('weekly digest');
+    expect(collect($board->recentRuns())->pluck('name'))->toContain(SCHEDULING_DIGEST_NAME);
 });
 
 test('pausing a scheduler entry suppresses it at tick time; resuming clears it', function (): void {

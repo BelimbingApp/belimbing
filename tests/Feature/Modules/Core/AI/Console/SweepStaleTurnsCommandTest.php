@@ -13,6 +13,8 @@ const SWEEP_STALE_SESSION = 'sess_stale_test';
 
 const SWEEP_EXPECT_ONE_STALE_LINE = '1 stale turn';
 
+const SWEEP_EXPECT_NO_STALE_TURNS = 'No stale turns';
+
 function createSweepFixture(): int
 {
     Company::provisionLicensee('Test Company');
@@ -21,23 +23,30 @@ function createSweepFixture(): int
     return User::factory()->create(['company_id' => Company::LICENSEE_ID])->id;
 }
 
+function createStaleSweepTurn(int $actingForUserId, AiRunStatus $status, RunPhase $phase, int $ageMinutes): AiRun
+{
+    $turn = AiRun::query()->create([
+        'employee_id' => Employee::LARA_ID,
+        'session_id' => SWEEP_STALE_SESSION,
+        'acting_for_user_id' => $actingForUserId,
+        'status' => $status,
+        'current_phase' => $phase,
+    ]);
+
+    AiRun::query()->where('id', $turn->id)->update([
+        'created_at' => now()->subMinutes($ageMinutes),
+    ]);
+
+    return $turn;
+}
+
 describe('SweepStaleTurnsCommand', function () {
     beforeEach(function () {
         $this->actingForUserId = createSweepFixture();
     });
 
     it('fails queued turns past the threshold', function () {
-        $turn = AiRun::query()->create([
-            'employee_id' => Employee::LARA_ID,
-            'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => $this->actingForUserId,
-            'status' => AiRunStatus::Queued,
-            'current_phase' => RunPhase::WaitingForWorker,
-        ]);
-
-        AiRun::query()->where('id', $turn->id)->update([
-            'created_at' => now()->subMinutes(15),
-        ]);
+        $turn = createStaleSweepTurn($this->actingForUserId, AiRunStatus::Queued, RunPhase::WaitingForWorker, 15);
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
@@ -48,17 +57,7 @@ describe('SweepStaleTurnsCommand', function () {
     });
 
     it('fails booting turns past the queued threshold', function () {
-        $turn = AiRun::query()->create([
-            'employee_id' => Employee::LARA_ID,
-            'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => $this->actingForUserId,
-            'status' => AiRunStatus::Booting,
-            'current_phase' => RunPhase::AwaitingLlm,
-        ]);
-
-        AiRun::query()->where('id', $turn->id)->update([
-            'created_at' => now()->subMinutes(15),
-        ]);
+        $turn = createStaleSweepTurn($this->actingForUserId, AiRunStatus::Booting, RunPhase::AwaitingLlm, 15);
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
@@ -69,17 +68,7 @@ describe('SweepStaleTurnsCommand', function () {
     });
 
     it('fails running turns past the running threshold', function () {
-        $turn = AiRun::query()->create([
-            'employee_id' => Employee::LARA_ID,
-            'session_id' => SWEEP_STALE_SESSION,
-            'acting_for_user_id' => $this->actingForUserId,
-            'status' => AiRunStatus::Running,
-            'current_phase' => RunPhase::RunningTool,
-        ]);
-
-        AiRun::query()->where('id', $turn->id)->update([
-            'created_at' => now()->subMinutes(45),
-        ]);
+        $turn = createStaleSweepTurn($this->actingForUserId, AiRunStatus::Running, RunPhase::RunningTool, 45);
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--running-minutes' => 30])
             ->assertSuccessful()
@@ -112,7 +101,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--running-minutes' => 30])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
 
         expect($turn->fresh()->status)->toBe(AiRunStatus::Running);
     });
@@ -128,7 +117,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
     });
 
     it('does not touch completed turns', function () {
@@ -146,7 +135,7 @@ describe('SweepStaleTurnsCommand', function () {
 
         $this->artisan('blb:ai:turns:sweep-stale', ['--queued-minutes' => 10])
             ->assertSuccessful()
-            ->expectsOutputToContain('No stale turns');
+            ->expectsOutputToContain(SWEEP_EXPECT_NO_STALE_TURNS);
     });
 
     it('emits run.failed event for each swept turn', function () {
