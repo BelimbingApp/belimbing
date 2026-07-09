@@ -1,4 +1,5 @@
 <?php
+
 $agentOperatorCapabilities = [
     'admin.ai.chat-attachment.manage',
     'admin.ai.agent.view',
@@ -41,28 +42,60 @@ $agentPowerUserAdditionalCapabilities = [
     'admin.ai.tool.write-js.execute',
 ];
 
-$capabilities = array_values(array_unique([
-    ...$agentOperatorCapabilities,
-    ...$agentPowerUserAdditionalCapabilities,
+$tenantOwnerAiCapabilities = [
+    'admin.ai.chat-attachment.manage',
+    'admin.ai.agent.view',
+    'admin.ai.agent.execute',
+    'admin.ai.tool.active-page-snapshot.view',
+    'admin.ai.tool.document-analysis.execute',
+    'admin.ai.tool.guide.execute',
+    'admin.ai.tool.image-analysis.execute',
+    'admin.ai.tool.navigate.execute',
+    'admin.ai.tool.notification.execute',
+    'admin.ai.tool.web-fetch.execute',
+    'admin.ai.tool.web-search.execute',
+    'admin.ai.tool.agent-list.execute',
+    'admin.ai.tool.workspace.view',
+    'admin.ai.tool.message.execute',
+];
 
+$messagingAccountCapabilities = [
     'messaging.account.manage',
     'messaging.account.grant',
     'messaging.account.revoke',
+];
+
+$messagingSearchCapabilities = [
+    'messaging.any.search',
+];
+
+$messagingResponderCapabilities = [
     'messaging.whatsapp.send',
     'messaging.whatsapp.react',
-    'messaging.whatsapp.media',
     'messaging.telegram.send',
     'messaging.telegram.react',
+    'messaging.slack.send',
+    'messaging.email.send',
+    ...$messagingSearchCapabilities,
+];
+
+$messagingOperatorCapabilities = array_values(array_unique([
+    ...$messagingResponderCapabilities,
+    'messaging.whatsapp.media',
     'messaging.telegram.edit',
     'messaging.telegram.delete',
     'messaging.telegram.poll',
     'messaging.linkedin.send',
     'messaging.signal.send',
     'messaging.imessage.send',
-    'messaging.slack.send',
-    'messaging.email.send',
     'messaging.sms.send',
-    'messaging.any.search',
+]));
+
+$capabilities = array_values(array_unique([
+    ...$agentOperatorCapabilities,
+    ...$agentPowerUserAdditionalCapabilities,
+    ...$messagingAccountCapabilities,
+    ...$messagingOperatorCapabilities,
 
     // Grants access to Lara provisioning and activation.
     'admin.ai.lara.manage',
@@ -95,6 +128,13 @@ return [
             'description' => 'View and execute agents with basic tool access.',
             'capabilities' => $agentOperatorCapabilities,
         ],
+        'tenant_owner' => [
+            'capabilities' => [
+                ...$tenantOwnerAiCapabilities,
+                ...$messagingAccountCapabilities,
+                ...$messagingOperatorCapabilities,
+            ],
+        ],
         'agent_power_user' => [
             'name' => 'Agent Power User',
             'description' => 'Full agent tool access including artisan, bash, delegation, scheduling, media analysis, and JS execution.',
@@ -118,52 +158,22 @@ return [
         'messaging_reader' => [
             'name' => 'Messaging Reader',
             'description' => 'Read-only access to messaging - search conversations across channels.',
-            'capabilities' => [
-                'messaging.any.search',
-            ],
+            'capabilities' => $messagingSearchCapabilities,
         ],
         'messaging_responder' => [
             'name' => 'Messaging Responder',
             'description' => 'Agent that responds to inbound messages - send and react on configured channels.',
-            'capabilities' => [
-                'messaging.whatsapp.send',
-                'messaging.whatsapp.react',
-                'messaging.telegram.send',
-                'messaging.telegram.react',
-                'messaging.slack.send',
-                'messaging.email.send',
-                'messaging.any.search',
-            ],
+            'capabilities' => $messagingResponderCapabilities,
         ],
         'messaging_operator' => [
             'name' => 'Messaging Operator',
             'description' => 'Full messaging power on granted channels - send, react, edit, delete, polls, and media.',
-            'capabilities' => [
-                'messaging.whatsapp.send',
-                'messaging.whatsapp.react',
-                'messaging.whatsapp.media',
-                'messaging.telegram.send',
-                'messaging.telegram.react',
-                'messaging.telegram.edit',
-                'messaging.telegram.delete',
-                'messaging.telegram.poll',
-                'messaging.linkedin.send',
-                'messaging.signal.send',
-                'messaging.imessage.send',
-                'messaging.slack.send',
-                'messaging.email.send',
-                'messaging.sms.send',
-                'messaging.any.search',
-            ],
+            'capabilities' => $messagingOperatorCapabilities,
         ],
         'messaging_admin' => [
             'name' => 'Messaging Admin',
             'description' => 'Supervisor role for managing channel accounts and agent access grants.',
-            'capabilities' => [
-                'messaging.account.manage',
-                'messaging.account.grant',
-                'messaging.account.revoke',
-            ],
+            'capabilities' => $messagingAccountCapabilities,
         ],
     ],
 ];

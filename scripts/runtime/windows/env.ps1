@@ -137,25 +137,26 @@ function Resolve-BLBNativeCommandPath {
     param([Parameter(Mandatory = $true)][string] $Command)
 
     $nativeExtensions = @('.exe', '.cmd', '.bat', '.com')
-    $commandInfo = Get-Command $Command -All -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandType -eq 'Application' -and $nativeExtensions -contains $_.Extension } |
+    $commandInfo = Get-Command -Name $Command -All -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandType -eq 'Application' } |
+        Where-Object { $nativeExtensions.Contains($_.Extension) } |
         Select-Object -First 1
 
     if ($commandInfo) {
         return $commandInfo.Source
     }
 
-    foreach ($pathEntry in ($env:Path -split [IO.Path]::PathSeparator)) {
-        if (-not $pathEntry) {
-            continue
-        }
-
+    $candidates = foreach ($pathEntry in ([Environment]::GetEnvironmentVariable('Path') -split [IO.Path]::PathSeparator)) {
         foreach ($extension in $nativeExtensions) {
-            $candidate = Join-Path $pathEntry "$Command$extension"
-            if (Test-Path $candidate) {
-                return $candidate
+            if (-not [string]::IsNullOrWhiteSpace($pathEntry)) {
+                Join-Path -Path $pathEntry -ChildPath "$Command$extension"
             }
         }
+    }
+
+    $resolved = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($resolved) {
+        return $resolved
     }
 
     return ''
