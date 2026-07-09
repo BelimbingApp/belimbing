@@ -104,6 +104,10 @@ class Index extends Component
         // time are still there on a fresh visit (or after an interrupted run).
         $lastRun = $history->lastDeploymentRun();
         $reloadState = $history->reloadState();
+        $reloadStateStatus = $reloadState['status'] ?? null;
+        $reloadStatePending = in_array($reloadStateStatus, ['pending', 'running'], true);
+        $reloadStateStalled = $reloadStatePending && $history->reloadStateIsStale($reloadState);
+        $reloadInProgress = $reloadStatePending && ! $reloadStateStalled;
         $hasSessionLog = $this->log !== [];
         $runStatus = $hasSessionLog ? $this->runOutcome() : ($lastRun['status'] ?? 'idle');
         $displayLog = $hasSessionLog ? $this->log : ($lastRun['log'] ?? []);
@@ -130,6 +134,9 @@ class Index extends Component
             'displayLog' => $displayLog,
             'lastReload' => $history->lastReload(),
             'reloadState' => $reloadState,
+            'reloadStateStatus' => $reloadStateStatus,
+            'reloadStateStalled' => $reloadStateStalled,
+            'reloadInProgress' => $reloadInProgress,
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $history->lastComposerRun(),
             'lastFrontendRun' => $history->lastFrontendRun(),

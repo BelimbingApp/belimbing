@@ -120,10 +120,9 @@
                                             <p class="mt-0.5 text-xs leading-snug text-muted">
                                                 {{ $diagnostic['detail'] }}
                                             </p>
-                                            <span class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent">
-                                                <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
+                                            <x-ui.link href="#" :navigate="false" class="mt-1 text-xs font-medium">
                                                 {{ __('Open related page') }}
-                                            </span>
+                                            </x-ui.link>
                                         </div>
                                     </div>
                                 </div>

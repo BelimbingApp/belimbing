@@ -203,22 +203,30 @@ final class DeploymentWorkerReloader
 
     private function waitForApplicationHealth(): ?string
     {
-        $url = $this->healthCheckUrl();
+        $urls = $this->adminEndpoints->healthCheckUrls();
         $lastFailure = null;
 
         for ($attempt = 1; $attempt <= self::HEALTH_CHECK_ATTEMPTS; $attempt++) {
-            try {
-                $response = Http::connectTimeout(self::HEALTH_CONNECT_TIMEOUT_SECONDS)
-                    ->timeout(self::HEALTH_REQUEST_TIMEOUT_SECONDS)
-                    ->get($url);
+            foreach ($urls as $url) {
+                try {
+                    $response = Http::connectTimeout(self::HEALTH_CONNECT_TIMEOUT_SECONDS)
+                        ->timeout(self::HEALTH_REQUEST_TIMEOUT_SECONDS)
+                        ->get($url);
 
-                if ($response->successful()) {
-                    return null;
+                    if ($response->successful()) {
+                        return null;
+                    }
+
+                    $lastFailure = (string) __(':url returned HTTP :status', [
+                        'url' => $url,
+                        'status' => $response->status(),
+                    ]);
+                } catch (\Throwable $exception) {
+                    $lastFailure = (string) __(':url failed: :message', [
+                        'url' => $url,
+                        'message' => $exception->getMessage(),
+                    ]);
                 }
-
-                $lastFailure = (string) __('health endpoint returned HTTP :status', ['status' => $response->status()]);
-            } catch (\Throwable $exception) {
-                $lastFailure = $exception->getMessage();
             }
 
             if ($attempt < self::HEALTH_CHECK_ATTEMPTS) {
@@ -227,10 +235,5 @@ final class DeploymentWorkerReloader
         }
 
         return $lastFailure ?? (string) __('health endpoint did not respond');
-    }
-
-    private function healthCheckUrl(): string
-    {
-        return rtrim((string) config('app.url'), '/').'/up';
     }
 }

@@ -416,6 +416,35 @@ test('deployment page shows the last frankenphp reload', function (): void {
         ->assertSee(DEPLOYMENT_UPDATE_RELOADED);
 });
 
+test('deployment page allows retry when a reload state is stale', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    app(SettingsService::class)->set('system.update.frankenphp.reload_state', [
+        'attempted_at' => now()->subMinutes(6)->utc()->toIso8601String(),
+        'status' => 'running',
+        'message' => 'Runtime reload is running.',
+        'admin_url' => null,
+    ]);
+
+    $component = Livewire::test(Index::class)
+        ->assertSee('Reload stalled')
+        ->assertSee('Retry reload');
+
+    $html = $component->html();
+    $retryLabelPosition = strpos($html, 'Retry reload');
+    $buttonStartPosition = strrpos(substr($html, 0, $retryLabelPosition), '<button');
+    $buttonEndPosition = strpos($html, '</button>', $buttonStartPosition);
+    $reloadButton = substr($html, $buttonStartPosition, $buttonEndPosition - $buttonStartPosition);
+
+    expect($reloadButton)
+        ->toContain('wire:click="reloadOnly"')
+        ->toContain('x-bind:disabled="running || refreshing || reloadInProgress"')
+        ->not->toContain('disabled="disabled"');
+});
+
 test('the previous run log persists at its rest location across page visits', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
@@ -646,6 +675,38 @@ test('the worker reload reads its admin port from the octane server-state file',
     );
 });
 
+test('the worker reload prefers the local octane listener for application health checks', function (): void {
+    withDeploymentOctaneState(
+        ['state' => [
+            'host' => '127.0.0.1',
+            'port' => 8100,
+            'adminHost' => '127.0.0.1',
+            'adminPort' => 2643,
+        ]],
+        function (): void {
+            fakeDeploymentUpdateProcesses();
+
+            $baseUrl = 'http://127.0.0.1:2643';
+            $localHealthUrl = 'http://127.0.0.1:8100/up';
+            $appHealthUrl = rtrim((string) config('app.url'), '/').'/up';
+
+            Http::fake([
+                $baseUrl.'/config/apps/frankenphp' => Http::response(['workers' => [['file_name' => public_path('frankenphp-worker.php')]]], 200),
+                $baseUrl.'/frankenphp/workers/restart' => Http::response('', 200),
+                $localHealthUrl => Http::response('', 200),
+                $appHealthUrl => Http::response('', 503),
+                '*' => Http::response('', 500),
+            ]);
+
+            $log = app(DeploymentService::class)->reload();
+
+            expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
+            Http::assertSent(fn ($request): bool => $request->url() === $localHealthUrl);
+            Http::assertNotSent(fn ($request): bool => $request->url() === $appHealthUrl);
+        }
+    );
+});
+
 test('the worker reload does not guess the Windows launcher admin port', function (): void {
     withDeploymentOctaneState(null, function (): void {
         fakeDeploymentUpdateProcesses();
@@ -726,10 +787,10 @@ test('the worker reload records a warning when application health does not recov
         $log = app(DeploymentService::class)->reload();
         $stored = app(DeploymentRunHistory::class)->lastReload();
 
-        expect($log)->toContain('Warning: web workers restart was accepted, but the application health check did not recover: health endpoint returned HTTP 503')
+        expect($log)->toContain("Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503")
             ->and($stored)->toMatchArray([
                 'ok' => false,
-                'message' => 'Warning: web workers restart was accepted, but the application health check did not recover: health endpoint returned HTTP 503',
+                'message' => "Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503",
             ]);
     } finally {
         putenv('CADDY_SERVER_ADMIN_HOST');

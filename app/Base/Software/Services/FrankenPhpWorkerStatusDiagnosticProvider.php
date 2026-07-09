@@ -8,14 +8,11 @@ use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
-    private const STALE_PENDING_MINUTES = 5;
-
     public function __construct(
         private readonly AuthorizationService $authorizationService,
         private readonly DeploymentRunHistory $history,
@@ -33,7 +30,7 @@ final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnos
         $reloadState = $this->history->reloadState();
 
         if ($this->reloadStateIsPending($reloadState)) {
-            if ($this->reloadStateIsStale($reloadState)) {
+            if ($this->history->reloadStateIsStale($reloadState)) {
                 return [$this->stalledReloadDiagnostic($reloadState)];
             }
 
@@ -139,19 +136,6 @@ final class FrankenPhpWorkerStatusDiagnosticProvider implements StatusBarDiagnos
     private function reloadStateIsPending(?array $reloadState): bool
     {
         return in_array($reloadState['status'] ?? null, ['pending', 'running'], true);
-    }
-
-    /**
-     * @param  array{attempted_at: string, status: string, message: string, admin_url: string|null}  $reloadState
-     */
-    private function reloadStateIsStale(array $reloadState): bool
-    {
-        try {
-            return Carbon::parse($reloadState['attempted_at'])
-                ->lessThan(now()->subMinutes(self::STALE_PENDING_MINUTES));
-        } catch (\Throwable) {
-            return true;
-        }
     }
 
     private function updatesUrl(): ?string

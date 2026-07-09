@@ -154,15 +154,14 @@
                                             @endif
 
                                             @if ($diagnostic->target !== null)
-                                                <a
-                                                    href="{{ $diagnostic->target }}"
-                                                    wire:navigate
+                                                <x-ui.link
                                                     @click="closeDialog()"
-                                                    class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                                                    kind="internal"
+                                                    href="{{ $diagnostic->target }}"
+                                                    class="mt-1 text-xs font-medium"
                                                 >
-                                                    <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
                                                     {{ __('Open related page') }}
-                                                </a>
+                                                </x-ui.link>
                                             @endif
                                         </div>
                                     </div>

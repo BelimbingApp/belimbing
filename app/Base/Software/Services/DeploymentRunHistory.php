@@ -3,12 +3,15 @@
 namespace App\Base\Software\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
+use Illuminate\Support\Carbon;
 
 /**
  * Stores the durable run records shown on the Deployment update page.
  */
 class DeploymentRunHistory
 {
+    public const RELOAD_STALE_AFTER_MINUTES = 5;
+
     private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
 
     private const RELOAD_STATE_KEY = 'system.update.frankenphp.reload_state';
@@ -82,6 +85,27 @@ class DeploymentRunHistory
             'message' => $message,
             'admin_url' => is_string($adminUrl) ? $adminUrl : null,
         ];
+    }
+
+    /**
+     * @param  array{attempted_at?: string, status?: string, message?: string, admin_url?: string|null}|null  $reloadState
+     */
+    public function reloadStateIsStale(?array $reloadState = null): bool
+    {
+        if (! in_array($reloadState['status'] ?? null, ['pending', 'running'], true)) {
+            return false;
+        }
+
+        if (! is_string($reloadState['attempted_at'] ?? null) || $reloadState['attempted_at'] === '') {
+            return true;
+        }
+
+        try {
+            return Carbon::parse($reloadState['attempted_at'])
+                ->lessThan(now()->subMinutes(self::RELOAD_STALE_AFTER_MINUTES));
+        } catch (\Throwable) {
+            return true;
+        }
     }
 
     /**

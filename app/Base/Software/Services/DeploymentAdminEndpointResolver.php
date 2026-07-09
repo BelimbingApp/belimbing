@@ -8,6 +8,8 @@ final class DeploymentAdminEndpointResolver
 
     private const DEFAULT_ADMIN_PORT = '2019';
 
+    private const WILDCARD_HOSTS = ['0.0.0.0', '::', '[::]'];
+
     /**
      * Candidate host+port pairs for the FrankenPHP/Caddy admin API.
      *
@@ -22,7 +24,7 @@ final class DeploymentAdminEndpointResolver
     {
         $host = env('CADDY_SERVER_ADMIN_HOST') ?: (getenv('CADDY_SERVER_ADMIN_HOST') ?: null);
         $port = env('CADDY_SERVER_ADMIN_PORT') ?: (getenv('CADDY_SERVER_ADMIN_PORT') ?: null);
-        [$stateHost, $statePort] = $this->octaneAdminEndpoint();
+        [$stateHost, $statePort] = $this->octaneAdminEndpoint($this->octaneState());
 
         if ($host !== null || $port !== null) {
             return [$this->configuredAdminEndpoint($host, $port, $stateHost, $statePort)];
@@ -39,6 +41,35 @@ final class DeploymentAdminEndpointResolver
         }
 
         return array_values($unique);
+    }
+
+    /**
+     * Candidate application health endpoints after a worker restart.
+     *
+     * Prefer the locally recorded Octane listener so restart verification does
+     * not depend on whether APP_URL's public hostname resolves back to this node.
+     * Keep APP_URL as a fallback for direct TLS deployments and older state files.
+     *
+     * @return list<string>
+     */
+    public function healthCheckUrls(): array
+    {
+        $state = $this->octaneState();
+        $stateEndpoint = $this->octaneApplicationEndpoint($state);
+        $urls = [];
+
+        if ($stateEndpoint !== null) {
+            [$host, $port] = $stateEndpoint;
+            $urls[] = "http://{$host}:{$port}/up";
+        }
+
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        if ($appUrl !== '') {
+            $urls[] = "{$appUrl}/up";
+        }
+
+        return array_values(array_unique($urls));
     }
 
     /**
@@ -77,13 +108,8 @@ final class DeploymentAdminEndpointResolver
     /**
      * @return array{0: string|null, 1: string|null}
      */
-    private function octaneAdminEndpoint(): array
+    private function octaneAdminEndpoint(?array $state): array
     {
-        $statePath = storage_path('logs/octane-server-state.json');
-        $state = is_file($statePath)
-            ? json_decode((string) file_get_contents($statePath), true)
-            : null;
-
         if (! is_array($state)) {
             return [null, null];
         }
@@ -94,5 +120,43 @@ final class DeploymentAdminEndpointResolver
             is_string($admin['adminHost'] ?? null) ? $admin['adminHost'] : null,
             isset($admin['adminPort']) ? (string) $admin['adminPort'] : null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $state
+     * @return array{0: string, 1: string}|null
+     */
+    private function octaneApplicationEndpoint(?array $state): ?array
+    {
+        if (! is_array($state)) {
+            return null;
+        }
+
+        $app = is_array($state['state'] ?? null) ? $state['state'] : $state;
+        $host = is_string($app['host'] ?? null) ? $app['host'] : null;
+        $port = isset($app['port']) ? (string) $app['port'] : null;
+
+        if ($port === null || $port === '') {
+            return null;
+        }
+
+        if ($host === null || $host === '' || in_array($host, self::WILDCARD_HOSTS, true)) {
+            $host = self::LOCAL_ADMIN_HOST;
+        }
+
+        return [$host, $port];
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function octaneState(): ?array
+    {
+        $statePath = storage_path('logs/octane-server-state.json');
+        $state = is_file($statePath)
+            ? json_decode((string) file_get_contents($statePath), true)
+            : null;
+
+        return is_array($state) ? $state : null;
     }
 }

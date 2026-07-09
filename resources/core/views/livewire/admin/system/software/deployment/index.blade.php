@@ -12,6 +12,10 @@
             refreshTimer: null,
             finishedStatus: @js(($runStatus ?? 'idle') !== 'idle' ? $runStatus : null),
             justRefreshed: false,
+            updateAllUnavailable: @js(! $behind),
+            reloadInProgress: @js($reloadInProgress),
+            reloadRequiresConfirmation: @js(app()->environment('production')),
+            reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
             init() {
                 this.restoreAfterRefresh();
@@ -57,6 +61,16 @@
                 this.runLogOpen = false;
                 this.justRefreshed = false;
                 this.forgetAfterRefresh();
+            },
+            confirmWorkerReload(event) {
+                if (this.reloadRequiresConfirmation && ! window.confirm(this.reloadConfirmationMessage)) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+
+                    return;
+                }
+
+                this.openRunLog();
             },
             rememberAfterRefresh() {
                 try {
@@ -153,7 +167,7 @@
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || @js(! $behind)" :disabled="! $behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateAllUnavailable" :disabled="! $behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -250,11 +264,6 @@
         </x-ui.card>
 
         <x-ui.card>
-            @php
-                $reloadStateStatus = is_array($reloadState ?? null) ? ($reloadState['status'] ?? null) : null;
-                $reloadInProgress = in_array($reloadStateStatus, ['pending', 'running'], true);
-            @endphp
-
             <h2 class="text-base font-medium text-ink">{{ __('Maintenance') }}</h2>
             <p class="mt-1 text-sm text-muted">{{ __('Each of these runs as part of Update. Trigger one on its own to apply a dependency, asset, or worker change — or to recover from a failed run — without pulling code.') }}</p>
 
@@ -317,6 +326,10 @@
                                 <x-ui.badge variant="warning">
                                     {{ $reloadStateStatus === 'running' ? __('Reload running') : __('Reload pending') }}
                                 </x-ui.badge>
+                            @elseif ($reloadStateStalled)
+                                <x-ui.badge variant="danger">
+                                    {{ __('Reload stalled') }}
+                                </x-ui.badge>
                             @endif
                             @if ($lastReload !== null)
                                 <x-ui.badge :variant="$lastReload['ok'] ? 'success' : 'warning'">
@@ -333,8 +346,8 @@
                         @else
                             <p class="mt-1 text-xs text-muted">{{ __('No reload has been recorded yet.') }}</p>
                         @endif
-                        @if ($reloadInProgress && is_array($reloadState ?? null))
-                            <p class="mt-1 text-xs text-status-warning">
+                        @if (($reloadInProgress || $reloadStateStalled) && is_array($reloadState ?? null))
+                            <p class="mt-1 text-xs {{ $reloadStateStalled ? 'text-status-danger' : 'text-status-warning' }}">
                                 {{ __('Current reload') }} <x-ui.datetime :value="$reloadState['attempted_at']" /> · {{ $reloadState['message'] }}
                             </p>
                         @endif
@@ -344,13 +357,15 @@
                         variant="outline"
                         class="ml-auto shrink-0"
                         wire:click="reloadOnly"
-                        x-on:click="if (@js(app()->environment('production')) && ! window.confirm(@js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')))) { $event.preventDefault(); $event.stopImmediatePropagation(); return; } openRunLog()"
+                        x-on:click="confirmWorkerReload($event)"
                         wire:loading.attr="disabled"
-                        x-bind:disabled="running || refreshing || @js($reloadInProgress)"
+                        x-bind:disabled="running || refreshing || reloadInProgress"
                         :disabled="$reloadInProgress"
                         wire:target="reloadOnly"
                     >
-                        <span wire:loading.remove wire:target="reloadOnly">{{ $reloadInProgress ? __('Reload pending') : __('Reload FrankenPHP') }}</span>
+                        <span wire:loading.remove wire:target="reloadOnly">
+                            {{ $reloadInProgress ? __('Reload pending') : ($reloadStateStalled ? __('Retry reload') : __('Reload FrankenPHP')) }}
+                        </span>
                         <span wire:loading wire:target="reloadOnly">{{ __('Reloading…') }}</span>
                     </x-ui.button>
                 </div>
