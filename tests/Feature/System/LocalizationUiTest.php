@@ -77,8 +77,7 @@ it('saves and confirms the selected locale from the localization page', function
 
     Livewire::test(LocalizationIndex::class)
         ->set('selectedLocale', 'ms-MY')
-        ->call('save')
-        ->assertRedirect(route('admin.system.localization.index'));
+        ->assertHasNoErrors();
 
     expect($this->settings->get(FEATURE_LOCALE_SETTINGS_KEY))->toBe('ms-MY')
         ->and($this->settings->get(FEATURE_LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::MANUAL->value)
@@ -171,4 +170,58 @@ it('renders browser-side preview hooks when timezone mode is local', function ()
         ->toContain('window.blbFormatDateTimeElement?.($el)');
 
     $this->travelBack();
+});
+
+it('derives the currency code from the locale region instead of falling back to USD', function (): void {
+    seedFeatureLicenseeLocale();
+
+    $html = Livewire::test(LocalizationIndex::class)
+        ->set('selectedLocale', 'en-MY')
+        ->html();
+
+    expect($html)->toContain('MYR')->not->toContain('USD');
+});
+
+it('falls back to the sample currency when the locale has no Geonames country', function (): void {
+    $html = Livewire::test(LocalizationIndex::class)
+        ->set('selectedLocale', 'en-MY')
+        ->html();
+
+    expect($html)->toContain('USD');
+});
+
+it('persists the company timezone via edit-in-place', function (): void {
+    Livewire::test(LocalizationIndex::class)
+        ->set('companyTimezone', FEATURE_TIMEZONE_KUALA_LUMPUR)
+        ->assertHasNoErrors();
+
+    expect($this->settings->get(
+        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        '',
+        Scope::company($this->user->company_id),
+    ))->toBe(FEATURE_TIMEZONE_KUALA_LUMPUR);
+});
+
+it('clears the company timezone when set to empty', function (): void {
+    $this->settings->set(
+        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        FEATURE_TIMEZONE_KUALA_LUMPUR,
+        Scope::company($this->user->company_id),
+    );
+
+    Livewire::test(LocalizationIndex::class)
+        ->set('companyTimezone', '')
+        ->assertHasNoErrors();
+
+    expect($this->settings->get(
+        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        '',
+        Scope::company($this->user->company_id),
+    ))->toBe('');
+});
+
+it('rejects an invalid timezone via edit-in-place', function (): void {
+    Livewire::test(LocalizationIndex::class)
+        ->set('companyTimezone', 'Not/A/Real/Zone')
+        ->assertHasErrors(['companyTimezone']);
 });
