@@ -158,6 +158,7 @@ This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to preven
 | `0100_01_17_*` | Audit | Database |
 | `0100_01_19_*` | Integration | Database, Settings |
 | `0100_01_21_*` | Media | Database |
+| `0100_01_23_*` | Schedule | Database |
 
 ### Core
 

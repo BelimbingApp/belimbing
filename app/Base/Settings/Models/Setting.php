@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Settings\Models;
 
 use App\Base\Settings\DTO\Scope;
@@ -89,5 +90,25 @@ class Setting extends Model
             ->where('key', $key)
             ->forScope($scope)
             ->first();
+    }
+
+    /**
+     * Expose a stable audit subject handle for this setting row.
+     *
+     * The subject id is the setting key, suffixed with the scope when non-global
+     * (e.g. ``ui.timezone.default@company:1``) so company-scoped settings do not
+     * leak across tenants in audit history queries.
+     *
+     * @return array{name: string, id: string}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        $id = $this->key;
+
+        if ($this->scope_type !== null) {
+            $id .= '@'.$this->scope_type.':'.$this->scope_id;
+        }
+
+        return ['name' => 'setting', 'id' => $id];
     }
 }

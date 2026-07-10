@@ -44,6 +44,8 @@ use App\Modules\Core\AI\Services\ControlPlane\RunDiagnosticService;
 use App\Modules\Core\AI\Services\ControlPlane\RunInspectionService;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\ControlPlane\WireLoggingTraceContextFactory;
+use App\Modules\Core\AI\Services\HeadlessCli\HeadlessCliExecutor;
+use App\Modules\Core\AI\Services\HeadlessCli\HeadlessCliProcessExecutor;
 use App\Modules\Core\AI\Services\ImageProviderCredentialStore;
 use App\Modules\Core\AI\Services\LaraCapabilityMatcher;
 use App\Modules\Core\AI\Services\LaraContextProvider;
@@ -128,6 +130,7 @@ use App\Modules\Core\AI\Tools\WebFetchTool;
 use App\Modules\Core\AI\Tools\WebSearchTool;
 use App\Modules\Core\AI\Tools\WriteJsTool;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -148,6 +151,8 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register(): void
     {
+        $this->mergeConfigFrom(__DIR__.'/Config/headless.php', 'ai-headless');
+
         $this->app->singleton(ConfigResolver::class);
         $this->app->singleton(ModelDiscoveryService::class);
 
@@ -233,10 +238,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(InboundSignalService::class);
         $this->app->singleton(InboundRoutingService::class);
 
-        // Scheduling subsystem
+        // Schedule subsystem
+        $this->app->singleton(HeadlessCliProcessExecutor::class);
+        $this->app->singleton(HeadlessCliExecutor::class);
         $this->app->singleton(ScheduleDefinitionService::class);
         $this->app->singleton(SchedulePlanner::class);
-        $this->app->tag(ScheduleDefinitionContributor::class, 'scheduling.contributors');
+        $this->app->tag(ScheduleDefinitionContributor::class, 'schedule.contributors');
 
         // Background command subsystem
         $this->app->singleton(BackgroundCommandService::class);
@@ -291,6 +298,20 @@ class ServiceProvider extends BaseServiceProvider
                 CodexAuthListenCommand::class,
             ]);
         }
+
+        // Register on booted() (not bootstrap/app.php withSchedule): Laravel's
+        // withSchedule only attaches when Artisan starts, so the admin Schedule
+        // page would otherwise omit these while schedule:list still showed them.
+        $this->app->booted(function (): void {
+            $schedule = $this->app->make(Schedule::class);
+
+            $schedule->command('blb:ai:schedules:tick')
+                ->everyMinute()
+                ->withoutOverlapping();
+            $schedule->command('blb:ai:runs:reap-orphans')->everyFiveMinutes();
+            $schedule->command('blb:ai:turns:sweep-stale')->everyFiveMinutes();
+            $schedule->command('blb:ai:pricing:refresh')->dailyAt('02:30')->withoutOverlapping();
+        });
     }
 
     /**

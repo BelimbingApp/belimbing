@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -17,7 +18,8 @@ use App\Modules\Core\AI\Services\OperationsDispatchService;
  * Operation status tool for Agents.
  *
  * Queries the ai_operation_dispatches ledger to inspect any previously
- * dispatched operation (agent tasks, scheduled tasks, background commands).
+ * dispatched operation (agent tasks, scheduled tasks, headless tasks,
+ * background commands).
  * Supports single-ID lookup via "get" and filtered listing via "list".
  *
  * Gated by `admin.ai.tool.delegation-status.execute` authz capability.
@@ -68,7 +70,7 @@ class DelegationStatusTool extends AbstractActionTool
             )
             ->string(
                 'type',
-                'Filter by operation type: agent_task, scheduled_task, background_command. '
+                'Filter by operation type: agent_task, scheduled_task, headless_task, background_command. '
                     .'Optional, used with "list" action.'
             )
             ->string(
@@ -105,7 +107,7 @@ class DelegationStatusTool extends AbstractActionTool
             'displayName' => 'Operation Status',
             'summary' => 'Check the status of dispatched operations.',
             'explanation' => 'Queries the status of any operation dispatched via delegate_task, '
-                .'schedule_task, or artisan (background). Returns status '
+                .'schedule_task, headless task, or artisan (background). Returns status '
                 .'(queued/running/succeeded/failed), timing, and result summary. '
                 .'Supports both single-ID lookup and filtered listing.',
             'limits' => [

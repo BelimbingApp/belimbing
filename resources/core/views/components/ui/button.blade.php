@@ -13,6 +13,7 @@ $variantClasses = match($variant) {
     'danger' => 'bg-status-danger hover:bg-status-danger/90 text-accent-on focus:ring-status-danger',
     'danger-ghost' => 'text-accent hover:bg-surface-subtle focus:ring-accent',
     'ghost' => 'text-accent hover:bg-surface-subtle focus:ring-accent',
+    'control' => 'bg-surface-card hover:bg-surface-subtle text-ink border border-border-input focus:ring-accent',
     'outline' => 'text-accent border-2 border-border-input hover:bg-surface-subtle focus:ring-accent',
     default => 'bg-accent hover:bg-accent-hover text-accent-on focus:ring-accent',
 };

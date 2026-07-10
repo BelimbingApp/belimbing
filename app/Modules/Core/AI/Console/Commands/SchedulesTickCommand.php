@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Console\Commands;
 
 use App\Modules\Core\AI\Services\Scheduling\SchedulePlanner;
@@ -20,13 +21,16 @@ class SchedulesTickCommand extends Command
 {
     protected $description = 'Find and dispatch all due AI schedule definitions';
 
-    protected $signature = 'blb:ai:schedules:tick';
+    protected $signature = 'blb:ai:schedules:tick {--source= : Limit dispatch to one schedule source}';
 
     public function handle(SchedulePlanner $planner): int
     {
         $this->components->info('Checking for due schedules...');
 
-        $dispatched = $planner->dispatchDue();
+        $source = $this->option('source');
+        $dispatched = $planner->dispatchDue(
+            source: is_string($source) && $source !== '' ? $source : null,
+        );
 
         if ($dispatched === 0) {
             $this->components->info('No schedules due.');

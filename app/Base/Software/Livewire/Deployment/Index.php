@@ -4,6 +4,7 @@ namespace App\Base\Software\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
@@ -20,6 +21,8 @@ use Livewire\Component;
  */
 class Index extends Component
 {
+    use FormatsDeploymentRunOutput;
+
     /** @var list<string> last action's log lines (persists so the resting panel survives a page visit) */
     #[Session('admin.system.software.updates.run_log')]
     public array $log = [];
@@ -143,16 +146,6 @@ class Index extends Component
         ]);
     }
 
-    public function runLineClass(string $line): string
-    {
-        return match (true) {
-            $this->isErrorLine($line) => 'text-status-danger',
-            $this->isWarningLine($line) => 'text-status-warning',
-            str_starts_with($line, 'Update complete.') || str_starts_with($line, 'Verified:') => 'text-status-success',
-            default => '',
-        };
-    }
-
     private function authorizeManage(): void
     {
         app(AuthorizationService::class)->authorize(
@@ -218,54 +211,5 @@ class Index extends Component
             collect($log)->contains(fn (string $line): bool => $this->isWarningLine($line)) => 'warning',
             default => 'success',
         };
-    }
-
-    private function statusLabel(string $status): string
-    {
-        return match ($status) {
-            'error' => (string) __('Needs action'),
-            'warning' => (string) __('Warnings'),
-            'pending' => (string) __('Reload pending'),
-            'success' => (string) __('Complete'),
-            default => (string) __('No run yet'),
-        };
-    }
-
-    private function statusVariant(string $status): string
-    {
-        return match ($status) {
-            'error' => 'danger',
-            'warning' => 'warning',
-            'pending' => 'warning',
-            'success' => 'success',
-            default => 'default',
-        };
-    }
-
-    private function isErrorLine(string $line): bool
-    {
-        $lower = strtolower($line);
-
-        return str_starts_with($line, 'FAILED:')
-            || str_contains($lower, 'finished with errors')
-            || str_contains($lower, ' install failed:')
-            || str_contains($lower, ' build failed:')
-            || str_contains($lower, ' refresh failed:');
-    }
-
-    private function isWarningLine(string $line): bool
-    {
-        return str_starts_with($line, 'Warning:')
-            || str_starts_with($line, 'Still behind:')
-            || str_starts_with($line, 'Could not verify')
-            || str_contains(strtolower($line), 'finished with warnings');
-    }
-
-    private function isPendingLine(string $line): bool
-    {
-        $lower = strtolower($line);
-
-        return str_contains($lower, 'runtime reload scheduled')
-            || str_contains($lower, 'runtime reload is already scheduled');
     }
 }

@@ -20,9 +20,12 @@ Intent: add BLB console commands and Laravel command overrides with consistent n
 
 ## Reference Shape
 
-- New BLB command names use `blb:` prefix (`blb:workflow:create`, `blb:user:create`).
+- New **Base/Core framework** command names use the `blb:` prefix (`blb:workflow:create`, `blb:user:create`, `blb:ai:runs:reap-orphans`).
+- **Domain modules** use their domain prefix, not `blb:` — e.g. `commerce:marketplace:ebay:pull`, `people:…`.
+- **Extensions** use their owner/module prefix — e.g. `ham:auto-parts:seed`, `investment:agent-dispatch`.
 - Laravel command overrides intentionally keep original names (example `migrate`).
 - Service provider binds or extends command classes in `register()`.
+- Do not rename existing domain/extension commands to `blb:` for consistency theater; ownership in the prefix is the consistency.
 
 ## Required Invariants
 

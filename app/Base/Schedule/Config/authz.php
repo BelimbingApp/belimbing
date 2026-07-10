@@ -1,6 +1,10 @@
 <?php
+
 return [
     'capabilities' => [
-        'admin.system.scheduled-task.list',
+        // Central schedule observability (admin/system/schedule).
+        'admin.system.schedule.view',
+        'admin.system.schedule.execute',
+        'admin.system.schedule.manage',
     ],
 ];

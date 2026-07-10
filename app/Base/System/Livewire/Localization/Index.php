@@ -1,14 +1,19 @@
 <?php
+
 namespace App\Base\System\Livewire\Localization;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
+use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
+use App\Modules\Core\Geonames\Models\Country;
 use Carbon\CarbonInterface;
+use DateTimeZone;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Number;
 use Illuminate\Validation\Rule;
@@ -25,16 +30,18 @@ class Index extends Component
 
     private const SETTINGS_KEY_INFERRED_COUNTRY = 'ui.locale_inferred_country';
 
-    private const SETTINGS_KEY_CURRENCY = 'ui.locale_currency';
+    private const SETTINGS_KEY_TIMEZONE = 'ui.timezone.default';
 
     public string $selectedLocale = '';
+
+    public ?string $companyTimezone = '';
 
     /**
      * @var array<int, array{value: string, label: string}>
      */
     public array $localeOptions = [];
 
-    public function mount(LocaleCatalog $catalog, LocaleContext $localeContext): void
+    public function mount(LocaleCatalog $catalog, LocaleContext $localeContext, SettingsService $settings): void
     {
         $this->localeOptions = collect($catalog->options())
             ->map(fn (string $label, string $code) => [
@@ -44,24 +51,30 @@ class Index extends Component
             ->values()
             ->all();
         $this->selectedLocale = $localeContext->currentLocale();
+
+        $companyId = auth()->user()?->company_id;
+        $this->companyTimezone = $companyId
+            ? (string) ($settings->get(self::SETTINGS_KEY_TIMEZONE, '', Scope::company($companyId)) ?? '')
+            : '';
     }
 
     /**
      * Persist the selected locale as the confirmed application locale.
      *
-     * Also derives and persists the currency code from the licensee's
-     * Geonames country record when available.
+     * Fired by the edit-in-place combobox when the admin commits a selection.
+     * Currency is no longer persisted here — it is derived from the locale's
+     * region at render time.
      */
-    public function save(
-        SettingsService $settings,
-        LocaleCatalog $catalog,
-        LicenseeLocaleBootstrapSource $bootstrapSource,
-    ): void {
+    public function updatedSelectedLocale(string $value): void
+    {
+        $catalog = app(LocaleCatalog::class);
+        $settings = app(SettingsService::class);
+
         $this->validate([
             'selectedLocale' => ['required', 'string', Rule::in(array_keys($catalog->options()))],
         ]);
 
-        $locale = $catalog->normalize($this->selectedLocale);
+        $locale = $catalog->normalize($value);
 
         if ($locale === null) {
             $this->addError('selectedLocale', __('Select a supported locale.'));
@@ -73,16 +86,38 @@ class Index extends Component
         $settings->set(self::SETTINGS_KEY_SOURCE, LocaleSource::MANUAL->value);
         $settings->set(self::SETTINGS_KEY_CONFIRMED_AT, now()->toIso8601String());
         $settings->forget(self::SETTINGS_KEY_INFERRED_COUNTRY);
+    }
 
-        $bootstrap = $bootstrapSource->resolve();
+    /**
+     * Persist the company default timezone (company-scoped).
+     *
+     * Fired by the edit-in-place combobox when the admin commits or clears
+     * the timezone. Clearing removes the setting, falling back to UTC.
+     */
+    public function updatedCompanyTimezone(?string $value): void
+    {
+        $tz = trim((string) $value);
 
-        if ($bootstrap?->currencyCode) {
-            $settings->set(self::SETTINGS_KEY_CURRENCY, strtoupper($bootstrap->currencyCode));
+        if ($tz !== '' && ! in_array($tz, DateTimeZone::listIdentifiers(), true)) {
+            $this->addError('companyTimezone', __('Select a valid timezone.'));
+
+            return;
         }
 
-        session()->flash('locale-status', __('Localization saved.'));
+        $companyId = auth()->user()?->company_id;
 
-        $this->redirectRoute('admin.system.localization.index', navigate: true);
+        if (! $companyId) {
+            return;
+        }
+
+        $settings = app(SettingsService::class);
+        $scope = Scope::company($companyId);
+
+        if ($tz === '') {
+            $settings->forget(self::SETTINGS_KEY_TIMEZONE, $scope);
+        } else {
+            $settings->set(self::SETTINGS_KEY_TIMEZONE, $tz, $scope);
+        }
     }
 
     public function render(
@@ -90,7 +125,6 @@ class Index extends Component
         LocaleContext $localeContext,
         LicenseeLocaleBootstrapSource $bootstrapSource,
         DateTimeDisplayService $dateTimeDisplay,
-        SettingsService $settings,
     ): View {
         $state = $localeContext->state();
         $previewLocale = $catalog->normalize($this->selectedLocale) ?? $state->locale;
@@ -98,14 +132,28 @@ class Index extends Component
         $numberLocale = str_replace('-', '_', $previewLocale);
         $sample = now();
         $bootstrap = $bootstrapSource->resolve();
-        $persistedCurrency = $settings->get(self::SETTINGS_KEY_CURRENCY);
-        $currencyCode = $persistedCurrency
-            ?: ($bootstrap?->currencyCode ?: config('locale.sample_currency', 'USD'));
-        $companyTimezone = $dateTimeDisplay->currentCompanyTimezone();
-        $companyTimezoneExplicit = $dateTimeDisplay->isCompanyTimezoneExplicit();
+        $currencyCode = $this->deriveCurrencyCode($previewLocale);
         $previewMode = $dateTimeDisplay->currentMode();
         $previewTimezone = $dateTimeDisplay->currentTimezone();
         $localPreview = $previewMode === TimezoneMode::LOCAL;
+
+        $timezoneOptions = $this->timezoneOptions($previewTimezone);
+
+        $localeHelp = $this->localeHelpText($catalog, $bootstrap);
+
+        $companyId = auth()->user()?->company_id;
+        $auditSubjects = [
+            ['name' => 'setting', 'id' => self::SETTINGS_KEY_LOCALE],
+            ['name' => 'setting', 'id' => self::SETTINGS_KEY_SOURCE],
+            ['name' => 'setting', 'id' => self::SETTINGS_KEY_CONFIRMED_AT],
+        ];
+
+        if ($companyId) {
+            $auditSubjects[] = [
+                'name' => 'setting',
+                'id' => self::SETTINGS_KEY_TIMEZONE.'@company:'.$companyId,
+            ];
+        }
 
         return view('livewire.admin.system.localization.index', [
             'current' => [
@@ -115,7 +163,6 @@ class Index extends Component
                 'source' => $this->sourceLabel($state->source),
                 'source_code' => $state->source->value,
                 'confirmed' => $state->confirmed,
-                'inferred_country' => $state->inferredCountry,
             ],
             'preview' => [
                 'locale' => $previewLocale,
@@ -130,18 +177,86 @@ class Index extends Component
                 'timezone_mode' => $previewMode->value,
                 'local_mode' => $localPreview,
             ],
-            'context' => [
-                'company_timezone' => $companyTimezone,
-                'company_timezone_explicit' => $companyTimezoneExplicit,
-                'currency_code' => $currencyCode,
-                'language' => $state->language,
-            ],
-            'bootstrap' => [
-                'country_iso' => $bootstrap?->countryIso,
-                'country_name' => $bootstrap?->countryName,
-                'suggested_locale' => $bootstrap ? $catalog->inferFromBootstrap($bootstrap) : null,
-            ],
+            'currency_code' => $currencyCode,
+            'timezoneOptions' => $timezoneOptions,
+            'localeHelp' => $localeHelp,
+            'auditSubjects' => $auditSubjects,
         ]);
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    private function timezoneOptions(string $previewTimezone): array
+    {
+        return collect([
+            $this->companyTimezone,
+            $previewTimezone,
+            config('app.timezone'),
+            'UTC',
+            'Asia/Kuala_Lumpur',
+            'Asia/Singapore',
+            'Asia/Jakarta',
+            'Asia/Bangkok',
+            'Europe/London',
+            'America/New_York',
+            'America/Los_Angeles',
+        ])
+            ->filter(fn (mixed $tz): bool => is_string($tz) && $tz !== '')
+            ->unique()
+            ->values()
+            ->map(fn (string $tz): array => ['value' => $tz, 'label' => $tz])
+            ->all();
+    }
+
+    /**
+     * Derive the currency code from the locale's region via Geonames.
+     *
+     * Falls back to the configured sample currency when the locale has no
+     * region component or the country is not in the Geonames table.
+     */
+    private function deriveCurrencyCode(string $locale): string
+    {
+        $parts = explode('-', str_replace('_', '-', $locale));
+        $region = strtoupper($parts[1] ?? '');
+
+        if ($region === '') {
+            return strtoupper((string) config('locale.sample_currency', 'USD'));
+        }
+
+        try {
+            $code = Country::query()->where('iso', $region)->value('currency_code');
+
+            return $code !== null && $code !== ''
+                ? strtoupper((string) $code)
+                : strtoupper((string) config('locale.sample_currency', 'USD'));
+        } catch (\Throwable) {
+            return strtoupper((string) config('locale.sample_currency', 'USD'));
+        }
+    }
+
+    /**
+     * Build the help text for the locale edit-in-place combobox.
+     */
+    private function localeHelpText(LocaleCatalog $catalog, ?LicenseeLocaleBootstrap $bootstrap): string
+    {
+        if ($bootstrap?->countryIso) {
+            $suggested = $catalog->inferFromBootstrap($bootstrap);
+            $countryName = $bootstrap->countryName ?: $bootstrap->countryIso;
+
+            if ($suggested) {
+                return __('Locale :locale was inferred from the licensee address (:country). Confirm it if it is correct, or choose another locale.', [
+                    'locale' => $suggested,
+                    'country' => $countryName,
+                ]);
+            }
+
+            return __('The licensee address country :country is available, but Belimbing does not have a supported default locale mapping for it yet.', [
+                'country' => $countryName,
+            ]);
+        }
+
+        return __('No licensee address country is available yet, so Belimbing cannot infer a default locale automatically.');
     }
 
     /**

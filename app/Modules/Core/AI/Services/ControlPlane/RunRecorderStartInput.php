@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 /**
