@@ -1,6 +1,6 @@
 # base-data-bridge
 
-Status: In progress — diagnostic capture Slice 1 is implemented; connected transfer and development import are next
+Status: In progress — diagnostic capture and local development import are implemented; declared datasets and connected network receipt remain open
 Last Updated: 2026-07-10
 Sources: `docs/brief.md`; `docs/architecture/module-system.md`; `docs/architecture/database.md`; `docs/architecture/settings.md`; `app/Base/Database/AGENTS.md`; `extensions/kiat/investment/AGENTS.md`; `docs/plans/database-backup-security.md`; `docs/runbooks/database-backup.md`; [Cloudflare Tunnel](https://developers.cloudflare.com/tunnel/); [Cloudflare Access service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/); [Cloudflare Access JWT validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
 Agents: Codex/Sol; Claude Fable 5
@@ -81,7 +81,7 @@ Recommend operator-initiated, one-way promotion. Re-exporting an updated dataset
 
 ### Production to development: two paths, only one through the bridge
 
-Replicating a production bug on development is a real operational need, but whole-state replication is not bridge work. Production bugs often live in exactly the state dataset declarations exclude — settings values, operational history, half-migrated rows — and redaction can destroy the bug when the malformed value is the bug. For whole-state replication, restore an existing `blb:db:backup` artifact into a disposable development instance, then run a post-restore sanitizer command (`blb:db:sanitize-dev`) that neutralizes environment-owned dangers: disable schedules and outbound scrapers, wipe or rotate provider credentials in `base_settings`, clear sessions, and stamp the instance role as development. Restoring without the production `APP_KEY` leaves Laravel-encrypted columns unreadable — a feature for debugging, unless the bug involves encrypted-column handling, in which case copying the key is a conscious, temporary acceptance that the development machine holds production secrets.
+Replicating a production bug on development is a real operational need, but whole-state replication is not bridge work. Production bugs often live in exactly the state dataset declarations exclude — settings values, operational history, half-migrated rows — and redaction can destroy the bug when the malformed value is the bug. For whole-state replication, restore an existing `blb:db:backup` artifact into a disposable development instance, then run the contributor-based post-restore sanitizer command (`blb:db:sanitize-dev --commit`) that neutralizes environment-owned dangers: pause framework schedules, disable AI schedules, remove pending queue work, wipe complete external-integration setting groups that contain credentials, and clear persistent sessions. The command asserts the deployment-owned development role and previews by default; operators must stop workers before restore because sanitization cannot undo work a running production queue already claimed. Restoring without the production `APP_KEY` leaves Laravel-encrypted columns unreadable — a feature for debugging, unless the bug involves encrypted-column handling, in which case copying the key is a conscious, temporary acceptance that the development machine holds production secrets.
 
 Dataset-level pulls downward do go through the bridge: the explicit deployment-config permit plus the dataset's redaction policy (no-op where the sensitivity class allows) covers cases such as pulling authored research from production back to a rebuilt development instance.
 
@@ -226,9 +226,11 @@ Validation: `php artisan test --compact tests/Feature/Database/DatabaseTablesSho
 
 Slice 2 — local handoff and dev-side import:
 
-- [ ] Admit a selected local diagnostic package into protected Incoming storage with a destination-observed hash; keep connected network receipt adapters in Phase 2.
-- [ ] Add a development-only import command: verify manifest, marker, limits, hash, and target role; upsert by primary key with foreign-key ordering; categorically refuse any non-development instance role.
-- [ ] Add `blb:db:sanitize-dev` for the backup-restore whole-state path: disable schedules and outbound scrapers, wipe or rotate credentials, clear sessions, assert development role.
+- [x] Admit a selected local diagnostic package into protected Incoming storage with an idempotent receipt and destination-observed hash; keep connected network receipt adapters in Phase 2. {Codex/Sol}
+- [x] Add `blb:db:bridge:import-diagnostic`: validate the receipt, manifest, marker, limits, payload hash, destination schema, parent ordering, and target role; preserve redacted destination fields; transactionally upsert by primary key; categorically refuse receipt and import on non-development instances. {Codex/Sol}
+- [x] Add contributor-based `blb:db:sanitize-dev` dry-run/commit behavior for the backup-restore path: remove credential-bearing integration setting groups, pause framework schedules, disable AI schedules, remove pending jobs/batches, clear sessions, and assert the deployment-owned development role. {Codex/Sol}
+
+Evidence: `app/Base/Database/Services/Bridge/DiagnosticPackageInbox.php`; `app/Base/Database/Services/Bridge/DiagnosticPackageImporter.php`; `app/Base/Database/Console/Commands/ImportDiagnosticBridgePackageCommand.php`; `app/Base/Database/Services/DevelopmentSanitizer.php`; module-owned `DevelopmentSanitizationContributor` implementations; `tests/Feature/Database/DataBridgeDiagnosticImportTest.php`; `tests/Feature/Database/DevelopmentDatabaseSanitizerTest.php`.
 
 Slice 3 — routing convergence:
 
@@ -237,7 +239,7 @@ Slice 3 — routing convergence:
 
 Affected pages: `/admin/system/database-tables/{tableName}`, `/admin/system/database-bridge`
 
-Validation: a captured package byte-round-trips RTL/zero-width/non-NFC values; encrypted-cast columns never appear in a package; a production instance refuses to import a diagnostic package in every code path; closure preview counts match what the package contains.
+Validation: `php artisan test --compact tests/Feature/Database/DatabaseTablesShowTest.php tests/Feature/Database/DataBridgeDiagnosticCaptureTest.php tests/Feature/Database/DataBridgeDiagnosticImportTest.php tests/Feature/Database/DevelopmentDatabaseSanitizerTest.php`; a captured package byte-round-trips RTL/zero-width/non-NFC values; encrypted-cast columns never appear in a package; a production instance refuses diagnostic receipt and import in every code path; closure preview counts match what the package contains; sanitizer preview is non-mutating and commit neutralizes restored executable state.
 
 ### Phase 2 — Build destination planning and safe apply
 

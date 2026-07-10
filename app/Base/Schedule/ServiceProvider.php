@@ -2,7 +2,9 @@
 
 namespace App\Base\Schedule;
 
+use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Schedule\Models\ScheduleSuppression;
+use App\Base\Schedule\Services\FrameworkScheduleDevelopmentSanitizer;
 use App\Base\Schedule\Services\ScheduleBoard;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
@@ -31,6 +33,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ScheduleHistoryPruner::class);
         $this->app->singleton(ScheduleRunRecorder::class);
         $this->app->singleton(ScheduleBoard::class);
+        $this->app->tag(FrameworkScheduleDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
     }
 
     /**

@@ -50,7 +50,7 @@ class DiagnosticRowCapture
     {
         $ids = $this->normalizeIds($ids);
         $tables = $this->buildTables($table, $ids);
-        $payload = $this->canonicalJson($tables);
+        $payload = CanonicalJson::encode($tables);
 
         $this->guardPackageSize(strlen($payload));
 
@@ -82,7 +82,7 @@ class DiagnosticRowCapture
         $tables = $this->buildTables($table, $ids);
         $primaryKey = $this->primaryKeyColumn($table);
 
-        $payload = $this->canonicalJson($tables);
+        $payload = CanonicalJson::encode($tables);
         $payloadSha256 = hash('sha256', $payload);
 
         $this->guardPackageSize(strlen($payload));
@@ -116,7 +116,7 @@ class DiagnosticRowCapture
             'tables' => $tables,
         ];
 
-        $json = $this->canonicalJson($package);
+        $json = CanonicalJson::encode($package);
         $path = trim((string) config('bridge.path_prefix', 'bridge/diagnostics'), '/')
             .'/'.now()->format('Ymd_His').'-'.$packageId.'.json';
 
@@ -304,31 +304,6 @@ class DiagnosticRowCapture
             'encoding' => $encoding,
             'collation' => $collation,
         ];
-    }
-
-    private function canonicalJson(array $data): string
-    {
-        return json_encode(
-            $this->canonicalize($data),
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR,
-        );
-    }
-
-    private function canonicalize(mixed $value): mixed
-    {
-        if (! is_array($value)) {
-            return $value;
-        }
-
-        if (! array_is_list($value)) {
-            ksort($value, SORT_STRING);
-        }
-
-        foreach ($value as $key => $item) {
-            $value[$key] = $this->canonicalize($item);
-        }
-
-        return $value;
     }
 
     /**

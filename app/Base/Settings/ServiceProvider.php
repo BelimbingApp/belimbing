@@ -2,8 +2,10 @@
 
 namespace App\Base\Settings;
 
+use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\CredentialSettingsDevelopmentSanitizer;
 use App\Base\Settings\Services\DatabaseSettingsService;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -20,6 +22,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(__DIR__.'/Config/settings.php', 'settings');
 
         $this->app->singleton(SettingsService::class, DatabaseSettingsService::class);
+        $this->app->tag(CredentialSettingsDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
     }
 
     public function boot(): void

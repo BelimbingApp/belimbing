@@ -5,19 +5,25 @@ namespace App\Base\Database;
 use App\Base\Database\Console\Commands\ApproveIncubatingMigrationCommand;
 use App\Base\Database\Console\Commands\BackupCommand;
 use App\Base\Database\Console\Commands\FreshCommand;
+use App\Base\Database\Console\Commands\ImportDiagnosticBridgePackageCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
 use App\Base\Database\Console\Commands\RekeyCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
+use App\Base\Database\Console\Commands\SanitizeDevelopmentDatabaseCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
+use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
+use App\Base\Database\Services\DevelopmentInstanceGuard;
+use App\Base\Database\Services\DevelopmentSanitizer;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
@@ -41,6 +47,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(__DIR__.'/Config/bridge.php', 'bridge');
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
+        $this->app->singleton(DevelopmentInstanceGuard::class);
+        $this->app->tag(SessionStateDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
+        $this->app->singleton(DevelopmentSanitizer::class, fn ($app) => new DevelopmentSanitizer(
+            $app->make(DevelopmentInstanceGuard::class),
+            $app->tagged(DevelopmentSanitizationContributor::CONTAINER_TAG),
+        ));
 
         Connection::resolverFor('pgsql', fn ($connection, string $database = '', string $prefix = '', array $config = []) => new GuardedPostgresConnection(
             $connection,
@@ -96,7 +108,9 @@ class ServiceProvider extends BaseServiceProvider
         $this->commands([
             ApproveIncubatingMigrationCommand::class,
             BackupCommand::class,
+            ImportDiagnosticBridgePackageCommand::class,
             RekeyCommand::class,
+            SanitizeDevelopmentDatabaseCommand::class,
         ]);
     }
 }

@@ -16,6 +16,8 @@ return [
 
     'path_prefix' => env('BRIDGE_PATH_PREFIX', 'bridge/diagnostics'),
 
+    'incoming_path_prefix' => env('BRIDGE_INCOMING_PATH_PREFIX', 'bridge/incoming'),
+
     /*
     |--------------------------------------------------------------------------
     | Capture Limits
@@ -28,6 +30,7 @@ return [
     */
     'limits' => [
         'max_selected_rows' => (int) env('BRIDGE_MAX_SELECTED_ROWS', 100),
+        'max_tables' => (int) env('BRIDGE_MAX_TABLES', 100),
         'max_closure_rows' => (int) env('BRIDGE_MAX_CLOSURE_ROWS', 5000),
         'max_closure_depth' => (int) env('BRIDGE_MAX_CLOSURE_DEPTH', 8),
         'max_scalar_bytes' => (int) env('BRIDGE_MAX_SCALAR_BYTES', 5 * 1024 * 1024),
