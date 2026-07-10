@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Models;
 
 use App\Modules\Core\AI\Enums\AiRunStatus;

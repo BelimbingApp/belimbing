@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -90,7 +91,7 @@ class ScheduleTaskTool extends AbstractActionTool
             'displayName' => 'Schedule Task',
             'summary' => 'Create and manage scheduled tasks for Agents.',
             'explanation' => 'CRUD operations for schedule definitions stored in the database. '
-                .'Each schedule defines a cron expression, target agent, and execution payload. '
+                .'Each schedule defines a cron expression, executor, target, and execution payload. '
                 .'Schedules fire through the operations dispatch ledger.',
             'setupRequirements' => [
                 'Laravel scheduler running',
@@ -124,6 +125,9 @@ class ScheduleTaskTool extends AbstractActionTool
             ->string('execution_payload', 'The task instruction or command that will be executed. Required for add, optional for update. For agent-targeted schedules, this is the task prompt sent to the agent.')
             ->string('cron_expression', 'Standard 5-field cron expression (minute hour day month weekday). Required for add, optional for update. Example: "0 9 * * 1" for every Monday at 9am.')
             ->integer('agent_id', 'Employee ID of the target Agent to execute the task. Optional; use agent_list to discover available agents.')
+            ->string('executor', 'Execution engine: agentic_runtime (default) or headless_cli.')
+            ->string('headless_provider', 'Headless CLI provider family for headless_cli schedules, for example anthropic, openai, or auto.')
+            ->string('headless_model', 'Model identifier for headless_cli schedules, for example claude-sonnet-5, gpt-5.5, or auto.')
             ->string('timezone', 'IANA timezone for the cron expression (default: UTC). Example: "Asia/Kuala_Lumpur".')
             ->boolean('enabled', 'Whether the scheduled task is enabled. Defaults to true for add. Optional for update.');
     }
@@ -190,6 +194,7 @@ class ScheduleTaskTool extends AbstractActionTool
         $agentId = $arguments['agent_id'] ?? null;
         $enabled = $this->optionalBool($arguments, 'enabled', true);
         $timezone = $this->optionalString($arguments, 'timezone') ?? 'UTC';
+        $executor = $this->optionalString($arguments, 'executor') ?? ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME;
 
         try {
             $schedule = $this->scheduleService->create($companyId, [
@@ -197,6 +202,9 @@ class ScheduleTaskTool extends AbstractActionTool
                 'execution_payload' => $executionPayload,
                 'cron_expression' => $cronExpression,
                 'employee_id' => is_int($agentId) ? $agentId : null,
+                'executor' => $executor,
+                'headless_provider' => $this->optionalString($arguments, 'headless_provider'),
+                'headless_model' => $this->optionalString($arguments, 'headless_model'),
                 'timezone' => $timezone,
                 'is_enabled' => $enabled,
                 'created_by_user_id' => $this->resolveUserId(),
@@ -236,7 +244,7 @@ class ScheduleTaskTool extends AbstractActionTool
         if ($updateData === []) {
             throw new ToolArgumentException(
                 'No update fields provided. Provide at least one of: '
-                .'description, execution_payload, cron_expression, agent_id, timezone, enabled.',
+                .'description, execution_payload, cron_expression, agent_id, executor, headless_provider, headless_model, timezone, enabled.',
             );
         }
 
@@ -383,6 +391,24 @@ class ScheduleTaskTool extends AbstractActionTool
             $data['employee_id'] = $agentId;
         }
 
+        $executor = $this->optionalString($arguments, 'executor');
+
+        if ($executor !== null) {
+            $data['executor'] = $executor;
+        }
+
+        $headlessProvider = $this->optionalString($arguments, 'headless_provider');
+
+        if ($headlessProvider !== null) {
+            $data['headless_provider'] = $headlessProvider;
+        }
+
+        $headlessModel = $this->optionalString($arguments, 'headless_model');
+
+        if ($headlessModel !== null) {
+            $data['headless_model'] = $headlessModel;
+        }
+
         $timezone = $this->optionalString($arguments, 'timezone');
 
         if ($timezone !== null) {
@@ -449,8 +475,14 @@ final class ScheduleTaskToolSupport
             'cron_expression' => $schedule->cron_expression,
             'timezone' => $schedule->timezone,
             'agent_id' => $schedule->employee_id,
+            'source' => $schedule->source,
+            'source_key' => $schedule->source_key,
+            'executor' => $schedule->executor,
+            'headless_provider' => $schedule->headless_provider,
+            'headless_model' => $schedule->headless_model,
             'enabled' => $schedule->is_enabled,
             'concurrency_policy' => $schedule->concurrency_policy,
+            'run_requested_at' => $schedule->run_requested_at?->toIso8601String(),
             'last_fired_at' => $schedule->last_fired_at?->toIso8601String(),
             'next_due_at' => $schedule->next_due_at?->toIso8601String(),
             'created_at' => $schedule->created_at?->toIso8601String(),

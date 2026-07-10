@@ -8,6 +8,9 @@
     'error' => null,
     'type' => 'text',
     'inputmode' => null,
+    'min' => null,
+    'max' => null,
+    'step' => null,
     'maxlength' => null,
     'monospace' => false,
     'tabular' => false,
@@ -352,6 +355,9 @@
             x-bind:style="editWidth ? 'width: ' + editWidth + 'px' : null"
             type="{{ $type }}"
             @if ($inputMode) inputmode="{{ $inputMode }}" @endif
+            @if ($min !== null) min="{{ $min }}" @endif
+            @if ($max !== null) max="{{ $max }}" @endif
+            @if ($step !== null) step="{{ $step }}" @endif
             @if ($maxlength) maxlength="{{ $maxlength }}" @endif
             @class([
                 'absolute left-0 top-0 block w-full min-w-0 max-w-full box-border px-1 py-0.5 -mx-1 text-sm border border-accent rounded bg-surface-card text-ink focus:outline-none focus:ring-1 focus:ring-accent',

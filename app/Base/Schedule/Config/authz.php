@@ -2,8 +2,9 @@
 
 return [
     'capabilities' => [
-        'admin.system.scheduled-task.list',
-        'admin.system.scheduled-task.execute',
-        'admin.system.scheduled-task.manage',
+        // Central schedule observability (admin/system/schedule).
+        'admin.system.schedule.view',
+        'admin.system.schedule.execute',
+        'admin.system.schedule.manage',
     ],
 ];

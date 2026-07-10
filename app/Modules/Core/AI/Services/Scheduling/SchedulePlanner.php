@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Scheduling;
 
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Jobs\RunAgentTaskJob;
+use App\Modules\Core\AI\Jobs\RunHeadlessCliTaskJob;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Models\ScheduleDefinition;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -31,17 +34,19 @@ class SchedulePlanner
      * @param  Carbon|null  $asOf  Reference time (defaults to now)
      * @return int Number of schedules dispatched
      */
-    public function dispatchDue(?Carbon $asOf = null): int
+    public function dispatchDue(?Carbon $asOf = null, ?string $source = null): int
     {
         $now = $asOf ?? now();
 
-        $dueSchedules = $this->findDue($now);
+        $dueSchedules = $this->findDue($now, $source);
         $dispatched = 0;
 
         foreach ($dueSchedules as $schedule) {
             if ($schedule->shouldSkipForConcurrency()) {
                 Log::info('Schedule skipped due to concurrency policy.', [
                     'schedule_id' => $schedule->id,
+                    'source' => $schedule->source,
+                    'source_key' => $schedule->source_key,
                     'description' => $schedule->description,
                     'policy' => $schedule->concurrency_policy,
                 ]);
@@ -60,6 +65,9 @@ class SchedulePlanner
             Log::info('Schedule dispatched.', [
                 'schedule_id' => $schedule->id,
                 'dispatch_id' => $dispatch->id,
+                'source' => $schedule->source,
+                'source_key' => $schedule->source_key,
+                'executor' => $schedule->executor,
                 'description' => $schedule->description,
             ]);
         }
@@ -68,18 +76,32 @@ class SchedulePlanner
     }
 
     /**
-     * Find all enabled schedules whose next_due_at has passed.
+     * Find all enabled schedules whose next_due_at has passed or whose
+     * manual run request is pending.
      *
      * @param  Carbon  $asOf  Reference time
      * @return Collection<int, ScheduleDefinition>
      */
-    public function findDue(Carbon $asOf): Collection
+    public function findDue(Carbon $asOf, ?string $source = null): Collection
     {
-        return ScheduleDefinition::query()
+        $query = ScheduleDefinition::query()
             ->where('is_enabled', true)
-            ->whereNotNull('next_due_at')
-            ->where('next_due_at', '<=', $asOf)
-            ->get();
+            ->where(function ($query) use ($asOf): void {
+                $query
+                    ->whereNotNull('run_requested_at')
+                    ->orWhere(function ($query) use ($asOf): void {
+                        $query->whereNotNull('next_due_at')
+                            ->where('next_due_at', '<=', $asOf);
+                    });
+            })
+            ->orderByRaw('run_requested_at is null')
+            ->orderBy('next_due_at');
+
+        if ($source !== null) {
+            $query->where('source', $source);
+        }
+
+        return $query->get();
     }
 
     /**
@@ -87,18 +109,29 @@ class SchedulePlanner
      */
     private function createDispatch(ScheduleDefinition $schedule): OperationDispatch
     {
+        $employeeId = $this->executionEmployeeId($schedule);
+
         return OperationDispatch::query()->create([
             'id' => OperationDispatch::ID_PREFIX.Str::random(12),
-            'operation_type' => OperationType::ScheduledTask,
-            'employee_id' => $schedule->employee_id,
+            'operation_type' => $schedule->usesHeadlessCli()
+                ? OperationType::HeadlessTask
+                : OperationType::ScheduledTask,
+            'employee_id' => $employeeId,
             'acting_for_user_id' => $schedule->created_by_user_id,
             'task' => $schedule->execution_payload,
             'status' => OperationStatus::Queued,
             'meta' => [
                 'schedule_id' => $schedule->id,
                 'schedule_description' => $schedule->description,
+                'schedule_source' => $schedule->source,
+                'schedule_source_key' => $schedule->source_key,
+                'source' => $schedule->source,
+                'source_key' => $schedule->source_key,
+                'executor' => $schedule->executor,
                 'cron_expression' => $schedule->cron_expression,
-                'source' => 'schedule_planner',
+                'trigger' => $schedule->run_requested_at === null ? 'schedule' : 'manual',
+                'headless_provider' => $schedule->headless_provider,
+                'headless_model' => $schedule->headless_model,
             ],
         ]);
     }
@@ -106,11 +139,16 @@ class SchedulePlanner
     /**
      * Queue the execution job for a scheduled dispatch.
      *
-     * Scheduled tasks that target an agent use RunAgentTaskJob.
-     * Non-agent schedules are not yet supported.
+     * Scheduled tasks route to their declared executor.
      */
     private function queueExecution(OperationDispatch $dispatch, ScheduleDefinition $schedule): void
     {
+        if ($schedule->usesHeadlessCli()) {
+            RunHeadlessCliTaskJob::dispatch($dispatch->id);
+
+            return;
+        }
+
         if ($schedule->employee_id !== null) {
             RunAgentTaskJob::dispatch($dispatch->id);
         } else {
@@ -118,5 +156,18 @@ class SchedulePlanner
             // Mark as failed with an informative message.
             $dispatch->markFailed('Schedule does not target an agent. Non-agent execution is not yet supported.');
         }
+    }
+
+    private function executionEmployeeId(ScheduleDefinition $schedule): ?int
+    {
+        if ($schedule->employee_id !== null) {
+            return $schedule->employee_id;
+        }
+
+        if ($schedule->usesHeadlessCli()) {
+            return Employee::LARA_ID;
+        }
+
+        return null;
     }
 }

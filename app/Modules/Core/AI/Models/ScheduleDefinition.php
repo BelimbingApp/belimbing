@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Models;
 
 use App\Modules\Core\Company\Models\Company;
@@ -20,12 +21,18 @@ use Illuminate\Support\Carbon;
  * @property int $company_id
  * @property int|null $employee_id
  * @property int|null $created_by_user_id
+ * @property string $source
+ * @property string|null $source_key
+ * @property string $executor
+ * @property string|null $headless_provider
+ * @property string|null $headless_model
  * @property string $description
  * @property string $execution_payload
  * @property string $cron_expression
  * @property string $timezone
  * @property bool $is_enabled
  * @property string $concurrency_policy
+ * @property Carbon|null $run_requested_at
  * @property Carbon|null $last_fired_at
  * @property Carbon|null $next_due_at
  * @property array<string, mixed>|null $meta
@@ -37,6 +44,12 @@ use Illuminate\Support\Carbon;
  */
 class ScheduleDefinition extends Model
 {
+    public const SOURCE_CORE_AI = 'core-ai';
+
+    public const EXECUTOR_AGENTIC_RUNTIME = 'agentic_runtime';
+
+    public const EXECUTOR_HEADLESS_CLI = 'headless_cli';
+
     /**
      * The table associated with the model.
      *
@@ -53,12 +66,18 @@ class ScheduleDefinition extends Model
         'company_id',
         'employee_id',
         'created_by_user_id',
+        'source',
+        'source_key',
+        'executor',
+        'headless_provider',
+        'headless_model',
         'description',
         'execution_payload',
         'cron_expression',
         'timezone',
         'is_enabled',
         'concurrency_policy',
+        'run_requested_at',
         'last_fired_at',
         'next_due_at',
         'meta',
@@ -73,6 +92,7 @@ class ScheduleDefinition extends Model
     {
         return [
             'is_enabled' => 'boolean',
+            'run_requested_at' => 'datetime',
             'last_fired_at' => 'datetime',
             'next_due_at' => 'datetime',
             'meta' => 'json',
@@ -134,6 +154,7 @@ class ScheduleDefinition extends Model
         $now = now();
 
         $this->update([
+            'run_requested_at' => null,
             'last_fired_at' => $now,
             'next_due_at' => $this->computeNextDue($now),
         ]);
@@ -149,9 +170,17 @@ class ScheduleDefinition extends Model
         }
 
         return OperationDispatch::query()
-            ->where('operation_type', 'scheduled_task')
+            ->whereIn('operation_type', ['scheduled_task', 'headless_task'])
             ->whereJsonContains('meta->schedule_id', $this->id)
             ->whereIn('status', ['queued', 'running'])
             ->exists();
+    }
+
+    /**
+     * Whether this definition should execute through a headless CLI.
+     */
+    public function usesHeadlessCli(): bool
+    {
+        return $this->executor === self::EXECUTOR_HEADLESS_CLI;
     }
 }

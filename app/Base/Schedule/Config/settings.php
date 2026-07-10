@@ -1,8 +1,8 @@
 <?php
 
 return [
-    // Retention is edited on the Scheduled Tasks Settings tab.
+    // Edited on Admin > System > Schedule and claimed for residue checks.
     'runtime' => [
-        'schedule.history.*',
+        'schedule.history.keep_days',
     ],
 ];

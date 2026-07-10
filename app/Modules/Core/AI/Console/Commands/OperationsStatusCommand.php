@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Console\Commands;
 
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -22,7 +23,7 @@ class OperationsStatusCommand extends Command
 
     protected $signature = 'blb:ai:operations:status
         {operation? : Operation dispatch ID (e.g., op_xxx). Omit for summary.}
-        {--type= : Filter by type: agent_task, scheduled_task, background_command}
+        {--type= : Filter by type: agent_task, scheduled_task, headless_task, background_command}
         {--status= : Filter by status: queued, running, succeeded, failed, cancelled}
         {--limit=15 : Maximum operations to show in listing}';
 

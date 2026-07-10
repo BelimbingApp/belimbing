@@ -94,6 +94,11 @@ function makeScheduleDefinitionStub(array $overrides = []): ScheduleDefinition
         'id' => 1,
         'company_id' => 10,
         'employee_id' => null,
+        'source' => ScheduleDefinition::SOURCE_CORE_AI,
+        'source_key' => null,
+        'executor' => ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
+        'headless_provider' => null,
+        'headless_model' => null,
         'description' => SCHED_TOOL_TASK,
         'execution_payload' => SCHED_TOOL_PAYLOAD,
         'cron_expression' => SCHED_TOOL_WEEKLY_CRON,
@@ -123,7 +128,7 @@ describe('tool metadata', function () {
             $this->tool,
             'schedule_task',
             'admin.ai.tool.schedule.execute',
-            ['action', 'task_id', 'description', 'execution_payload', 'cron_expression', 'agent_id', 'timezone', 'enabled'],
+            ['action', 'task_id', 'description', 'execution_payload', 'cron_expression', 'agent_id', 'executor', 'headless_provider', 'headless_model', 'timezone', 'enabled'],
             ['action'],
         );
     });
@@ -262,6 +267,38 @@ describe('add action', function () {
         expect($data['agent_id'])->toBe(42);
     });
 
+    it('creates headless CLI schedules through the same schedule service', function () {
+        $schedule = makeScheduleDefinitionStub([
+            'executor' => ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+            'headless_provider' => 'anthropic',
+            'headless_model' => 'claude-sonnet-5',
+        ]);
+
+        $this->scheduleService->shouldReceive('create')
+            ->once()
+            ->with(10, Mockery::on(fn (array $data): bool => $data['executor'] === ScheduleDefinition::EXECUTOR_HEADLESS_CLI
+                && $data['headless_provider'] === 'anthropic'
+                && $data['headless_model'] === 'claude-sonnet-5'))
+            ->andReturn($schedule);
+
+        actAsScheduleUser();
+
+        $result = $this->tool->execute([
+            'action' => 'add',
+            'description' => SCHED_TOOL_TASK,
+            'execution_payload' => SCHED_TOOL_PAYLOAD,
+            'cron_expression' => SCHED_TOOL_WEEKLY_CRON,
+            'executor' => ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+            'headless_provider' => 'anthropic',
+            'headless_model' => 'claude-sonnet-5',
+        ]);
+        $data = json_decode((string) $result, true);
+
+        expect($data['executor'])->toBe(ScheduleDefinition::EXECUTOR_HEADLESS_CLI)
+            ->and($data['headless_provider'])->toBe('anthropic')
+            ->and($data['headless_model'])->toBe('claude-sonnet-5');
+    });
+
     it('defaults enabled to true', function () {
         $schedule = makeScheduleDefinitionStub(['is_enabled' => true]);
 
@@ -336,6 +373,37 @@ describe('update action', function () {
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('updated');
+    });
+
+    it('updates headless executor fields through service', function () {
+        $schedule = makeScheduleDefinitionStub([
+            'executor' => ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+            'headless_provider' => 'openai',
+            'headless_model' => 'gpt-5.5',
+        ]);
+
+        $this->scheduleService->shouldReceive('update')
+            ->once()
+            ->with(1, 10, [
+                'executor' => ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+                'headless_provider' => 'openai',
+                'headless_model' => 'gpt-5.5',
+            ])
+            ->andReturn($schedule);
+
+        actAsScheduleUser();
+
+        $result = $this->tool->execute([
+            'action' => 'update',
+            'task_id' => 1,
+            'executor' => ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+            'headless_provider' => 'openai',
+            'headless_model' => 'gpt-5.5',
+        ]);
+        $data = json_decode((string) $result, true);
+
+        expect($data['status'])->toBe('updated')
+            ->and($data['executor'])->toBe(ScheduleDefinition::EXECUTOR_HEADLESS_CLI);
     });
 
     it('returns not_found when service returns null', function () {

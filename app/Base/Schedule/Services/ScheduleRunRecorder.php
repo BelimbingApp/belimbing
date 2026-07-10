@@ -3,30 +3,122 @@
 namespace App\Base\Schedule\Services;
 
 use App\Base\Schedule\Models\ScheduleRun;
-use App\Base\Schedule\Models\ScheduleRunHistory;
-use App\Base\Schedule\Support\ScheduleRunStatuses;
+use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskSkipped;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
+/**
+ * Records every Laravel scheduler execution into one append-style ledger.
+ * The Event instance carries the run id inside one PHP process; background
+ * finishes fall back to the latest running row for the same stable key.
+ */
 class ScheduleRunRecorder
 {
-    private const OUTPUT_LIMIT = 8000;
+    private const STORAGE_STRING_LIMIT = 255;
 
-    private const ATTEMPT_KEY_PROPERTY = 'blbScheduleAttemptKey';
+    private const OUTPUT_LIMIT = 2000;
+
+    private const RUN_ID_PROPERTY = 'blbScheduleRunId';
+
+    public function __construct(
+        private readonly ScheduleHistoryPruner $historyPruner,
+    ) {}
+
+    public function taskStarting(ScheduledTaskStarting $event): void
+    {
+        $this->guard(function () use ($event): void {
+            if (! $this->ready()) {
+                return;
+            }
+
+            $this->prepareOutputPath($event->task);
+
+            $run = ScheduleRun::query()->create([
+                'source' => 'scheduler',
+                'key' => $this->key($event->task),
+                'name' => $this->name($event->task),
+                'expression' => $this->expression($event->task),
+                'status' => 'running',
+                'started_at' => now(),
+            ]);
+
+            $event->task->{self::RUN_ID_PROPERTY} = $run->id;
+            $this->historyPruner->prune();
+        });
+    }
+
+    public function taskFinished(ScheduledTaskFinished $event): void
+    {
+        if ($event->task->runInBackground) {
+            return;
+        }
+
+        if ($event->task->skippedBecauseOverlapping) {
+            $this->complete($event->task, 'skipped');
+
+            return;
+        }
+
+        $this->complete($event->task, $this->statusFromExitCode($this->exitCode($event->task)), $this->exitCode($event->task), $event->runtime);
+    }
+
+    public function backgroundTaskFinished(ScheduledBackgroundTaskFinished $event): void
+    {
+        $this->complete($event->task, $this->statusFromExitCode($this->exitCode($event->task)), $this->exitCode($event->task));
+    }
+
+    public function taskFailed(ScheduledTaskFailed $event): void
+    {
+        $this->complete($event->task, 'failed', $this->exitCode($event->task) ?? 1, failure: $event->exception->getMessage());
+    }
+
+    public function taskSkipped(ScheduledTaskSkipped $event): void
+    {
+        $this->complete($event->task, 'skipped');
+    }
 
     /**
-     * Strip Laravel's scheduler command wrapper down to the artisan command
-     * users recognize on the Scheduled Tasks page.
+     * The artisan command or callback description without PHP/artisan wrapper noise.
      */
+    public function name(Event $task): string
+    {
+        $command = $this->normalizeCommand((string) $task->command);
+
+        if ($command !== '') {
+            return $this->truncate($command, self::STORAGE_STRING_LIMIT);
+        }
+
+        $summary = trim((string) $task->getSummaryForDisplay());
+
+        return $this->truncate($summary !== '' ? $summary : 'closure', self::STORAGE_STRING_LIMIT);
+    }
+
+    /**
+     * Stable scheduler identity for storage and actions. Names can be display
+     * text; keys are the thing we match across runs.
+     */
+    public function key(Event $task): string
+    {
+        $command = $this->normalizeCommand((string) $task->command);
+
+        if ($command !== '') {
+            return $this->stableKey($command);
+        }
+
+        return 'callback:'.sha1($task->mutexName().'|'.$this->name($task));
+    }
+
     public function normalizeCommand(string $rawCommand): string
     {
-        $command = trim($rawCommand);
-        $command = trim($command, "'\"");
+        $command = trim($rawCommand, " \t\n\r\0\x0B'\"");
         $command = preg_replace('/^.*["\']?(?:artisan|artisan\.bat)["\']?\s+/i', '', $command) ?? $command;
-        $command = trim($command, "'\"");
+        $command = trim($command, " \t\n\r\0\x0B'\"");
 
         return preg_replace('/\s+/', ' ', trim($command)) ?? trim($command);
     }
@@ -36,345 +128,97 @@ class ScheduleRunRecorder
         return storage_path('logs/schedule-'.sha1($task->mutexName()).'.log');
     }
 
-    public function isCommandRunning(string $commandKey): bool
-    {
-        $commandKey = $this->normalizeCommand($commandKey);
+    private function complete(
+        Event $task,
+        string $status,
+        ?int $exitCode = null,
+        ?float $runtimeSeconds = null,
+        ?string $failure = null,
+    ): void {
+        $this->guard(function () use ($task, $status, $exitCode, $runtimeSeconds, $failure): void {
+            if (! $this->ready()) {
+                return;
+            }
 
-        return ScheduleRun::query()
-            ->where('command_key', $commandKey)
-            ->where('status', ScheduleRunStatuses::RUNNING)
-            ->exists()
-            || ScheduleRunHistory::query()
-                ->where('command_key', $commandKey)
-                ->where('status', ScheduleRunStatuses::RUNNING)
-                ->exists();
-    }
+            $run = $this->resolveRun($task);
+            $now = now();
 
-    public function rememberStarting(Event $task): void
-    {
-        $this->guard(function () use ($task): void {
-            $task->storeOutput();
-            // Each Starting is a new attempt, even if the same Event instance is reused.
-            unset($task->{self::ATTEMPT_KEY_PROPERTY});
-            $attemptKey = $this->bindAttemptKey($task);
-
-            $attributes = [
-                'attempt_key' => $attemptKey,
-                'status' => ScheduleRunStatuses::RUNNING,
-                'exit_code' => null,
-                'runtime_ms' => null,
-                'output' => null,
-                'started_at' => now(),
-                'finished_at' => null,
-            ];
-
-            $this->upsertLastRun($task, $attributes);
-            $this->insertHistory($task, $attributes);
-        });
-    }
-
-    public function rememberFinished(Event $task, float $runtimeSeconds): void
-    {
-        $this->guard(function () use ($task, $runtimeSeconds): void {
-            if ($task->skippedBecauseOverlapping) {
-                $this->completeAsSkipped($task);
+            if ($run->finished_at !== null) {
+                if ($status === 'failed' && $run->status === 'failed') {
+                    $run->update([
+                        'exit_code' => $exitCode,
+                        'output_excerpt' => $this->mergeOutput($run->output_excerpt, $this->outputExcerpt($task, $failure)),
+                    ]);
+                }
 
                 return;
             }
 
-            $exitCode = $this->exitCode($task);
-            $runtimeMs = (int) round($runtimeSeconds * 1000);
-            $status = $this->statusFromExitCode($exitCode);
-
-            $attributes = [
+            $run->update([
                 'status' => $status,
+                'finished_at' => $now,
                 'exit_code' => $exitCode,
-                'runtime_ms' => $runtimeMs,
-                'output' => $this->readOutput($task),
-                'started_at' => $this->startedAt($task, $runtimeMs),
-                'finished_at' => now(),
-            ];
-
-            $this->upsertLastRun($task, $attributes);
-            $this->completeHistory($task, $attributes);
+                'runtime_ms' => $runtimeSeconds !== null
+                    ? (int) round($runtimeSeconds * 1000)
+                    : ($run->started_at !== null ? max(0, (int) $run->started_at->diffInMilliseconds($now)) : null),
+                'output_excerpt' => $this->outputExcerpt($task, $failure),
+            ]);
         });
     }
 
-    public function rememberFailed(Event $task, Throwable $e): void
+    private function resolveRun(Event $task): ScheduleRun
     {
-        $this->guard(function () use ($task, $e): void {
-            $attributes = [
-                'status' => ScheduleRunStatuses::FAILED,
-                'exit_code' => $this->exitCode($task),
-                'runtime_ms' => null,
-                'output' => $this->mergeOutput($this->readOutput($task), $e->getMessage()),
-                'started_at' => $this->startedAt($task),
-                'finished_at' => now(),
-            ];
+        $runId = $task->{self::RUN_ID_PROPERTY} ?? null;
 
-            $this->upsertLastRun($task, $attributes);
-            $this->completeHistory($task, $attributes, enrichTerminalFailed: true);
-        });
-    }
+        if (is_int($runId) || ctype_digit((string) $runId)) {
+            $run = ScheduleRun::query()->find((int) $runId);
 
-    public function rememberSkipped(Event $task): void
-    {
-        $this->guard(function () use ($task): void {
-            $this->completeAsSkipped($task);
-        });
-    }
+            if ($run instanceof ScheduleRun) {
+                return $run;
+            }
+        }
 
-    public function rememberBackgroundFinished(Event $task): void
-    {
-        $this->guard(function () use ($task): void {
-            $this->adoptAttemptFromLastRun($task);
-            $this->restoreDeterministicOutputPath($task);
-            $exitCode = $this->exitCode($task);
+        $key = $this->key($task);
 
-            $attributes = [
-                'attempt_key' => $this->boundAttemptKey($task),
-                'status' => $this->statusFromExitCode($exitCode),
-                'exit_code' => $exitCode,
-                'runtime_ms' => null,
-                'output' => $this->readOutput($task),
-                'started_at' => $this->startedAt($task),
-                'finished_at' => now(),
-            ];
-
-            $this->upsertLastRun($task, array_filter(
-                $attributes,
-                fn (mixed $value, string $key): bool => $key !== 'attempt_key' || $value !== null,
-                ARRAY_FILTER_USE_BOTH,
-            ));
-            $this->completeHistory($task, $attributes);
-        });
-    }
-
-    /**
-     * @return Collection<string, ScheduleRun>
-     */
-    public function lastRunsByCommandKey(): Collection
-    {
-        return ScheduleRun::query()
-            ->get()
-            ->keyBy('command_key');
-    }
-
-    public function forCommand(string $commandKey): ?ScheduleRun
-    {
-        return ScheduleRun::query()
-            ->where('command_key', $this->normalizeCommand($commandKey))
+        $run = ScheduleRun::query()
+            ->where('source', 'scheduler')
+            ->where('key', $key)
+            ->where('status', 'running')
+            ->orderByDesc('started_at')
             ->first();
-    }
 
-    private function completeAsSkipped(Event $task): void
-    {
-        $now = now();
+        if ($run instanceof ScheduleRun) {
+            $task->{self::RUN_ID_PROPERTY} = $run->id;
 
-        $attributes = [
-            'status' => ScheduleRunStatuses::SKIPPED,
-            'exit_code' => null,
-            'runtime_ms' => null,
-            'output' => null,
-            'started_at' => $now,
-            'finished_at' => $now,
-        ];
-
-        $this->upsertLastRun($task, $attributes);
-
-        if ($this->boundAttemptKey($task) !== null || $this->findRunningHistory($task) !== null) {
-            $this->completeHistory($task, $attributes);
-
-            return;
+            return $run;
         }
 
-        $this->insertHistory($task, [
-            'attempt_key' => $this->bindAttemptKey($task),
-            ...$attributes,
+        $run = ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'key' => $key,
+            'name' => $this->name($task),
+            'expression' => $this->expression($task),
+            'status' => 'running',
+            'started_at' => now(),
         ]);
+        $task->{self::RUN_ID_PROPERTY} = $run->id;
+
+        return $run;
     }
 
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    private function upsertLastRun(Event $task, array $attributes): void
+    private function prepareOutputPath(Event $task): void
     {
-        $commandKey = $this->normalizeCommand($task->command);
-
-        ScheduleRun::query()->updateOrCreate(
-            ['command_key' => $commandKey],
-            [
-                'command' => $commandKey,
-                'expression' => $this->truncate((string) ($task->expression ?? ''), 64),
-                ...$attributes,
-            ],
-        );
-    }
-
-    /**
-     * @param  array<string, mixed>  $attributes
-     */
-    private function insertHistory(Event $task, array $attributes): void
-    {
-        $commandKey = $this->normalizeCommand($task->command);
-        $attemptKey = (string) ($attributes['attempt_key'] ?? $this->bindAttemptKey($task));
-
-        ScheduleRunHistory::query()->create([
-            'command_key' => $commandKey,
-            'command' => $commandKey,
-            'expression' => $this->truncate((string) ($task->expression ?? ''), 64),
-            ...$attributes,
-            'attempt_key' => $attemptKey,
-        ]);
-    }
-
-    /**
-     * Complete the attempt identified by attempt_key. Failed after Finished
-     * enriches the same terminal row instead of inserting a duplicate.
-     *
-     * @param  array<string, mixed>  $attributes
-     */
-    private function completeHistory(Event $task, array $attributes, bool $enrichTerminalFailed = false): void
-    {
-        $history = $this->resolveHistoryForCompletion($task);
-
-        if ($history !== null) {
-            if (ScheduleRunStatuses::isTerminal($history->status) && ! $enrichTerminalFailed) {
-                return;
-            }
-
-            if (
-                $enrichTerminalFailed
-                && ScheduleRunStatuses::isTerminal($history->status)
-                && $history->status !== ScheduleRunStatuses::FAILED
-                && $history->status !== ScheduleRunStatuses::RUNNING
-            ) {
-                // Do not overwrite succeeded/skipped with a late Failed.
-                return;
-            }
-
-            if ($enrichTerminalFailed && $history->status === ScheduleRunStatuses::FAILED) {
-                $attributes['output'] = $this->mergeOutput($history->output, (string) ($attributes['output'] ?? ''));
-                if ($history->runtime_ms !== null && ($attributes['runtime_ms'] ?? null) === null) {
-                    $attributes['runtime_ms'] = $history->runtime_ms;
-                }
-                if ($history->started_at !== null) {
-                    $attributes['started_at'] = $history->started_at;
-                }
-            }
-
-            $history->fill(array_diff_key($attributes, ['attempt_key' => true]))->save();
-
-            return;
-        }
-
-        $this->insertHistory($task, [
-            'attempt_key' => $this->bindAttemptKey($task),
-            ...$attributes,
-        ]);
-    }
-
-    private function resolveHistoryForCompletion(Event $task): ?ScheduleRunHistory
-    {
-        $attemptKey = $this->boundAttemptKey($task);
-
-        if ($attemptKey !== null) {
-            $byKey = ScheduleRunHistory::query()->where('attempt_key', $attemptKey)->first();
-            if ($byKey !== null) {
-                return $byKey;
-            }
-        }
-
-        // Background schedule:finish reconstructs Event without the in-memory
-        // attempt key. Prefer the last-run mirror's attempt when still running.
-        $lastRun = $this->forCommand($this->normalizeCommand($task->command));
-        if (
-            is_string($lastRun?->attempt_key)
-            && $lastRun->attempt_key !== ''
-            && $lastRun->status === ScheduleRunStatuses::RUNNING
-        ) {
-            $byLast = ScheduleRunHistory::query()
-                ->where('attempt_key', $lastRun->attempt_key)
-                ->first();
-            if ($byLast !== null) {
-                return $byLast;
-            }
-        }
-
-        return $this->findRunningHistory($task);
-    }
-
-    private function findRunningHistory(Event $task): ?ScheduleRunHistory
-    {
-        return ScheduleRunHistory::query()
-            ->where('command_key', $this->normalizeCommand($task->command))
-            ->where('status', ScheduleRunStatuses::RUNNING)
-            ->orderByDesc('id')
-            ->first();
-    }
-
-    private function adoptAttemptFromLastRun(Event $task): void
-    {
-        if ($this->boundAttemptKey($task) !== null) {
-            return;
-        }
-
-        $lastRun = $this->forCommand($this->normalizeCommand($task->command));
-        if (
-            is_string($lastRun?->attempt_key)
-            && $lastRun->attempt_key !== ''
-            && $lastRun->status === ScheduleRunStatuses::RUNNING
-        ) {
-            $task->{self::ATTEMPT_KEY_PROPERTY} = $lastRun->attempt_key;
-        }
-    }
-
-    private function bindAttemptKey(Event $task): string
-    {
-        $existing = $this->boundAttemptKey($task);
-        if ($existing !== null) {
-            return $existing;
-        }
-
-        $attemptKey = (string) Str::uuid();
-        $task->{self::ATTEMPT_KEY_PROPERTY} = $attemptKey;
-
-        return $attemptKey;
-    }
-
-    private function boundAttemptKey(Event $task): ?string
-    {
-        $value = $task->{self::ATTEMPT_KEY_PROPERTY} ?? null;
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    private function restoreDeterministicOutputPath(Event $task): void
-    {
-        $default = $task->getDefaultOutput();
         $current = $task->output ?? null;
+        $default = $task->getDefaultOutput();
 
-        if (! is_string($current) || $current === '' || $current === $default) {
+        if (! is_string($current) || $current === '' || $current === $default || in_array(strtolower($current), ['nul', '/dev/null'], true)) {
             $task->sendOutputTo($this->deterministicOutputPath($task));
         }
     }
 
-    private function exitCode(Event $task): ?int
+    private function outputExcerpt(Event $task, ?string $failure): ?string
     {
-        $exitCode = $task->exitCode ?? null;
-
-        return is_int($exitCode) ? $exitCode : (is_numeric($exitCode) ? (int) $exitCode : null);
-    }
-
-    /**
-     * Background finishes sometimes omit exitCode; treat unknown as succeeded
-     * unless Laravel reported a concrete non-zero code.
-     */
-    private function statusFromExitCode(?int $exitCode): string
-    {
-        return ($exitCode === null || $exitCode === 0)
-            ? ScheduleRunStatuses::SUCCEEDED
-            : ScheduleRunStatuses::FAILED;
+        return $this->mergeOutput($this->readOutput($task), $failure);
     }
 
     private function readOutput(Event $task): ?string
@@ -395,7 +239,12 @@ class ScheduleRunRecorder
         }
 
         try {
-            $contents = fread($handle, self::OUTPUT_LIMIT + 1);
+            $size = filesize($path);
+            if (is_int($size) && $size > self::OUTPUT_LIMIT) {
+                fseek($handle, -self::OUTPUT_LIMIT, SEEK_END);
+            }
+
+            $contents = stream_get_contents($handle);
         } finally {
             fclose($handle);
         }
@@ -404,56 +253,60 @@ class ScheduleRunRecorder
             return null;
         }
 
-        return $this->truncate($contents, self::OUTPUT_LIMIT);
+        return $this->truncate(trim($contents), self::OUTPUT_LIMIT);
     }
 
-    private function mergeOutput(?string $commandOutput, string $exceptionMessage): ?string
+    private function mergeOutput(?string ...$parts): ?string
     {
-        $parts = array_values(array_filter([
-            $commandOutput !== null && trim($commandOutput) !== '' ? trim($commandOutput) : null,
-            trim($exceptionMessage) !== '' ? trim($exceptionMessage) : null,
-        ]));
-
-        if ($parts === []) {
-            return null;
-        }
-
-        // Deduplicate when Failed re-merges output already containing the message.
         $merged = [];
+
         foreach ($parts as $part) {
-            if (! in_array($part, $merged, true)) {
+            $part = $part === null ? null : trim($part);
+
+            if ($part !== null && $part !== '' && ! in_array($part, $merged, true)) {
                 $merged[] = $part;
             }
         }
 
-        return $this->truncate(implode("\n", $merged), self::OUTPUT_LIMIT);
+        return $merged === [] ? null : $this->truncate(implode("\n", $merged), self::OUTPUT_LIMIT);
     }
 
-    private function startedAt(Event $task, ?int $runtimeMs = null): mixed
+    private function expression(Event $task): ?string
     {
-        $attemptKey = $this->boundAttemptKey($task);
-        if ($attemptKey !== null) {
-            $history = ScheduleRunHistory::query()->where('attempt_key', $attemptKey)->first();
-            if ($history?->started_at !== null) {
-                return $history->started_at;
-            }
-        }
+        $expression = trim((string) ($task->expression ?? ''));
 
-        $existing = $this->forCommand($this->normalizeCommand($task->command));
-        if ($existing?->started_at !== null && $existing->status === ScheduleRunStatuses::RUNNING) {
-            return $existing->started_at;
-        }
-
-        return $runtimeMs !== null ? now()->subMilliseconds($runtimeMs) : now();
+        return $expression === '' ? null : $this->truncate($expression, 64);
     }
 
-    private function truncate(?string $value, int $limit): ?string
+    private function exitCode(Event $task): ?int
     {
-        if ($value === null) {
-            return null;
-        }
+        $exitCode = $task->exitCode ?? null;
 
+        return is_int($exitCode) ? $exitCode : (is_numeric($exitCode) ? (int) $exitCode : null);
+    }
+
+    private function statusFromExitCode(?int $exitCode): string
+    {
+        return ($exitCode === null || $exitCode === 0) ? 'succeeded' : 'failed';
+    }
+
+    private function truncate(string $value, int $limit): string
+    {
         return mb_strlen($value) > $limit ? mb_substr($value, 0, $limit) : $value;
+    }
+
+    private function stableKey(string $value): string
+    {
+        if (mb_strlen($value) <= self::STORAGE_STRING_LIMIT) {
+            return $value;
+        }
+
+        return mb_substr($value, 0, self::STORAGE_STRING_LIMIT - 41).':'.sha1($value);
+    }
+
+    private function ready(): bool
+    {
+        return Schema::hasTable('base_schedule_runs');
     }
 
     private function guard(callable $callback): void
@@ -461,7 +314,7 @@ class ScheduleRunRecorder
         try {
             $callback();
         } catch (Throwable $e) {
-            Log::warning('Scheduled task run recorder failed.', [
+            Log::warning('Schedule run recorder failed.', [
                 'exception' => $e::class,
                 'message' => $e->getMessage(),
             ]);

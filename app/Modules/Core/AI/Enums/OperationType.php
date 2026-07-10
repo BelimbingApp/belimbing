@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Enums;
 
 /**
@@ -13,6 +14,9 @@ enum OperationType: string
 
     /** Execution triggered by a due schedule definition. */
     case ScheduledTask = 'scheduled_task';
+
+    /** Repo-capable scheduled work executed through a headless AI CLI. */
+    case HeadlessTask = 'headless_task';
 
     /** Background artisan command dispatched through policy. */
     case BackgroundCommand = 'background_command';
@@ -30,7 +34,7 @@ enum OperationType: string
     {
         return match ($this) {
             self::AgentTask, self::ScheduledTask, self::ChildSession, self::BackgroundChat => true,
-            self::BackgroundCommand => false,
+            self::HeadlessTask, self::BackgroundCommand => false,
         };
     }
 
@@ -42,6 +46,7 @@ enum OperationType: string
         return match ($this) {
             self::AgentTask => 'Agent Task',
             self::ScheduledTask => 'Scheduled Task',
+            self::HeadlessTask => 'Headless Task',
             self::BackgroundCommand => 'Background Command',
             self::ChildSession => 'Child Session',
             self::BackgroundChat => 'Background Chat',

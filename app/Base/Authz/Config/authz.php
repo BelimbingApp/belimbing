@@ -100,14 +100,14 @@ return [
         ],
         'system_viewer' => [
             'name' => 'System Viewer',
-            'description' => 'Read-only access to system infrastructure: tables, jobs, cache, scheduled tasks, and sessions.',
+            'description' => 'Read-only access to system infrastructure: tables, jobs, cache, schedule, and sessions.',
             'capabilities' => [
                 'admin.system.database-table.list',
                 'admin.system.database-table.view',
                 'admin.system.log.list',
                 'admin.system.failed-job.list',
                 'admin.system.job-batch.list',
-                'admin.system.scheduled-task.list',
+                'admin.system.schedule.view',
                 'admin.system.info.view',
                 'admin.system.session.list',
                 'admin.system.cache.view',

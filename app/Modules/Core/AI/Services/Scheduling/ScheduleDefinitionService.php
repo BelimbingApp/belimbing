@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Scheduling;
 
 use App\Modules\Core\AI\Models\ScheduleDefinition;
@@ -38,16 +39,36 @@ class ScheduleDefinitionService
     }
 
     /**
+     * List schedules for one owning source.
+     *
+     * @return Collection<int, ScheduleDefinition>
+     */
+    public function listBySource(string $source, ?int $companyId = null): Collection
+    {
+        $query = ScheduleDefinition::query()
+            ->where('source', $source)
+            ->orderBy('source_key')
+            ->orderBy('description');
+
+        if ($companyId !== null) {
+            $query->where('company_id', $companyId);
+        }
+
+        return $query->get();
+    }
+
+    /**
      * Create a new schedule definition.
      *
      * @param  int  $companyId  Owning company ID
-     * @param  array{description: string, execution_payload: string, cron_expression: string, employee_id?: int|null, timezone?: string, is_enabled?: bool, concurrency_policy?: string, created_by_user_id?: int|null, meta?: array<string, mixed>}  $data  Schedule data
+     * @param  array{description: string, execution_payload: string, cron_expression: string, employee_id?: int|null, created_by_user_id?: int|null, source?: string, source_key?: string|null, executor?: string, headless_provider?: string|null, headless_model?: string|null, timezone?: string, is_enabled?: bool, concurrency_policy?: string, meta?: array<string, mixed>}  $data  Schedule data
      *
      * @throws \InvalidArgumentException If the cron expression is invalid
      */
     public function create(int $companyId, array $data): ScheduleDefinition
     {
         $this->validateCronExpression($data['cron_expression']);
+        $this->validateExecutor($data['executor'] ?? ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME);
 
         $timezone = $data['timezone'] ?? 'UTC';
 
@@ -55,6 +76,11 @@ class ScheduleDefinitionService
             'company_id' => $companyId,
             'employee_id' => $data['employee_id'] ?? null,
             'created_by_user_id' => $data['created_by_user_id'] ?? null,
+            'source' => $data['source'] ?? ScheduleDefinition::SOURCE_CORE_AI,
+            'source_key' => $data['source_key'] ?? null,
+            'executor' => $data['executor'] ?? ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
+            'headless_provider' => $data['headless_provider'] ?? null,
+            'headless_model' => $data['headless_model'] ?? null,
             'description' => $data['description'],
             'execution_payload' => $data['execution_payload'],
             'cron_expression' => $data['cron_expression'],
@@ -92,6 +118,10 @@ class ScheduleDefinitionService
 
         if (isset($data['cron_expression'])) {
             $this->validateCronExpression($data['cron_expression']);
+        }
+
+        if (isset($data['executor'])) {
+            $this->validateExecutor((string) $data['executor']);
         }
 
         $schedule->update($data);
@@ -142,6 +172,28 @@ class ScheduleDefinitionService
     }
 
     /**
+     * Mark a schedule for immediate dispatch on the next planner tick.
+     */
+    public function requestRunNow(int $scheduleId, ?int $companyId = null): ?ScheduleDefinition
+    {
+        $query = ScheduleDefinition::query()->where('id', $scheduleId);
+
+        if ($companyId !== null) {
+            $query->where('company_id', $companyId);
+        }
+
+        $schedule = $query->first();
+
+        if ($schedule === null) {
+            return null;
+        }
+
+        $schedule->update(['run_requested_at' => now()]);
+
+        return $schedule->refresh();
+    }
+
+    /**
      * Validate a cron expression string.
      *
      * @throws \InvalidArgumentException If the expression is invalid
@@ -152,6 +204,23 @@ class ScheduleDefinitionService
             throw new \InvalidArgumentException(
                 'Invalid cron expression: "'.$expression.'". '
                 .'Expected standard 5-field format: "minute hour day month weekday".',
+            );
+        }
+    }
+
+    /**
+     * Validate the schedule executor identifier.
+     */
+    private function validateExecutor(string $executor): void
+    {
+        $valid = [
+            ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
+            ScheduleDefinition::EXECUTOR_HEADLESS_CLI,
+        ];
+
+        if (! in_array($executor, $valid, true)) {
+            throw new \InvalidArgumentException(
+                'Invalid schedule executor: "'.$executor.'". Expected one of: '.implode(', ', $valid).'.',
             );
         }
     }
