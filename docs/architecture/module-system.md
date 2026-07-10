@@ -3,7 +3,7 @@
 **Document Type:** Architecture Specification
 **Scope:** Belimbing's module system — platform baseline, directory layout, Distribution Bundle model, lifecycle, variation (adapters and slots), and discovery contracts
 **Based On:** Project Brief v1.0.0, Ousterhout's "A Philosophy of Software Design"
-**Last Updated:** 2026-06-24
+**Last Updated:** 2026-07-09
 **Related:** `docs/brief.md`, `docs/architecture/database.md`, `docs/modules/*/`, `docs/guides/extensions/private-extension-repositories.md`, `docs/guides/extensions/database-migrations.md`
 
 ---
@@ -149,6 +149,7 @@ These path contracts are the pluggability contract: a module that satisfies the 
 | Settings | `Config/settings.php` under `app/Base/*`, `app/Modules/*/*`, `extensions/*/*` | `App\Base\Settings\ServiceProvider` |
 | Authz | `Config/authz.php` under `app/Base/*`, `app/Modules/*/*` — **not** extensions | `App\Base\Authz\ServiceProvider`; extensions merge their own authz config from their discovered provider when they need capabilities |
 | Views | Not glob-discovered — each module provider calls `loadViewsFrom(__DIR__.'/Views', '<namespace>')` | module `ServiceProvider` |
+| Agent skills | `.agents/skills/*/SKILL.md` under project root, `app/Modules/*/*`, `extensions/*`, and `extensions/*/*` | `App\Modules\Core\AI\Services\Orchestration\FilesystemSkillPackLoader` |
 | Tailwind classes | `@source` entries in `resources/app.css`: `./core/views`, `../app/Modules/*/*/Views`, `../extensions/*/*/Views` | Vite/Tailwind build |
 | Blade hot reload | `resources/core/views/**` · `app/Modules/*/*/Views/**` · `extensions/*/*/Views/**` | `vite.config.js` |
 | Tests | testsuites `Modules` (`app/Modules/*/Tests`, `app/Modules/*/*/Tests`) and `Extensions` (`extensions/*/*/Tests`) | `phpunit.xml` + `tests/Pest.php` |

@@ -110,6 +110,18 @@ describe('PageContext DTO', function () {
             ->and($hydrated->visibleActions)->toBe($original->visibleActions);
     });
 
+    it('includes suggested skills in XML and array serialization', function () {
+        $context = new PageContext(
+            route: PAGE_CONTEXT_TEST_ROUTE,
+            url: PAGE_CONTEXT_TEST_URL,
+            title: PAGE_CONTEXT_TEST_TITLE,
+            suggestedSkills: ['extension.kiat.advise-refresh'],
+        );
+
+        expect($context->toArray()['suggested_skills'])->toBe(['extension.kiat.advise-refresh'])
+            ->and($context->toPromptXml())->toContain('suggested_skills="extension.kiat.advise-refresh"');
+    });
+
     it('omits empty arrays and null values from XML', function () {
         $context = new PageContext(
             route: 'admin.dashboard',
@@ -122,6 +134,25 @@ describe('PageContext DTO', function () {
             ->toContain('route="admin.dashboard"')
             ->not->toContain('title=')
             ->not->toContain('module=')
-            ->not->toContain('actions=');
+            ->not->toContain('actions=')
+            ->not->toContain('suggested_skills=');
+    });
+
+    it('replaces selected fields with() and keeps the rest', function () {
+        $context = new PageContext(
+            route: PAGE_CONTEXT_TEST_ROUTE,
+            url: PAGE_CONTEXT_TEST_URL,
+            title: PAGE_CONTEXT_TEST_TITLE,
+            suggestedSkills: ['extension.kiat.advise-refresh'],
+        );
+
+        $copy = $context->with(['active_tab' => 'advise', 'resource_id' => 42]);
+
+        expect($copy->activeTab)->toBe('advise')
+            ->and($copy->resourceId)->toBe(42)
+            ->and($copy->route)->toBe(PAGE_CONTEXT_TEST_ROUTE)
+            ->and($copy->title)->toBe(PAGE_CONTEXT_TEST_TITLE)
+            ->and($copy->suggestedSkills)->toBe(['extension.kiat.advise-refresh'])
+            ->and($context->activeTab)->toBeNull();
     });
 });

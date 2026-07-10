@@ -112,7 +112,7 @@ class Index extends Component implements ProvidesLaraPageContext
         ]);
     }
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         $filters = [];
 

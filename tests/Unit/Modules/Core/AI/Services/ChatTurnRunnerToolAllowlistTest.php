@@ -9,5 +9,6 @@ it('defaults interactive Lara turns to repository and active-page tools before s
         'edit',
         'active_page_snapshot',
         'bash',
+        'load_skill',
     ]);
 });

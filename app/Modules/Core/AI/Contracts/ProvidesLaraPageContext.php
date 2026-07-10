@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Contracts;
 
 use App\Modules\Core\AI\DTO\PageContext;
@@ -14,6 +15,8 @@ interface ProvidesLaraPageContext
 {
     /**
      * Build the page context DTO from this component's current state.
+     *
+     * @param  string|null  $pageUrl  Client page URL (may include hash for active tab)
      */
-    public function pageContext(): PageContext;
+    public function pageContext(?string $pageUrl = null): PageContext;
 }

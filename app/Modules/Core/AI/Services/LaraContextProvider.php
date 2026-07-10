@@ -7,6 +7,7 @@ use App\Base\AI\Services\ShellCommandRunner;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Foundation\Providers\ProviderRegistry;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Services\Orchestration\SkillSelectionService;
 use Illuminate\Contracts\Auth\Authenticatable;
 
 class LaraContextProvider
@@ -14,6 +15,7 @@ class LaraContextProvider
     public function __construct(
         private readonly KnowledgeNavigator $knowledgeNavigator,
         private readonly ?ShellCommandRunner $shellRunner = null,
+        private readonly ?SkillSelectionService $skillSelection = null,
     ) {}
 
     /**
@@ -37,6 +39,7 @@ class LaraContextProvider
             'repository' => $this->repositoryContext(),
             'shell' => $this->shellContext(),
             'modules' => $this->installedModules(),
+            'skills' => $this->skillsContext(),
             'providers' => $this->configuredProviders($companyId),
             'knowledge' => $this->knowledgeContext($query),
         ];
@@ -94,7 +97,7 @@ class LaraContextProvider
     }
 
     /**
-     * Return discovered application module names.
+     * Return discovered application and extension module identities.
      *
      * @return list<string>
      */
@@ -112,10 +115,37 @@ class LaraContextProvider
             $modules[] = $parts[3];
         }
 
+        foreach (ProviderRegistry::discoverExtensionProviders() as $providerClass) {
+            $parts = explode('\\', $providerClass);
+
+            if (count($parts) < 4 || $parts[0] !== 'Extensions') {
+                continue;
+            }
+
+            $owner = str($parts[1])->kebab()->toString();
+            $module = str($parts[2])->kebab()->toString();
+            $modules[] = $owner.'/'.$module;
+        }
+
         $modules = array_values(array_unique($modules));
         sort($modules);
 
         return $modules;
+    }
+
+    /**
+     * Compact skill catalog for progressive disclosure.
+     *
+     * @return array{catalog: list<array{id: string, name: string, description: string, owner: string|null, path: string|null}>, usage: string}
+     */
+    private function skillsContext(): array
+    {
+        $selection = $this->skillSelection ?? app(SkillSelectionService::class);
+
+        return [
+            'catalog' => $selection->catalogEntries(),
+            'usage' => 'Catalog lists available skills. Call load_skill with a catalog id before following a procedure. Prefer current_page suggested_skills when present.',
+        ];
     }
 
     /**

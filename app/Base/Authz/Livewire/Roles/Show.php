@@ -377,7 +377,7 @@ class Show extends Component implements ProvidesLaraPageContext
         ]);
     }
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         return new PageContext(
             route: 'admin.roles.show',

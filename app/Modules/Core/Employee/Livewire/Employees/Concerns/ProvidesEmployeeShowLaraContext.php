@@ -10,7 +10,7 @@ use App\Modules\Core\AI\DTO\PageSnapshot;
 
 trait ProvidesEmployeeShowLaraContext
 {
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         return new PageContext(
             route: 'admin.employees.show',
