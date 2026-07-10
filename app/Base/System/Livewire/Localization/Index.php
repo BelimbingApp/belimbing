@@ -137,10 +137,7 @@ class Index extends Component
         $previewTimezone = $dateTimeDisplay->currentTimezone();
         $localPreview = $previewMode === TimezoneMode::LOCAL;
 
-        $timezoneOptions = collect(DateTimeZone::listIdentifiers())
-            ->map(fn (string $tz) => ['value' => $tz, 'label' => $tz])
-            ->values()
-            ->all();
+        $timezoneOptions = $this->timezoneOptions($previewTimezone);
 
         $localeHelp = $this->localeHelpText($catalog, $bootstrap);
 
@@ -185,6 +182,31 @@ class Index extends Component
             'localeHelp' => $localeHelp,
             'auditSubjects' => $auditSubjects,
         ]);
+    }
+
+    /**
+     * @return list<array{value: string, label: string}>
+     */
+    private function timezoneOptions(string $previewTimezone): array
+    {
+        return collect([
+            $this->companyTimezone,
+            $previewTimezone,
+            config('app.timezone'),
+            'UTC',
+            'Asia/Kuala_Lumpur',
+            'Asia/Singapore',
+            'Asia/Jakarta',
+            'Asia/Bangkok',
+            'Europe/London',
+            'America/New_York',
+            'America/Los_Angeles',
+        ])
+            ->filter(fn (mixed $tz): bool => is_string($tz) && $tz !== '')
+            ->unique()
+            ->values()
+            ->map(fn (string $tz): array => ['value' => $tz, 'label' => $tz])
+            ->all();
     }
 
     /**
