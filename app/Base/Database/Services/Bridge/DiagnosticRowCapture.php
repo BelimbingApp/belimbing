@@ -33,6 +33,7 @@ class DiagnosticRowCapture
         private DependencyClosureResolver $closure,
         private ColumnRedactor $redactor,
         private FilesystemManager $disks,
+        private BridgeSettings $settings,
     ) {}
 
     public function primaryKeyColumn(string $table): ?string
@@ -117,7 +118,7 @@ class DiagnosticRowCapture
         ];
 
         $json = CanonicalJson::encode($package);
-        $path = trim((string) config('bridge.path_prefix', 'bridge/diagnostics'), '/')
+        $path = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics')
             .'/'.now()->format('Ymd_His').'-'.$packageId.'.json';
 
         $this->guardPackageSize(strlen($json));
@@ -143,8 +144,8 @@ class DiagnosticRowCapture
     public function listPackages(): array
     {
         $disk = $this->disk();
-        $prefix = trim((string) config('bridge.path_prefix', 'bridge/diagnostics'), '/');
-        $maxPackageBytes = (int) config('bridge.limits.max_package_bytes', 25 * 1024 * 1024);
+        $prefix = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics');
+        $maxPackageBytes = $this->settings->integer('bridge.limits.max_package_bytes', 25 * 1024 * 1024, 1, 2147483647);
         $packages = [];
 
         foreach ($disk->files($prefix) as $file) {
@@ -192,7 +193,7 @@ class DiagnosticRowCapture
 
     public function deletePackage(string $path): bool
     {
-        $prefix = trim((string) config('bridge.path_prefix', 'bridge/diagnostics'), '/');
+        $prefix = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics');
 
         if (! str_starts_with($path, $prefix.'/') || str_contains($path, '..')) {
             return false;
@@ -219,7 +220,7 @@ class DiagnosticRowCapture
             throw BridgeCaptureException::noSelection();
         }
 
-        $maxSelected = (int) config('bridge.limits.max_selected_rows', 100);
+        $maxSelected = $this->settings->integer('bridge.limits.max_selected_rows', 100, 1, 10000);
 
         if (count($ids) > $maxSelected) {
             throw BridgeCaptureException::tooManySelected($maxSelected);
@@ -263,7 +264,7 @@ class DiagnosticRowCapture
      */
     private function encodeRow(string $table, array $row): array
     {
-        $maxScalarBytes = (int) config('bridge.limits.max_scalar_bytes', 5 * 1024 * 1024);
+        $maxScalarBytes = $this->settings->integer('bridge.limits.max_scalar_bytes', 5 * 1024 * 1024, 1, 2147483647);
 
         foreach ($row as $column => $value) {
             if (! is_string($value)) {
@@ -387,7 +388,7 @@ class DiagnosticRowCapture
 
     private function guardPackageSize(int $size): void
     {
-        $maxPackageBytes = (int) config('bridge.limits.max_package_bytes', 25 * 1024 * 1024);
+        $maxPackageBytes = $this->settings->integer('bridge.limits.max_package_bytes', 25 * 1024 * 1024, 1, 2147483647);
 
         if ($size > $maxPackageBytes) {
             throw BridgeCaptureException::packageTooLarge($maxPackageBytes);
@@ -396,7 +397,7 @@ class DiagnosticRowCapture
 
     private function disk(): Filesystem
     {
-        $diskName = (string) config('bridge.disk', 'local');
+        $diskName = $this->settings->disk();
         $diskConfig = config("filesystems.disks.{$diskName}", []);
 
         if ($diskName === 'public' || ($diskConfig['visibility'] ?? null) === 'public') {

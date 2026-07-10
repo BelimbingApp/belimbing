@@ -1,6 +1,12 @@
 <?php
 
 return [
+    'instance' => [
+        'id' => null,
+        'name' => null,
+        'role' => null,
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Diagnostic Capture Storage
@@ -12,11 +18,21 @@ return [
     | secret columns.
     |
     */
-    'disk' => env('BRIDGE_DISK', 'local'),
+    'disk' => 'local',
 
-    'path_prefix' => env('BRIDGE_PATH_PREFIX', 'bridge/diagnostics'),
+    'path_prefix' => 'bridge/diagnostics',
 
-    'incoming_path_prefix' => env('BRIDGE_INCOMING_PATH_PREFIX', 'bridge/incoming'),
+    'incoming_path_prefix' => 'bridge/incoming',
+
+    'outgoing_path_prefix' => 'bridge/outgoing',
+
+    'receiving_path_prefix' => 'bridge/receiving',
+
+    'receive_grants' => [
+        'expiry_minutes' => 15,
+        'send_timeout_seconds' => 600,
+        'base_urls' => '',
+    ],
 
     /*
     |--------------------------------------------------------------------------
@@ -25,16 +41,27 @@ return [
     |
     | Bounds applied before any row is serialized. Diagnostic capture is for
     | a handful of problem records plus their referenced parents, not bulk
-    | data movement — the bridge dataset contract owns that.
+    | data movement — Data Export uses a separate, larger limit set.
     |
     */
     'limits' => [
-        'max_selected_rows' => (int) env('BRIDGE_MAX_SELECTED_ROWS', 100),
-        'max_tables' => (int) env('BRIDGE_MAX_TABLES', 100),
-        'max_closure_rows' => (int) env('BRIDGE_MAX_CLOSURE_ROWS', 5000),
-        'max_closure_depth' => (int) env('BRIDGE_MAX_CLOSURE_DEPTH', 8),
-        'max_scalar_bytes' => (int) env('BRIDGE_MAX_SCALAR_BYTES', 5 * 1024 * 1024),
-        'max_package_bytes' => (int) env('BRIDGE_MAX_PACKAGE_BYTES', 25 * 1024 * 1024),
+        'max_selected_rows' => 100,
+        'max_tables' => 100,
+        'max_closure_rows' => 5000,
+        'max_closure_depth' => 8,
+        'max_scalar_bytes' => 5 * 1024 * 1024,
+        'max_package_bytes' => 25 * 1024 * 1024,
+    ],
+
+    'transfer_limits' => [
+        'max_tables' => 250,
+        'max_records' => 250000,
+        'max_scalar_bytes' => 10 * 1024 * 1024,
+        'max_record_line_bytes' => 32 * 1024 * 1024,
+        'max_package_bytes' => 250 * 1024 * 1024,
+        'expiry_hours' => 24,
+        'incoming_retention_days' => 14,
+        'receiving_retention_hours' => 24,
     ],
 
     /*
@@ -43,9 +70,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | Opaque Laravel runtime payloads can contain credentials even when the
-    | column name is generic. Table owners may extend this map from their
-    | service provider until the module-contributed classification registry
-    | in the bridge plan is available.
+    | column name is generic. These Base-owned rules apply only to diagnostic
+    | row capture; bulk exports preserve selected tables exactly.
     |
     */
     'redaction' => [

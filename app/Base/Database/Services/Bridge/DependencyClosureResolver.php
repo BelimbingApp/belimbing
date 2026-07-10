@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class DependencyClosureResolver
 {
+    public function __construct(private readonly BridgeSettings $settings) {}
+
     /**
      * Resolve selected rows plus every transitively referenced parent row.
      *
@@ -28,8 +30,8 @@ class DependencyClosureResolver
     public function resolve(string $rootTable, string $primaryKey, array $ids): array
     {
         $ids = array_values(array_unique($ids, SORT_REGULAR));
-        $maxRows = (int) config('bridge.limits.max_closure_rows', 5000);
-        $maxDepth = (int) config('bridge.limits.max_closure_depth', 8);
+        $maxRows = $this->settings->integer('bridge.limits.max_closure_rows', 5000, 1, 1000000);
+        $maxDepth = $this->settings->integer('bridge.limits.max_closure_depth', 8, 1, 64);
 
         $rootRows = DB::table($rootTable)
             ->whereIn($primaryKey, $ids)

@@ -22,6 +22,7 @@ class DiagnosticPackageImporter
         private readonly DiagnosticPackageInbox $inbox,
         private readonly TableInspector $inspector,
         private readonly DevelopmentInstanceGuard $environment,
+        private readonly BridgeSettings $settings,
     ) {}
 
     /**
@@ -163,8 +164,9 @@ class DiagnosticPackageImporter
             throw BridgeImportException::invalidPackage(__('the table payload is missing.'));
         }
 
-        $maxTables = (int) config('bridge.limits.max_tables', 100);
-        $maxRows = (int) config('bridge.limits.max_closure_rows', 5000);
+        $maxTables = $this->settings->integer('bridge.limits.max_tables', 100, 1, 10000);
+        $maxRows = $this->settings->integer('bridge.limits.max_closure_rows', 5000, 1, 1000000);
+        $maxDepth = $this->settings->integer('bridge.limits.max_closure_depth', 8, 1, 64);
 
         if (count($packageTables) > $maxTables) {
             throw BridgeImportException::invalidPackage(__('the table count exceeds the configured limit.'));
@@ -259,7 +261,7 @@ class DiagnosticPackageImporter
 
             $depth = $entry['depth'] ?? null;
 
-            if (! is_int($depth) || $depth < 0 || $depth > (int) config('bridge.limits.max_closure_depth', 8)) {
+            if (! is_int($depth) || $depth < 0 || $depth > $maxDepth) {
                 throw BridgeImportException::invalidPackage(__('table :table has an invalid dependency depth.', ['table' => $table]));
             }
 
@@ -296,7 +298,7 @@ class DiagnosticPackageImporter
         }
 
         $decoded = [];
-        $maxScalarBytes = (int) config('bridge.limits.max_scalar_bytes', 5 * 1024 * 1024);
+        $maxScalarBytes = $this->settings->integer('bridge.limits.max_scalar_bytes', 5 * 1024 * 1024, 1, 2147483647);
 
         foreach ($row as $column => $value) {
             if (! is_string($column) || ! isset($columnSet[$column])) {
@@ -404,7 +406,7 @@ class DiagnosticPackageImporter
             || ! is_array($selection['ids'] ?? null)
             || ! array_is_list($selection['ids'])
             || $selection['ids'] === []
-            || count($selection['ids']) > (int) config('bridge.limits.max_selected_rows', 100)) {
+            || count($selection['ids']) > $this->settings->integer('bridge.limits.max_selected_rows', 100, 1, 10000)) {
             throw BridgeImportException::invalidPackage(__('the root selection is invalid.'));
         }
 

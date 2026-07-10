@@ -19,6 +19,7 @@ class DiagnosticPackageInbox
     public function __construct(
         private readonly FilesystemManager $disks,
         private readonly DevelopmentInstanceGuard $environment,
+        private readonly BridgeSettings $settings,
     ) {}
 
     /**
@@ -30,7 +31,7 @@ class DiagnosticPackageInbox
 
         $disk = $this->disk();
         $sourcePath = trim($sourcePath, '/');
-        $diagnosticsPrefix = trim((string) config('bridge.path_prefix', 'bridge/diagnostics'), '/');
+        $diagnosticsPrefix = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics');
 
         if (! $this->pathIsWithin($sourcePath, $diagnosticsPrefix)) {
             throw BridgeImportException::invalidSourcePath();
@@ -40,7 +41,7 @@ class DiagnosticPackageInbox
             throw BridgeImportException::sourceMissing($sourcePath);
         }
 
-        $maxBytes = (int) config('bridge.limits.max_package_bytes', 25 * 1024 * 1024);
+        $maxBytes = $this->settings->integer('bridge.limits.max_package_bytes', 25 * 1024 * 1024, 1, 2147483647);
         $size = $disk->size($sourcePath);
 
         if ($size > $maxBytes) {
@@ -115,7 +116,7 @@ class DiagnosticPackageInbox
             throw BridgeImportException::incomingMissing($packageId);
         }
 
-        $maxBytes = (int) config('bridge.limits.max_package_bytes', 25 * 1024 * 1024);
+        $maxBytes = $this->settings->integer('bridge.limits.max_package_bytes', 25 * 1024 * 1024, 1, 2147483647);
         if ($disk->size($receiptPath) > 64 * 1024) {
             throw BridgeImportException::receiptMismatch($packageId);
         }
@@ -174,7 +175,7 @@ class DiagnosticPackageInbox
 
     private function incomingDirectory(string $packageId): string
     {
-        return trim((string) config('bridge.incoming_path_prefix', 'bridge/incoming'), '/')
+        return $this->settings->pathPrefix('bridge.incoming_path_prefix', 'bridge/incoming')
             .'/diagnostic/'.$packageId;
     }
 
@@ -195,7 +196,7 @@ class DiagnosticPackageInbox
 
     private function disk(): Filesystem
     {
-        $diskName = (string) config('bridge.disk', 'local');
+        $diskName = $this->settings->disk();
         $diskConfig = config("filesystems.disks.{$diskName}", []);
 
         if ($diskName === 'public' || ($diskConfig['visibility'] ?? null) === 'public') {

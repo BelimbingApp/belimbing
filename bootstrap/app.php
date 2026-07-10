@@ -152,7 +152,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Marketplace webhooks are called by external servers (eBay) that
         // cannot carry a CSRF token; the handlers authenticate by signature
         // or shared verification token instead.
-        $middleware->validateCsrfTokens(except: ['webhooks/*']);
+        $middleware->validateCsrfTokens(except: ['webhooks/*', 'data-bridge/receive/*']);
 
         // The in-app updater drops the site into maintenance mode while it pulls,
         // migrates, and reloads. Keep its own console — and the bring-back-online

@@ -23,5 +23,10 @@ return [
         'admin.system.database-bridge.view',
         'admin.system.database-bridge.create',
         'admin.system.database-bridge.delete',
+        'admin.system.database-bridge-export.execute',
+        'admin.system.database-bridge-plan.review',
+        'admin.system.database-bridge-apply.execute',
+        'admin.system.database-bridge-receive-grant.manage',
+        'admin.system.database-bridge-settings.manage',
     ],
 ];

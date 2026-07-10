@@ -59,8 +59,8 @@
     };
 
     $variantClasses = [
-        'list' => 'flex gap-0 border-b border-border-default',
-        'tab' => 'relative '.$sizeClasses['tab'].' font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset',
+        'list' => 'flex flex-wrap gap-0 border-b border-border-default sm:flex-nowrap sm:overflow-x-auto',
+        'tab' => 'relative shrink-0 '.$sizeClasses['tab'].' font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-accent focus:ring-inset',
         'active' => 'text-ink',
         'inactive' => 'text-muted hover:text-ink',
     ];
