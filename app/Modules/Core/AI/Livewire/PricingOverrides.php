@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire;
 
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
@@ -30,7 +31,7 @@ class PricingOverrides extends Component implements ProvidesLaraPageContext
 
     public string $reason = '';
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         return new PageContext(
             route: 'admin.ai.pricing-overrides',

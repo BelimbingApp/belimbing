@@ -64,4 +64,12 @@ describe('contextForCurrentUser', function (): void {
             ])
             ->and($context['repository']['path_convention'])->toContain('relative to target_surface');
     });
+
+    it('includes a compact skills catalog for progressive disclosure', function (): void {
+        $context = $this->service->contextForCurrentUser();
+
+        expect($context)->toHaveKey('skills')
+            ->and($context['skills']['catalog'])->toBeArray()
+            ->and($context['skills']['usage'])->toContain('load_skill');
+    });
 });

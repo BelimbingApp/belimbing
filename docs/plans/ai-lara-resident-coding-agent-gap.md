@@ -1,9 +1,9 @@
 # ai-lara-resident-coding-agent-gap.md
 
 **Status:** In Progress
-**Last Updated:** 2026-05-06
+**Last Updated:** 2026-07-09
 **Sources:** `docs/architecture/ai/lara.md`, `docs/architecture/ai/current-state.md`, `app/Modules/Core/AI/ServiceProvider.php`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/ChatTurnRunner.php`, `app/Modules/Core/AI/Services/SessionManager.php`, `app/Modules/Core/AI/Tools/EditTool.php`, `app/Modules/Core/AI/Tools/BrowserTool.php`, `resources/core/views/components/layouts/app.blade.php`
-**Agents:** Codex/gpt-5.5-medium, Codex/GPT-5
+**Agents:** Codex/gpt-5.5-medium, Codex/GPT-5, Grok/Cursor
 
 ## Problem Essence
 
@@ -80,9 +80,9 @@ Goal: Let licensees and admins teach Lara durable procedures without expanding t
 - [x] Use `.agents/skills/*/SKILL.md` as the initial minimal filesystem skill contract. {Codex/GPT-5}
 - [x] Load BLB core skills from `.agents/skills/`. {Codex/GPT-5}
 - [x] Discover extension skills from each active extension's `.agents/skills/`. {Codex/GPT-5}
-- [ ] Scope skill application by target surface so extension-specific skills do not bleed into core work.
+- [x] Scope skill application by target surface so extension-specific skills do not bleed into core work. {Grok/Cursor} — progressive disclosure: catalog always; bodies only via page suggestions, skill-intent match, or `load_skill`
 - [ ] Validate skills for readable errors: bad manifest, missing references, unsupported tool names, disabled tools.
-- [ ] Inject relevant skill guidance through existing `SkillContextResolver` / runtime hook flow.
+- [x] Inject relevant skill guidance through existing `SkillContextResolver` / runtime hook flow. {Grok/Cursor} — `SkillSelectionService` + `SkillContextInjectionHook` + `load_skill`
 - [ ] Add admin/operator visibility for installed skills and why a skill was or was not applied.
 
 ### Phase 4 — Computer-Use Readiness

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Orchestration;
 
 use App\Modules\Core\AI\DTO\Orchestration\SkillPackManifest;
@@ -6,6 +7,15 @@ use App\Modules\Core\AI\DTO\Orchestration\SkillPackPromptResource;
 use App\Modules\Core\AI\DTO\Orchestration\SkillPackReference;
 use App\Modules\Core\AI\Enums\SkillPackStatus;
 
+/**
+ * Discovers ownership-scoped filesystem skills by path contract.
+ *
+ * Roots (module-system discovery):
+ * - `.agents/skills/` → `core.{slug}`
+ * - `extensions/{owner}/.agents/skills/` → `extension.{owner}.{slug}`
+ * - `extensions/{owner}/{module}/.agents/skills/` → `extension.{owner}.{module}.{slug}`
+ * - `app/Modules/{Domain}/{Module}/.agents/skills/` → `module.{domain}.{module}.{slug}`
+ */
 class FilesystemSkillPackLoader
 {
     /**
@@ -14,9 +24,15 @@ class FilesystemSkillPackLoader
     public function load(): array
     {
         $manifests = [];
+        $seenIds = [];
 
         foreach ($this->skillRoots() as $root) {
             foreach ($this->loadFromRoot($root['path'], $root['owner'], $root['id_prefix']) as $manifest) {
+                if (isset($seenIds[$manifest->id])) {
+                    continue;
+                }
+
+                $seenIds[$manifest->id] = true;
                 $manifests[] = $manifest;
             }
         }
@@ -35,45 +51,74 @@ class FilesystemSkillPackLoader
             'id_prefix' => 'core',
         ]];
 
-        foreach ($this->extensionRoots() as $slug => $extensionRoot) {
+        foreach ($this->domainModuleRoots() as $identity => $moduleRoot) {
             $roots[] = [
-                'path' => $extensionRoot.'/.agents/skills',
-                'owner' => 'extension:'.$slug,
-                'id_prefix' => 'extension.'.$slug,
+                'path' => $moduleRoot.'/.agents/skills',
+                'owner' => 'module:'.$identity,
+                'id_prefix' => 'module.'.$identity,
             ];
         }
 
-        return $roots;
-    }
+        foreach ($this->extensionBundleRoots() as $owner => $bundleRoot) {
+            $roots[] = [
+                'path' => $bundleRoot.'/.agents/skills',
+                'owner' => 'extension:'.$owner,
+                'id_prefix' => 'extension.'.$owner,
+            ];
 
-    /**
-     * @return array<string, string>
-     */
-    private function extensionRoots(): array
-    {
-        $roots = [];
-
-        foreach (['extensions'] as $base) {
-            $basePath = base_path($base);
-            if (! is_dir($basePath)) {
-                continue;
+            foreach ($this->extensionModuleRootsUnderBundle($bundleRoot) as $module) {
+                $roots[] = [
+                    'path' => $bundleRoot.'/'.$module.'/.agents/skills',
+                    'owner' => 'extension:'.$owner.'/'.$module,
+                    'id_prefix' => 'extension.'.$owner.'.'.$module,
+                ];
             }
-
-            $roots = array_merge($roots, $this->extensionRootsUnderBase($basePath));
         }
 
         return $roots;
     }
 
     /**
-     * @return array<string, string>
+     * @return array<string, string> domain/module identity → absolute module root
      */
-    private function extensionRootsUnderBase(string $basePath): array
+    private function domainModuleRoots(): array
     {
         $roots = [];
+        $modulesBase = base_path('app/Modules');
+
+        if (! is_dir($modulesBase)) {
+            return [];
+        }
+
+        foreach (glob($modulesBase.'/*', GLOB_ONLYDIR) ?: [] as $domainPath) {
+            $domain = $this->normalizeSlug(basename($domainPath));
+
+            foreach (glob($domainPath.'/*', GLOB_ONLYDIR) ?: [] as $modulePath) {
+                $module = $this->normalizeSlug(basename($modulePath));
+                $roots[$domain.'.'.$module] = $modulePath;
+            }
+        }
+
+        return $roots;
+    }
+
+    /**
+     * Extension bundle roots keyed by owner slug (kiat, custom/foo → foo, etc.).
+     *
+     * @return array<string, string>
+     */
+    private function extensionBundleRoots(): array
+    {
+        $roots = [];
+        $basePath = base_path('extensions');
+
+        if (! is_dir($basePath)) {
+            return [];
+        }
 
         foreach (glob($basePath.'/*', GLOB_ONLYDIR) ?: [] as $path) {
             $slug = basename($path);
+
             if (in_array($slug, ['custom', 'vendor'], true)) {
                 foreach (glob($path.'/*', GLOB_ONLYDIR) ?: [] as $nested) {
                     $roots[basename($nested)] = $nested;
@@ -86,6 +131,28 @@ class FilesystemSkillPackLoader
         }
 
         return $roots;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extensionModuleRootsUnderBundle(string $bundleRoot): array
+    {
+        $modules = [];
+
+        foreach (glob($bundleRoot.'/*', GLOB_ONLYDIR) ?: [] as $path) {
+            $name = basename($path);
+
+            if (str_starts_with($name, '.') || in_array($name, ['docs', 'vendor', 'node_modules'], true)) {
+                continue;
+            }
+
+            $modules[] = $name;
+        }
+
+        sort($modules);
+
+        return $modules;
     }
 
     /**
@@ -108,24 +175,27 @@ class FilesystemSkillPackLoader
             }
 
             $id = $idPrefix.'.'.$this->normalizeSlug($slug);
+            $name = $this->nameFromContent($content) ?? $this->titleFromSlug($slug);
+            $description = $this->descriptionFromContent($content);
+
             $manifests[] = new SkillPackManifest(
                 id: $id,
                 version: '1.0.0',
-                name: $this->titleFromSlug($slug),
-                description: $this->descriptionFromContent($content),
+                name: $name,
+                description: $description,
                 owner: $owner,
                 promptResources: [
                     new SkillPackPromptResource(
                         label: 'skill-'.$this->normalizeSlug($slug),
-                        content: '## Skill: '.$this->titleFromSlug($slug)."\n\n".$content,
+                        content: '## Skill: '.$name."\n\n".$content,
                         order: 300,
                     ),
                 ],
                 references: [
                     new SkillPackReference(
-                        title: $this->titleFromSlug($slug),
+                        title: $name,
                         path: $this->relativePath($skillFile),
-                        summary: $this->descriptionFromContent($content),
+                        summary: $description,
                     ),
                 ],
                 readinessChecks: ['SKILL.md exists and is readable'],
@@ -146,9 +216,26 @@ class FilesystemSkillPackLoader
         return str($slug)->replace(['-', '_'], ' ')->title()->toString();
     }
 
+    private function nameFromContent(string $content): ?string
+    {
+        $frontmatter = $this->frontmatter($content);
+        $name = $frontmatter['name'] ?? null;
+
+        return is_string($name) && trim($name) !== '' ? trim($name) : null;
+    }
+
     private function descriptionFromContent(string $content): string
     {
-        foreach (explode("\n", $content) as $line) {
+        $frontmatter = $this->frontmatter($content);
+        $description = $frontmatter['description'] ?? null;
+
+        if (is_string($description) && trim($description) !== '') {
+            return mb_substr(trim($description), 0, 200);
+        }
+
+        $body = $this->bodyWithoutFrontmatter($content);
+
+        foreach (explode("\n", $body) as $line) {
             $line = trim($line, " \t#");
             if ($line !== '') {
                 return mb_substr($line, 0, 200);
@@ -158,12 +245,51 @@ class FilesystemSkillPackLoader
         return 'Filesystem skill';
     }
 
+    /**
+     * @return array<string, string>
+     */
+    private function frontmatter(string $content): array
+    {
+        if (! str_starts_with(ltrim($content), '---')) {
+            return [];
+        }
+
+        if (! preg_match('/^---\s*\n(.*?)\n---\s*\n/s', ltrim($content), $matches)) {
+            return [];
+        }
+
+        $fields = [];
+
+        foreach (explode("\n", $matches[1]) as $line) {
+            if (! str_contains($line, ':')) {
+                continue;
+            }
+
+            [$key, $value] = explode(':', $line, 2);
+            $fields[trim($key)] = trim($value);
+        }
+
+        return $fields;
+    }
+
+    private function bodyWithoutFrontmatter(string $content): string
+    {
+        $trimmed = ltrim($content);
+
+        if (! preg_match('/^---\s*\n.*?\n---\s*\n(.*)$/s', $trimmed, $matches)) {
+            return $content;
+        }
+
+        return $matches[1];
+    }
+
     private function relativePath(string $path): string
     {
         $base = rtrim(base_path(), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
+        $normalized = str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
 
-        return str_starts_with($path, $base)
-            ? substr($path, strlen($base))
-            : $path;
+        return str_starts_with($normalized, $base)
+            ? str_replace('\\', '/', substr($normalized, strlen($base)))
+            : str_replace('\\', '/', $path);
     }
 }

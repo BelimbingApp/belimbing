@@ -323,13 +323,18 @@ Implemented outcome:
 - repository work has an explicit target surface: `core` or `extension:<slug>`
 - core repository tools reject extension paths unless the caller selects the matching extension surface
 - extension surfaces are discovered under `extensions/`, `extensions/custom/`, and `extensions/vendor/`
-- filesystem skills are loaded from BLB core and extension-owned `.agents/skills/*/SKILL.md` roots
+- filesystem skills are loaded from BLB core, domain-module, and extension-owned `.agents/skills/*/SKILL.md` roots (bundle root and nested `extensions/{owner}/{module}`)
+- Lara runtime context includes a compact `skills.catalog` (id/name/description/owner/path) plus extension module identities
+- relevant skill bodies are injected via `SkillSelectionService` + `SkillContextInjectionHook` (page suggestions and skill-intent message matches, capped) and on demand through the `load_skill` tool
 - broad `read`, `search`, and `edit` tools remain registered for explicit profiles and future agents, but are not Lara's default coding/chat path
 
 Implemented services and tools:
 
 - `RepositorySurfaceResolver`
 - `FilesystemSkillPackLoader`
+- `SkillSelectionService`
+- `SkillContextInjectionHook`
+- `load_skill`
 - Lara default allowlist in `ChatTurnRunner`
 - `read`
 - `search`
@@ -347,7 +352,8 @@ Remaining gaps:
 - repository write results do not yet persist before/after snapshots in run metadata
 - remote/origin enforcement for core vs extension repositories is not complete
 - automatic cross-surface work splitting and completion-evidence policy are runtime work, not yet enforced
-- filesystem skills are loaded and ownership-labelled, but task-time filtering and operator lifecycle UI are still pending
+- operator skill lifecycle UI and company skill overrides are still pending
+- headless CLI skill execution (kiat AgentTaskRunner convergence) remains a separate plan
 
 Native Windows runtime expectations:
 

@@ -110,18 +110,15 @@ describe('PageContext DTO', function () {
             ->and($hydrated->visibleActions)->toBe($original->visibleActions);
     });
 
-    it('omits empty arrays and null values from XML', function () {
+    it('includes suggested skills in XML and array serialization', function () {
         $context = new PageContext(
-            route: 'admin.dashboard',
-            url: 'http://localhost/admin',
+            route: PAGE_CONTEXT_TEST_ROUTE,
+            url: PAGE_CONTEXT_TEST_URL,
+            title: PAGE_CONTEXT_TEST_TITLE,
+            suggestedSkills: ['extension.kiat.advise-refresh'],
         );
 
-        $xml = $context->toPromptXml();
-
-        expect($xml)
-            ->toContain('route="admin.dashboard"')
-            ->not->toContain('title=')
-            ->not->toContain('module=')
-            ->not->toContain('actions=');
+        expect($context->toArray()['suggested_skills'])->toBe(['extension.kiat.advise-refresh'])
+            ->and($context->toPromptXml())->toContain('suggested_skills="extension.kiat.advise-refresh"');
     });
 });

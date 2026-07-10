@@ -44,7 +44,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $this->hydrateTaskState();
     }
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         return new PageContext(
             route: 'admin.ai.task-models',

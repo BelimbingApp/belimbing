@@ -48,6 +48,7 @@ class ChatTurnRunner
         'edit',
         'active_page_snapshot',
         'bash',
+        'load_skill',
     ];
 
     /**

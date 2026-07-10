@@ -91,7 +91,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $executionControlsOverride = null,
         ?RuntimeInvocationContext $context = null,
     ): array {
-        $this->sessionContext->set($sessionId);
+        $this->beginSessionContext($sessionId, $employeeId, $messages);
 
         try {
             $policy ??= ExecutionPolicy::interactive();
@@ -152,6 +152,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $allowedToolNames,
             );
 
+            $result['meta'] = $this->withResolvedSkillPackMeta($result['meta'] ?? []);
+
             if (isset($result['meta']['error_type'])) {
                 $this->runRecorder->fail(
                     $runId,
@@ -206,7 +208,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $executionControlsOverride = null,
         ?RuntimeInvocationContext $context = null,
     ): \Generator {
-        $this->sessionContext->set($sessionId);
+        $this->beginSessionContext($sessionId, $employeeId, $messages);
 
         try {
             $policy ??= ExecutionPolicy::interactive();
@@ -907,6 +909,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             $meta['hooks'] = $toolLoopState['hookMetadata'];
         }
 
+        $meta = $this->withResolvedSkillPackMeta($meta);
+
         $this->runRecorder->complete($runId, $meta);
 
         yield ['event' => 'done', 'data' => [
@@ -1349,5 +1353,58 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'effective_tools' => $toolNames,
             'tool_count' => count($toolNames),
         ]);
+    }
+
+    /**
+     * @param  list<mixed>  $messages
+     */
+    private function beginSessionContext(?string $sessionId, int $employeeId, array $messages): void
+    {
+        $this->sessionContext->set($sessionId);
+        $this->sessionContext->remember('employee_id', $employeeId);
+
+        $latest = $this->latestUserMessageContent($messages);
+
+        if ($latest !== null) {
+            $this->sessionContext->remember('latest_user_message', $latest);
+        }
+    }
+
+    /**
+     * @param  list<mixed>  $messages
+     */
+    private function latestUserMessageContent(array $messages): ?string
+    {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $message = $messages[$i];
+            $role = is_object($message) ? ($message->role ?? null) : ($message['role'] ?? null);
+            $content = is_object($message) ? ($message->content ?? null) : ($message['content'] ?? null);
+
+            if ($role === 'user' && is_string($content) && trim($content) !== '') {
+                return $content;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function withResolvedSkillPackMeta(array $meta): array
+    {
+        $resolved = $this->sessionContext->recall('resolved_skill_pack_ids');
+
+        if (! is_array($resolved) || $resolved === []) {
+            return $meta;
+        }
+
+        $meta['resolved_skill_pack_ids'] = array_values(array_filter(
+            $resolved,
+            fn (mixed $id): bool => is_string($id) && $id !== '',
+        ));
+
+        return $meta;
     }
 }

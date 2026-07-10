@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\DTO;
 
 /**
@@ -23,6 +24,7 @@ final readonly class PageContext
      * @param  list<string>  $breadcrumbs  Breadcrumb trail
      * @param  list<string>  $filters  Active filter labels
      * @param  string|null  $searchQuery  Active search query text
+     * @param  list<string>  $suggestedSkills  Skill pack ids or slugs relevant to this page
      */
     public function __construct(
         public string $route,
@@ -37,6 +39,7 @@ final readonly class PageContext
         public array $breadcrumbs = [],
         public array $filters = [],
         public ?string $searchQuery = null,
+        public array $suggestedSkills = [],
     ) {}
 
     /**
@@ -59,6 +62,7 @@ final readonly class PageContext
             breadcrumbs: $data['breadcrumbs'] ?? [],
             filters: $data['filters'] ?? [],
             searchQuery: $data['search_query'] ?? null,
+            suggestedSkills: $data['suggested_skills'] ?? [],
         );
     }
 
@@ -101,6 +105,10 @@ final readonly class PageContext
             $attrs[] = 'search="'.$this->xmlEscape($this->searchQuery).'"';
         }
 
+        if ($this->suggestedSkills !== []) {
+            $attrs[] = 'suggested_skills="'.$this->xmlEscape(implode(', ', $this->suggestedSkills)).'"';
+        }
+
         return '<current_page '.implode(' ', $attrs).' />';
     }
 
@@ -124,7 +132,38 @@ final readonly class PageContext
             'breadcrumbs' => $this->breadcrumbs !== [] ? $this->breadcrumbs : null,
             'filters' => $this->filters !== [] ? $this->filters : null,
             'search_query' => $this->searchQuery,
+            'suggested_skills' => $this->suggestedSkills !== [] ? $this->suggestedSkills : null,
         ], fn (mixed $v): bool => $v !== null);
+    }
+
+    /**
+     * Return a copy with selected fields replaced.
+     *
+     * @param  array{
+     *     route?: string,
+     *     url?: string,
+     *     title?: string|null,
+     *     module?: string|null,
+     *     resource_type?: string|null,
+     *     resource_id?: int|string|null,
+     *     tabs?: list<string>,
+     *     active_tab?: string|null,
+     *     visible_actions?: list<string>,
+     *     breadcrumbs?: list<string>,
+     *     filters?: list<string>,
+     *     search_query?: string|null,
+     *     suggested_skills?: list<string>
+     * }  $overrides
+     */
+    public function with(array $overrides): self
+    {
+        $data = $this->toArray();
+
+        foreach ($overrides as $key => $value) {
+            $data[$key] = $value;
+        }
+
+        return self::fromArray($data);
     }
 
     private function xmlEscape(string $value): string

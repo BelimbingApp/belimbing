@@ -240,7 +240,7 @@ class Providers extends Component implements ProvidesLaraPageContext
         $this->notify(__('Advanced settings reset.'));
     }
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         $companyId = $this->getCompanyId();
         $connectedCount = $companyId !== null

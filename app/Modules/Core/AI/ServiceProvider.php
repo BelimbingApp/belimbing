@@ -77,9 +77,11 @@ use App\Modules\Core\AI\Services\Orchestration\OrchestrationPolicyService;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
 use App\Modules\Core\AI\Services\Orchestration\SessionSpawnManager;
+use App\Modules\Core\AI\Services\Orchestration\SkillContextInjectionHook;
 use App\Modules\Core\AI\Services\Orchestration\SkillContextResolver;
 use App\Modules\Core\AI\Services\Orchestration\SkillPackRegistry;
 use App\Modules\Core\AI\Services\Orchestration\SkillPacks\KnowledgeSkillPack;
+use App\Modules\Core\AI\Services\Orchestration\SkillSelectionService;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Services\PageContextHolder;
 use App\Modules\Core\AI\Services\PageContextResolver;
@@ -110,6 +112,7 @@ use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
 use App\Modules\Core\AI\Tools\EditTool;
 use App\Modules\Core\AI\Tools\GuideTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
+use App\Modules\Core\AI\Tools\LoadSkillTool;
 use App\Modules\Core\AI\Tools\MemoryGetTool;
 use App\Modules\Core\AI\Tools\MemorySearchTool;
 use App\Modules\Core\AI\Tools\MemoryStatusTool;
@@ -202,10 +205,12 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(SkillPackRegistry::class);
         $this->app->singleton(FilesystemSkillPackLoader::class);
         $this->app->singleton(SkillContextResolver::class);
+        $this->app->singleton(SkillSelectionService::class);
         $this->app->singleton(RuntimeHookRegistry::class);
         $this->app->singleton(RuntimeHookRunner::class);
 
         $this->registerSkillPacks();
+        $this->registerSkillRuntimeHooks();
 
         // Browser subsystem
         $this->app->singleton(BrowserSessionRepository::class);
@@ -308,6 +313,15 @@ class ServiceProvider extends BaseServiceProvider
         });
     }
 
+    private function registerSkillRuntimeHooks(): void
+    {
+        $this->app->afterResolving(RuntimeHookRegistry::class, function (RuntimeHookRegistry $registry): void {
+            if (! $registry->hasIdentifier('skill.context-injection')) {
+                $registry->register($this->app->make(SkillContextInjectionHook::class));
+            }
+        });
+    }
+
     /**
      * Build all tool instances once and wire both registries.
      *
@@ -381,6 +395,7 @@ class ServiceProvider extends BaseServiceProvider
             $app->make(EditTool::class),
             $app->make(GuideTool::class),
             new ImageAnalysisTool,
+            $app->make(LoadSkillTool::class),
             $this->buildMemoryGetTool($app),
             $this->buildMemoryStatusTool($app),
             $app->make(MessageTool::class),

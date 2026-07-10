@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
@@ -145,7 +146,9 @@ class PageContextResolver
             $component = app($componentClass);
 
             if ($component instanceof ProvidesLaraPageContext) {
-                return $component->pageContext();
+                $this->hydrateRouteParameters($component, $route);
+
+                return $this->enrichFromUrl($component->pageContext($url), $url, $route);
             }
         } catch (\Throwable) {
             // Fall through to route-derived context
@@ -154,6 +157,67 @@ class PageContextResolver
         $routeName = $route->getName();
 
         return is_string($routeName) ? $this->resolveFromRoute($route, $routeName, $url) : null;
+    }
+
+    /**
+     * Copy matched route parameters onto public Livewire component properties.
+     */
+    private function hydrateRouteParameters(object $component, Route $route): void
+    {
+        foreach ($route->parameters() as $name => $value) {
+            if (! property_exists($component, $name)) {
+                continue;
+            }
+
+            if (is_object($value) && method_exists($value, 'getKey')) {
+                $component->{$name} = $value;
+
+                continue;
+            }
+
+            if (is_scalar($value) || $value === null) {
+                $component->{$name} = $value;
+            }
+        }
+    }
+
+    /**
+     * Ensure client URL (and hash tab) win when the component omitted them.
+     */
+    private function enrichFromUrl(PageContext $context, string $url, Route $route): PageContext
+    {
+        $overrides = [];
+
+        if ($context->url === '' || ! str_contains($context->url, '://')) {
+            $overrides['url'] = $url;
+        }
+
+        $hashTab = $this->hashFragment($url);
+
+        if ($context->activeTab === null && $hashTab !== null) {
+            $overrides['active_tab'] = $hashTab;
+        }
+
+        if ($context->resourceId === null) {
+            $resourceId = $this->resourceIdFromRoute($route);
+
+            if ($resourceId !== null) {
+                $overrides['resource_id'] = $resourceId;
+            }
+        }
+
+        return $overrides === [] ? $context : $context->with($overrides);
+    }
+
+    private function hashFragment(string $url): ?string
+    {
+        $fragment = parse_url($url, PHP_URL_FRAGMENT);
+
+        if (! is_string($fragment) || trim($fragment) === '') {
+            return null;
+        }
+
+        return trim($fragment);
     }
 
     /**

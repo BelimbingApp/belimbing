@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Livewire\Roles;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -73,7 +74,7 @@ class Index extends Component implements ProvidesLaraPageContext
         ]);
     }
 
-    public function pageContext(): PageContext
+    public function pageContext(?string $pageUrl = null): PageContext
     {
         return new PageContext(
             route: 'admin.roles.index',

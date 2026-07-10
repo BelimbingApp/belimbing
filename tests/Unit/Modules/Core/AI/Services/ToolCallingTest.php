@@ -152,6 +152,7 @@ describe('AgentToolRegistry', function () {
         $registry->register(makeSimpleTool('search'));
         $registry->register(makeSimpleTool('edit'));
         $registry->register(makeSimpleTool('active_page_snapshot'));
+        $registry->register(makeSimpleTool('load_skill'));
         $registry->register(makeSimpleTool('browser'));
         $registry->register(makeSimpleTool('unlisted'));
 
