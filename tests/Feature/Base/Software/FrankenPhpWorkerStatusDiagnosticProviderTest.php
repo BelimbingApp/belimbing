@@ -9,6 +9,10 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 
+const FRANKENPHP_RELOAD_NEEDS_ATTENTION = 'FrankenPHP worker reload needs attention';
+const FRANKENPHP_TEST_ADMIN_CONFIG_URL = 'http://127.0.0.1:2020/config/apps/frankenphp';
+const FRANKENPHP_TEST_ADMIN_RESTART_URL = 'http://127.0.0.1:2020/frankenphp/workers/restart';
+
 it('reports a pending frankenphp worker reload', function (): void {
     $pendingSince = now()->utc()->toIso8601String();
     Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, $pendingSince, now()->addMinute());
@@ -38,7 +42,7 @@ it('reports a stale pending frankenphp worker reload as needing attention', func
     expect($diagnostics)->toHaveCount(1);
     expect($diagnostics[0]->id)->toBe('software.frankenphp-worker-reload.stalled')
         ->and($diagnostics[0]->severity)->toBe(StatusVariant::Error)
-        ->and($diagnostics[0]->summary)->toBe('FrankenPHP worker reload needs attention')
+        ->and($diagnostics[0]->summary)->toBe(FRANKENPHP_RELOAD_NEEDS_ATTENTION)
         ->and($diagnostics[0]->metadata)->toMatchArray([
             'pending_since' => $pendingSince,
             'status' => 'running',
@@ -49,7 +53,7 @@ it('reports a failed last frankenphp worker reload', function (): void {
     app(DeploymentRunHistory::class)->rememberReload(
         ok: false,
         message: 'Warning: web workers were not reloaded because the FrankenPHP admin API could not be reached.',
-        adminUrl: 'http://127.0.0.1:2020/config/apps/frankenphp',
+        adminUrl: FRANKENPHP_TEST_ADMIN_CONFIG_URL,
     );
 
     $diagnostics = collect(app(FrankenPhpWorkerStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
@@ -57,10 +61,10 @@ it('reports a failed last frankenphp worker reload', function (): void {
     expect($diagnostics)->toHaveCount(1);
     expect($diagnostics[0]->id)->toBe('software.frankenphp-worker-reload.failed')
         ->and($diagnostics[0]->severity)->toBe(StatusVariant::Error)
-        ->and($diagnostics[0]->summary)->toBe('FrankenPHP worker reload needs attention')
+        ->and($diagnostics[0]->summary)->toBe(FRANKENPHP_RELOAD_NEEDS_ATTENTION)
         ->and($diagnostics[0]->metadata)->toMatchArray([
             'message' => 'Warning: web workers were not reloaded because the FrankenPHP admin API could not be reached.',
-            'admin_url' => 'http://127.0.0.1:2020/config/apps/frankenphp',
+            'admin_url' => FRANKENPHP_TEST_ADMIN_CONFIG_URL,
         ]);
 });
 
@@ -70,12 +74,12 @@ it('clears the failed reload diagnostic after a successful reload is recorded', 
     $history->rememberReload(
         ok: false,
         message: 'Warning: web workers were not reloaded.',
-        adminUrl: 'http://127.0.0.1:2020/config/apps/frankenphp',
+        adminUrl: FRANKENPHP_TEST_ADMIN_CONFIG_URL,
     );
     $history->rememberReload(
         ok: true,
         message: 'Web workers reloaded.',
-        adminUrl: 'http://127.0.0.1:2020/frankenphp/workers/restart',
+        adminUrl: FRANKENPHP_TEST_ADMIN_RESTART_URL,
     );
 
     expect(collect(app(FrankenPhpWorkerStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser())))->toBeEmpty();
@@ -95,14 +99,14 @@ it('surfaces frankenphp reload diagnostics through the status bar aggregator', f
     app(DeploymentRunHistory::class)->rememberReload(
         ok: false,
         message: 'Warning: web workers were not reloaded.',
-        adminUrl: 'http://127.0.0.1:2020/config/apps/frankenphp',
+        adminUrl: FRANKENPHP_TEST_ADMIN_CONFIG_URL,
     );
 
     $response = $this->actingAs(createAdminUser())
         ->get(route('admin.system.info.index'));
 
     $response->assertOk()
-        ->assertSee('FrankenPHP worker reload needs attention')
+        ->assertSee(FRANKENPHP_RELOAD_NEEDS_ATTENTION)
         ->assertSee('href="'.route('admin.system.software.updates.index').'"', false);
 });
 
