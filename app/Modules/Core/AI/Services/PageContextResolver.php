@@ -161,22 +161,23 @@ class PageContextResolver
 
     /**
      * Copy matched route parameters onto public Livewire component properties.
+     *
+     * matchRoute() binds a synthetic request without SubstituteBindings, so
+     * values are always raw URL segments. A property whose declared type
+     * rejects the segment (e.g. a typed model) is skipped instead of
+     * aborting hydration for the whole component.
      */
     private function hydrateRouteParameters(object $component, Route $route): void
     {
         foreach ($route->parameters() as $name => $value) {
-            if (! property_exists($component, $name)) {
+            if (! property_exists($component, $name) || (! is_scalar($value) && $value !== null)) {
                 continue;
             }
 
-            if (is_object($value) && method_exists($value, 'getKey')) {
+            try {
                 $component->{$name} = $value;
-
-                continue;
-            }
-
-            if (is_scalar($value) || $value === null) {
-                $component->{$name} = $value;
+            } catch (\TypeError) {
+                // Property type does not accept the raw segment; leave it unset.
             }
         }
     }

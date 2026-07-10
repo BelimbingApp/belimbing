@@ -76,6 +76,10 @@ it('returns an empty selection when the message does not request a skill', funct
     expect($this->selection->selectForTurn(Employee::LARA_ID, 'What is the latest close?'))->toBe([]);
 });
 
+it('does not treat verb phrases like "use the" as skill intent', function (): void {
+    expect($this->selection->selectForTurn(Employee::LARA_ID, 'Use the annual report to check revenue'))->toBe([]);
+});
+
 it('selects page-suggested skills first', function (): void {
     $page = new PageContext(
         route: 'investment.company-research.show',

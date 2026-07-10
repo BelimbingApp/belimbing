@@ -5,6 +5,7 @@ namespace App\Modules\Core\AI\Services\Orchestration;
 use App\Modules\Core\AI\DTO\Orchestration\SkillPackManifest;
 use App\Modules\Core\AI\DTO\PageContext;
 use App\Modules\Core\AI\Services\PageContextHolder;
+use App\Modules\Core\Employee\Models\Employee;
 
 /**
  * Selects which skill packs should inject full guidance for a turn.
@@ -104,14 +105,18 @@ class SkillSelectionService
     /**
      * Compact catalog entries for Lara runtime context (no skill bodies).
      *
+     * Filtered by the same applicability policy as resolvePack() so the
+     * catalog never advertises a skill load_skill would refuse.
+     *
      * @return list<array{id: string, name: string, description: string, owner: string|null, path: string|null}>
      */
-    public function catalogEntries(): array
+    public function catalogEntries(?int $employeeId = null): array
     {
+        $employeeId ??= Employee::LARA_ID;
         $entries = [];
 
         foreach ($this->registry->all() as $manifest) {
-            if (! $manifest->isAvailable()) {
+            if (! $this->policy->isSkillPackApplicable($manifest, $employeeId)) {
                 continue;
             }
 
@@ -209,7 +214,9 @@ class SkillSelectionService
 
     private function mentionsSkillIntent(string $haystack): bool
     {
-        foreach (['skill', 'procedure', 'playbook', 'run the', 'use the', 'follow the'] as $cue) {
+        // Noun cues only — verb phrases like "use the" match too much
+        // ordinary chat and auto-inject bodies on false positives.
+        foreach (['skill', 'procedure', 'playbook'] as $cue) {
             if (str_contains($haystack, $cue)) {
                 return true;
             }

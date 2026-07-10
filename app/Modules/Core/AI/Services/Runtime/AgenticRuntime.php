@@ -1378,14 +1378,47 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         for ($i = count($messages) - 1; $i >= 0; $i--) {
             $message = $messages[$i];
             $role = is_object($message) ? ($message->role ?? null) : ($message['role'] ?? null);
-            $content = is_object($message) ? ($message->content ?? null) : ($message['content'] ?? null);
 
-            if ($role === 'user' && is_string($content) && trim($content) !== '') {
-                return $content;
+            if ($role !== 'user') {
+                continue;
             }
+
+            // Always answer from the newest user message — an older turn's
+            // text must not drive skill selection for this turn.
+            $content = is_object($message) ? ($message->content ?? null) : ($message['content'] ?? null);
+            $text = $this->messageContentText($content);
+
+            return $text !== '' ? $text : null;
         }
 
         return null;
+    }
+
+    /**
+     * Extract text from string content or multimodal content blocks.
+     */
+    private function messageContentText(mixed $content): string
+    {
+        if (is_string($content)) {
+            return trim($content);
+        }
+
+        if (! is_array($content)) {
+            return '';
+        }
+
+        $parts = [];
+
+        foreach ($content as $block) {
+            $type = is_object($block) ? ($block->type ?? null) : (is_array($block) ? ($block['type'] ?? null) : null);
+            $text = is_object($block) ? ($block->text ?? null) : (is_array($block) ? ($block['text'] ?? null) : null);
+
+            if ($type === 'text' && is_string($text) && trim($text) !== '') {
+                $parts[] = trim($text);
+            }
+        }
+
+        return implode("\n", $parts);
     }
 
     /**

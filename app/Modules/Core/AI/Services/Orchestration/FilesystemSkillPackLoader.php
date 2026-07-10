@@ -254,7 +254,7 @@ class FilesystemSkillPackLoader
             return [];
         }
 
-        if (! preg_match('/^---\s*\n(.*?)\n---\s*\n/s', ltrim($content), $matches)) {
+        if (! preg_match('/^---\s*\n(.*?)\n---\s*(?:\n|$)/s', ltrim($content), $matches)) {
             return [];
         }
 
@@ -266,7 +266,7 @@ class FilesystemSkillPackLoader
             }
 
             [$key, $value] = explode(':', $line, 2);
-            $fields[trim($key)] = trim($value);
+            $fields[trim($key)] = trim(trim($value), '"\'');
         }
 
         return $fields;
@@ -276,11 +276,11 @@ class FilesystemSkillPackLoader
     {
         $trimmed = ltrim($content);
 
-        if (! preg_match('/^---\s*\n.*?\n---\s*\n(.*)$/s', $trimmed, $matches)) {
+        if (! preg_match('/^---\s*\n.*?\n---\s*(?:\n(.*))?$/s', $trimmed, $matches)) {
             return $content;
         }
 
-        return $matches[1];
+        return $matches[1] ?? '';
     }
 
     private function relativePath(string $path): string

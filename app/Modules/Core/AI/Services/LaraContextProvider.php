@@ -136,7 +136,7 @@ class LaraContextProvider
     /**
      * Compact skill catalog for progressive disclosure.
      *
-     * @return array{catalog: list<array{id: string, name: string, description: string, owner: string|null, path: string|null}}, usage: string}
+     * @return array{catalog: list<array{id: string, name: string, description: string, owner: string|null, path: string|null}>, usage: string}
      */
     private function skillsContext(): array
     {

@@ -2,7 +2,10 @@
 
 namespace App\Modules\Core\AI\Tools;
 
-use App\Base\AI\Tools\AbstractReadOnlyMemoryTool;
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Tools\AbstractTool;
+use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\Orchestration\SkillSelectionService;
@@ -15,12 +18,24 @@ use App\Modules\Core\Employee\Models\Employee;
  * Progressive disclosure: the runtime context lists skill ids; this tool
  * pulls the full SKILL.md body when Lara needs the procedure.
  */
-class LoadSkillTool extends AbstractReadOnlyMemoryTool
+class LoadSkillTool extends AbstractTool
 {
+    use ProvidesToolMetadata;
+
     public function __construct(
         private readonly SkillSelectionService $selection,
         private readonly RuntimeSessionContext $sessionContext,
     ) {}
+
+    public function category(): ToolCategory
+    {
+        return ToolCategory::CONTEXT;
+    }
+
+    public function riskClass(): ToolRiskClass
+    {
+        return ToolRiskClass::READ_ONLY;
+    }
 
     public function name(): string
     {
