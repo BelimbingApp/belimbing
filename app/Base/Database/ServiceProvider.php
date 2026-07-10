@@ -38,6 +38,7 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
+        $this->mergeConfigFrom(__DIR__.'/Config/bridge.php', 'bridge');
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
 

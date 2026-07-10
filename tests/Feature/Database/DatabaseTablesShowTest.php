@@ -47,5 +47,7 @@ test('database table show page marks timestamp columns with shared timezone-awar
     $response->assertOk()
         ->assertSee('data-company-timezone=', false)
         ->assertSee('data-raw-text=', false)
-        ->assertSee('window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })', false);
+        ->assertSee('window.blbFormatDateTimeElement?.($el)', false)
+        ->assertDontSee('tableTzMode', false)
+        ->assertDontSee('Cycle timestamp display mode.');
 });

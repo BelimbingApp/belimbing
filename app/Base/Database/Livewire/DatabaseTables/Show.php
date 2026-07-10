@@ -2,17 +2,23 @@
 
 namespace App\Base\Database\Livewire\DatabaseTables;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
+use App\Base\Database\Exceptions\BridgeCaptureException;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Services\Bridge\DiagnosticRowCapture;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Str as BlbStr;
+use App\Modules\Core\User\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Throwable;
 
 /**
  * Generic table viewer — displays contents of any registered database table.
@@ -47,6 +53,24 @@ class Show extends Component
      * @var list<string>
      */
     public array $orphanedRegistryNotices = [];
+
+    /**
+     * Primary key values of rows selected for diagnostic capture.
+     *
+     * @var list<string>
+     */
+    public array $selectedRowIds = [];
+
+    public bool $showCaptureModal = false;
+
+    /**
+     * @var array{tables: list<array{table: string, depth: int, row_count: int, redacted_columns: list<string>}>, total_rows: int, selected_rows: int, payload_size_bytes: int, preview_sha256: string, source: array<string, mixed>}|null
+     */
+    public ?array $capturePreview = null;
+
+    public ?string $captureStatusMessage = null;
+
+    public ?string $captureStatusVariant = null;
 
     public function schemaStateVariant(string $schemaState): string
     {
@@ -204,6 +228,119 @@ class Show extends Component
     }
 
     /**
+     * Clear the diagnostic capture row selection.
+     */
+    public function clearSelection(): void
+    {
+        $this->selectedRowIds = [];
+    }
+
+    /**
+     * Resolve the dependency closure preview and open the capture dialog.
+     */
+    public function openCaptureDialog(?DiagnosticRowCapture $capture = null): void
+    {
+        $capture ??= app(DiagnosticRowCapture::class);
+
+        $this->requireCapability('admin.system.database-bridge.create');
+        $this->captureStatusMessage = null;
+
+        try {
+            $this->capturePreview = $capture->preview($this->tableName, $this->selectedRowIds);
+        } catch (BridgeCaptureException $e) {
+            $this->flashCaptureStatus($e->getMessage(), 'warning');
+
+            return;
+        } catch (Throwable $e) {
+            report($e);
+            $this->flashCaptureStatus(__('Could not resolve dependencies. Review the application logs and try again.'), 'danger');
+
+            return;
+        }
+
+        $this->showCaptureModal = true;
+    }
+
+    public function closeCaptureDialog(): void
+    {
+        $this->showCaptureModal = false;
+        $this->capturePreview = null;
+    }
+
+    /**
+     * Write the reviewed diagnostic capture package to protected storage.
+     */
+    public function createCapturePackage(?DiagnosticRowCapture $capture = null): void
+    {
+        $capture ??= app(DiagnosticRowCapture::class);
+
+        $this->requireCapability('admin.system.database-bridge.create');
+
+        try {
+            $result = $capture->capture(
+                $this->tableName,
+                $this->selectedRowIds,
+                $this->captureTrigger(),
+                (string) ($this->capturePreview['preview_sha256'] ?? ''),
+            );
+        } catch (BridgeCaptureException $e) {
+            $this->closeCaptureDialog();
+            $this->flashCaptureStatus($e->getMessage(), 'warning');
+
+            return;
+        } catch (Throwable $e) {
+            report($e);
+            $this->flashCaptureStatus(__('Capture failed. Review the application logs and try again.'), 'danger');
+
+            return;
+        }
+
+        $this->closeCaptureDialog();
+        $this->clearSelection();
+        $this->flashCaptureStatus(
+            __(':id created (:rows rows, :size bytes) at :path. Development import only.', [
+                'id' => $result['package_id'],
+                'rows' => $result['total_rows'],
+                'size' => $result['size_bytes'],
+                'path' => $result['path'],
+            ]),
+            'success',
+        );
+    }
+
+    private function flashCaptureStatus(string $message, string $variant): void
+    {
+        $this->captureStatusMessage = $message;
+        $this->captureStatusVariant = $variant;
+    }
+
+    private function captureTrigger(): string
+    {
+        $user = auth()->user();
+        $userId = $user instanceof User ? (int) $user->id : 0;
+
+        return "ui:user={$userId}";
+    }
+
+    private function requireCapability(string $capability): void
+    {
+        if (! $this->capabilityAllows($capability)) {
+            abort(403, "Capability '{$capability}' is required.");
+        }
+    }
+
+    private function capabilityAllows(string $capability): bool
+    {
+        $user = auth()->user();
+
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        return app(AuthorizationService::class)->can(Actor::forUser($user), $capability)->allowed;
+    }
+
+    /**
      * Track a table in the recently viewed session list.
      */
     private function trackRecentTable(string $tableName): void
@@ -228,6 +365,9 @@ class Show extends Component
         $tableRegistry = TableRegistry::query()
             ->where('table_name', $this->tableName)
             ->first();
+        $capturePrimaryKey = app(DiagnosticRowCapture::class)->primaryKeyColumn($this->tableName);
+        $canCapture = $capturePrimaryKey !== null
+            && $this->capabilityAllows('admin.system.database-bridge.create');
 
         return view('livewire.admin.system.database-tables.show', [
             'tableRegistry' => $tableRegistry,
@@ -247,6 +387,8 @@ class Show extends Component
             'migrationSource' => $migrationSource,
             'tablesGrouped' => $tablesGrouped,
             'recentTables' => $recentTables,
+            'canCapture' => $canCapture,
+            'capturePrimaryKey' => $capturePrimaryKey,
         ]);
     }
 }

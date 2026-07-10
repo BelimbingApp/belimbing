@@ -2,7 +2,6 @@
     @php
         $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
         $dateTimes = app(\App\Base\DateTime\Contracts\DateTimeDisplayService::class);
-        $currentTzMode = $dateTimes->currentMode();
         $companyTimezone = $dateTimes->currentCompanyTimezone();
     @endphp
 
@@ -22,22 +21,6 @@
             <x-ui.button
                 variant="ghost"
                 size="sm"
-                @click="
-                    const modes = ['utc', 'company', 'local'];
-                    const idx = modes.indexOf(tableTzMode);
-                    tableTzMode = modes[(idx + 1) % modes.length];
-                "
-                ::class="tableTzMode !== 'utc' ? 'ring-2 ring-accent' : ''"
-                x-bind:aria-pressed="(tableTzMode !== 'utc').toString()"
-                title="{{ __('Cycle timestamp display: UTC → Company → Local.') }}"
-                aria-label="{{ __('Cycle timestamp display mode.') }}"
-            >
-                <x-icon name="heroicon-o-clock" class="w-4 h-4" />
-                <span x-text="tableTzMode === 'utc' ? '{{ __('UTC') }}' : (tableTzMode === 'company' ? '{{ __('Company') }}' : '{{ __('Local') }}')"></span>
-            </x-ui.button>
-            <x-ui.button
-                variant="ghost"
-                size="sm"
                 wire:click="toggleRawValues"
                 @class(['ring-2 ring-accent' => $this->rawValues])
                 aria-pressed="{{ $this->rawValues ? 'true' : 'false' }}"
@@ -53,10 +36,35 @@
         </div>
     </div>
 
+    @if($canCapture && count($this->selectedRowIds) > 0)
+        <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border-default bg-surface-subtle px-3 py-2">
+            <div class="flex flex-wrap items-center gap-2">
+                <x-ui.badge variant="info">{{ __('Data Bridge') }}</x-ui.badge>
+                <span class="text-sm text-ink tabular-nums">
+                    {{ trans_choice(':count row selected|:count rows selected', count($this->selectedRowIds), ['count' => count($this->selectedRowIds)]) }}
+                </span>
+            </div>
+            <div class="ml-auto flex items-center gap-2">
+                <x-ui.button variant="ghost" size="sm" wire:click="clearSelection">
+                    {{ __('Clear') }}
+                </x-ui.button>
+                <x-ui.button size="sm" wire:click="openCaptureDialog">
+                    <x-icon name="heroicon-o-archive-box" class="w-4 h-4" />
+                    {{ __('Preview package…') }}
+                </x-ui.button>
+            </div>
+        </div>
+    @endif
+
     <x-ui.table container="flush" :caption="__('Table data')">
 
             <x-slot name="head">
                 <tr>
+                    @if($canCapture)
+                        <x-ui.th class="w-8">
+                            <span class="sr-only">{{ __('Select rows') }}</span>
+                        </x-ui.th>
+                    @endif
                     @foreach($columns as $col)
                         @php
                             $outgoingFk = collect($foreignKeys['outgoing'])->firstWhere('column', $col['name']);
@@ -89,6 +97,17 @@
 
                 @forelse($rows as $row)
                     <tr wire:key="{{ $this->rowKey($row, $loop->index) }}">
+                        @if($canCapture)
+                            @php $captureId = (string) data_get((array) $row, $capturePrimaryKey); @endphp
+                            <td class="px-table-cell-x py-table-cell-y w-8">
+                                <x-ui.checkbox
+                                    id="capture-row-{{ $captureId }}"
+                                    value="{{ $captureId }}"
+                                    wire:model.live="selectedRowIds"
+                                    aria-label="{{ __('Select row :id', ['id' => $captureId]) }}"
+                                />
+                            </td>
+                        @endif
                         @foreach($columns as $col)
                             @php
                                 $value = data_get((array) $row, $col['name']);
@@ -120,7 +139,7 @@
                                                 x-init="
                                                     const apply = () => {
                                                         if (window.blbMountDateTimeElement) {
-                                                            window.blbMountDateTimeElement($el, () => ({ mode: tableTzMode }));
+                                                            window.blbMountDateTimeElement($el, () => ({}));
                                                             return;
                                                         }
 
@@ -129,7 +148,7 @@
 
                                                     apply();
                                                 "
-                                                x-effect="window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })"
+                                                x-effect="window.blbFormatDateTimeElement?.($el)"
                                             >{{ $formatted }}</time>
                                         @else
                                             {{ $formatted }}
@@ -147,7 +166,7 @@
                                             x-init="
                                                 const apply = () => {
                                                     if (window.blbMountDateTimeElement) {
-                                                        window.blbMountDateTimeElement($el, () => ({ mode: tableTzMode }));
+                                                        window.blbMountDateTimeElement($el, () => ({}));
                                                         return;
                                                     }
 
@@ -156,7 +175,7 @@
 
                                                 apply();
                                             "
-                                            x-effect="window.blbFormatDateTimeElement?.($el, { mode: tableTzMode })"
+                                            x-effect="window.blbFormatDateTimeElement?.($el)"
                                         >{{ $formatted }}</time>
                                     @else
                                         {{ $formatted }}
@@ -167,7 +186,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="{{ count($columns) }}" class="px-table-cell-x py-8 text-center text-sm text-muted">
+                        <td colspan="{{ count($columns) + ($canCapture ? 1 : 0) }}" class="px-table-cell-x py-8 text-center text-sm text-muted">
                             {{ $this->search ? __('No rows match your search.') : __('This table is empty.') }}
                         </td>
                     </tr>

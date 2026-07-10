@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Database\Livewire\Backups\Index as BackupsIndex;
+use App\Base\Database\Livewire\Bridge\Index as BridgeIndex;
 use App\Base\Database\Livewire\DatabaseTables\Index as DatabaseTablesIndex;
 use App\Base\Database\Livewire\DatabaseTables\Show as DatabaseTablesShow;
 use App\Base\Database\Livewire\Queries\Index as QueriesIndex;
@@ -33,6 +34,10 @@ Route::middleware('auth')->group(function () {
     Route::get('admin/system/database-backups', BackupsIndex::class)
         ->middleware('authz:admin.system.database-backup.list')
         ->name('admin.system.database-backups.index');
+
+    Route::get('admin/system/database-bridge', BridgeIndex::class)
+        ->middleware('authz:admin.system.database-bridge.view')
+        ->name('admin.system.database-bridge.index');
 
     Route::get('admin/system/database-residue', ResidueIndex::class)
         ->middleware('authz:admin.system.database-residue.view')

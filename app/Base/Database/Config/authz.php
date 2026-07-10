@@ -17,5 +17,11 @@ return [
         // manage gates the destructive cleanup of unclaimed DB state.
         'admin.system.database-residue.view',
         'admin.system.database-residue.manage',
+
+        // Data bridge admin UI (admin/system/database-bridge).
+        // create gates diagnostic row capture from the table browser.
+        'admin.system.database-bridge.view',
+        'admin.system.database-bridge.create',
+        'admin.system.database-bridge.delete',
     ],
 ];

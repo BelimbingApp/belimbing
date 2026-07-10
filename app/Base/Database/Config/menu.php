@@ -47,6 +47,13 @@ return [
             'admin.system.database-backup.list',
         ),
         $databaseMenuItem(
+            'admin.system.database-bridge',
+            'Data Bridge',
+            'heroicon-o-arrow-up-tray',
+            'admin.system.database-bridge.index',
+            'admin.system.database-bridge.view',
+        ),
+        $databaseMenuItem(
             'admin.system.database-residue',
             'Database Residue',
             'heroicon-o-trash',
