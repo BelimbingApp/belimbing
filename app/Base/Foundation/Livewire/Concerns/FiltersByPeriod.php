@@ -79,11 +79,15 @@ trait FiltersByPeriod
 
     public function updatedFrom(): void
     {
-        $this->period = 'custom';
-        $this->periodFilterUpdated();
+        $this->markPeriodAsCustom();
     }
 
     public function updatedTo(): void
+    {
+        $this->markPeriodAsCustom();
+    }
+
+    private function markPeriodAsCustom(): void
     {
         $this->period = 'custom';
         $this->periodFilterUpdated();

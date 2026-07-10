@@ -3,10 +3,10 @@
 namespace App\Modules\Core\AI\Services\HeadlessCli;
 
 use App\Modules\Core\AI\DTO\HeadlessCliRunResult;
+use App\Modules\Core\AI\Exceptions\HeadlessCliConfigurationException;
 use App\Modules\Core\AI\Models\ScheduleDefinition;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\Employee\Models\Employee;
-use RuntimeException;
 use Throwable;
 
 class HeadlessCliExecutor
@@ -45,7 +45,7 @@ class HeadlessCliExecutor
 
         return is_array($providers[$provider] ?? null)
             ? $providers[$provider]
-            : throw new RuntimeException('Unknown headless provider ['.$provider.']; add it to ai-headless.providers.');
+            : throw HeadlessCliConfigurationException::unknownProvider($provider);
     }
 
     /**
@@ -60,6 +60,8 @@ class HeadlessCliExecutor
             return [$provider, $model, 'pinned on this schedule'];
         }
 
+        $fallbackSource = 'fallback: no Research model configured on AI Task Models';
+
         try {
             $config = app(ConfigResolver::class)->readTaskConfig(Employee::LARA_ID, 'research') ?? [];
             $providerName = is_string($config['provider'] ?? null) ? $config['provider'] : null;
@@ -72,20 +74,24 @@ class HeadlessCliExecutor
                     return [$family, $configuredModel, 'AI Task Models: Research ('.$providerName.' / '.$configuredModel.')'];
                 }
 
-                return [
-                    (string) config('ai-headless.fallback_provider', 'anthropic'),
-                    (string) config('ai-headless.fallback_model', 'claude-sonnet-5'),
-                    'fallback: no CLI template for provider "'.$providerName.'"',
-                ];
+                $fallbackSource = 'fallback: no CLI template for provider "'.$providerName.'"';
             }
         } catch (Throwable) {
             // AI model settings are optional for unattended CLI schedules.
         }
 
+        return $this->fallbackIdentity($fallbackSource);
+    }
+
+    /**
+     * @return array{0: string, 1: string, 2: string}
+     */
+    private function fallbackIdentity(string $source): array
+    {
         return [
             (string) config('ai-headless.fallback_provider', 'anthropic'),
             (string) config('ai-headless.fallback_model', 'claude-sonnet-5'),
-            'fallback: no Research model configured on AI Task Models',
+            $source,
         ];
     }
 

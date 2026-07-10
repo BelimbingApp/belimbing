@@ -14,7 +14,7 @@ trait ProvidesEmployeeShowLaraContext
     {
         return new PageContext(
             route: 'admin.employees.show',
-            url: route('admin.employees.show', $this->employee),
+            url: $pageUrl ?? route('admin.employees.show', $this->employee),
             title: $this->employee->full_name,
             module: 'Employee',
             resourceType: 'employee',

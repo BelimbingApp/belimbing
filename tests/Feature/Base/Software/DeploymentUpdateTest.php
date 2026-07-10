@@ -123,6 +123,21 @@ function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
 }
 
+/**
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, array<string, mixed>>
+ */
+function deploymentOctaneState(array $overrides = []): array
+{
+    return [
+        'state' => [
+            ...$overrides,
+            'adminHost' => DEPLOYMENT_UPDATE_ADMIN_HOST,
+            'adminPort' => 2643,
+        ],
+    ];
+}
+
 function deploymentAdminConfigUrl(string $baseUrl): string
 {
     return $baseUrl.DEPLOYMENT_UPDATE_ADMIN_CONFIG_PATH;
@@ -732,19 +747,17 @@ test('the worker reload reads its admin port from the octane server-state file',
     // No env override → the port must come from octane's recorded state, not the
     // stock Caddy default of 2019 (which is the wrong port for our deployments).
     withDeploymentOctaneState(
-        ['state' => ['adminHost' => DEPLOYMENT_UPDATE_ADMIN_HOST, 'adminPort' => 2643]],
+        deploymentOctaneState(),
         fn () => expectDeploymentReloadUsesAdminEndpoint(DEPLOYMENT_UPDATE_ADMIN_BASE_URL)
     );
 });
 
 test('the worker reload prefers the local octane listener for application health checks', function (): void {
     withDeploymentOctaneState(
-        ['state' => [
+        deploymentOctaneState([
             'host' => DEPLOYMENT_UPDATE_ADMIN_HOST,
             'port' => 8100,
-            'adminHost' => DEPLOYMENT_UPDATE_ADMIN_HOST,
-            'adminPort' => 2643,
-        ]],
+        ]),
         function (): void {
             fakeDeploymentUpdateProcesses();
 

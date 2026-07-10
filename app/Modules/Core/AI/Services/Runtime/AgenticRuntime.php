@@ -1410,8 +1410,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $parts = [];
 
         foreach ($content as $block) {
-            $type = is_object($block) ? ($block->type ?? null) : (is_array($block) ? ($block['type'] ?? null) : null);
-            $text = is_object($block) ? ($block->text ?? null) : (is_array($block) ? ($block['text'] ?? null) : null);
+            $type = $this->contentBlockValue($block, 'type');
+            $text = $this->contentBlockValue($block, 'text');
 
             if ($type === 'text' && is_string($text) && trim($text) !== '') {
                 $parts[] = trim($text);
@@ -1419,6 +1419,15 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         }
 
         return implode("\n", $parts);
+    }
+
+    private function contentBlockValue(mixed $block, string $key): mixed
+    {
+        if (is_object($block)) {
+            return $block->{$key} ?? null;
+        }
+
+        return is_array($block) ? ($block[$key] ?? null) : null;
     }
 
     /**

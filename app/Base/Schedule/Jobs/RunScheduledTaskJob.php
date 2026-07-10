@@ -2,6 +2,7 @@
 
 namespace App\Base\Schedule\Jobs;
 
+use App\Base\Schedule\Exceptions\ScheduledTaskExecutionException;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
 use Illuminate\Bus\Queueable;
@@ -19,7 +20,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -49,7 +49,7 @@ class RunScheduledTaskJob implements ShouldQueue
         $event = $this->findEvent($schedule, $recorder);
 
         if ($event === null) {
-            throw new RuntimeException("Scheduled task [{$this->key}] is not registered.");
+            throw ScheduledTaskExecutionException::notRegistered($this->key);
         }
 
         if ($this->suppressed()) {
@@ -85,9 +85,7 @@ class RunScheduledTaskJob implements ShouldQueue
             ));
 
             if ($event->exitCode !== null && $event->exitCode !== 0) {
-                throw new RuntimeException(
-                    "Scheduled task [{$recorder->name($event)}] failed with exit code [{$event->exitCode}]."
-                );
+                throw ScheduledTaskExecutionException::failed($event, $recorder->name($event));
             }
         } catch (Throwable $e) {
             $dispatcher->dispatch(new ScheduledTaskFailed($event, $e));

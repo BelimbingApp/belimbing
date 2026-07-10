@@ -9,6 +9,7 @@ use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
@@ -22,12 +23,11 @@ class ScheduleRunRecorder
 {
     private const STORAGE_STRING_LIMIT = 255;
 
-    private const OUTPUT_LIMIT = 2000;
-
     private const RUN_ID_PROPERTY = 'blbScheduleRunId';
 
     public function __construct(
         private readonly ScheduleHistoryPruner $historyPruner,
+        private readonly ScheduleRunOutput $output,
     ) {}
 
     public function taskStarting(ScheduledTaskStarting $event): void
@@ -37,7 +37,7 @@ class ScheduleRunRecorder
                 return;
             }
 
-            $this->prepareOutputPath($event->task);
+            $this->output->prepare($event->task);
 
             $run = ScheduleRun::query()->create([
                 'source' => 'scheduler',
@@ -65,12 +65,16 @@ class ScheduleRunRecorder
             return;
         }
 
-        $this->complete($event->task, $this->statusFromExitCode($this->exitCode($event->task)), $this->exitCode($event->task), $event->runtime);
+        $exitCode = $this->exitCode($event->task);
+
+        $this->complete($event->task, $exitCode === null || $exitCode === 0 ? 'succeeded' : 'failed', $exitCode, $event->runtime);
     }
 
     public function backgroundTaskFinished(ScheduledBackgroundTaskFinished $event): void
     {
-        $this->complete($event->task, $this->statusFromExitCode($this->exitCode($event->task)), $this->exitCode($event->task));
+        $exitCode = $this->exitCode($event->task);
+
+        $this->complete($event->task, $exitCode === null || $exitCode === 0 ? 'succeeded' : 'failed', $exitCode);
     }
 
     public function taskFailed(ScheduledTaskFailed $event): void
@@ -123,11 +127,6 @@ class ScheduleRunRecorder
         return preg_replace('/\s+/', ' ', trim($command)) ?? trim($command);
     }
 
-    public function deterministicOutputPath(Event $task): string
-    {
-        return storage_path('logs/schedule-'.sha1($task->mutexName()).'.log');
-    }
-
     private function complete(
         Event $task,
         string $status,
@@ -147,7 +146,7 @@ class ScheduleRunRecorder
                 if ($status === 'failed' && $run->status === 'failed') {
                     $run->update([
                         'exit_code' => $exitCode,
-                        'output_excerpt' => $this->mergeOutput($run->output_excerpt, $this->outputExcerpt($task, $failure)),
+                        'output_excerpt' => $this->output->merge($run->output_excerpt, $this->output->excerpt($task, $failure)),
                     ]);
                 }
 
@@ -158,10 +157,8 @@ class ScheduleRunRecorder
                 'status' => $status,
                 'finished_at' => $now,
                 'exit_code' => $exitCode,
-                'runtime_ms' => $runtimeSeconds !== null
-                    ? (int) round($runtimeSeconds * 1000)
-                    : ($run->started_at !== null ? max(0, (int) $run->started_at->diffInMilliseconds($now)) : null),
-                'output_excerpt' => $this->outputExcerpt($task, $failure),
+                'runtime_ms' => $this->runtimeMs($run, $now, $runtimeSeconds),
+                'output_excerpt' => $this->output->excerpt($task, $failure),
             ]);
         });
     }
@@ -206,71 +203,6 @@ class ScheduleRunRecorder
         return $run;
     }
 
-    private function prepareOutputPath(Event $task): void
-    {
-        $current = $task->output ?? null;
-        $default = $task->getDefaultOutput();
-
-        if (! is_string($current) || $current === '' || $current === $default || in_array(strtolower($current), ['nul', '/dev/null'], true)) {
-            $task->sendOutputTo($this->deterministicOutputPath($task));
-        }
-    }
-
-    private function outputExcerpt(Event $task, ?string $failure): ?string
-    {
-        return $this->mergeOutput($this->readOutput($task), $failure);
-    }
-
-    private function readOutput(Event $task): ?string
-    {
-        $path = $task->output ?? null;
-
-        if (! is_string($path) || $path === '' || in_array(strtolower($path), ['nul', '/dev/null'], true)) {
-            return null;
-        }
-
-        if (! is_file($path) || ! is_readable($path)) {
-            return null;
-        }
-
-        $handle = @fopen($path, 'rb');
-        if ($handle === false) {
-            return null;
-        }
-
-        try {
-            $size = filesize($path);
-            if (is_int($size) && $size > self::OUTPUT_LIMIT) {
-                fseek($handle, -self::OUTPUT_LIMIT, SEEK_END);
-            }
-
-            $contents = stream_get_contents($handle);
-        } finally {
-            fclose($handle);
-        }
-
-        if ($contents === false || trim($contents) === '') {
-            return null;
-        }
-
-        return $this->truncate(trim($contents), self::OUTPUT_LIMIT);
-    }
-
-    private function mergeOutput(?string ...$parts): ?string
-    {
-        $merged = [];
-
-        foreach ($parts as $part) {
-            $part = $part === null ? null : trim($part);
-
-            if ($part !== null && $part !== '' && ! in_array($part, $merged, true)) {
-                $merged[] = $part;
-            }
-        }
-
-        return $merged === [] ? null : $this->truncate(implode("\n", $merged), self::OUTPUT_LIMIT);
-    }
-
     private function expression(Event $task): ?string
     {
         $expression = trim((string) ($task->expression ?? ''));
@@ -282,12 +214,11 @@ class ScheduleRunRecorder
     {
         $exitCode = $task->exitCode ?? null;
 
-        return is_int($exitCode) ? $exitCode : (is_numeric($exitCode) ? (int) $exitCode : null);
-    }
+        if (is_int($exitCode)) {
+            return $exitCode;
+        }
 
-    private function statusFromExitCode(?int $exitCode): string
-    {
-        return ($exitCode === null || $exitCode === 0) ? 'succeeded' : 'failed';
+        return is_numeric($exitCode) ? (int) $exitCode : null;
     }
 
     private function truncate(string $value, int $limit): string
@@ -302,6 +233,17 @@ class ScheduleRunRecorder
         }
 
         return mb_substr($value, 0, self::STORAGE_STRING_LIMIT - 41).':'.sha1($value);
+    }
+
+    private function runtimeMs(ScheduleRun $run, Carbon $now, ?float $runtimeSeconds): ?int
+    {
+        if ($runtimeSeconds !== null) {
+            return (int) round($runtimeSeconds * 1000);
+        }
+
+        return $run->started_at !== null
+            ? max(0, (int) $run->started_at->diffInMilliseconds($now))
+            : null;
     }
 
     private function ready(): bool
