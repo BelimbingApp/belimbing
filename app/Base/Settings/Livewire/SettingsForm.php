@@ -190,6 +190,8 @@ abstract class SettingsForm extends Component
             'multiGroup' => count($groups) > 1,
             'pageTitle' => $this->pageTitle(),
             'pageSubtitle' => $this->pageSubtitle(),
+            'pageHelp' => $this->pageHelp(),
+            'pageHelpLabel' => $this->pageHelpLabel(),
         ]);
     }
 
@@ -219,6 +221,16 @@ abstract class SettingsForm extends Component
     protected function pageSubtitle(): string
     {
         return __($this->groupConfig()['description'] ?? 'Operator-editable module settings stored in base_settings.');
+    }
+
+    protected function pageHelp(): ?string
+    {
+        return null;
+    }
+
+    protected function pageHelpLabel(): string
+    {
+        return __('Help');
     }
 
     /**

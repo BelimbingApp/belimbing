@@ -2,22 +2,22 @@
 
 namespace App\Base\Database;
 
-use App\Base\Database\Console\Commands\ApplyBridgePackageCommand;
+use App\Base\Database\Console\Commands\ApplyDataSharePackageCommand;
 use App\Base\Database\Console\Commands\ApproveIncubatingMigrationCommand;
 use App\Base\Database\Console\Commands\BackupCommand;
-use App\Base\Database\Console\Commands\BridgeScopesCommand;
-use App\Base\Database\Console\Commands\ExportBridgePackageCommand;
+use App\Base\Database\Console\Commands\DataShareScopesCommand;
+use App\Base\Database\Console\Commands\ExportDataSharePackageCommand;
+use App\Base\Database\Console\Commands\FetchDataShareTransferOfferCommand;
 use App\Base\Database\Console\Commands\FreshCommand;
-use App\Base\Database\Console\Commands\ImportDiagnosticBridgePackageCommand;
-use App\Base\Database\Console\Commands\InspectBridgePackageCommand;
-use App\Base\Database\Console\Commands\IssueBridgeReceiveGrantCommand;
+use App\Base\Database\Console\Commands\ImportDiagnosticDataSharePackageCommand;
+use App\Base\Database\Console\Commands\InspectDataSharePackageCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
-use App\Base\Database\Console\Commands\PlanBridgePackageCommand;
-use App\Base\Database\Console\Commands\PruneBridgePackagesCommand;
+use App\Base\Database\Console\Commands\PlanDataSharePackageCommand;
+use App\Base\Database\Console\Commands\PruneDataSharePackagesCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
 use App\Base\Database\Console\Commands\RekeyCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
-use App\Base\Database\Console\Commands\RevokeBridgeReceiveGrantCommand;
+use App\Base\Database\Console\Commands\RevokeDataShareTransferOfferCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\SanitizeDevelopmentDatabaseCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
@@ -52,7 +52,7 @@ class ServiceProvider extends BaseServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
-        $this->mergeConfigFrom(__DIR__.'/Config/bridge.php', 'bridge');
+        $this->mergeConfigFrom(__DIR__.'/Config/data_share.php', 'data_share');
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
         $this->app->singleton(DevelopmentInstanceGuard::class);
@@ -115,17 +115,17 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->commands([
             ApproveIncubatingMigrationCommand::class,
-            ApplyBridgePackageCommand::class,
+            ApplyDataSharePackageCommand::class,
             BackupCommand::class,
-            BridgeScopesCommand::class,
-            ExportBridgePackageCommand::class,
-            ImportDiagnosticBridgePackageCommand::class,
-            InspectBridgePackageCommand::class,
-            IssueBridgeReceiveGrantCommand::class,
-            PlanBridgePackageCommand::class,
-            PruneBridgePackagesCommand::class,
+            DataShareScopesCommand::class,
+            ExportDataSharePackageCommand::class,
+            FetchDataShareTransferOfferCommand::class,
+            ImportDiagnosticDataSharePackageCommand::class,
+            InspectDataSharePackageCommand::class,
+            PlanDataSharePackageCommand::class,
+            PruneDataSharePackagesCommand::class,
             RekeyCommand::class,
-            RevokeBridgeReceiveGrantCommand::class,
+            RevokeDataShareTransferOfferCommand::class,
             SanitizeDevelopmentDatabaseCommand::class,
         ]);
     }

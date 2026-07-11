@@ -5,9 +5,9 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
-use App\Base\Database\Exceptions\BridgeCaptureException;
+use App\Base\Database\Exceptions\DataShareCaptureException;
 use App\Base\Database\Models\TableRegistry;
-use App\Base\Database\Services\Bridge\DiagnosticRowCapture;
+use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -242,12 +242,12 @@ class Show extends Component
     {
         $capture ??= app(DiagnosticRowCapture::class);
 
-        $this->requireCapability('admin.system.database-bridge.create');
+        $this->requireCapability('admin.system.data-share.create');
         $this->captureStatusMessage = null;
 
         try {
             $this->capturePreview = $capture->preview($this->tableName, $this->selectedRowIds);
-        } catch (BridgeCaptureException $e) {
+        } catch (DataShareCaptureException $e) {
             $this->flashCaptureStatus($e->getMessage(), 'warning');
 
             return;
@@ -274,7 +274,7 @@ class Show extends Component
     {
         $capture ??= app(DiagnosticRowCapture::class);
 
-        $this->requireCapability('admin.system.database-bridge.create');
+        $this->requireCapability('admin.system.data-share.create');
 
         try {
             $result = $capture->capture(
@@ -283,7 +283,7 @@ class Show extends Component
                 $this->captureTrigger(),
                 (string) ($this->capturePreview['preview_sha256'] ?? ''),
             );
-        } catch (BridgeCaptureException $e) {
+        } catch (DataShareCaptureException $e) {
             $this->closeCaptureDialog();
             $this->flashCaptureStatus($e->getMessage(), 'warning');
 
@@ -367,7 +367,7 @@ class Show extends Component
             ->first();
         $capturePrimaryKey = app(DiagnosticRowCapture::class)->primaryKeyColumn($this->tableName);
         $canCapture = $capturePrimaryKey !== null
-            && $this->capabilityAllows('admin.system.database-bridge.create');
+            && $this->capabilityAllows('admin.system.data-share.create');
 
         return view('livewire.admin.system.database-tables.show', [
             'tableRegistry' => $tableRegistry,

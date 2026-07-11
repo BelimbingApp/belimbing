@@ -47,11 +47,11 @@ return [
             'admin.system.database-backup.list',
         ),
         $databaseMenuItem(
-            'admin.system.database-bridge',
-            'Data Bridge',
-            'heroicon-o-arrow-up-tray',
-            'admin.system.database-bridge.index',
-            'admin.system.database-bridge.view',
+            'admin.system.data-share',
+            'Data Share',
+            'heroicon-o-share',
+            'admin.system.data-share.index',
+            'admin.system.data-share.view',
         ),
         $databaseMenuItem(
             'admin.system.database-residue',

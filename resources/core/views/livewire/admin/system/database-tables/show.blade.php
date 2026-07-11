@@ -276,7 +276,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
                 <div class="flex items-start justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-medium tracking-tight text-ink">
-                            {{ __('Review Data Bridge capture') }}
+                            {{ __('Review Data Share capture') }}
                         </h2>
                         <p class="mt-1 text-sm text-muted">
                             {{ trans_choice(':count selected row from :table. String values retain their exact bytes, and only a development instance can import the package.|:count selected rows from :table. String values retain their exact bytes, and only a development instance can import the package.', $this->capturePreview['selected_rows'] ?? 0, ['count' => $this->capturePreview['selected_rows'] ?? 0, 'table' => $this->tableName]) }}
@@ -326,7 +326,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
                     </div>
 
                     <x-ui.alert variant="warning">
-                        {{ __('The package is written unencrypted to this machine\'s protected storage. Bridge rules and ciphertext detection redact identified secrets, but remaining values are raw and may still be sensitive — transfer it only over a trusted channel.') }}
+                        {{ __('The package is written unencrypted to this machine\'s protected storage. DataShare rules and ciphertext detection redact identified secrets, but remaining values are raw and may still be sensitive — transfer it only over a trusted channel.') }}
                     </x-ui.alert>
                 @endif
 

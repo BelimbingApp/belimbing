@@ -1,4 +1,4 @@
-@props(['title', 'subtitle' => null, 'actions' => null, 'help' => null, 'pinnable' => null])
+@props(['title', 'subtitle' => null, 'actions' => null, 'help' => null, 'helpLabel' => null, 'pinnable' => null])
 
 @php
     $resolvedPinnable = app(\App\Base\Menu\Services\PagePinResolver::class)->resolve((string) $title, $pinnable);
@@ -42,7 +42,12 @@
                     </button>
                 @endif
                 @if($help)
-                    <x-ui.help size="lg" @click="helpOpen = !helpOpen" ::aria-expanded="helpOpen" />
+                    <x-ui.help
+                        size="lg"
+                        :label="$helpLabel"
+                        @click="helpOpen = !helpOpen"
+                        ::aria-expanded="helpOpen"
+                    />
                 @endif
             </div>
             @if($subtitle)

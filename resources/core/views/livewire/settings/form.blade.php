@@ -5,13 +5,21 @@ use App\Base\Settings\Livewire\SettingsForm;
 /** @var SettingsForm $this */
 /** @var list<array{id: string, config: array<string, mixed>}> $groups */
 /** @var bool $multiGroup */
+/** @var string|null $pageHelp */
+/** @var string $pageHelpLabel */
 ?>
 
 <div>
     <x-slot name="title">{{ $pageTitle }}</x-slot>
 
     <div class="space-y-section-gap">
-        <x-ui.page-header :title="$pageTitle" :subtitle="$pageSubtitle" />
+        <x-ui.page-header :title="$pageTitle" :subtitle="$pageSubtitle" :help-label="$pageHelpLabel">
+            @if ($pageHelp !== null)
+                <x-slot name="help">
+                    <p class="max-w-3xl leading-6 text-ink">{{ $pageHelp }}</p>
+                </x-slot>
+            @endif
+        </x-ui.page-header>
 
         <x-ui.session-flash />
 

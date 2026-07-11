@@ -4,22 +4,22 @@ $pathRules = ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+(?:\/[A-Z
 
 return [
     'editable' => [
-        'database_bridge_identity' => [
+        'data_share_identity' => [
             'label' => 'Identity',
-            'description' => 'How this Belimbing instance identifies itself in receive keys, packages, policy checks, and the audit ledger.',
+            'description' => 'How this Belimbing instance identifies itself in transfer offers, packages, policy checks, and the audit ledger.',
             'fields' => [
                 [
-                    'key' => 'bridge.instance.id',
+                    'key' => 'data_share.instance.id',
                     'label' => 'Instance ID',
                     'type' => 'text',
                     'scope' => 'global',
                     'default' => '',
                     'placeholder' => 'livenpc',
-                    'help' => 'Stable identifier shared with the other operator. Save it before issuing a key; changing it invalidates outstanding receive keys and unapplied packages.',
+                    'help' => 'Stable identifier shared with the other operator. Save it before publishing an offer; changing it invalidates outstanding offers and unapplied packages.',
                     'rules' => ['nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9][A-Za-z0-9._:-]*$/'],
                 ],
                 [
-                    'key' => 'bridge.instance.name',
+                    'key' => 'data_share.instance.name',
                     'label' => 'Instance name',
                     'type' => 'text',
                     'scope' => 'global',
@@ -29,7 +29,7 @@ return [
                     'rules' => ['nullable', 'string', 'max:255'],
                 ],
                 [
-                    'key' => 'bridge.instance.role',
+                    'key' => 'data_share.instance.role',
                     'label' => 'Environment role',
                     'type' => 'select',
                     'scope' => 'global',
@@ -39,60 +39,51 @@ return [
                         'staging' => 'Staging',
                         'production' => 'Production',
                     ],
-                    'help' => 'Controls one-way promotion and production recovery. Changing it invalidates outstanding receive keys and unapplied packages.',
+                    'help' => 'Controls one-way promotion and production recovery. Changing it invalidates outstanding offers and unapplied packages.',
                     'rules' => ['required', 'in:development,staging,production'],
                 ],
             ],
         ],
-        'database_bridge_transport' => [
+        'data_share_transport' => [
             'label' => 'Transport',
-            'description' => 'Short-lived receive-key behavior and the HTTPS routes advertised to a source operator.',
+            'description' => 'Source-owned transfer-offer availability and HTTPS routes advertised to a target operator.',
             'fields' => [
                 [
-                    'key' => 'bridge.receive_grants.base_urls',
+                    'key' => 'data_share.offers.base_urls',
                     'label' => 'Advertised HTTPS routes',
                     'type' => 'textarea',
                     'scope' => 'global',
                     'default' => '',
-                    'placeholder' => "https://livenpc.internal\nhttps://bridge.example.com",
-                    'help' => 'One base URL per line, private LAN first and Cloudflare fallback second. Belimbing appends the one-time receive path.',
+                    'placeholder' => "https://source.internal\nhttps://data-share.example.com",
+                    'help' => 'One source base URL per line, private LAN first and Cloudflare fallback second. Belimbing appends the offer-specific download path.',
                     'rules' => ['nullable', 'string', 'max:2048'],
                 ],
                 [
-                    'key' => 'bridge.receive_grants.expiry_minutes',
-                    'label' => 'Receive-key lifetime (minutes)',
+                    'key' => 'data_share.offers.expiry_minutes',
+                    'label' => 'Offer lifetime (minutes)',
                     'type' => 'text',
                     'scope' => 'global',
-                    'default' => '15',
-                    'help' => 'How long a newly issued one-time receive key remains usable.',
-                    'rules' => ['required', 'integer', 'min:1', 'max:1440'],
+                    'default' => '60',
+                    'help' => 'How long the source keeps a published immutable package available for target fetch or retry.',
+                    'rules' => ['required', 'integer', 'min:1', 'max:10080'],
                 ],
                 [
-                    'key' => 'bridge.receive_grants.send_timeout_seconds',
-                    'label' => 'Send timeout (seconds)',
+                    'key' => 'data_share.offers.fetch_timeout_seconds',
+                    'label' => 'Fetch timeout (seconds)',
                     'type' => 'text',
                     'scope' => 'global',
                     'default' => '600',
-                    'help' => 'Maximum source wait for one streamed HTTPS delivery.',
+                    'help' => 'Maximum target wait for one streamed HTTPS fetch.',
                     'rules' => ['required', 'integer', 'min:30', 'max:7200'],
-                ],
-                [
-                    'key' => 'bridge.transfer_limits.expiry_hours',
-                    'label' => 'Package lifetime (hours)',
-                    'type' => 'text',
-                    'scope' => 'global',
-                    'default' => '24',
-                    'help' => 'Packages older than this are refused before planning or apply.',
-                    'rules' => ['required', 'integer', 'min:1', 'max:168'],
                 ],
             ],
         ],
-        'database_bridge_storage' => [
+        'data_share_storage' => [
             'label' => 'Storage',
             'description' => 'Private filesystem placement and retention. Changing a path does not move existing packages.',
             'fields' => [
                 [
-                    'key' => 'bridge.disk',
+                    'key' => 'data_share.disk',
                     'label' => 'Private disk',
                     'type' => 'text',
                     'scope' => 'global',
@@ -101,43 +92,43 @@ return [
                     'rules' => ['required', 'string', 'max:64', 'regex:/^[A-Za-z0-9._-]+$/'],
                 ],
                 [
-                    'key' => 'bridge.outgoing_path_prefix',
+                    'key' => 'data_share.outgoing_path_prefix',
                     'label' => 'Outgoing path',
                     'type' => 'text',
                     'scope' => 'global',
-                    'default' => 'bridge/outgoing',
+                    'default' => 'data-share/outgoing',
                     'help' => 'Protected path for source packages awaiting delivery or retention cleanup.',
                     'rules' => $pathRules,
                 ],
                 [
-                    'key' => 'bridge.receiving_path_prefix',
+                    'key' => 'data_share.receiving_path_prefix',
                     'label' => 'Receiving path',
                     'type' => 'text',
                     'scope' => 'global',
-                    'default' => 'bridge/receiving',
+                    'default' => 'data-share/receiving',
                     'help' => 'Temporary protected path used while a target verifies a complete stream.',
                     'rules' => $pathRules,
                 ],
                 [
-                    'key' => 'bridge.incoming_path_prefix',
+                    'key' => 'data_share.incoming_path_prefix',
                     'label' => 'Incoming path',
                     'type' => 'text',
                     'scope' => 'global',
-                    'default' => 'bridge/incoming',
+                    'default' => 'data-share/incoming',
                     'help' => 'Protected path for verified packages awaiting plan review or apply.',
                     'rules' => $pathRules,
                 ],
                 [
-                    'key' => 'bridge.path_prefix',
+                    'key' => 'data_share.path_prefix',
                     'label' => 'Diagnostic path',
                     'type' => 'text',
                     'scope' => 'global',
-                    'default' => 'bridge/diagnostics',
+                    'default' => 'data-share/diagnostics',
                     'help' => 'Protected path for development-only diagnostic captures.',
                     'rules' => $pathRules,
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.incoming_retention_days',
+                    'key' => 'data_share.transfer_limits.incoming_retention_days',
                     'label' => 'Package retention (days)',
                     'type' => 'text',
                     'scope' => 'global',
@@ -146,7 +137,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:3650'],
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.receiving_retention_hours',
+                    'key' => 'data_share.transfer_limits.receiving_retention_hours',
                     'label' => 'Abandoned stream retention (hours)',
                     'type' => 'text',
                     'scope' => 'global',
@@ -156,12 +147,12 @@ return [
                 ],
             ],
         ],
-        'database_bridge_transfer_limits' => [
+        'data_share_transfer_limits' => [
             'label' => 'Transfer limits',
-            'description' => 'Hard bounds applied to every bulk Data Export and Data Bridge package.',
+            'description' => 'Hard bounds applied to every bulk Data Export and Data Share package.',
             'fields' => [
                 [
-                    'key' => 'bridge.transfer_limits.max_tables',
+                    'key' => 'data_share.transfer_limits.max_tables',
                     'label' => 'Maximum tables',
                     'type' => 'text',
                     'scope' => 'global',
@@ -170,7 +161,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:10000'],
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.max_records',
+                    'key' => 'data_share.transfer_limits.max_records',
                     'label' => 'Maximum records',
                     'type' => 'text',
                     'scope' => 'global',
@@ -179,7 +170,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:10000000'],
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.max_scalar_bytes',
+                    'key' => 'data_share.transfer_limits.max_scalar_bytes',
                     'label' => 'Maximum scalar bytes',
                     'type' => 'text',
                     'scope' => 'global',
@@ -188,7 +179,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.max_record_line_bytes',
+                    'key' => 'data_share.transfer_limits.max_record_line_bytes',
                     'label' => 'Maximum record-line bytes',
                     'type' => 'text',
                     'scope' => 'global',
@@ -197,22 +188,22 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
                 [
-                    'key' => 'bridge.transfer_limits.max_package_bytes',
+                    'key' => 'data_share.transfer_limits.max_package_bytes',
                     'label' => 'Maximum package bytes',
                     'type' => 'text',
                     'scope' => 'global',
                     'default' => '262144000',
-                    'help' => 'Maximum streamed request and protected package size. Keep it within every proxy and origin limit.',
+                    'help' => 'Maximum streamed response and protected package size. Keep it within every proxy and origin limit.',
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
             ],
         ],
-        'database_bridge_diagnostic_limits' => [
+        'data_share_diagnostic_limits' => [
             'label' => 'Diagnostics',
             'description' => 'Smaller bounds for development-only row captures and foreign-key parent closure.',
             'fields' => [
                 [
-                    'key' => 'bridge.limits.max_selected_rows',
+                    'key' => 'data_share.limits.max_selected_rows',
                     'label' => 'Maximum selected rows',
                     'type' => 'text',
                     'scope' => 'global',
@@ -221,7 +212,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:10000'],
                 ],
                 [
-                    'key' => 'bridge.limits.max_tables',
+                    'key' => 'data_share.limits.max_tables',
                     'label' => 'Maximum diagnostic tables',
                     'type' => 'text',
                     'scope' => 'global',
@@ -230,7 +221,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:10000'],
                 ],
                 [
-                    'key' => 'bridge.limits.max_closure_rows',
+                    'key' => 'data_share.limits.max_closure_rows',
                     'label' => 'Maximum closure rows',
                     'type' => 'text',
                     'scope' => 'global',
@@ -239,7 +230,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:1000000'],
                 ],
                 [
-                    'key' => 'bridge.limits.max_closure_depth',
+                    'key' => 'data_share.limits.max_closure_depth',
                     'label' => 'Maximum closure depth',
                     'type' => 'text',
                     'scope' => 'global',
@@ -248,7 +239,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:64'],
                 ],
                 [
-                    'key' => 'bridge.limits.max_scalar_bytes',
+                    'key' => 'data_share.limits.max_scalar_bytes',
                     'label' => 'Maximum diagnostic scalar bytes',
                     'type' => 'text',
                     'scope' => 'global',
@@ -257,7 +248,7 @@ return [
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
                 [
-                    'key' => 'bridge.limits.max_package_bytes',
+                    'key' => 'data_share.limits.max_package_bytes',
                     'label' => 'Maximum diagnostic package bytes',
                     'type' => 'text',
                     'scope' => 'global',

@@ -18,15 +18,16 @@ return [
         'admin.system.database-residue.view',
         'admin.system.database-residue.manage',
 
-        // Data bridge admin UI (admin/system/database-bridge).
+        // Data share admin UI (admin/system/data-share).
         // create gates diagnostic row capture from the table browser.
-        'admin.system.database-bridge.view',
-        'admin.system.database-bridge.create',
-        'admin.system.database-bridge.delete',
-        'admin.system.database-bridge-export.execute',
-        'admin.system.database-bridge-plan.review',
-        'admin.system.database-bridge-apply.execute',
-        'admin.system.database-bridge-receive-grant.manage',
-        'admin.system.database-bridge-settings.manage',
+        'admin.system.data-share.view',
+        'admin.system.data-share.create',
+        'admin.system.data-share.delete',
+        'admin.system.data-share-offer.create',
+        'admin.system.data-share-offer.manage',
+        'admin.system.data-share-offer.accept',
+        'admin.system.data-share-plan.review',
+        'admin.system.data-share-apply.execute',
+        'admin.system.data-share-settings.manage',
     ],
 ];

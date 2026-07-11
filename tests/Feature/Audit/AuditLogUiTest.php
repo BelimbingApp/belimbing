@@ -797,11 +797,11 @@ it('renders the record history bridge on first-wave detail pages', function (): 
         $company = Company::query()->findOrFail($actor->company_id);
         $employee = Employee::factory()->create([
             'company_id' => $company->id,
-            'full_name' => 'Bridge History Employee',
+            'full_name' => 'DataShare History Employee',
         ]);
         $address = Address::factory()->create([
             'country_iso' => null,
-            'label' => 'Bridge History Address',
+            'label' => 'DataShare History Address',
         ]);
 
         return [$company, $employee, $address];
@@ -825,7 +825,7 @@ it('renders the record history bridge on first-wave detail pages', function (): 
 it('does not mount the record history bridge without audit permission', function (): void {
     setupAuthzRoles();
 
-    [, $viewer, $target] = auditLogUiViewerWithoutAudit('Bridge Hidden Target');
+    [, $viewer, $target] = auditLogUiViewerWithoutAudit('DataShare Hidden Target');
 
     $this->actingAs($viewer)
         ->get(route('admin.users.show', $target))

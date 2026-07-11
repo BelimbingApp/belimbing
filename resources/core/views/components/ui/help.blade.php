@@ -22,6 +22,7 @@
 @props([
     'size' => 'md',
     'icon' => 'heroicon-o-question-mark-circle',
+    'label' => null,
 ])
 
 @php
@@ -38,7 +39,7 @@
         'focus:outline-none rounded-full p-0.5',
         'focus:ring-2 focus:ring-accent/20',
     ]) }}
-    aria-label="{{ __('Help') }}"
+    aria-label="{{ $label ?? __('Help') }}"
 >
     <x-icon :name="$icon" class="{{ $sizeClasses }}" />
 </button>

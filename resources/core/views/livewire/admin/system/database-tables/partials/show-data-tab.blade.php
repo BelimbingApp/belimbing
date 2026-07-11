@@ -39,7 +39,7 @@
     @if($canCapture && count($this->selectedRowIds) > 0)
         <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border-default bg-surface-subtle px-3 py-2">
             <div class="flex flex-wrap items-center gap-2">
-                <x-ui.badge variant="info">{{ __('Data Bridge') }}</x-ui.badge>
+                <x-ui.badge variant="info">{{ __('Data Share') }}</x-ui.badge>
                 <span class="text-sm text-ink tabular-nums">
                     {{ trans_choice(':count row selected|:count rows selected', count($this->selectedRowIds), ['count' => count($this->selectedRowIds)]) }}
                 </span>

@@ -20,17 +20,17 @@ beforeEach(function (): void {
 
 it('previews then neutralizes credentials, framework and AI schedules, and sessions', function (): void {
     config(['settings.editable.bridge_test_credentials' => [
-        'label' => 'Bridge test integration',
+        'label' => 'DataShare test integration',
         'fields' => [
-            ['key' => 'bridge.test.endpoint', 'type' => 'text'],
-            ['key' => 'bridge.test.token', 'type' => 'password', 'encrypted' => true],
+            ['key' => 'data_share.test.endpoint', 'type' => 'text'],
+            ['key' => 'data_share.test.token', 'type' => 'password', 'encrypted' => true],
         ],
     ]]);
 
     $settings = app(SettingsService::class);
-    $settings->set('bridge.test.endpoint', 'https://production.example.test');
-    $settings->set('bridge.test.token', 'production-token', encrypted: true);
-    $settings->set('bridge.test.business-default', 'keep-me');
+    $settings->set('data_share.test.endpoint', 'https://production.example.test');
+    $settings->set('data_share.test.token', 'production-token', encrypted: true);
+    $settings->set('data_share.test.business-default', 'keep-me');
 
     DB::table('sessions')->insert([
         'id' => 'production-session',
@@ -74,7 +74,7 @@ it('previews then neutralizes credentials, framework and AI schedules, and sessi
 
     expect(Artisan::call('blb:db:sanitize-dev'))->toBe(0)
         ->and(Artisan::output())->toContain('Preview only')
-        ->and(Setting::query()->where('key', 'bridge.test.token')->exists())->toBeTrue()
+        ->and(Setting::query()->where('key', 'data_share.test.token')->exists())->toBeTrue()
         ->and(DB::table('sessions')->count())->toBe(1)
         ->and(DB::table('jobs')->count())->toBe(1)
         ->and($aiSchedule->fresh()->is_enabled)->toBeTrue()
@@ -82,8 +82,8 @@ it('previews then neutralizes credentials, framework and AI schedules, and sessi
 
     expect(Artisan::call('blb:db:sanitize-dev', ['--commit' => true]))->toBe(0)
         ->and(Artisan::output())->toContain('Development sanitization applied')
-        ->and(Setting::query()->whereIn('key', ['bridge.test.endpoint', 'bridge.test.token'])->count())->toBe(0)
-        ->and(Setting::query()->where('key', 'bridge.test.business-default')->value('value'))->toBe('keep-me')
+        ->and(Setting::query()->whereIn('key', ['data_share.test.endpoint', 'data_share.test.token'])->count())->toBe(0)
+        ->and(Setting::query()->where('key', 'data_share.test.business-default')->value('value'))->toBe('keep-me')
         ->and(DB::table('sessions')->count())->toBe(0)
         ->and(DB::table('jobs')->count())->toBe(0)
         ->and(ScheduleSuppression::query()->where('key', $eventKey)->exists())->toBeTrue();
@@ -96,10 +96,10 @@ it('previews then neutralizes credentials, framework and AI schedules, and sessi
 });
 
 it('refuses development sanitization in production without touching state', function (): void {
-    app(SettingsService::class)->set('bridge.test.production-token', 'secret', encrypted: true);
+    app(SettingsService::class)->set('data_share.test.production-token', 'secret', encrypted: true);
     config(['app.env' => 'production']);
 
     expect(Artisan::call('blb:db:sanitize-dev', ['--commit' => true]))->toBe(1)
         ->and(Artisan::output())->toContain('only on a development instance')
-        ->and(Setting::query()->where('key', 'bridge.test.production-token')->exists())->toBeTrue();
+        ->and(Setting::query()->where('key', 'data_share.test.production-token')->exists())->toBeTrue();
 });
