@@ -20,29 +20,7 @@ class ColumnRedactor
      */
     public function redact(string $table, array $rows): array
     {
-        $rules = config('bridge.redaction.columns', []);
-        $classifiedColumns = is_array($rules) && is_array($rules[$table] ?? null)
-            ? array_values(array_filter($rules[$table], is_string(...)))
-            : [];
-        $redacted = array_fill_keys(
-            $classifiedColumns,
-            true,
-        );
-
-        foreach ($rows as $row) {
-            foreach ($row as $column => $value) {
-                if (isset($redacted[$column])) {
-                    continue;
-                }
-
-                if (preg_match(self::SECRET_NAME_PATTERN, $column) === 1
-                    || $this->looksLikeLaravelCiphertext($value)) {
-                    $redacted[$column] = true;
-                }
-            }
-        }
-
-        $columns = array_keys($redacted);
+        $columns = array_keys($this->redactedColumnMap($table, $rows));
         sort($columns, SORT_STRING);
 
         $rows = array_map(function (array $row) use ($columns): array {
@@ -56,6 +34,42 @@ class ColumnRedactor
         }, $rows);
 
         return ['rows' => $rows, 'redacted_columns' => $columns];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $rows
+     * @return array<string, true>
+     */
+    private function redactedColumnMap(string $table, array $rows): array
+    {
+        $redacted = $this->configuredRedactedColumnMap($table);
+
+        foreach ($rows as $row) {
+            foreach ($row as $column => $value) {
+                if (! isset($redacted[$column]) && $this->shouldRedactColumn($column, $value)) {
+                    $redacted[$column] = true;
+                }
+            }
+        }
+
+        return $redacted;
+    }
+
+    /** @return array<string, true> */
+    private function configuredRedactedColumnMap(string $table): array
+    {
+        $rules = config('bridge.redaction.columns', []);
+        $columns = is_array($rules) && is_array($rules[$table] ?? null)
+            ? array_values(array_filter($rules[$table], is_string(...)))
+            : [];
+
+        return array_fill_keys($columns, true);
+    }
+
+    private function shouldRedactColumn(string $column, mixed $value): bool
+    {
+        return preg_match(self::SECRET_NAME_PATTERN, $column) === 1
+            || $this->looksLikeLaravelCiphertext($value);
     }
 
     private function looksLikeLaravelCiphertext(mixed $value, int $depth = 0): bool
@@ -72,6 +86,11 @@ class ColumnRedactor
             return $this->looksLikeLaravelCiphertext($jsonValue, $depth + 1);
         }
 
+        return $this->isLaravelCiphertextEnvelope($value);
+    }
+
+    private function isLaravelCiphertextEnvelope(string $value): bool
+    {
         $decoded = base64_decode($value, true);
 
         if ($decoded === false) {

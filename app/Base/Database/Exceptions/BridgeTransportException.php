@@ -35,4 +35,9 @@ class BridgeTransportException extends RuntimeException
     {
         return new self(__('The target refused or could not receive the Data Bridge package: :reason', ['reason' => $reason]), 502);
     }
+
+    public static function protectedReceiptStorageUnavailable(): self
+    {
+        return new self(__('Could not allocate protected Data Bridge receipt storage.'), 500);
+    }
 }

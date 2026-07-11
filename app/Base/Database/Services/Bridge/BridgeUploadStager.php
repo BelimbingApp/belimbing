@@ -32,7 +32,7 @@ class BridgeUploadStager
         $temporary = tempnam(sys_get_temp_dir(), 'blb-bridge-receive-');
 
         if ($temporary === false) {
-            throw BridgeTransportException::invalidUpload();
+            throw BridgeTransportException::protectedReceiptStorageUnavailable();
         }
 
         @chmod($temporary, 0600);
