@@ -9,7 +9,6 @@ use App\Base\Database\DTO\Bridge\SerializedTablePayload;
 use App\Base\Database\Exceptions\BridgeDefinitionException;
 use App\Base\Database\Exceptions\BridgePackageException;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 use Throwable;
 
 class RelationalDataSerializer
@@ -57,7 +56,7 @@ class RelationalDataSerializer
         $stream = fopen($path, 'wb');
 
         if ($stream === false) {
-            throw new RuntimeException(__('Could not open a temporary Data Export payload.'));
+            throw BridgePackageException::temporaryStorageOpenFailed();
         }
 
         $records = 0;
@@ -118,7 +117,7 @@ class RelationalDataSerializer
 
         if ($bytes === false || $sha256 === false) {
             @unlink($path);
-            throw new RuntimeException(__('Could not inspect a temporary Data Export payload.'));
+            throw BridgePackageException::payloadInspectionFailed();
         }
 
         return new SerializedTablePayload($path, [
@@ -148,7 +147,7 @@ class RelationalDataSerializer
         $path = tempnam(sys_get_temp_dir(), 'blb-data-export-table-');
 
         if ($path === false) {
-            throw new RuntimeException(__('Could not allocate temporary Data Export storage.'));
+            throw BridgePackageException::temporaryStorageUnavailable();
         }
 
         @chmod($path, 0600);
@@ -167,7 +166,7 @@ class RelationalDataSerializer
         }
 
         if (fwrite($stream, $line) !== strlen($line)) {
-            throw new RuntimeException(__('Could not write a canonical Data Export payload.'));
+            throw BridgePackageException::payloadWriteFailed();
         }
     }
 }

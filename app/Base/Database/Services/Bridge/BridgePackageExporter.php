@@ -12,7 +12,6 @@ use App\Base\Database\Exceptions\BridgePackageException;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Throwable;
 
 class BridgePackageExporter
@@ -80,7 +79,7 @@ class BridgePackageExporter
             $sha256 = hash_file('sha256', $temporaryPackage);
 
             if ($bytes === false || $sha256 === false) {
-                throw new RuntimeException(__('Could not inspect the Data Bridge package.'));
+                throw BridgePackageException::payloadInspectionFailed();
             }
 
             $this->guardPackageSize($bytes, $grant->maxBytes);
@@ -186,7 +185,7 @@ class BridgePackageExporter
         $path = tempnam(sys_get_temp_dir(), 'blb-bridge-package-');
 
         if ($path === false) {
-            throw new RuntimeException(__('Could not allocate temporary Data Bridge package storage.'));
+            throw BridgePackageException::temporaryStorageUnavailable();
         }
 
         @chmod($path, 0600);
@@ -194,7 +193,7 @@ class BridgePackageExporter
 
         if ($output === false) {
             @unlink($path);
-            throw new RuntimeException(__('Could not open temporary Data Bridge package storage.'));
+            throw BridgePackageException::temporaryStorageOpenFailed();
         }
 
         try {
@@ -207,7 +206,7 @@ class BridgePackageExporter
                 $input = fopen($payload->path, 'rb');
 
                 if ($input === false) {
-                    throw new RuntimeException(__('Could not reopen a Data Export payload.'));
+                    throw BridgePackageException::payloadReopenFailed();
                 }
 
                 try {

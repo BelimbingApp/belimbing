@@ -71,7 +71,7 @@ class SessionStateDevelopmentSanitizer implements DevelopmentSanitizationContrib
     {
         $table = (string) config('session.table', 'sessions');
 
-        if (preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $table) !== 1 || ! Schema::hasTable($table)) {
+        if (preg_match('/\A[A-Za-z_]\w*\z/', $table) !== 1 || ! Schema::hasTable($table)) {
             throw DevelopmentSanitizationException::missingTable($table);
         }
 

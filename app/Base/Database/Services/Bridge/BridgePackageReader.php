@@ -57,19 +57,7 @@ class BridgePackageReader
         $headerLine = $this->readCanonicalLine($stream);
         hash_update($packageHash, $headerLine['raw']);
         $bytes += strlen($headerLine['raw']);
-        $header = $headerLine['value'];
-
-        if (($header['format'] ?? null) !== BridgePackageExporter::FORMAT) {
-            throw BridgePackageException::unsupportedFormat((string) ($header['format'] ?? 'missing'));
-        }
-
-        $manifest = $header['manifest'] ?? null;
-
-        if (! is_array($manifest)) {
-            throw BridgePackageException::invalidPackage(__('the manifest is missing.'));
-        }
-
-        $this->validateManifestShape($manifest);
+        $manifest = $this->validatedHeaderManifest($headerLine['value']);
         $scope = $this->catalog->scope($manifest['scope']['name'], $manifest['scope']['tables']);
         $payloadMetadata = $manifest['payloads'];
 
@@ -92,20 +80,11 @@ class BridgePackageReader
             $this->validatePayloadMetadata($metadata);
             $payloadHash = hash_init('sha256');
             $remaining = (int) $metadata['bytes'];
-            $tableLine = $this->readPayloadLine($stream, $remaining, $payloadHash, $packageHash, $bytes);
+            $readLine = function () use ($stream, &$remaining, $payloadHash, $packageHash, &$bytes): array {
+                return $this->readPayloadLine($stream, $remaining, $payloadHash, $packageHash, $bytes);
+            };
             $destinationSchema = $this->schemas->forTable($table);
-
-            if (($tableLine['kind'] ?? null) !== 'table'
-                || ($tableLine['name'] ?? null) !== $table->table
-                || ($tableLine['primary_key_columns'] ?? null) !== $table->primaryKeyColumns
-                || ($tableLine['schema_sha256'] ?? null) !== $metadata['schema_sha256']
-                || ! is_array($tableLine['schema'] ?? null)
-                || ! hash_equals(
-                    (string) $metadata['schema_sha256'],
-                    hash('sha256', CanonicalJson::encode($tableLine['schema'] ?? null)),
-                )) {
-                throw BridgePackageException::schemaMismatch($table->table);
-            }
+            $tableLine = $this->validatedTableHeader($readLine(), $table, $metadata);
 
             $this->compatibility->assertCompatible(
                 $tableLine['schema'],
@@ -114,45 +93,15 @@ class BridgePackageReader
                 $destinationDriver,
             );
 
-            $tableRecords = 0;
-            $seen = [];
-
-            while (true) {
-                $line = $this->readPayloadLine($stream, $remaining, $payloadHash, $packageHash, $bytes);
-
-                if (($line['kind'] ?? null) === 'table_end') {
-                    if ($line !== ['kind' => 'table_end', 'name' => $table->table]) {
-                        throw BridgePackageException::invalidPackage(__('table terminator is malformed.'));
-                    }
-
-                    break;
-                }
-
-                $keyJson = $this->validateRecord($line, $table);
-                $keyHash = hash('sha256', $keyJson);
-
-                if (isset($seen[$keyHash])) {
-                    throw BridgePackageException::duplicatePrimaryKey($table->table);
-                }
-
-                $seen[$keyHash] = true;
-                $recordCount++;
-                $tableRecords++;
-
-                if ($recordCount > $maximumRecords) {
-                    throw BridgePackageException::tooManyRecords($maximumRecords);
-                }
-
-                if ($onRecord !== null) {
-                    $onRecord($scope, $table, $line);
-                }
-            }
-
-            if ($remaining !== 0
-                || $tableRecords !== (int) $metadata['records']
-                || ! hash_equals((string) $metadata['sha256'], hash_final($payloadHash))) {
-                throw BridgePackageException::payloadHashMismatch($table->table);
-            }
+            $tableRecords = $this->inspectTableRecords(
+                $readLine,
+                $scope,
+                $table,
+                $recordCount,
+                $maximumRecords,
+                $onRecord,
+            );
+            $this->validatePayloadCompletion($table, $metadata, $remaining, $tableRecords, $payloadHash);
         }
 
         if (fgetc($stream) !== false) {
@@ -167,6 +116,124 @@ class BridgePackageReader
         }
 
         return new VerifiedBridgePackage($manifest, hash_final($packageHash), $bytes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $header
+     * @return array<string, mixed>
+     */
+    private function validatedHeaderManifest(array $header): array
+    {
+        if (($header['format'] ?? null) !== BridgePackageExporter::FORMAT) {
+            throw BridgePackageException::unsupportedFormat((string) ($header['format'] ?? 'missing'));
+        }
+
+        $manifest = $header['manifest'] ?? null;
+
+        if (! is_array($manifest)) {
+            throw BridgePackageException::invalidPackage(__('the manifest is missing.'));
+        }
+
+        $this->validateManifestShape($manifest);
+
+        return $manifest;
+    }
+
+    /**
+     * @param  array<string, mixed>  $line
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function validatedTableHeader(
+        array $line,
+        BridgeTableDefinition $table,
+        array $metadata,
+    ): array {
+        if (($line['kind'] ?? null) !== 'table'
+            || ($line['name'] ?? null) !== $table->table
+            || ($line['primary_key_columns'] ?? null) !== $table->primaryKeyColumns
+            || ($line['schema_sha256'] ?? null) !== $metadata['schema_sha256']
+            || ! is_array($line['schema'] ?? null)
+            || ! hash_equals(
+                (string) $metadata['schema_sha256'],
+                hash('sha256', CanonicalJson::encode($line['schema'] ?? null)),
+            )) {
+            throw BridgePackageException::schemaMismatch($table->table);
+        }
+
+        return $line;
+    }
+
+    /**
+     * @param  callable(): array<string, mixed>  $readLine
+     * @param  (callable(BridgeScopeDefinition, BridgeTableDefinition, array<string, mixed>): void)|null  $onRecord
+     */
+    private function inspectTableRecords(
+        callable $readLine,
+        BridgeScopeDefinition $scope,
+        BridgeTableDefinition $table,
+        int &$recordCount,
+        int $maximumRecords,
+        ?callable $onRecord,
+    ): int {
+        $tableRecords = 0;
+        $seen = [];
+
+        while (true) {
+            $line = $readLine();
+
+            if (($line['kind'] ?? null) === 'table_end') {
+                $this->validateTableTerminator($line, $table);
+
+                break;
+            }
+
+            $keyHash = hash('sha256', $this->validateRecord($line, $table));
+
+            if (isset($seen[$keyHash])) {
+                throw BridgePackageException::duplicatePrimaryKey($table->table);
+            }
+
+            $seen[$keyHash] = true;
+            $recordCount++;
+            $tableRecords++;
+
+            if ($recordCount > $maximumRecords) {
+                throw BridgePackageException::tooManyRecords($maximumRecords);
+            }
+
+            if ($onRecord !== null) {
+                $onRecord($scope, $table, $line);
+            }
+        }
+
+        return $tableRecords;
+    }
+
+    /** @param array<string, mixed> $line */
+    private function validateTableTerminator(array $line, BridgeTableDefinition $table): void
+    {
+        if ($line !== ['kind' => 'table_end', 'name' => $table->table]) {
+            throw BridgePackageException::invalidPackage(__('table terminator is malformed.'));
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @param  resource  $payloadHash
+     */
+    private function validatePayloadCompletion(
+        BridgeTableDefinition $table,
+        array $metadata,
+        int $remaining,
+        int $tableRecords,
+        $payloadHash,
+    ): void {
+        if ($remaining !== 0
+            || $tableRecords !== (int) $metadata['records']
+            || ! hash_equals((string) $metadata['sha256'], hash_final($payloadHash))) {
+            throw BridgePackageException::payloadHashMismatch($table->table);
+        }
     }
 
     /** @param array<string, mixed> $manifest */

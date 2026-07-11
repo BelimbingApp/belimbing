@@ -28,6 +28,8 @@ class DiagnosticRowCapture
 
     public const FORMAT_VERSION = 1;
 
+    private const DEFAULT_PATH_PREFIX = 'bridge/diagnostics';
+
     public function __construct(
         private TableInspector $inspector,
         private DependencyClosureResolver $closure,
@@ -118,7 +120,7 @@ class DiagnosticRowCapture
         ];
 
         $json = CanonicalJson::encode($package);
-        $path = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics')
+        $path = $this->settings->pathPrefix('bridge.path_prefix', self::DEFAULT_PATH_PREFIX)
             .'/'.now()->format('Ymd_His').'-'.$packageId.'.json';
 
         $this->guardPackageSize(strlen($json));
@@ -144,7 +146,7 @@ class DiagnosticRowCapture
     public function listPackages(): array
     {
         $disk = $this->disk();
-        $prefix = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics');
+        $prefix = $this->settings->pathPrefix('bridge.path_prefix', self::DEFAULT_PATH_PREFIX);
         $maxPackageBytes = $this->settings->integer('bridge.limits.max_package_bytes', 25 * 1024 * 1024, 1, 2147483647);
         $packages = [];
 
@@ -193,7 +195,7 @@ class DiagnosticRowCapture
 
     public function deletePackage(string $path): bool
     {
-        $prefix = $this->settings->pathPrefix('bridge.path_prefix', 'bridge/diagnostics');
+        $prefix = $this->settings->pathPrefix('bridge.path_prefix', self::DEFAULT_PATH_PREFIX);
 
         if (! str_starts_with($path, $prefix.'/') || str_contains($path, '..')) {
             return false;

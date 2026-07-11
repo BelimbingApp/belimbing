@@ -42,6 +42,14 @@ use Symfony\Component\Process\Process;
 const GENERIC_BRIDGE_SCOPE = 'tests/fixtures/data-export';
 const GENERIC_BRIDGE_PARENT = 'test_bridge_parents';
 const GENERIC_BRIDGE_CHILD = 'test_bridge_children';
+const GENERIC_BRIDGE_SOURCE_NAME = 'Generic source';
+const GENERIC_BRIDGE_BINARY_PAYLOAD = "\x00\xFFbridge";
+const GENERIC_BRIDGE_PRIMARY_ENDPOINT = 'https://livenpc.lan:8443';
+const GENERIC_BRIDGE_FALLBACK_ENDPOINT = 'https://bridge.example.test';
+const GENERIC_BRIDGE_INVALID_GRANT_MESSAGE = 'invalid, unavailable, or expired';
+const GENERIC_BRIDGE_CONTENT_TYPE = 'application/x-ndjson';
+const GENERIC_BRIDGE_ACCEPT = 'application/json';
+const GENERIC_BRIDGE_AUTHORIZATION_PREFIX = 'Bearer ';
 
 beforeEach(function (): void {
     Storage::fake('local');
@@ -49,7 +57,7 @@ beforeEach(function (): void {
         'app.env' => 'testing',
         'bridge.disk' => 'local',
         'bridge.instance.id' => 'generic-source-dev',
-        'bridge.instance.name' => 'Generic source',
+        'bridge.instance.name' => GENERIC_BRIDGE_SOURCE_NAME,
         'bridge.instance.role' => 'development',
         'bridge.outgoing_path_prefix' => 'bridge/outgoing',
         'bridge.incoming_path_prefix' => 'bridge/incoming',
@@ -96,7 +104,7 @@ function seedGenericBridgeFixture(): void
             'metadata' => json_encode(['nested' => ['ready' => true]], JSON_THROW_ON_ERROR),
             'effective_on' => '2026-07-10',
             'amount' => '12.3400',
-            'payload' => "\x00\xFFbridge",
+            'payload' => GENERIC_BRIDGE_BINARY_PAYLOAD,
         ],
         [
             'id' => 10,
@@ -119,14 +127,14 @@ function seedGenericBridgeFixture(): void
 
 function genericBridgeSource(): BridgeInstanceIdentity
 {
-    return new BridgeInstanceIdentity('generic-source-dev', 'Generic source', BridgeInstanceRole::Development);
+    return new BridgeInstanceIdentity('generic-source-dev', GENERIC_BRIDGE_SOURCE_NAME, BridgeInstanceRole::Development);
 }
 
 function becomeGenericBridgeSource(): void
 {
     config([
         'bridge.instance.id' => 'generic-source-dev',
-        'bridge.instance.name' => 'Generic source',
+        'bridge.instance.name' => GENERIC_BRIDGE_SOURCE_NAME,
         'bridge.instance.role' => 'development',
     ]);
 }
@@ -172,6 +180,17 @@ function becomeGenericBridgeProductionDestination(): BridgeInstanceIdentity
         'Generic production destination',
         BridgeInstanceRole::Production,
     );
+}
+
+/** @return array<string, string> */
+function genericBridgeReceiveServer(BridgeReceiveGrantBundle $bundle, int $contentLength): array
+{
+    return [
+        'CONTENT_LENGTH' => (string) $contentLength,
+        'CONTENT_TYPE' => GENERIC_BRIDGE_CONTENT_TYPE,
+        'HTTP_ACCEPT' => GENERIC_BRIDGE_ACCEPT,
+        'HTTP_AUTHORIZATION' => GENERIC_BRIDGE_AUTHORIZATION_PREFIX.$bundle->secret,
+    ];
 }
 
 function issueGenericBridgeProductionGrant(): BridgeReceiveGrantBundle
@@ -251,8 +270,8 @@ it('rejects a selected foreign-key cycle that has no generic insert order', func
 
 it('issues a copy-once receive key while persisting only its hash and public policy', function (): void {
     config(['bridge.receive_grants.base_urls' => [
-        'https://livenpc.lan:8443',
-        'https://bridge.example.test',
+        GENERIC_BRIDGE_PRIMARY_ENDPOINT,
+        GENERIC_BRIDGE_FALLBACK_ENDPOINT,
     ]]);
     $bundle = issueGenericBridgeGrant();
     $grant = BridgeReceiveGrant::query()->where('grant_id', $bundle->grantId)->firstOrFail();
@@ -266,8 +285,8 @@ it('issues a copy-once receive key while persisting only its hash and public pol
         ->and($decoded->target->id)->toBe('generic-destination-stage')
         ->and($decoded->scope)->toBe(GENERIC_BRIDGE_SCOPE)
         ->and($decoded->endpoints)->toBe([
-            'https://livenpc.lan:8443/data-bridge/receive/'.$bundle->grantId,
-            'https://bridge.example.test/data-bridge/receive/'.$bundle->grantId,
+            GENERIC_BRIDGE_PRIMARY_ENDPOINT.'/data-bridge/receive/'.$bundle->grantId,
+            GENERIC_BRIDGE_FALLBACK_ENDPOINT.'/data-bridge/receive/'.$bundle->grantId,
         ])
         ->and($decoded->endpoint)->toBe($decoded->endpoints[0])
         ->and($grant->issued_by_actor_id)->toBe(9001);
@@ -419,7 +438,7 @@ it('lets an authorized target user issue and permanently hide a copy-once receiv
 
     $component = Livewire::test(BridgeIndex::class)
         ->set('grantSourceId', 'generic-source-dev')
-        ->set('grantSourceName', 'Generic source')
+        ->set('grantSourceName', GENERIC_BRIDGE_SOURCE_NAME)
         ->set('grantSourceRole', 'development')
         ->set('grantScope', GENERIC_BRIDGE_SCOPE)
         ->call('issueReceiveGrant')
@@ -444,7 +463,7 @@ it('stores Data Bridge operator configuration in Base Settings and uses it at ru
         ->assertSee('Data Bridge Settings')
         ->assertSee('Advertised HTTPS routes')
         ->assertSet('values.bridge__instance__id', 'generic-source-dev')
-        ->assertSet('values.bridge__instance__name', 'Generic source')
+        ->assertSet('values.bridge__instance__name', GENERIC_BRIDGE_SOURCE_NAME)
         ->assertSet('values.bridge__instance__role', 'development')
         ->set('values.bridge__instance__id', 'settings-target')
         ->set('values.bridge__instance__name', 'Settings target')
@@ -510,8 +529,8 @@ it('resolves each Base Setting only once per bridge service instance', function 
 it('applies a pasted receive key to the exact target scope and whole-module selection', function (): void {
     seedGenericBridgeFixture();
     config(['bridge.receive_grants.base_urls' => [
-        'https://livenpc.lan:8443',
-        'https://bridge.example.test',
+        GENERIC_BRIDGE_PRIMARY_ENDPOINT,
+        GENERIC_BRIDGE_FALLBACK_ENDPOINT,
     ]]);
     $bundle = issueGenericBridgeGrant();
     becomeGenericBridgeSource();
@@ -566,7 +585,7 @@ it('exports deterministic bounded table payloads with physical identities and bi
         ->and($parent['values']['id'])->toBe(2)
         ->and($parent['values']['metadata'])->toBe('{"nested":{"ready":true}}')
         ->and($parent['values']['amount'])->toBe('12.34')
-        ->and($parent['values']['payload'])->toBe(['__bridge_binary_base64' => base64_encode("\x00\xFFbridge")])
+        ->and($parent['values']['payload'])->toBe(['__bridge_binary_base64' => base64_encode(GENERIC_BRIDGE_BINARY_PAYLOAD)])
         ->and(Storage::disk('local')->get($result->path))->not->toContain($grant->secret)
         ->and($result->bytes)->toBeLessThan((int) config('bridge.transfer_limits.max_package_bytes'));
 });
@@ -610,7 +629,7 @@ it('plans and applies inserts, preserves relationships, rejects replay, and make
 
     expect($result->counts['insert'])->toBe(3)
         ->and($parent['name'])->toBe('Éclair شركة')
-        ->and($parent['payload'])->toBe("\x00\xFFbridge")
+        ->and($parent['payload'])->toBe(GENERIC_BRIDGE_BINARY_PAYLOAD)
         ->and((int) $child['parent_id'])->toBe(10)
         ->and(BridgeEvent::query()->pluck('action')->all())
         ->toContain('grant_issued', 'exported', 'grant_consumed', 'received', 'planned', 'applied');
@@ -827,17 +846,17 @@ it('rejects revoked, expired, malformed, and incorrect receive keys before readi
     $manager->revoke($grant);
 
     expect(fn () => $manager->authenticate($bundle->grantId, $bundle->secret))
-        ->toThrow(BridgeTransportException::class, 'invalid, unavailable, or expired')
+        ->toThrow(BridgeTransportException::class, GENERIC_BRIDGE_INVALID_GRANT_MESSAGE)
         ->and(fn () => BridgeReceiveGrantBundle::fromJson('{"not":"a grant"}'))
         ->toThrow(BridgeTransportException::class, 'malformed');
 
     $fresh = issueGenericBridgeGrant();
     expect(fn () => $manager->authenticate($fresh->grantId, str_repeat('a', 43)))
-        ->toThrow(BridgeTransportException::class, 'invalid, unavailable, or expired');
+        ->toThrow(BridgeTransportException::class, GENERIC_BRIDGE_INVALID_GRANT_MESSAGE);
 
     BridgeReceiveGrant::query()->where('grant_id', $fresh->grantId)->update(['expires_at' => now('UTC')->subSecond()]);
     expect(fn () => $manager->authenticate($fresh->grantId, $fresh->secret))
-        ->toThrow(BridgeTransportException::class, 'invalid, unavailable, or expired');
+        ->toThrow(BridgeTransportException::class, GENERIC_BRIDGE_INVALID_GRANT_MESSAGE);
 });
 
 it('rejects tampered bytes and packages above the configured receipt bound', function (): void {
@@ -864,12 +883,7 @@ it('streams a one-time authorized HTTP receipt without planning or applying', fu
     becomeGenericBridgeDestination();
     $path = (string) parse_url($bundle->endpoint, PHP_URL_PATH);
 
-    $response = $this->call('POST', $path, server: [
-        'CONTENT_LENGTH' => (string) strlen($raw),
-        'CONTENT_TYPE' => 'application/x-ndjson',
-        'HTTP_ACCEPT' => 'application/json',
-        'HTTP_AUTHORIZATION' => 'Bearer '.$bundle->secret,
-    ], content: $raw);
+    $response = $this->call('POST', $path, server: genericBridgeReceiveServer($bundle, strlen($raw)), content: $raw);
 
     $response->assertAccepted()
         ->assertJsonPath('package_id', $export->packageId)
@@ -882,12 +896,8 @@ it('streams a one-time authorized HTTP receipt without planning or applying', fu
         ->and(BridgeReceiveGrant::query()->where('grant_id', $bundle->grantId)->value('status'))->toBe('consumed')
         ->and(DB::table(GENERIC_BRIDGE_PARENT)->where('id', 2)->exists())->toBeTrue();
 
-    $this->call('POST', $path, server: [
-        'CONTENT_LENGTH' => (string) strlen($raw),
-        'CONTENT_TYPE' => 'application/x-ndjson',
-        'HTTP_ACCEPT' => 'application/json',
-        'HTTP_AUTHORIZATION' => 'Bearer '.$bundle->secret,
-    ], content: $raw)->assertUnauthorized();
+    $this->call('POST', $path, server: genericBridgeReceiveServer($bundle, strlen($raw)), content: $raw)
+        ->assertUnauthorized();
 });
 
 it('leaves a receive key usable when a streamed package is truncated before verification', function (): void {
@@ -897,24 +907,14 @@ it('leaves a receive key usable when a streamed package is truncated before veri
     $truncated = substr($raw, 0, -32);
     becomeGenericBridgeDestination();
     $path = (string) parse_url($bundle->endpoint, PHP_URL_PATH);
-    $server = [
-        'CONTENT_TYPE' => 'application/x-ndjson',
-        'HTTP_ACCEPT' => 'application/json',
-        'HTTP_AUTHORIZATION' => 'Bearer '.$bundle->secret,
-    ];
-
-    $this->call('POST', $path, server: [
-        ...$server,
-        'CONTENT_LENGTH' => (string) strlen($truncated),
-    ], content: $truncated)->assertUnprocessable();
+    $this->call('POST', $path, server: genericBridgeReceiveServer($bundle, strlen($truncated)), content: $truncated)
+        ->assertUnprocessable();
 
     expect(BridgeReceiveGrant::query()->where('grant_id', $bundle->grantId)->value('status'))->toBe('issued')
         ->and(BridgeReceipt::query()->count())->toBe(0);
 
-    $this->call('POST', $path, server: [
-        ...$server,
-        'CONTENT_LENGTH' => (string) strlen($raw),
-    ], content: $raw)->assertAccepted();
+    $this->call('POST', $path, server: genericBridgeReceiveServer($bundle, strlen($raw)), content: $raw)
+        ->assertAccepted();
 
     expect(BridgeReceiveGrant::query()->where('grant_id', $bundle->grantId)->value('status'))->toBe('consumed')
         ->and(BridgeReceipt::query()->count())->toBe(1);
@@ -937,16 +937,16 @@ it('binds an admitted package hash to the consumed receive grant', function (): 
 it('streams the protected Outgoing file with bearer auth and verifies the target receipt response', function (): void {
     seedGenericBridgeFixture();
     config(['bridge.receive_grants.base_urls' => [
-        'https://livenpc.lan:8443',
-        'https://bridge.example.test',
+        GENERIC_BRIDGE_PRIMARY_ENDPOINT,
+        GENERIC_BRIDGE_FALLBACK_ENDPOINT,
     ]]);
     ['export' => $export, 'grant' => $bundle] = exportGenericBridgeFixture();
     $selectedGrant = $bundle->usingEndpoint($bundle->endpoints[1]);
     $requestWasExact = false;
     Http::fake(function ($request) use ($selectedGrant, $export, &$requestWasExact) {
         $requestWasExact = $request->url() === $selectedGrant->endpoint
-            && $request->hasHeader('Authorization', 'Bearer '.$selectedGrant->secret)
-            && $request->hasHeader('Content-Type', 'application/x-ndjson')
+            && $request->hasHeader('Authorization', GENERIC_BRIDGE_AUTHORIZATION_PREFIX.$selectedGrant->secret)
+            && $request->hasHeader('Content-Type', GENERIC_BRIDGE_CONTENT_TYPE)
             && $request->hasHeader('Content-Length', (string) $export->bytes)
             && strlen($request->body()) === $export->bytes;
 
