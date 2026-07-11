@@ -1,5 +1,5 @@
 ---
-version: beta
+version: stable
 name: Belimbing
 description: Professional, compact, warm workflow UI for long operational sessions.
 ---
@@ -29,10 +29,6 @@ Compact, high-signal layouts; responsive on narrow screens. Compact does not mea
 ## Subtle depth
 
 Subtle contrast, borders, and shadows; motion clarifies state at 60fps.
-
-## Coherent shapes
-
-Coherent rounded language; no mixed corner styles in one view.
 
 ## Reuse components
 
