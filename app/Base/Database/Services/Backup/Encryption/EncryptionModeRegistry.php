@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Services\Backup\Encryption;
 
 use App\Base\Database\Exceptions\BackupException;
@@ -19,7 +20,7 @@ final class EncryptionModeRegistry
 
     /**
      * @param  callable(array<string, mixed>): EncryptionMode  $factory
-     *    Receives the resolved `config('backup')` array.
+     *                                                                   Receives the resolved `config('backup')` array.
      */
     public function register(string $mode, callable $factory): void
     {

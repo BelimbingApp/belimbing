@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Services;
 
 use App\Base\Database\Exceptions\BlbQueryException;

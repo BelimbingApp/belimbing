@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Seeders;
 
 use App\Base\Database\Exceptions\DevSeederProductionEnvironmentException;

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Services\Backup\Encryption;
 
 use App\Base\Database\Exceptions\BackupException;
@@ -48,7 +49,7 @@ final class NoneEncryption implements EncryptionMode
 
         @chmod($destinationPath, 0600);
 
-        return new EncryptResult();
+        return new EncryptResult;
     }
 
     public function decryptFile(string $sourcePath, string $destinationPath, ?Manifest $manifest = null): void

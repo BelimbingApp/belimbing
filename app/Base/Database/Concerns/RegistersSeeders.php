@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Concerns;
 
 use App\Base\Database\Models\SeederRegistry;

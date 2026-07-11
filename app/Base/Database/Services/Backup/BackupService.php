@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Services\Backup;
 
 use App\Base\Database\Exceptions\BackupException;

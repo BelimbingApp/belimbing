@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Concerns\InteractsWithModuleMigrations;

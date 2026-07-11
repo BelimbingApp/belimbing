@@ -9,6 +9,4 @@ namespace App\Base\Database\Concerns;
  * using this trait. Keep this marker source-local so coding agents can find it
  * beside the schema they are editing.
  */
-trait IncubatingSchema
-{
-}
+trait IncubatingSchema {}

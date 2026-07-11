@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Middleware;
 
 use Closure;

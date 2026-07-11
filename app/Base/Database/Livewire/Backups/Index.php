@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Database\Livewire\Backups;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -260,13 +261,13 @@ class Index extends Component
         $this->requireCapability('admin.system.database-backup.manage');
 
         $coerced = match ($field) {
-            'backup.enabled'                  => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
-            'backup.disk'                     => trim((string) $value),
-            'backup.path_prefix'              => trim((string) $value),
-            'backup.encryption.mode'          => trim((string) $value),
-            'backup.retention.keep_days'      => (string) max(0, (int) $value),
-            'backup.retention.keep_count'     => (string) max(0, (int) $value),
-            default                           => null,
+            'backup.enabled' => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
+            'backup.disk' => trim((string) $value),
+            'backup.path_prefix' => trim((string) $value),
+            'backup.encryption.mode' => trim((string) $value),
+            'backup.retention.keep_days' => (string) max(0, (int) $value),
+            'backup.retention.keep_count' => (string) max(0, (int) $value),
+            default => null,
         };
 
         if ($coerced === null) {
@@ -292,14 +293,14 @@ class Index extends Component
         $base = (array) config('backup', []);
 
         return array_replace($base, [
-            'enabled'     => (bool) filter_var($settings->get('backup.enabled', $base['enabled'] ?? true), FILTER_VALIDATE_BOOLEAN),
-            'disk'        => (string) $settings->get('backup.disk', $base['disk'] ?? 'local'),
+            'enabled' => (bool) filter_var($settings->get('backup.enabled', $base['enabled'] ?? true), FILTER_VALIDATE_BOOLEAN),
+            'disk' => (string) $settings->get('backup.disk', $base['disk'] ?? 'local'),
             'path_prefix' => (string) $settings->get('backup.path_prefix', $base['path_prefix'] ?? 'backups'),
-            'encryption'  => array_replace($base['encryption'] ?? [], [
+            'encryption' => array_replace($base['encryption'] ?? [], [
                 'mode' => (string) $settings->get('backup.encryption.mode', $base['encryption']['mode'] ?? 'app-key'),
             ]),
-            'retention'   => array_replace($base['retention'] ?? [], [
-                'keep_days'  => (int) $settings->get('backup.retention.keep_days', $base['retention']['keep_days'] ?? 30),
+            'retention' => array_replace($base['retention'] ?? [], [
+                'keep_days' => (int) $settings->get('backup.retention.keep_days', $base['retention']['keep_days'] ?? 30),
                 'keep_count' => (int) $settings->get('backup.retention.keep_count', $base['retention']['keep_count'] ?? 7),
             ]),
         ]);
