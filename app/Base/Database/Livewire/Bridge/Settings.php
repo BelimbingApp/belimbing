@@ -68,10 +68,14 @@ class Settings extends SettingsForm
     {
         $key = $this->formKey('bridge.receive_grants.base_urls');
         $raw = trim((string) ($this->values[$key] ?? ''));
-        $urls = $raw === '' ? [] : array_values(array_unique(array_filter(array_map(
-            'trim',
-            preg_split('/[\r\n,]+/', $raw) ?: [],
-        ))));
+        $urls = [];
+
+        if ($raw !== '') {
+            $urls = array_values(array_unique(array_filter(array_map(
+                'trim',
+                preg_split('/[\r\n,]+/', $raw) ?: [],
+            ))));
+        }
 
         if (! is_array($urls) || count($urls) > 5) {
             $this->fail($key, __('Enter at most five HTTPS base URLs.'));

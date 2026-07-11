@@ -18,6 +18,8 @@ use App\Modules\Core\AI\Enums\SkillPackStatus;
  */
 class FilesystemSkillPackLoader
 {
+    private const SKILLS_PATH = '/.agents/skills';
+
     /**
      * @return list<SkillPackManifest>
      */
@@ -53,7 +55,7 @@ class FilesystemSkillPackLoader
 
         foreach ($this->domainModuleRoots() as $identity => $moduleRoot) {
             $roots[] = [
-                'path' => $moduleRoot.'/.agents/skills',
+                'path' => $moduleRoot.self::SKILLS_PATH,
                 'owner' => 'module:'.$identity,
                 'id_prefix' => 'module.'.$identity,
             ];
@@ -61,14 +63,14 @@ class FilesystemSkillPackLoader
 
         foreach ($this->extensionBundleRoots() as $owner => $bundleRoot) {
             $roots[] = [
-                'path' => $bundleRoot.'/.agents/skills',
+                'path' => $bundleRoot.self::SKILLS_PATH,
                 'owner' => 'extension:'.$owner,
                 'id_prefix' => 'extension.'.$owner,
             ];
 
             foreach ($this->extensionModuleRootsUnderBundle($bundleRoot) as $module) {
                 $roots[] = [
-                    'path' => $bundleRoot.'/'.$module.'/.agents/skills',
+                    'path' => $bundleRoot.'/'.$module.self::SKILLS_PATH,
                     'owner' => 'extension:'.$owner.'/'.$module,
                     'id_prefix' => 'extension.'.$owner.'.'.$module,
                 ];

@@ -188,7 +188,7 @@ class DiagnosticPackageImporter
             $table = is_array($entry) ? ($entry['table'] ?? null) : null;
 
             if (! is_string($table)
-                || preg_match('/\A[A-Za-z_][A-Za-z0-9_]*\z/', $table) !== 1
+                || preg_match('/\A[A-Za-z_]\w*\z/', $table) !== 1
                 || isset($seenTables[$table])) {
                 throw BridgeImportException::invalidPackage(__('a table name is invalid or duplicated.'));
             }

@@ -82,24 +82,23 @@ class SkillSelectionService
         $slugNeedle = $this->trailingSlug($normalized);
 
         foreach ($this->registry->all() as $manifest) {
-            if (! $this->policy->isSkillPackApplicable($manifest, $employeeId)) {
-                continue;
-            }
-
-            if (strtolower($manifest->id) === $normalized) {
-                return $manifest;
-            }
-
-            if ($this->trailingSlug($manifest->id) === $slugNeedle) {
-                return $manifest;
-            }
-
-            if (strtolower($manifest->name) === $normalized) {
+            if ($this->matchesAvailablePack($manifest, $employeeId, $normalized, $slugNeedle)) {
                 return $manifest;
             }
         }
 
         return null;
+    }
+
+    private function matchesAvailablePack(SkillPackManifest $manifest, int $employeeId, string $normalized, string $slugNeedle): bool
+    {
+        if (! $this->policy->isSkillPackApplicable($manifest, $employeeId)) {
+            return false;
+        }
+
+        return strtolower($manifest->id) === $normalized
+            || $this->trailingSlug($manifest->id) === $slugNeedle
+            || strtolower($manifest->name) === $normalized;
     }
 
     /**

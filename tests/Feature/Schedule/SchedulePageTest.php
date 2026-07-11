@@ -33,6 +33,12 @@ use Symfony\Component\Console\Output\NullOutput;
 uses(RefreshDatabase::class);
 
 const SCHEDULE_DIGEST_NAME = 'weekly digest';
+const SCHEDULE_TEST_TASK_ALPHA = 'UI Alpha schedule';
+const SCHEDULE_TEST_TASK_BETA = 'UI Beta schedule';
+const SCHEDULE_TEST_TASK_PAUSED = 'UI Paused schedule';
+const SCHEDULE_TEST_HISTORY_ALPHA = 'UI History Alpha';
+const SCHEDULE_TEST_HISTORY_BETA = 'UI History Beta';
+const SCHEDULE_TEST_CANCELLED_DETAIL = 'Operator cancelled the run.';
 
 beforeEach(function (): void {
     setupAuthzRoles();
@@ -289,9 +295,9 @@ test('schedule tasks can be searched filtered sorted and explained', function ()
         public function tasks(): array
         {
             return [
-                new ScheduleTask('test', 'ui-alpha', 'UI Alpha schedule', '* * * * *', $this->now->copy()->addMinutes(2), 'succeeded'),
-                new ScheduleTask('test', 'ui-beta', 'UI Beta schedule', '0 9 * * *', $this->now->copy()->addHour(), 'failed'),
-                new ScheduleTask('test', 'ui-paused', 'UI Paused schedule', '*/15 * * * *', $this->now->copy()->addMinutes(15), paused: true),
+                new ScheduleTask('test', 'ui-alpha', SCHEDULE_TEST_TASK_ALPHA, '* * * * *', $this->now->copy()->addMinutes(2), 'succeeded'),
+                new ScheduleTask('test', 'ui-beta', SCHEDULE_TEST_TASK_BETA, '0 9 * * *', $this->now->copy()->addHour(), 'failed'),
+                new ScheduleTask('test', 'ui-paused', SCHEDULE_TEST_TASK_PAUSED, '*/15 * * * *', $this->now->copy()->addMinutes(15), paused: true),
             ];
         }
 
@@ -314,24 +320,24 @@ test('schedule tasks can be searched filtered sorted and explained', function ()
         ->call('sortTasks', 'name')
         ->assertViewHas('tasks', function (array $tasks): bool {
             return collect($tasks)->pluck('name')->values()->all() === [
-                'UI Alpha schedule',
-                'UI Beta schedule',
-                'UI Paused schedule',
+                SCHEDULE_TEST_TASK_ALPHA,
+                SCHEDULE_TEST_TASK_BETA,
+                SCHEDULE_TEST_TASK_PAUSED,
             ];
         })
         ->call('sortTasks', 'name')
         ->assertViewHas('tasks', function (array $tasks): bool {
             return collect($tasks)->pluck('name')->values()->all() === [
-                'UI Paused schedule',
-                'UI Beta schedule',
-                'UI Alpha schedule',
+                SCHEDULE_TEST_TASK_PAUSED,
+                SCHEDULE_TEST_TASK_BETA,
+                SCHEDULE_TEST_TASK_ALPHA,
             ];
         })
         ->set('taskSearch', 'beta')
-        ->assertViewHas('tasks', fn (array $tasks): bool => collect($tasks)->pluck('name')->values()->all() === ['UI Beta schedule'])
+        ->assertViewHas('tasks', fn (array $tasks): bool => collect($tasks)->pluck('name')->values()->all() === [SCHEDULE_TEST_TASK_BETA])
         ->set('taskSearch', 'UI')
         ->set('taskStatus', 'paused')
-        ->assertViewHas('tasks', fn (array $tasks): bool => collect($tasks)->pluck('name')->values()->all() === ['UI Paused schedule']);
+        ->assertViewHas('tasks', fn (array $tasks): bool => collect($tasks)->pluck('name')->values()->all() === [SCHEDULE_TEST_TASK_PAUSED]);
 });
 
 test('schedule history can be searched filtered sorted and paginated', function (): void {
@@ -352,7 +358,7 @@ test('schedule history can be searched filtered sorted and paginated', function 
     ScheduleRun::query()->create([
         'source' => 'scheduler',
         'key' => 'ui-history-alpha',
-        'name' => 'UI History Alpha',
+        'name' => SCHEDULE_TEST_HISTORY_ALPHA,
         'status' => 'succeeded',
         'started_at' => $now->copy()->subHour(),
         'finished_at' => $now->copy()->subHour()->addSeconds(42),
@@ -362,7 +368,7 @@ test('schedule history can be searched filtered sorted and paginated', function 
     ScheduleRun::query()->create([
         'source' => 'scheduler',
         'key' => 'ui-history-beta',
-        'name' => 'UI History Beta',
+        'name' => SCHEDULE_TEST_HISTORY_BETA,
         'status' => 'failed',
         'started_at' => $now->copy()->subDays(2),
         'finished_at' => $now->copy()->subDays(2)->addMinutes(2),
@@ -386,17 +392,17 @@ test('schedule history can be searched filtered sorted and paginated', function 
         ->assertSee('Rows per page')
         ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => $runs->total() === 15 && $runs->perPage() === 25)
         ->set('historySearch', 'beta')
-        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->pluck('name')->values()->all() === ['UI History Beta'])
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->pluck('name')->values()->all() === [SCHEDULE_TEST_HISTORY_BETA])
         ->set('historySearch', '')
         ->set('historyStatus', 'failed')
-        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->pluck('name')->values()->all() === ['UI History Beta'])
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->pluck('name')->values()->all() === [SCHEDULE_TEST_HISTORY_BETA])
         ->set('historyStatus', 'all')
         ->set('from', $now->copy()->subDays(3)->toDateString())
         ->assertViewHas('runs', function (LengthAwarePaginator $runs): bool {
             $names = collect($runs->items())->pluck('name');
 
-            return $names->contains('UI History Alpha')
-                && $names->contains('UI History Beta')
+            return $names->contains(SCHEDULE_TEST_HISTORY_ALPHA)
+                && $names->contains(SCHEDULE_TEST_HISTORY_BETA)
                 && ! $names->contains('UI History Gamma');
         })
         ->assertSet('period', 'custom')
@@ -411,7 +417,7 @@ test('schedule history can be searched filtered sorted and paginated', function 
         ->call('sortHistory', 'name')
         ->assertSet('historySort', 'name')
         ->assertSet('historySortDirection', 'asc')
-        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->first()->name === 'UI History Alpha');
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => collect($runs->items())->first()->name === SCHEDULE_TEST_HISTORY_ALPHA);
 });
 
 test('schedule page labels cancelled contributor runs honestly', function (): void {
@@ -423,7 +429,7 @@ test('schedule page labels cancelled contributor runs honestly', function (): vo
         'operation_type' => OperationType::ScheduledTask,
         'task' => 'Prepare agent digest',
         'status' => OperationStatus::Cancelled,
-        'error_message' => 'Operator cancelled the run.',
+        'error_message' => SCHEDULE_TEST_CANCELLED_DETAIL,
         'meta' => ['schedule_description' => 'Agent digest'],
         'started_at' => $startedAt,
         'finished_at' => $finishedAt,
@@ -436,14 +442,14 @@ test('schedule page labels cancelled contributor runs honestly', function (): vo
         ->and($run->status)->toBe('cancelled')
         ->and($run->startedAt->equalTo($startedAt))->toBeTrue()
         ->and($run->finishedAt?->equalTo($finishedAt))->toBeTrue()
-        ->and($run->detail)->toBe('Operator cancelled the run.');
+        ->and($run->detail)->toBe(SCHEDULE_TEST_CANCELLED_DETAIL);
 
     $this->actingAs(createAdminUser());
 
     $this->get(route('admin.system.schedule.index'))
         ->assertOk()
         ->assertSee('Cancelled')
-        ->assertSee('Operator cancelled the run.');
+        ->assertSee(SCHEDULE_TEST_CANCELLED_DETAIL);
 });
 
 test('old schedule urls are not kept as compatibility routes', function (): void {

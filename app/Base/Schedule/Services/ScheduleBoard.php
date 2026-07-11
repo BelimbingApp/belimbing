@@ -157,21 +157,23 @@ class ScheduleBoard
             return null;
         }
 
+        $result = null;
+
         if (is_string($run->output_excerpt) && trim($run->output_excerpt) !== '') {
-            return mb_substr(trim($run->output_excerpt), 0, 240);
+            $result = mb_substr(trim($run->output_excerpt), 0, 240);
+        } elseif ($run->exit_code !== null) {
+            $result = 'Exit '.$run->exit_code;
+        } else {
+            $result = match ($run->status) {
+                'running' => 'Running',
+                'skipped' => 'Skipped',
+                'succeeded' => 'Succeeded',
+                'failed' => 'Failed',
+                default => null,
+            };
         }
 
-        if ($run->exit_code !== null) {
-            return 'Exit '.$run->exit_code;
-        }
-
-        return match ($run->status) {
-            'running' => 'Running',
-            'skipped' => 'Skipped',
-            'succeeded' => 'Succeeded',
-            'failed' => 'Failed',
-            default => null,
-        };
+        return $result;
     }
 
     private function eventTimezone(Event $event): string

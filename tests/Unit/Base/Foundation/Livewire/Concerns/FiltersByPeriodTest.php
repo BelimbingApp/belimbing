@@ -6,6 +6,9 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
+const PERIOD_FILTER_TODAY = '2026-07-10';
+const PERIOD_FILTER_JULY_START = '2026-07-01';
+
 function periodFilterHarness(): object
 {
     return new class
@@ -28,14 +31,14 @@ function periodFilterHarness(): object
 }
 
 it('applies the default period on mount', function (): void {
-    Carbon::setTestNow('2026-07-10 10:00:00');
+    Carbon::setTestNow(PERIOD_FILTER_TODAY.' 10:00:00');
 
     $component = periodFilterHarness();
     $component->mountFiltersByPeriod();
 
     expect($component->period)->toBe('last_30_days')
         ->and($component->from)->toBe('2026-06-11')
-        ->and($component->to)->toBe('2026-07-10');
+        ->and($component->to)->toBe(PERIOD_FILTER_TODAY);
 });
 
 afterEach(function (): void {
@@ -65,7 +68,7 @@ it('reports inverted custom ranges', function (): void {
 });
 
 it('opens custom ranges as drafts and restores the previous preset on cancel', function (): void {
-    Carbon::setTestNow('2026-07-10 10:00:00');
+    Carbon::setTestNow(PERIOD_FILTER_TODAY.' 10:00:00');
 
     $component = periodFilterHarness();
     $component->mountFiltersByPeriod();
@@ -74,7 +77,7 @@ it('opens custom ranges as drafts and restores the previous preset on cancel', f
 
     expect($component->periodRangeModalOpen)->toBeTrue()
         ->and($component->periodDraftFrom)->toBe('2026-06-11')
-        ->and($component->periodDraftTo)->toBe('2026-07-10');
+        ->and($component->periodDraftTo)->toBe(PERIOD_FILTER_TODAY);
 
     $component->cancelPeriodRangeModal();
 
@@ -86,13 +89,13 @@ it('applies a valid custom range from the modal', function (): void {
     $component = periodFilterHarness();
     $component->mountFiltersByPeriod();
     $component->openPeriodRangeModal();
-    $component->periodDraftFrom = '2026-07-01';
-    $component->periodDraftTo = '2026-07-10';
+    $component->periodDraftFrom = PERIOD_FILTER_JULY_START;
+    $component->periodDraftTo = PERIOD_FILTER_TODAY;
     $component->applyPeriodRangeModal();
 
     expect($component->period)->toBe('custom')
-        ->and($component->from)->toBe('2026-07-01')
-        ->and($component->to)->toBe('2026-07-10')
+        ->and($component->from)->toBe(PERIOD_FILTER_JULY_START)
+        ->and($component->to)->toBe(PERIOD_FILTER_TODAY)
         ->and($component->periodRangeModalOpen)->toBeFalse()
         ->and($component->pageReset)->toBeTrue();
 });
@@ -113,8 +116,8 @@ it('keeps an inverted draft range open with a useful error', function (): void {
     $component = periodFilterHarness();
     $component->mountFiltersByPeriod();
     $component->openPeriodRangeModal();
-    $component->periodDraftFrom = '2026-07-10';
-    $component->periodDraftTo = '2026-07-01';
+    $component->periodDraftFrom = PERIOD_FILTER_TODAY;
+    $component->periodDraftTo = PERIOD_FILTER_JULY_START;
     $component->applyPeriodRangeModal();
 
     expect($component->periodRangeModalOpen)->toBeTrue()

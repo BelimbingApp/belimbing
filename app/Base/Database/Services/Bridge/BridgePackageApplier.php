@@ -61,7 +61,7 @@ class BridgePackageApplier
             $this->assertFresh($plan, mutate: false);
             $backup = $this->recovery->create();
 
-            $result = DB::transaction(function () use ($plan, $backup): BridgeApplyResult {
+            return DB::transaction(function () use ($plan, $backup): BridgeApplyResult {
                 $this->assertFresh($plan, mutate: true);
                 $this->synchronizeSequences($plan->receipt->metadata['tables'] ?? []);
                 $summary = $plan->summary;
@@ -84,8 +84,6 @@ class BridgePackageApplier
                     $backup,
                 );
             }, 1);
-
-            return $result;
         } catch (Throwable $e) {
             $this->events->record('apply_failed', $plan, error: $e->getMessage());
             throw $e;

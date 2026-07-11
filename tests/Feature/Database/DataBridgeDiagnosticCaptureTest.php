@@ -16,6 +16,9 @@ use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
+const DIAGNOSTIC_BRIDGE_PATH = 'bridge/diagnostics';
+const OUTSIDE_BRIDGE_PATH = 'backups/important.json';
+
 beforeEach(function (): void {
     Storage::fake('local');
     setupAuthzRoles();
@@ -127,7 +130,7 @@ it('creates a package from the table browser selection flow', function (): void 
         ->assertSet('selectedRowIds', [])
         ->assertSet('captureStatusVariant', 'success');
 
-    expect(Storage::disk('local')->files('bridge/diagnostics'))->toHaveCount(1);
+    expect(Storage::disk('local')->files(DIAGNOSTIC_BRIDGE_PATH))->toHaveCount(1);
 });
 
 it('warns instead of opening the dialog when nothing is selected', function (): void {
@@ -178,13 +181,13 @@ it('lists and deletes packages on the data bridge page', function (): void {
 it('refuses to delete paths outside the bridge storage prefix', function (): void {
     createCaptureTargetUser();
 
-    Storage::disk('local')->put('backups/important.json', '{}');
+    Storage::disk('local')->put(OUTSIDE_BRIDGE_PATH, '{}');
 
     Livewire::test(BridgeIndex::class)
-        ->call('deletePackage', 'backups/important.json')
+        ->call('deletePackage', OUTSIDE_BRIDGE_PATH)
         ->assertSet('statusVariant', 'warning');
 
-    expect(Storage::disk('local')->exists('backups/important.json'))->toBeTrue();
+    expect(Storage::disk('local')->exists(OUTSIDE_BRIDGE_PATH))->toBeTrue();
 });
 
 it('forbids deleting a package without the bridge delete capability', function (): void {
@@ -228,7 +231,7 @@ it('requires the package to match the previewed rows and dependencies', function
         $preview['preview_sha256'],
     ))->toThrow(BridgeCaptureException::class, 'changed after preview');
 
-    expect(Storage::disk('local')->files('bridge/diagnostics'))->toBeEmpty();
+    expect(Storage::disk('local')->files(DIAGNOSTIC_BRIDGE_PATH))->toBeEmpty();
 });
 
 it('refuses a table-browser selection changed after preview', function (): void {
@@ -243,7 +246,7 @@ it('refuses a table-browser selection changed after preview', function (): void 
         ->assertSet('showCaptureModal', false)
         ->assertSet('captureStatusVariant', 'warning');
 
-    expect(Storage::disk('local')->files('bridge/diagnostics'))->toBeEmpty();
+    expect(Storage::disk('local')->files(DIAGNOSTIC_BRIDGE_PATH))->toBeEmpty();
 });
 
 it('detects Laravel ciphertext stored inside a JSON column value', function (): void {

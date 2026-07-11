@@ -27,12 +27,7 @@ class BridgePackageInbox
         $existing = BridgeReceipt::query()->where('package_id', $manifest['package_id'])->first();
 
         if ($existing !== null) {
-            if (hash_equals($existing->package_sha256, $verified->sha256)
-                && $existing->receive_grant_id === $grant->id) {
-                return $existing;
-            }
-
-            throw BridgePackageException::packageIdCollision((string) $manifest['package_id']);
+            return $this->matchingExistingReceipt($existing, $verified, $grant);
         }
 
         $destinationPath = $this->storage->incomingPath((string) $manifest['package_id']);
@@ -43,7 +38,6 @@ class BridgePackageInbox
             return DB::transaction(function () use (
                 $sourcePath,
                 $destinationPath,
-                $disk,
                 $grant,
                 $verified,
                 &$wroteDestination,
@@ -51,17 +45,7 @@ class BridgePackageInbox
                 $consumedGrant = $this->grants->consume($grant->id, $verified->sha256);
 
                 if ($sourcePath !== $destinationPath) {
-                    $source = $disk->readStream($sourcePath);
-
-                    if ($source === false || ! $disk->put($destinationPath, $source)) {
-                        if (is_resource($source)) {
-                            fclose($source);
-                        }
-
-                        throw BridgePackageException::receiveFailed($destinationPath);
-                    }
-
-                    fclose($source);
+                    $this->copyPackage($sourcePath, $destinationPath);
                     $wroteDestination = true;
                 }
 
@@ -79,6 +63,35 @@ class BridgePackageInbox
             }
 
             throw $e;
+        }
+    }
+
+    private function matchingExistingReceipt(
+        BridgeReceipt $receipt,
+        VerifiedBridgePackage $verified,
+        BridgeReceiveGrant $grant,
+    ): BridgeReceipt {
+        if (hash_equals($receipt->package_sha256, $verified->sha256)
+            && $receipt->receive_grant_id === $grant->id) {
+            return $receipt;
+        }
+
+        throw BridgePackageException::packageIdCollision((string) $verified->manifest['package_id']);
+    }
+
+    private function copyPackage(string $sourcePath, string $destinationPath): void
+    {
+        $disk = $this->storage->disk();
+        $source = $disk->readStream($sourcePath);
+
+        try {
+            if ($source === false || ! $disk->put($destinationPath, $source)) {
+                throw BridgePackageException::receiveFailed($destinationPath);
+            }
+        } finally {
+            if (is_resource($source)) {
+                fclose($source);
+            }
         }
     }
 

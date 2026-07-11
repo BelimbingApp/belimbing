@@ -91,25 +91,36 @@ final class BridgeSettings
         $path = $this->normalizedPath($key, $default);
 
         if (array_key_exists($key, self::STORAGE_PATHS)) {
-            $paths = [];
-
-            foreach (self::STORAGE_PATHS as $settingKey => $settingDefault) {
-                $paths[$settingKey] = $settingKey === $key
-                    ? $path
-                    : $this->normalizedPath($settingKey, $settingDefault);
-            }
-
-            foreach ($paths as $leftKey => $left) {
-                foreach ($paths as $rightKey => $right) {
-                    if ($leftKey !== $rightKey
-                        && ($left === $right || str_starts_with($left, $right.'/'))) {
-                        throw BridgePolicyException::invalidSetting($leftKey);
-                    }
-                }
-            }
+            $this->assertStoragePathsDoNotOverlap($this->storagePathsFor($key, $path));
         }
 
         return $path;
+    }
+
+    /** @return array<string, string> */
+    private function storagePathsFor(string $key, string $path): array
+    {
+        $paths = [];
+
+        foreach (self::STORAGE_PATHS as $settingKey => $settingDefault) {
+            $paths[$settingKey] = $settingKey === $key
+                ? $path
+                : $this->normalizedPath($settingKey, $settingDefault);
+        }
+
+        return $paths;
+    }
+
+    /** @param array<string, string> $paths */
+    private function assertStoragePathsDoNotOverlap(array $paths): void
+    {
+        foreach ($paths as $leftKey => $left) {
+            foreach ($paths as $rightKey => $right) {
+                if ($leftKey !== $rightKey && ($left === $right || str_starts_with($left, $right.'/'))) {
+                    throw BridgePolicyException::invalidSetting($leftKey);
+                }
+            }
+        }
     }
 
     private function normalizedPath(string $key, string $default): string

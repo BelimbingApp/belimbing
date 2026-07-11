@@ -5,7 +5,6 @@ namespace App\Base\Database\Services\Bridge;
 use App\Base\Database\DTO\Bridge\StagedBridgeUpload;
 use App\Base\Database\Exceptions\BridgeTransportException;
 use Illuminate\Support\Str;
-use RuntimeException;
 use Throwable;
 
 class BridgeUploadStager
@@ -33,7 +32,7 @@ class BridgeUploadStager
         $temporary = tempnam(sys_get_temp_dir(), 'blb-bridge-receive-');
 
         if ($temporary === false) {
-            throw new RuntimeException(__('Could not allocate protected receipt storage.'));
+            throw BridgeTransportException::protectedReceiptStorageUnavailable();
         }
 
         @chmod($temporary, 0600);
