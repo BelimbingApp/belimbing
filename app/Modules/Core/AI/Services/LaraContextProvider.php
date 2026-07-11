@@ -144,7 +144,9 @@ class LaraContextProvider
 
         return [
             'catalog' => $selection->catalogEntries(),
-            'usage' => 'Catalog lists available skills. Call load_skill with a catalog id before following a procedure. Prefer current_page suggested_skills when present.',
+            'usage' => 'Catalog lists available skills. When the user names a skill or a catalog entry matches the task, '
+                .'call load_skill with the catalog id FIRST - never search or read the filesystem to find a SKILL.md. '
+                .'Prefer current_page suggested_skills when present.',
         ];
     }
 

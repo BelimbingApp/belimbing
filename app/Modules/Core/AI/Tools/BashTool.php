@@ -43,7 +43,11 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
 
     public function description(): string
     {
-        return 'Execute a shell command from the repository core surface and return its output.';
+        return 'Execute a shell command from the repository core surface and return its output. '
+            .'Commands are killed after '.self::TIMEOUT_SECONDS.'s, so scope test runs to one file or filter - full suites will not finish. '
+            .'For PHP/Eloquent snippets, write the code to a file first and run `php artisan tinker <file.php>`; '
+            .'inline `tinker --execute` one-liners with namespaces break under Windows shell quoting. '
+            .'For read-only SQL prefer the query_data tool.';
     }
 
     protected function schema(): ToolSchemaBuilder
