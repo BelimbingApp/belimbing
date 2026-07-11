@@ -69,14 +69,25 @@
     </style>
 </head>
 <body>
+    @php
+        // A link back to the exact page already on screen is not a fix, it's
+        // a reload — say so instead of promising an escape that isn't one
+        // (the screenshot that prompted this: 500 on "/", "Back to home"
+        // pointing at "/" too, so clicking it just replayed the same 500).
+        $currentUrl = url()->current();
+        $primaryHref = $__env->yieldContent('primary-href', url('/'));
+        $primaryIsHere = $primaryHref === $currentUrl;
+        $secondaryHref = $__env->yieldContent('secondary-href', '');
+        $secondaryIsHere = $secondaryHref !== '' && $secondaryHref === $currentUrl;
+    @endphp
     <main>
         <p class="code">@yield('code')</p>
         <h1>@yield('title')</h1>
         <p>@yield('message')</p>
         <div class="actions">
-            <a class="button" href="@yield('primary-href', url('/'))">@yield('primary-label', __('Back to home'))</a>
-            @hasSection('secondary-href')
-                <a class="quiet" href="@yield('secondary-href')">@yield('secondary-label')</a>
+            <a class="button" href="@yield('primary-href', url('/'))">{{ $primaryIsHere ? __('Try again') : $__env->yieldContent('primary-label', __('Back to home')) }}</a>
+            @if($secondaryHref !== '' && ! $secondaryIsHere)
+                <a class="quiet" href="{{ $secondaryHref }}">@yield('secondary-label')</a>
             @endif
         </div>
     </main>

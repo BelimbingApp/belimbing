@@ -8,6 +8,7 @@ use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Foundation\Http\Middleware\SecurityHeaders;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
+use App\Base\System\Services\ReportedErrorRecorder;
 use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Company\Enums\CompanyErrorCode;
 use App\Modules\Core\Employee\Enums\EmployeeErrorCode;
@@ -74,6 +75,13 @@ $reportBlbException = static function (BlbException $exception): void {
         'reason_code' => $exception->reasonCode->value,
         'context' => $exception->context,
     ]);
+};
+
+// Every reported exception — uncaught web/console/queue errors and explicit
+// report() calls alike — also lands in the status-bar diagnostic buffer, so
+// real errors surface in the UI instead of staying log-file-only.
+$recordReportedError = static function (Throwable $exception): void {
+    app(ReportedErrorRecorder::class)->record($exception);
 };
 
 $renderBlbException = static function (BlbException $exception, Request $request) {
@@ -178,10 +186,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $renderUnauthorizedLivewireException,
         $reportBlbException,
         $renderBlbException,
+        $recordReportedError,
     ) {
         $exceptions->render($renderAuthenticationException);
         $exceptions->render($renderTokenMismatchException);
         $exceptions->render($renderUnauthorizedLivewireException);
         $exceptions->report($reportBlbException);
         $exceptions->render($renderBlbException);
+        $exceptions->report($recordReportedError);
     })->create();

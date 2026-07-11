@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Capability;
 
 use InvalidArgumentException;
@@ -19,6 +20,16 @@ final class CapabilityCatalog
      * @var array<int, string>
      */
     private array $capabilities;
+
+    /**
+     * Capabilities dropped by validate() because they fail the key grammar
+     * or reference an unknown domain/verb, keyed by capability with the
+     * reason. A malformed entry from one module must not deny access to
+     * every other capability app-wide - see validate().
+     *
+     * @var array<string, string>
+     */
+    private array $rejected = [];
 
     /**
      * @param  array<int, string>  $domains
@@ -74,24 +85,62 @@ final class CapabilityCatalog
     }
 
     /**
-     * Validate catalog against grammar and domain/verb rules.
+     * Prune capabilities that fail grammar or domain/verb rules instead of
+     * throwing, so one module's malformed authz.php entry cannot take the
+     * whole app down - every request resolves this catalog to wire the
+     * Gate. A dropped capability is simply absent from the registry, so
+     * KnownCapabilityPolicy denies any check against it (fails closed,
+     * same as a typo'd capability key always has). Rejections are reported
+     * so they surface in logs instead of silently vanishing.
      */
     public function validate(): void
     {
-        foreach ($this->capabilities as $capability) {
-            if (! CapabilityKey::isValid($capability)) {
-                throw new InvalidArgumentException("Invalid capability key [$capability].");
-            }
+        $this->rejected = [];
 
-            $parts = CapabilityKey::parse($capability);
+        $this->capabilities = array_values(array_filter(
+            $this->capabilities,
+            function (string $capability): bool {
+                $reason = $this->invalidReason($capability);
 
-            if (! in_array($parts['domain'], $this->domains, true)) {
-                throw new InvalidArgumentException("Unknown capability domain [{$parts['domain']}] for [$capability].");
-            }
+                if ($reason === null) {
+                    return true;
+                }
 
-            if (! in_array($parts['action'], $this->verbs, true)) {
-                throw new InvalidArgumentException("Unknown capability verb [{$parts['action']}] for [$capability].");
+                $this->rejected[$capability] = $reason;
+                report(new InvalidArgumentException("Capability [$capability] excluded from the registry: $reason."));
+
+                return false;
             }
+        ));
+    }
+
+    /**
+     * Capabilities dropped by the last validate() call, keyed by capability
+     * with the rejection reason. Empty when the catalog is entirely clean.
+     *
+     * @return array<string, string>
+     */
+    public function rejected(): array
+    {
+        return $this->rejected;
+    }
+
+    private function invalidReason(string $capability): ?string
+    {
+        if (! CapabilityKey::isValid($capability)) {
+            return 'does not match the domain.resource.action grammar';
         }
+
+        $parts = CapabilityKey::parse($capability);
+
+        if (! in_array($parts['domain'], $this->domains, true)) {
+            return "unknown domain [{$parts['domain']}]";
+        }
+
+        if (! in_array($parts['action'], $this->verbs, true)) {
+            return "unknown verb [{$parts['action']}]";
+        }
+
+        return null;
     }
 }

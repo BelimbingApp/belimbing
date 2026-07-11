@@ -36,3 +36,25 @@ it('throws for unknown capability', function (): void {
     expect(fn () => $registry->assertKnown('core.user.manage'))
         ->toThrow(UnknownCapabilityException::class);
 });
+
+it('prunes a malformed capability instead of failing the whole catalog', function (): void {
+    // One module ships a typo'd verb (as happened with the Data Share
+    // "receive" capability); every other module's capabilities - and the
+    // request that resolves this catalog to wire the Gate - must survive it.
+    $catalog = new CapabilityCatalog(
+        domains: ['admin'],
+        verbs: ['view'],
+        capabilities: ['admin.user.view', 'admin.thing.receive', 'not-a-capability', 'unknown-domain.thing.view'],
+    );
+
+    $catalog->validate();
+
+    expect($catalog->capabilities())->toBe(['admin.user.view'])
+        ->and($catalog->rejected())->toHaveKeys(['admin.thing.receive', 'not-a-capability', 'unknown-domain.thing.view'])
+        ->and($catalog->rejected()['admin.thing.receive'])->toContain('unknown verb');
+
+    $registry = CapabilityRegistry::fromCatalog($catalog);
+
+    expect($registry->has('admin.user.view'))->toBeTrue()
+        ->and($registry->has('admin.thing.receive'))->toBeFalse();
+});
