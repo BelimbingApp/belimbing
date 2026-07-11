@@ -9,6 +9,7 @@ use App\Base\Database\DTO\Bridge\BridgeReceiveGrantBundle;
 use App\Base\Database\DTO\Bridge\BridgeScopeDefinition;
 use App\Base\Database\DTO\Bridge\SerializedBridgeScope;
 use App\Base\Database\Exceptions\BridgePackageException;
+use App\Base\Database\Exceptions\BridgePackageStorageException;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -79,7 +80,7 @@ class BridgePackageExporter
             $sha256 = hash_file('sha256', $temporaryPackage);
 
             if ($bytes === false || $sha256 === false) {
-                throw BridgePackageException::payloadInspectionFailed();
+                throw BridgePackageStorageException::payloadInspectionFailed();
             }
 
             $this->guardPackageSize($bytes, $grant->maxBytes);
@@ -185,7 +186,7 @@ class BridgePackageExporter
         $path = tempnam(sys_get_temp_dir(), 'blb-bridge-package-');
 
         if ($path === false) {
-            throw BridgePackageException::temporaryStorageUnavailable();
+            throw BridgePackageStorageException::temporaryStorageUnavailable();
         }
 
         @chmod($path, 0600);
@@ -193,7 +194,7 @@ class BridgePackageExporter
 
         if ($output === false) {
             @unlink($path);
-            throw BridgePackageException::temporaryStorageOpenFailed();
+            throw BridgePackageStorageException::temporaryStorageOpenFailed();
         }
 
         try {
@@ -206,7 +207,7 @@ class BridgePackageExporter
                 $input = fopen($payload->path, 'rb');
 
                 if ($input === false) {
-                    throw BridgePackageException::payloadReopenFailed();
+                    throw BridgePackageStorageException::payloadReopenFailed();
                 }
 
                 try {
