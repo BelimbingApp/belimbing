@@ -24,5 +24,10 @@ it('keeps the catalog in a mobile drawer so reference content stays primary', fu
         ->assertSee('data-side-panel-mobile-trigger', false)
         ->assertSee('data-side-panel-mobile', false)
         ->assertSee('aria-label="Close catalog"', false)
+        ->assertSee('Catalog: Navigation')
         ->assertSee('Catalog Pages');
+
+    $this->get(route('admin.system.ui-reference.show', ['section' => 'inputs']))
+        ->assertOk()
+        ->assertSee('Catalog: Inputs');
 });

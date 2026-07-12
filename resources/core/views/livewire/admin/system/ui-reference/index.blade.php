@@ -6,7 +6,7 @@
         :default-width="248"
         :min-width="216"
         :max-width="360"
-        :mobile-panel-label="__('Catalog navigation')"
+        :mobile-panel-label="__('Catalog: :section', ['section' => __($currentSection->label())])"
     >
         <x-slot name="mobilePanel">
             @include('livewire.admin.system.ui-reference.partials.section-nav', ['mode' => 'drawer'])
