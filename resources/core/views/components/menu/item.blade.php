@@ -1,4 +1,7 @@
-@props(['item', 'isActive', 'hasActiveChild', 'children'])
+{{-- showRail=false (the mobile drawer, which never collapses to the icon
+     rail) skips the rail-variant markup entirely — it halved the drawer's
+     copy of every menu item. --}}
+@props(['item', 'isActive', 'hasActiveChild', 'children', 'showRail' => true])
 
 <li
     x-data="{ expanded: {{ $hasActiveChild ? 'true' : 'false' }} }"
@@ -21,17 +24,19 @@
 
     @if($item->hasRoute())
         {{-- Link item: rail (icon-only) variant --}}
-        <a
-            x-show="rail"
-            x-cloak
-            href="{{ $href }}"
-            @if($item->route) wire:navigate @endif
-            class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle data-[current]:bg-surface-card data-[current]:text-ink"
-            aria-label="{{ __($item->label) }}"
-            title="{{ $tooltip }}"
-        >
-            <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
-        </a>
+        @if($showRail)
+            <a
+                x-show="rail"
+                x-cloak
+                href="{{ $href }}"
+                @if($item->route) wire:navigate @endif
+                class="flex items-center justify-center w-full h-8 rounded-none transition text-link hover:bg-surface-subtle data-[current]:bg-surface-card data-[current]:text-ink"
+                aria-label="{{ __($item->label) }}"
+                title="{{ $tooltip }}"
+            >
+                <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
+            </a>
+        @endif
 
         {{-- Link item: expanded variant. Active state is driven client-side by
              wire:current (it sets data-current on the matching link), so the
@@ -78,17 +83,19 @@
         </div>
     @else
         {{-- Container item (no route): rail variant --}}
-        <button
-            x-show="rail"
-            x-cloak
-            type="button"
-            @click="expanded = !expanded"
-            class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : 'text-link hover:bg-surface-subtle group-has-[[data-current]]/menuitem:text-ink' }}"
-            aria-label="{{ __($item->label) }}"
-            title="{{ $tooltip }}"
-        >
-            <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
-        </button>
+        @if($showRail)
+            <button
+                x-show="rail"
+                x-cloak
+                type="button"
+                @click="expanded = !expanded"
+                class="flex items-center justify-center w-full h-8 rounded-none transition {{ $isTopLevelContainer ? 'text-accent' : 'text-link hover:bg-surface-subtle group-has-[[data-current]]/menuitem:text-ink' }}"
+                aria-label="{{ __($item->label) }}"
+                title="{{ $tooltip }}"
+            >
+                <x-icon :name="$iconName" class="w-[1.125rem] h-[1.125rem]" />
+            </button>
+        @endif
 
         {{-- Container item: expanded variant --}}
         <div
@@ -120,6 +127,7 @@
                     :isActive="$child['is_active']"
                     :hasActiveChild="$child['has_active_child']"
                     :children="$child['children']"
+                    :showRail="$showRail"
                 />
             @endforeach
         </ul>

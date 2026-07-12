@@ -21,7 +21,8 @@ use Illuminate\Support\Facades\Route;
  */
 final class PerfRegressionStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
-    private const CACHE_KEY = 'perf.route-regressions.v1';
+    /** Read by the dashboard RequestHealth widget too. */
+    public const CACHE_KEY = 'perf.route-regressions.v1';
 
     private const FRESH_SECONDS = 900;
 

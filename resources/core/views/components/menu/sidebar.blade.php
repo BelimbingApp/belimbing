@@ -1,188 +1,16 @@
 @props(['menuTree', 'menuItemsFlat' => [], 'pins' => [], 'honorRail' => true])
 
-@php
-    $defaultRailPinIcon = 'heroicon-o-squares-2x2';
-
-    $pinRailIconNames = collect($pins)
-        ->pluck('icon')
-        ->merge(collect($menuItemsFlat)->pluck('icon'))
-        ->filter()
-        ->unique()
-        ->values();
-
-    if (! $pinRailIconNames->contains($defaultRailPinIcon)) {
-        $pinRailIconNames->push($defaultRailPinIcon);
-    }
-
-    $pinRailIconSvgs = $pinRailIconNames->mapWithKeys(
-        static fn (string $name): array => [
-            $name => \Illuminate\Support\Facades\Blade::render(
-                '<x-icon :name="$name" class="w-[1.125rem] h-[1.125rem]" />',
-                ['name' => $name],
-            ),
-        ],
-    )->all();
-@endphp
-
 <aside
     {{ $attributes->class([
         'shrink-0 bg-surface-sidebar h-full w-full flex flex-col border-r border-border-default',
     ]) }}
     @toggle-page-pin.window="togglePagePin($event.detail)"
     @pins-synced.window="pins = $event.detail.pins"
-    x-data="{
-        pins: @js($pins),
-        _dragIdx: null,
-        _dropIdx: null,
-
-        {{-- Rail (icon-only) is a desktop-column affordance driven by the global
-             shell store. The mobile drawer has a fixed width with room for labels,
-             so it opts out (honorRail=false) and always renders expanded. Reading
-             a scoped `rail` here (instead of $store.shell.rail directly) lets the
-             whole menu tree resolve it up the Alpine scope chain. --}}
-        honorRail: @js($honorRail),
-        get rail() {
-            return this.honorRail ? this.$store.shell.rail : false;
-        },
-
-        _normalizeUrl(url) {
-            try {
-                const u = new URL(url, window.location.origin);
-                return u.pathname.replace(/\/+$/, '') || '/';
-            } catch { return url; }
-        },
-
-        isPinnedByUrl(url) {
-            const needle = this._normalizeUrl(url);
-            return this.pins.some(p => this._normalizeUrl(p.url) === needle);
-        },
-
-        _acquireLock() {
-            if (window.__pinBusy) return false;
-            window.__pinBusy = true;
-            return true;
-        },
-        _releaseLock() { window.__pinBusy = false; },
-        _syncPins(pins) {
-            this.pins = pins;
-            window.dispatchEvent(new CustomEvent('pins-synced', { detail: { pins } }));
-        },
-
-        _apiHeaders() {
-            return {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content ?? '',
-                'Accept': 'application/json',
-            };
-        },
-
-        _toggleByUrl(label, url, icon) {
-            if (!this._acquireLock()) return;
-
-            const wasPinned = this.isPinnedByUrl(url);
-            const prevPins = [...this.pins];
-
-            if (wasPinned) {
-                const needle = this._normalizeUrl(url);
-                this.pins = this.pins.filter(p => this._normalizeUrl(p.url) !== needle);
-            } else {
-                this.pins.push({ id: null, label, url, icon: icon ?? null });
-            }
-
-            fetch('{{ route('pins.toggle') }}', {
-                method: 'POST',
-                headers: this._apiHeaders(),
-                body: JSON.stringify({ label, url, icon: icon ?? null }),
-            })
-            .then(r => r.ok ? r.json() : Promise.reject(r))
-            .then(data => { this._syncPins(data.pins); })
-            .catch(() => { this._syncPins(prevPins); })
-            .finally(() => { this._releaseLock(); });
-        },
-
-        togglePin(id) {
-            const item = this.menuItemsFlat[id];
-            if (!item) return;
-            this._toggleByUrl(item.pinLabel, item.href, item.icon);
-        },
-
-        unpinFromSidebar(pin) {
-            this._toggleByUrl(pin.label, pin.url, pin.icon);
-        },
-
-        togglePagePin(detail) {
-            const { label, url, icon } = detail;
-            this._toggleByUrl(label, url, icon);
-        },
-
-        reorderPins(orderedPins) {
-            this.pins = orderedPins;
-
-            fetch('{{ route('pins.reorder') }}', {
-                method: 'POST',
-                headers: this._apiHeaders(),
-                body: JSON.stringify({
-                    pins: orderedPins.map(pin => ({ id: pin.id })),
-                }),
-            })
-            .then(r => r.ok ? r.json() : Promise.reject(r))
-            .then(data => { this.pins = data.pins; })
-            .catch(() => {
-                {{-- Silently keep optimistic order on failure --}}
-            });
-        },
-
-        {{-- Drag-reorder handlers --}}
-        pinDragStart(idx, event) {
-            this._dragIdx = idx;
-            event.dataTransfer.effectAllowed = 'move';
-            event.dataTransfer.setData('text/plain', idx);
-        },
-        pinDragOver(idx, event) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-            this._dropIdx = idx;
-        },
-        pinDrop(idx) {
-            if (this._dragIdx === null || this._dragIdx === idx) {
-                this._dragIdx = null;
-                this._dropIdx = null;
-                return;
-            }
-            const reorderedPins = [...this.pins];
-            const [moved] = reorderedPins.splice(this._dragIdx, 1);
-            reorderedPins.splice(idx, 0, moved);
-            this._dragIdx = null;
-            this._dropIdx = null;
-            this.reorderPins(reorderedPins);
-        },
-        pinDragEnd() {
-            this._dragIdx = null;
-            this._dropIdx = null;
-        },
-
-        defaultRailPinIcon: @js($defaultRailPinIcon),
-        pinRailIconSvgs: @js($pinRailIconSvgs),
-        pinRailIconName(pin) {
-            if (pin?.icon) {
-                return pin.icon;
-            }
-            const needle = this._normalizeUrl(pin.url);
-            for (const id in this.menuItemsFlat) {
-                const item = this.menuItemsFlat[id];
-                if (item?.href && this._normalizeUrl(item.href) === needle) {
-                    return item.icon ?? this.defaultRailPinIcon;
-                }
-            }
-            return this.defaultRailPinIcon;
-        },
-        pinRailIconHtml(pin) {
-            const name = this.pinRailIconName(pin);
-            return this.pinRailIconSvgs[name] ?? this.pinRailIconSvgs[this.defaultRailPinIcon];
-        },
-
-        menuItemsFlat: @js($menuItemsFlat),
-    }"
+    {{-- Methods live in resources/core/js/sidebar-menu.js (blbSidebarMenu);
+         shared data (pins, menu items, icon refs) comes from the layout's
+         #blb-menu-data blob so the desktop column and mobile drawer don't
+         each carry a copy. Only the per-instance rail preference is inline. --}}
+    x-data="blbSidebarMenu({ honorRail: @js($honorRail) })"
 >
     {{-- Pinned section (above divider) --}}
     <template x-if="pins.length > 0">
@@ -256,7 +84,7 @@
 
     {{-- Main menu tree (scrollable) --}}
     <nav class="flex-1 overflow-y-auto px-0.5 py-0.5" aria-label="{{ __('Main navigation') }}">
-        <x-menu.tree :items="$menuTree" />
+        <x-menu.tree :items="$menuTree" :showRail="$honorRail" />
     </nav>
 
     {{-- Footer: User + Logout --}}

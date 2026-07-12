@@ -87,6 +87,16 @@ it('hides the diagnostic from users without the perf capability', function (): v
     expect(collect(app(PerfRegressionStatusDiagnosticProvider::class)->diagnosticsFor($user)))->toBeEmpty();
 });
 
+it('summarizes the last day on the dashboard widget', function (): void {
+    writeRegressionFixture($this->perfDir, 'dashboard', daysAgo: 0, ms: 400, count: 12);
+
+    Livewire\Livewire::actingAs(createAdminUser())
+        ->test(App\Base\Perf\Livewire\Widgets\RequestHealth::class)
+        ->assertSee('12')
+        ->assertSee('400 ms')
+        ->assertSee('dashboard');
+});
+
 it('caches a snapshot that survives hardened cache serialization', function (): void {
     writeRegressionFixture($this->perfDir, 'dashboard', daysAgo: 3, ms: 300, count: 20);
     writeRegressionFixture($this->perfDir, 'dashboard', daysAgo: 0, ms: 2000, count: 15);

@@ -36,12 +36,58 @@
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
+    {{-- Icon sprite — every <x-icon> on authenticated pages emits a <use>
+         against these definitions. Persisted so wire:navigate keeps the sprite
+         while page content (and its icon references) swap. --}}
+    @persist('icon-sprite')
+        @unless($skipShellRender)
+            @include('partials.icon-sprite')
+        @endunless
+    @endpersist
+
     {{-- Top Bar — persisted region: its content is page-independent (logo, company,
          user, timezone, locale), so keep the same DOM across wire:navigate instead
          of tearing down and rebuilding the full-width bar (which read as a flash). --}}
     @persist('top-bar')
         @unless($skipShellRender)
             <x-layouts.top-bar />
+        @endunless
+    @endpersist
+
+    {{-- Shared sidebar data (pins, flat menu items, rail icon refs) read by
+         blbSidebarMenu in both sidebar copies — inlining it per copy doubled
+         ~70 KB of JSON on every full load. Persisted like the chrome that
+         consumes it. --}}
+    @persist('menu-data')
+        @unless($skipShellRender)
+            @php
+                // Built inside @php on purpose: Blade's component-tag compiler
+                // rewrites <x-icon ...> even inside string literals of {!! !!}
+                // echoes, but leaves @php blocks alone.
+                $defaultRailPinIcon = 'heroicon-o-squares-2x2';
+                $menuDataJson = json_encode([
+                    'pins' => $pins ?? [],
+                    'menuItemsFlat' => $menuItemsFlat ?? [],
+                    'defaultRailPinIcon' => $defaultRailPinIcon,
+                    'pinRailIconSvgs' => collect($pins ?? [])
+                        ->pluck('icon')
+                        ->merge(collect($menuItemsFlat ?? [])->pluck('icon'))
+                        ->filter()
+                        ->push($defaultRailPinIcon)
+                        ->unique()
+                        ->values()
+                        ->mapWithKeys(static fn (string $name): array => [
+                            $name => \Illuminate\Support\Facades\Blade::render(
+                                '<x-icon :name="$name" class="w-[1.125rem] h-[1.125rem]" />',
+                                ['name' => $name],
+                            ),
+                        ])
+                        ->all(),
+                    'toggleUrl' => route('pins.toggle'),
+                    'reorderUrl' => route('pins.reorder'),
+                ], JSON_HEX_TAG | JSON_UNESCAPED_SLASHES);
+            @endphp
+            <script type="application/json" id="blb-menu-data">{!! $menuDataJson !!}</script>
         @endunless
     @endpersist
 

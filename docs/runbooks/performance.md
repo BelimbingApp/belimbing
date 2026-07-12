@@ -56,6 +56,20 @@ group, a per-request collector fed by DB/cache/process listeners, and the
 three artisan commands. Under Octane the `mem_mb` field is the
 worker-lifetime peak, not per-request.
 
+## Shell payload
+
+Full page loads carry the app shell once: an icon sprite
+(`partials/icon-sprite.blade.php`, generated dynamically from
+`IconRegistry::PATHS` — new registry entries appear automatically, no build
+step) that lets `<x-icon>` emit a ~250-byte `<use>` instead of inline path
+data on authenticated pages (guests and mail still inline, keyed off
+`auth()->check()`); a single `#blb-menu-data` JSON blob feeding both sidebar
+copies; and sidebar behavior in `resources/core/js/sidebar-menu.js` instead
+of ~100 KB of inline `x-data` per copy. The mobile drawer skips rail-variant
+markup entirely (`showRail=false`). Dashboard full load measured 1,265 KB →
+883 KB. If the icon registry grows several-fold, the next step is serving the
+sprite as a hash-versioned external file so the browser caches it once.
+
 ## Degradation announces itself
 
 A status-bar diagnostic (`Base/Perf/Services/PerfRegressionStatusDiagnosticProvider`)

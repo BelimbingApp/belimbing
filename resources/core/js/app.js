@@ -1,5 +1,6 @@
 import './shell-layout.js'
 import './shell-navigation.js'
+import './sidebar-menu.js'
 import './auto-navigate.js'
 import './livewire-session-guard.js'
 
