@@ -99,6 +99,22 @@ it('reports dirty and unpushed add-in bundles as one aggregate warning', functio
         ]);
 });
 
+it('reuses the expensive git inventory snapshot across status bar renders', function (): void {
+    $inventory = Mockery::mock(SoftwareInventoryService::class);
+    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')
+        ->once()
+        ->andReturn([
+            softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+        ]);
+    app()->instance(SoftwareInventoryService::class, $inventory);
+
+    $provider = app(SoftwareInventoryStatusDiagnosticProvider::class);
+    $user = createAdminUser();
+
+    expect(collect($provider->diagnosticsFor($user)))->toHaveCount(1)
+        ->and(collect($provider->diagnosticsFor($user)))->toHaveCount(1);
+});
+
 it('hides software diagnostics from users without module inventory access', function (): void {
     $inventory = Mockery::mock(SoftwareInventoryService::class);
     $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');

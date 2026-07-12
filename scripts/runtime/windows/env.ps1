@@ -66,6 +66,23 @@ function Get-BLBPortValue {
     return $port
 }
 
+function Get-BLBPositiveIntegerValue {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Key,
+
+        [Parameter(Mandatory = $true)]
+        [int] $Default
+    )
+
+    $value = Get-BLBEnvValue -Key $Key -Default "$Default"
+    if ($value -notmatch '^\d+$' -or [int] $value -lt 1) {
+        throw "$Key must be a positive integer, got '$value'."
+    }
+
+    return [int] $value
+}
+
 function ConvertTo-BLBTaskToken {
     param([string] $Value)
 
@@ -275,6 +292,9 @@ function Get-BLBBindAddress {
 }
 
 function Set-BLBCaddyEnvironment {
+    $octaneWorkers = Get-BLBPositiveIntegerValue -Key 'OCTANE_WORKERS' -Default 4
+    $octaneMaxRequests = Get-BLBPositiveIntegerValue -Key 'OCTANE_MAX_REQUESTS' -Default 500
+
     $env:APP_DOMAIN = $script:FrontendDomain
     $env:BACKEND_DOMAIN = $script:BackendDomain
     $env:APP_PORT = "$script:AppPort"
@@ -289,9 +309,10 @@ function Set-BLBCaddyEnvironment {
     $env:APP_PUBLIC_PATH = Join-Path $script:ProjectRoot 'public'
     $env:APP_BASE_PATH = $script:ProjectRoot
     $env:LARAVEL_OCTANE = '1'
-    $env:MAX_REQUESTS = Get-BLBEnvValue -Key 'MAX_REQUESTS' -Default '500'
+    $env:OCTANE_WORKERS = "$octaneWorkers"
+    $env:MAX_REQUESTS = "$octaneMaxRequests"
     $env:REQUEST_MAX_EXECUTION_TIME = Get-BLBEnvValue -Key 'REQUEST_MAX_EXECUTION_TIME' -Default '0'
-    $env:CADDY_SERVER_WORKER_DIRECTIVE = ''
+    $env:CADDY_SERVER_WORKER_DIRECTIVE = "num $octaneWorkers"
     $env:CADDY_SERVER_WATCH_DIRECTIVES = ''
 
     New-Item -ItemType Directory -Force -Path $env:CADDY_LOG_DIR | Out-Null
@@ -305,7 +326,7 @@ function Write-BLBOctaneServerState {
             port = $script:HttpsPort
             adminHost = $script:CaddyAdminHost
             adminPort = $script:CaddyAdminPort
-            workers = $null
+            workers = [int] $env:OCTANE_WORKERS
             maxRequests = $env:MAX_REQUESTS
         }
     }

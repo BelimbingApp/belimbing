@@ -20,6 +20,8 @@ runtime env file. The supervised Windows scripts read these keys directly:
 | `HTTPS_PORT` | Pinned local origin port. External ingress must dial this exact port. |
 | `CADDY_SERVER_ADMIN_PORT` | Pinned Caddy admin API port used by reload/deploy. |
 | `CADDY_BIND_ADDRESS` | Usually `127.0.0.1` behind tunnels/proxies; explicit LAN/public address for standalone mode. |
+| `OCTANE_WORKERS` | Resident Laravel worker count; defaults to `4`. Keep this explicit when the host needs a different concurrency/memory trade-off. |
+| `OCTANE_MAX_REQUESTS` | Requests handled by each Laravel worker before recycling; defaults to `500`. |
 | `BLB_FRANKENPHP_HOME`, `BLB_GIT_EXECUTABLE`, `BLB_BUN_EXECUTABLE` | Tool paths pinned by setup so SYSTEM tasks do not depend on an interactive user's profile. |
 | `BLB_PUBLIC_HEALTH_URL` | Optional public URL checked by health/deploy when the instance has public ingress. |
 
@@ -169,6 +171,44 @@ Then check Caddy access logs and Laravel logs:
 Get-Content .\.caddy\logs\access.log -Tail 80
 Get-Content .\storage\logs\laravel.log -Tail 120
 ```
+
+### Recurring whole-site latency
+
+If Laravel pages and Vite/static responses become slow together, check host CPU
+before profiling a route. A PHP-only query or lock does not explain simultaneous
+delays in frontend assets.
+
+Native Windows launchers must pass `OCTANE_WORKERS` into FrankenPHP's `worker
+num` setting. Without that setting, FrankenPHP defaults to two workers per CPU;
+on a 16-core host that boots 32 copies of Laravel at once and can monopolize the
+machine during starts and worker reloads. BLB defaults to four workers for this
+reason. Confirm the active value through the Caddy admin API (replace the port
+from `.env` when necessary):
+
+```powershell
+$config = Invoke-RestMethod http://127.0.0.1:2020/config/
+$config.apps.frankenphp.workers | Format-List file_name,num
+```
+
+`num` should match `OCTANE_WORKERS`. If it is absent, update the checkout before
+restarting; do not compensate by enabling filesystem polling in Vite. Vite's
+`server.watch.usePolling` continuously scans the tree and can consume multiple
+CPU cores on Windows while idle.
+
+For authenticated administrators, the shared status bar also checks nested Git
+repositories for add-in drift. Running that inventory synchronously took about
+eight seconds on the Windows development checkout, so BLB keeps a shared fresh
+snapshot for five minutes and serves stale data for up to an hour while it
+refreshes after the response. The Modules and Updates pages retain their live,
+task-specific checks. If this regression returns, measure the underlying scan:
+
+```powershell
+php artisan tinker --execute '$start = microtime(true); app(\App\Base\Software\Services\SoftwareInventoryService::class)->installedBundlesForStatusDiagnostics(); dump(round((microtime(true) - $start) * 1000));'
+```
+
+Do not put filesystem or Git subprocess discovery directly on the shared layout
+render path. Cache it with stale-while-revalidate semantics or move it to an
+explicit diagnostics page/background refresh.
 
 ## Health and alerting
 

@@ -45,6 +45,21 @@ function Get-EnvValue {
     return ($match -replace "^\s*$([regex]::Escape($Key))=", '').Trim('"')
 }
 
+function Get-PositiveIntegerEnvValue {
+    param(
+        [string] $Path,
+        [string] $Key,
+        [int] $Default
+    )
+
+    $value = Get-EnvValue $Path $Key "$Default"
+    if ($value -notmatch '^\d+$' -or [int] $value -lt 1) {
+        throw "$Key must be a positive integer, got '$value'."
+    }
+
+    return [int] $value
+}
+
 function Resolve-FrankenPhpHome {
     if ($env:FRANKENPHP_INSTALL) {
         return $env:FRANKENPHP_INSTALL
@@ -308,7 +323,7 @@ function Write-OctaneServerState {
             port = $Port
             adminHost = $AdminHost
             adminPort = $AdminPort
-            workers = $null
+            workers = [int] $env:OCTANE_WORKERS
             maxRequests = $env:MAX_REQUESTS
         }
     }
@@ -353,6 +368,8 @@ $httpsPortValue = Get-EnvValue $envPath 'HTTPS_PORT' '443'
 $caddyAdminPortValue = Get-EnvValue $envPath 'CADDY_SERVER_ADMIN_PORT' "$CaddyAdminPort"
 $bindHost = Get-EnvValue $envPath 'APP_BIND_HOST' '127.0.0.1'
 $caddyBindAddress = Get-EnvValue $envPath 'CADDY_BIND_ADDRESS' $bindHost
+$octaneWorkers = Get-PositiveIntegerEnvValue $envPath 'OCTANE_WORKERS' 4
+$octaneMaxRequests = Get-PositiveIntegerEnvValue $envPath 'OCTANE_MAX_REQUESTS' 500
 $AppPort = [int] $appPortValue
 $VitePort = [int] $vitePortValue
 $CaddyAdminPort = [int] $caddyAdminPortValue
@@ -377,9 +394,10 @@ $env:CADDY_VITE_SNIPPET = if ($NoVite) { 'scripts/caddy-snippets/vite-disabled.c
 $env:APP_PUBLIC_PATH = Join-Path $ProjectRootPath 'public'
 $env:APP_BASE_PATH = $ProjectRootPath
 $env:LARAVEL_OCTANE = '1'
-$env:MAX_REQUESTS = '500'
+$env:OCTANE_WORKERS = "$octaneWorkers"
+$env:MAX_REQUESTS = "$octaneMaxRequests"
 $env:REQUEST_MAX_EXECUTION_TIME = '0'
-$env:CADDY_SERVER_WORKER_DIRECTIVE = ''
+$env:CADDY_SERVER_WORKER_DIRECTIVE = "num $octaneWorkers"
 $env:CADDY_SERVER_WATCH_DIRECTIVES = ''
 
 # Local OPcache/JIT tuning (raises the 10k file cap, enables tracing JIT, more

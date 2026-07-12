@@ -9,10 +9,17 @@ use App\Base\Software\Inventory\InstalledBundle;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
+    private const INVENTORY_CACHE_KEY = 'software.inventory.status-diagnostics';
+
+    private const INVENTORY_FRESH_SECONDS = 300;
+
+    private const INVENTORY_STALE_SECONDS = 3600;
+
     public function __construct(
         private readonly AuthorizationService $authorizationService,
         private readonly SoftwareInventoryService $inventory,
@@ -35,7 +42,14 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             return $this->updatePageDependencyDiagnostics();
         }
 
-        $bundles = $this->inventory->installedBundlesForStatusDiagnostics();
+        // Nested Git status is especially expensive on Windows. Keep navigation
+        // off that synchronous path and refresh a shared snapshot after the
+        // response once it becomes stale.
+        $bundles = Cache::flexible(
+            self::INVENTORY_CACHE_KEY,
+            [self::INVENTORY_FRESH_SECONDS, self::INVENTORY_STALE_SECONDS],
+            fn (): array => $this->inventory->installedBundlesForStatusDiagnostics(),
+        );
         $diagnostics = [];
 
         $dependencyIssueCount = $this->dependencyIssueCount($bundles);

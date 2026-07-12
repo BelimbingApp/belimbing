@@ -288,6 +288,40 @@ and increases OPcache memory. `scripts/start-app.ps1` loads it automatically via
 editing it. The Defender exclusions above are the larger win; this is
 complementary.
 
+### FrankenPHP worker count
+
+BLB defaults to four resident Laravel workers through `OCTANE_WORKERS`. The
+native Windows launcher passes that value directly to FrankenPHP. This matters
+because FrankenPHP otherwise defaults to two workers per CPU: a 16-core
+developer machine would boot 32 copies of Laravel simultaneously, causing long
+startup/reload CPU spikes and making both pages and frontend assets stall.
+
+Keep the default unless load testing justifies a different value. To confirm
+the running server received it:
+
+```powershell
+$config = Invoke-RestMethod http://127.0.0.1:2020/config/
+$config.apps.frankenphp.workers | Format-List file_name,num
+```
+
+The reported `num` should be `4`, or the explicit `OCTANE_WORKERS` value from
+`.env`. If the entire site becomes slow again, sample the process first:
+
+```powershell
+Get-Process frankenphp,node,php -ErrorAction SilentlyContinue |
+  Select-Object ProcessName,Id,CPU,WorkingSet,StartTime
+```
+
+Avoid `server.watch.usePolling` as a performance workaround. Polling is useful
+only as a short-lived file-lock workaround because it repeatedly scans the
+source tree and can consume multiple CPU cores while the app is otherwise idle.
+
+The authenticated status bar also reports add-in Git drift. BLB caches that
+inventory and refreshes stale data after sending the response; otherwise nested
+`git status` calls can add several seconds to every page on Windows. Keep live
+filesystem/Git inspection on the Modules or Updates pages, not in shared layout
+rendering.
+
 ## File Locks During Renames, Moves, and Branch Switches (Important)
 
 On Windows a file or directory cannot be renamed, moved, or deleted while any
@@ -478,6 +512,17 @@ app feel far slower than a Linux box even on better hardware. See
 [Performance](#performance-important) and add the Defender exclusions. A symptom
 that points here specifically: the *first* visit to each page is slow (seconds)
 while a refresh is fast, and the slowness returns as you move between pages.
+
+If pages, `/resources/app.css`, and JavaScript modules all slow down together,
+check the [FrankenPHP worker count](#frankenphp-worker-count) and process CPU.
+That pattern is host saturation, not a slow Laravel route. Do not enable Vite
+polling; it makes host saturation worse.
+
+If cached frontend assets are fast but every authenticated Laravel page is slow,
+time the software inventory command in the Windows runtime runbook. A multi-
+second result points to nested Git inspection; verify the running checkout
+contains the status-diagnostic stale-while-revalidate cache rather than adding
+more web workers.
 
 ### Browser cannot resolve `local.blb.lara`
 
