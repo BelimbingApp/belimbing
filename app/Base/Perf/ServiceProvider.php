@@ -9,6 +9,8 @@ use App\Base\Perf\Process\CountingProcessFactory;
 use App\Base\Perf\Services\BackgroundWorkRecorder;
 use App\Base\Perf\Services\PerfLog;
 use App\Base\Perf\Services\PerformanceCollector;
+use App\Base\Perf\Services\PerfRegressionStatusDiagnosticProvider;
+use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\CacheMissed;
 use Illuminate\Cache\Events\KeyWritten;
@@ -33,6 +35,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(PerformanceCollector::class);
         $this->app->singleton(PerfLog::class);
         $this->app->singleton(BackgroundWorkRecorder::class);
+        $this->app->singleton(PerfRegressionStatusDiagnosticProvider::class);
+        $this->app->tag(PerfRegressionStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
 
         // The Process facade resolves this binding, so every subprocess spawned
         // through it (git, deploys, PDF tooling, ...) is counted per request.

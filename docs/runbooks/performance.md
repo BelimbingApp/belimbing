@@ -56,6 +56,16 @@ group, a per-request collector fed by DB/cache/process listeners, and the
 three artisan commands. Under Octane the `mem_mb` field is the
 worker-lifetime peak, not per-request.
 
+## Degradation announces itself
+
+A status-bar diagnostic (`Base/Perf/Services/PerfRegressionStatusDiagnosticProvider`)
+compares each route's p95 over the last day against its own p95 over the prior
+six days and warns when a route with real traffic (≥10 hits in both windows)
+gets ≥2× slower and lands above 750 ms. Whoever is signed in with
+`admin.system.perf.view` — human or agent — sees the warning without anyone
+remembering to run `perf:slowest`. The snapshot is cached (scalars only) with
+stale-while-revalidate semantics.
+
 ## Budgets
 
 `tests/Feature/Base/Perf/PerfInstrumentationTest.php` asserts the dashboard

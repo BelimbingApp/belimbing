@@ -461,7 +461,19 @@ try {
     }
 
     if (-not $NoScheduler) {
-        $processes += Start-BelimbingProcess -Name 'Scheduler' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'schedule:work')
+        # The "Belimbing Local Scheduler" Windows task (run-scheduler.ps1)
+        # already owns schedule:work on hosts where setup registered it — and
+        # it self-heals when its process is killed, so checking for a running
+        # process is not enough. Starting a second scheduler makes every
+        # scheduled command fire twice per tick (verified in the perf log:
+        # duplicated cmd: entries each minute).
+        $schedulerTask = Get-ScheduledTask -TaskName 'Belimbing Local Scheduler' -ErrorAction SilentlyContinue
+
+        if ($schedulerTask -and $schedulerTask.State -ne 'Disabled') {
+            Write-Information "The 'Belimbing Local Scheduler' Windows task owns schedule:work; not starting another." -InformationAction Continue
+        } else {
+            $processes += Start-BelimbingProcess -Name 'Scheduler' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'schedule:work')
+        }
     }
 
     if (-not $NoVite) {
