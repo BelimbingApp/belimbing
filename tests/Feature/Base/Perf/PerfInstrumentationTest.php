@@ -1,0 +1,111 @@
+<?php
+
+use App\Base\Perf\Services\PerformanceCollector;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
+
+beforeEach(function (): void {
+    $this->perfDir = storage_path('framework/testing/perf-'.uniqid());
+    config()->set('perf.enabled', true);
+    config()->set('perf.min_ms', 0);
+    config()->set('perf.path', $this->perfDir);
+});
+
+afterEach(function (): void {
+    File::deleteDirectory($this->perfDir);
+});
+
+function latestPerfEntry(string $dir): array
+{
+    $files = glob($dir.'/perf-*.jsonl');
+
+    expect($files)->not->toBeEmpty();
+
+    $lines = array_values(array_filter(explode(PHP_EOL, trim(file_get_contents(end($files))))));
+
+    return json_decode(end($lines), true);
+}
+
+it('records one json line per web request', function (): void {
+    $this->get('/login')->assertOk();
+
+    $entry = latestPerfEntry($this->perfDir);
+
+    expect($entry['path'])->toBe('/login')
+        ->and($entry['method'])->toBe('GET')
+        ->and($entry['status'])->toBe(200)
+        ->and($entry['ms'])->toBeGreaterThan(0)
+        ->and($entry['resp_bytes'])->toBeGreaterThan(0)
+        ->and($entry)->toHaveKeys(['ts', 'route', 'db_ms', 'queries', 'cache_hits', 'cache_misses', 'procs']);
+});
+
+it('counts queries, cache traffic, and subprocesses while a request window is active', function (): void {
+    Process::fake();
+
+    $collector = app(PerformanceCollector::class);
+    $collector->begin();
+
+    DB::select('select 1');
+    Cache::put('perf-test-key', 1, 10);
+    Cache::get('perf-test-key');
+    Cache::get('perf-test-missing');
+    Process::run('git --version');
+
+    $metrics = $collector->end();
+
+    expect($metrics['queries'])->toBeGreaterThanOrEqual(1)
+        ->and($metrics['cache_writes'])->toBeGreaterThanOrEqual(1)
+        ->and($metrics['cache_hits'])->toBeGreaterThanOrEqual(1)
+        ->and($metrics['cache_misses'])->toBeGreaterThanOrEqual(1)
+        ->and($metrics['procs'])->toBe(1);
+});
+
+it('ignores activity outside a request window', function (): void {
+    $collector = app(PerformanceCollector::class);
+    $collector->begin();
+    $collector->end();
+
+    DB::select('select 1');
+
+    $collector->begin();
+
+    expect($collector->end()['queries'])->toBe(0);
+});
+
+it('respects the min_ms threshold', function (): void {
+    config()->set('perf.min_ms', 60_000);
+
+    $this->get('/login')->assertOk();
+
+    expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
+});
+
+it('aggregates the log by route in perf:slowest', function (): void {
+    $this->get('/login')->assertOk();
+    $this->get('/login')->assertOk();
+
+    $this->artisan('perf:slowest', ['--since' => '1h'])
+        ->expectsOutputToContain('login')
+        ->assertSuccessful();
+});
+
+it('keeps shared-chrome page renders within the query budget', function (): void {
+    // Budget guard, not a benchmark: the dashboard render includes the menu
+    // tree, per-item authorization, and the status bar — the shared chrome
+    // every page pays on a full load. A large jump here means an N+1 or new
+    // per-request work crept into that path; fix the regression or, if the
+    // growth is intentional, raise the budget in the same change that adds it.
+    $user = createAdminUser();
+
+    $queries = 0;
+    DB::listen(function () use (&$queries): void {
+        $queries++;
+    });
+
+    $this->actingAs($user)->get(route('dashboard'))->assertOk();
+
+    // Measured 44 on 2026-07-12; the budget is ~2x for organic growth.
+    expect($queries)->toBeLessThanOrEqual(90);
+});

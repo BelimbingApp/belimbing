@@ -8,6 +8,7 @@ use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Foundation\Http\Middleware\SecurityHeaders;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
+use App\Base\Perf\Http\Middleware\RecordRequestPerformance;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Company\Enums\CompanyErrorCode;
@@ -169,6 +170,14 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->preventRequestsDuringMaintenance(except: [
             'admin/system/software/updates',
             'admin/system/software/online',
+        ]);
+
+        // Request performance log: one JSON line per request (wall/DB time,
+        // query count, cache traffic, subprocess spawns) in storage/logs/
+        // perf-*.jsonl. Prepended so its timing wraps the whole web stack.
+        // Query with `php artisan perf:slowest` / `perf:requests`.
+        $middleware->web(prepend: [
+            RecordRequestPerformance::class,
         ]);
 
         // Add database connection recovery middleware to web group

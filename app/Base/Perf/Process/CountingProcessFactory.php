@@ -1,0 +1,24 @@
+<?php
+
+namespace App\Base\Perf\Process;
+
+use App\Base\Perf\Services\PerformanceCollector;
+use Illuminate\Process\Factory;
+use Illuminate\Process\PendingProcess;
+
+/**
+ * Drop-in Process factory that reports every spawned subprocess to the
+ * performance collector. Bound in place of Illuminate\Process\Factory, so
+ * all Process-facade call sites (git, deploy, PDF tooling, ...) are counted
+ * without touching them. Process::fake() keeps working — fakes are state on
+ * this same instance and short-circuit inside PendingProcess::run().
+ */
+final class CountingProcessFactory extends Factory
+{
+    public function __construct(private readonly PerformanceCollector $collector) {}
+
+    public function newPendingProcess(): PendingProcess
+    {
+        return new CountingPendingProcess($this, $this->collector);
+    }
+}
