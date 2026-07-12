@@ -1,6 +1,12 @@
-@props(['title' => null])
+@props([
+    'title' => null,
+    'rounded' => true,
+])
 
-<div {{ $attributes->merge(['class' => 'bg-surface-card border border-border-default rounded-2xl shadow-sm']) }}>
+<div {{ $attributes->class([
+    'border border-border-default bg-surface-card shadow-sm',
+    'rounded-2xl' => $rounded,
+]) }}>
     @if($title)
         <div class="px-6 py-4 border-b border-border-default">
             <h3 class="text-lg font-semibold text-ink">{{ $title }}</h3>
