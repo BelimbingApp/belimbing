@@ -44,6 +44,19 @@ beforeEach(function (): void {
     setupAuthzRoles();
 });
 
+test('local runtime launchers keep the Laravel scheduler alive', function (): void {
+    $package = json_decode(file_get_contents(base_path('package.json')), true, flags: JSON_THROW_ON_ERROR);
+    $windowsStart = file_get_contents(base_path('scripts/start-app.ps1'));
+    $windowsStop = file_get_contents(base_path('scripts/stop-app.ps1'));
+
+    expect($package['scripts']['dev:all'])->toContain('php artisan schedule:work')
+        ->and($package['scripts']['dev:all:watch'])->toContain('php artisan schedule:work')
+        ->and($windowsStart)->toContain("-Name 'Scheduler'")
+        ->and($windowsStart)->toContain("'schedule:work'")
+        ->and($windowsStop)->toContain("-Name 'Scheduler'")
+        ->and($windowsStop)->toContain("'schedule:work'");
+});
+
 function scheduleTestEvent(): Event
 {
     $event = app(Schedule::class)->command('inspire')->description('inspire');

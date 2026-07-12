@@ -138,4 +138,14 @@ Stop-BelimbingProcess -Name 'Queue worker' -Predicate {
     )
 }
 
+Stop-BelimbingProcess -Name 'Scheduler' -Predicate {
+    param($process)
+
+    Test-CommandLineContains $process.CommandLine @(
+        $ProjectRootPath,
+        'artisan',
+        'schedule:work'
+    )
+}
+
 Stop-BelimbingPortListener -Name 'FrankenPHP / Octane' -Port $CaddyAdminPort -AllowedProcessNames @('frankenphp')

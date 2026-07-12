@@ -10,6 +10,7 @@ param(
     [int] $VitePort = 5173,
     [int] $CaddyAdminPort = 2020,
     [switch] $NoQueue,
+    [switch] $NoScheduler,
     [switch] $NoVite,
     [switch] $Watch
 )
@@ -335,7 +336,7 @@ function Write-OctaneServerState {
 $envPath = Join-Path $ProjectRootPath '.env'
 $appEnv = (Get-EnvValue $envPath 'APP_ENV' 'local').ToLowerInvariant()
 if ($appEnv -in @('staging', 'production')) {
-    if ($NoQueue -or $NoVite -or $Watch) {
+    if ($NoQueue -or $NoScheduler -or $NoVite -or $Watch) {
         Write-Warning 'APP_ENV is staging/production; development flags are ignored because the supervised runtime owns the process model.'
     }
 
@@ -443,6 +444,10 @@ try {
 
     if (-not $NoQueue) {
         $processes += Start-BelimbingProcess -Name 'Queue worker' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'queue:work', '--queue=ai-chat-turns,ai-agent-tasks,ai-background-commands,ai-schedules,default', '--tries=1', '--timeout=900', '--sleep=1')
+    }
+
+    if (-not $NoScheduler) {
+        $processes += Start-BelimbingProcess -Name 'Scheduler' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'schedule:work')
     }
 
     if (-not $NoVite) {
