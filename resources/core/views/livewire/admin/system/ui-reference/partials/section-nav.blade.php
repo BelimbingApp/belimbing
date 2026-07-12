@@ -15,14 +15,8 @@
         @endif
     </div>
 
-    <div class="px-1.5 py-1.5 border-b border-border-default bg-surface-pinned">
-        <p class="text-xs text-muted">
-            {{ __('Use the rail as the standard index of UI reference groups. Rich descriptions stay visible so the navigator remains useful during feature ideation, not just page switching.') }}
-        </p>
-    </div>
-
     <nav
-        aria-label="{{ __('UI reference sections') }}"
+        aria-label="{{ __('UI reference pages') }}"
         class="flex-1 overflow-y-auto px-2 pb-2 pt-2"
     >
         @foreach ($sections as $sectionOption)
@@ -67,7 +61,7 @@
                 <x-ui.badge variant="accent">{{ $currentSection->label() }}</x-ui.badge>
             </div>
 
-            <nav aria-label="{{ __('UI reference sections') }}" class="grid gap-2 md:grid-cols-2">
+            <nav aria-label="{{ __('UI reference pages') }}" class="grid gap-2 md:grid-cols-2">
                 @foreach ($sections as $sectionOption)
                     <a
                         href="{{ $this->sectionUrl($sectionOption) }}"
