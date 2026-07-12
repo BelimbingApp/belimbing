@@ -62,6 +62,22 @@ it('counts queries, cache traffic, and subprocesses while a request window is ac
         ->and($metrics['procs'])->toBe(1);
 });
 
+it('keeps Process::fake working through the counting factory', function (): void {
+    // The counting factory replaces Laravel's Process factory binding. If it
+    // drops the fake-handler wiring, Process::fake() silently stops
+    // intercepting and every faked test runs real subprocesses — which is how
+    // deployment tests once ran real runtime reloads against the live dev
+    // server. This must fail loudly if that wiring ever regresses.
+    Process::fake([
+        '*' => Process::result('faked-output'),
+    ]);
+
+    $result = Process::run('definitely-not-a-real-command --flag');
+
+    expect(trim($result->output()))->toBe('faked-output');
+    Process::assertRan(fn ($process): bool => str_contains($process->command, 'definitely-not-a-real-command'));
+});
+
 it('ignores activity outside a request window', function (): void {
     $collector = app(PerformanceCollector::class);
     $collector->begin();
@@ -98,6 +114,12 @@ it('keeps shared-chrome page renders within the query budget', function (): void
     // per-request work crept into that path; fix the regression or, if the
     // growth is intentional, raise the budget in the same change that adds it.
     $user = createAdminUser();
+
+    // The status bar's inventory provider would otherwise run the real nested
+    // git scan (a dozen-plus subprocesses) inside the test process.
+    $inventory = Mockery::mock(App\Base\Software\Services\SoftwareInventoryService::class);
+    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')->andReturn([]);
+    app()->instance(App\Base\Software\Services\SoftwareInventoryService::class, $inventory);
 
     $queries = 0;
     DB::listen(function () use (&$queries): void {

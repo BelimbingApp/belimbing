@@ -27,10 +27,19 @@
     <php>
         <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <!-- cache + array store keeps maintenance mode process-local. The file
+             driver wrote storage/framework/down, which the LIVE dev server also
+             reads: deployment tests calling artisan down took the real site
+             offline for ~35s per run (verified 2026-07-12). -->
+        <env name="APP_MAINTENANCE_DRIVER" value="cache"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
         <env name="CACHE_STORE" value="array"/>
+        <!-- Point tests away from the live FrankenPHP admin API (2020/2019):
+             worker-reload code paths are Http::faked in tests, but an escaped
+             real call must never be able to restart the dev server's workers. -->
+        <env name="CADDY_SERVER_ADMIN_HOST" value="127.0.0.1"/>
+        <env name="CADDY_SERVER_ADMIN_PORT" value="2098"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="MAIL_MAILER" value="array"/>

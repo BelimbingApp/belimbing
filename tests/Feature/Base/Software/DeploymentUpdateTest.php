@@ -85,10 +85,55 @@ function deploymentUniqueRemoteCheckCount(array $status): int
         ->count();
 }
 
+function withDeploymentAdminEnv(string $host, string $port, Closure $callback): void
+{
+    // env() consults $_ENV/$_SERVER before getenv(), and phpunit.xml pins the
+    // admin endpoint there (away from the live dev server). Tests that need a
+    // specific endpoint must set all three sources, then restore the pin.
+    $savedEnv = [];
+
+    foreach (['CADDY_SERVER_ADMIN_HOST' => $host, 'CADDY_SERVER_ADMIN_PORT' => $port] as $key => $value) {
+        $savedEnv[$key] = [$_ENV[$key] ?? null, $_SERVER[$key] ?? null, getenv($key) === false ? null : getenv($key)];
+        putenv("$key=$value");
+        $_ENV[$key] = $value;
+        $_SERVER[$key] = $value;
+    }
+
+    try {
+        $callback();
+    } finally {
+        foreach ($savedEnv as $key => [$env, $server, $getenv]) {
+            if ($env === null) {
+                unset($_ENV[$key]);
+            } else {
+                $_ENV[$key] = $env;
+            }
+
+            if ($server === null) {
+                unset($_SERVER[$key]);
+            } else {
+                $_SERVER[$key] = $server;
+            }
+
+            $getenv === null ? putenv($key) : putenv("$key=$getenv");
+        }
+    }
+}
+
 function withDeploymentOctaneState(?array $state, Closure $callback): void
 {
-    putenv('CADDY_SERVER_ADMIN_HOST');
-    putenv('CADDY_SERVER_ADMIN_PORT');
+    // These tests exercise the state-file resolution chain, so no configured
+    // endpoint may be visible. phpunit.xml pins the admin port away from the
+    // live dev server via <env>, which populates $_ENV/$_SERVER — env() reads
+    // those, not just getenv(), so all three sources must be cleared here
+    // (and restored, so the pin keeps protecting every other test).
+    $savedEnv = [];
+
+    foreach (['CADDY_SERVER_ADMIN_HOST', 'CADDY_SERVER_ADMIN_PORT'] as $key) {
+        $savedEnv[$key] = [$_ENV[$key] ?? null, $_SERVER[$key] ?? null, getenv($key) === false ? null : getenv($key)];
+        putenv($key);
+        unset($_ENV[$key], $_SERVER[$key]);
+    }
 
     $statePath = storage_path('logs/octane-server-state.json');
     $backup = is_file($statePath) ? file_get_contents($statePath) : null;
@@ -101,6 +146,18 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
         $callback();
     } finally {
         $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
+
+        foreach ($savedEnv as $key => [$env, $server, $getenv]) {
+            if ($env !== null) {
+                $_ENV[$key] = $env;
+            }
+            if ($server !== null) {
+                $_SERVER[$key] = $server;
+            }
+            if ($getenv !== null) {
+                putenv("$key=$getenv");
+            }
+        }
     }
 }
 
@@ -724,23 +781,17 @@ test('the update console stays reachable during maintenance and can bring the si
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {
-    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
-    putenv('CADDY_SERVER_ADMIN_PORT=2019');
+    withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2019', function (): void {
+        fakeDeploymentUpdateProcesses();
+        fakeDeploymentUpdateHttp(reloadOk: false);
 
-    fakeDeploymentUpdateProcesses();
-    fakeDeploymentUpdateHttp(reloadOk: false);
-
-    try {
         $log = app(DeploymentService::class)->update(['platform']);
 
         expect($log)->toContain('Warning: web workers were not reloaded because the FrankenPHP admin API at http://127.0.0.1:2019/config/apps/frankenphp did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.')
             ->and($log)->toContain(DEPLOYMENT_UPDATE_VERIFIED_PLATFORM)
             ->and($log)->toContain('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.')
             ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
-    } finally {
-        putenv('CADDY_SERVER_ADMIN_HOST');
-        putenv('CADDY_SERVER_ADMIN_PORT');
-    }
+    });
 });
 
 test('the worker reload reads its admin port from the octane server-state file', function (): void {
@@ -797,14 +848,11 @@ test('the worker reload does not guess the Windows launcher admin port', functio
 });
 
 test('the worker reload retries once when the FrankenPHP admin API times out', function (): void {
-    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
-    putenv('CADDY_SERVER_ADMIN_PORT=2643');
+    withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2643', function (): void {
+        fakeDeploymentUpdateProcesses();
 
-    fakeDeploymentUpdateProcesses();
+        $getAttempts = 0;
 
-    $getAttempts = 0;
-
-    try {
         Http::fake(function ($request) use (&$getAttempts) {
             return fakeDeploymentTimedOutAdminApiResponse($request->url(), $request->method(), $getAttempts);
         });
@@ -813,22 +861,16 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
 
         expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED)
             ->and($getAttempts)->toBe(2);
-    } finally {
-        putenv('CADDY_SERVER_ADMIN_HOST');
-        putenv('CADDY_SERVER_ADMIN_PORT');
-    }
+    });
 });
 
 test('the worker reload records a warning when application health does not recover', function (): void {
-    putenv(DEPLOYMENT_UPDATE_ADMIN_HOST_ENV);
-    putenv('CADDY_SERVER_ADMIN_PORT=2643');
+    withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2643', function (): void {
+        fakeDeploymentUpdateProcesses();
 
-    fakeDeploymentUpdateProcesses();
+        $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
+        $healthUrl = rtrim((string) config('app.url'), '/').'/up';
 
-    $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
-    $healthUrl = rtrim((string) config('app.url'), '/').'/up';
-
-    try {
         Http::fake([
             deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
             deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
@@ -844,10 +886,7 @@ test('the worker reload records a warning when application health does not recov
                 'ok' => false,
                 'message' => "Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503",
             ]);
-    } finally {
-        putenv('CADDY_SERVER_ADMIN_HOST');
-        putenv('CADDY_SERVER_ADMIN_PORT');
-    }
+    });
 });
 
 test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {

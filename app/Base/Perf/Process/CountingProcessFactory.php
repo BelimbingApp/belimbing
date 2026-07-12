@@ -19,6 +19,12 @@ final class CountingProcessFactory extends Factory
 
     public function newPendingProcess(): PendingProcess
     {
-        return new CountingPendingProcess($this, $this->collector);
+        // withFakeHandlers is load-bearing: omitting it silently disabled
+        // Process::fake() app-wide, and deployment tests then ran their
+        // pipelines for real — including detached runtime reloads that
+        // restarted the live dev server's workers (the 2026-07-12 "silent
+        // FrankenPHP deaths"). See tests/Feature/Base/Perf.
+        return (new CountingPendingProcess($this, $this->collector))
+            ->withFakeHandlers($this->fakeHandlers);
     }
 }
