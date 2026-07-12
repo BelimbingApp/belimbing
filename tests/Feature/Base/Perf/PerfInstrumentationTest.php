@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
 
+const PERF_LOGIN_PATH = '/login';
+
 beforeEach(function (): void {
     $this->perfDir = storage_path('framework/testing/perf-'.uniqid());
     config()->set('perf.enabled', true);
@@ -41,11 +43,11 @@ function latestPerfEntry(string $dir): array
 }
 
 it('records one json line per web request', function (): void {
-    $this->get('/login')->assertOk();
+    $this->get(PERF_LOGIN_PATH)->assertOk();
 
     $entry = latestPerfEntry($this->perfDir);
 
-    expect($entry['path'])->toBe('/login')
+    expect($entry['path'])->toBe(PERF_LOGIN_PATH)
         ->and($entry['method'])->toBe('GET')
         ->and($entry['status'])->toBe(200)
         ->and($entry['ms'])->toBeGreaterThan(0)
@@ -105,7 +107,7 @@ it('ignores activity outside a request window', function (): void {
 it('respects the min_ms threshold', function (): void {
     config()->set('perf.min_ms', 60_000);
 
-    $this->get('/login')->assertOk();
+    $this->get(PERF_LOGIN_PATH)->assertOk();
 
     expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
 });
@@ -153,8 +155,8 @@ it('captures the slowest sql statements on a request', function (): void {
 });
 
 it('aggregates the log by route in perf:slowest', function (): void {
-    $this->get('/login')->assertOk();
-    $this->get('/login')->assertOk();
+    $this->get(PERF_LOGIN_PATH)->assertOk();
+    $this->get(PERF_LOGIN_PATH)->assertOk();
 
     $this->artisan('perf:slowest', ['--since' => '1h'])
         ->expectsOutputToContain('login')
