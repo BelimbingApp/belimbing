@@ -2,9 +2,17 @@
     'mode' => 'card',
 ])
 
-@if ($mode === 'rail')
-    <div class="border-b border-border-default px-2 py-1.5">
+@if (in_array($mode, ['rail', 'drawer'], true))
+    <div class="flex items-center justify-between gap-2 border-b border-border-default px-2 py-1.5">
         <span class="text-[11px] uppercase tracking-wider font-semibold text-muted select-none">{{ __('Catalog Pages') }}</span>
+        @if ($mode === 'drawer')
+            <x-ui.icon-action
+                icon="heroicon-o-x-mark"
+                :label="__('Close catalog')"
+                x-ref="mobilePanelClose"
+                @click="closeMobilePanel()"
+            />
+        @endif
     </div>
 
     <div class="px-1.5 py-1.5 border-b border-border-default bg-surface-pinned">
@@ -21,6 +29,7 @@
             <a
                 href="{{ $this->sectionUrl($sectionOption) }}"
                 wire:navigate
+                @if ($mode === 'drawer') @click="closeMobilePanel(false)" @endif
                 @class([
                     'block rounded-2xl px-3 py-3 transition-colors',
                     'bg-accent/10 text-ink' => $currentSection === $sectionOption,
