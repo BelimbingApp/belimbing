@@ -21,6 +21,8 @@ it('keeps the catalog in a mobile drawer so reference content stays primary', fu
     $response = $this->get(route('admin.system.ui-reference.show', ['section' => 'navigation']));
 
     $response->assertOk()
+        ->assertSee('data-side-panel-mobile-trigger-shell', false)
+        ->assertSee('sticky top-0', false)
         ->assertSee('data-side-panel-mobile-trigger', false)
         ->assertSee('data-side-panel-mobile', false)
         ->assertSee('aria-label="Close catalog"', false)

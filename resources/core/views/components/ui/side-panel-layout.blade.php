@@ -60,7 +60,10 @@
     class="space-y-section-gap lg:-mx-1 lg:-my-2"
 >
     @if ($mobilePanel)
-        <div class="lg:hidden">
+        <div
+            class="sticky top-0 z-20 -mx-1 bg-surface-page px-1 py-1 sm:-mx-4 sm:px-4 lg:hidden"
+            data-side-panel-mobile-trigger-shell
+        >
             <x-ui.button
                 type="button"
                 variant="control"
