@@ -66,6 +66,21 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     }
 
     /**
+     * Recompute the snapshot and store it exactly as Cache::flexible would,
+     * so scheduled warming (software:inventory:warm, every ten minutes) keeps
+     * the cache fresh and no page ever pays the multi-second git scan
+     * synchronously. The companion `created` key is Cache::flexible's own
+     * bookkeeping — writing both keeps the request-time fallback coherent.
+     */
+    public function warmInventorySnapshot(): void
+    {
+        Cache::putMany([
+            self::INVENTORY_CACHE_KEY => $this->inventorySnapshot(),
+            'illuminate:cache:flexible:created:'.self::INVENTORY_CACHE_KEY => now()->getTimestamp(),
+        ], self::INVENTORY_STALE_SECONDS);
+    }
+
+    /**
      * The status bar needs only a few scalar facts per bundle. Cache those as
      * plain arrays: cache.serializable_classes is disabled (gadget-chain
      * hardening), so cached objects come back as __PHP_Incomplete_Class.

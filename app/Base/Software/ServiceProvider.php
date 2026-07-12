@@ -3,11 +3,13 @@
 namespace App\Base\Software;
 
 use App\Base\Software\Console\Commands\DomainRuntimeReloadCommand;
+use App\Base\Software\Console\Commands\WarmInventorySnapshotCommand;
 use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
 use App\Base\Software\Services\InventoryContributionDiscoveryService;
 use App\Base\Software\Services\InventoryContributionRegistry;
 use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -16,6 +18,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->commands([
             DomainRuntimeReloadCommand::class,
+            WarmInventorySnapshotCommand::class,
         ]);
 
         $this->app->singleton(InventoryContributionRegistry::class);
@@ -24,6 +27,19 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(SoftwareInventoryStatusDiagnosticProvider::class);
         $this->app->tag(FrankenPhpWorkerStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(SoftwareInventoryStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
+
+        // Register on booted() (not bootstrap/app.php withSchedule) so the
+        // admin Schedule page sees it too. Warming every ten minutes keeps
+        // the status-bar inventory snapshot inside its fresh window, so no
+        // web request ever runs the nested git scan synchronously; the
+        // Cache::flexible fallback in the provider still covers a scheduler
+        // outage.
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('blb:software:inventory:warm')
+                ->everyTenMinutes()
+                ->withoutOverlapping();
+        });
     }
 
     public function boot(InventoryContributionDiscoveryService $contributions): void

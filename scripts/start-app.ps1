@@ -292,7 +292,21 @@ function Start-BelimbingProcess {
     )
 
     Write-Information "Starting $Name..." -InformationAction Continue
-    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $ProjectRootPath -PassThru -NoNewWindow
+
+    # Capture child output to per-process log files. Child stderr previously
+    # went to this launcher's console, so when FrankenPHP or a worker died the
+    # reason was unrecoverable (2026-07-12: two silent FrankenPHP exits with
+    # no trace). Logs are overwritten per launch — the current run's output
+    # is the one that matters, and access/application logs cover history.
+    $slug = ($Name -replace '[^A-Za-z0-9]+', '-').ToLowerInvariant().Trim('-')
+    $logDir = Join-Path $ProjectRootPath 'storage\logs'
+    if (-not (Test-Path $logDir)) {
+        New-Item -ItemType Directory -Force -Path $logDir | Out-Null
+    }
+
+    $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -WorkingDirectory $ProjectRootPath -PassThru -NoNewWindow `
+        -RedirectStandardOutput (Join-Path $logDir "runtime-$slug.out.log") `
+        -RedirectStandardError (Join-Path $logDir "runtime-$slug.err.log")
     return [pscustomobject]@{
         Name = $Name
         Process = $process

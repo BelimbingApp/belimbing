@@ -118,13 +118,24 @@ class TableRegistry extends Model
 
         $declaredTables = self::discoverDeclaredTables();
 
+        // One upsert instead of exists()+update() per table: this runs on
+        // every Database page mount and the registry holds hundreds of rows
+        // (measured 502 queries per visit before batching). The update-column
+        // list leaves stabilized_at/stabilized_by untouched, matching what
+        // register() preserved.
+        $rows = [];
+
         foreach ($declaredTables as $tableName => $metadata) {
-            self::register(
-                $tableName,
-                $metadata['module_name'],
-                $metadata['module_path'],
-                $metadata['migration_file'],
-            );
+            $rows[] = [
+                'table_name' => $tableName,
+                'module_name' => $metadata['module_name'],
+                'module_path' => $metadata['module_path'],
+                'migration_file' => $metadata['migration_file'],
+            ];
+        }
+
+        if ($rows !== []) {
+            self::query()->upsert($rows, ['table_name'], ['module_name', 'module_path', 'migration_file']);
         }
 
         self::ensureInfrastructureRegistered();

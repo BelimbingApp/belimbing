@@ -116,6 +116,24 @@ it('reuses the expensive git inventory snapshot across status bar renders', func
         ->and(collect($provider->diagnosticsFor($user)))->toHaveCount(1);
 });
 
+it('serves status bar renders from a scheduler-warmed snapshot without rescanning', function (): void {
+    $inventory = Mockery::mock(SoftwareInventoryService::class);
+    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')
+        ->once()
+        ->andReturn([
+            softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+        ]);
+    app()->instance(SoftwareInventoryService::class, $inventory);
+
+    $this->artisan('blb:software:inventory:warm')->assertSuccessful();
+
+    // The mock allows exactly one scan: this render must come from the cache.
+    $diagnostics = collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
+
+    expect($diagnostics)->toHaveCount(1)
+        ->and($diagnostics[0]->id)->toBe('software.bundle-drift');
+});
+
 it('caches an inventory snapshot that survives hardened cache serialization', function (): void {
     // Production disables cache.serializable_classes (gadget-chain hardening),
     // so any cached object silently unserializes to __PHP_Incomplete_Class.
