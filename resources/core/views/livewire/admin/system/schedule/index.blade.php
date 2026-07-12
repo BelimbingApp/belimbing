@@ -60,7 +60,7 @@ $tabs = [
         <x-ui.tabs :tabs="$tabs" :default="$tab" persistence="query" query-key="tab" wire-action="setTab">
             <x-ui.tab id="tasks">
                 <x-ui.card>
-                    <div class="mb-3 flex flex-col gap-3 lg:flex-row">
+                    <div class="mb-3 flex flex-col gap-3 sm:flex-row">
                         <div class="min-w-0 flex-1">
                             <label class="sr-only" for="schedule-task-search">{{ __('Search task name') }}</label>
                             <x-ui.search-input
@@ -69,7 +69,7 @@ $tabs = [
                                 placeholder="{{ __('Search task name…') }}"
                             />
                         </div>
-                        <div class="lg:w-64">
+                        <div class="sm:w-64">
                             <label class="sr-only" for="schedule-task-status">{{ __('Task status') }}</label>
                             <x-ui.select id="schedule-task-status" wire:model.live="taskStatus">
                                 @foreach($taskStatusOptions as $value => $label)
