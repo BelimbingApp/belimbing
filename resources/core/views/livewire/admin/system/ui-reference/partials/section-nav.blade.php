@@ -4,7 +4,7 @@
 
 @if (in_array($mode, ['rail', 'drawer'], true))
     <div class="flex items-center justify-between gap-2 border-b border-border-default px-2 py-1.5">
-        <span class="text-[11px] uppercase tracking-wider font-semibold text-muted select-none">{{ __('Catalog Pages') }}</span>
+        <span class="text-[11px] uppercase tracking-wider font-semibold text-muted select-none">{{ __('Catalog') }}</span>
         @if ($mode === 'drawer')
             <x-ui.icon-action
                 icon="heroicon-o-x-mark"
@@ -55,7 +55,7 @@
         <div class="space-y-3">
             <div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
                 <div>
-                    <h2 class="text-sm font-medium text-ink">{{ __('Catalog Pages') }}</h2>
+                    <h2 class="text-sm font-medium text-ink">{{ __('Catalog') }}</h2>
                     <p class="text-xs text-muted">{{ __('Each page has one job. Use the group that matches the design question you are trying to answer.') }}</p>
                 </div>
                 <x-ui.badge variant="accent">{{ $currentSection->label() }}</x-ui.badge>
