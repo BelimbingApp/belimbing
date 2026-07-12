@@ -130,9 +130,20 @@
                             />
                         </dd>
                     </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('Compact open (card/widget header)') }}</dt>
+                        <dd>
+                            <x-ui.icon-action
+                                icon="heroicon-m-arrow-right"
+                                :label="__('Open Dashboard')"
+                                :href="route('dashboard')"
+                                wire:navigate
+                            />
+                        </dd>
+                    </div>
                 </dl>
                 <p class="mt-4 border-t border-border-default pt-3 text-xs text-muted">
-                    {{ __('External and forced-new-tab share the box-arrow — the difference is rel, which the component owns. Copy uses the clipboard glyph, never the box-arrow. Trailing icons say what happens; leading icons say what kind of thing.') }}
+                    {{ __('External and forced-new-tab share the box-arrow — the difference is rel, which the component owns. Copy uses the clipboard glyph, never the box-arrow. Trailing icons say what happens; leading icons say what kind of thing. The compact open action is the one exception to internal links carrying no glyph: it exists for tight card headers where the heading already names the destination — everywhere else, in-app navigation stays a plain x-ui.link.') }}
                 </p>
             </div>
         </div>

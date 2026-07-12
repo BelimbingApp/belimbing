@@ -192,6 +192,7 @@ Things that move the user are links. Things that mutate data are buttons.
 | Modal/dialog | `<button>` | n/a | optional `heroicon-o-arrows-pointing-out` | n/a |
 | Drawer/slide-over | `<button>` | n/a | trailing `heroicon-o-dock-right` | n/a |
 | Mutation | `<button>` | n/a | domain glyph | n/a |
+| Compact open (card/widget header) | `x-ui.icon-action` | n/a | `heroicon-m-arrow-right` | `wire:navigate` |
 
 Rules:
 - Use `x-ui.link`; do not hand-write `target`, `rel`, or affordance icons for text links.
@@ -199,6 +200,7 @@ Rules:
 - External and forced-new-tab both use the box-arrow glyph.
 - Copy always uses clipboard, never box-arrow.
 - Force new tabs only when losing current state is costly or target is side-reference.
+- Use the compact open action (`x-ui.icon-action` with the arrow glyph) only where space is tight and the destination is already named by the surrounding heading — a dashboard widget's card title, not standalone body text. Everywhere else, in-app navigation is `x-ui.link` with no glyph (see the internal-kind row above). `x-ui.widget-header` is the canonical consumer.
 
 ## Read-First Detail Pages
 
