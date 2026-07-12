@@ -10,6 +10,7 @@ use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Defer;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 
@@ -19,9 +20,18 @@ use Livewire\Component;
  * deploy. The actual pull/refresh/migrate/reload lives in DeploymentService so it
  * stays cross-platform and testable.
  */
+#[Defer]
 class Index extends Component
 {
     use FormatsDeploymentRunOutput;
+
+    public function placeholder(): View
+    {
+        // Outside the livewire. view namespace on purpose: component-name
+        // discovery keys off the first view('livewire.*') string in the file
+        // (see ComponentDiscoveryService), which must stay the render() view.
+        return view('placeholders.page');
+    }
 
     /** @var list<string> last action's log lines (persists so the resting panel survives a page visit) */
     #[Session('admin.system.software.updates.run_log')]

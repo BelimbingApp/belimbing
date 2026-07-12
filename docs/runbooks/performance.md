@@ -1,11 +1,15 @@
 # Performance instrumentation
 
-BLB records every web request as one JSON line in
-`storage/logs/perf-YYYY-MM-DD.jsonl`: wall time, DB time and query count,
-cache hits/misses/writes, subprocess spawns (anything through the `Process`
-facade — git, deploys, PDF tooling), response size, and whether the request
-was a `wire:navigate` partial. It is on by default (`PERF_LOG_ENABLED`,
-`PERF_LOG_MIN_MS`, `PERF_LOG_RETENTION_DAYS` in `.env`).
+BLB records every web request, **queue job, and console command** as one JSON
+line in `storage/logs/perf-YYYY-MM-DD.jsonl`: wall time, DB time and query
+count, the top slow SQL statements, cache hits/misses/writes, subprocess
+spawns (anything through the `Process` facade — git, deploys, PDF tooling),
+response size, and whether the request was a `wire:navigate` partial.
+Livewire update requests are attributed to their component (`lw:<name>`), so
+the slowest interactions are visible, not just the slowest pages. It is on by
+default (`PERF_LOG_ENABLED`, `PERF_LOG_MIN_MS`, `PERF_LOG_SLOW_SQL_MIN_MS`,
+`PERF_LOG_RETENTION_DAYS` in `.env`); the test environment disables it in
+phpunit.xml so suites never write into the live log.
 
 The log is built to be queried from the command line — agents are its
 first-class consumers. **Start every "why is X slow" investigation here** —
@@ -18,11 +22,13 @@ and the slowest requests. It renders the same jsonl and never writes; treat
 it as a showcase of the log, not a second source of truth.
 
 ```bash
-# Slowest routes, aggregated (hits, p50/p95/max, avg DB ms, queries, subprocesses)
+# Slowest routes/jobs/commands, aggregated (hits, p50/p95/max, avg DB ms, queries, subprocesses)
 php artisan perf:slowest --since=24h
+php artisan perf:slowest --type=job          # queue jobs only (also: command, http)
 
-# Individual requests, newest first; filter by route-name/path substring
+# Individual entries, newest first; filter by route-name/path substring
 php artisan perf:requests --since=1h --route=dashboard --min-ms=500
+php artisan perf:requests --route=payroll --sql   # print the slowest captured SQL per entry
 
 # Delete files past the retention window
 php artisan perf:prune
@@ -32,6 +38,12 @@ Reading a row:
 
 - High `ms`, low `DB ms`, `Procs > 0` → subprocess cost (usually git); see the
   stale-while-revalidate guidance in [windows-runtime.md](windows-runtime.md).
+  For a page whose own job is the expensive scan (Modules, Updates, GitHub
+  Access), mark the component `#[Defer]` with the shared
+  `placeholders.page` skeleton — the shell renders in ~300 ms and the work
+  streams in as an attributed `lw:` entry. Use `#[Defer]`, not `#[Lazy]`:
+  a full page is always in view, and the intersect trigger does not fire on
+  full-page component roots.
 - High `Queries` per request (three digits) → N+1; find it with
   `perf:requests --route=...`, fix with eager loading.
 - Large `Resp KB` on full loads but not navigate requests → shell payload;

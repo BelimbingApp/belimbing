@@ -3,16 +3,21 @@
 namespace App\Base\Perf\Services;
 
 /**
- * Per-request counters for the performance log.
+ * Per-unit-of-work counters for the performance log.
  *
  * A container singleton so framework-level listeners (DB, cache, process)
- * can reach it cheaply; the middleware calls begin()/end() around each
- * request. Octane keeps the instance alive across requests in a worker,
- * which is why begin() resets every counter instead of relying on fresh
- * construction.
+ * can reach it cheaply; the owner of a work window — the HTTP middleware, a
+ * queue job, a console command — calls begin()/end() around it. begin() is
+ * non-reentrant: a queue job on the sync driver or an Artisan::call inside a
+ * web request stays part of the enclosing window instead of resetting it.
+ * Octane keeps the instance alive across requests in a worker, which is why
+ * begin() resets every counter instead of relying on fresh construction.
  */
 final class PerformanceCollector
 {
+    /** Keep this many slowest SQL statements per window. */
+    private const TOP_SQL_LIMIT = 3;
+
     private bool $active = false;
 
     private int $queries = 0;
@@ -29,8 +34,19 @@ final class PerformanceCollector
 
     private float $processMs = 0.0;
 
-    public function begin(): void
+    /** @var list<array{ms: float, sql: string}> */
+    private array $topSql = [];
+
+    /**
+     * Open a window. Returns false when one is already active — the caller
+     * then does not own the window and must not end() or record it.
+     */
+    public function begin(): bool
     {
+        if ($this->active) {
+            return false;
+        }
+
         $this->active = true;
         $this->queries = 0;
         $this->dbMs = 0.0;
@@ -39,16 +55,22 @@ final class PerformanceCollector
         $this->cacheWrites = 0;
         $this->processes = 0;
         $this->processMs = 0.0;
+        $this->topSql = [];
+
+        return true;
     }
 
     /**
      * Snapshot the counters and deactivate until the next begin().
      *
-     * @return array{queries: int, db_ms: float, cache_hits: int, cache_misses: int, cache_writes: int, procs: int, proc_ms: float}
+     * @return array{queries: int, db_ms: float, cache_hits: int, cache_misses: int, cache_writes: int, procs: int, proc_ms: float, top_sql: list<array{ms: float, sql: string}>}
      */
     public function end(): array
     {
         $this->active = false;
+
+        $topSql = $this->topSql;
+        usort($topSql, fn (array $a, array $b): int => $b['ms'] <=> $a['ms']);
 
         return [
             'queries' => $this->queries,
@@ -58,10 +80,11 @@ final class PerformanceCollector
             'cache_writes' => $this->cacheWrites,
             'procs' => $this->processes,
             'proc_ms' => $this->processMs,
+            'top_sql' => $topSql,
         ];
     }
 
-    public function recordQuery(float $milliseconds): void
+    public function recordQuery(float $milliseconds, string $sql = ''): void
     {
         if (! $this->active) {
             return;
@@ -69,6 +92,10 @@ final class PerformanceCollector
 
         $this->queries++;
         $this->dbMs += $milliseconds;
+
+        if ($sql !== '' && $milliseconds >= (float) config('perf.slow_sql_min_ms')) {
+            $this->rememberSlowSql($milliseconds, $sql);
+        }
     }
 
     public function recordCacheHit(): void
@@ -100,5 +127,18 @@ final class PerformanceCollector
 
         $this->processes++;
         $this->processMs += $milliseconds;
+    }
+
+    private function rememberSlowSql(float $milliseconds, string $sql): void
+    {
+        $this->topSql[] = [
+            'ms' => round($milliseconds, 1),
+            'sql' => mb_substr($sql, 0, 300),
+        ];
+
+        if (count($this->topSql) > self::TOP_SQL_LIMIT) {
+            usort($this->topSql, fn (array $a, array $b): int => $b['ms'] <=> $a['ms']);
+            array_pop($this->topSql);
+        }
     }
 }

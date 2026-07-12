@@ -17,6 +17,18 @@ afterEach(function (): void {
     File::deleteDirectory($this->perfDir);
 });
 
+class PerfInstrumentationFixtureJob implements Illuminate\Contracts\Queue\ShouldQueue
+{
+    use Illuminate\Bus\Queueable;
+    use Illuminate\Foundation\Bus\Dispatchable;
+    use Illuminate\Queue\InteractsWithQueue;
+
+    public function handle(): void
+    {
+        Illuminate\Support\Facades\DB::select('select 1');
+    }
+}
+
 function latestPerfEntry(string $dir): array
 {
     $files = glob($dir.'/perf-*.jsonl');
@@ -96,6 +108,48 @@ it('respects the min_ms threshold', function (): void {
     $this->get('/login')->assertOk();
 
     expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
+});
+
+it('records console commands as command entries', function (): void {
+    // Artisan's in-process test path (Kernel::call) never dispatches the
+    // console events, so drive the recorder through the real event bus the
+    // way `php artisan` does.
+    $input = new Symfony\Component\Console\Input\ArrayInput([]);
+    $output = new Symfony\Component\Console\Output\NullOutput;
+
+    event(new Illuminate\Console\Events\CommandStarting('perf:prune', $input, $output));
+    DB::select('select 1');
+    event(new Illuminate\Console\Events\CommandFinished('perf:prune', $input, $output, 0));
+
+    $entry = latestPerfEntry($this->perfDir);
+
+    expect($entry['type'])->toBe('command')
+        ->and($entry['route'])->toBe('cmd:perf:prune')
+        ->and($entry['method'])->toBe('CMD')
+        ->and($entry['status'])->toBe(200)
+        ->and($entry['queries'])->toBeGreaterThanOrEqual(1);
+});
+
+it('records queue jobs as job entries', function (): void {
+    dispatch(new PerfInstrumentationFixtureJob);
+
+    $entry = latestPerfEntry($this->perfDir);
+
+    expect($entry['type'])->toBe('job')
+        ->and($entry['route'])->toBe('job:'.PerfInstrumentationFixtureJob::class)
+        ->and($entry['queries'])->toBeGreaterThanOrEqual(1);
+});
+
+it('captures the slowest sql statements on a request', function (): void {
+    config()->set('perf.slow_sql_min_ms', 0);
+
+    $this->get('/login')->assertOk();
+
+    $entry = latestPerfEntry($this->perfDir);
+
+    expect($entry['top_sql'])->toBeArray()->not->toBeEmpty()
+        ->and($entry['top_sql'][0])->toHaveKeys(['ms', 'sql'])
+        ->and(count($entry['top_sql']))->toBeLessThanOrEqual(3);
 });
 
 it('aggregates the log by route in perf:slowest', function (): void {

@@ -10,19 +10,25 @@ final class PerfSlowestCommand extends Command
     protected $signature = 'perf:slowest
         {--since=24h : Window to analyze, e.g. 30m, 2h, 7d}
         {--limit=15 : Number of routes to show}
-        {--min-ms=0 : Ignore requests faster than this}';
+        {--min-ms=0 : Ignore requests faster than this}
+        {--type= : Only http, job, or command entries}';
 
-    protected $description = 'Aggregate the request performance log by route, slowest first';
+    protected $description = 'Aggregate the performance log by route/job/command, slowest first';
 
     public function handle(PerfLog $log): int
     {
         $cutoff = PerfLog::parseSince((string) $this->option('since'));
         $minMs = (float) $this->option('min-ms');
+        $type = (string) $this->option('type');
 
         $byRoute = [];
 
         foreach ($log->entriesSince($cutoff) as $entry) {
             if (($entry['ms'] ?? 0) < $minMs) {
+                continue;
+            }
+
+            if ($type !== '' && ($entry['type'] ?? 'http') !== $type) {
                 continue;
             }
 

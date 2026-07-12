@@ -15,6 +15,7 @@ use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Defer;
 use Livewire\Component;
 
 /**
@@ -29,6 +30,7 @@ use Livewire\Component;
  * (lifecycle) screens. Lifecycle goes through DomainInstaller; manifest detail
  * through ModuleManifestReader; the catalog through BelimbingAppCatalogService.
  */
+#[Defer]
 class Modules extends Component
 {
     use InteractsWithNotifications;
@@ -57,9 +59,30 @@ class Modules extends Component
 
     public function mount(?string $tab = null): void
     {
-        $resolved = $tab ?? request()->query('tab');
+        $resolved = $tab ?? request()->query('tab') ?? $this->tabFromReferer();
 
         $this->tab = $resolved === 'available' ? 'available' : 'installed';
+    }
+
+    /**
+     * The page renders #[Defer] (the inventory's nested git scans took ~5 s
+     * synchronously), so mount() runs in a follow-up ajax request where the
+     * original ?tab deep link only survives in the Referer — the same
+     * fallback Livewire's own #[Url] hydration uses.
+     */
+    private function tabFromReferer(): ?string
+    {
+        parse_str((string) parse_url((string) request()->header('referer'), PHP_URL_QUERY), $query);
+
+        return is_string($query['tab'] ?? null) ? $query['tab'] : null;
+    }
+
+    public function placeholder(): View
+    {
+        // Outside the livewire. view namespace on purpose: component-name
+        // discovery keys off the first view('livewire.*') string in the file
+        // (see ComponentDiscoveryService), which must stay the render() view.
+        return view('placeholders.page');
     }
 
     public function setTab(string $tab): void

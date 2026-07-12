@@ -11,20 +11,27 @@ final class PerfRequestsCommand extends Command
         {--since=1h : Window to search, e.g. 30m, 2h, 7d}
         {--route= : Substring filter on route name or path}
         {--min-ms=0 : Only show requests at least this slow}
-        {--limit=20 : Number of requests to show}';
+        {--limit=20 : Number of requests to show}
+        {--type= : Only http, job, or command entries}
+        {--sql : Show the slowest captured SQL under each entry}';
 
-    protected $description = 'Show individual requests from the performance log, newest first';
+    protected $description = 'Show individual requests, jobs, and commands from the performance log, newest first';
 
     public function handle(PerfLog $log): int
     {
         $cutoff = PerfLog::parseSince((string) $this->option('since'));
         $routeFilter = (string) $this->option('route');
         $minMs = (float) $this->option('min-ms');
+        $type = (string) $this->option('type');
 
         $matches = [];
 
         foreach ($log->entriesSince($cutoff) as $entry) {
             if (($entry['ms'] ?? 0) < $minMs) {
+                continue;
+            }
+
+            if ($type !== '' && ($entry['type'] ?? 'http') !== $type) {
                 continue;
             }
 
@@ -62,6 +69,20 @@ final class PerfRequestsCommand extends Command
                 ($entry['navigate'] ?? false) ? 'y' : '',
             ], $matches),
         );
+
+        if ($this->option('sql')) {
+            foreach ($matches as $entry) {
+                foreach ($entry['top_sql'] ?? [] as $statement) {
+                    $this->line(sprintf(
+                        '  %s %s %6.1f ms  %s',
+                        substr((string) ($entry['ts'] ?? ''), 11, 8),
+                        str_pad((string) ($entry['path'] ?? ''), 30),
+                        $statement['ms'] ?? 0,
+                        $statement['sql'] ?? '',
+                    ));
+                }
+            }
+        }
 
         return self::SUCCESS;
     }

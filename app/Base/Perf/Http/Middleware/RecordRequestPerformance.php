@@ -23,11 +23,10 @@ final class RecordRequestPerformance
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! config('perf.enabled')) {
+        if (! config('perf.enabled') || ! $this->collector->begin()) {
             return $next($request);
         }
 
-        $this->collector->begin();
         $startedAt = hrtime(true);
 
         try {
@@ -58,9 +57,10 @@ final class RecordRequestPerformance
 
         $this->log->write([
             'ts' => now()->toIso8601String(),
+            'type' => 'http',
             'method' => $request->method(),
             'path' => '/'.ltrim($request->path(), '/'),
-            'route' => $request->route()?->getName(),
+            'route' => $this->routeLabel($request),
             'status' => $status,
             'ms' => round($totalMs, 1),
             'db_ms' => round($metrics['db_ms'], 1),
@@ -70,6 +70,7 @@ final class RecordRequestPerformance
             'cache_writes' => $metrics['cache_writes'],
             'procs' => $metrics['procs'],
             'proc_ms' => round($metrics['proc_ms'], 1),
+            'top_sql' => $metrics['top_sql'] ?: null,
             'resp_bytes' => is_string($content) ? strlen($content) : null,
             'navigate' => $request->hasHeader('X-Livewire-Navigate'),
             'livewire' => $request->hasHeader('X-Livewire'),
@@ -77,5 +78,28 @@ final class RecordRequestPerformance
             // still useful as a leak ceiling.
             'mem_mb' => round(memory_get_peak_usage(true) / 1048576, 1),
         ]);
+    }
+
+    /**
+     * Livewire update requests all share one route name, which hides the
+     * slowest interactions. Attribute them to the component instead.
+     */
+    private function routeLabel(Request $request): ?string
+    {
+        $route = $request->route()?->getName();
+
+        if ($route === null || ! str_ends_with($route, 'livewire.update')) {
+            return $route;
+        }
+
+        $snapshot = $request->json('components.0.snapshot');
+
+        if (! is_string($snapshot)) {
+            return $route;
+        }
+
+        $name = json_decode($snapshot, true)['memo']['name'] ?? null;
+
+        return is_string($name) ? 'lw:'.$name : $route;
     }
 }

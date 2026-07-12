@@ -780,6 +780,23 @@ test('the update console stays reachable during maintenance and can bring the si
     }
 });
 
+test('the updates page defers its git work behind a lazy placeholder', function (): void {
+    $user = createAdminUser();
+    Process::fake();
+
+    // Undo the global test opt-out (tests/TestCase.php) for this request:
+    // this test asserts the lazy behavior itself.
+    \Livewire\Features\SupportLazyLoading\SupportLazyLoading::$disableWhileTesting = false;
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.index'))
+        ->assertOk()
+        ->assertSee(__('Loading page…'));
+
+    // The whole point: the initial page load spawns no git subprocesses.
+    Process::assertNothingRan();
+});
+
 test('update reports reload problems as warnings instead of clean completion', function (): void {
     withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2019', function (): void {
         fakeDeploymentUpdateProcesses();

@@ -42,7 +42,13 @@ class Index extends Component
             $this->window = self::WINDOWS[0];
         }
 
-        $entries = iterator_to_array($log->entriesSince(PerfLog::parseSince($this->window)), false);
+        // Web requests only: job/command entries (perf:slowest --type=job)
+        // have no response size or navigate flag and would distort the
+        // latency scatter's story.
+        $entries = array_values(array_filter(
+            iterator_to_array($log->entriesSince(PerfLog::parseSince($this->window)), false),
+            static fn (array $entry): bool => ($entry['type'] ?? 'http') === 'http',
+        ));
 
         return view('livewire.admin.system.perf.index', [
             'windows' => self::WINDOWS,

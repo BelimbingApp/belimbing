@@ -22,6 +22,10 @@ return [
     // which is the useful default: aggregate views need the fast requests too.
     'min_ms' => (float) env('PERF_LOG_MIN_MS', 0),
 
+    // SQL statements at least this slow are kept (top 3 per request) in the
+    // entry's top_sql field, so `perf:requests --sql` names the guilty query.
+    'slow_sql_min_ms' => (float) env('PERF_LOG_SLOW_SQL_MIN_MS', 20),
+
     // Directory for perf-*.jsonl files. Defaults to storage/logs.
     'path' => env('PERF_LOG_PATH'),
 

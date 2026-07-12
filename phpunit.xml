@@ -43,6 +43,10 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- The perf log path defaults to the shared storage/logs; without
+             this, every feature-test request writes entries into the live
+             log. Perf's own tests re-enable it against a scratch path. -->
+        <env name="PERF_LOG_ENABLED" value="false"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

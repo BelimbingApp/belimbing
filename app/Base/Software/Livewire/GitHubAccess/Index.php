@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Software\Services\DeploymentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\Defer;
 use Livewire\Component;
 
 /**
@@ -17,9 +18,18 @@ use Livewire\Component;
  * scoped to one owner — so this lists each owner and stores a token per owner
  * (encrypted, `integrations.github.token.{owner}`). Public owners need none.
  */
+#[Defer]
 class Index extends Component
 {
     use InteractsWithNotifications;
+
+    public function placeholder(): View
+    {
+        // Outside the livewire. view namespace on purpose: component-name
+        // discovery keys off the first view('livewire.*') string in the file
+        // (see ComponentDiscoveryService), which must stay the render() view.
+        return view('placeholders.page');
+    }
 
     /** x-ui.secret-input renders this for an already-stored secret; an untouched save submits it (= keep). */
     private const SECRET_KEPT = '******';
