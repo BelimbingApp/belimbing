@@ -54,6 +54,16 @@
             if (mode === 'utc') return 'UTC · Y-m-d H:i:s';
             return this.companyTzExplicit ? this.companyTz : '{{ __('(not set)') }}';
         },
+        tzCity(tz) {
+            if (!tz) return tz;
+            const parts = tz.split('/');
+            return parts[parts.length - 1].replace(/_/g, ' ');
+        },
+        tzCompact(mode) {
+            if (mode === 'local') return this.tzCity(this.browserTz);
+            if (mode === 'utc') return 'UTC';
+            return this.companyTzExplicit ? this.tzCity(this.companyTz) : '{{ __('(not set)') }}';
+        },
         goToCompanyTimezoneSettings() {
             window.location.href = this.companyTimezoneSettingsUrl;
         },
@@ -92,9 +102,10 @@
                     aria-haspopup="true"
                     :aria-expanded="tzOpen"
                     aria-label="{{ __('Select timezone display mode') }}"
+                    :title="tzLabel + ' — ' + tzDisplay(tzMode)"
                 >
                     <x-icon name="heroicon-o-clock" class="w-3.5 h-3.5" />
-                    <span x-text="tzLabel + ' — ' + tzDisplay(tzMode)"></span>
+                    <span x-text="tzCompact(tzMode)"></span>
                     <x-icon name="heroicon-m-chevron-down" class="w-3 h-3 opacity-60" />
                 </button>
 
