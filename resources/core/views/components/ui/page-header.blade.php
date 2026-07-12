@@ -55,7 +55,16 @@
             @endif
         </div>
         @if($actions)
-            <div class="shrink-0 flex items-center gap-2">
+            {{-- text-sm here, not on x-ui.link itself: x-ui.link sets no
+                 font-size of its own, so it was inheriting the browser's 16px
+                 default — one size larger than every sibling in this row
+                 (buttons, tabs, subtitle all render at 14px). Buttons set
+                 their own explicit text-sm/text-xs and are unaffected by
+                 inheritance; this only reaches elements that don't size
+                 themselves. Scoped here rather than on x-ui.link globally,
+                 which has 8 existing callers that already patch their own
+                 size (text-xs/text-sm) at the call site. --}}
+            <div class="shrink-0 flex items-center gap-2 text-sm">
                 {{ $actions }}
             </div>
         @endif
