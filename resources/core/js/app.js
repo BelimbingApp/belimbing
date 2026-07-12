@@ -1,5 +1,6 @@
 import './shell-layout.js'
 import './shell-navigation.js'
+import './auto-navigate.js'
 import './livewire-session-guard.js'
 
 const blbDateTimeOptions = (format, includeSeconds = false) => {

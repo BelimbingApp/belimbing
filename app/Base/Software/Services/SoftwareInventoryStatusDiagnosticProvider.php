@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Route;
 
 final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
-    private const INVENTORY_CACHE_KEY = 'software.inventory.status-diagnostics';
+    private const INVENTORY_CACHE_KEY = 'software.inventory.status-diagnostics.v2';
 
     private const INVENTORY_FRESH_SECONDS = 300;
 
@@ -45,24 +45,45 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
         // Nested Git status is especially expensive on Windows. Keep navigation
         // off that synchronous path and refresh a shared snapshot after the
         // response once it becomes stale.
-        $bundles = Cache::flexible(
+        $snapshot = Cache::flexible(
             self::INVENTORY_CACHE_KEY,
             [self::INVENTORY_FRESH_SECONDS, self::INVENTORY_STALE_SECONDS],
-            fn (): array => $this->inventory->installedBundlesForStatusDiagnostics(),
+            fn (): array => $this->inventorySnapshot(),
         );
         $diagnostics = [];
 
-        $dependencyIssueCount = $this->dependencyIssueCount($bundles);
+        $dependencyIssueCount = array_sum(array_column($snapshot, 'dependency_issues'));
         if ($dependencyIssueCount > 0) {
-            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $this->dependencyBundleLabels($bundles));
+            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $this->dependencyBundleLabels($snapshot));
         }
 
-        $driftedBundles = $this->driftedAddInBundles($bundles);
+        $driftedBundles = $this->driftedAddInBundles($snapshot);
         if ($driftedBundles !== []) {
             $diagnostics[] = $this->driftDiagnostic($driftedBundles);
         }
 
         return $diagnostics;
+    }
+
+    /**
+     * The status bar needs only a few scalar facts per bundle. Cache those as
+     * plain arrays: cache.serializable_classes is disabled (gadget-chain
+     * hardening), so cached objects come back as __PHP_Incomplete_Class.
+     *
+     * @return list<array{label: string, kind: string, dirty: bool, unpushed: int, dependency_issues: int}>
+     */
+    private function inventorySnapshot(): array
+    {
+        return array_map(
+            fn (InstalledBundle $bundle): array => [
+                'label' => $bundle->label,
+                'kind' => $bundle->kind,
+                'dirty' => $bundle->isDirty(),
+                'unpushed' => $bundle->unpushed(),
+                'dependency_issues' => count($bundle->dependencyIssues),
+            ],
+            $this->inventory->installedBundlesForStatusDiagnostics(),
+        );
     }
 
     /**
@@ -80,17 +101,6 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
         return [
             $this->dependencyDiagnostic($issueCount, $this->dependencyIssueLabels($issues)),
         ];
-    }
-
-    /**
-     * @param  list<InstalledBundle>  $bundles
-     */
-    private function dependencyIssueCount(array $bundles): int
-    {
-        return array_sum(array_map(
-            fn (InstalledBundle $bundle): int => count($bundle->dependencyIssues),
-            $bundles,
-        ));
     }
 
     /**
@@ -115,14 +125,14 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     }
 
     /**
-     * @param  list<InstalledBundle>  $bundles
+     * @param  list<array{label: string, dependency_issues: int}>  $snapshot
      * @return list<string>
      */
-    private function dependencyBundleLabels(array $bundles): array
+    private function dependencyBundleLabels(array $snapshot): array
     {
         return array_values(array_map(
-            fn (InstalledBundle $bundle): string => $bundle->label,
-            array_filter($bundles, fn (InstalledBundle $bundle): bool => $bundle->hasDependencyIssues()),
+            fn (array $bundle): string => $bundle['label'],
+            array_filter($snapshot, fn (array $bundle): bool => $bundle['dependency_issues'] > 0),
         ));
     }
 
@@ -139,27 +149,27 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     }
 
     /**
-     * @param  list<InstalledBundle>  $bundles
-     * @return list<InstalledBundle>
+     * @param  list<array{kind: string, dirty: bool, unpushed: int}>  $snapshot
+     * @return list<array{label: string, kind: string, dirty: bool, unpushed: int, dependency_issues: int}>
      */
-    private function driftedAddInBundles(array $bundles): array
+    private function driftedAddInBundles(array $snapshot): array
     {
-        return array_values(array_filter($bundles, function (InstalledBundle $bundle): bool {
-            if ($bundle->kind === InstalledBundle::KIND_PLATFORM) {
+        return array_values(array_filter($snapshot, function (array $bundle): bool {
+            if ($bundle['kind'] === InstalledBundle::KIND_PLATFORM) {
                 return false;
             }
 
-            return $bundle->isDirty() || $bundle->unpushed() > 0;
+            return $bundle['dirty'] || $bundle['unpushed'] > 0;
         }));
     }
 
     /**
-     * @param  list<InstalledBundle>  $bundles
+     * @param  list<array{label: string, dirty: bool, unpushed: int}>  $bundles
      */
     private function driftDiagnostic(array $bundles): StatusBarDiagnostic
     {
-        $dirty = count(array_filter($bundles, fn (InstalledBundle $bundle): bool => $bundle->isDirty()));
-        $unpushedCommits = array_sum(array_map(fn (InstalledBundle $bundle): int => $bundle->unpushed(), $bundles));
+        $dirty = count(array_filter($bundles, fn (array $bundle): bool => $bundle['dirty']));
+        $unpushedCommits = array_sum(array_column($bundles, 'unpushed'));
 
         return new StatusBarDiagnostic(
             id: 'software.bundle-drift',
@@ -171,7 +181,7 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             detail: __('One or more add-in bundles have uncommitted changes or unpushed commits. Open Modules to see the affected checkout paths and resolve them before updating or changing add-ins.'),
             target: $this->modulesUrl('#add-in-bundle-drift'),
             metadata: [
-                'affected_bundles' => array_map(fn (InstalledBundle $bundle): string => $bundle->label, $bundles),
+                'affected_bundles' => array_column($bundles, 'label'),
                 'dirty_bundles' => $dirty,
                 'unpushed_commits' => $unpushedCommits,
             ],

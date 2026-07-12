@@ -210,6 +210,13 @@ Do not put filesystem or Git subprocess discovery directly on the shared layout
 render path. Cache it with stale-while-revalidate semantics or move it to an
 explicit diagnostics page/background refresh.
 
+Cache scalars and plain arrays only: `cache.serializable_classes` is disabled
+(gadget-chain hardening), so cached objects silently unserialize to
+`__PHP_Incomplete_Class` on every read. The test suite's array cache store
+never serializes, so a test can pass while the file-backed store in a real
+runtime returns garbage — assert a `serialize`/`unserialize` round-trip with
+`allowed_classes => false` when adding a cache of structured data.
+
 ## Health and alerting
 
 The `BLB-{Instance}-Health` task runs every five minutes. It starts missing

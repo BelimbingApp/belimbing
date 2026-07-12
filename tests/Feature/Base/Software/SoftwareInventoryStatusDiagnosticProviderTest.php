@@ -7,6 +7,7 @@ use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 function softwareDiagnosticBundle(
     string $key,
@@ -113,6 +114,23 @@ it('reuses the expensive git inventory snapshot across status bar renders', func
 
     expect(collect($provider->diagnosticsFor($user)))->toHaveCount(1)
         ->and(collect($provider->diagnosticsFor($user)))->toHaveCount(1);
+});
+
+it('caches an inventory snapshot that survives hardened cache serialization', function (): void {
+    // Production disables cache.serializable_classes (gadget-chain hardening),
+    // so any cached object silently unserializes to __PHP_Incomplete_Class.
+    // The tests' array store never serializes, so simulate the round-trip here.
+    fakeSoftwareInventory([
+        softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+    ]);
+
+    collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()))->all();
+
+    $cached = Cache::get('software.inventory.status-diagnostics.v2');
+    $roundTripped = unserialize(serialize($cached), ['allowed_classes' => false]);
+
+    expect($roundTripped)->toEqual($cached)
+        ->and(collect($roundTripped)->flatten()->filter(fn ($value) => is_object($value)))->toBeEmpty();
 });
 
 it('hides software diagnostics from users without module inventory access', function (): void {
