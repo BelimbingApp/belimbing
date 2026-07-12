@@ -7,9 +7,15 @@ facade — git, deploys, PDF tooling), response size, and whether the request
 was a `wire:navigate` partial. It is on by default (`PERF_LOG_ENABLED`,
 `PERF_LOG_MIN_MS`, `PERF_LOG_RETENTION_DAYS` in `.env`).
 
-There is no web UI on purpose: the log is built to be queried from the
-command line. **Start every "why is X slow" investigation here** — do not
-hand-roll curl timing loops or tinker microtime scripts first.
+The log is built to be queried from the command line — agents are its
+first-class consumers. **Start every "why is X slow" investigation here** —
+do not hand-roll curl timing loops or tinker microtime scripts first.
+
+For humans there is a read-only demonstration page at Administration →
+System → Diagnostics → Performance (`admin.system.perf.view` capability):
+stat strip, latency scatter, per-route DB/subprocess/other composition bars,
+and the slowest requests. It renders the same jsonl and never writes; treat
+it as a showcase of the log, not a second source of truth.
 
 ```bash
 # Slowest routes, aggregated (hits, p50/p95/max, avg DB ms, queries, subprocesses)
