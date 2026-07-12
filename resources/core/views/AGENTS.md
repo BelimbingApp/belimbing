@@ -125,7 +125,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | Component | Use |
 |-----------|-----|
 | `x-ui.button` | All buttons and button-weight links |
-| `x-ui.link` | Text links; owns glyph/target/rel |
+| `x-ui.link` / `x-ui.link-group` | Text links; owns glyph/target/rel. Group 2+ adjacent links with a divider |
 | `x-ui.icon-action` / `x-ui.icon-action-group` | Compact icon actions |
 
 ### Navigation
@@ -201,6 +201,21 @@ Rules:
 - Copy always uses clipboard, never box-arrow.
 - Force new tabs only when losing current state is costly or target is side-reference.
 - Use the compact open action (`x-ui.icon-action` with the arrow glyph) only where space is tight and the destination is already named by the surrounding heading — a dashboard widget's card title, not standalone body text. Everywhere else, in-app navigation is `x-ui.link` with no glyph (see the internal-kind row above). `x-ui.widget-header` is the canonical consumer.
+
+**Page-header actions: button weight is reserved for mutation and for the
+one primary forward CTA.** A page typically has at most one of the latter
+(e.g. "New Audit"). Everything else that just moves the user — Settings, a
+related report, a sibling page — is `x-ui.link`, never
+`x-ui.button as="a" variant="secondary/ghost"`. A secondary-variant button
+sitting next to a real `wire:click` button looks equally "clickable to do
+something" as the mutation beside it; only the link's lighter weight tells
+the user which one is safe to click without consequence.
+
+**Two or more `x-ui.link`s next to each other need `x-ui.link-group`.**
+Same-color text links separated only by the actions slot's flex gap read as
+one continuous phrase, not two links — the group's divider makes each
+link's boundary unambiguous. Wrap them; do not add a manual gap/margin
+instead.
 
 ## Read-First Detail Pages
 

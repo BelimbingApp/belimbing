@@ -141,9 +141,18 @@
                             />
                         </dd>
                     </div>
+                    <div class="flex items-center justify-between gap-3">
+                        <dt class="text-sm text-muted">{{ __('Two or more related links') }}</dt>
+                        <dd>
+                            <x-ui.link-group>
+                                <x-ui.link kind="new-tab" href="{{ route('admin.ai.task-models') }}">{{ __('AI Task Models') }}</x-ui.link>
+                                <x-ui.link kind="new-tab" href="{{ route('admin.system.schedule.index') }}">{{ __('System Schedule') }}</x-ui.link>
+                            </x-ui.link-group>
+                        </dd>
+                    </div>
                 </dl>
                 <p class="mt-4 border-t border-border-default pt-3 text-xs text-muted">
-                    {{ __('External and forced-new-tab share the box-arrow — the difference is rel, which the component owns. Copy uses the clipboard glyph, never the box-arrow. Trailing icons say what happens; leading icons say what kind of thing. The compact open action is the one exception to internal links carrying no glyph: it exists for tight card headers where the heading already names the destination — everywhere else, in-app navigation stays a plain x-ui.link.') }}
+                    {{ __('External and forced-new-tab share the box-arrow — the difference is rel, which the component owns. Copy uses the clipboard glyph, never the box-arrow. Trailing icons say what happens; leading icons say what kind of thing. The compact open action is the one exception to internal links carrying no glyph: it exists for tight card headers where the heading already names the destination — everywhere else, in-app navigation stays a plain x-ui.link. Two or more links side by side need x-ui.link-group — without its divider they read as one continuous phrase, not separate destinations. Button weight in a page-header actions slot is reserved for mutation and the one primary forward CTA; a secondary-variant button styled next to a real button looks equally clickable-to-do-something, so peer navigation (Settings, a related page) stays a plain link instead.') }}
                 </p>
             </div>
         </div>
