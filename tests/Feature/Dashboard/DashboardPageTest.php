@@ -9,14 +9,30 @@ use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
 const DASHBOARD_LEAVE_WIDGET = 'people.leave.pending-approvals';
+const DASHBOARD_PERF_WIDGET = 'perf.request-health';
 const DASHBOARD_AI_WIDGET = 'ai.operations-status';
 const DASHBOARD_TEST_LEAVE_CONFIG = 'app/Modules/People/Leave/Config/dashboard.php';
 
 beforeEach(function (): void {
+    // The fixture must live at the real discovery path — but on machines
+    // where blb-people is checked out, that file exists and belongs to the
+    // module. Back it up and restore it, or this suite silently deletes a
+    // real repo file on every run (which it did until 2026-07-13).
+    $real = base_path(DASHBOARD_TEST_LEAVE_CONFIG);
+    $this->dashboardLeaveConfigBackup = File::exists($real)
+        ? File::get($real)
+        : null;
+
     installDashboardLeaveFixture();
 });
 
 afterEach(function (): void {
+    if ($this->dashboardLeaveConfigBackup !== null) {
+        File::put(base_path(DASHBOARD_TEST_LEAVE_CONFIG), $this->dashboardLeaveConfigBackup);
+
+        return;
+    }
+
     File::delete(base_path(DASHBOARD_TEST_LEAVE_CONFIG));
     @rmdir(base_path('app/Modules/People/Leave/Config'));
     @rmdir(base_path('app/Modules/People/Leave'));
@@ -83,7 +99,8 @@ it('shows capability-gated widgets to an admin in registry order', function (): 
         ->test(Index::class)
         ->assertViewHas(
             'widgets',
-            fn (array $widgets): bool => array_slice(dashboardWidgetIds($widgets), 0, 2) === [DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET],
+            // Base providers register before Modules, so the perf widget leads.
+            fn (array $widgets): bool => array_slice(dashboardWidgetIds($widgets), 0, 3) === [DASHBOARD_PERF_WIDGET, DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET],
         );
 });
 

@@ -6,14 +6,7 @@
 @endphp
 <div>
     <x-ui.card>
-        <div class="mb-3 flex items-center justify-between gap-2">
-            <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Performance') }}</span>
-            @if ($perfUrl)
-                <x-ui.link kind="internal" :href="$perfUrl">{{ __('Open') }}</x-ui.link>
-            @else
-                <x-icon name="heroicon-o-bolt" class="w-4 h-4 text-muted" />
-            @endif
-        </div>
+        <x-ui.widget-header :title="__('Performance')" :href="$perfUrl" icon="heroicon-o-bolt" />
         <x-ui.stat-strip>
             <x-ui.stat :label="__('Requests · 24 h')">{{ number_format($summary['requests']) }}</x-ui.stat>
             <x-ui.stat :label="__('p50')">{{ $ms($summary['p50']) }}</x-ui.stat>
