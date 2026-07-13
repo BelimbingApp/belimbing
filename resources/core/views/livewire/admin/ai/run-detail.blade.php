@@ -12,25 +12,19 @@ use Illuminate\Support\Str;
 
     <x-ui.page-header :title="__('Run Detail')" :subtitle="__('Standalone deep link for a single AI run.')">
         <x-slot name="actions">
-            <x-ui.button as="a" href="#wire-log-panel" variant="ghost" size="sm">
-                {{ __('Wire Log') }}
-            </x-ui.button>
-            @if ($operationsBreadcrumb && $operationsBreadcrumb['url'])
-                <a
-                    href="{{ $operationsBreadcrumb['url'] }}"
-                    wire:navigate
-                    class="text-sm text-accent hover:underline"
-                >
-                    {{ __('Back to :label', ['label' => $operationsBreadcrumb['label']]) }}
-                </a>
-            @endif
-            <a
-                href="{{ route('admin.ai.control-plane', array_merge(request()->only(['from', 'returnTo']), ['tab' => 'inspector', 'runId' => $runId])) }}"
-                wire:navigate
-                class="text-sm text-accent hover:underline"
-            >
-                {{ __('Back to Control Plane') }}
-            </a>
+            <x-ui.link-group>
+                <x-ui.link kind="anchor" href="#wire-log-panel">
+                    {{ __('Wire Log') }}
+                </x-ui.link>
+                @if ($operationsBreadcrumb && $operationsBreadcrumb['url'])
+                    <x-ui.link href="{{ $operationsBreadcrumb['url'] }}">
+                        {{ __('Back to :label', ['label' => $operationsBreadcrumb['label']]) }}
+                    </x-ui.link>
+                @endif
+                <x-ui.link href="{{ route('admin.ai.control-plane', array_merge(request()->only(['from', 'returnTo']), ['tab' => 'inspector', 'runId' => $runId])) }}">
+                    {{ __('Back to Control Plane') }}
+                </x-ui.link>
+            </x-ui.link-group>
         </x-slot>
     </x-ui.page-header>
 

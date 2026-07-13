@@ -34,16 +34,9 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                 </x-ui.badge>
                 <span class="font-mono text-xs" title="{{ $instance->id }}">{{ $instance->name }}</span>
                 @if($canManageSettings)
-                    <x-ui.button
-                        as="a"
-                        variant="ghost"
-                        size="sm"
-                        :href="route('admin.system.data-share.settings')"
-                        wire:navigate
-                    >
-                        <x-icon name="heroicon-o-cog-6-tooth" class="h-4 w-4" />
+                    <x-ui.link :href="route('admin.system.data-share.settings')">
                         {{ __('Settings') }}
-                    </x-ui.button>
+                    </x-ui.link>
                 @endif
             </div>
         </x-slot>
