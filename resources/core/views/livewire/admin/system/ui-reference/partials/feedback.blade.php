@@ -19,11 +19,16 @@
         <x-ui.card>
             <div
                 x-data="{
-                    demo(variant, message) { $dispatch('notify', { variant, message }) },
+                    messages: {
+                        success: @js(__('Default model updated.')),
+                        warning: @js(__('Availability sync needs attention.')),
+                        error: @js(__('The channel could not be reached.')),
+                    },
+                    demo(variant) { $dispatch('notify', { variant, message: this.messages[variant] }) },
                     stack() {
-                        this.demo('success', @js(__('Default model updated.')))
-                        setTimeout(() => this.demo('warning', @js(__('Availability sync needs attention.'))), 150)
-                        setTimeout(() => this.demo('error', @js(__('The channel could not be reached.'))), 300)
+                        this.demo('success')
+                        setTimeout(() => this.demo('warning'), 150)
+                        setTimeout(() => this.demo('error'), 300)
                     },
                 }"
                 class="space-y-4"
@@ -34,9 +39,9 @@
                 </div>
 
                 <div class="flex flex-wrap gap-2">
-                    <x-ui.button variant="primary" @click="demo('success', @js(__('Default model updated.')))">{{ __('Success') }}</x-ui.button>
-                    <x-ui.button variant="secondary" @click="demo('warning', @js(__('Availability sync needs attention.')))">{{ __('Warning (sticky)') }}</x-ui.button>
-                    <x-ui.button variant="secondary" @click="demo('error', @js(__('The channel could not be reached.')))">{{ __('Error (sticky)') }}</x-ui.button>
+                    <x-ui.button variant="primary" @click="demo('success')">{{ __('Success') }}</x-ui.button>
+                    <x-ui.button variant="secondary" @click="demo('warning')">{{ __('Warning (sticky)') }}</x-ui.button>
+                    <x-ui.button variant="secondary" @click="demo('error')">{{ __('Error (sticky)') }}</x-ui.button>
                     <x-ui.button variant="ghost" @click="stack()">{{ __('Stack Three') }}</x-ui.button>
                 </div>
 

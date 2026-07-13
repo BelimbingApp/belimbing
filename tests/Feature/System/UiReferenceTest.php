@@ -15,6 +15,18 @@ it('documents status bar diagnostics in the feedback reference', function (): vo
         ->assertDontSee('aria-label="Open related diagnostics"', false);
 });
 
+it('renders executable notification demo handlers', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $response = $this->get(route('admin.system.ui-reference.show', ['section' => 'feedback']));
+
+    $response->assertOk()
+        ->assertSee("@click=\"demo('success')\"", false)
+        ->assertSee("@click=\"demo('warning')\"", false)
+        ->assertSee("@click=\"demo('error')\"", false)
+        ->assertDontSee('@click="demo(\'success\', @js(', false);
+});
+
 it('keeps the catalog in a mobile drawer so reference content stays primary', function (): void {
     $this->actingAs(createAdminUser());
 
