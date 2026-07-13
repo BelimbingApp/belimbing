@@ -29,6 +29,8 @@ class SourceHistory extends Component
 
     public string $buttonLabel = '';
 
+    public bool $iconOnly = false;
+
     public string $sourceCapability = '';
 
     public function open(): void

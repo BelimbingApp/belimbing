@@ -1,12 +1,13 @@
 <?php
 
 use App\Base\Database\Livewire\DataShare\Index;
+use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 
 /** @var Index $this */
 
 $badgeVariant = static fn (string $status): string => match ($status) {
     'applied', 'ready', 'verified', 'published' => 'success',
-    'conflicts', 'expired', 'revoked' => 'warning',
+    'conflicts', 'expired', 'revoked', 'exhausted' => 'warning',
     'failed', 'apply_failed' => 'danger',
     default => 'info',
 };
@@ -17,9 +18,26 @@ $formatBytes = static fn (int $bytes): string => match (true) {
     default => app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($bytes).' B',
 };
 $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
+$scopeOptions = collect($scopes)->map(fn (array $scope): array => [
+    'value' => $scope['name'],
+    'label' => "{$scope['label']} · {$scope['module_path']}",
+])->values()->all();
+$offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMorphClass();
 ?>
 
-<div>
+<div
+    x-on:data-share-bundle-ready.window="
+        (async () => {
+            try {
+                await navigator.clipboard.writeText($event.detail.bundle);
+                await $wire.offerBundleCopied($event.detail.offerId);
+            } catch (error) {
+                await $wire.offerBundleCopyFailed();
+            }
+        })()
+    "
+    x-on:data-share-published.window="window.location.hash = 'published'"
+>
     <x-slot name="title">{{ __('Data Share') }}</x-slot>
 
     <x-ui.page-header
@@ -75,6 +93,16 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
     </x-ui.page-header>
 
     <div class="mt-4 space-y-section-gap">
+        <div
+            wire:loading.flex
+            wire:target="previewShare,publishShare"
+            class="items-center gap-3 rounded-2xl border border-border-default bg-surface-subtle px-4 py-3 text-sm text-muted"
+        >
+            <x-icon name="heroicon-o-arrow-path" class="h-4 w-4 shrink-0 animate-spin text-accent" />
+            <span wire:loading wire:target="publishShare">{{ __('Publishing transfer offer — exporting selected tables and computing hashes…') }}</span>
+            <span wire:loading wire:target="previewShare">{{ __('Reading selected tables and computing the preview hash…') }}</span>
+        </div>
+
         @if($statusMessage)
             <x-ui.alert :variant="$statusVariant ?? 'info'">
                 {{ $statusMessage }}
@@ -85,9 +113,8 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
             <x-ui.tabs
                 :tabs="[
                     ['id' => 'share', 'label' => __('Share'), 'icon' => 'heroicon-o-share'],
-                    ['id' => 'incoming', 'label' => __('Incoming'), 'icon' => 'heroicon-o-inbox-arrow-down'],
                     ['id' => 'published', 'label' => __('Published'), 'icon' => 'heroicon-o-link'],
-                    ['id' => 'history', 'label' => __('History'), 'icon' => 'heroicon-o-clock'],
+                    ['id' => 'incoming', 'label' => __('Incoming'), 'icon' => 'heroicon-o-inbox-arrow-down'],
                     ['id' => 'diagnostics', 'label' => __('Diagnostics'), 'icon' => 'heroicon-o-wrench-screwdriver'],
                 ]"
                 default="share"
@@ -97,7 +124,7 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                         <div class="max-w-3xl">
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Choose what to share') }}</h2>
                             <p class="mt-1 text-sm text-muted">
-                                {{ __('Base discovers modules and tables from the database registry, then reads primary keys, unique constraints, and foreign keys from the live schema. Modules implement nothing for Data Share.') }}
+                                {{ __('Pick a module, then choose the exact tables to include. Selecting the whole module shares everything registered under it; deselect any table you want to leave out.') }}
                             </p>
                         </div>
 
@@ -109,15 +136,13 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                         @else
                             <div class="max-w-5xl space-y-4">
                                 <div class="space-y-4">
-                                    <x-ui.select
+                                    <x-ui.combobox
                                         id="data-share-scope"
                                         :label="__('Module scope')"
+                                        :placeholder="__('Select a module…')"
+                                        :options="$scopeOptions"
                                         wire:model.live="scopeName"
-                                    >
-                                        @foreach($scopes as $scope)
-                                            <option value="{{ $scope['name'] }}">{{ $scope['label'] }} · {{ $scope['module_path'] }}</option>
-                                        @endforeach
-                                    </x-ui.select>
+                                    />
 
                                     @if($selectedScope)
                                         <div wire:key="scope-{{ $selectedScope['name'] }}" class="rounded-xl border border-border-default bg-surface-subtle">
@@ -157,11 +182,12 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                                     @endif
                                 </div>
 
-                                @if($canPublish)
-                                    <div class="flex justify-end border-t border-border-default pt-4">
+                                @if($canPublish && $selectedScope && ! $publishedOfferBundle)
+                                    <div class="flex flex-col gap-2 border-t border-border-default pt-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <p class="text-xs text-muted">{{ __('Preview computes a snapshot hash without publishing anything. Review it below, then publish when ready.') }}</p>
                                         <x-ui.button variant="secondary" wire:click="previewShare" wire:loading.attr="disabled" wire:target="previewShare,publishShare">
                                             <x-icon name="heroicon-o-document-magnifying-glass" class="h-4 w-4" />
-                                            <span wire:loading.remove wire:target="previewShare">{{ __('Preview share') }}</span>
+                                            <span wire:loading.remove wire:target="previewShare">{{ __('Preview') }}</span>
                                             <span wire:loading wire:target="previewShare">{{ __('Reading selected tables…') }}</span>
                                         </x-ui.button>
                                     </div>
@@ -210,6 +236,18 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                                     </x-ui.disclosure>
                                 </div>
 
+                                <div class="mt-4 max-w-xs">
+                                    <x-ui.input
+                                        id="data-share-max-downloads"
+                                        type="number"
+                                        min="1"
+                                        max="{{ DataShareTransferOfferManager::MAX_DOWNLOADS }}"
+                                        :label="__('Maximum fetches')"
+                                        :help="__('How many fetches the target may start before the offer closes. A fetch claims one slot before streaming, so the limit remains reliable under concurrent requests.')"
+                                        wire:model="maxDownloads"
+                                    />
+                                </div>
+
                                 <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                     <p class="break-all font-mono text-xs text-muted" title="{{ $sharePreview['preview_sha256'] }}">
                                         {{ __('Preview SHA-256: :hash', ['hash' => $sharePreview['preview_sha256']]) }}
@@ -217,7 +255,7 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                                     @if($canPublish)
                                         <x-ui.button wire:click="publishShare" wire:loading.attr="disabled" wire:target="publishShare">
                                             <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
-                                            <span wire:loading.remove wire:target="publishShare">{{ __('Publish transfer offer') }}</span>
+                                            <span wire:loading.remove wire:target="publishShare">{{ __('Publish') }}</span>
                                             <span wire:loading wire:target="publishShare">{{ __('Rechecking and publishing…') }}</span>
                                         </x-ui.button>
                                     @endif
@@ -226,18 +264,34 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                         @endif
 
                         @if($publishedOfferBundle)
-                            <x-ui.alert variant="warning">
-                                <p class="font-medium">{{ __('Copy this transfer offer now') }}</p>
-                                <p class="mt-1">{{ __('The package remains available until expiry or revocation, but the plaintext bearer secret cannot be shown again after you hide or refresh this page.') }}</p>
+                            <x-ui.alert variant="success">
+                                <p class="font-medium">{{ __('Transfer offer bundle') }}</p>
+                                <p class="mt-1">{{ __('Paste this on the target instance. You can copy it again from Published while the offer remains available.') }}</p>
                                 <div class="mt-3">
                                     <x-ui.textarea id="data-share-published-offer" rows="7" readonly>{{ $publishedOfferBundle }}</x-ui.textarea>
                                 </div>
-                                <div class="mt-3 flex flex-wrap gap-2">
-                                    <x-ui.button variant="control" size="sm" x-on:click="navigator.clipboard.writeText(@js($publishedOfferBundle))">
+                                <div class="mt-3" x-data="{ copyState: 'idle', copyTimer: null }">
+                                    <x-ui.button
+                                        variant="control"
+                                        size="sm"
+                                        x-on:click="
+                                            clearTimeout(copyTimer);
+                                            copyState = 'copying';
+                                            (async () => {
+                                                try {
+                                                    await navigator.clipboard.writeText(@js($publishedOfferBundle));
+                                                    copyState = 'copied';
+                                                    copyTimer = setTimeout(() => copyState = 'idle', 1600);
+                                                } catch (error) {
+                                                    copyState = 'failed';
+                                                }
+                                            })()
+                                        "
+                                    >
                                         <x-icon name="heroicon-o-clipboard" class="h-4 w-4" />
-                                        {{ __('Copy offer') }}
+                                        <span x-text="copyState === 'copying' ? @js(__('Copying…')) : (copyState === 'copied' ? @js(__('Copied')) : @js(__('Copy offer')))">{{ __('Copy offer') }}</span>
                                     </x-ui.button>
-                                    <x-ui.button variant="ghost" size="sm" wire:click="clearPublishedOfferBundle">{{ __('Hide permanently') }}</x-ui.button>
+                                    <p x-cloak x-show="copyState === 'failed'" class="mt-2 text-xs text-status-danger">{{ __('Clipboard access failed. Check browser permission and try again.') }}</p>
                                 </div>
                             </x-ui.alert>
                         @endif
@@ -256,7 +310,7 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                                 <x-ui.textarea
                                     id="data-share-transfer-offer"
                                     :label="__('Transfer offer')"
-                                    :help="__('Paste the complete copy-once JSON bundle from the source. The secret is held only for review and fetch.')"
+                                    :help="__('Paste the complete transfer-offer JSON bundle from the source. The secret is held only for review and fetch.')"
                                     rows="7"
                                     wire:model.live.debounce.400ms="offerBundle"
                                     autocomplete="off"
@@ -406,61 +460,11 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                     </div>
                 </x-ui.tab>
 
-                <x-ui.tab id="history">
-                    <div class="space-y-5">
-                        <div class="max-w-3xl">
-                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Data Share ledger') }}</h2>
-                            <p class="mt-1 text-sm text-muted">{{ __('The ledger keeps identities, hashes, counts, actors, and outcomes. It never copies domain payload values into audit history.') }}</p>
-                        </div>
-
-                        @if($history === [])
-                            <div class="py-8 text-center">
-                                <p class="text-sm font-medium text-ink">{{ __('No share events yet') }}</p>
-                                <p class="mt-1 text-sm text-muted">{{ __('Offer lifecycle, fetches, receipts, plans, applies, and verification failures appear here.') }}</p>
-                            </div>
-                        @else
-                            <x-ui.table :caption="__('Data Share audit ledger')">
-                                <x-slot name="head">
-                                    <tr>
-                                        <x-ui.th>{{ __('Event') }}</x-ui.th>
-                                        <x-ui.th>{{ __('Package') }}</x-ui.th>
-                                        <x-ui.th>{{ __('Source and scope') }}</x-ui.th>
-                                        <x-ui.th>{{ __('Outcome') }}</x-ui.th>
-                                        <x-ui.th>{{ __('Time') }}</x-ui.th>
-                                    </tr>
-                                </x-slot>
-                                @foreach($history as $event)
-                                    <tr wire:key="event-{{ $event['id'] }}">
-                                        <td class="px-table-cell-x py-table-cell-y text-sm">
-                                            <x-ui.badge :variant="$badgeVariant($event['action'])">{{ str_replace('_', ' ', ucfirst($event['action'])) }}</x-ui.badge>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $event['package_id'] ?? '—' }}</td>
-                                        <td class="px-table-cell-x py-table-cell-y text-sm">
-                                            <p class="text-ink">{{ $event['source_instance_id'] ?? '—' }}</p>
-                                            <p class="font-mono text-xs text-muted">{{ $event['scope_name'] ?? '—' }}</p>
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
-                                            @if($event['error_summary'])
-                                                <span class="text-status-danger">{{ $event['error_summary'] }}</span>
-                                            @elseif(isset($event['metadata']['counts']))
-                                                {{ __(':records records', ['records' => array_sum($event['metadata']['counts'])]) }}
-                                            @else
-                                                {{ __('Recorded') }}
-                                            @endif
-                                        </td>
-                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$event['created_at']" /></td>
-                                    </tr>
-                                @endforeach
-                            </x-ui.table>
-                        @endif
-                    </div>
-                </x-ui.tab>
-
                 <x-ui.tab id="published">
                     <div class="space-y-5">
                         <div class="max-w-3xl">
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Published transfer offers') }}</h2>
-                            <p class="mt-1 text-sm text-muted">{{ __('The source owns package availability. A target may fetch the same immutable bytes repeatedly until expiry or revocation; planning and apply remain target-local.') }}</p>
+                            <p class="mt-1 text-sm text-muted">{{ __('The source owns package availability. A target may fetch the same immutable bytes until the fetch limit, expiry, or revocation; planning and apply remain target-local.') }}</p>
                         </div>
 
                         @if($offers === [])
@@ -472,7 +476,6 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                             <x-ui.table :caption="__('Source-published Data Share offers')">
                                 <x-slot name="head">
                                     <tr>
-                                        <x-ui.th>{{ __('Offer and package') }}</x-ui.th>
                                         <x-ui.th>{{ __('Scope') }}</x-ui.th>
                                         <x-ui.th>{{ __('Size') }}</x-ui.th>
                                         <x-ui.th>{{ __('Availability') }}</x-ui.th>
@@ -482,24 +485,42 @@ $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
                                 </x-slot>
                                 @foreach($offers as $offer)
                                     <tr wire:key="offer-{{ $offer['id'] }}">
-                                        <td class="px-table-cell-x py-table-cell-y text-sm">
-                                            <p class="font-mono text-xs text-ink">{{ $offer['offer_id'] }}</p>
-                                            <p class="mt-1 font-mono text-xs text-muted" title="{{ $offer['package_sha256'] }}">{{ $offer['package_id'] }} · {{ $shortHash($offer['package_sha256']) }}</p>
-                                        </td>
                                         <td class="px-table-cell-x py-table-cell-y break-all font-mono text-xs text-muted">{{ $offer['scope_name'] }}</td>
                                         <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">{{ $formatBytes($offer['bytes']) }}</td>
                                         <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
                                             <x-ui.badge :variant="$badgeVariant($offer['status'])">{{ ucfirst($offer['status']) }}</x-ui.badge>
                                             <p class="mt-1 whitespace-nowrap text-xs"><x-ui.datetime :value="$offer['expires_at']" /></p>
                                         </td>
-                                        <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">{{ $offer['download_count'] }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y text-sm tabular-nums text-muted">
+                                            @if($offer['max_downloads'] !== null)
+                                                {{ __(':used of :max', ['used' => $offer['download_count'], 'max' => $offer['max_downloads']]) }}
+                                            @else
+                                                {{ __(':used · unlimited', ['used' => $offer['download_count']]) }}
+                                            @endif
+                                        </td>
                                         @if($canManageOffers)
                                             <td class="px-table-cell-x py-table-cell-y text-right">
-                                                @if($offer['status'] === 'published')
-                                                    <x-ui.button variant="ghost" size="sm" wire:click="revokeOffer({{ $offer['id'] }})" wire:confirm="{{ __('Revoke this transfer offer? Future fetches will be refused immediately.') }}">
-                                                        {{ __('Revoke') }}
-                                                    </x-ui.button>
-                                                @endif
+                                                <x-ui.icon-action-group>
+                                                    @if($offer['status'] === 'published')
+                                                        <x-ui.icon-action
+                                                            icon="heroicon-o-clipboard"
+                                                            :label="__('Copy offer bundle')"
+                                                            wire:click="copyOfferBundle({{ $offer['id'] }})"
+                                                        />
+                                                    @endif
+                                                    <x-ui.record-history
+                                                        :title="__('History for offer :offer', ['offer' => $offer['offer_id']])"
+                                                        :auditable-type="$offerMorphType"
+                                                        :auditable-id="$offer['id']"
+                                                        source-capability="admin.system.data-share.view"
+                                                        icon-only
+                                                    />
+                                                    @if($offer['status'] === 'published')
+                                                        <x-ui.button variant="ghost" size="sm" wire:click="revokeOffer({{ $offer['id'] }})" wire:confirm="{{ __('Revoke this transfer offer? Future fetches will be refused immediately.') }}">
+                                                            {{ __('Revoke') }}
+                                                        </x-ui.button>
+                                                    @endif
+                                                </x-ui.icon-action-group>
                                             </td>
                                         @endif
                                     </tr>

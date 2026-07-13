@@ -15,11 +15,13 @@ return new class extends Migration
             $table->id();
             $table->char('offer_id', 26)->unique();
             $table->char('secret_hash', 64);
+            $table->text('secret');
             $table->unsignedBigInteger('published_by_actor_id')->nullable();
             $table->char('package_id', 26)->unique();
             $table->char('package_sha256', 64);
             $table->string('package_path');
             $table->string('source_instance_id');
+            $table->string('source_name');
             $table->string('source_role', 20);
             $table->string('scope_name');
             $table->unsignedBigInteger('bytes');
@@ -28,6 +30,7 @@ return new class extends Migration
             $table->timestamp('expires_at');
             $table->timestamp('revoked_at')->nullable();
             $table->unsignedBigInteger('download_count')->default(0);
+            $table->unsignedInteger('max_downloads')->nullable();
             $table->timestamp('last_downloaded_at')->nullable();
             $table->timestamps();
             $table->index(['source_instance_id', 'scope_name']);

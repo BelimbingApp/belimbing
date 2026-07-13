@@ -24,6 +24,18 @@ class DataSharePolicyException extends RuntimeException
         return new self(__('A Data Share transfer offer in :status status cannot be revoked.', ['status' => $status]));
     }
 
+    public static function offerNotCopyable(string $status): self
+    {
+        return new self(__('A Data Share transfer offer in :status status cannot be copied.', ['status' => $status]));
+    }
+
+    public static function invalidMaximumDownloads(int $maximum): self
+    {
+        return new self(__('Data Share maximum fetches must be between 1 and :maximum, or unlimited.', [
+            'maximum' => $maximum,
+        ]));
+    }
+
     public static function invalidOfferBaseUrl(string $url): self
     {
         return new self(__('Data Share offer endpoint configuration :url must use HTTPS without credentials, query, or fragment.', [

@@ -13,9 +13,9 @@ Data Share is not replication. It preserves selected physical keys, inserts miss
 - Admin pages require normal Belimbing login and the relevant capability.
 - The narrow source `GET /data-share/offers/{offerId}` route accepts only the offer bearer secret, is rate-limited, and streams one already-published package. It cannot enumerate, export, plan, or apply.
 - The source owns scope, exact package bytes, expiry, advertised routes, and revocation. The target owns whether to fetch and whether a verified receipt proceeds to plan/apply.
-- The 256-bit secret is shown once. Only its SHA-256 hash is stored. Put it only in the HTTPS `Authorization` header; never in a URL, log, issue, shell argument, or committed file.
+- The 256-bit secret is shown at publish time and can be recopied from the Published tab while the offer is available. It is persisted as application-encrypted ciphertext alongside the SHA-256 hash used for authentication. Put it only in the HTTPS `Authorization` header; never in a URL, log, issue, shell argument, or committed file.
 - The package is target-neutral. Target identity and authorization are bound locally when Incoming records the verified receipt.
-- Fetch may repeat until expiry or revocation. Package/offer/hash replay protection makes receipt and apply idempotent; repeated download is not repeated mutation.
+- Fetch may repeat until the offer's fetch limit, expiry, or revocation. A fetch slot is claimed atomically before streaming, so concurrent requests cannot exceed the configured limit; interrupted transfers consume a slot. The offer defaults to one fetch (`max_downloads` = 1) and moves to `exhausted` when that slot is claimed. Publish a new offer if another transfer attempt is required. Package/offer/hash replay protection makes receipt and apply idempotent; repeated download is not repeated mutation.
 
 ## Configure each instance
 
@@ -64,9 +64,9 @@ For the first Investment promotion, the current scope has 24 shareable tables an
 
 ### 2. Preview and publish on the source
 
-Choose **Preview export** and review table/record counts, per-table sizes, total estimate, and preview SHA-256. Publishing recomputes the snapshot and refuses if source data changed.
+Choose **Preview** and review table/record counts, per-table sizes, total estimate, and preview SHA-256. Publishing recomputes the snapshot and refuses if source data changed.
 
-Choose **Publish transfer offer**, copy the complete JSON bundle, and convey it directly to the target operator. Hiding or refreshing permanently removes the plaintext display; revoke and republish if it is lost or exposed.
+Choose **Publish**, copy the complete JSON bundle, and convey it directly to the target operator. The bundle can also be copied again at any time from **Data Share → Published**; revoke instead if it was exposed to the wrong party.
 
 CLI:
 

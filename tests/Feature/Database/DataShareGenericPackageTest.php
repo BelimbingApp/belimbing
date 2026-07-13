@@ -227,14 +227,15 @@ it('rejects a selected foreign-key cycle that has no generic insert order', func
     }
 });
 
-it('publishes a target-neutral immutable offer while persisting only the secret hash', function (): void {
+it('publishes a target-neutral immutable offer and persists a copyable encrypted secret', function (): void {
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'offer' => $offer, 'export' => $export] = publishGenericDataShare();
     $decoded = DataShareTransferOfferBundle::fromJson($bundle->toJson());
 
     expect($bundle->secret)->toHaveLength(43)
         ->and($offer->secret_hash)->toBe(hash('sha256', $bundle->secret))
-        ->and($offer->getRawOriginal('secret'))->toBeNull()
+        ->and($offer->secret)->toBe($bundle->secret)
+        ->and($offer->getRawOriginal('secret'))->not->toBe($bundle->secret)
         ->and($decoded->offerId)->toBe($offer->offer_id)
         ->and($decoded->packageSha256)->toBe($export->sha256)
         ->and($decoded->endpoints)->toBe([
@@ -245,6 +246,21 @@ it('publishes a target-neutral immutable offer while persisting only the secret 
         ->and($export->manifest)->not->toHaveKey('receive_grant_id')
         ->and($export->manifest['transfer_offer_id'])->toBe($offer->offer_id)
         ->and(DataShareEvent::query()->where('action', 'offer_published')->count())->toBe(1);
+
+    becomeGenericDataShareDestination();
+    $recopied = app(DataShareTransferOfferManager::class)->bundleFor($offer);
+
+    expect($recopied->toJson())->toBe($bundle->toJson())
+        ->and($recopied->source->name)->toBe(GENERIC_SHARE_SOURCE_NAME);
+});
+
+it('rejects invalid fetch limits before exporting a package', function (): void {
+    expect(fn () => app(DataShareTransferOfferManager::class)->publish(
+        GENERIC_SHARE_SCOPE,
+        [GENERIC_SHARE_PARENT],
+        str_repeat('0', 64),
+        maxDownloads: DataShareTransferOfferManager::MAX_DOWNLOADS + 1,
+    ))->toThrow(DataSharePolicyException::class, 'maximum fetches');
 });
 
 it('validates offer bundles and permits only an advertised route', function (): void {
@@ -294,6 +310,39 @@ it('streams the same immutable source bytes repeatedly until revocation', functi
 
     app(DataShareTransferOfferManager::class)->revoke($offer);
     expect($this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId)->getStatusCode())->toBe(401);
+});
+
+it('closes a single-use offer when the first fetch is claimed', function (): void {
+    seedGenericDataShareFixture();
+    becomeGenericDataShareSource();
+    $tables = [GENERIC_SHARE_PARENT, GENERIC_SHARE_CHILD];
+    $preview = app(DataSharePackageExporter::class)->preview(GENERIC_SHARE_SCOPE, $tables);
+    $bundle = app(DataShareTransferOfferManager::class)->publish(
+        GENERIC_SHARE_SCOPE,
+        $tables,
+        $preview->previewHash,
+        maxDownloads: 1,
+    );
+    $headers = ['Authorization' => 'Bearer '.$bundle->secret, 'Accept' => 'application/x-ndjson'];
+
+    $first = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
+    $offer = DataShareTransferOffer::query()->where('offer_id', $bundle->offerId)->firstOrFail();
+
+    expect($first->getStatusCode())->toBe(200)
+        ->and($offer->status)->toBe('exhausted')
+        ->and($offer->download_count)->toBe(1)
+        ->and(fn () => app(DataShareTransferOfferManager::class)->bundleFor($offer))
+        ->toThrow(DataSharePolicyException::class, 'cannot be copied');
+
+    ob_start();
+    $first->sendContent();
+    ob_get_clean();
+
+    $second = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
+
+    expect($second->getStatusCode())->toBe(401)
+        ->and($offer->refresh()->status)->toBe('exhausted')
+        ->and(DataShareEvent::query()->where('action', 'offer_exhausted')->count())->toBe(1);
 });
 
 it('refuses incorrect and expired offer secrets without exposing package bytes', function (): void {

@@ -2,7 +2,9 @@
 
 namespace App\Base\Database\Services\DataShare;
 
+use App\Base\Database\DTO\DataShare\DataShareInstanceIdentity;
 use App\Base\Database\DTO\DataShare\DataShareTransferOfferBundle;
+use App\Base\Database\Enums\DataShareInstanceRole;
 use App\Base\Database\Exceptions\DataSharePolicyException;
 use App\Base\Database\Exceptions\DataShareTransportException;
 use App\Base\Database\Models\DataShareTransferOffer;
@@ -13,6 +15,8 @@ use Illuminate\Support\Str;
 
 class DataShareTransferOfferManager
 {
+    public const MAX_DOWNLOADS = 100;
+
     public function __construct(
         private readonly DataSharePackageExporter $exporter,
         private readonly DataShareInstanceIdentityResolver $instances,
@@ -27,7 +31,12 @@ class DataShareTransferOfferManager
         array $tables,
         string $expectedPreviewHash,
         ?int $actorId = null,
+        ?int $maxDownloads = null,
     ): DataShareTransferOfferBundle {
+        if ($maxDownloads !== null && ($maxDownloads < 1 || $maxDownloads > self::MAX_DOWNLOADS)) {
+            throw DataSharePolicyException::invalidMaximumDownloads(self::MAX_DOWNLOADS);
+        }
+
         $source = $this->instances->current();
         $offerId = Str::lower((string) Str::ulid());
         $endpoints = $this->offerEndpoints($offerId);
@@ -44,15 +53,18 @@ class DataShareTransferOfferManager
         );
 
         try {
-            $offer = DB::transaction(function () use ($actorId, $expiresAt, $export, $offerId, $scopeName, $secret, $source): DataShareTransferOffer {
+            $offer = DB::transaction(function () use ($actorId, $expiresAt, $export, $maxDownloads, $offerId, $scopeName, $secret, $source): DataShareTransferOffer {
                 $offer = DataShareTransferOffer::query()->create([
                     'offer_id' => $offerId,
                     'secret_hash' => hash('sha256', $secret),
+                    'secret' => $secret,
+                    'max_downloads' => $maxDownloads,
                     'published_by_actor_id' => $actorId ?? auth()->id(),
                     'package_id' => $export->packageId,
                     'package_sha256' => $export->sha256,
                     'package_path' => $export->path,
                     'source_instance_id' => $source->id,
+                    'source_name' => $source->name,
                     'source_role' => $source->role->value,
                     'scope_name' => $scopeName,
                     'bytes' => $export->bytes,
@@ -88,14 +100,47 @@ class DataShareTransferOfferManager
         );
     }
 
+    public function bundleFor(DataShareTransferOffer $offer): DataShareTransferOfferBundle
+    {
+        $this->refreshAvailability($offer);
+
+        if ($offer->status !== 'published') {
+            throw DataSharePolicyException::offerNotCopyable($offer->status);
+        }
+
+        $endpoints = $this->offerEndpoints($offer->offer_id);
+
+        return new DataShareTransferOfferBundle(
+            endpoint: $endpoints[0],
+            endpoints: $endpoints,
+            offerId: $offer->offer_id,
+            secret: $offer->secret,
+            source: new DataShareInstanceIdentity(
+                $offer->source_instance_id,
+                $offer->source_name,
+                DataShareInstanceRole::from($offer->source_role),
+            ),
+            scope: $offer->scope_name,
+            packageId: $offer->package_id,
+            packageSha256: $offer->package_sha256,
+            bytes: $offer->bytes,
+            counts: $offer->metadata['counts'],
+            expiresAt: $offer->expires_at->toIso8601String(),
+        );
+    }
+
+    public function refreshAvailability(DataShareTransferOffer $offer): DataShareTransferOffer
+    {
+        $offer->refresh();
+        $this->refreshAvailabilityState($offer);
+
+        return $offer;
+    }
+
     public function authenticate(string $offerId, string $secret): DataShareTransferOffer
     {
         $offer = DataShareTransferOffer::query()->where('offer_id', $offerId)->first();
-
-        if ($offer?->status === 'published' && $offer->expires_at->isPast()) {
-            $offer->forceFill(['status' => 'expired'])->save();
-            $this->events->recordOffer('offer_expired', $offer);
-        }
+        $this->refreshAvailabilityState($offer);
 
         if ($offer === null
             || $offer->status !== 'published'
@@ -120,14 +165,73 @@ class DataShareTransferOfferManager
         $this->events->recordOffer('offer_revoked', $offer);
     }
 
-    public function recordDownload(DataShareTransferOffer $offer): void
+    /**
+     * Atomically consume one fetch slot before streaming. A row lock serializes
+     * concurrent fetches so the configured maximum stays an enforceable boundary,
+     * and the claim is persisted with an Eloquent save so the fetch is captured
+     * as an audit mutation (visible in the offer's record history).
+     */
+    public function claimDownload(DataShareTransferOffer $offer): DataShareTransferOffer
     {
-        DataShareTransferOffer::query()->whereKey($offer->id)->increment('download_count', 1, [
-            'last_downloaded_at' => now('UTC'),
-            'updated_at' => now('UTC'),
-        ]);
-        $offer->refresh();
-        $this->events->recordOffer('offer_downloaded', $offer, ['download_count' => $offer->download_count]);
+        $claimed = DB::transaction(function () use ($offer): ?DataShareTransferOffer {
+            $locked = DataShareTransferOffer::query()->whereKey($offer->id)->lockForUpdate()->first();
+
+            if ($locked === null || $locked->status !== 'published') {
+                return null;
+            }
+
+            // Persist lazy expiry/exhaustion transitions inside the lock; returning
+            // null (rather than throwing) keeps these committed while signalling refusal.
+            if ($locked->expires_at->isPast()) {
+                $locked->forceFill(['status' => 'expired'])->save();
+                $this->events->recordOffer('offer_expired', $locked);
+
+                return null;
+            }
+
+            if ($this->fetchLimitReached($locked)) {
+                $locked->forceFill(['status' => 'exhausted'])->save();
+                $this->events->recordOffer('offer_exhausted', $locked);
+
+                return null;
+            }
+
+            $locked->download_count += 1;
+            $locked->last_downloaded_at = now('UTC');
+            $locked->save();
+            $this->events->recordOffer('offer_downloaded', $locked, ['download_count' => $locked->download_count]);
+
+            if ($this->fetchLimitReached($locked)) {
+                $locked->forceFill(['status' => 'exhausted'])->save();
+                $this->events->recordOffer('offer_exhausted', $locked);
+            }
+
+            return $locked;
+        });
+
+        if ($claimed === null) {
+            throw DataShareTransportException::invalidTransferOffer();
+        }
+
+        return $claimed;
+    }
+
+    public function fetchLimitReached(DataShareTransferOffer $offer): bool
+    {
+        return $offer->max_downloads !== null && $offer->download_count >= $offer->max_downloads;
+    }
+
+    private function refreshAvailabilityState(?DataShareTransferOffer $offer): void
+    {
+        if ($offer?->status === 'published' && $offer->expires_at->isPast()) {
+            $offer->forceFill(['status' => 'expired'])->save();
+            $this->events->recordOffer('offer_expired', $offer);
+        }
+
+        if ($offer?->status === 'published' && $this->fetchLimitReached($offer)) {
+            $offer->forceFill(['status' => 'exhausted'])->save();
+            $this->events->recordOffer('offer_exhausted', $offer);
+        }
     }
 
     /** @return list<string> */

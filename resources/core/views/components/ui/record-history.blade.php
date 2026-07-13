@@ -5,6 +5,7 @@
     'auditableId' => null,
     'sourceCapability',
     'buttonLabel' => null,
+    'iconOnly' => false,
 ])
 
 @php
@@ -53,6 +54,7 @@
         'auditableId' => $auditableId,
         'allUrl' => $fullHistoryUrl,
         'buttonLabel' => $buttonLabel ?? __('History'),
+        'iconOnly' => $iconOnly,
         'sourceCapability' => $resolvedSourceCapability,
     ], key($componentKey))
 @endif

@@ -29,11 +29,11 @@ Data Export is the reusable snapshot foundation. Data Share is its Belimbing-to-
 
 ### Source-published transfer offers
 
-The source owns the data and therefore owns what is offered, the exact immutable package bytes, availability window, advertised routes, and revocation. Publishing creates one package and one transfer offer with a 256-bit secret. The plaintext secret appears only in the copy-once JSON bundle; only its SHA-256 hash is stored.
+The source owns the data and therefore owns what is offered, the exact immutable package bytes, availability window, advertised routes, and revocation. Publishing creates one package and one transfer offer with a 256-bit secret. The secret appears in the JSON bundle and is persisted encrypted at rest on the offer record; its separate SHA-256 hash is used for authentication. This lets an authorized source operator recopy an available offer without reissuing it or storing the secret in plaintext.
 
-The bundle uses `belimbing-data-share/transfer-offer/v1` and contains the public offer ID, source identity and role, scope, package ID, package SHA-256, exact bytes and counts, expiry, one or more advertised HTTPS endpoints, and the bearer secret. It contains no database credential and names no target.
+The bundle uses `belimbing-data-share/offer/v1` and contains the public offer ID, source identity and role, scope, package ID, package SHA-256, exact bytes and counts, expiry, one or more advertised HTTPS endpoints, and the bearer secret. It contains no database credential and names no target.
 
-The source exposes only `GET /data-share/offers/{offerId}`. The request authenticates with `Authorization: Bearer`, is rate-limited, and streams the exact protected Outgoing bytes. It cannot plan, apply, enumerate tables, or mutate source data. The same immutable bytes may be downloaded repeatedly until expiry or revocation so interrupted or response-ambiguous fetches are safely retryable. Download count and last-download time are telemetry, not consumption state.
+The source exposes only `GET /data-share/offers/{offerId}`. The request authenticates with `Authorization: Bearer`, is rate-limited, and streams the exact protected Outgoing bytes. It cannot plan, apply, enumerate tables, or mutate source data. The same immutable bytes may be downloaded until the offer's fetch limit, expiry, or revocation. `max_downloads` (null means unlimited, source-side default via the UI is 1) is claimed atomically before streaming so concurrent requests cannot exceed the authorization limit; the offer moves to `exhausted` as soon as its final slot is claimed. An interrupted transfer therefore consumes a slot. Package/offer/hash replay protection still makes receipt and apply idempotent, and an operator can publish a new offer when another transfer attempt is required.
 
 ### Target pull and local receipt
 
@@ -55,7 +55,7 @@ The offer shape deliberately permits future catalogs or subscriptions: a target 
 
 ## Public Contract
 
-- Canonical package format is `belimbing-data-share/package/v1` as bounded canonical NDJSON; copy-once offers use `belimbing-data-share/offer/v1`.
+- Canonical package format is `belimbing-data-share/package/v1` as bounded canonical NDJSON; transfer offers use `belimbing-data-share/offer/v1`.
 - Every selected table must be live, registered, and have a primary key. Unsupported relations remain visible with a reason.
 - Packages preserve physical primary and foreign keys and exact normalized values.
 - Binary and invalid UTF-8 values use an explicit Base64 envelope. JSON, booleans, numbers, dates, and datetimes normalize deterministically.
@@ -63,14 +63,14 @@ The offer shape deliberately permits future catalogs or subscriptions: a target 
 - Instance identity, offer routes, offer lifetime, fetch timeout, storage paths, retention, and limits live in global `base_settings` with code defaults and an authorized settings UI; `.env` is not the operator contract.
 - Default direction is upward only: development to staging or production, and staging to production. Lateral and downward transfer fail closed on the target.
 - Offer endpoints are HTTPS, contain no credentials/query/fragment, and match the exact public offer ID.
-- Offer secrets never enter URLs, package bytes, logs, ledger metadata, or persisted plaintext settings.
+- Offer secrets never enter URLs, package bytes, logs, ledger metadata, or persisted plaintext; the offer record holds only application-encrypted ciphertext so an authorized source operator can recopy an available bundle.
 - A package ID cannot be rebound to different bytes or another offer. An applied package cannot be applied again.
 - Planning and receipt do not mutate domain tables. Apply remains a separate capability and explicit act.
 - The ledger stores identities, offer/package/plan hashes, counts, bytes, actors, lifecycle outcomes, and bounded errors without payload values or secrets.
 
 ## Operator Surfaces
 
-- `Share`: select scope/tables, preview, publish, then copy or permanently hide the source-owned offer bundle.
+- `Share`: select scope/tables, preview, publish, then copy the source-owned offer bundle.
 - `Incoming`: paste/review an offer, select one advertised LAN or Cloudflare route, fetch and verify, then plan/apply a local receipt.
 - `Published`: list source offers, their scope/package/hash/bytes/expiry/download telemetry, and revoke an available offer.
 - `History`: inspect export, offer, fetch, receipt, plan, apply, prune, and failure events.

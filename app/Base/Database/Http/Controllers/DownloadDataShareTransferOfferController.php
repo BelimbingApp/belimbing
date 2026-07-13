@@ -29,7 +29,11 @@ class DownloadDataShareTransferOfferController
             return response()->json(['message' => __('The published Data Share package is unavailable.')], 410);
         }
 
-        $offers->recordDownload($offer);
+        try {
+            $offer = $offers->claimDownload($offer);
+        } catch (DataShareTransportException $e) {
+            return response()->json(['message' => $e->getMessage()], $e->status);
+        }
 
         return response()->stream(function () use ($disk, $offer): void {
             $stream = $disk->readStream($offer->package_path);

@@ -6,7 +6,6 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\DTO\DataShare\DataShareTransferOfferBundle;
 use App\Base\Database\Enums\DataShareInstanceRole;
-use App\Base\Database\Models\DataShareEvent;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataShareReceipt;
 use App\Base\Database\Models\DataShareTransferOffer;
@@ -41,13 +40,12 @@ class Index extends Component
     public array $offers = [];
 
     /** @var list<array<string, mixed>> */
-    public array $history = [];
-
-    /** @var list<array<string, mixed>> */
     public array $diagnosticPackages = [];
 
     /** @var array<string, mixed>|null */
     public ?array $sharePreview = null;
+
+    public int $maxDownloads = 1;
 
     public string $scopeName = '';
 
@@ -76,8 +74,6 @@ class Index extends Component
     public function mount(DataShareScopeCatalog $catalog, DiagnosticRowCapture $diagnostics): void
     {
         $this->scopes = $this->scopeRows($catalog);
-        $this->scopeName = $this->scopes[0]['name'] ?? '';
-        $this->selectEntireScope();
         $this->diagnosticPackages = $diagnostics->listPackages();
         $this->refreshOperations();
     }
@@ -116,13 +112,15 @@ class Index extends Component
                 $this->scopeName,
                 $this->selectedTables,
                 (string) $this->sharePreview['preview_sha256'],
+                maxDownloads: $this->maxDownloads,
             );
             $this->publishedOfferBundle = $offer->toJson();
-            $this->setStatus(__('Transfer offer :offer is published. Copy its bundle now; only the secret hash is stored.', [
+            $this->setStatus(__('Transfer offer :offer is published. Copy its bundle from the Published tab.', [
                 'offer' => $offer->offerId,
             ]), 'success');
             $this->sharePreview = null;
             $this->refreshOperations();
+            $this->dispatch('data-share-published');
         } catch (Throwable $e) {
             $this->setStatus($e->getMessage(), 'danger');
         }
@@ -263,6 +261,35 @@ class Index extends Component
         $this->refreshOperations();
     }
 
+    public function copyOfferBundle(int $offerId, DataShareTransferOfferManager $manager): void
+    {
+        $this->requireCapability('admin.system.data-share-offer.manage');
+
+        try {
+            $offer = DataShareTransferOffer::query()->findOrFail($offerId);
+            $bundle = $manager->bundleFor($offer);
+
+            $this->dispatch('data-share-bundle-ready', bundle: $bundle->toJson(), offerId: $offer->offer_id);
+        } catch (Throwable $e) {
+            $this->setStatus($e->getMessage(), 'danger');
+            $this->refreshOperations();
+        }
+    }
+
+    public function offerBundleCopied(string $offerId): void
+    {
+        $this->requireCapability('admin.system.data-share-offer.manage');
+        $this->setStatus(__('Transfer offer :offer bundle copied. Paste it on the target instance.', [
+            'offer' => $offerId,
+        ]), 'success');
+    }
+
+    public function offerBundleCopyFailed(): void
+    {
+        $this->requireCapability('admin.system.data-share-offer.manage');
+        $this->setStatus(__('The transfer offer bundle could not be copied. Check browser clipboard permission and try again.'), 'danger');
+    }
+
     public function clearPublishedOfferBundle(): void
     {
         $this->publishedOfferBundle = null;
@@ -329,10 +356,13 @@ class Index extends Component
                 ];
             })
             ->all();
-        $this->offers = DataShareTransferOffer::query()
+        $offerManager = app(DataShareTransferOfferManager::class);
+        $offers = DataShareTransferOffer::query()
             ->latest()
             ->limit(50)
-            ->get()
+            ->get();
+        $offers->each(fn (DataShareTransferOffer $offer) => $offerManager->refreshAvailability($offer));
+        $this->offers = $offers
             ->map(fn (DataShareTransferOffer $offer): array => [
                 'id' => $offer->id,
                 'offer_id' => $offer->offer_id,
@@ -343,30 +373,13 @@ class Index extends Component
                 'scope_name' => $offer->scope_name,
                 'bytes' => $offer->bytes,
                 'counts' => $offer->metadata['counts'] ?? [],
-                'status' => $offer->status === 'published' && $offer->expires_at->isPast()
-                    ? 'expired'
-                    : $offer->status,
+                'status' => $offer->status,
                 'expires_at' => $offer->expires_at,
                 'revoked_at' => $offer->revoked_at,
                 'download_count' => $offer->download_count,
+                'max_downloads' => $offer->max_downloads,
                 'last_downloaded_at' => $offer->last_downloaded_at,
                 'updated_at' => $offer->updated_at,
-            ])
-            ->all();
-        $this->history = DataShareEvent::query()
-            ->latest('created_at')
-            ->limit(100)
-            ->get()
-            ->map(fn (DataShareEvent $event): array => [
-                'id' => $event->id,
-                'action' => $event->action,
-                'package_id' => $event->package_id,
-                'plan_hash' => $event->plan_hash,
-                'source_instance_id' => $event->source_instance_id,
-                'scope_name' => $event->scope_name,
-                'metadata' => $event->metadata,
-                'error_summary' => $event->error_summary,
-                'created_at' => $event->created_at,
             ])
             ->all();
     }
@@ -399,18 +412,21 @@ class Index extends Component
             'scopeName' => ['required', 'string'],
             'selectedTables' => ['required', 'array', 'min:1'],
             'selectedTables.*' => ['required', 'string'],
+            'maxDownloads' => ['required', 'integer', 'min:1', 'max:'.DataShareTransferOfferManager::MAX_DOWNLOADS],
         ]);
     }
 
     public function updatedScopeName(): void
     {
         $this->sharePreview = null;
+        $this->clearPublishedOfferBundle();
         $this->selectEntireScope();
     }
 
     public function updatedSelectedTables(): void
     {
         $this->sharePreview = null;
+        $this->clearPublishedOfferBundle();
     }
 
     public function updatedOfferBundle(): void

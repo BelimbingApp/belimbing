@@ -10,12 +10,14 @@ class DataShareTransferOffer extends Model
 
     protected $guarded = [];
 
-    protected $hidden = ['secret_hash'];
+    protected $hidden = ['secret_hash', 'secret'];
 
     protected function casts(): array
     {
         return [
             'metadata' => 'array',
+            'secret' => 'encrypted',
+            'max_downloads' => 'integer',
             'expires_at' => 'immutable_datetime',
             'revoked_at' => 'immutable_datetime',
             'last_downloaded_at' => 'immutable_datetime',

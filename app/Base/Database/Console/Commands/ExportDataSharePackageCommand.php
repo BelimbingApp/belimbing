@@ -16,6 +16,7 @@ class ExportDataSharePackageCommand extends Command
                             {--table=* : Registered tables within the scope; defaults to the entire scope}
                             {--publish : Publish an immutable source offer in protected Outgoing storage}
                             {--preview-hash= : Exact preview hash required with --publish}
+                            {--max-downloads=1 : Fetches allowed before the offer closes; 0 means unlimited}
                             {--json : Emit machine-readable JSON}';
 
     protected $description = 'Preview registered tables or publish a source-owned Data Share offer';
@@ -40,10 +41,22 @@ class ExportDataSharePackageCommand extends Command
                     return self::INVALID;
                 }
 
+                $maximumOption = trim((string) $this->option('max-downloads'));
+
+                if (preg_match('/^\d+$/', $maximumOption) !== 1
+                    || (int) $maximumOption > DataShareTransferOfferManager::MAX_DOWNLOADS) {
+                    $this->components->error('--max-downloads must be 0 (unlimited) or an integer from 1 to '.DataShareTransferOfferManager::MAX_DOWNLOADS.'.');
+
+                    return self::INVALID;
+                }
+
+                $maxDownloads = (int) $maximumOption;
+
                 $offer = $offers->publish(
                     (string) $this->argument('scope'),
                     $this->option('table'),
                     $expected,
+                    maxDownloads: $maxDownloads > 0 ? $maxDownloads : null,
                 );
                 $payload = ['mode' => 'published', 'offer' => $offer->toArray()];
             }
@@ -61,7 +74,7 @@ class ExportDataSharePackageCommand extends Command
 
         $this->components->info($payload['mode'] === 'preview'
             ? 'Export preview only; no package was written.'
-            : 'Transfer offer published. Copy the offer JSON now; the plaintext secret is not stored.');
+            : 'Transfer offer published. Its bundle can be copied again while the offer remains available.');
         $this->line(json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
         return self::SUCCESS;
