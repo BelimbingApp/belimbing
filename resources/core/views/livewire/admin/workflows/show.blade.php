@@ -15,10 +15,9 @@
                     :auditable-id="$workflow->id"
                     source-capability="admin.workflow.manage"
                 />
-                <x-ui.button variant="ghost" as="a" href="{{ route('admin.workflows.index') }}" wire:navigate>
-                    <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
+                <x-ui.link href="{{ route('admin.workflows.index') }}">
                     {{ __('Back') }}
-                </x-ui.button>
+                </x-ui.link>
             </x-slot>
         </x-ui.page-header>
 

@@ -4,10 +4,9 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Edit Employee Type')" :subtitle="$employeeType->code">
             <x-slot name="actions">
-                <x-ui.button variant="ghost" as="a" href="{{ route('admin.employee-types.index') }}" wire:navigate>
-                    <x-icon name="heroicon-o-arrow-left" class="w-5 h-5" />
+                <x-ui.link href="{{ route('admin.employee-types.index') }}">
                     {{ __('Back') }}
-                </x-ui.button>
+                </x-ui.link>
             </x-slot>
         </x-ui.page-header>
 

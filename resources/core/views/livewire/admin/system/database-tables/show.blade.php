@@ -201,10 +201,9 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
                         <x-icon name="heroicon-o-bars-3-bottom-left" class="w-4 h-4" />
                         {{ __('Tables') }}
                     </x-ui.button>
-                    <x-ui.button variant="ghost" size="sm" href="{{ route('admin.system.database-tables.index') }}">
-                        <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
+                    <x-ui.link href="{{ route('admin.system.database-tables.index') }}">
                         {{ __('Back to Registry') }}
-                    </x-ui.button>
+                    </x-ui.link>
                 </x-slot>
             </x-ui.page-header>
 

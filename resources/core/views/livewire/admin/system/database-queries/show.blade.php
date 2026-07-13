@@ -83,10 +83,9 @@
                 </span>
             </x-slot>
             <x-slot name="actions">
-                <x-ui.button variant="ghost" size="sm" href="{{ route('admin.system.database-queries.index') }}" wire:navigate>
-                    <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
+                <x-ui.link href="{{ route('admin.system.database-queries.index') }}">
                     {{ __('Back') }}
-                </x-ui.button>
+                </x-ui.link>
                 @if(! $isNew)
                     {{-- Share --}}
                     <div x-data="{ open: false }" class="relative">

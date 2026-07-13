@@ -14,10 +14,9 @@
                     :auditable-id="$exchange->id"
                     source-capability="admin.system.outbound-exchange.list"
                 />
-                <x-ui.button variant="ghost" as="a" href="{{ route('admin.integration.outbound-exchanges.index') }}" wire:navigate>
-                    <x-icon name="heroicon-o-arrow-left" class="h-4 w-4" />
+                <x-ui.link href="{{ route('admin.integration.outbound-exchanges.index') }}">
                     {{ __('Back') }}
-                </x-ui.button>
+                </x-ui.link>
             </x-slot>
         </x-ui.page-header>
 
