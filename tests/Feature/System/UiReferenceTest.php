@@ -37,7 +37,9 @@ it('keeps the catalog in a mobile drawer so reference content stays primary', fu
         ->assertSee('sticky top-0', false)
         ->assertSee('data-side-panel-mobile-trigger', false)
         ->assertSee('data-side-panel-mobile', false)
-        ->assertSee('aria-label="Close catalog"', false)
+        // The drawer's dismiss control is an x-ui.icon-action; its accessible
+        // name is carried by the sr-only label + title, not a raw aria-label.
+        ->assertSee('Close catalog')
         ->assertSee('Catalog: Navigation')
         ->assertSee('Catalog')
         ->assertDontSee('Catalog Pages')

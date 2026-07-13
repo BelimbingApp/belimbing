@@ -176,6 +176,10 @@ test('provider catalog is a lazy island kept out of the page initial paint', fun
     $user = createAiProvidersTestUser();
     $this->actingAs($user);
 
+    // This test's contract is the lazy island itself, so observe real placeholder
+    // rendering instead of the suite-wide eager render.
+    $this->withRealLazyLoading();
+
     // The full-page component must defer the ~100-row models.dev catalog: its
     // initial HTML carries only the lazy placeholder, not the catalog UI.
     Livewire::test(Providers::class)
@@ -186,6 +190,8 @@ test('provider catalog is a lazy island kept out of the page initial paint', fun
 test('provider catalog island renders the catalog once lazily loaded', function (): void {
     $user = createAiProvidersTestUser();
     $this->actingAs($user);
+
+    $this->withRealLazyLoading();
 
     $component = Livewire::test(CatalogBrowser::class);
     $component->assertDontSee(PROVIDER_CATALOG_SEARCH_PLACEHOLDER);

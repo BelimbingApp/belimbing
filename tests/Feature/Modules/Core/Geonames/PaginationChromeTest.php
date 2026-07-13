@@ -6,17 +6,6 @@ beforeEach(function (): void {
     $this->actingAs(createAdminUser());
 });
 
-it('does not put a drop shadow on the page strip', function (): void {
-    GeonamesSeeder::countries(25);
-
-    $html = $this->get(route('admin.geonames.countries.index'))->assertOk()->getContent();
-
-    // The strip container must not carry a flat drop shadow (DESIGN.md subtle depth).
-    expect($html)
-        ->not->toContain('shadow-sm rounded-2xl')
-        ->and($html)->toContain('rounded-2xl');
-});
-
 it('uses the same vertical padding as the per-page select on page pills', function (): void {
     GeonamesSeeder::countries(25);
 

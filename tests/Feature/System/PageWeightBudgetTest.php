@@ -20,6 +20,11 @@ test('full-page Livewire components stay within the HTML budget', function (): v
     // The harness logs in a user to render pages as; ensure one exists.
     $this->actingAs(createAdminUser());
 
+    // The budget guards the deferred *initial* payload, so measure pages with
+    // real #[Lazy]/#[Defer] rendering — matching the browser — rather than the
+    // suite-wide eager render that would inflate lazy-island pages.
+    $this->withRealLazyLoading();
+
     $allow = [
         // ~152 KB: aggregate x-ui overhead on the active-tab workbench (no single
         // hotspot; the create modal already includes only the active form). Marginal
