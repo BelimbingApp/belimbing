@@ -6,6 +6,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\DTO\DataShare\DataShareTransferOfferBundle;
 use App\Base\Database\Enums\DataShareInstanceRole;
+use App\Base\Database\Exceptions\DataShareTransportException;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataShareReceipt;
 use App\Base\Database\Models\DataShareTransferOffer;
@@ -203,7 +204,7 @@ class Index extends Component
             app(DataShareScopeCatalog::class)->scope($offer->scope);
 
             if ($offer->isExpired()) {
-                throw new \RuntimeException(__('This transfer offer has expired.'));
+                throw DataShareTransportException::expiredTransferOffer();
             }
 
             $this->offerEndpoint = $offer->endpoint;

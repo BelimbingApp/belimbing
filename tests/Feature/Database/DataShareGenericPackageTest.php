@@ -47,6 +47,8 @@ const GENERIC_SHARE_SOURCE_NAME = 'Generic source';
 const GENERIC_SHARE_BINARY_PAYLOAD = "\x00\xFFshare";
 const GENERIC_SHARE_PRIMARY_URL = 'https://source.lan:8443';
 const GENERIC_SHARE_FALLBACK_URL = 'https://share.example.test';
+const GENERIC_SHARE_OFFER_PATH = '/data-share/offers/';
+const GENERIC_SHARE_NDJSON = 'application/x-ndjson';
 
 beforeEach(function (): void {
     Storage::fake('local');
@@ -239,8 +241,8 @@ it('publishes a target-neutral immutable offer and persists a copyable encrypted
         ->and($decoded->offerId)->toBe($offer->offer_id)
         ->and($decoded->packageSha256)->toBe($export->sha256)
         ->and($decoded->endpoints)->toBe([
-            GENERIC_SHARE_PRIMARY_URL.'/data-share/offers/'.$offer->offer_id,
-            GENERIC_SHARE_FALLBACK_URL.'/data-share/offers/'.$offer->offer_id,
+            GENERIC_SHARE_PRIMARY_URL.GENERIC_SHARE_OFFER_PATH.$offer->offer_id,
+            GENERIC_SHARE_FALLBACK_URL.GENERIC_SHARE_OFFER_PATH.$offer->offer_id,
         ])
         ->and($export->manifest)->not->toHaveKey('target')
         ->and($export->manifest)->not->toHaveKey('receive_grant_id')
@@ -268,7 +270,7 @@ it('validates offer bundles and permits only an advertised route', function (): 
     ['bundle' => $bundle] = publishGenericDataShare();
 
     expect($bundle->usingEndpoint($bundle->endpoints[1])->endpoint)->toBe($bundle->endpoints[1])
-        ->and(fn () => $bundle->usingEndpoint('https://other.example.test/data-share/offers/'.$bundle->offerId))
+        ->and(fn () => $bundle->usingEndpoint('https://other.example.test'.GENERIC_SHARE_OFFER_PATH.$bundle->offerId))
         ->toThrow(DataShareTransportException::class)
         ->and(fn () => DataShareTransferOfferBundle::fromJson('{"not":"an offer"}'))
         ->toThrow(DataShareTransportException::class);
@@ -291,10 +293,10 @@ it('refuses offer metadata that does not describe the immutable package', functi
 it('streams the same immutable source bytes repeatedly until revocation', function (): void {
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'offer' => $offer, 'export' => $export] = publishGenericDataShare();
-    $headers = ['Authorization' => 'Bearer '.$bundle->secret, 'Accept' => 'application/x-ndjson'];
+    $headers = ['Authorization' => 'Bearer '.$bundle->secret, 'Accept' => GENERIC_SHARE_NDJSON];
 
-    $first = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
-    $second = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
+    $first = $this->withHeaders($headers)->get(GENERIC_SHARE_OFFER_PATH.$bundle->offerId);
+    $second = $this->withHeaders($headers)->get(GENERIC_SHARE_OFFER_PATH.$bundle->offerId);
     ob_start();
     $first->sendContent();
     $firstContent = (string) ob_get_clean();
@@ -309,7 +311,7 @@ it('streams the same immutable source bytes repeatedly until revocation', functi
         ->and($offer->refresh()->download_count)->toBe(2);
 
     app(DataShareTransferOfferManager::class)->revoke($offer);
-    expect($this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId)->getStatusCode())->toBe(401);
+    expect($this->withHeaders($headers)->get(GENERIC_SHARE_OFFER_PATH.$bundle->offerId)->getStatusCode())->toBe(401);
 });
 
 it('closes a single-use offer when the first fetch is claimed', function (): void {
@@ -349,9 +351,9 @@ it('refuses incorrect and expired offer secrets without exposing package bytes',
     seedGenericDataShareFixture();
     ['bundle' => $bundle, 'offer' => $offer] = publishGenericDataShare();
 
-    expect($this->withToken(str_repeat('x', 43))->getJson('/data-share/offers/'.$bundle->offerId)->getStatusCode())->toBe(401);
+    expect($this->withToken(str_repeat('x', 43))->getJson(GENERIC_SHARE_OFFER_PATH.$bundle->offerId)->getStatusCode())->toBe(401);
     $offer->forceFill(['expires_at' => now('UTC')->subSecond()])->save();
-    expect($this->withToken($bundle->secret)->getJson('/data-share/offers/'.$bundle->offerId)->getStatusCode())->toBe(401);
+    expect($this->withToken($bundle->secret)->getJson(GENERIC_SHARE_OFFER_PATH.$bundle->offerId)->getStatusCode())->toBe(401);
 
     expect($offer->refresh()->status)->toBe('expired');
 });
@@ -424,7 +426,7 @@ it('explains the publish and pull workflow and orients Data Share settings', fun
 
 it('stores Data Share operator configuration in Base Settings and validates source routes', function (): void {
     $this->actingAs(createAdminUser());
-    $component = Livewire::test(DataShareSettingsPage::class)
+    Livewire::test(DataShareSettingsPage::class)
         ->assertSet('values.data_share__instance__id', 'generic-source-dev')
         ->set('values.data_share__instance__id', 'settings-source')
         ->set('values.data_share__instance__name', 'Settings source')
@@ -462,11 +464,13 @@ it('exports deterministic bounded payloads with physical identities and binary f
     ['export' => $export] = publishGenericDataShare();
     $stream = Storage::disk('local')->readStream($export->path);
     $rows = [];
+    $inspectedScope = null;
 
     try {
         $verified = app(DataSharePackageReader::class)->inspect(
             $stream,
-            function ($scope, $table, array $record) use (&$rows): void {
+            function ($scope, $table, array $record) use (&$rows, &$inspectedScope): void {
+                $inspectedScope = $scope->name;
                 $rows[$table->table][] = $record;
             },
         );
@@ -476,6 +480,7 @@ it('exports deterministic bounded payloads with physical identities and binary f
 
     expect($first->previewHash)->toBe($second->previewHash)
         ->and($verified->sha256)->toBe($export->sha256)
+        ->and($inspectedScope)->toBe(GENERIC_SHARE_SCOPE)
         ->and(array_column($rows[GENERIC_SHARE_PARENT], 'primary_key'))->toBe([['id' => 2], ['id' => 10]])
         ->and($rows[GENERIC_SHARE_PARENT][0]['values']['payload'])->toBe([
             '__data_share_binary_base64' => base64_encode(GENERIC_SHARE_BINARY_PAYLOAD),
@@ -580,7 +585,7 @@ it('rolls back a partial apply and succeeds on a clean retry', function (): void
         public function findExisting(DataShareTableDefinition $table, array $record): ?array
         {
             if (++$this->calls === 6) {
-                throw new RuntimeException('Injected Data Share transaction failure.');
+                throw new DataShareApplyException('Injected Data Share transaction failure.');
             }
 
             return parent::findExisting($table, $record);
@@ -593,7 +598,7 @@ it('rolls back a partial apply and succeeds on a clean retry', function (): void
         $receipt->package_sha256,
         $plan->plan_hash,
         confirmed: true,
-    ))->toThrow(RuntimeException::class, 'Injected Data Share transaction failure');
+    ))->toThrow(DataShareApplyException::class, 'Injected Data Share transaction failure');
     expect(DB::table(GENERIC_SHARE_PARENT)->count())->toBe(0);
 
     app()->instance(DataShareDestinationMapper::class, new DataShareDestinationMapper(
@@ -718,7 +723,7 @@ it('fetches an advertised offer into bounded target Incoming without planning', 
     becomeGenericDataShareDestination();
     Http::fake([
         $bundle->endpoint => Http::response($bytes, 200, [
-            'Content-Type' => 'application/x-ndjson',
+            'Content-Type' => GENERIC_SHARE_NDJSON,
             'Content-Length' => (string) strlen($bytes),
             'X-Data-Share-Offer-Id' => $bundle->offerId,
             'X-Data-Share-Package-Id' => $bundle->packageId,
@@ -741,7 +746,7 @@ it('deletes a fetched temporary stream when response metadata is wrong', functio
     becomeGenericDataShareDestination();
     Http::fake([
         $bundle->endpoint => Http::response($bytes, 200, [
-            'Content-Type' => 'application/x-ndjson',
+            'Content-Type' => GENERIC_SHARE_NDJSON,
             'Content-Length' => (string) strlen($bytes),
             'X-Data-Share-Offer-Id' => $bundle->offerId,
             'X-Data-Share-Package-Id' => $bundle->packageId,

@@ -12,12 +12,55 @@
 
 // Responses that are files, not app pages — navigating into them would swap
 // the document body with binary/CSV content instead of downloading it.
-const FILE_LIKE_PATH = /\.(?:csv|pdf|zip|gz|tar|xlsx?|docx?|pptx?|png|jpe?g|gif|svg|webp|avif|ics|txt|xml|json|mp[34]|webm)$|\/(?:download|export)(?:\/|$)/i
+const FILE_EXTENSIONS = new Set([
+    'avif',
+    'csv',
+    'doc',
+    'docx',
+    'gif',
+    'gz',
+    'ics',
+    'jpeg',
+    'jpg',
+    'json',
+    'mp3',
+    'mp4',
+    'pdf',
+    'png',
+    'ppt',
+    'pptx',
+    'svg',
+    'tar',
+    'txt',
+    'webm',
+    'webp',
+    'xls',
+    'xlsx',
+    'xml',
+    'zip',
+])
+
+const FILE_ACTION_SEGMENTS = new Set(['download', 'export'])
 
 // Auth pages use the guest layout: leaving the app chrome is fine, but coming
 // BACK in must be a full load so the chrome exists to persist (see the menu
 // view composer invariant). Keep the whole boundary on full page loads.
 const AUTH_PATH = /^\/(?:login|logout|register|password|two-factor|email\/verify)(?:\/|$)/
+
+const isFileLikePath = (pathname) => {
+    const finalSegment = pathname.split('/').pop() ?? ''
+    const extension = finalSegment.includes('.')
+        ? finalSegment.split('.').pop()?.toLowerCase()
+        : null
+
+    if (extension && FILE_EXTENSIONS.has(extension)) {
+        return true
+    }
+
+    return pathname
+        .split('/')
+        .some((segment) => FILE_ACTION_SEGMENTS.has(segment.toLowerCase()))
+}
 
 const shouldAutoNavigate = (event, anchor) => {
     if (event.defaultPrevented || event.button !== 0) {
@@ -70,7 +113,7 @@ const shouldAutoNavigate = (event, anchor) => {
         return false
     }
 
-    return !FILE_LIKE_PATH.test(url.pathname) && !AUTH_PATH.test(url.pathname)
+    return !isFileLikePath(url.pathname) && !AUTH_PATH.test(url.pathname)
 }
 
 // Bubble phase, registered on the document: inner handlers (Alpine

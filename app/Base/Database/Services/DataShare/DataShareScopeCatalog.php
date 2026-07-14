@@ -110,27 +110,13 @@ class DataShareScopeCatalog
      */
     private function dependencyOrder(array $tables): array
     {
-        $byName = [];
-        $dependencies = [];
-
-        foreach ($tables as $table) {
-            $byName[$table->table] = $table;
-            $dependencies[$table->table] = [];
-        }
-
-        foreach ($tables as $table) {
-            foreach ($table->references as $reference) {
-                if ($reference->targetTable !== $table->table && isset($byName[$reference->targetTable])) {
-                    $dependencies[$table->table][$reference->targetTable] = true;
-                }
-            }
-        }
+        $byName = array_column($tables, null, 'table');
+        $dependencies = $this->dependencyMap($tables, $byName);
 
         $ordered = [];
 
         while ($dependencies !== []) {
-            $ready = array_keys(array_filter($dependencies, fn (array $required): bool => $required === []));
-            sort($ready, SORT_STRING);
+            $ready = $this->readyTableNames($dependencies);
 
             if ($ready === []) {
                 throw DataShareDefinitionException::invalid(__('selected tables contain a foreign-key cycle that generic insert ordering cannot satisfy.'));
@@ -149,5 +135,37 @@ class DataShareScopeCatalog
         }
 
         return $ordered;
+    }
+
+    /**
+     * @param  list<DataShareTableDefinition>  $tables
+     * @param  array<string, DataShareTableDefinition>  $byName
+     * @return array<string, array<string, true>>
+     */
+    private function dependencyMap(array $tables, array $byName): array
+    {
+        $dependencies = array_fill_keys(array_keys($byName), []);
+
+        foreach ($tables as $table) {
+            foreach ($table->references as $reference) {
+                if ($reference->targetTable !== $table->table && isset($byName[$reference->targetTable])) {
+                    $dependencies[$table->table][$reference->targetTable] = true;
+                }
+            }
+        }
+
+        return $dependencies;
+    }
+
+    /**
+     * @param  array<string, array<string, true>>  $dependencies
+     * @return list<string>
+     */
+    private function readyTableNames(array $dependencies): array
+    {
+        $ready = array_keys(array_filter($dependencies, fn (array $required): bool => $required === []));
+        sort($ready, SORT_STRING);
+
+        return $ready;
     }
 }

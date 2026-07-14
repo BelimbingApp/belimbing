@@ -4,13 +4,9 @@ namespace App\Base\Settings\Livewire;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Livewire\Concerns\HandlesSettingsFields;
 use App\Base\Settings\Support\SettingsFieldValue;
-use App\Base\Support\Str as BlbStr;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Validation\Rule;
-use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 /**
@@ -23,6 +19,7 @@ use Livewire\Component;
  */
 abstract class SettingsForm extends Component
 {
+    use HandlesSettingsFields;
     use InteractsWithNotifications;
 
     /**
@@ -113,68 +110,6 @@ abstract class SettingsForm extends Component
         $this->notify(__('Settings saved.'));
     }
 
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    public function fieldValue(array $field): string
-    {
-        if (($field['value_route'] ?? null) !== null) {
-            return route($field['value_route']);
-        }
-
-        return (string) ($field['value'] ?? '');
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    public function hasEncryptedValue(array $field): bool
-    {
-        if (! ($field['encrypted'] ?? false)) {
-            return false;
-        }
-
-        return app(SettingsService::class)->has($field['key'], $this->scopeForField($field, $this->companyScope()));
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    public function savedSecretMask(array $field): string
-    {
-        return (string) ($field['saved_mask'] ?? $field['saved_placeholder'] ?? BlbStr::DEFAULT_SAVED_SECRET_MASK);
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    protected function shouldHydrateEncryptedValue(array $field): bool
-    {
-        if (! ($field['encrypted'] ?? false)) {
-            return false;
-        }
-
-        return (bool) ($field['show_reveal_button'] ?? false);
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    private function passwordFieldDisplayValue(SettingsService $settings, array $field, Scope $scope, mixed $value): string
-    {
-        $fieldScope = $this->scopeForField($field, $scope);
-
-        if (! $settings->has($field['key'], $fieldScope)) {
-            return '';
-        }
-
-        if ($this->shouldHydrateEncryptedValue($field)) {
-            return (string) $value;
-        }
-
-        return $this->savedSecretMask($field);
-    }
-
     public function render(): View
     {
         $groups = array_map(
@@ -255,102 +190,5 @@ abstract class SettingsForm extends Component
         return $groupId === $this->group()
             ? $this->groupConfig()
             : (config('settings.editable', [])[$groupId] ?? []);
-    }
-
-    /**
-     * All editable fields across every group on this form, flattened. Field keys
-     * are globally unique, so hydration, validation, and save can treat them as
-     * one set.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function allFields(): array
-    {
-        $fields = [];
-
-        foreach ($this->groups() as $groupId) {
-            foreach ($this->groupConfigFor($groupId)['fields'] ?? [] as $field) {
-                $fields[] = $field;
-            }
-        }
-
-        return $fields;
-    }
-
-    /**
-     * @return array<string, list<mixed>>
-     */
-    private function rules(): array
-    {
-        $rules = [];
-
-        foreach ($this->allFields() as $field) {
-            if ($this->isReadonlyField($field)) {
-                continue;
-            }
-
-            $rules['values.'.SettingsFieldValue::formKey($field['key'])] = $field['rules'] ?? ['nullable', 'string'];
-
-            if (($field['type'] ?? 'text') === 'checkbox-list' && ($field['options'] ?? []) !== []) {
-                $rules['values.'.SettingsFieldValue::formKey($field['key']).'.*'] = [
-                    Rule::in(array_keys($field['options'])),
-                ];
-            }
-        }
-
-        return $rules;
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    private function normalizeValue(mixed $value, array $field): mixed
-    {
-        if (is_string($value)) {
-            $value = trim($value);
-        }
-
-        if (($field['normalize'] ?? null) === 'uppercase' && is_string($value)) {
-            return strtoupper($value);
-        }
-
-        if (($field['type'] ?? 'text') === 'checkbox-list') {
-            $allowed = array_keys($field['options'] ?? []);
-
-            return SettingsFieldValue::checkboxList($value, $field, $allowed);
-        }
-
-        return $value;
-    }
-
-    private function companyScope(): Scope
-    {
-        $companyId = Auth::user()?->company_id;
-
-        if ($companyId === null) {
-            throw ValidationException::withMessages([
-                'values' => __('Your account must belong to a company before settings can be saved.'),
-            ]);
-        }
-
-        return Scope::company($companyId);
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    private function scopeForField(array $field, Scope $companyScope): ?Scope
-    {
-        return ($field['scope'] ?? 'global') === 'company'
-            ? $companyScope
-            : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $field
-     */
-    private function isReadonlyField(array $field): bool
-    {
-        return in_array(($field['type'] ?? 'text'), ['readonly'], true);
     }
 }

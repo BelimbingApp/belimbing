@@ -53,7 +53,7 @@ class DataShareTransferOfferManager
         );
 
         try {
-            $offer = DB::transaction(function () use ($actorId, $expiresAt, $export, $maxDownloads, $offerId, $scopeName, $secret, $source): DataShareTransferOffer {
+            DB::transaction(function () use ($actorId, $expiresAt, $export, $maxDownloads, $offerId, $scopeName, $secret, $source): DataShareTransferOffer {
                 $offer = DataShareTransferOffer::query()->create([
                     'offer_id' => $offerId,
                     'secret_hash' => hash('sha256', $secret),

@@ -21,6 +21,11 @@ class DataShareTransportException extends RuntimeException
         return new self(__('The pasted Data Share transfer offer is malformed.'), 422);
     }
 
+    public static function expiredTransferOffer(): self
+    {
+        return new self(__('This transfer offer has expired.'), 422);
+    }
+
     public static function invalidUpload(): self
     {
         return new self(__('The Data Share receipt body is missing or exceeds the configured package limit.'), 413);
