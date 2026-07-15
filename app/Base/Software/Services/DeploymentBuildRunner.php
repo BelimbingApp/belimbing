@@ -61,6 +61,20 @@ class DeploymentBuildRunner
         return (string) __('Autoload refresh failed: :error', ['error' => $this->processError($result)]);
     }
 
+    /** @return array{status: int, output: string} */
+    public function migrate(): array
+    {
+        $result = Process::path(base_path())
+            ->timeout(1200)
+            ->run(PhpCli::current()->artisan(['migrate', '--force', '--no-interaction']));
+        $output = trim($result->output()."\n".$result->errorOutput());
+
+        return [
+            'status' => $result->exitCode(),
+            'output' => $output !== '' ? $output : (string) __('No pending migrations.'),
+        ];
+    }
+
     public function frontendPackageManager(): string
     {
         return $this->nodeInstallCommand()[0];

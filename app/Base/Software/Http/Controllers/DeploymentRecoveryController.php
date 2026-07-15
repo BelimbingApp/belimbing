@@ -2,6 +2,8 @@
 
 namespace App\Base\Software\Http\Controllers;
 
+use App\Base\Software\Services\DeploymentMaintenanceGuard;
+use App\Base\Software\Services\DeploymentRunHistory;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 
@@ -15,9 +17,31 @@ use Illuminate\Support\Facades\Artisan;
  */
 class DeploymentRecoveryController
 {
-    public function __invoke(): RedirectResponse
-    {
-        Artisan::call('up');
+    public function __invoke(
+        DeploymentMaintenanceGuard $maintenance,
+        DeploymentRunHistory $history,
+    ): RedirectResponse {
+        $runId = $maintenance->activeRunId();
+
+        if ($runId !== null && $maintenance->leaseExists($runId)) {
+            if (! $maintenance->leaseExpired($runId)) {
+                return redirect()
+                    ->route('admin.system.software.updates.index')
+                    ->with('error', __('The update is still active and owns maintenance mode. Automatic recovery will bring Belimbing online if that process stops responding.'));
+            }
+
+            if (! $maintenance->recoverExpired($runId, $history)) {
+                return redirect()
+                    ->route('admin.system.software.updates.index')
+                    ->with('error', __('Maintenance recovery is already running or could not bring Belimbing online. Try again shortly.'));
+            }
+        }
+
+        if (app()->isDownForMaintenance() && Artisan::call('up') !== 0) {
+            return redirect()
+                ->route('admin.system.software.updates.index')
+                ->with('error', __('Belimbing could not leave maintenance mode. Check the deployment log and try again.'));
+        }
 
         return redirect()
             ->route('admin.system.software.updates.index')

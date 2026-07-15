@@ -14,11 +14,16 @@
             justRefreshed: false,
             updateAllUnavailable: @js(! $behind),
             reloadInProgress: @js($reloadInProgress),
+            updateInProgress: @js($updateInProgress),
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
             init() {
                 this.restoreAfterRefresh();
+
+                if (this.updateInProgress) {
+                    window.setTimeout(() => window.location.reload(), 5000);
+                }
             },
             isFloating() {
                 return this.runLogOpen && ! this.dismissed;
@@ -123,11 +128,15 @@
     >
         <x-ui.page-header
             :title="__('Updates')"
-            :subtitle="__('Pull the latest code per Distribution Bundle and schedule the runtime reload. Each bundle updates from its branch, migrations run under maintenance mode, then BLB records the worker reload separately when the background command finishes.')"
+            :subtitle="__('Launch a durable background update per Distribution Bundle. The detached process survives web-worker restarts, runs migrations under maintenance mode, reloads the runtime, and records its progress here.')"
         />
 
         @if (session('status'))
             <x-ui.alert variant="success">{{ session('status') }}</x-ui.alert>
+        @endif
+
+        @if (session('error'))
+            <x-ui.alert variant="danger">{{ session('error') }}</x-ui.alert>
         @endif
 
         {{-- This page is excepted from maintenance mode, so it stays reachable even when
@@ -163,11 +172,11 @@
                             <h2 class="text-base font-medium text-ink">{{ __('Distribution Bundles') }}</h2>
                             <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
                         </div>
-                        <p class="mt-1 text-sm text-muted">{{ __('Update pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, then schedules a worker reload and records its final result separately. Private repositories use the token set in') }}
+                        <p class="mt-1 text-sm text-muted">{{ __('Update launches a detached process that pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, and reloads workers. Private repositories use the token set in') }}
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateAllUnavailable" :disabled="! $behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || updateAllUnavailable" :disabled="! $behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -250,7 +259,7 @@
                             @elseif ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
@@ -287,7 +296,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No composer install has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing" wire:target="rebuildPhp">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="rebuildPhp">
                         <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies') }}</span>
                         <span wire:loading wire:target="rebuildPhp">{{ __('Running composer install…') }}</span>
                     </x-ui.button>
@@ -312,7 +321,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No frontend build has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing" wire:target="rebuildAssets">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="rebuildAssets">
                         <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets') }}</span>
                         <span wire:loading wire:target="rebuildAssets">{{ __('Running :pm install & build…', ['pm' => $packageManager]) }}</span>
                     </x-ui.button>
@@ -359,7 +368,7 @@
                         wire:click="reloadOnly"
                         x-on:click="confirmWorkerReload($event)"
                         wire:loading.attr="disabled"
-                        x-bind:disabled="running || refreshing || reloadInProgress"
+                        x-bind:disabled="running || refreshing || updateInProgress || reloadInProgress"
                         :disabled="$reloadInProgress"
                         wire:target="reloadOnly"
                     >
@@ -390,7 +399,7 @@
                                     <h2 id="deployment-run-log-title" class="text-base font-medium text-ink">
                                         <span x-show="running">{{ __('Run in progress') }}</span>
                                         <span x-show="! running && refreshing">{{ __('Run finished') }}</span>
-                                        <span x-show="! running && ! refreshing && statusIs('pending')">{{ __('Reload pending') }}</span>
+                                        <span x-show="! running && ! refreshing && statusIs('pending')">{{ __('Run in progress') }}</span>
                                         <span x-show="! running && ! refreshing && justRefreshed">{{ __('Run complete') }}</span>
                                         <span x-show="! running && ! refreshing && ! justRefreshed && ! statusIs('pending')">{{ __('Last run') }}</span>
                                     </h2>
@@ -409,7 +418,7 @@
                                         {{ __('Needs action') }}
                                     </x-ui.badge>
                                     <x-ui.badge variant="warning" x-show="! running && statusIs('pending')" x-cloak>
-                                        {{ __('Reload pending') }}
+                                        {{ __('In progress') }}
                                     </x-ui.badge>
                                     <x-ui.badge variant="info" x-show="refreshing && ! running" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -422,7 +431,7 @@
 
                                 <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. You can dismiss this window; the run continues.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Reloading this page so commits and actions match the code on disk.') }}</p>
-                                <p class="mt-1 text-xs text-muted" x-show="statusIs('pending') && ! running && ! refreshing" x-cloak>{{ __('Runtime reload has been scheduled. BLB will record the final reload result in the Maintenance section when the background command finishes.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="statusIs('pending') && ! running && ! refreshing" x-cloak>{{ __('Background work is still running. BLB will refresh this page and record the final result when it finishes.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="justRefreshed && ! running && ! refreshing" x-cloak>{{ __('Status refreshed. Current commits and actions now reflect the code on disk.') }}</p>
                                 @if ($runAt)
                                     <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing">

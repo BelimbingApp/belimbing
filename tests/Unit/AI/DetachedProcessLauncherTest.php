@@ -1,7 +1,7 @@
 <?php
 
-use App\Base\AI\Services\DetachedProcessLauncher;
-use App\Base\AI\Services\ExecutableLocator;
+use App\Base\Support\DetachedProcessLauncher;
+use App\Base\Support\ExecutableLocator;
 
 function unixCommandLine(array $command, array $env = [], ?string $stdout = null, ?string $stderr = null): string
 {

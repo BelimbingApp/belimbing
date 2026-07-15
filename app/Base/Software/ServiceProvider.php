@@ -3,6 +3,8 @@
 namespace App\Base\Software;
 
 use App\Base\Software\Console\Commands\DomainRuntimeReloadCommand;
+use App\Base\Software\Console\Commands\SoftwareUpdateCommand;
+use App\Base\Software\Console\Commands\SoftwareUpdateWatchdogCommand;
 use App\Base\Software\Console\Commands\WarmInventorySnapshotCommand;
 use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
 use App\Base\Software\Services\InventoryContributionDiscoveryService;
@@ -18,6 +20,8 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->commands([
             DomainRuntimeReloadCommand::class,
+            SoftwareUpdateCommand::class,
+            SoftwareUpdateWatchdogCommand::class,
             WarmInventorySnapshotCommand::class,
         ]);
 

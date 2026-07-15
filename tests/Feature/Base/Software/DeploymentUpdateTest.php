@@ -2,10 +2,13 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Livewire\Deployment\Index;
+use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\DistributionBundleRepository;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Services\SoftwareUpdateLauncher;
+use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\PhpCli;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Artisan;
@@ -504,12 +507,18 @@ test('software update runtime reload command reloads workers after clearing runt
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
 });
 
-test('component updates record completion before scheduling the runtime reload', function (): void {
+test('component updates launch a durable process instead of updating inside the web worker', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
     fakeDeploymentUpdateProcesses();
     Http::fake();
+    $launcher = Mockery::mock(DetachedProcessLauncher::class);
+    $launcher->shouldReceive('launch')
+        ->once()
+        ->withArgs(fn (array $command): bool => deploymentCommandContains($command, 'blb:software:update')
+            && deploymentCommandContains($command, 'platform'))
+        ->andReturnTrue();
+    app()->instance(DetachedProcessLauncher::class, $launcher);
 
     try {
         Livewire::test(Index::class)
@@ -521,17 +530,96 @@ test('component updates record completion before scheduling the runtime reload',
 
         expect($run)->toBeArray()
             ->and($run['status'])->toBe('pending')
-            ->and($run['summary'])->toBe('Runtime reload scheduled in the background.')
-            ->and($run['log'])->toContain('Update complete. Selected Distribution Bundles are up to date; runtime reload still needs to run separately.')
-            ->and($run['log'])->toContain('Runtime reload scheduled in the background.')
-            ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeTrue();
+            ->and($run['summary'])->toContain('Software update scheduled in a detached process.')
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue()
+            ->and(app()->isDownForMaintenance())->toBeFalse();
 
-        Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
-            && deploymentCommandContains($process->command, '--clear-runtime-caches'));
+        Process::assertNotRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY]);
         Http::assertNothingSent();
     } finally {
-        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
         Artisan::call('up');
+    }
+});
+
+test('detached update command owns cleanup and records a terminal result', function (): void {
+    $runId = 'deployment-command-test';
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
+
+    $maintenance = Mockery::mock(DeploymentMaintenanceGuard::class);
+    $maintenance->shouldReceive('arm')->once()->with($runId);
+    $maintenance->shouldReceive('enter')->once()->with($runId);
+    $maintenance->shouldReceive('renew')->atLeast()->once()->with($runId)->andReturnTrue();
+    $maintenance->shouldReceive('leave')->twice()->with($runId)->andReturnTrue();
+    $maintenance->shouldReceive('disarm')->twice()->with($runId);
+    app()->instance(DeploymentMaintenanceGuard::class, $maintenance);
+
+    $deployment = Mockery::mock(DeploymentService::class);
+    $deployment->shouldReceive('update')
+        ->once()
+        ->withArgs(function (array $keys, callable $progress, bool $reloadWorkers, bool $manageMaintenance, callable $beforeReload): bool {
+            $progress('Pulling Belimbing (platform)…');
+            $beforeReload();
+
+            return $keys === ['platform'] && $reloadWorkers && ! $manageMaintenance;
+        })
+        ->andReturn([DEPLOYMENT_UPDATE_COMPLETE]);
+    app()->instance(DeploymentService::class, $deployment);
+
+    expect(Artisan::call('blb:software:update', [
+        'keys' => ['platform'],
+        '--run-id' => $runId,
+    ]))->toBe(0)
+        ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+
+    $run = $history->lastDeploymentRun();
+    expect($run)->toMatchArray([
+        'status' => 'success',
+        'summary' => DEPLOYMENT_UPDATE_COMPLETE,
+        'log' => [DEPLOYMENT_UPDATE_COMPLETE],
+    ]);
+});
+
+test('maintenance actions are fenced while a detached update owns the execution lock', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    $runId = 'active-maintenance-fence';
+    app(DeploymentRunHistory::class)->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
+    fakeDeploymentUpdateProcesses();
+
+    try {
+        Livewire::test(Index::class)
+            ->call('rebuildAssets')
+            ->assertDispatched('run-finished', status: 'warning', refresh: false)
+            ->assertHasNoErrors();
+
+        Process::assertNotRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
+        expect(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray([
+            'status' => 'pending',
+            'summary' => 'Scheduled.',
+        ]);
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+test('an update cannot launch while a maintenance action holds the execution lock', function (): void {
+    $detached = Mockery::mock(DetachedProcessLauncher::class);
+    $detached->shouldNotReceive('launch');
+    app()->instance(DetachedProcessLauncher::class, $detached);
+    $launcher = app(SoftwareUpdateLauncher::class);
+    $lock = $launcher->maintenanceActionLock();
+
+    expect($lock->get())->toBeTrue();
+
+    try {
+        expect($launcher->launch(['platform']))
+            ->toBe(['Warning: another software update is already running.']);
+    } finally {
+        $lock->release();
     }
 });
 
@@ -575,7 +663,7 @@ test('deployment page allows retry when a reload state is stale', function (): v
 
     expect($reloadButton)
         ->toContain('wire:click="reloadOnly"')
-        ->toContain('x-bind:disabled="running || refreshing || reloadInProgress"')
+        ->toContain('x-bind:disabled="running || refreshing || updateInProgress || reloadInProgress"')
         ->not->toContain('disabled="disabled"');
 });
 
@@ -687,6 +775,9 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY]);
     Process::assertRan(fn ($process): bool => in_array('dump-autoload', $process->command, true));
     Process::assertRan(fn ($process): bool => $process->command === ['bun', 'run', 'build']);
+    Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'migrate')
+        && deploymentCommandContains($process->command, '--force')
+        && deploymentCommandContains($process->command, '--no-interaction'));
 });
 
 test('a failed frontend rebuild halts the deployment before migrations and reload', function (): void {
@@ -780,21 +871,82 @@ test('the update console stays reachable during maintenance and can bring the si
     }
 });
 
-test('the updates page defers its git work behind a lazy placeholder', function (): void {
+test('maintenance cleanup is fenced to the detached update that owns it', function (): void {
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+
+    try {
+        $writeLease->invoke($maintenance, 'owned-update', true);
+        $maintenance->enter('owned-update');
+
+        expect($maintenance->ownsMaintenance('owned-update'))->toBeTrue();
+
+        $maintenance->leave('different-update');
+        expect(app()->isDownForMaintenance())->toBeTrue();
+
+        $maintenance->leave('owned-update');
+        expect(app()->isDownForMaintenance())->toBeFalse();
+    } finally {
+        $maintenance->disarm('owned-update');
+        Artisan::call('up');
+    }
+});
+
+test('manual recovery cannot expose an update with a live maintenance lease', function (): void {
+    $user = createAdminUser();
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+
+    try {
+        $writeLease->invoke($maintenance, 'active-update', true);
+        $maintenance->enter('active-update');
+
+        $this->actingAs($user)
+            ->post(route('admin.system.software.online'))
+            ->assertRedirect(route('admin.system.software.updates.index'))
+            ->assertSessionHas('error');
+
+        expect($maintenance->ownsMaintenance('active-update'))->toBeTrue();
+    } finally {
+        $maintenance->disarm('active-update');
+        Artisan::call('up');
+    }
+});
+
+test('an expired watchdog lease recovers only its maintenance run', function (): void {
+    $runId = 'expired-update';
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+
+    try {
+        $writeLease->invoke($maintenance, $runId, true);
+        $maintenance->enter($runId);
+        $writeLease->invoke($maintenance, $runId, true, time() - 1);
+
+        expect($maintenance->recoverExpired($runId, $history))->toBeTrue()
+            ->and(app()->isDownForMaintenance())->toBeFalse()
+            ->and($maintenance->leaseExists($runId))->toBeFalse()
+            ->and($history->lastDeploymentRun())->toMatchArray([
+                'status' => 'error',
+                'summary' => 'FAILED: the update process stopped responding; automatic recovery brought Belimbing back online.',
+            ]);
+    } finally {
+        $maintenance->disarm($runId);
+        Artisan::call('up');
+    }
+});
+
+test('the updates page renders synchronously so recovery remains available during maintenance', function (): void {
     $user = createAdminUser();
     Process::fake();
-
-    // Undo the global test opt-out (tests/TestCase.php) for this request:
-    // this test asserts the lazy behavior itself.
-    \Livewire\Features\SupportLazyLoading\SupportLazyLoading::$disableWhileTesting = false;
 
     $this->actingAs($user)
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
-        ->assertSee(__('Loading page…'));
-
-    // The whole point: the initial page load spawns no git subprocesses.
-    Process::assertNothingRan();
+        ->assertSee(__('Updates'))
+        ->assertDontSee(__('Loading page…'));
 });
 
 test('update reports reload problems as warnings instead of clean completion', function (): void {
@@ -986,32 +1138,25 @@ test('the deployment page flags a bundle with uncommitted and unpushed changes',
 });
 
 test('a failed migration halts the deployment before reloading workers', function (): void {
-    fakeDeploymentUpdateProcesses();
+    Process::fake(function ($process) {
+        if (deploymentCommandContains($process->command, 'migrate')) {
+            return Process::result(
+                errorOutput: 'Pending incubating schema cannot be migrated outside local/testing without a local approval',
+                exitCode: 1,
+            );
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
     fakeDeploymentUpdateHttp();
 
-    // An incubating migration makes `migrate` fail on a non-disposable database.
-    writeIncubatingTestMigration(
-        'extensions/test-vendor/deploy-guard/Database/Migrations',
-        '2099_02_02_020202_create_deploy_guard_widgets_table.php',
-        'deploy_guard_widgets',
-    );
-    app()['env'] = 'production';
+    $log = app(DeploymentService::class)->update(['platform']);
 
-    try {
-        $log = app(DeploymentService::class)->update(['platform']);
+    expect($log)->toContain('FAILED: database migrations did not complete; deployment halted before reload.')
+        ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, 'Pending incubating schema cannot be migrated outside local/testing without a local approval')))->toBeTrue()
+        ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
 
-        expect($log)->toContain('FAILED: database migrations did not complete; deployment halted before reload.')
-            ->and(collect($log)->contains(fn (string $line): bool => str_contains($line, 'Pending incubating schema cannot be migrated outside local/testing without a local approval')))->toBeTrue()
-            ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
-
-        // Workers were never reloaded because the deploy halted at the migration step.
-        Http::assertNothingSent();
-        expect(app()->isDownForMaintenance())->toBeFalse();
-    } finally {
-        cleanupIncubatingTestMigration(
-            'extensions/test-vendor/deploy-guard/Database/Migrations',
-            '2099_02_02_020202_create_deploy_guard_widgets_table.php',
-            'deploy_guard_widgets',
-        );
-    }
+    // Workers were never reloaded because the fresh migration process failed.
+    Http::assertNothingSent();
+    expect(app()->isDownForMaintenance())->toBeFalse();
 });

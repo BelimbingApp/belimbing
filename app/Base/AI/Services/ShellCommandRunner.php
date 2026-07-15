@@ -3,6 +3,7 @@
 namespace App\Base\AI\Services;
 
 use App\Base\AI\Exceptions\ShellBackendUnavailableException;
+use App\Base\Support\ExecutableLocator;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Process;
 

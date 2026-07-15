@@ -8,9 +8,9 @@ use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
-use Livewire\Attributes\Defer;
 use Livewire\Attributes\Session;
 use Livewire\Component;
 
@@ -20,7 +20,6 @@ use Livewire\Component;
  * deploy. The actual pull/refresh/migrate/reload lives in DeploymentService so it
  * stays cross-platform and testable.
  */
-#[Defer]
 class Index extends Component
 {
     use FormatsDeploymentRunOutput;
@@ -46,25 +45,17 @@ class Index extends Component
 
     public function updateRepo(
         string $key,
-        DeploymentService $deployment,
         DeploymentRunHistory $history,
-        FrankenPhpDomainRuntimeReloader $runtimeReloader,
+        SoftwareUpdateLauncher $launcher,
     ): void {
-        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
-            $deployment->update([$key], fn (string $line) => $this->streamRunLine($line), reloadWorkers: false),
-            $runtimeReloader,
-        ));
+        $this->runDetachedUpdate($history, $launcher, [$key]);
     }
 
     public function updateAll(
-        DeploymentService $deployment,
         DeploymentRunHistory $history,
-        FrankenPhpDomainRuntimeReloader $runtimeReloader,
+        SoftwareUpdateLauncher $launcher,
     ): void {
-        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
-            $deployment->update([], fn (string $line) => $this->streamRunLine($line), reloadWorkers: false),
-            $runtimeReloader,
-        ));
+        $this->runDetachedUpdate($history, $launcher, []);
     }
 
     public function reloadOnly(DeploymentRunHistory $history, FrankenPhpDomainRuntimeReloader $runtimeReloader): void
@@ -97,17 +88,59 @@ class Index extends Component
     private function runAction(DeploymentRunHistory $history, callable $work): void
     {
         $this->authorizeManage();
-        set_time_limit(0);
-        $this->startRunLog();
-        $this->log = $work();
-        $outcome = $this->runOutcome();
-        $history->rememberDeploymentRun($this->log, $outcome);
-        $this->streamRunRecordedMarker($outcome);
-        $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending');
+        $lock = app(SoftwareUpdateLauncher::class)->maintenanceActionLock();
+
+        if (! $lock->get()) {
+            $this->startRunLog();
+            $this->streamRunLine((string) __('Warning: maintenance actions are unavailable while a software update is running.'));
+            $this->log = [];
+            $this->dispatch('run-finished', status: 'warning', refresh: false);
+
+            return;
+        }
+
+        try {
+            set_time_limit(0);
+            $this->startRunLog();
+            $this->log = $work();
+            $outcome = $this->runOutcome();
+            $history->rememberDeploymentRun($this->log, $outcome);
+            $this->streamRunRecordedMarker($outcome);
+            $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending');
+        } finally {
+            $lock->release();
+        }
     }
 
-    public function render(DeploymentService $deployment, DeploymentRunHistory $history): View
-    {
+    /** @param list<string> $keys */
+    private function runDetachedUpdate(
+        DeploymentRunHistory $history,
+        SoftwareUpdateLauncher $launcher,
+        array $keys,
+    ): void {
+        $this->authorizeManage();
+        $this->startRunLog();
+        $lines = $launcher->launch($keys);
+
+        foreach ($lines as $line) {
+            $this->streamRunLine($line);
+        }
+
+        $outcome = $this->logOutcome($lines);
+
+        if ($outcome === 'error') {
+            $history->rememberDeploymentRun($lines, $outcome);
+        }
+
+        $this->log = [];
+        $this->dispatch('run-finished', status: $outcome, refresh: false);
+    }
+
+    public function render(
+        DeploymentService $deployment,
+        DeploymentRunHistory $history,
+        SoftwareUpdateLauncher $launcher,
+    ): View {
         $status = $this->latestStatusLoaded
             ? $deployment->status()
             : $deployment->localStatus();
@@ -153,6 +186,7 @@ class Index extends Component
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $history->lastComposerRun(),
             'lastFrontendRun' => $history->lastFrontendRun(),
+            'updateInProgress' => $launcher->inProgress(),
         ]);
     }
 

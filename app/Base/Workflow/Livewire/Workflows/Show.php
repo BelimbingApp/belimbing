@@ -142,7 +142,84 @@ class Show extends Component
             'statuses' => $statuses,
             'transitions' => $transitions,
             'kanbanColumns' => $kanbanColumns,
+            'workflowGraph' => $this->buildWorkflowGraph($statuses, $transitions),
         ]);
+    }
+
+    /**
+     * Build the serializable node and edge contract used by the workflow graph.
+     *
+     * Transitions with a missing endpoint remain visible through a synthetic
+     * node so configuration drift is explicit instead of silently discarded.
+     *
+     * @param  Collection<int, StatusConfig>  $statuses
+     * @param  Collection<int, StatusTransition>  $transitions
+     * @return array{
+     *     nodes: array<int, array{code: string, label: string, position: int, active: bool, missing: bool}>,
+     *     edges: array<int, array{id: int, from: string, to: string, label: string, active: bool, capability: string|null, guarded: bool, sla: string}>
+     * }
+     */
+    private function buildWorkflowGraph(Collection $statuses, Collection $transitions): array
+    {
+        $nodes = $statuses
+            ->sortBy([
+                ['position', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->map(fn (StatusConfig $status): array => [
+                'code' => $status->code,
+                'label' => $status->label,
+                'position' => $status->position,
+                'active' => $status->is_active,
+                'missing' => false,
+            ])
+            ->values();
+
+        $knownCodes = $nodes->pluck('code')->all();
+        $referencedCodes = $transitions
+            ->flatMap(fn (StatusTransition $transition): array => [
+                $transition->from_code,
+                $transition->to_code,
+            ])
+            ->unique()
+            ->values();
+
+        $missingNodes = $referencedCodes
+            ->reject(fn (string $code): bool => in_array($code, $knownCodes, true))
+            ->map(fn (string $code, int $index): array => [
+                'code' => $code,
+                'label' => $code,
+                'position' => PHP_INT_MAX - $referencedCodes->count() + $index,
+                'active' => false,
+                'missing' => true,
+            ]);
+
+        $nodes = $nodes->concat($missingNodes)->values();
+        $labelsByCode = $nodes->pluck('label', 'code');
+
+        $edges = $transitions
+            ->sortBy([
+                ['position', 'asc'],
+                ['id', 'asc'],
+            ])
+            ->map(fn (StatusTransition $transition): array => [
+                'id' => $transition->id,
+                'from' => $transition->from_code,
+                'to' => $transition->to_code,
+                'label' => $transition->label
+                    ?? $labelsByCode->get($transition->to_code, $transition->to_code),
+                'active' => $transition->is_active,
+                'capability' => $transition->capability,
+                'guarded' => $transition->guard_class !== null,
+                'sla' => $this->formatSla($transition->sla_seconds),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'nodes' => $nodes->all(),
+            'edges' => $edges,
+        ];
     }
 
     /**

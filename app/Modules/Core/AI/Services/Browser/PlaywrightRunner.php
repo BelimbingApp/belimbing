@@ -2,7 +2,7 @@
 
 namespace App\Modules\Core\AI\Services\Browser;
 
-use App\Base\AI\Services\DetachedProcessLauncher;
+use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
 use Symfony\Component\Process\Process;

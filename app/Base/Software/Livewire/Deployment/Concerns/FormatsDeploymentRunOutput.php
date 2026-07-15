@@ -19,7 +19,7 @@ trait FormatsDeploymentRunOutput
         return match ($status) {
             'error' => (string) __('Needs action'),
             'warning' => (string) __('Warnings'),
-            'pending' => (string) __('Reload pending'),
+            'pending' => (string) __('In progress'),
             'success' => (string) __('Complete'),
             default => (string) __('No run yet'),
         };
@@ -60,6 +60,7 @@ trait FormatsDeploymentRunOutput
         $lower = strtolower($line);
 
         return str_contains($lower, 'runtime reload scheduled')
-            || str_contains($lower, 'runtime reload is already scheduled');
+            || str_contains($lower, 'runtime reload is already scheduled')
+            || str_contains($lower, 'software update scheduled');
     }
 }
