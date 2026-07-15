@@ -4,6 +4,7 @@ namespace App\Base\Software\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Stores the durable run records shown on the Deployment update page.
@@ -21,6 +22,8 @@ class DeploymentRunHistory
     private const FRONTEND_RUN_KEY = 'system.update.frontend.last_run';
 
     private const DEPLOYMENT_RUN_KEY = 'system.update.deployment.last_run';
+
+    private const DEPLOYMENT_RUN_LOCK_KEY = 'software.deployment.run-history';
 
     public function __construct(private readonly SettingsService $settings) {}
 
@@ -137,12 +140,71 @@ class DeploymentRunHistory
      */
     public function rememberDeploymentRun(array $log, string $status): void
     {
-        $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
-            'attempted_at' => now()->utc()->toIso8601String(),
-            'status' => $status,
-            'summary' => $log === [] ? '' : (string) $log[array_key_last($log)],
-            'log' => array_values($log),
-        ]);
+        $this->withDeploymentRunLock(function () use ($log, $status): void {
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
+                'attempted_at' => now()->utc()->toIso8601String(),
+                'status' => $status,
+                'summary' => $log === [] ? '' : (string) $log[array_key_last($log)],
+                'log' => array_values($log),
+            ]);
+        });
+    }
+
+    /** @param list<string> $targetKeys */
+    public function beginDeploymentRun(string $runId, array $targetKeys, string $message): void
+    {
+        $now = now()->utc()->toIso8601String();
+
+        $this->withDeploymentRunLock(function () use ($runId, $targetKeys, $message, $now): void {
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
+                'run_id' => $runId,
+                'target_keys' => array_values($targetKeys),
+                'attempted_at' => $now,
+                'updated_at' => $now,
+                'status' => 'pending',
+                'summary' => $message,
+                'log' => [$message],
+            ]);
+        });
+    }
+
+    public function appendDeploymentLine(string $runId, string $line): void
+    {
+        $this->withDeploymentRunLock(function () use ($runId, $line): void {
+            $record = $this->deploymentRunRecord($runId);
+
+            if ($record === null || $this->deploymentRunIsTerminal($record)) {
+                return;
+            }
+
+            $log = is_array($record['log'] ?? null) ? array_values(array_filter($record['log'], 'is_string')) : [];
+            $log[] = $line;
+            $record['updated_at'] = now()->utc()->toIso8601String();
+            $record['summary'] = $line;
+            $record['log'] = array_slice($log, -300);
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
+        });
+    }
+
+    /** @param list<string> $log */
+    public function finishDeploymentRun(string $runId, string $status, array $log): void
+    {
+        $this->withDeploymentRunLock(fn () => $this->finishDeploymentRunUnlocked($runId, $status, $log));
+    }
+
+    public function interruptDeploymentRun(string $runId, string $message): void
+    {
+        $this->withDeploymentRunLock(function () use ($runId, $message): void {
+            $record = $this->deploymentRunRecord($runId);
+
+            if ($record === null || $this->deploymentRunIsTerminal($record)) {
+                return;
+            }
+
+            $log = is_array($record['log'] ?? null) ? array_values(array_filter($record['log'], 'is_string')) : [];
+            $log[] = $message;
+            $this->finishDeploymentRunUnlocked($runId, 'error', $log);
+        });
     }
 
     /**
@@ -172,6 +234,44 @@ class DeploymentRunHistory
                 'is_string',
             )),
         ];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function deploymentRunRecord(string $runId): ?array
+    {
+        $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+        return is_array($record) && ($record['run_id'] ?? null) === $runId ? $record : null;
+    }
+
+    /** @param array<string, mixed> $record */
+    private function deploymentRunIsTerminal(array $record): bool
+    {
+        return in_array($record['status'] ?? null, ['success', 'warning', 'error'], true);
+    }
+
+    /** @param list<string> $log */
+    private function finishDeploymentRunUnlocked(string $runId, string $status, array $log): void
+    {
+        $record = $this->deploymentRunRecord($runId);
+
+        if ($record === null || $this->deploymentRunIsTerminal($record)) {
+            return;
+        }
+
+        $log = array_slice(array_values(array_filter($log, 'is_string')), -300);
+        $now = now()->utc()->toIso8601String();
+        $record['updated_at'] = $now;
+        $record['finished_at'] = $now;
+        $record['status'] = $status;
+        $record['summary'] = $log === [] ? '' : $log[array_key_last($log)];
+        $record['log'] = $log;
+        $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
+    }
+
+    private function withDeploymentRunLock(callable $callback): mixed
+    {
+        return Cache::lock(self::DEPLOYMENT_RUN_LOCK_KEY, 10)->block(5, $callback);
     }
 
     /**

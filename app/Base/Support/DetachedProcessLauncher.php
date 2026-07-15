@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Base\AI\Services;
+namespace App\Base\Support;
 
 use Symfony\Component\Process\Process;
 
-final class DetachedProcessLauncher
+class DetachedProcessLauncher
 {
     public function __construct(
         private readonly ExecutableLocator $locator,

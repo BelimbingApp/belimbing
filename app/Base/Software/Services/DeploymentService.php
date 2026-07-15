@@ -86,10 +86,16 @@ class DeploymentService
      *
      * @param  list<string>  $keys
      * @param  (callable(string): void)|null  $progress
+     * @param  (callable(): void)|null  $beforeReload
      * @return list<string>
      */
-    public function update(array $keys = [], ?callable $progress = null, bool $reloadWorkers = true): array
-    {
+    public function update(
+        array $keys = [],
+        ?callable $progress = null,
+        bool $reloadWorkers = true,
+        bool $manageMaintenance = true,
+        ?callable $beforeReload = null,
+    ): array {
         $targets = $this->updateTargets($keys);
 
         if ($targets === []) {
@@ -110,7 +116,9 @@ class DeploymentService
         };
         $composerBefore = $this->buildRunner->composerLockHash();
 
-        Artisan::call('down', ['--retry' => 5]);
+        if ($manageMaintenance) {
+            Artisan::call('down', ['--retry' => 5]);
+        }
 
         try {
             $this->pullTargets($targets, $record);
@@ -131,16 +139,22 @@ class DeploymentService
             }
 
             $record((string) __('Running migrations…'));
-            $migrateStatus = Artisan::call('migrate', ['--force' => true]);
-            $record(trim(Artisan::output()) ?: (string) __('No pending migrations.'));
+            $migration = $this->buildRunner->migrate();
+            $record($migration['output']);
 
-            if ($migrateStatus !== 0) {
+            if ($migration['status'] !== 0) {
                 $record((string) __('FAILED: database migrations did not complete; deployment halted before reload.'));
 
                 return $log;
             }
         } finally {
-            Artisan::call('up');
+            if ($manageMaintenance) {
+                Artisan::call('up');
+            }
+        }
+
+        if ($beforeReload !== null) {
+            $beforeReload();
         }
 
         if ($reloadWorkers) {

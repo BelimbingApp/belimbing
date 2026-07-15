@@ -1,8 +1,8 @@
 <?php
 
 use App\Base\AI\Exceptions\ShellBackendUnavailableException;
-use App\Base\AI\Services\ExecutableLocator;
 use App\Base\AI\Services\ShellCommandRunner;
+use App\Base\Support\ExecutableLocator;
 use Tests\TestCase;
 
 uses(TestCase::class);

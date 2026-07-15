@@ -2,9 +2,9 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
-use App\Base\AI\Services\ExecutableLocator;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Support\ExecutableLocator;
 use App\Base\Support\File as BlbFile;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\User\Models\User;

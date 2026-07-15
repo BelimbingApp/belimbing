@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Base\AI\Services;
+namespace App\Base\Support;
 
 use Illuminate\Support\Arr;
 use Symfony\Component\Process\ExecutableFinder;

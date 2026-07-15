@@ -3,7 +3,7 @@
 namespace App\Modules\Core\AI\Livewire\Providers;
 
 use App\Base\AI\Enums\AiErrorType;
-use App\Base\AI\Services\DetachedProcessLauncher;
+use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\PhpCli;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\ProviderOperation;
