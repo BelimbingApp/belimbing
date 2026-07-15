@@ -33,7 +33,7 @@ return new class extends Migration
             $table->unsignedInteger('max_downloads')->nullable();
             $table->timestamp('last_downloaded_at')->nullable();
             $table->timestamps();
-            $table->index(['source_instance_id', 'scope_name']);
+            $table->index(['source_instance_id', 'scope_name'], 'data_share_offers_source_scope_idx');
         });
 
         Schema::create('base_database_data_share_receipts', function (Blueprint $table): void {
