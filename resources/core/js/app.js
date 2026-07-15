@@ -3,6 +3,7 @@ import './shell-navigation.js'
 import './sidebar-menu.js'
 import './auto-navigate.js'
 import './livewire-session-guard.js'
+import './workflow-graph.js'
 
 const blbDateTimeOptions = (format, includeSeconds = false) => {
     const timeOptions = includeSeconds

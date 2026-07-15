@@ -1,5 +1,15 @@
 <?php
 /** @var \App\Base\Workflow\Livewire\Workflows\Show $this */
+
+$workflowTabs = [
+    ['id' => 'graph', 'label' => __('Graph')],
+    ['id' => 'statuses', 'label' => __('Statuses')],
+    ['id' => 'transitions', 'label' => __('Transitions')],
+];
+
+if ($kanbanColumns->isNotEmpty()) {
+    $workflowTabs[] = ['id' => 'kanban', 'label' => __('Kanban')];
+}
 ?>
 
 <div>
@@ -51,11 +61,18 @@
             </dl>
         </x-ui.card>
 
-        {{-- Statuses --}}
-        <x-ui.card>
-            <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Statuses') }}</h2>
+        <x-ui.tabs :tabs="$workflowTabs" default="graph">
+            <x-ui.tab id="graph">
+                <x-ui.card>
+                    @include('livewire.admin.workflows.partials.graph')
+                </x-ui.card>
+            </x-ui.tab>
 
-            <x-ui.table container="flush" :caption="__('Workflow steps')">
+            <x-ui.tab id="statuses">
+                <x-ui.card>
+                    <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Statuses') }}</h2>
+
+                    <x-ui.table container="flush" :caption="__('Workflow steps')">
 
                     <x-slot name="head">
                         <tr>
@@ -152,14 +169,15 @@
                         @endforelse
 
 
-            </x-ui.table>
-        </x-ui.card>
+                    </x-ui.table>
+                </x-ui.card>
+            </x-ui.tab>
 
-        {{-- Transitions --}}
-        <x-ui.card>
-            <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Transitions') }}</h2>
+            <x-ui.tab id="transitions">
+                <x-ui.card>
+                    <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Transitions') }}</h2>
 
-            <x-ui.table container="flush" :caption="__('Workflow transitions')">
+                    <x-ui.table container="flush" :caption="__('Workflow transitions')">
 
                     <x-slot name="head">
                         <tr>
@@ -246,15 +264,16 @@
                         @endforelse
 
 
-            </x-ui.table>
-        </x-ui.card>
+                    </x-ui.table>
+                </x-ui.card>
+            </x-ui.tab>
 
-        {{-- Kanban Columns --}}
-        @if($kanbanColumns->isNotEmpty())
-            <x-ui.card>
-                <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Kanban Columns') }}</h2>
+            @if($kanbanColumns->isNotEmpty())
+                <x-ui.tab id="kanban">
+                    <x-ui.card>
+                        <h2 class="text-base font-medium tracking-tight text-ink mb-3">{{ __('Kanban Columns') }}</h2>
 
-                <x-ui.table container="flush" :caption="__('Workflow instances')">
+                        <x-ui.table container="flush" :caption="__('Workflow kanban columns')">
 
                         <x-slot name="head">
                             <tr>
@@ -297,8 +316,10 @@
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $column->wip_limit ?? '—' }}</td>
                                 </tr>
                             @endforeach
-                                        </x-ui.table>
-            </x-ui.card>
-        @endif
+                        </x-ui.table>
+                    </x-ui.card>
+                </x-ui.tab>
+            @endif
+        </x-ui.tabs>
     </div>
 </div>
