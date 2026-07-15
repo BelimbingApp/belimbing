@@ -2,17 +2,15 @@
 
 namespace App\Base\Database\Livewire\DatabaseTables;
 
-use App\Base\Authz\Contracts\AuthorizationService;
-use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Exceptions\DataShareCaptureException;
+use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
 use App\Base\Database\Services\TableInspector;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Str as BlbStr;
-use App\Modules\Core\User\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
@@ -29,6 +27,8 @@ use Throwable;
  */
 class Show extends Component
 {
+    use AuthorizesDataShareOperations;
+
     private const MAX_CELL_LENGTH = 120;
 
     private const MAX_RECENT_TABLES = 8;
@@ -320,24 +320,6 @@ class Show extends Component
         $userId = $user instanceof User ? (int) $user->id : 0;
 
         return "ui:user={$userId}";
-    }
-
-    private function requireCapability(string $capability): void
-    {
-        if (! $this->capabilityAllows($capability)) {
-            abort(403, "Capability '{$capability}' is required.");
-        }
-    }
-
-    private function capabilityAllows(string $capability): bool
-    {
-        $user = auth()->user();
-
-        if (! $user instanceof User) {
-            return false;
-        }
-
-        return app(AuthorizationService::class)->can(Actor::forUser($user), $capability)->allowed;
     }
 
     /**

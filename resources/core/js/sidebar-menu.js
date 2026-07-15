@@ -42,7 +42,11 @@ globalThis.blbSidebarMenu = ({ honorRail = true } = {}) => {
     _normalizeUrl(url) {
         try {
             const u = new URL(url, window.location.origin)
-            return u.pathname.replace(/\/+$/, '') || '/'
+            let path = u.pathname
+            while (path.length > 1 && path.endsWith('/')) {
+                path = path.slice(0, -1)
+            }
+            return path || '/'
         } catch {
             return url
         }
@@ -92,7 +96,7 @@ globalThis.blbSidebarMenu = ({ honorRail = true } = {}) => {
             headers: this._apiHeaders(),
             body: JSON.stringify({ label, url, icon: icon ?? null }),
         })
-            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(r => r.ok ? r.json() : Promise.reject(new Error(`Pin toggle failed with status ${r.status}`)))
             .then(data => { this._syncPins(data.pins) })
             .catch(() => { this._syncPins(prevPins) })
             .finally(() => { this._releaseLock() })
@@ -123,7 +127,7 @@ globalThis.blbSidebarMenu = ({ honorRail = true } = {}) => {
                 pins: orderedPins.map(pin => ({ id: pin.id })),
             }),
         })
-            .then(r => r.ok ? r.json() : Promise.reject(r))
+            .then(r => r.ok ? r.json() : Promise.reject(new Error(`Pin reorder failed with status ${r.status}`)))
             .then(data => { this.pins = data.pins })
             .catch(() => {
                 // Silently keep optimistic order on failure

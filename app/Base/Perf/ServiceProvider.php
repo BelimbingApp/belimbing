@@ -83,7 +83,7 @@ class ServiceProvider extends BaseServiceProvider
         // open window (sync jobs in a request, Artisan::call in a command).
         $recorder = $this->app->make(BackgroundWorkRecorder::class);
 
-        Event::listen(JobProcessing::class, static fn (JobProcessing $event) => $recorder->jobStarting($event));
+        Event::listen(JobProcessing::class, static fn () => $recorder->jobStarting());
         Event::listen(JobProcessed::class, static fn (JobProcessed $event) => $recorder->jobFinished($event));
         Event::listen(JobFailed::class, static fn (JobFailed $event) => $recorder->jobFailed($event));
         Event::listen(CommandStarting::class, static fn (CommandStarting $event) => $recorder->commandStarting($event));

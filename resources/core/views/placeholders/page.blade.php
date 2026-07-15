@@ -20,5 +20,5 @@
         </div>
     </div>
 
-    <p class="sr-only" role="status">{{ __('Loading page…') }}</p>
+    <output class="sr-only">{{ __('Loading page…') }}</output>
 </div>

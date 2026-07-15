@@ -116,21 +116,28 @@
                 </x-slot>
 
                 <x-slot name="body">
-                    @foreach ($routes as $route)
-                        <tr wire:key="route-{{ $route['route'] }}">
-                            <td class="max-w-64 truncate px-table-cell-x py-table-cell-y font-mono text-xs text-ink" title="{{ $route['route'] }}">{{ $route['route'] }}</td>
-                            <td class="px-table-cell-x py-table-cell-y">
-                                <div
-                                    class="flex h-2.5 overflow-hidden rounded-full motion-safe:transition-[width] motion-safe:duration-200 motion-safe:ease-out"
-                                    style="width: {{ number_format($route['bar_width'], 2) }}%"
-                                    role="img"
-                                    aria-label="{{ __(':total average — :db% database, :proc% subprocess', ['total' => $ms($route['avg_ms']), 'db' => number_format($route['db_pct']), 'proc' => number_format($route['proc_pct'])]) }}"
-                                >
-                                    <div class="h-full shrink-0 bg-status-info" style="width: {{ number_format($route['db_pct'], 2) }}%"></div>
-                                    <div class="h-full shrink-0 bg-status-warning" style="width: {{ number_format($route['proc_pct'], 2) }}%"></div>
-                                    <div class="h-full flex-1 bg-border-input"></div>
-                                </div>
-                            </td>
+                @foreach ($routes as $route)
+                    @php
+                        $compositionLabel = __(':total average — :db% database, :proc% subprocess', [
+                            'total' => $ms($route['avg_ms']),
+                            'db' => number_format($route['db_pct']),
+                            'proc' => number_format($route['proc_pct']),
+                        ]);
+                    @endphp
+                    <tr wire:key="route-{{ $route['route'] }}">
+                        <td class="max-w-64 truncate px-table-cell-x py-table-cell-y font-mono text-xs text-ink" title="{{ $route['route'] }}">{{ $route['route'] }}</td>
+                        <td class="px-table-cell-x py-table-cell-y">
+                            <div
+                                class="flex h-2.5 overflow-hidden rounded-full motion-safe:transition-[width] motion-safe:duration-200 motion-safe:ease-out"
+                                style="width: {{ number_format($route['bar_width'], 2) }}%"
+                                aria-hidden="true"
+                            >
+                                <div class="h-full shrink-0 bg-status-info" style="width: {{ number_format($route['db_pct'], 2) }}%"></div>
+                                <div class="h-full shrink-0 bg-status-warning" style="width: {{ number_format($route['proc_pct'], 2) }}%"></div>
+                                <div class="h-full flex-1 bg-border-input"></div>
+                            </div>
+                            <span class="sr-only">{{ $compositionLabel }}</span>
+                        </td>
                             <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">{{ number_format($route['hits']) }}</td>
                             <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-muted">{{ $ms($route['p50']) }}</td>
                             <td class="px-table-cell-x py-table-cell-y text-right tabular-nums font-medium text-ink">{{ $ms($route['p95']) }}</td>

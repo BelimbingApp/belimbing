@@ -6,7 +6,6 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
-use Illuminate\Queue\Events\JobProcessing;
 
 /**
  * Extends the performance log beyond HTTP: queue jobs and console commands
@@ -52,7 +51,7 @@ final class BackgroundWorkRecorder
         private readonly PerfLog $log,
     ) {}
 
-    public function jobStarting(JobProcessing $event): void
+    public function jobStarting(): void
     {
         $this->openWindow();
     }

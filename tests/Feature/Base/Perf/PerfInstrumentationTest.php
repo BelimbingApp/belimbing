@@ -1,12 +1,22 @@
 <?php
 
 use App\Base\Perf\Services\PerformanceCollector;
+use App\Base\Software\Services\SoftwareInventoryService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
 
 const PERF_LOGIN_PATH = '/login';
+const PERF_SELECT_ONE_SQL = 'select 1';
 
 beforeEach(function (): void {
     $this->perfDir = storage_path('framework/testing/perf-'.uniqid());
@@ -19,15 +29,15 @@ afterEach(function (): void {
     File::deleteDirectory($this->perfDir);
 });
 
-class PerfInstrumentationFixtureJob implements Illuminate\Contracts\Queue\ShouldQueue
+class PerfInstrumentationFixtureJob implements ShouldQueue
 {
-    use Illuminate\Bus\Queueable;
-    use Illuminate\Foundation\Bus\Dispatchable;
-    use Illuminate\Queue\InteractsWithQueue;
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
 
     public function handle(): void
     {
-        Illuminate\Support\Facades\DB::select('select 1');
+        DB::select(PERF_SELECT_ONE_SQL);
     }
 }
 
@@ -61,7 +71,7 @@ it('counts queries, cache traffic, and subprocesses while a request window is ac
     $collector = app(PerformanceCollector::class);
     $collector->begin();
 
-    DB::select('select 1');
+    DB::select(PERF_SELECT_ONE_SQL);
     Cache::put('perf-test-key', 1, 10);
     Cache::get('perf-test-key');
     Cache::get('perf-test-missing');
@@ -97,7 +107,7 @@ it('ignores activity outside a request window', function (): void {
     $collector->begin();
     $collector->end();
 
-    DB::select('select 1');
+    DB::select(PERF_SELECT_ONE_SQL);
 
     $collector->begin();
 
@@ -116,12 +126,12 @@ it('records console commands as command entries', function (): void {
     // Artisan's in-process test path (Kernel::call) never dispatches the
     // console events, so drive the recorder through the real event bus the
     // way `php artisan` does.
-    $input = new Symfony\Component\Console\Input\ArrayInput([]);
-    $output = new Symfony\Component\Console\Output\NullOutput;
+    $input = new ArrayInput([]);
+    $output = new NullOutput;
 
-    event(new Illuminate\Console\Events\CommandStarting('perf:prune', $input, $output));
-    DB::select('select 1');
-    event(new Illuminate\Console\Events\CommandFinished('perf:prune', $input, $output, 0));
+    event(new CommandStarting('perf:prune', $input, $output));
+    DB::select(PERF_SELECT_ONE_SQL);
+    event(new CommandFinished('perf:prune', $input, $output, 0));
 
     $entry = latestPerfEntry($this->perfDir);
 
@@ -173,9 +183,9 @@ it('keeps shared-chrome page renders within the query budget', function (): void
 
     // The status bar's inventory provider would otherwise run the real nested
     // git scan (a dozen-plus subprocesses) inside the test process.
-    $inventory = Mockery::mock(App\Base\Software\Services\SoftwareInventoryService::class);
+    $inventory = Mockery::mock(SoftwareInventoryService::class);
     $inventory->shouldReceive('installedBundlesForStatusDiagnostics')->andReturn([]);
-    app()->instance(App\Base\Software\Services\SoftwareInventoryService::class, $inventory);
+    app()->instance(SoftwareInventoryService::class, $inventory);
 
     $queries = 0;
     DB::listen(function () use (&$queries): void {
