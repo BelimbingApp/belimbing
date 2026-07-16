@@ -45,6 +45,14 @@ final class FrontendBuildStatusDiagnosticProvider implements StatusBarDiagnostic
             return [];
         }
 
+        // Default-path mode reads the real working tree, which the test suite
+        // must not depend on: a dev box with edited-but-unbuilt JS would fail
+        // unrelated tests that count status-bar diagnostics. Tests exercise
+        // this provider by injecting explicit paths instead.
+        if ($this->manifestPath === null && app()->runningUnitTests()) {
+            return [];
+        }
+
         // No frontend to build, or the Vite dev server is serving sources
         // live (the hot file redirects @vite away from public/build).
         if (! is_file($this->packageJsonPath()) || is_file($this->hotPath())) {

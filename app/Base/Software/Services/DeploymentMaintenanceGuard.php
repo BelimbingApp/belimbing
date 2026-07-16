@@ -11,6 +11,13 @@ class DeploymentMaintenanceGuard
 {
     public const LEASE_SECONDS = 1800;
 
+    /**
+     * Maintenance-payload key carrying the update run that owns maintenance
+     * mode. Read back by ownsMaintenance()/activeRunId() here and by the 503
+     * error page to tell "installing an update" apart from manual downtime.
+     */
+    public const MAINTENANCE_DATA_RUN_ID = 'blb_software_update_run_id';
+
     public function __construct(private readonly DetachedProcessLauncher $launcher) {}
 
     public function arm(string $runId): void
@@ -60,7 +67,7 @@ class DeploymentMaintenanceGuard
         }
 
         $mode = app()->maintenanceMode();
-        $mode->activate(array_merge($mode->data(), ['blb_software_update_run_id' => $runId]));
+        $mode->activate(array_merge($mode->data(), [self::MAINTENANCE_DATA_RUN_ID => $runId]));
 
         if (! $this->renew($runId)) {
             throw new RuntimeException('The maintenance recovery lease was lost.');
@@ -80,7 +87,7 @@ class DeploymentMaintenanceGuard
     public function ownsMaintenance(string $runId): bool
     {
         return app()->isDownForMaintenance()
-            && (app()->maintenanceMode()->data()['blb_software_update_run_id'] ?? null) === $runId;
+            && (app()->maintenanceMode()->data()[self::MAINTENANCE_DATA_RUN_ID] ?? null) === $runId;
     }
 
     public function activeRunId(): ?string
@@ -89,7 +96,7 @@ class DeploymentMaintenanceGuard
             return null;
         }
 
-        $runId = app()->maintenanceMode()->data()['blb_software_update_run_id'] ?? null;
+        $runId = app()->maintenanceMode()->data()[self::MAINTENANCE_DATA_RUN_ID] ?? null;
 
         return is_string($runId) && $runId !== '' ? $runId : null;
     }

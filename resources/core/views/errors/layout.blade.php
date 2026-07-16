@@ -10,6 +10,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title') — {{ config('app.name', 'Belimbing') }}</title>
+    @yield('head')
     <style>
         :root {
             --surface-page: #f1ede5;

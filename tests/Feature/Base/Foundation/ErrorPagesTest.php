@@ -1,6 +1,8 @@
 <?php
 
+use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 it('offers try again instead of a self-referential back to home when the error happened on home', function (): void {
@@ -77,4 +79,37 @@ it('returns a JSON 404 for unmatched URLs when the client expects JSON', functio
     $this->getJson('/definitely-not-a-real-api-endpoint')
         ->assertNotFound()
         ->assertExactJson(['message' => __('Not Found.')]);
+});
+
+it('renders a self-retrying maintenance page for manual downtime', function (): void {
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertSee(__('Down for maintenance'))
+            ->assertSee('http-equiv="refresh"', false);
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+it('tells users an update is installing when the update owns maintenance mode', function (): void {
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        // Stamp the payload the way DeploymentMaintenanceGuard::enter() does.
+        $mode = app()->maintenanceMode();
+        $mode->activate(array_merge($mode->data(), [
+            DeploymentMaintenanceGuard::MAINTENANCE_DATA_RUN_ID => 'test-run',
+        ]));
+
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertSee(__('Installing an update'))
+            ->assertSee('http-equiv="refresh"', false)
+            ->assertDontSee(__('Down for maintenance'));
+    } finally {
+        Artisan::call('up');
+    }
 });
