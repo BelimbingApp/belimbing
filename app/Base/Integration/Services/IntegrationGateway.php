@@ -3,6 +3,7 @@
 namespace App\Base\Integration\Services;
 
 use App\Base\Integration\Models\OutboundExchange;
+use Composer\CaBundle\CaBundle;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -86,7 +87,13 @@ class IntegrationGateway
      */
     private function sendHttp(IntegrationRequest $request): Response
     {
-        $pending = Http::timeout($request->timeoutSeconds);
+        $pending = Http::timeout($request->timeoutSeconds)
+            ->withOptions([
+                // Windows PHP builds do not reliably inherit the OS trust
+                // store. Keep TLS verification mandatory while resolving a
+                // portable configured/system/Mozilla CA bundle.
+                'verify' => CaBundle::getSystemCaRootBundlePath(),
+            ]);
 
         if ($request->headers !== []) {
             $pending = $pending->withHeaders($request->headers);

@@ -4,8 +4,33 @@ use App\Base\Authz\Capability\CapabilityRegistry;
 use App\Base\Integration\Models\OutboundExchange;
 use App\Base\Integration\Services\IntegrationGateway;
 use App\Base\Integration\Services\IntegrationRequest;
+use Composer\CaBundle\CaBundle;
+use GuzzleHttp\Promise\Create;
+use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Psr\Http\Message\RequestInterface;
+
+it('uses a portable CA bundle for verified outbound TLS', function (): void {
+    $optionsSeen = [];
+    Http::globalOptions([
+        'handler' => function (RequestInterface $request, array $options) use (&$optionsSeen) {
+            $optionsSeen = $options;
+
+            return Create::promiseFor(new Psr7Response(200, [], '{"ok":true}'));
+        },
+    ]);
+
+    $response = app(IntegrationGateway::class)->send(new IntegrationRequest(
+        system: 'example',
+        operation: 'example.tls',
+        method: 'GET',
+        endpoint: 'https://api.example.test/tls',
+    ));
+
+    expect($response->successful())->toBeTrue()
+        ->and($optionsSeen['verify'] ?? null)->toBe(CaBundle::getSystemCaRootBundlePath());
+});
 
 it('records successful external exchanges', function (): void {
     Http::fake([

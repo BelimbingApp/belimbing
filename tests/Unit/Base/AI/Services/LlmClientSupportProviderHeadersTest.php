@@ -3,6 +3,7 @@
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\LlmClientSupport;
+use Composer\CaBundle\CaBundle;
 use Tests\TestCase;
 
 uses(TestCase::class);
@@ -29,7 +30,8 @@ test('LlmClientSupport merges mapper and runtime provider headers', function ():
         'chatgpt-account-id' => 'acct_test',
         'originator' => 'blb',
         'OpenAI-Beta' => 'responses=experimental',
-    ]);
+    ])->and($http->getOptions()['verify'] ?? null)
+        ->toBe(CaBundle::getSystemCaRootBundlePath());
 });
 
 test('LlmClientSupport uses x-api-key for anthropic requests instead of bearer auth', function (): void {

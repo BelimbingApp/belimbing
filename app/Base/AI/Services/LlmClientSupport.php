@@ -6,6 +6,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use Composer\CaBundle\CaBundle;
 use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
@@ -24,7 +25,14 @@ final class LlmClientSupport
         array $providerHeaders = [],
         bool $stream = false,
     ): PendingRequest {
-        $http = Http::timeout($request->timeout);
+        $http = Http::timeout($request->timeout)
+            ->withOptions([
+                // PHP builds on Windows do not reliably inherit the OS trust
+                // store. Composer resolves the configured/system bundle and
+                // falls back to its maintained Mozilla roots while keeping
+                // certificate and hostname verification mandatory.
+                'verify' => CaBundle::getSystemCaRootBundlePath(),
+            ]);
 
         if ($stream) {
             $http = $http->withOptions([
