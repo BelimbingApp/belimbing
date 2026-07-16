@@ -1,9 +1,9 @@
-const NODE_WIDTH = 184
-const NODE_HEIGHT = 76
-const COLUMN_GAP = 112
-const ROW_GAP = 48
-const CANVAS_PADDING_X = 40
-const CANVAS_PADDING_Y = 40
+const NODE_WIDTH = 220
+const NODE_HEIGHT = 92
+const NODE_GAP = 48
+const RANK_GAP = 112
+const CANVAS_PADDING_X = 48
+const CANVAS_PADDING_Y = 56
 
 const compareByPosition = (a, b) => {
     const position = Number(a.position ?? 0) - Number(b.position ?? 0)
@@ -105,6 +105,7 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
     canvasHeight: 0,
     selected: null,
     resizeObserver: null,
+    hasCenteredViewport: false,
 
     init() {
         this.layout()
@@ -132,24 +133,24 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
         }
 
         const maxRank = Math.max(...grouped.keys(), 0)
-        const maxRows = Math.max(...[...grouped.values()].map((column) => column.length), 1)
+        const maxColumns = Math.max(...[...grouped.values()].map((rank) => rank.length), 1)
         const reverseEdgeCount = this.edges.filter((edge) => {
             const fromRank = ranks.get(edge.from) ?? 0
             const toRank = ranks.get(edge.to) ?? 0
 
             return fromRank >= toRank
         }).length
-        const contentHeight = (maxRows * NODE_HEIGHT) + ((maxRows - 1) * ROW_GAP)
-        const returnLaneHeight = Math.min(reverseEdgeCount, 4) * 24
         const viewportWidth = this.$refs.viewport?.clientWidth ?? 0
+        const contentWidth = (maxColumns * NODE_WIDTH) + ((maxColumns - 1) * NODE_GAP)
+        const returnLaneWidth = Math.min(reverseEdgeCount, 4) * 24
 
         this.canvasWidth = Math.max(
             viewportWidth,
-            (maxRank + 1) * NODE_WIDTH + maxRank * COLUMN_GAP + CANVAS_PADDING_X * 2,
+            contentWidth + CANVAS_PADDING_X * 2 + returnLaneWidth,
         )
         this.canvasHeight = Math.max(
             300,
-            contentHeight + CANVAS_PADDING_Y * 2 + returnLaneHeight,
+            ((maxRank + 1) * NODE_HEIGHT) + (maxRank * RANK_GAP) + (CANVAS_PADDING_Y * 2),
         )
 
         const activeIncoming = new Map(this.nodes.map((node) => [node.code, 0]))
@@ -160,14 +161,14 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
             activeOutgoing.set(edge.from, (activeOutgoing.get(edge.from) ?? 0) + 1)
         })
 
-        this.layoutNodes = [...grouped.entries()].flatMap(([rank, column]) => {
-            const columnHeight = column.length * NODE_HEIGHT + (column.length - 1) * ROW_GAP
-            const startY = CANVAS_PADDING_Y + Math.max(0, (contentHeight - columnHeight) / 2)
+        this.layoutNodes = [...grouped.entries()].flatMap(([rank, row]) => {
+            const rowWidth = row.length * NODE_WIDTH + (row.length - 1) * NODE_GAP
+            const startX = Math.max(CANVAS_PADDING_X, (this.canvasWidth - returnLaneWidth - rowWidth) / 2)
 
-            return column.map((node, index) => ({
+            return row.map((node, index) => ({
                 ...node,
-                x: CANVAS_PADDING_X + rank * (NODE_WIDTH + COLUMN_GAP),
-                y: startY + index * (NODE_HEIGHT + ROW_GAP),
+                x: startX + index * (NODE_WIDTH + NODE_GAP),
+                y: CANVAS_PADDING_Y + rank * (NODE_HEIGHT + RANK_GAP),
                 start: (activeIncoming.get(node.code) ?? 0) === 0,
                 terminal: (activeOutgoing.get(node.code) ?? 0) === 0,
             }))
@@ -183,12 +184,65 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
             const offset = offsets.get(edge.id) ?? 0
             const geometry = this.edgeGeometry(source, target, offset, returnLane)
 
-            if (source && target && target.x <= source.x) {
+            if (source && target && target.y <= source.y) {
                 returnLane += 1
             }
 
             return { ...edge, ...geometry }
         })
+
+        this.$nextTick(() => {
+            this.renderEdgePaths()
+
+            if (!this.hasCenteredViewport && viewportWidth > 0 && this.canvasWidth > viewportWidth) {
+                this.$refs.viewport.scrollLeft = (this.canvasWidth - viewportWidth) / 2
+                this.hasCenteredViewport = true
+            }
+        })
+    },
+
+    renderEdgePaths() {
+        const layer = this.$refs.edgePaths
+
+        if (!layer) {
+            return
+        }
+
+        layer.replaceChildren()
+
+        for (const edge of this.layoutEdges) {
+            const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+            const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+            const emphasized = this.edgeIsEmphasized(edge)
+
+            path.setAttribute('d', edge.path)
+            path.setAttribute('fill', 'none')
+            path.setAttribute('stroke', emphasized
+                ? 'var(--color-accent)'
+                : (edge.active ? 'var(--color-muted)' : 'var(--color-border-input)'))
+            path.setAttribute('stroke-width', '2')
+            path.setAttribute('stroke-linecap', 'round')
+            path.setAttribute('stroke-linejoin', 'round')
+            path.setAttribute('marker-end', emphasized
+                ? 'url(#workflow-arrow-accent)'
+                : (edge.active ? 'url(#workflow-arrow)' : 'url(#workflow-arrow-inactive)'))
+            path.setAttribute('opacity', this.edgeIsDimmed(edge) ? '0.15' : '1')
+
+            if (!edge.active) {
+                path.setAttribute('stroke-dasharray', '6 6')
+            }
+
+            hitArea.setAttribute('d', edge.path)
+            hitArea.setAttribute('fill', 'none')
+            hitArea.setAttribute('stroke', 'transparent')
+            hitArea.setAttribute('stroke-width', '20')
+            hitArea.style.cursor = 'pointer'
+            hitArea.addEventListener('click', () => this.selectEdge(edge.id))
+
+            group.append(path, hitArea)
+            layer.append(group)
+        }
     },
 
     edgeGeometry(source, target, offset, returnLane) {
@@ -208,41 +262,46 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
             }
         }
 
-        const sourceCenterY = source.y + NODE_HEIGHT / 2
-        const targetCenterY = target.y + NODE_HEIGHT / 2
+        const sourceCenterX = source.x + NODE_WIDTH / 2
+        const targetCenterX = target.x + NODE_WIDTH / 2
 
-        if (target.x > source.x) {
-            const startX = source.x + NODE_WIDTH
-            const endX = target.x
-            const control = Math.max(48, (endX - startX) * 0.45)
+        if (target.y > source.y) {
+            const startY = source.y + NODE_HEIGHT
+            const endY = target.y
+            const control = Math.max(48, (endY - startY) * 0.45)
             const bend = offset * 22
 
             return {
-                path: `M ${startX} ${sourceCenterY} C ${startX + control} ${sourceCenterY + bend}, ${endX - control} ${targetCenterY + bend}, ${endX} ${targetCenterY}`,
-                labelX: (startX + endX) / 2,
-                labelY: (sourceCenterY + targetCenterY) / 2 + bend - 12,
+                path: `M ${sourceCenterX} ${startY} C ${sourceCenterX + bend} ${startY + control}, ${targetCenterX + bend} ${endY - control}, ${targetCenterX} ${endY}`,
+                labelX: (sourceCenterX + targetCenterX) / 2 + bend,
+                labelY: (startY + endY) / 2,
             }
         }
 
-        if (target.x === source.x) {
-            const x = source.x + NODE_WIDTH
-            const routeX = x + 48 + Math.abs(offset) * 18
+        if (target.y === source.y) {
+            const travelsRight = target.x > source.x
+            const startX = travelsRight ? source.x + NODE_WIDTH : source.x
+            const endX = travelsRight ? target.x : target.x + NODE_WIDTH
+            const centerY = source.y + NODE_HEIGHT / 2
+            const routeY = source.y + NODE_HEIGHT + 40 + Math.abs(offset) * 18
 
             return {
-                path: `M ${x} ${sourceCenterY} C ${routeX} ${sourceCenterY}, ${routeX} ${targetCenterY}, ${x} ${targetCenterY}`,
-                labelX: routeX,
-                labelY: (sourceCenterY + targetCenterY) / 2 - 10,
+                path: `M ${startX} ${centerY} C ${startX} ${routeY}, ${endX} ${routeY}, ${endX} ${centerY}`,
+                labelX: (startX + endX) / 2,
+                labelY: routeY,
             }
         }
 
-        const startX = source.x
+        const startX = source.x + NODE_WIDTH
         const endX = target.x + NODE_WIDTH
-        const laneY = this.canvasHeight - 34 - (returnLane % 4) * 24
+        const startY = source.y + NODE_HEIGHT / 2
+        const endY = target.y + NODE_HEIGHT / 2
+        const laneX = this.canvasWidth - 28 - (returnLane % 4) * 24
 
         return {
-            path: `M ${startX} ${sourceCenterY} C ${startX - 48} ${sourceCenterY}, ${startX - 48} ${laneY}, ${startX - 24} ${laneY} L ${endX + 24} ${laneY} C ${endX + 48} ${laneY}, ${endX + 48} ${targetCenterY}, ${endX} ${targetCenterY}`,
-            labelX: (startX + endX) / 2,
-            labelY: laneY - 10,
+            path: `M ${startX} ${startY} C ${laneX} ${startY}, ${laneX} ${startY}, ${laneX} ${startY - 24} L ${laneX} ${endY + 24} C ${laneX} ${endY}, ${laneX} ${endY}, ${endX} ${endY}`,
+            labelX: laneX,
+            labelY: (startY + endY) / 2,
         }
     },
 
@@ -258,16 +317,19 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
         this.selected = this.selected?.type === 'node' && this.selected.id === code
             ? null
             : { type: 'node', id: code }
+        this.$nextTick(() => this.renderEdgePaths())
     },
 
     selectEdge(id) {
         this.selected = this.selected?.type === 'edge' && this.selected.id === id
             ? null
             : { type: 'edge', id }
+        this.$nextTick(() => this.renderEdgePaths())
     },
 
     clearSelection() {
         this.selected = null
+        this.$nextTick(() => this.renderEdgePaths())
     },
 
     nodeIsEmphasized(node) {
@@ -303,6 +365,74 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
         return edge.from === this.selected.id || edge.to === this.selected.id
     },
 
+    nodeIsDimmed(node) {
+        return this.selected !== null && !this.nodeIsEmphasized(node)
+    },
+
+    edgeIsDimmed(edge) {
+        return this.selected !== null && !this.edgeIsEmphasized(edge)
+    },
+
+    selectedNode() {
+        if (this.selected?.type !== 'node') {
+            return null
+        }
+
+        return this.layoutNodes.find((node) => node.code === this.selected.id) ?? null
+    },
+
+    selectedEdge() {
+        if (this.selected?.type !== 'edge') {
+            return null
+        }
+
+        return this.edges.find((edge) => edge.id === this.selected.id) ?? null
+    },
+
+    nodeByCode(code) {
+        return this.nodes.find((node) => node.code === code) ?? null
+    },
+
+    nodeLabel(code) {
+        return this.nodeByCode(code)?.label ?? code
+    },
+
+    incomingEdges(code) {
+        return this.edges.filter((edge) => edge.to === code)
+    },
+
+    outgoingEdges(code) {
+        return this.edges.filter((edge) => edge.from === code)
+    },
+
+    connectionText(node) {
+        const incoming = this.incomingEdges(node.code).length
+        const outgoing = this.outgoingEdges(node.code).length
+
+        return `${incoming} in · ${outgoing} out`
+    },
+
+    edgeRuleSummary(edge) {
+        const rules = [
+            edge.guard ? this.labels.guarded : null,
+            edge.sla && edge.sla !== '—' ? `${this.labels.sla} ${edge.sla}` : null,
+        ].filter(Boolean)
+
+        return rules.join(' · ')
+    },
+
+    missingCount() {
+        return this.nodes.filter((node) => node.missing).length
+    },
+
+    isolatedCount() {
+        return this.layoutNodes.filter((node) => node.start && node.terminal && !node.missing).length
+    },
+
+    issueCount() {
+        return this.missingCount() + this.isolatedCount()
+    },
+
     nodeStateLabel(node) {
         if (node.missing) {
             return this.labels.missing
@@ -325,34 +455,5 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
         }
 
         return ''
-    },
-
-    selectionText() {
-        if (!this.selected) {
-            return this.labels.selectionHint
-        }
-
-        if (this.selected.type === 'node') {
-            const node = this.nodes.find((candidate) => candidate.code === this.selected.id)
-
-            return node
-                ? `${this.labels.selectedStatus}: ${node.label} (${node.code})`
-                : this.labels.selectionHint
-        }
-
-        const edge = this.edges.find((candidate) => candidate.id === this.selected.id)
-
-        if (!edge) {
-            return this.labels.selectionHint
-        }
-
-        const details = [
-            edge.capability,
-            edge.guarded ? this.labels.guarded : null,
-            edge.sla && edge.sla !== '—' ? `${this.labels.sla}: ${edge.sla}` : null,
-        ].filter(Boolean)
-        const suffix = details.length > 0 ? ` · ${details.join(' · ')}` : ''
-
-        return `${this.labels.selectedTransition}: ${edge.from} → ${edge.to} — ${edge.label}${suffix}`
     },
 })

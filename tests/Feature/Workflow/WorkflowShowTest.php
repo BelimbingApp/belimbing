@@ -80,6 +80,10 @@ it('renders the workflow graph as the first detail tab', function (): void {
         'from_code' => 'draft',
         'to_code' => 'approved',
         'label' => 'Approve',
+        'capability' => 'workflow.approve',
+        'guard_class' => 'App\\Workflow\\ApprovalGuard',
+        'action_class' => 'App\\Workflow\\RecordApproval',
+        'sla_seconds' => 7200,
         'position' => 1,
         'is_active' => true,
     ]);
@@ -88,11 +92,14 @@ it('renders the workflow graph as the first detail tab', function (): void {
         ->get(route('admin.workflows.show', $workflow))
         ->assertOk()
         ->assertSeeInOrder(['Graph', 'Statuses', 'Transitions'])
-        ->assertSee('State machine')
+        ->assertSee('How work moves')
         ->assertSee('blbWorkflowGraph')
         ->assertSee('Draft')
         ->assertSee('Approved')
         ->assertSee('Approve')
+        ->assertSee('workflow.approve')
+        ->assertSee('ApprovalGuard')
+        ->assertSee('RecordApproval')
         ->assertSeeHtml("defaultTab: 'graph'");
 });
 
@@ -142,5 +149,5 @@ it('renders a useful graph empty state when no statuses exist', function (): voi
         ->get(route('admin.workflows.show', $workflow))
         ->assertOk()
         ->assertSee('No statuses configured.')
-        ->assertSee('Add statuses and transitions to see this workflow as a state machine.');
+        ->assertSee('Add statuses and transitions to see how work moves from start to finish.');
 });

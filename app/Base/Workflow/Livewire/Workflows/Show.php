@@ -156,7 +156,7 @@ class Show extends Component
      * @param  Collection<int, StatusTransition>  $transitions
      * @return array{
      *     nodes: array<int, array{code: string, label: string, position: int, active: bool, missing: bool}>,
-     *     edges: array<int, array{id: int, from: string, to: string, label: string, active: bool, capability: string|null, guarded: bool, sla: string}>
+     *     edges: array<int, array{id: int, from: string, to: string, label: string, active: bool, capability: string|null, guard: string|null, action: string|null, sla: string}>
      * }
      */
     private function buildWorkflowGraph(Collection $statuses, Collection $transitions): array
@@ -210,7 +210,12 @@ class Show extends Component
                     ?? $labelsByCode->get($transition->to_code, $transition->to_code),
                 'active' => $transition->is_active,
                 'capability' => $transition->capability,
-                'guarded' => $transition->guard_class !== null,
+                'guard' => $transition->guard_class !== null
+                    ? class_basename($transition->guard_class)
+                    : null,
+                'action' => $transition->action_class !== null
+                    ? class_basename($transition->action_class)
+                    : null,
                 'sla' => $this->formatSla($transition->sla_seconds),
             ])
             ->values()
