@@ -15,6 +15,10 @@
             updateAllUnavailable: @js(! $behind),
             reloadInProgress: @js($reloadInProgress),
             updateInProgress: @js($updateInProgress),
+            progressUrl: @js(route('admin.system.software.updates.progress')),
+            _pollTimer: null,
+            _pollFailures: 0,
+            _destroyed: false,
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
@@ -22,8 +26,97 @@
                 this.restoreAfterRefresh();
 
                 if (this.updateInProgress) {
-                    window.setTimeout(() => window.location.reload(), 5000);
+                    this.followDetachedRun();
                 }
+            },
+            destroy() {
+                this._destroyed = true;
+                window.clearTimeout(this._pollTimer);
+            },
+            {{-- Detached updates run outside the web workers and append every
+                 line to the durable run record. Livewire's endpoint 503s while
+                 the update holds the site in maintenance mode, so we follow the
+                 run through the maintenance-excepted progress route instead of
+                 wire:poll — and instead of the old flickering 5s full reload. --}}
+            followDetachedRun() {
+                if (this._pollTimer !== null) {
+                    return;
+                }
+
+                this.openRunLog();
+                this.pollProgressSoon(0);
+            },
+            pollProgressSoon(delay = 2000) {
+                if (this._destroyed) {
+                    return;
+                }
+
+                this._pollTimer = window.setTimeout(() => this.pollProgress(), delay);
+            },
+            async pollProgress() {
+                try {
+                    const response = await fetch(this.progressUrl, { headers: { 'Accept': 'application/json' } });
+
+                    if (! response.ok) {
+                        throw new Error(`progress poll failed with status ${response.status}`);
+                    }
+
+                    const run = await response.json();
+                    this._pollFailures = 0;
+                    this.renderRunProgress(run);
+
+                    if (['success', 'warning', 'error'].includes(run.status)) {
+                        this._pollTimer = null;
+
+                        return; {{-- the recorded-run marker takes over from here --}}
+                    }
+                } catch (error) {
+                    {{-- Transient failures are by design: the final phase reloads
+                         the web workers, which briefly drops requests. Keep
+                         polling, and only fall back to a full reload if the feed
+                         stays unreachable for ~90s. --}}
+                    if (++this._pollFailures >= 45) {
+                        window.location.reload();
+
+                        return;
+                    }
+                }
+
+                this.pollProgressSoon();
+            },
+            renderRunProgress(run) {
+                const target = this.$root.querySelector('[data-run-log-lines]');
+
+                if (! target || ! Array.isArray(run.lines)) {
+                    return;
+                }
+
+                const fragment = document.createDocumentFragment();
+
+                for (const line of run.lines) {
+                    const div = document.createElement('div');
+                    div.textContent = line.text ?? '';
+
+                    if (line.class) {
+                        div.className = line.class;
+                    }
+
+                    fragment.appendChild(div);
+                }
+
+                {{-- Terminal runs get the same hidden marker the Livewire stream
+                     emits; the run box's MutationObserver spots it and finishes
+                     the run through the existing deployment-run-recorded flow. --}}
+                if (['success', 'warning', 'error'].includes(run.status)) {
+                    const marker = document.createElement('span');
+                    marker.className = 'hidden';
+                    marker.setAttribute('aria-hidden', 'true');
+                    marker.dataset.deploymentRunRecorded = 'true';
+                    marker.dataset.runOutcome = run.status;
+                    fragment.appendChild(marker);
+                }
+
+                target.replaceChildren(fragment);
             },
             isFloating() {
                 return this.runLogOpen && ! this.dismissed;
@@ -123,6 +216,7 @@
             },
         }"
         @run-finished.window="finishRun($event.detail || {})"
+        @follow-update-progress.window="followDetachedRun()"
         @deployment-run-recorded="finishRun($event.detail || {})"
         @keydown.escape.window="closeRunLog()"
     >
@@ -492,7 +586,7 @@
                             class="mt-2 h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink"
                             aria-live="polite"
                         >
-                            <div class="space-y-0" wire:stream="runLog">
+                            <div class="space-y-0" wire:stream="runLog" data-run-log-lines>
                                 @foreach ($displayLog as $line)
                                     <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
                                 @endforeach

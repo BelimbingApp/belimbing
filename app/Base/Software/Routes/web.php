@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Software\Http\Controllers\DeploymentProgressController;
 use App\Base\Software\Http\Controllers\DeploymentRecoveryController;
 use App\Base\Software\Livewire\Deployment\Index as DeploymentIndex;
 use App\Base\Software\Livewire\GitHubAccess\Index as GitHubAccessIndex;
@@ -9,6 +10,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('admin/system/software/updates', DeploymentIndex::class)
         ->middleware('authz:admin.system.software.updates.manage')
         ->name('admin.system.software.updates.index');
+
+    // Live progress feed for the run box. Excepted from maintenance in
+    // bootstrap/app.php: Livewire's endpoint 503s while an update holds the
+    // site down, so the page follows the detached run through this route.
+    Route::get('admin/system/software/updates/progress', DeploymentProgressController::class)
+        ->middleware('authz:admin.system.software.updates.manage')
+        ->name('admin.system.software.updates.progress');
 
     // Lifts maintenance mode (artisan up). Excepted from maintenance in bootstrap/app.php
     // so it works even when an interrupted run has stranded the site on a 503.

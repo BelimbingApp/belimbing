@@ -29,6 +29,20 @@ globalThis.blbSidebarMenu = ({ honorRail = true } = {}) => {
     _dragIdx: null,
     _dropIdx: null,
 
+    // Boot beacon: the app layout renders a fail-visible "could not finish
+    // loading" notice (#blb-boot-beacon) that reveals itself after a few
+    // seconds. Reaching init() proves the failure class it guards against
+    // (stale/missing bundle → Alpine never boots the sidebar → every menu
+    // item stays x-cloak-hidden) did not happen, so remove it before it
+    // shows. The shell-store check keeps that proof honest: without the
+    // store, the `rail` getter would throw right after init and the menu
+    // would still come up blank.
+    init() {
+        if (this.$store.shell !== undefined) {
+            document.getElementById('blb-boot-beacon')?.remove()
+        }
+    },
+
     // Rail (icon-only) is a desktop-column affordance driven by the global
     // shell store. The mobile drawer has a fixed width with room for labels,
     // so it opts out (honorRail=false) and always renders expanded. Reading

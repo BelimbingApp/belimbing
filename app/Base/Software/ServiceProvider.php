@@ -7,6 +7,7 @@ use App\Base\Software\Console\Commands\SoftwareUpdateCommand;
 use App\Base\Software\Console\Commands\SoftwareUpdateWatchdogCommand;
 use App\Base\Software\Console\Commands\WarmInventorySnapshotCommand;
 use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
+use App\Base\Software\Services\FrontendBuildStatusDiagnosticProvider;
 use App\Base\Software\Services\InventoryContributionDiscoveryService;
 use App\Base\Software\Services\InventoryContributionRegistry;
 use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
@@ -28,8 +29,10 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(InventoryContributionRegistry::class);
         $this->app->singleton(InventoryContributionDiscoveryService::class);
         $this->app->singleton(FrankenPhpWorkerStatusDiagnosticProvider::class);
+        $this->app->singleton(FrontendBuildStatusDiagnosticProvider::class);
         $this->app->singleton(SoftwareInventoryStatusDiagnosticProvider::class);
         $this->app->tag(FrankenPhpWorkerStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
+        $this->app->tag(FrontendBuildStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(SoftwareInventoryStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
 
         // Register on booted() (not bootstrap/app.php withSchedule) so the

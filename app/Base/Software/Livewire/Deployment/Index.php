@@ -134,6 +134,14 @@ class Index extends Component
 
         $this->log = [];
         $this->dispatch('run-finished', status: $outcome, refresh: false);
+
+        // The run now lives in a detached process; hand the browser over to
+        // the progress poller so this session watches it live instead of
+        // sitting frozen on the launch line. (Dispatched after run-finished
+        // so finishRun's running=false doesn't clobber the poller's state.)
+        if ($outcome === 'pending') {
+            $this->dispatch('follow-update-progress');
+        }
     }
 
     public function render(

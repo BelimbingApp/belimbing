@@ -36,6 +36,44 @@
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
+    {{-- Boot beacon — fail-visible fallback for a broken script pipeline.
+         The shell hides all menu content behind Alpine (x-cloak / x-show), so a
+         stale or failed JS bundle renders a silently empty sidebar with no error
+         anywhere. This notice is destined to appear (CSS reveal after 5s) and a
+         healthy boot removes it first (see blbSidebarMenu.init in
+         resources/core/js/sidebar-menu.js). Deliberately self-contained inline
+         CSS — like resources/core/views/errors/layout.blade.php, it must render
+         exactly when the asset pipeline is the thing that broke, so it cannot
+         depend on built CSS. Full loads only: wire:navigate implies the client
+         already booted a working bundle. --}}
+    @unless($skipShellRender)
+        <div id="blb-boot-beacon" role="alert">
+            <style>
+                #blb-boot-beacon {
+                    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+                    display: flex; flex-wrap: wrap; column-gap: .5rem; align-items: baseline; justify-content: center;
+                    padding: .625rem 1rem;
+                    background: #faf9f5; border-bottom: 1px solid #ddd8cf;
+                    box-shadow: 0 1px 6px rgb(44 36 24 / .08);
+                    font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
+                    font-size: .8125rem; line-height: 1.4; color: #2c2418;
+                    opacity: 0; visibility: hidden;
+                    animation: blb-boot-beacon-reveal .4s ease 5s forwards;
+                }
+                @keyframes blb-boot-beacon-reveal { to { opacity: 1; visibility: visible; } }
+                #blb-boot-beacon a { color: #b5622f; font-weight: 500; }
+            </style>
+            <strong style="font-weight: 600;">{{ __('This page could not finish loading.') }}</strong>
+            <span style="color: #6b6057;">
+                {{ __('Refresh to try again. If it keeps happening, ask your operator to rebuild the frontend assets from the Updates page.') }}
+                @if (config('app.debug'))
+                    {{ __('Dev: run `bun run build` or start the Vite dev server.') }}
+                @endif
+            </span>
+            <a href="">{{ __('Refresh') }}</a>
+        </div>
+    @endunless
+
     {{-- Icon sprite — every <x-icon> on authenticated pages emits a <use>
          against these definitions. Persisted so wire:navigate keeps the sprite
          while page content (and its icon references) swap. --}}
