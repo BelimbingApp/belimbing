@@ -123,6 +123,7 @@ use App\Modules\Core\AI\Tools\MemoryStatusTool;
 use App\Modules\Core\AI\Tools\MessageTool;
 use App\Modules\Core\AI\Tools\NavigateTool;
 use App\Modules\Core\AI\Tools\NotificationTool;
+use App\Modules\Core\AI\Tools\ReadOnlyBrowserTool;
 use App\Modules\Core\AI\Tools\ReadTool;
 use App\Modules\Core\AI\Tools\ScheduleTaskTool;
 use App\Modules\Core\AI\Tools\SearchTool;
@@ -413,6 +414,7 @@ class ServiceProvider extends BaseServiceProvider
             $app->make(ArtisanTool::class),
             $app->make(BashTool::class),
             $app->make(BrowserTool::class),
+            $app->make(ReadOnlyBrowserTool::class),
             $app->make(DelegateTaskTool::class),
             $app->make(DelegationStatusTool::class),
             $app->make(DocumentAnalysisTool::class),
