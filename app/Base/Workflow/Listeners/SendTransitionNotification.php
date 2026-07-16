@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Listeners;
 
 use App\Base\Workflow\Events\TransitionCompleted;
@@ -88,7 +89,8 @@ class SendTransitionNotification
     }
 
     /**
-     * Add a user from a model relation if the relation exists and returns a notifiable user.
+     * Add a user from a model relation if the relation exists and resolves
+     * to a notifiable user.
      *
      * @param  Collection<int, object>  $recipients
      */
@@ -98,11 +100,39 @@ class SendTransitionNotification
             return;
         }
 
-        $user = $model->{$relation};
+        $recipient = $this->resolveNotifiable($model->{$relation});
 
-        if ($user !== null && method_exists($user, 'notify')) {
-            $recipients->push($user);
+        if ($recipient !== null) {
+            $recipients->push($recipient);
         }
+    }
+
+    /**
+     * Resolve a relation value to something Laravel can notify.
+     *
+     * Flows anchor stakeholders on Employees, which are not notifiable;
+     * their linked login User is. Accept a notifiable directly, otherwise
+     * follow a `user` relation when it yields a notifiable.
+     */
+    private function resolveNotifiable(?object $related): ?object
+    {
+        if ($related === null) {
+            return null;
+        }
+
+        if (method_exists($related, 'notify')) {
+            return $related;
+        }
+
+        if (method_exists($related, 'user')) {
+            $user = $related->user;
+
+            if ($user !== null && method_exists($user, 'notify')) {
+                return $user;
+            }
+        }
+
+        return null;
     }
 
     /**

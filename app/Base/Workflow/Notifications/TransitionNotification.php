@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Workflow\Notifications;
 
+use App\Base\Workflow\Contracts\PresentsWorkflowNotifications;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
 use Illuminate\Bus\Queueable;
@@ -49,10 +51,14 @@ class TransitionNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $presents = $this->model instanceof PresentsWorkflowNotifications;
+
         return [
             'flow' => $this->flow,
             'model_type' => get_class($this->model),
             'model_id' => $this->model->getKey(),
+            'title' => $presents ? $this->model->workflowNotificationTitle() : null,
+            'url' => $presents ? $this->model->workflowNotificationUrl() : null,
             'from_status' => $this->transition->from_code,
             'to_status' => $this->transition->to_code,
             'transition_label' => $this->transition->resolveLabel(),

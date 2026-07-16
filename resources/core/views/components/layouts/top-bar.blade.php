@@ -29,7 +29,7 @@
         </a>
     </div>
 
-    {{-- Right: Timezone selector + Theme selector --}}
+    {{-- Right: Notifications + Timezone selector + Theme selector --}}
     <div class="flex items-center gap-3" x-data="{
         theme: 'light',
         tzOpen: false,
@@ -87,6 +87,10 @@
             .catch(() => { this.tzSaving = false; });
         }
     }">
+        @auth
+            <livewire:notifications.bell />
+        @endauth
+
         {{-- Timezone Mode Selector --}}
         @auth
             <div class="relative" @click.outside="tzOpen = false" @keydown.escape.window="tzOpen = false">
