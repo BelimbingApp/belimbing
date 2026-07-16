@@ -9,6 +9,7 @@
 ])
 
 @php
+    $resolvedPanelLabel = $mobilePanelLabel ?: __('Side panel');
     $resolvedMobilePanelLabel = $mobilePanelLabel ?: __('Open side panel');
     $mobilePanelId = 'side-panel-mobile-'.\Illuminate\Support\Str::slug($storageKey);
 @endphp
@@ -99,7 +100,7 @@
                 x-transition:leave-start="translate-x-0"
                 x-transition:leave-end="-translate-x-full"
                 class="fixed top-11 bottom-6 left-0 z-40 flex w-80 max-w-[calc(100vw-3rem)] flex-col overflow-hidden border-r border-border-default bg-surface-sidebar shadow-lg"
-                aria-label="{{ $resolvedMobilePanelLabel }}"
+                aria-label="{{ $resolvedPanelLabel }}"
                 data-side-panel-mobile
                 style="display: none;"
             >
@@ -113,7 +114,7 @@
             class="hidden lg:flex lg:shrink-0 lg:relative"
             :style="'width: ' + panelWidth + 'px'"
         >
-            <aside class="flex w-full flex-col overflow-hidden border-r border-border-default bg-surface-sidebar">
+            <aside class="flex w-full flex-col overflow-hidden border-r border-border-default bg-surface-sidebar" aria-label="{{ $resolvedPanelLabel }}">
                 {{ $panel }}
             </aside>
 

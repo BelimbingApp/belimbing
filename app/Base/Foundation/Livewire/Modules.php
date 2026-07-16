@@ -2,8 +2,7 @@
 
 namespace App\Base\Foundation\Livewire;
 
-use App\Base\Authz\Contracts\AuthorizationService;
-use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\AuthorizesModuleManagement;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
@@ -14,7 +13,6 @@ use App\Base\Software\Inventory\InstalledBundle;
 use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Defer;
 use Livewire\Component;
 
@@ -33,6 +31,7 @@ use Livewire\Component;
 #[Defer]
 class Modules extends Component
 {
+    use AuthorizesModuleManagement;
     use InteractsWithNotifications;
 
     /**
@@ -341,35 +340,5 @@ class Modules extends Component
         return strtoupper($domain) === $domain
             ? strtolower($domain)
             : Str::pascalToKebab($domain);
-    }
-
-    private function authorizeManage(): void
-    {
-        if (! $this->canManage()) {
-            abort(403);
-        }
-    }
-
-    private function canManage(): bool
-    {
-        $user = Auth::user();
-
-        if ($user === null) {
-            return false;
-        }
-
-        return app(AuthorizationService::class)
-            ->can(Actor::forUser($user), 'admin.system.software.modules.manage')
-            ->allowed;
-    }
-
-    /**
-     * @param  list<string>  $log
-     */
-    private function flashReloadLog(array $log): void
-    {
-        if ($log !== []) {
-            session()->flash('command-log', implode("\n", $log));
-        }
     }
 }

@@ -327,7 +327,7 @@ it('closes a single-use offer when the first fetch is claimed', function (): voi
     );
     $headers = ['Authorization' => 'Bearer '.$bundle->secret, 'Accept' => 'application/x-ndjson'];
 
-    $first = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
+    $first = $this->withHeaders($headers)->get(GENERIC_SHARE_OFFER_PATH.$bundle->offerId);
     $offer = DataShareTransferOffer::query()->where('offer_id', $bundle->offerId)->firstOrFail();
 
     expect($first->getStatusCode())->toBe(200)
@@ -340,7 +340,7 @@ it('closes a single-use offer when the first fetch is claimed', function (): voi
     $first->sendContent();
     ob_get_clean();
 
-    $second = $this->withHeaders($headers)->get('/data-share/offers/'.$bundle->offerId);
+    $second = $this->withHeaders($headers)->get(GENERIC_SHARE_OFFER_PATH.$bundle->offerId);
 
     expect($second->getStatusCode())->toBe(401)
         ->and($offer->refresh()->status)->toBe('exhausted')
