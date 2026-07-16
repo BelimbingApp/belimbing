@@ -68,6 +68,33 @@ mkdir -p \
     storage/logs
 touch database/database.sqlite
 
+install_bundle() {
+    local repository=$1
+    local destination=$2
+
+    if [[ -d "$destination/.git" ]]; then
+        echo "    Reusing ${destination}"
+        return 0
+    fi
+
+    if [[ -e "$destination" ]]; then
+        echo "Expected ${destination} to be absent or a nested Git checkout." >&2
+        return 1
+    fi
+
+    git clone --branch main --single-branch "$repository" "$destination"
+}
+
+echo '==> Installing domain Distribution Bundles'
+install_bundle https://github.com/BelimbingApp/blb-commerce.git app/Modules/Commerce
+install_bundle https://github.com/BelimbingApp/blb-operation.git app/Modules/Operation
+install_bundle https://github.com/BelimbingApp/blb-people.git app/Modules/People
+
+echo '==> Installing private blb-* extensions'
+install_bundle https://github.com/kiatng/blb-ham.git extensions/ham
+install_bundle https://github.com/kiatng/blb-kiat.git extensions/kiat
+install_bundle https://github.com/kiatng/blb-sbg.git extensions/sb-group
+
 echo '==> Installing locked PHP and JavaScript dependencies'
 composer install --no-interaction --prefer-dist --optimize-autoloader
 bun install --frozen-lockfile
@@ -87,7 +114,7 @@ printf '%s\n' 'Orb Admin' 'admin@example.test' 'password' > "$admin_bootstrap_fi
 LICENSEE_COMPANY_NAME='Belimbing Orb' \
 LICENSEE_COMPANY_CODE='BLB' \
 BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
-    php artisan migrate --force --no-interaction
+    php artisan migrate --seed --force --no-interaction
 rm -f "$admin_bootstrap_file"
 trap - EXIT
 bun run build
