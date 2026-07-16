@@ -1,6 +1,6 @@
 # operation-it-tickets-workspace.md
 
-Status: Complete — built and verified; not yet committed
+Status: Complete — PRs open: BelimbingApp/belimbing#193 (land first), BelimbingApp/blb-operation#1
 Last Updated: 2026-07-16
 Sources: `app/Modules/Operation/IT/*`, `app/Base/Workflow/*`, `DESIGN.md`, root `AGENTS.md`
 Agents: claude/claude-fable-5
