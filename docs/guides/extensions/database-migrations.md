@@ -133,12 +133,8 @@ return new class extends Migration {
 
 ### Step 2: Follow Database Standards
 
-Refer to `app/Base/Database/AGENTS.md` for migration standards:
+Refer to `app/Base/Database/AGENTS.md` for the canonical migration conventions. In particular, use the shared rules there for primary keys, foreign keys, timestamps, and soft deletes.
 
-- **Primary Keys**: Use `id()` method (creates `UNSIGNED BIGINT`)
-- **Foreign Keys**: Use `foreignId()` method (creates `UNSIGNED BIGINT`)
-- **Timestamps**: Include `$table->timestamps()` for created_at/updated_at
-- **Soft Deletes**: Consider `$table->softDeletes()` if logical deletion is needed
 - **Year Prefix**: Extension migrations use real years (`2026+`), not layered prefixes
 
 ### Step 3: Reference Core Tables

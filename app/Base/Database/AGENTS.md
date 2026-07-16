@@ -18,6 +18,14 @@ For extension authoring rules, use:
 - [docs/guides/extensions/database-migrations.md](../../../docs/guides/extensions/database-migrations.md)
 - [docs/guides/extensions/backup-encryption-modes.md](../../../docs/guides/extensions/backup-encryption-modes.md)
 
+## Migration Conventions
+
+- Use `id()` or `bigIncrements('id')` for standard tables.
+- Use `uuid` or `ulid` only when there is a specific reason, such as externally generated IDs or a domain requirement.
+- Use `foreignId()` for foreign-key columns.
+- Include `$table->timestamps()` for created/updated timestamps.
+- Consider `$table->softDeletes()` when logical deletion is needed.
+
 ## Seeder Registration
 
 Migrations register their seeders via `RegistersSeeders`:
