@@ -18,7 +18,8 @@ it('links the inactive Lara status-bar action to AI Providers with setup guidanc
     $response->assertOk()
         ->assertSee('href="'.route('admin.ai.providers').'"', false)
         ->assertSee('title="Activate Lara"', false)
-        ->assertSee('Activate Lara');
+        ->assertSee('Activate Lara')
+        ->assertSee('laraActivated: false', false);
 });
 
 it('renders tagged diagnostics in the status bar detail surface', function (): void {

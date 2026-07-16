@@ -108,6 +108,14 @@ globalThis.blbAppShell = ({ laraActivated = false } = {}) => ({
         this.$watch('laraChatOpen', () => this.teleportLaraChat())
         this.$watch('laraChatMode', () => this.teleportLaraChat())
         this.$watch('laraChatFullscreen', () => this.teleportLaraChat())
+        this.$watch('laraActivated', (value) => {
+            if (!value) {
+                this.laraChatOpen = false
+                this.laraChatFullscreen = false
+                localStorage.removeItem('agent-chat-1-open')
+                localStorage.removeItem('agent-chat-1-fullscreen')
+            }
+        })
         globalThis.blbShellNavigation?.wire()
     },
 

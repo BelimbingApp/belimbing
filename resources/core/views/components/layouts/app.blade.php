@@ -33,6 +33,7 @@
     @keydown.meta.shift.f.window.prevent="toggleLaraFullscreen()"
     @agent-chat-busy.window="laraBusy = true"
     @agent-chat-idle.window="laraBusy = false"
+    @lara-activation-changed.window="laraActivated = $event.detail?.activated"
     @keydown.escape.window="closeLaraChat()"
     class="h-screen overflow-hidden bg-surface-page flex flex-col"
 >
@@ -207,77 +208,78 @@
         <main class="relative flex-1 overflow-y-auto bg-surface-page px-1 py-2 sm:px-4 sm:py-1">
             {{ $slot }}
 
-            @if ($laraActivated)
-                {{-- Fullscreen mode: take over the main content box (desktop only) --}}
-                <div
-                    x-show="laraChatOpen && laraChatFullscreen"
-                    x-cloak
-                    class="hidden sm:block absolute inset-0 z-50 bg-surface-card border border-border-default rounded-2xl overflow-hidden"
-                >
-                    <div class="h-full" x-ref="laraFullscreenTarget"></div>
-                </div>
-            @endif
+            {{-- Fullscreen mode: take over the main content box (desktop only).
+                 Always rendered so the chat panel is available immediately after
+                 activation — the Chat component handles the not-activated state,
+                 and x-show/x-cloak keep the containers invisible until opened. --}}
+            <div
+                x-show="laraChatOpen && laraChatFullscreen"
+                x-cloak
+                class="hidden sm:block absolute inset-0 z-50 bg-surface-card border border-border-default rounded-2xl overflow-hidden"
+            >
+                <div class="h-full" x-ref="laraFullscreenTarget"></div>
+            </div>
         </main>
 
-        @if ($laraActivated)
-            {{-- Docked mode: right-side panel inside the layout flow (drag-resizable) --}}
-            <aside
-                x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'docked'"
-                x-cloak
-                class="hidden sm:flex shrink-0 border-l border-border-default bg-surface-card overflow-hidden relative"
-                :style="'width: ' + laraDockWidth + 'px'"
+        {{-- Docked mode: right-side panel inside the layout flow (drag-resizable) --}}
+        <aside
+            x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'docked'"
+            x-cloak
+            class="hidden sm:flex shrink-0 border-l border-border-default bg-surface-card overflow-hidden relative"
+            :style="'width: ' + laraDockWidth + 'px'"
+        >
+            {{-- Drag handle (left edge) --}}
+            <div
+                @mousedown.prevent="startDockDrag($event)"
+                class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize z-10 group"
             >
-                {{-- Drag handle (left edge) --}}
                 <div
-                    @mousedown.prevent="startDockDrag($event)"
-                    class="absolute top-0 bottom-0 left-0 w-1 cursor-col-resize z-10 group"
-                >
-                    <div
-                        class="w-full h-full transition-colors"
-                        :class="_laraDockDragging ? 'bg-accent' : 'group-hover:bg-border-default'"
-                    ></div>
-                </div>
-                {{-- Teleport target for docked mode --}}
-                <div class="flex-1 min-w-0 h-full" x-ref="laraDockTarget"></div>
-            </aside>
-        @endif
+                    class="w-full h-full transition-colors"
+                    :class="_laraDockDragging ? 'bg-accent' : 'group-hover:bg-border-default'"
+                ></div>
+            </div>
+            {{-- Teleport target for docked mode --}}
+            <div class="flex-1 min-w-0 h-full" x-ref="laraDockTarget"></div>
+        </aside>
     </div>
 
-    @if ($laraActivated)
-        {{-- Overlay mode: floating card (desktop only) --}}
-        <div
-            x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'overlay'"
-            x-cloak
-            class="hidden sm:block fixed right-3 sm:right-4 bottom-8 z-50"
-        >
-            <section class="w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)] bg-surface-card border border-border-default rounded-2xl shadow-lg overflow-hidden">
-                {{-- Teleport target for overlay mode --}}
-                <div class="h-full" x-ref="laraOverlayTarget"></div>
-            </section>
-        </div>
+    {{-- Overlay mode: floating card (desktop only) --}}
+    <div
+        x-show="laraChatOpen && !laraChatFullscreen && laraChatMode === 'overlay'"
+        x-cloak
+        class="hidden sm:block fixed right-3 sm:right-4 bottom-8 z-50"
+    >
+        <section class="w-[min(56rem,calc(100vw-2rem))] h-[min(80vh,46rem)] bg-surface-card border border-border-default rounded-2xl shadow-lg overflow-hidden">
+            {{-- Teleport target for overlay mode --}}
+            <div class="h-full" x-ref="laraOverlayTarget"></div>
+        </section>
+    </div>
 
-        {{-- Mobile: full-screen takeover --}}
-        <div
-            x-show="laraChatOpen"
-            x-cloak
-            class="sm:hidden fixed inset-x-0 top-11 bottom-6 z-50 bg-surface-card overflow-hidden"
-        >
-            {{-- Teleport target for mobile mode --}}
-            <div class="h-full" x-ref="laraMobileTarget"></div>
-        </div>
+    {{-- Mobile: full-screen takeover --}}
+    <div
+        x-show="laraChatOpen"
+        x-cloak
+        class="sm:hidden fixed inset-x-0 top-11 bottom-6 z-50 bg-surface-card overflow-hidden"
+    >
+        {{-- Teleport target for mobile mode --}}
+        <div class="h-full" x-ref="laraMobileTarget"></div>
+    </div>
 
-        {{-- Single persisted Lara chat instance. The shell Alpine data moves
-             #lara-chat-instance into the active mode target; @persist plus
-             parking it back into #lara-chat-home on livewire:navigating keeps the
-             live instance (and its state) alive across wire:navigate. --}}
-        @persist('lara-chat')
-        <div id="lara-chat-home" style="display: contents;">
-            <div id="lara-chat-instance" class="h-full" style="display: none;">
-                <livewire:ai.chat />
+    {{-- Single persisted Lara chat instance. The shell Alpine data moves
+         #lara-chat-instance into the active mode target; @persist plus
+         parking it back into #lara-chat-home on livewire:navigating keeps the
+         live instance (and its state) alive across wire:navigate. Always
+         rendered so the chat panel exists in the DOM immediately after
+         activation — the Chat component handles the not-activated state. --}}
+    @persist('lara-chat')
+        @unless($skipShellRender)
+            <div id="lara-chat-home" style="display: contents;">
+                <div id="lara-chat-instance" class="h-full" style="display: none;">
+                    <livewire:ai.chat />
+                </div>
             </div>
-        </div>
-        @endpersist
-    @endif
+        @endunless
+    @endpersist
 
     {{-- Status Bar — persisted region (page-independent: locale, environment,
          impersonation/license notices). Same reasoning as the top bar. --}}

@@ -48,6 +48,13 @@ class Providers extends Component implements ProvidesLaraPageContext
     public ?int $expandedProviderId = null;
 
     /**
+     * Previous render's Lara activation state — used to detect transitions
+     * and dispatch a browser event so persisted chrome (status bar, chat
+     * panel) updates without a full page reload.
+     */
+    public ?bool $previousLaraActivated = null;
+
+    /**
      * Provider-owned advanced settings schema for the edit modal.
      *
      * @var list<array{
@@ -299,6 +306,17 @@ class Providers extends Component implements ProvidesLaraPageContext
         $imageProviderTestable = $this->imageProviderTestable($imageProviders);
         $imageProviderStatusLines = $companyId !== null ? $this->imageProviderStatusLines($companyId) : [];
 
+        $laraActivated = Employee::laraActivationState() === true;
+
+        // Dispatch a browser event when the activation state transitions so
+        // persisted chrome (status bar, chat shell) updates without a full
+        // page reload. The previous state is null on initial render — no event.
+        if ($this->previousLaraActivated !== null && $this->previousLaraActivated !== $laraActivated) {
+            $this->dispatch('lara-activation-changed', activated: $laraActivated);
+        }
+
+        $this->previousLaraActivated = $laraActivated;
+
         return view('livewire.admin.ai.providers.providers', [
             'providers' => $providers,
             'expandedModels' => $expandedModels,
@@ -306,7 +324,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             'imageProviders' => $imageProviders,
             'imageProviderTestable' => $imageProviderTestable,
             'imageProviderStatusLines' => $imageProviderStatusLines,
-            'laraActivated' => Employee::laraActivationState() === true,
+            'laraActivated' => $laraActivated,
         ]);
     }
 

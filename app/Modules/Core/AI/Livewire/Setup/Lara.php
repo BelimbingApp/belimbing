@@ -37,6 +37,13 @@ class Lara extends Component
 
     public bool $showEditorModal = false;
 
+    /**
+     * Previous render's Lara activation state — used to detect transitions
+     * and dispatch a browser event so persisted chrome (status bar, chat
+     * panel) updates without a full page reload.
+     */
+    public ?bool $previousLaraActivated = null;
+
     public function mount(): void
     {
         // Idempotent — only provisions when both Licensee company exists and
@@ -186,6 +193,15 @@ class Lara extends Component
 
         $taskSummaries = $laraActivated ? $this->buildTaskSummaries($resolver) : [];
         $toolRows = $laraExists ? $this->buildInteractiveToolRows() : ['enabled' => [], 'available' => []];
+
+        // Dispatch a browser event when the activation state transitions so
+        // persisted chrome (status bar, chat shell) updates without a full
+        // page reload. The previous state is null on initial render — no event.
+        if ($this->previousLaraActivated !== null && $this->previousLaraActivated !== $laraActivated) {
+            $this->dispatch('lara-activation-changed', activated: $laraActivated);
+        }
+
+        $this->previousLaraActivated = $laraActivated;
 
         return view('livewire.admin.setup.lara', [
             'licenseeExists' => $licenseeExists,
