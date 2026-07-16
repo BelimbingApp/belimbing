@@ -15,12 +15,6 @@ trait AuthorizesDataShareOperations
         return $confirmedAt > 0 && (time() - $confirmedAt) <= (int) config('auth.password_timeout', 10800);
     }
 
-    private function setStatus(string $message, string $variant): void
-    {
-        $this->statusMessage = $message;
-        $this->statusVariant = $variant;
-    }
-
     private function requireCapability(string $capability): void
     {
         if (! $this->capabilityAllows($capability)) {

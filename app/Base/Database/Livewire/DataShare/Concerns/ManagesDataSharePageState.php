@@ -122,4 +122,10 @@ trait ManagesDataSharePageState
             ->values()
             ->all();
     }
+
+    private function setStatus(string $message, string $variant): void
+    {
+        $this->statusMessage = $message;
+        $this->statusVariant = $variant;
+    }
 }
