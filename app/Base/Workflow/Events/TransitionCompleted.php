@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Events;
 
 use App\Base\Workflow\DTO\TransitionContext;
@@ -9,10 +10,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Events\Dispatchable;
 
 /**
- * Fired after a transition commits successfully (best-effort).
+ * Fired after a transition commits successfully.
  *
- * Listeners handle notifications, external integrations, and
- * cross-process coordination (e.g., spawning child workflows).
+ * Delivery is durable and at least once through the workflow transition
+ * outbox. Listeners handle notifications, external integrations, and
+ * cross-process coordination, and must make side effects idempotent.
  *
  * Use `$payload` for a stable, flattened contract — avoids coupling
  * listeners to Eloquent model internals or transition object structure.

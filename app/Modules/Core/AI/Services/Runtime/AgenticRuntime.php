@@ -95,6 +95,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
         try {
             $policy ??= ExecutionPolicy::interactive();
+            $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
 
             $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
@@ -140,7 +141,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $errorResult;
             }
 
-            $config['timeout'] = $policy->timeoutSeconds;
+            $config['timeout'] = max(1, $policy->timeoutSeconds);
 
             $result = $this->runToolCallingLoop(
                 $runId,
@@ -150,6 +151,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $messages,
                 $systemPrompt,
                 $allowedToolNames,
+                $deadline,
             );
 
             $result['meta'] = $this->withResolvedSkillPackMeta($result['meta'] ?? []);
@@ -212,6 +214,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
         try {
             $policy ??= ExecutionPolicy::interactive();
+            $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
 
             $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
@@ -262,7 +265,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
-            $config['timeout'] = $policy->timeoutSeconds;
+            $config['timeout'] = max(1, $policy->timeoutSeconds);
 
             yield from $this->runStreamingToolLoop(
                 $runId,
@@ -272,6 +275,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $messages,
                 $systemPrompt,
                 $allowedToolNames,
+                $deadline,
             );
         } finally {
             $this->sessionContext->clear();
@@ -343,7 +347,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
-        ?array $allowedToolNames = null,
+        ?array $allowedToolNames,
+        float $deadline,
     ): array {
         // Hook: PreContextBuild — augment system prompt before message assembly
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
@@ -371,25 +376,41 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $iteration = 0;
 
         while (true) {
+            if ($this->configWithinExecutionBudget($config, $deadline) === null) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $this->executionBudgetError(),
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
             // Hook: PreLlmCall — observe or augment before each LLM call
             $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
 
-            $result = $this->chatWithRetry($runId, $credentials, $config, $apiMessages, $tools, $retryAttempts);
+            $result = $this->chatWithRetry(
+                $runId,
+                $credentials,
+                $config,
+                $apiMessages,
+                $tools,
+                $retryAttempts,
+                $deadline,
+            );
 
             if (isset($result['runtime_error'])) {
-                $errorResult = $this->responseFactory->error(
+                return $this->syncLoopErrorResult(
                     $runId,
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $employeeId,
+                    $config,
                     $result['runtime_error'],
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
                 );
-                $errorResult['meta']['retry_attempts'] = $retryAttempts;
-
-                // Hook: PostRun on error
-                $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
-                $errorResult['meta']['hooks'] = $hookMetadata;
-
-                return $errorResult;
             }
 
             $this->recordSuccessfulSyncCall($runId, $iteration, $config, $result);
@@ -411,8 +432,20 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $successResult;
             }
 
+            if ($iteration >= $this->maxToolIterations()) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $this->toolLoopLimitError(),
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
             $this->appendAssistantToolCallMessage($apiMessages, $result);
-            $this->executeToolCallsWithHooks(
+            $toolError = $this->executeToolCallsWithHooks(
                 $runId,
                 $employeeId,
                 $result['tool_calls'],
@@ -421,9 +454,59 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $clientActions,
                 $hookMetadata,
                 $allowedToolNames,
+                $deadline,
             );
+
+            if ($toolError !== null) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $toolError,
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
             $iteration++;
         }
+    }
+
+    /**
+     * Build a failed sync result while preserving completed tool and hook evidence.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  list<array<string, mixed>>  $retryAttempts
+     * @param  array<string, mixed>  $hookMetadata
+     * @param  list<array<string, mixed>>  $toolActions
+     * @return array{content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function syncLoopErrorResult(
+        string $runId,
+        int $employeeId,
+        array $config,
+        AiRuntimeError $runtimeError,
+        array $retryAttempts,
+        array $hookMetadata,
+        array $toolActions,
+    ): array {
+        $errorResult = $this->responseFactory->error(
+            $runId,
+            $config['model'],
+            (string) ($config['provider_name'] ?? 'unknown'),
+            $runtimeError,
+        );
+        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
+
+        $errorResult['meta']['retry_attempts'] = $retryAttempts;
+        $errorResult['meta']['hooks'] = $hookMetadata;
+
+        if ($toolActions !== []) {
+            $errorResult['meta']['tool_actions'] = $toolActions;
+        }
+
+        return $errorResult;
     }
 
     /**
@@ -465,8 +548,15 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $apiMessages,
         array $tools,
         array &$retryAttempts,
+        float $deadline,
     ): array {
-        $result = $this->chatWithTools($runId, $credentials, $config, $apiMessages, $tools);
+        $attemptConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+        if ($attemptConfig === null) {
+            return ['runtime_error' => $this->executionBudgetError()];
+        }
+
+        $result = $this->chatWithTools($runId, $credentials, $attemptConfig, $apiMessages, $tools);
 
         if (! isset($result['runtime_error'])) {
             return $result;
@@ -481,7 +571,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         // Don't retry timeouts that consumed most of the budget — retrying
         // with the same budget will fail identically.
         if ($runtimeError->errorType === AiErrorType::Timeout) {
-            $budgetMs = ($config['timeout'] ?? 60) * 1000;
+            $budgetMs = ($attemptConfig['timeout'] ?? 60) * 1000;
 
             if ($runtimeError->latencyMs >= $budgetMs * 0.5) {
                 return $result;
@@ -496,7 +586,13 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'latency_ms' => $runtimeError->latencyMs,
         ];
 
-        return $this->chatWithTools($runId, $credentials, $config, $apiMessages, $tools);
+        $retryConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+        if ($retryConfig === null) {
+            return ['runtime_error' => $this->executionBudgetError()];
+        }
+
+        return $this->chatWithTools($runId, $credentials, $retryConfig, $apiMessages, $tools);
     }
 
     /**
@@ -626,7 +722,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         }
 
         if ($originalLength > self::MAX_TOOL_RESULT_CHARS) {
-            $resultString = Str::limit($resultString, self::MAX_TOOL_RESULT_CHARS, "\n\n[Tool result truncated before returning to the model. Use bash or a narrower command for more detail.]");
+            $resultString = Str::limit($resultString, self::MAX_TOOL_RESULT_CHARS, "\n\n[Tool result truncated before returning to the model. Narrow the tool query, filters, or page range for more detail.]");
             $action['result_truncated'] = true;
             $action['result_length'] = $originalLength;
         }
@@ -736,7 +832,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $credentials,
         array $messages,
         ?string $systemPrompt,
-        ?array $allowedToolNames = null,
+        ?array $allowedToolNames,
+        float $deadline,
     ): \Generator {
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
 
@@ -754,6 +851,15 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
 
         while (true) {
+            $iterationConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+            if ($iterationConfig === null) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->executionBudgetError(), $toolLoopState);
+
+                return;
+            }
+
             // Turn is blocked on the model round-trip for this loop iteration.
             yield ['event' => 'status', 'data' => [
                 'phase' => RunPhase::AwaitingLlm->value,
@@ -765,7 +871,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
             $iterResult = yield from $this->toolLoopStreamReader->consumeIterationStream(
                 $runId,
-                $config,
+                $iterationConfig,
                 $credentials,
                 $toolLoopState,
                 $apiType,
@@ -820,18 +926,33 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
+            if ($iteration >= $this->maxToolIterations()) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolLoopLimitError(), $toolLoopState);
+
+                return;
+            }
+
             // Determine phase for context continuity: only commentary content is preserved
             $phase = ($iterResult['commentary'] ?? '') !== '' ? 'commentary' : null;
             $this->appendAssistantToolCallMessage($toolLoopState['apiMessages'], $iterResult, $phase);
 
-            yield from $this->streamToolCalls(
+            $toolError = yield from $this->streamToolCalls(
                 $runId,
                 $employeeId,
                 $iterResult['tool_calls'],
                 $toolLoopState,
                 $toolIndex,
                 $allowedToolNames,
+                $deadline,
             );
+
+            if ($toolError !== null) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $toolError, $toolLoopState);
+
+                return;
+            }
 
             $iteration++;
         }
@@ -1076,20 +1197,28 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         AiRuntimeError $runtimeError,
         array $toolLoopState,
     ): array {
+        $meta = array_merge(
+            $this->responseFactory->errorMeta(
+                $config['model'],
+                (string) ($config['provider_name'] ?? 'unknown'),
+                $runtimeError,
+            ),
+            [
+                'retry_attempts' => $toolLoopState['retryAttempts'],
+                'hooks' => $toolLoopState['hookMetadata'],
+            ],
+        );
+
+        if ($toolLoopState['toolActions'] !== []) {
+            $meta['tool_actions'] = $toolLoopState['toolActions'];
+        }
+
+        $this->runRecorder->fail($runId, $runtimeError, $meta);
+
         return ['event' => 'error', 'data' => [
             'message' => $runtimeError->userMessage,
             'run_id' => $runId,
-            'meta' => array_merge(
-                $this->responseFactory->errorMeta(
-                    $config['model'],
-                    (string) ($config['provider_name'] ?? 'unknown'),
-                    $runtimeError,
-                ),
-                [
-                    'retry_attempts' => $toolLoopState['retryAttempts'],
-                    'hooks' => $toolLoopState['hookMetadata'],
-                ],
-            ),
+            'meta' => $meta,
         ]];
     }
 
@@ -1114,11 +1243,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $toolCalls,
         array &$toolLoopState,
         int &$toolIndex,
-        ?array $allowedToolNames = null,
+        ?array $allowedToolNames,
+        float $deadline,
     ): \Generator {
         $hookMetadata = &$toolLoopState['hookMetadata'];
 
         foreach ($toolCalls as $toolCall) {
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+
             $functionName = (string) ($toolCall['function']['name'] ?? '');
             $arguments = $this->decodeToolArguments($toolCall);
             $toolCallId = (string) ($toolCall['id'] ?? '');
@@ -1239,7 +1373,13 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             }
 
             $toolIndex++;
+
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
         }
+
+        return null;
     }
 
     /**
@@ -1262,9 +1402,14 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array &$toolActions,
         array &$clientActions,
         array &$hookMetadata,
-        ?array $allowedToolNames = null,
-    ): void {
+        ?array $allowedToolNames,
+        float $deadline,
+    ): ?AiRuntimeError {
         foreach ($toolCalls as $toolCall) {
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+
             $functionName = (string) ($toolCall['function']['name'] ?? '');
             $arguments = $this->decodeToolArguments($toolCall);
             $toolCallId = (string) ($toolCall['id'] ?? '');
@@ -1316,7 +1461,63 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             ]);
 
             $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
         }
+
+        return null;
+    }
+
+    /**
+     * Apply the remaining wall-clock budget to the next provider request.
+     *
+     * Tool implementations remain responsible for their own hard cancellation;
+     * the runtime checks the shared deadline before and after each tool call.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>|null
+     */
+    private function configWithinExecutionBudget(array $config, float $deadline): ?array
+    {
+        $remaining = $deadline - microtime(true);
+
+        if ($remaining <= 0) {
+            return null;
+        }
+
+        $config['timeout'] = max(1, (int) ceil($remaining));
+
+        return $config;
+    }
+
+    private function executionBudgetExpired(float $deadline): bool
+    {
+        return microtime(true) >= $deadline;
+    }
+
+    private function maxToolIterations(): int
+    {
+        return max(0, (int) config('ai.llm.agentic.max_tool_iterations', 24));
+    }
+
+    private function executionBudgetError(): AiRuntimeError
+    {
+        return AiRuntimeError::fromType(
+            AiErrorType::Timeout,
+            'The agent exhausted its configured execution budget.',
+        );
+    }
+
+    private function toolLoopLimitError(): AiRuntimeError
+    {
+        $limit = $this->maxToolIterations();
+
+        return AiRuntimeError::fromType(
+            AiErrorType::ToolLoopLimit,
+            "The model requested another tool round after the configured limit of {$limit}.",
+        );
     }
 
     /**

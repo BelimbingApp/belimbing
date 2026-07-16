@@ -53,6 +53,9 @@ return [
     |
     */
     'llm' => [
+        'agentic' => [
+            'max_tool_iterations' => (int) env('AI_AGENTIC_MAX_TOOL_ITERATIONS', 24),
+        ],
         'execution_controls' => [
             'limits' => [
                 'max_output_tokens' => 8192,
@@ -111,6 +114,16 @@ return [
             'timeout_seconds' => 30,
             'max_response_bytes' => 5242880, // 5MB
             'ssrf_allow_private' => env('AI_WEB_FETCH_SSRF_ALLOW_PRIVATE', false),
+        ],
+        'document_analysis' => [
+            'download_timeout_seconds' => 30,
+            'pdf_timeout_seconds' => 60,
+            'pdftotext_path' => env('AI_PDFTOTEXT_PATH'),
+            'max_response_bytes' => 26214400, // 25 MiB
+            'max_output_chars' => 120000,
+            'max_pdf_pages' => 200,
+            'max_page_number' => 10000,
+            'max_page_segments' => 20,
         ],
         'browser' => [
             'enabled' => env('AI_BROWSER_ENABLED', true),

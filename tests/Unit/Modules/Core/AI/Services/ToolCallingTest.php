@@ -23,7 +23,6 @@ use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
 use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
-use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
 use App\Modules\Core\AI\Tools\NavigateTool;
 use App\Modules\Core\AI\Tools\VisibleNavMenuSnapshotTool;
@@ -481,71 +480,6 @@ describe('DelegateTaskTool', function () {
 
         expect((string) $result)->toContain('Error');
         expect((string) $result)->toContain('Dispatch unavailable');
-    });
-});
-
-describe('DocumentAnalysisTool', function () {
-    it(TOOL_METADATA_DESCRIPTION, function () {
-        $tool = new DocumentAnalysisTool;
-
-        expect($tool->name())->toBe('document_analysis');
-        expect($tool->requiredCapability())->toBe('admin.ai.tool.document-analysis.execute');
-    });
-
-    it('returns error for empty or missing path', function () {
-        $tool = new DocumentAnalysisTool;
-
-        expect((string) $tool->execute([]))->toContain(PATH_REQUIRED_ERROR);
-        expect((string) $tool->execute(['path' => '']))->toContain(PATH_REQUIRED_ERROR);
-        expect((string) $tool->execute(['path' => '   ']))->toContain(PATH_REQUIRED_ERROR);
-    });
-
-    it('returns structured payload for a valid request', function () {
-        $tool = new DocumentAnalysisTool;
-
-        $result = $tool->execute([
-            'path' => 'README.md',
-            'prompt' => 'Summarize this document.',
-        ]);
-
-        expect((string) $result)->toContain('"action": "document_analysis"');
-        expect((string) $result)->toContain('"path": "README.md"');
-        expect((string) $result)->toContain('"prompt": "Summarize this document."');
-    });
-
-    it('returns error for a path that does not exist', function () {
-        $tool = new DocumentAnalysisTool;
-
-        $result = $tool->execute([
-            'path' => 'non-existent-file-xyz.txt',
-            'prompt' => 'Summarize this document.',
-        ]);
-
-        expect((string) $result)->toContain('"path": "non-existent-file-xyz.txt"');
-    });
-
-    it('returns error for missing prompt', function () {
-        $tool = new DocumentAnalysisTool;
-
-        $result = $tool->execute(['path' => 'README.md']);
-
-        expect((string) $result)->toContain('No prompt provided');
-    });
-
-    it('returns file content and header for a created temp file', function () {
-        $relativePath = makeToolCallingTempRelativePath('test_doc_analysis_tool.txt');
-        writeToolCallingTempFile($relativePath, 'Hello, document analysis!');
-
-        $tool = new DocumentAnalysisTool;
-        $result = $tool->execute([
-            'path' => $relativePath,
-            'prompt' => 'Summarize this document.',
-        ]);
-
-        deleteToolCallingTempFile($relativePath);
-
-        expect((string) $result)->toContain('"path": "'.$relativePath.'"');
-        expect((string) $result)->toContain('"prompt": "Summarize this document."');
     });
 });
 

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Workflow\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;

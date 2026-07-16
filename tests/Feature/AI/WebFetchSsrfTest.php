@@ -2,6 +2,7 @@
 
 use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\WebFetchService;
+use Composer\CaBundle\CaBundle;
 use Illuminate\Support\Facades\Http;
 
 const WEB_FETCH_SSRF_START_PATTERN = 'https://start.test/*';
@@ -17,14 +18,27 @@ function webFetchSsrfCurlOptResolve(): int
 
 /**
  * @param  list<string>  $hostnameAllowlist
- * @return array{validation_error?: string, request_error?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}
+ * @return array{validation_error?: string, request_error?: string, response_too_large?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}
  */
 function webFetchSsrfFetch(
     WebFetchService $service,
     string $url = WEB_FETCH_SSRF_START_URL,
     array $hostnameAllowlist = ['start.test'],
+    int $maxBytes = 1_000_000,
 ): array {
-    return $service->fetch($url, 30, 1_000_000, 50_000, 'text', false, $hostnameAllowlist);
+    return $service->fetch($url, 30, $maxBytes, 50_000, 'text', false, $hostnameAllowlist);
+}
+
+/**
+ * @return array{validation_error?: string, request_error?: string, response_too_large?: string, http_status?: int, body?: string, byte_count?: int, content_type?: string, final_url?: string}
+ */
+function webFetchSsrfDownload(
+    WebFetchService $service,
+    string $url = WEB_FETCH_SSRF_START_URL,
+    int $maxBytes = 1_000_000,
+    array $hostnameAllowlist = ['start.test'],
+): array {
+    return $service->download($url, 30, $maxBytes, false, $hostnameAllowlist);
 }
 
 // The initial host is allowlisted in redirect tests so pinnedIpFor() skips DNS.
@@ -39,6 +53,53 @@ it('blocks a redirect that points at an internal target', function (): void {
 
     expect($result)->toHaveKey('validation_error')
         ->and($result['validation_error'])->toContain('localhost');
+});
+
+it('also revalidates redirects for raw document downloads', function (): void {
+    Http::fake([
+        WEB_FETCH_SSRF_START_PATTERN => Http::response('go', 302, ['Location' => 'http://127.0.0.1/report.pdf']),
+    ]);
+
+    $result = webFetchSsrfDownload(new WebFetchService(new UrlSafetyGuard));
+
+    expect($result)->toHaveKey('validation_error')
+        ->and($result['validation_error'])->toContain('private or reserved');
+});
+
+it('rejects oversized raw document responses instead of parsing partial bytes', function (): void {
+    Http::fake([
+        WEB_FETCH_SSRF_START_PATTERN => Http::response(
+            str_repeat('x', 101),
+            200,
+            ['Content-Type' => 'application/pdf'],
+        ),
+    ]);
+
+    $result = webFetchSsrfDownload(
+        new WebFetchService(new UrlSafetyGuard),
+        maxBytes: 100,
+    );
+
+    expect($result)->toHaveKey('response_too_large')
+        ->and($result)->not->toHaveKey('body');
+});
+
+it('rejects an oversized fetched page without relying on content length', function (): void {
+    Http::fake([
+        WEB_FETCH_SSRF_START_PATTERN => Http::response(
+            str_repeat('x', 101),
+            200,
+            ['Content-Type' => 'text/plain'],
+        ),
+    ]);
+
+    $result = webFetchSsrfFetch(
+        new WebFetchService(new UrlSafetyGuard),
+        maxBytes: 100,
+    );
+
+    expect($result)->toHaveKey('response_too_large')
+        ->and($result)->not->toHaveKey('content');
 });
 
 it('stops after the redirect limit', function (): void {
@@ -67,6 +128,34 @@ it('extracts content from a successful response', function (): void {
         ->and($result['content'])->toContain('Body text here.');
 });
 
+it('preserves safe navigational sources and resolves them against the final URL', function (): void {
+    Http::fake(function ($request) {
+        if ($request->url() === WEB_FETCH_SSRF_START_URL) {
+            return Http::response('', 302, ['Location' => '/reports/']);
+        }
+
+        return Http::response(
+            '<main>'
+            .'<a href="annual/FY2025.pdf">Annual report</a>'
+            .'<a href="https://admin:secret@example.test/private">Credentialed link</a>'
+            .'<iframe src="//www.insage.com.my/IR/cmn/trps02/ArTop.aspx?Symbol=7252"></iframe>'
+            .'<iframe src="javascript:alert(1)"></iframe>'
+            .'</main>',
+            200,
+            ['Content-Type' => 'text/html'],
+        );
+    });
+
+    $result = webFetchSsrfFetch(new WebFetchService(new UrlSafetyGuard));
+
+    expect($result['content'])
+        ->toContain('Annual report [Link: https://start.test/reports/annual/FY2025.pdf]')
+        ->toContain('Credentialed link')
+        ->not->toContain('admin:secret')
+        ->toContain('Embedded source: https://www.insage.com.my/IR/cmn/trps02/ArTop.aspx?Symbol=7252')
+        ->not->toContain('javascript:');
+});
+
 it('blocks an initial internal URL before any request', function (): void {
     Http::fake();
 
@@ -93,7 +182,9 @@ it('pins DNS fetches to the validated public IP', function (): void {
 
     expect($result['content'] ?? null)->toBe('Pinned body')
         ->and($optionsSeen['curl'][webFetchSsrfCurlOptResolve()][0] ?? null)
-        ->toBe('start.test:443:'.WEB_FETCH_SSRF_PUBLIC_IP);
+        ->toBe('start.test:443:'.WEB_FETCH_SSRF_PUBLIC_IP)
+        ->and($optionsSeen['verify'] ?? null)->toBe(CaBundle::getSystemCaRootBundlePath())
+        ->and(is_readable((string) ($optionsSeen['verify'] ?? '')))->toBeTrue();
 });
 
 it('blocks DNS fetches when the validated hostname cannot be pinned', function (): void {

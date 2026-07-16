@@ -25,6 +25,7 @@
         "ext-tokenizer": "*",
         "ext-xml": "*",
         "ext-zip": "*",
+        "composer/ca-bundle": "^1.5",
         "laravel/framework": "^13.14.0",
         "laravel/octane": "^2.17.4",
         "laravel/tinker": "^3.0.2",

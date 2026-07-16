@@ -7,7 +7,6 @@ use App\Base\Workflow\Contracts\TransitionAction;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\DTO\TransitionPayload;
 use App\Base\Workflow\DTO\TransitionResult;
-use App\Base\Workflow\Events\TransitionCompleted;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
@@ -25,8 +24,9 @@ use Illuminate\Support\Str;
  * model update, history recording, action execution, and hook firing.
  *
  * Transaction policy:
- * - Inside DB transaction: model status update + history + action_class
- * - Outside (best-effort): Hooks::fireAfter / event dispatch
+ * - Inside DB transaction: model status update, history, action class, and outbox record
+ * - After commit: semantic audit is best-effort and the durable event gets an
+ *   immediate delivery attempt; the reconciler retries failed deliveries
  */
 class WorkflowEngine
 {
@@ -34,6 +34,8 @@ class WorkflowEngine
         private readonly TransitionManager $transitionManager,
         private readonly TransitionValidator $validator,
         private readonly Container $container,
+        private readonly TransitionOutbox $outbox,
+        private readonly TransitionOutboxDispatcher $outboxDispatcher,
     ) {}
 
     /**
@@ -46,36 +48,54 @@ class WorkflowEngine
      */
     public function transition(Model $model, string $flow, string $toCode, TransitionContext $context): TransitionResult
     {
-        $fromCode = $model->getAttribute('status');
-
-        $transition = $this->transitionManager->getTransition($flow, $fromCode, $toCode);
-
-        if ($transition === null) {
-            return TransitionResult::failure(
-                "No transition defined from '{$fromCode}' to '{$toCode}' in flow '{$flow}'."
-            );
+        if ($model->getKey() === null) {
+            return TransitionResult::failure('A workflow transition requires a persisted model.');
         }
 
-        $guardResult = $this->validator->validate($transition, $context->actor, $model);
+        /**
+         * Lock and re-read the participant before deriving the source edge. Two
+         * workers may hold stale model instances, but only the first transition
+         * from the persisted status can commit.
+         *
+         * @var TransitionResult|array{model: Model, transition: StatusTransition, history: StatusHistory, payload: TransitionPayload, outbox_id: int} $outcome
+         */
+        $outcome = DB::transaction(function () use ($model, $flow, $toCode, $context): TransitionResult|array {
+            $lockedModel = $model->newModelQuery()
+                ->whereKey($model->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+            $fromCode = $lockedModel->getAttribute('status');
 
-        if (! $guardResult->allowed) {
-            return TransitionResult::failure($guardResult->reason ?? 'Transition denied.');
-        }
+            if (! is_string($fromCode) || $fromCode === '') {
+                return TransitionResult::failure('The workflow participant has no current status.');
+            }
 
-        $previousHistory = StatusHistory::latest($flow, $model->getKey());
-        $now = Carbon::now();
-        $tat = $previousHistory?->transitioned_at
-            ? (int) $previousHistory->transitioned_at->diffInSeconds($now)
-            : null;
+            $transition = $this->transitionManager->getTransition($flow, $fromCode, $toCode);
 
-        /** @var StatusHistory $history */
-        $history = DB::transaction(function () use ($model, $flow, $toCode, $context, $transition, $now, $tat): StatusHistory {
-            $model->setAttribute('status', $toCode);
-            $model->save();
+            if ($transition === null) {
+                return TransitionResult::failure(
+                    "No transition defined from '{$fromCode}' to '{$toCode}' in flow '{$flow}'."
+                );
+            }
+
+            $guardResult = $this->validator->validate($transition, $context->actor, $lockedModel);
+
+            if (! $guardResult->allowed) {
+                return TransitionResult::failure($guardResult->reason ?? 'Transition denied.');
+            }
+
+            $previousHistory = StatusHistory::latest($flow, (int) $lockedModel->getKey());
+            $now = Carbon::now();
+            $tat = $previousHistory?->transitioned_at
+                ? (int) $previousHistory->transitioned_at->diffInSeconds($now)
+                : null;
+
+            $lockedModel->setAttribute('status', $toCode);
+            $lockedModel->save();
 
             $history = StatusHistory::query()->create([
                 'flow' => $flow,
-                'flow_id' => $model->getKey(),
+                'flow_id' => $lockedModel->getKey(),
                 'status' => $toCode,
                 'tat' => $tat,
                 'actor_id' => $context->actor->id,
@@ -90,33 +110,55 @@ class WorkflowEngine
                 'transitioned_at' => $now,
             ]);
 
-            $this->executeAction($transition, $model, $context);
+            $this->executeAction($transition, $lockedModel, $context);
+            $lockedModel->refresh();
 
-            return $history;
+            $payload = new TransitionPayload(
+                flow: $flow,
+                flowModel: $lockedModel::class,
+                flowId: (int) $lockedModel->getKey(),
+                fromStatus: $fromCode,
+                toStatus: $toCode,
+                actorId: $context->actor->id,
+                actorRole: $context->actor->attributes['role'] ?? null,
+                actorDepartment: $context->actor->attributes['department'] ?? null,
+                assignees: $context->assignees,
+                comment: $context->comment,
+                commentTag: $context->commentTag,
+                attachments: $context->attachments,
+                metadata: $context->metadata,
+                transitionedAt: $now,
+            );
+            $outbox = $this->outbox->enqueue($lockedModel, $transition, $history, $context, $payload);
+
+            return [
+                'model' => $lockedModel,
+                'transition' => $transition,
+                'history' => $history,
+                'payload' => $payload,
+                'outbox_id' => (int) $outbox->id,
+            ];
         });
 
-        $payload = new TransitionPayload(
-            flow: $flow,
-            flowModel: $model::class,
-            flowId: $model->getKey(),
-            fromStatus: $fromCode,
-            toStatus: $toCode,
-            actorId: $context->actor->id,
-            actorRole: $context->actor->attributes['role'] ?? null,
-            actorDepartment: $context->actor->attributes['department'] ?? null,
-            assignees: $context->assignees,
-            comment: $context->comment,
-            commentTag: $context->commentTag,
-            attachments: $context->attachments,
-            metadata: $context->metadata,
-            transitionedAt: $now,
-        );
+        if ($outcome instanceof TransitionResult) {
+            return $outcome;
+        }
 
-        $this->recordTransitionSemanticAction($model, $transition, $context, $payload);
+        $model->setRawAttributes($outcome['model']->getAttributes(), true);
 
-        TransitionCompleted::dispatch($flow, $model, $transition, $history, $context, $payload);
+        try {
+            $this->recordTransitionSemanticAction($outcome['model'], $outcome['transition'], $context, $outcome['payload']);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
 
-        return TransitionResult::success($history);
+        try {
+            $this->outboxDispatcher->deliver($outcome['outbox_id']);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+
+        return TransitionResult::success($outcome['history']);
     }
 
     /**

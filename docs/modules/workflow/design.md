@@ -143,23 +143,69 @@ Multiple transition rows from the same `from_code`. The UI queries available tra
 
 Transition rows define the *possible* edges, but **transition guards** (conditions) determine if a specific transition is available *right now* for *this instance*. Edge-level policy — capabilities, guards, actions — lives in the `base_workflow_status_transitions` table.
 
-### 5.1 Composition Patterns (Beyond the Engine)
+### 5.1 Composition Patterns
 
-The engine's scope ends at Level 3 — a single directed graph with capability-gated, guard-protected transitions. More complex scenarios are handled by **composing multiple independent workflow instances** using standard Laravel infrastructure. The engine has no sub-process, orchestration, or external-system machinery.
+The status engine's scope ends at Level 3 — one aggregate and one directed lifecycle graph with capability-gated, guard-protected transitions. Do not encode independent facts such as coverage lifecycle, reporting-period readiness, and agent execution in one status column. Each has a different clock and owner.
+
+Base provides a separate **durable process coordinator** for execution topology: code-owned versioned definitions, fan-out/fan-in dependencies, timers, signals, leases, retries, and crash reconciliation. It coordinates work *around* domain aggregates; it does not replace their truthful lifecycle state.
 
 #### Multi-Department / Multi-Agency Orchestration
 **Example:** School placement spanning admissions, finance, immigration, healthcare
 
-Each department runs its own Level 1–3 workflow. A parent transition's `action_class` or `Hooks::fireAfter()` dispatches a Laravel event; listeners in other modules create independent workflow instances with their own status graphs.
+Each department can run its own Level 1–3 lifecycle. A committed transition event or other domain fact starts or signals a durable process run; the coordinator materializes independent work items and controls their dependencies.
 
 - **Parallel tracks:** The placement's `applied → processing` transition fires `PlacementProcessingStarted`. Listeners create independent `immigration` and `health_check` workflow instances.
-- **Cross-process coordination:** A guard on the placement's `processing → all_cleared` transition checks that the related immigration and health check processes have both reached their terminal status.
-- **No engine coupling:** Each process is a standalone status graph. The parent doesn't know what child processes exist — it only knows about events. Adding a new child process means adding a new listener, not changing the parent's configuration.
+- **Cross-process coordination:** A fan-in work item accepts the explicit outcomes required from immigration and health-check work. The aggregate lifecycle advances only after that durable result exists.
+- **No domain coupling in Base:** Modules contribute definitions through `ProcessDefinitionContributor`; Base does not import domain roles or models.
 
 #### External System Integration
 **Example:** Customs clearance requires API calls to government systems
 
-Transition hooks (before/after) trigger external integrations via Laravel jobs. The status might enter a "waiting" state until an external callback advances it. This is standard Laravel job/event infrastructure, not engine functionality.
+Transition events trigger external integrations through claimable process work. A callback calls `ProcessCoordinator::signal()` with an idempotency key; the matching work item retains the signal timestamp and payload as worker input. The scheduler-safe `blb:workflow:reconcile` command repairs expired leases and advances due work.
+
+### 5.2 Durable Process Coordinator Contract
+
+Definitions are immutable code for a given key and version. The first use atomically reserves that pair with a fingerprint of its complete executable contract; an in-place edit is rejected even across concurrent workers or later deployments. Runs persist the exact version and fingerprint, subject morph, correlation key, inputs, work topology, outcomes, and an append-only event stream. Reconciliation idempotently materializes missing definition steps and dependency edges before advancing a run.
+
+```php
+final class InvestmentProcesses implements ProcessDefinitionContributor
+{
+    public function contribute(ProcessDefinitionRegistry $definitions): void
+    {
+        $definitions->register(new ProcessDefinition('investment.reporting-cycle', 1, [
+            new ProcessStep('collect', 'Collect evidence', executorKey: 'evidence.collector'),
+            new ProcessStep('bull', 'Bull case', [new ProcessDependency('collect')], executorKey: 'bull.analyst'),
+            new ProcessStep('bear', 'Bear case', [new ProcessDependency('collect')], executorKey: 'bear.analyst'),
+            new ProcessStep('committee', 'Committee', [
+                new ProcessDependency('bull', ['supported']),
+                new ProcessDependency('bear', ['supported']),
+            ]), // ALL fan-in by default
+            new ProcessStep('early_alert', 'Early alert', [
+                new ProcessDependency('bull', ['escalate']),
+                new ProcessDependency('bear', ['escalate']),
+            ], dependencyMode: DependencyMode::ANY),
+        ]));
+    }
+}
+
+// In the owning module provider:
+$this->app->tag(InvestmentProcesses::class, ProcessDefinitionContributor::CONTAINER_TAG);
+
+$run = $processes->start(
+    'investment.reporting-cycle',
+    input: ['reporting_period' => 'FY2026'],
+    idempotencyKey: 'company:42:cycle:9',
+    subjectType: CaseCompany::class,
+    subjectId: 42,
+    correlationKey: 'company:42:cycle:9',
+);
+
+$claim = $processes->claim('agent-worker-1');
+$processes->heartbeat($claim);
+$processes->complete($claim, output: ['assessment_id' => 123], outcome: 'supported', resultRef: 'assessment:123');
+```
+
+`ProcessCoordinator` exposes `start`, `signal`, `reconcile`, `claim`, `heartbeat`, `complete`, `fail`, `waive`, `block`, `pause`, and `resume`. Claims may be limited to executor keys and an explicit set of assigned process-run IDs, so a scoped worker cannot drain unrelated work. An empty run assignment returns no work. A pause retains completed work and the event stream while excluding the run from future claims. Every worker mutation is fenced by a lease token; an expired worker cannot overwrite a reassigned item.
 
 ---
 
@@ -555,7 +601,7 @@ INDEX       (flow, is_active, position)                -- board rendering query
 
 ## 9. The Engine Components
 
-The Workflow module has five components:
+The Workflow module has seven primary components:
 
 | Component | Responsibility |
 |-----------|---------------|
@@ -563,7 +609,9 @@ The Workflow module has five components:
 | **StatusManager** | CRUD and querying of `StatusConfig` records. Loads the status graph for a process. Caches aggressively. |
 | **TransitionManager** | CRUD and querying of `base_workflow_status_transitions` records. Loads edge-level policy for a process. |
 | **TransitionValidator** | Evaluates whether a transition is allowed: checks transition active state, AuthZ capability, and guard classes. |
-| **Hooks/** | Before/after transition hooks. Notifications, external integrations, AI prompts. |
+| **TransitionOutbox** | Commits a replayable `TransitionCompleted` event with the domain transition. The dispatcher leases and retries delivery. |
+| **ProcessDefinitionRegistry** | Collects immutable, versioned process topology contributed by business modules. |
+| **ProcessCoordinator** | Materializes and advances durable parallel work, dependencies, signals, timers, leases, retries, and attention states. |
 
 ### Call Flow
 
@@ -583,8 +631,6 @@ WorkflowEngine::transition($leaveApp, 'approved', $context)
     │       ├── Does $actor have the required capability? (AuthorizationService::authorize)
     │       └── Does guard_class pass? (e.g., LeaveBalanceGuard)
     │
-    ├── Hooks::fireBefore('leave_application', 'pending_approval', 'approved')
-    │
     ├── $leaveApp->status = 'approved'
     │   $leaveApp->save()
     │
@@ -592,9 +638,16 @@ WorkflowEngine::transition($leaveApp, 'approved', $context)
     │
     ├── TransitionAction::execute($transition->action_class)        // edge-specific action
     │
-    ├── Hooks::fireAfter('leave_application', 'pending_approval', 'approved')
-    │       ├── Send notifications (per target status config)
-    │       └── Assign PIC (per target status config)
+    ├── TransitionOutbox::enqueue(...)                              // same DB transaction
+    │
+    ├── database commit
+    │
+    ├── record semantic audit (best effort)
+    │
+    ├── TransitionOutboxDispatcher::deliver(...)                    // immediate attempt
+    │       └── TransitionCompleted listeners
+    │
+    ├── blb:workflow:reconcile                                      // retries failed delivery
     │
     └── return TransitionResult
 ```
@@ -603,10 +656,12 @@ WorkflowEngine::transition($leaveApp, 'approved', $context)
 
 The transition call flow wraps the critical path in a **database transaction**:
 
-- **Inside the transaction:** Model status update, history recording, and `action_class` execution. If any of these fail, the entire transition rolls back — the model's status is unchanged, no history is written, and the action's side effects (if DB-only) are reverted.
-- **Outside the transaction (best-effort):** `Hooks::fireBefore()` runs before the transaction opens (can abort the transition by throwing). `Hooks::fireAfter()` runs after commit — notifications, event dispatching, and external integrations. These are best-effort: a failed notification does not undo an approved leave application.
+- **Inside the transaction:** The participant is re-read with a row lock before the source edge is selected. The model update, history row, `action_class`, and a unique transition outbox message commit together. If any fails, all roll back; competing transitions from the same persisted status cannot both commit.
+- **Outside the transaction (durable, at least once):** `TransitionCompleted` keeps its public event contract, but is reconstructed from the outbox. Immediate delivery is attempted after commit; `blb:workflow:reconcile` retries failures with a lease and backoff. A delivered event is never dispatched again by the outbox. Listeners must still make external side effects idempotent by history/event identity because a worker can fail after a listener acts but before delivery is acknowledged.
 - **`action_class` with external side effects:** If an action calls an external API (e.g., `NotifyCustomsAgency`), it should dispatch a queued job rather than making the call synchronously inside the transaction. This prevents holding the transaction open on network I/O and avoids the problem of rolling back a DB change after an external call has already succeeded.
 - **Partial failure surfacing:** `TransitionResult` carries success/failure state and a reason. Guards return `GuardResult` with a denial reason. The engine does not silently swallow failures.
+
+Current limitation: the outbox guarantees at-least-once event delivery, but built-in listener effects do not yet have a durable per-recipient/channel idempotency ledger, and the outbox retains a full raw model snapshot for exact replay. The accepted follow-up design is tracked in `docs/plans/workflow-transition-effect-delivery.md`. Until it lands, listeners must use the history/event identity for deduplication and must not make business-process correctness depend on notifications. The Investment research process satisfies this boundary: its orchestrator and workers advance `ProcessRun`/`ProcessWorkItem` records directly; its owner digest is a separate attention surface, not a workflow completion signal.
 
 ### Guard and Action Placement
 
@@ -714,7 +769,7 @@ The admin refines conversationally: *"Add a guard on the approve transition that
 | # | Question | Notes |
 |---|----------|-------|
 | 1 | ~~**Is Workflow a Core module (`0200`) or Base infrastructure (`0100`)?**~~ | **Resolved.** Base infrastructure (`0100`). Module path: `app/Base/Workflow/`. Migration prefix: `0100_01_15_*`. Table prefix: `base_workflow_*`. The engine is process-agnostic infrastructure; child classes (process-specific guards, actions, models) live in business modules. |
-| 2 | ~~**How do sub-processes (Level 4) relate to parent processes?**~~ | **Resolved.** No sub-process support in the engine. Related processes are independent workflow instances linked by Laravel events. A parent transition's `action_class` or `Hooks::fireAfter()` dispatches an event; a listener in the child module creates/advances its own process. Same pattern as OpenMage's event-observer. The engine stays simple; orchestration is event-driven. |
+| 2 | ~~**How do sub-processes (Level 4) relate to parent processes?**~~ | **Resolved.** Aggregate lifecycles remain independent status graphs. The adjacent durable process coordinator owns execution dependencies and consumes committed domain facts through idempotent starts/signals. It never overloads an aggregate's status column. |
 | 3 | **Should `StatusConfig` support versioning?** | When an admin changes a process definition, should in-flight items keep their original definition? |
 | 4 | **Should the engine enforce that `status` column values match `StatusConfig` codes?** | Strict enforcement vs. advisory. Strict is safer but less flexible during migration. |
 | 5 | ~~**How does this integrate with AuthZ?**~~ | **Resolved.** Transitions carry a `capability` column referencing an AuthZ capability key. The `TransitionValidator` delegates to `AuthorizationService::authorize()`. Each business module declares its own `workflow.{process_code}.{action}` capabilities. See §6.1. |
@@ -724,12 +779,7 @@ The admin refines conversationally: *"Add a guard on the approve transition that
 
 ## 13. What's Next
 
-This document captures the big picture. Before writing code:
-
-1. **Define the public interface** — `WorkflowEngine`, `StatusManager`, `TransitionManager`, `TransitionValidator` method signatures
-2. **Walk through IT tickets end-to-end** against this design (first use case), followed by quality assurance control (second use case)
-3. **Write migrations** — all five tables, following BLB naming and timestamp conventions
-4. **Then build** — models first, engine second, UI last
+The status engine and durable process coordinator are implemented. The next shared-infrastructure slice is the transition-effect idempotency, minimal snapshot projection, and retention work tracked in `docs/plans/workflow-transition-effect-delivery.md`; business modules can use the coordinator now as long as correctness stays in persisted domain/process state rather than notification delivery.
 
 ---
 

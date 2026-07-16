@@ -121,6 +121,19 @@ describe('content fetching', function () {
         expect($result)->toContain('truncated');
     });
 
+    it('returns a truthful error when the response exceeds the byte limit', function () {
+        config(['ai.tools.web_fetch.max_response_bytes' => 100]);
+
+        Http::fake([
+            '*' => Http::response(str_repeat('x', 101), 200, ['Content-Type' => 'text/plain']),
+        ]);
+        $result = $this->tool->execute(['url' => 'http://example.com/page']);
+
+        expect($result->errorPayload?->code)->toBe('response_too_large')
+            ->and((string) $result)->toContain('100-byte limit')
+            ->and((string) $result)->not->toContain(str_repeat('x', 100));
+    });
+
     it('returns error for failed HTTP requests', function () {
         $result = ($this->fakeHttpResponse)(
             'Not Found',
@@ -152,7 +165,7 @@ describe('markdown extraction', function () {
         $html = '<html><body><a href="http://example.com">link text</a></body></html>';
         $result = ($this->fakeHttpResponse)($html, ['extract_mode' => 'markdown']);
 
-        expect($result)->toContain('[link text](http://example.com)');
+        expect($result)->toContain('[link text](<http://example.com>)');
     });
 
     it('converts bold to markdown', function () {

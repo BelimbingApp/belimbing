@@ -407,6 +407,57 @@ describe('AgenticRuntime (sync tool loop)', function () {
             expect($result['content'])->toContain('executed:echo_tool:world')
                 ->and($result['meta']['tool_actions'])->toHaveCount(24);
         });
+
+        it('stops before executing tools beyond the configured loop limit', function () {
+            config()->set('ai.llm.agentic.max_tool_iterations', 2);
+
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->times(3)
+                ->andReturn($this->makeToolCallResponse('call_loop', 'echo_tool', '{"input":"world"}'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Loop forever',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)
+                ->and($result['meta']['tool_actions'])->toHaveCount(2);
+        });
+
+        it('uses capability-neutral guidance when a tool result is truncated', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_large', 'large_tool', '{}')
+            );
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function (ChatRequest $request): bool {
+                    $toolMessage = collect($request->messages)
+                        ->last(fn (array $message): bool => ($message['role'] ?? null) === 'tool');
+                    $content = (string) ($toolMessage['content'] ?? '');
+
+                    return str_contains($content, 'Narrow the tool query, filters, or page range')
+                        && ! str_contains($content, 'Use bash');
+                })
+                ->andReturn($this->makeFinalResponse('Enough detail.'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildGenericTool(
+                    'large_tool',
+                    'Returns a large result',
+                    ['type' => 'object'],
+                    str_repeat('x', 20100),
+                )),
+            );
+
+            expect($result['content'])->toBe('Enough detail.')
+                ->and($result['meta']['tool_actions'][0]['result_truncated'])->toBeTrue()
+                ->and($result['meta']['tool_actions'][0]['result_length'])->toBe(20100);
+        });
     });
 
     describe('per-call usage recording', function () {
@@ -620,6 +671,19 @@ describe('AgenticRuntime (sync context and errors)', function () {
         expect($result['meta']['error_type'])->toBe('auth_error');
         expect($result['meta']['retry_attempts'])->toBe([]);
     });
+
+    it('enforces one execution deadline across the whole sync run', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldNotReceive('chat');
+
+        $result = runAgenticConversation(
+            $llmClient,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 0),
+        );
+
+        expect($result['meta']['error_type'])->toBe(AiErrorType::Timeout->value)
+            ->and($result['content'])->toContain('execution budget');
+    });
 });
 
 describe('AgenticRuntime (sync fallback)', function () {
@@ -695,6 +759,74 @@ describe('AgenticRuntime (streaming)', function () {
         expect($errorEvent)->not->toBeNull()
             ->and($errorEvent['data']['meta']['error_type'] ?? null)->toBe('rate_limit');
         expect(collect($events)->pluck('event')->all())->not->toContain('done');
+    });
+
+    it('persists and emits a streaming tool-loop limit failure', function () {
+        config()->set('ai.llm.agentic.max_tool_iterations', 1);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () {
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => 0,
+                'id' => 'call_loop',
+                'name' => 'echo_tool',
+                'arguments_delta' => '{"input":"world"}',
+            ];
+            yield [
+                'type' => 'done',
+                'finish_reason' => 'tool_calls',
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                'latency_ms' => 20,
+            ];
+        });
+
+        $recordedFailure = null;
+        $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+        $runRecorder->shouldReceive('fail')
+            ->once()
+            ->withArgs(function (string $runId, AiRuntimeError $error, array $meta) use (&$recordedFailure): bool {
+                $recordedFailure = [$runId, $error->errorType, $meta['error_type'] ?? null];
+
+                return $error->errorType === AiErrorType::ToolLoopLimit;
+            });
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            runRecorder: $runRecorder,
+        );
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Loop forever')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        ));
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::ToolLoopLimit->value)
+            ->and(collect($events)->where('data.phase', 'tool_finished'))->toHaveCount(1)
+            ->and($recordedFailure[1] ?? null)->toBe(AiErrorType::ToolLoopLimit)
+            ->and($recordedFailure[2] ?? null)->toBe(AiErrorType::ToolLoopLimit->value);
+    });
+
+    it('enforces the execution deadline before opening a stream', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldNotReceive('chatStream');
+
+        $runtime = $this->makeAgenticRuntime($llmClient);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 0),
+        ));
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::Timeout->value);
     });
 
     it('yields stream events before the full provider stream completes', function () {

@@ -1,1 +1,2 @@
-# Add database files to ignore here if needed
+# Local migration-safety snapshots are deliberately retained outside Git.
+database.sqlite.before-*

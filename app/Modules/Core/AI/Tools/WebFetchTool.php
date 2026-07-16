@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Enums\ToolCategory;
@@ -142,7 +143,7 @@ class WebFetchTool extends AbstractTool
     }
 
     /**
-     * @param  array{validation_error?: string, request_error?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}  $result
+     * @param  array{validation_error?: string, request_error?: string, response_too_large?: string, http_status?: int, content?: string, char_count?: int, truncated?: bool}  $result
      */
     private function formatFetchResponse(array $result, string $url, int $maxChars): ToolResult
     {
@@ -155,6 +156,9 @@ class WebFetchTool extends AbstractTool
         } elseif (isset($result['request_error'])) {
             $errorMessage = 'Failed to fetch URL: '.$result['request_error'];
             $errorCode = 'request_error';
+        } elseif (isset($result['response_too_large'])) {
+            $errorMessage = $result['response_too_large'];
+            $errorCode = 'response_too_large';
         } elseif (isset($result['http_status'])) {
             $errorMessage = 'Failed to fetch URL: HTTP '.$result['http_status'];
             $errorCode = 'http_error';

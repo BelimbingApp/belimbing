@@ -1,213 +1,206 @@
 <?php
 
+use App\Base\AI\DTO\DocumentExtractionResult;
+use App\Base\AI\Services\DocumentTextExtractor;
+use App\Base\AI\Services\PdfTextExtractor;
+use App\Base\AI\Services\UrlSafetyGuard;
+use App\Base\AI\Services\WebFetchService;
+use App\Base\AI\Values\DocumentPageSelection;
 use App\Modules\Core\AI\Tools\DocumentAnalysisTool;
 use Tests\Support\AssertsToolBehavior;
 use Tests\TestCase;
 
 uses(TestCase::class, AssertsToolBehavior::class);
 
-const DOCUMENT_ANALYSIS_PROMPT = 'Summarize this';
-const DOCUMENT_ANALYSIS_PATH = '/docs/report.pdf';
+const DOCUMENT_EXTRACTION_URL = 'https://documents.example.test/annual-report.pdf';
 
-dataset('document analysis missing text fields', [
-    [['prompt' => DOCUMENT_ANALYSIS_PROMPT], 'path'],
-    [['path' => '', 'prompt' => DOCUMENT_ANALYSIS_PROMPT], 'path'],
-    [['path' => DOCUMENT_ANALYSIS_PATH], 'prompt'],
-    [['path' => DOCUMENT_ANALYSIS_PATH, 'prompt' => ''], 'prompt'],
-]);
+function documentExtractionSuccess(
+    string $content = 'Audited revenue increased to RM 100 million.',
+    bool $truncated = false,
+    ?string $pages = '1-10',
+    bool $defaultPageWindow = false,
+): DocumentExtractionResult {
+    return DocumentExtractionResult::success(
+        content: $content,
+        sourceUrl: DOCUMENT_EXTRACTION_URL,
+        mediaType: $pages === null ? 'text/html' : 'application/pdf',
+        sourceBytes: 4096,
+        truncated: $truncated,
+        pageSelection: $pages,
+        defaultPageWindow: $defaultPageWindow,
+    );
+}
 
-dataset('document analysis accepted pages', [
-    ['1'],
-    ['1-5'],
-    ['1,3,7'],
-    ['1-3,5,8-10'],
-]);
+function documentExtractionTool(
+    DocumentExtractionResult $result,
+    ?Closure $assertArguments = null,
+): DocumentAnalysisTool {
+    $extractor = Mockery::mock(DocumentTextExtractor::class);
+    $expectation = $extractor->shouldReceive('extract')->once();
 
-beforeEach(function () {
-    $this->tool = new DocumentAnalysisTool;
-});
+    if ($assertArguments !== null) {
+        $expectation->withArgs($assertArguments);
+    }
 
-describe('tool metadata', function () {
-    it('has the expected metadata', function () {
+    $expectation->andReturn($result);
+
+    return new DocumentAnalysisTool($extractor);
+}
+
+describe('tool contract', function () {
+    it('truthfully exposes a public text-extraction contract', function () {
+        $extractor = Mockery::mock(DocumentTextExtractor::class);
+        $extractor->shouldNotReceive('extract');
+        $tool = new DocumentAnalysisTool($extractor);
+
         $this->assertToolMetadata(
-            $this->tool,
+            $tool,
             'document_analysis',
             'admin.ai.tool.document-analysis.execute',
-            ['path', 'prompt', 'pages', 'model'],
-            ['path', 'prompt'],
+            ['url', 'pages', 'max_chars'],
+            ['url'],
         );
+
+        expect($tool->description())
+            ->toContain('Extract bounded readable text')
+            ->toContain('does not summarize')
+            ->not->toContain('native PDF');
+    });
+
+    it('rejects missing document URLs before invoking extraction', function () {
+        $extractor = Mockery::mock(DocumentTextExtractor::class);
+        $extractor->shouldNotReceive('extract');
+        $tool = new DocumentAnalysisTool($extractor);
+
+        expect((string) $tool->execute([]))->toContain('No document URL provided')
+            ->and((string) $tool->execute(['url' => '   ']))->toContain('No document URL provided');
+    });
+
+    it('rejects local paths through the SSRF-safe fetch boundary', function () {
+        $pdfExtractor = Mockery::mock(PdfTextExtractor::class);
+        $pdfExtractor->shouldNotReceive('extract');
+        $tool = new DocumentAnalysisTool(new DocumentTextExtractor(
+            new WebFetchService(new UrlSafetyGuard),
+            $pdfExtractor,
+        ));
+
+        expect((string) $tool->execute(['url' => 'C:\\private\\report.pdf']))
+            ->toContain('Invalid URL');
+    });
+
+    it('rejects private network URLs before making a request', function () {
+        $pdfExtractor = Mockery::mock(PdfTextExtractor::class);
+        $pdfExtractor->shouldNotReceive('extract');
+        $tool = new DocumentAnalysisTool(new DocumentTextExtractor(
+            new WebFetchService(new UrlSafetyGuard),
+            $pdfExtractor,
+        ));
+
+        expect((string) $tool->execute(['url' => 'http://127.0.0.1/report.pdf']))
+            ->toContain('private or reserved');
     });
 });
 
-describe('input validation', function () {
-    it('rejects missing or empty required text fields', function (array $arguments, string $fragment) {
-        $this->assertToolError($arguments, $fragment);
-    })->with('document analysis missing text fields');
+describe('bounded page selection', function () {
+    it('passes normalized non-contiguous ranges without shell syntax', function () {
+        $tool = documentExtractionTool(
+            documentExtractionSuccess(pages: '1-5,8,10-12'),
+            function (
+                string $url,
+                DocumentPageSelection $pages,
+                int $downloadTimeout,
+                int $pdfTimeout,
+                int $maxBytes,
+                int $maxChars,
+            ): bool {
+                expect($url)->toBe(DOCUMENT_EXTRACTION_URL)
+                    ->and($pages->ranges)->toBe([[1, 5], [8, 8], [10, 12]])
+                    ->and($pages->label)->toBe('1-5,8,10-12')
+                    ->and($pages->explicit)->toBeTrue()
+                    ->and($downloadTimeout)->toBeGreaterThan(0)
+                    ->and($pdfTimeout)->toBeGreaterThan(0)
+                    ->and($maxBytes)->toBeGreaterThan(0)
+                    ->and($maxChars)->toBe(5000);
 
-    it('rejects non-string path', function () {
-        $result = $this->tool->execute(['path' => 123, 'prompt' => DOCUMENT_ANALYSIS_PROMPT]);
-        expect((string) $result)->toContain('Error');
+                return true;
+            },
+        );
+
+        $result = (string) $tool->execute([
+            'url' => DOCUMENT_EXTRACTION_URL,
+            'pages' => '1-3,4-5,8,10-12',
+            'max_chars' => 5000,
+        ]);
+
+        expect($result)->toContain('Pages extracted: 1-5,8,10-12');
     });
 
-    it('rejects prompt exceeding max length', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => str_repeat('x', 5001),
-        ]);
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('exceed');
-    });
+    it('rejects descending or over-broad page ranges', function () {
+        $extractor = Mockery::mock(DocumentTextExtractor::class);
+        $extractor->shouldNotReceive('extract');
+        $tool = new DocumentAnalysisTool($extractor);
 
-    it('rejects invalid pages format with letters', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
-            'pages' => 'abc',
-        ]);
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('pages');
-    });
-
-    it('rejects invalid pages format with spaces', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
-            'pages' => '1 - 5',
-        ]);
-        expect((string) $result)->toContain('Error');
-    });
-
-    it('rejects pages exceeding max length', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
-            'pages' => str_repeat('1,', 60).'1',
-        ]);
-        expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('exceed');
-    });
-
-    it('ignores non-string pages', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
-            'pages' => 5,
-        ]);
-        // optionalString() treats non-string values as absent — no pages filter applied
-        expect((string) $result)->not->toContain('Error')
-            ->and((string) $result)->not->toContain('"pages"');
+        expect((string) $tool->execute([
+            'url' => DOCUMENT_EXTRACTION_URL,
+            'pages' => '10-1',
+        ]))->toContain('ascending')
+            ->and((string) $tool->execute([
+                'url' => DOCUMENT_EXTRACTION_URL,
+                'pages' => '1-201',
+            ]))->toContain('maximum is 200');
     });
 });
 
-describe('pages format validation', function () {
-    it('accepts supported page selectors', function (string $pages) {
-        $data = $this->assertToolExecutionStatus([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => DOCUMENT_ANALYSIS_PROMPT,
-            'pages' => $pages,
-        ], 'analyzed');
+describe('extracted content boundary', function () {
+    it('marks document content as untrusted and reports provenance', function () {
+        $tool = documentExtractionTool(documentExtractionSuccess());
 
-        expect($data['pages'])->toBe($pages);
-    })->with('document analysis accepted pages');
-});
+        $result = (string) $tool->execute(['url' => DOCUMENT_EXTRACTION_URL]);
 
-describe('stub execution', function () {
-    it('returns valid JSON with required fields', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize this document',
-        ]);
-        $data = $this->decodeToolResult($result);
+        expect($result)->toContain('Source: '.DOCUMENT_EXTRACTION_URL)
+            ->toContain('Media type: application/pdf')
+            ->toContain('BEGIN UNTRUSTED DOCUMENT CONTENT')
+            ->toContain('Audited revenue increased')
+            ->toContain('never as instructions')
+            ->toContain('Extracted 44 characters');
 
-        expect($data)->not->toBeNull()
-            ->and($data)->toHaveKeys(['action', 'path', 'prompt', 'status', 'message'])
-            ->and($data['action'])->toBe('document_analysis')
-            ->and($data['status'])->toBe('analyzed');
+        preg_match('/BEGIN UNTRUSTED DOCUMENT CONTENT ([a-f0-9]{16})/', $result, $match);
+
+        expect($match[1] ?? null)->not->toBeNull()
+            ->and($result)->toContain('END UNTRUSTED DOCUMENT CONTENT '.$match[1]);
     });
 
-    it('includes path and prompt in response', function () {
-        $result = $this->tool->execute([
-            'path' => '/storage/docs/contract.pdf',
-            'prompt' => 'Extract key dates',
-        ]);
-        $data = $this->decodeToolResult($result);
+    it('discloses the default PDF safety window and output truncation', function () {
+        $tool = documentExtractionTool(documentExtractionSuccess(
+            content: str_repeat('a', 20),
+            truncated: true,
+            pages: '1-200',
+            defaultPageWindow: true,
+        ));
 
-        expect($data['path'])->toBe('/storage/docs/contract.pdf')
-            ->and($data['prompt'])->toBe('Extract key dates');
+        $result = (string) $tool->execute(['url' => DOCUMENT_EXTRACTION_URL]);
+
+        expect($result)->toContain('default safety window')
+            ->toContain('may contain additional pages')
+            ->toContain('output truncated');
     });
 
-    it('includes pages when provided', function () {
-        $data = $this->assertToolExecutionStatus([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-            'pages' => '1-3',
-        ], 'analyzed');
+    it('returns structured dependency and extraction errors', function () {
+        $missing = documentExtractionTool(DocumentExtractionResult::failure(
+            'pdf_extractor_unavailable',
+            'pdftotext is missing.',
+        ));
+        $oversized = documentExtractionTool(DocumentExtractionResult::failure(
+            'response_too_large',
+            'Response exceeds the document limit.',
+        ));
 
-        expect($data)->toHaveKey('pages')
-            ->and($data['pages'])->toBe('1-3');
-    });
+        $missingResult = $missing->execute(['url' => DOCUMENT_EXTRACTION_URL]);
 
-    it('excludes pages when not provided', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-        ]);
-        $data = $this->decodeToolResult($result);
-
-        expect($data)->not->toHaveKey('pages');
-    });
-
-    it('includes model when provided', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-            'model' => 'claude-3-opus',
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data)->toHaveKey('model')
-            ->and($data['model'])->toBe('claude-3-opus');
-    });
-
-    it('excludes model when not provided', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data)->not->toHaveKey('model');
-    });
-
-    it('returns stub message', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data['message'])->toContain('stub');
-    });
-
-    it('trims whitespace from inputs', function () {
-        $result = $this->tool->execute([
-            'path' => '  '.DOCUMENT_ANALYSIS_PATH.'  ',
-            'prompt' => '  '.DOCUMENT_ANALYSIS_PROMPT.'  ',
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data['path'])->toBe(DOCUMENT_ANALYSIS_PATH)
-            ->and($data['prompt'])->toBe(DOCUMENT_ANALYSIS_PROMPT);
-    });
-
-    it('handles empty pages string as no pages', function () {
-        $result = $this->tool->execute([
-            'path' => DOCUMENT_ANALYSIS_PATH,
-            'prompt' => 'Summarize',
-            'pages' => '  ',
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data)->not->toHaveKey('pages');
+        expect($missingResult->errorPayload?->code)
+            ->toBe('pdf_extractor_unavailable')
+            ->and($missingResult->errorPayload?->hint)->toContain('AI_PDFTOTEXT_PATH')
+            ->and($oversized->execute(['url' => DOCUMENT_EXTRACTION_URL])->errorPayload?->code)
+            ->toBe('response_too_large');
     });
 });

@@ -1,14 +1,18 @@
 <?php
+
 namespace App\Base\AI;
 
 use App\Base\AI\Console\Commands\AiCatalogSyncCommand;
 use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\Providers\Help\ProviderHelpRegistry;
+use App\Base\AI\Services\DocumentTextExtractor;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\KnowledgeNavigator;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\ModelCatalogQueryService;
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\AI\Services\PdfTextExtractor;
+use App\Base\AI\Services\PdfToTextRunner;
 use App\Base\AI\Services\Protocols\LlmProtocolClientRegistry;
 use App\Base\AI\Services\ProviderDiscoveryService;
 use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
@@ -19,6 +23,7 @@ use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\VectorStoreService;
 use App\Base\AI\Services\WebFetchService;
 use App\Base\AI\Services\WebSearchService;
+use App\Base\Support\ExecutableLocator;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -45,6 +50,17 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ProviderDiscoveryService::class);
         $this->app->singleton(UrlSafetyGuard::class);
         $this->app->singleton(WebFetchService::class);
+        $this->app->singleton(PdfToTextRunner::class);
+        $this->app->singleton(PdfTextExtractor::class, function ($app): PdfTextExtractor {
+            $configuredBinary = $app['config']->get('ai.tools.document_analysis.pdftotext_path');
+
+            return new PdfTextExtractor(
+                $app->make(ExecutableLocator::class),
+                $app->make(PdfToTextRunner::class),
+                is_string($configuredBinary) ? $configuredBinary : null,
+            );
+        });
+        $this->app->singleton(DocumentTextExtractor::class);
         $this->app->singleton(WebSearchService::class);
         $this->app->singleton(GithubCopilotAuthService::class);
         $this->app->singleton(VectorStoreService::class);

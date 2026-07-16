@@ -415,7 +415,7 @@ class ServiceProvider extends BaseServiceProvider
             $app->make(BrowserTool::class),
             $app->make(DelegateTaskTool::class),
             $app->make(DelegationStatusTool::class),
-            new DocumentAnalysisTool,
+            $app->make(DocumentAnalysisTool::class),
             $app->make(EditTool::class),
             $app->make(GuideTool::class),
             new ImageAnalysisTool,

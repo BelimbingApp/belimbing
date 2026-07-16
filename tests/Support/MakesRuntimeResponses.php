@@ -11,14 +11,14 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
-use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
-use App\Modules\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\ControlPlane\RunRecorder;
 use App\Modules\Core\AI\Services\ControlPlane\WireLogger;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRegistry;
 use App\Modules\Core\AI\Services\Orchestration\RuntimeHookRunner;
+use App\Modules\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Modules\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
 use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 use App\Modules\Core\AI\Services\Runtime\RuntimeHookCoordinator;
 use App\Modules\Core\AI\Services\Runtime\RuntimeMessageBuilder;
@@ -141,8 +141,9 @@ trait MakesRuntimeResponses
         LlmClient $llmClient,
         ?ConfigResolver $configResolver = null,
         ?AgentToolRegistry $toolRegistry = null,
+        ?RunRecorder $runRecorder = null,
     ): AgenticRuntime {
-        $runRecorder = \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+        $runRecorder ??= \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
         $responseFactory = new RuntimeResponseFactory;
 
         return new AgenticRuntime(
@@ -193,5 +194,4 @@ trait MakesRuntimeResponses
             'usage' => ['prompt_tokens' => 30, 'completion_tokens' => 10],
         ];
     }
-
 }
