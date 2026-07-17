@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Definitions;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -7,6 +8,7 @@ use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
+use App\Modules\Core\AI\Services\OpenAiCodexClientVersionResolver;
 use App\Modules\Core\AI\Values\ModelsDiscoveryProfile;
 use App\Modules\Core\AI\Values\ProviderAdvancedSetting;
 use App\Modules\Core\AI\Values\ProviderField;
@@ -48,6 +50,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
 
     public function __construct(
         private OpenAiCodexAuthManager $auth,
+        private OpenAiCodexClientVersionResolver $clientVersions,
     ) {}
 
     public function key(): string
@@ -149,7 +152,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
                 stateKey: 'modelsDiscoveryClientVersion',
                 settingsKey: self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY,
                 label: __('Model discovery client version'),
-                help: __('Sent as client_version when Belimbing asks the ChatGPT Codex backend for available models. Change only when Codex model sync fails after the external contract changes.'),
+                help: __('Sent as client_version when Belimbing asks the ChatGPT Codex backend for available models. By default Belimbing follows the latest stable Codex CLI release automatically (checked daily); save a value here only to pin a specific version, and use Reset to return to automatic.'),
                 inputType: 'text',
                 default: $default,
                 rules: ['required', 'string', 'max:32'],
@@ -177,24 +180,12 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
             $headers['User-Agent'] = 'codex-cli';
         }
 
-        $defaultClientVersion = self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION;
-
-        $clientVersion = $defaultClientVersion;
-
-        if (Schema::hasTable('base_settings')) {
-            try {
-                $settings = app(SettingsService::class);
-                $settingsClientVersion = $settings->get(
-                    self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY,
-                    $defaultClientVersion,
-                    scope: null,
-                );
-                $clientVersion = is_string($settingsClientVersion) ? $settingsClientVersion : $defaultClientVersion;
-            } catch (\Throwable) {
-                // Unit tests may not load the settings tables; default is acceptable.
-                $clientVersion = $defaultClientVersion;
-            }
-        }
+        // Precedence: operator-pinned setting → latest stable Codex CLI release
+        // (cached daily) → shipped constant. The backend filters the model list
+        // by client_version, so the constant alone goes stale between releases.
+        $clientVersion = $this->pinnedClientVersion()
+            ?? $this->clientVersions->latest()
+            ?? self::MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION;
 
         $query = [];
         if ($clientVersion !== '') {
@@ -207,6 +198,32 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
     public function discoverModels(AiProvider $provider): ?array
     {
         return null;
+    }
+
+    /**
+     * Operator-pinned client_version from settings, or null when unset
+     * (the advanced-settings "Reset" removes the key, restoring auto mode).
+     */
+    private function pinnedClientVersion(): ?string
+    {
+        if (! Schema::hasTable('base_settings')) {
+            return null;
+        }
+
+        try {
+            $settings = app(SettingsService::class);
+
+            if (! $settings->has(self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY, scope: null)) {
+                return null;
+            }
+
+            $pinned = $settings->get(self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY, null, scope: null);
+
+            return is_string($pinned) && $pinned !== '' ? $pinned : null;
+        } catch (\Throwable) {
+            // Unit tests may not load the settings tables; fall back to auto.
+            return null;
+        }
     }
 
     /**

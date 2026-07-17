@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Services\GithubCopilotAuthService;
@@ -72,7 +73,10 @@ class ProviderDefinitionRegistry
         $this->register(new CloudflareGatewayDefinition);
         $this->register(new CopilotProxyDefinition);
         $this->register(new GithubCopilotDefinition($this->copilotAuth));
-        $this->register(new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class)));
+        $this->register(new OpenAiCodexDefinition(
+            app(OpenAiCodexAuthManager::class),
+            app(OpenAiCodexClientVersionResolver::class),
+        ));
 
         // Build generic definitions from catalog overlay
         $providers = $this->catalog->getProviders();

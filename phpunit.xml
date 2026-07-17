@@ -32,6 +32,10 @@
              reads: deployment tests calling artisan down took the real site
              offline for ~35s per run (verified 2026-07-12). -->
         <env name="APP_MAINTENANCE_DRIVER" value="cache"/>
+        <!-- Codex model discovery auto-resolves client_version from the GitHub
+             releases API; tests must never make that live call. Resolver tests
+             re-enable it against Http::fake. -->
+        <env name="AI_CODEX_AUTO_CLIENT_VERSION" value="false"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="ARGON_MEMORY" value="1024"/>
         <env name="ARGON_TIME" value="1"/>
