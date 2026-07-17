@@ -23,6 +23,8 @@ use App\Base\Workflow\Services\TransitionOutboxDispatcher;
 use App\Base\Workflow\Services\WorkflowEngine;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
 it('serializes competing transitions against the persisted status', function (): void {
@@ -263,6 +265,36 @@ it('uses heartbeats to extend a lease and reconciliation to repair an expired le
         ->and($run->workItems()->sole()->outcome)->toBe('completed');
 });
 
+it('atomically supersedes idle work without revoking a live lease', function (): void {
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.supersede', 1, [
+        new ProcessStep('gather', 'Gather'),
+        new ProcessStep('decide', 'Decide', [new ProcessDependency('gather')], maxAttempts: 2),
+    ]));
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->start('test.supersede');
+    $gather = $coordinator->claim('worker-a');
+    $coordinator->complete($gather, ['fact_id' => 77]);
+    $decide = $coordinator->claim('worker-b', leaseSeconds: 5);
+
+    $fenced = DB::transaction(fn () => $coordinator->assertClaimActive($decide));
+
+    expect($fenced->id)->toBe($decide->workItem->id)
+        ->and($coordinator->supersede($run, 'A newer process contract is active.'))->toBeNull()
+        ->and($decide->workItem->refresh()->status)->toBe(ProcessWorkStatus::LEASED)
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::RUNNING);
+
+    $this->travel(6)->seconds();
+    $superseded = $coordinator->supersede($run, 'A newer process contract is active.');
+
+    expect($superseded?->status)->toBe(ProcessRunStatus::BLOCKED)
+        ->and($run->workItems()->where('step_key', 'gather')->sole()->status)->toBe(ProcessWorkStatus::COMPLETED)
+        ->and($run->workItems()->where('step_key', 'decide')->sole()->status)->toBe(ProcessWorkStatus::BLOCKED)
+        ->and($coordinator->supersede($run, 'A still newer contract exists.'))->toBeNull()
+        ->and($run->events()->where('type', 'process.superseded')->count())->toBe(1)
+        ->and(fn () => DB::transaction(fn () => $coordinator->assertClaimActive($decide)))
+        ->toThrow(ProcessCoordinationException::class);
+});
+
 it('blocks downstream work when a final failure makes its dependency impossible', function (): void {
     app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.failure', 1, [
         new ProcessStep('attempt', 'Attempt', maxAttempts: 1),
@@ -277,6 +309,69 @@ it('blocks downstream work when a final failure makes its dependency impossible'
     expect($run->workItems()->where('step_key', 'attempt')->sole()->status)->toBe(ProcessWorkStatus::FAILED)
         ->and($run->workItems()->where('step_key', 'dependent')->sole()->status)->toBe(ProcessWorkStatus::BLOCKED)
         ->and($run->refresh()->status)->toBe(ProcessRunStatus::FAILED);
+});
+
+it('terminates a non-retryable failure immediately with its typed disposition', function (): void {
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.non-retryable-failure', 1, [
+        new ProcessStep('attempt', 'Attempt', maxAttempts: 3),
+    ]));
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->start('test.non-retryable-failure');
+    $claim = $coordinator->claim('worker');
+
+    $failed = $coordinator->fail(
+        $claim,
+        'The assigned result violated its contract.',
+        retryable: false,
+        failureCategory: 'result_contract',
+    );
+
+    expect($failed->status)->toBe(ProcessWorkStatus::FAILED)
+        ->and($failed->attempts)->toBe(1)
+        ->and($failed->output)->toBe([
+            'failure' => [
+                'retryable' => false,
+                'category' => 'result_contract',
+            ],
+        ])
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::FAILED)
+        ->and($coordinator->claim('another-worker'))->toBeNull()
+        ->and($run->events()->where('type', 'work.failed')->sole()->payload)->toMatchArray([
+            'failure' => [
+                'retryable' => false,
+                'category' => 'result_contract',
+            ],
+        ]);
+});
+
+it('blocks a leased claim without discarding its typed diagnostic output', function (): void {
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.claim-blocker', 1, [
+        new ProcessStep('research', 'Research'),
+    ]));
+    $coordinator = app(ProcessCoordinator::class);
+    $run = $coordinator->start('test.claim-blocker');
+    $claim = $coordinator->claim('worker');
+
+    $item = $coordinator->blockClaim(
+        $claim,
+        'The assigned primary source is unavailable.',
+        ['agent_run_id' => 41, 'work_summary' => 'Primary source unavailable.'],
+        'agent-run:41',
+    );
+
+    expect($item->status)->toBe(ProcessWorkStatus::BLOCKED)
+        ->and($item->outcome)->toBe('blocked')
+        ->and($item->output)->toBe([
+            'agent_run_id' => 41,
+            'work_summary' => 'Primary source unavailable.',
+        ])
+        ->and($item->result_ref)->toBe('agent-run:41')
+        ->and($item->last_error)->toBe('The assigned primary source is unavailable.')
+        ->and($run->refresh()->status)->toBe(ProcessRunStatus::BLOCKED)
+        ->and($run->events()->where('type', 'work.blocked')->sole()->payload)->toMatchArray([
+            'reason' => 'The assigned primary source is unavailable.',
+            'result_ref' => 'agent-run:41',
+        ]);
 });
 
 it('pauses future claims without discarding completed facts', function (): void {
@@ -358,6 +453,77 @@ it('claims only supported executors and orders work by dynamic process priority'
     expect($claim?->workItem->process_run_id)->toBe($high->id)
         ->and($claim?->workItem->executor_key)->toBe('investment.research')
         ->and($low->workItems()->sole()->status)->toBe(ProcessWorkStatus::AVAILABLE);
+});
+
+it('retries contended claims with canonical locks and fresh eligibility checks', function (): void {
+    app(ProcessDefinitionRegistry::class)->register(new ProcessDefinition('test.claim-contention', 1, [
+        new ProcessStep('research', 'Research', executorKey: 'investment.research'),
+    ]));
+    $coordinator = app(ProcessCoordinator::class);
+    $low = $coordinator->start('test.claim-contention', priority: 10);
+    $middle = $coordinator->start('test.claim-contention', priority: 20);
+    $high = $coordinator->start('test.claim-contention', priority: 30);
+    $middleWorkItem = $middle->workItems()->sole();
+    $candidateQueries = 0;
+    $queries = [];
+    $recordQueries = true;
+
+    DB::listen(function (QueryExecuted $query) use (&$candidateQueries, &$queries, &$recordQueries, $high, $middleWorkItem): void {
+        if (! $recordQueries) {
+            return;
+        }
+
+        $normalizedSql = str_replace(['"', '`', '[', ']'], '', strtolower($query->sql));
+        $queries[] = $normalizedSql;
+
+        if (! str_contains($normalizedSql, 'from base_workflow_process_work_items')
+            || ! str_contains($normalizedSql, 'join base_workflow_process_runs')) {
+            return;
+        }
+
+        $candidateQueries++;
+
+        if ($candidateQueries === 1) {
+            ProcessRun::query()->whereKey($high->id)->update(['last_error' => 'Run became ineligible.']);
+        } elseif ($candidateQueries === 2) {
+            $middleWorkItem->newQuery()->whereKey($middleWorkItem->id)->update(['executor_key' => 'other.executor']);
+        }
+    });
+
+    $claim = $coordinator->claim(
+        'research-worker',
+        definitionKey: 'test.claim-contention',
+        executorKeys: ['investment.research'],
+        processRunIds: [$low->id, $middle->id, $high->id],
+    );
+    $recordQueries = false;
+
+    $candidateIndexes = array_keys(array_filter(
+        $queries,
+        fn (string $sql): bool => str_contains($sql, 'from base_workflow_process_work_items')
+            && str_contains($sql, 'join base_workflow_process_runs'),
+    ));
+    $lastCandidateIndex = $candidateIndexes[2];
+    $runLockIndex = collect(array_keys($queries))->first(
+        fn (int $index): bool => $index > $lastCandidateIndex
+            && str_contains($queries[$index], 'from base_workflow_process_runs')
+            && ! str_contains($queries[$index], 'join'),
+    );
+    $workItemLockIndex = collect(array_keys($queries))->first(
+        fn (int $index): bool => $index > $lastCandidateIndex
+            && str_contains($queries[$index], 'from base_workflow_process_work_items')
+            && ! str_contains($queries[$index], 'join'),
+    );
+
+    expect($candidateQueries)->toBe(3)
+        ->and($claim?->workItem->process_run_id)->toBe($low->id)
+        ->and($high->refresh()->last_error)->toBe('Run became ineligible.')
+        ->and($high->workItems()->sole()->status)->toBe(ProcessWorkStatus::AVAILABLE)
+        ->and($middleWorkItem->refresh()->status)->toBe(ProcessWorkStatus::AVAILABLE)
+        ->and($low->workItems()->sole()->status)->toBe(ProcessWorkStatus::LEASED)
+        ->and($runLockIndex)->toBeInt()
+        ->and($workItemLockIndex)->toBeInt()
+        ->and($runLockIndex)->toBeLessThan($workItemLockIndex);
 });
 
 it('limits claims and reconciliation to an explicitly assigned set of process runs', function (): void {

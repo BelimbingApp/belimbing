@@ -25,6 +25,8 @@ use Illuminate\Support\Str;
  */
 class ProcessCoordinator
 {
+    private const CLAIM_CONTENTION_ATTEMPTS = 8;
+
     public function __construct(
         private readonly ProcessDefinitionRegistry $definitions,
     ) {}
@@ -221,8 +223,7 @@ class ProcessCoordinator
     /**
      * Claim one due unit of work. The returned lease token is required for all
      * worker-owned mutations, so a late worker cannot overwrite a reassignment.
-     */
-    /**
+     *
      * @param  list<string>|null  $executorKeys
      * @param  list<int>|null  $processRunIds
      */
@@ -269,49 +270,121 @@ class ProcessCoordinator
             }
         }
 
-        return DB::transaction(function () use ($worker, $leaseSeconds, $definitionKey, $executorKeys, $processRunIds): ?WorkClaim {
-            $query = ProcessWorkItem::query()
-                ->select('base_workflow_process_work_items.*')
-                ->join(
-                    'base_workflow_process_runs',
-                    'base_workflow_process_runs.id',
-                    '=',
-                    'base_workflow_process_work_items.process_run_id'
-                )
-                ->where('base_workflow_process_runs.status', ProcessRunStatus::RUNNING->value)
-                ->whereNull('base_workflow_process_runs.last_error')
-                ->where('base_workflow_process_runs.available_at', '<=', now())
-                ->where('base_workflow_process_work_items.status', ProcessWorkStatus::AVAILABLE->value)
-                ->where('base_workflow_process_work_items.available_at', '<=', now());
+        for ($attempt = 0; $attempt < self::CLAIM_CONTENTION_ATTEMPTS; $attempt++) {
+            $candidate = $this->findClaimCandidate($definitionKey, $executorKeys, $processRunIds);
 
-            if ($definitionKey !== null) {
-                $query->where('base_workflow_process_runs.definition_key', $definitionKey);
-            }
-
-            if ($executorKeys !== null) {
-                $query->whereIn('base_workflow_process_work_items.executor_key', $executorKeys);
-            }
-
-            if ($processRunIds !== null) {
-                $query->whereIn('base_workflow_process_runs.id', $processRunIds);
-            }
-
-            /** @var ProcessWorkItem|null $workItem */
-            $workItem = $query
-                ->orderByDesc('base_workflow_process_runs.priority')
-                ->orderByDesc('base_workflow_process_work_items.priority')
-                ->orderBy('base_workflow_process_work_items.available_at')
-                ->orderBy('base_workflow_process_work_items.id')
-                ->lockForUpdate()
-                ->first();
-
-            if ($workItem === null) {
+            if ($candidate === null) {
                 return null;
             }
 
-            $run = $this->lockRun($workItem->process_run_id);
-            $token = (string) Str::uuid();
+            $claim = $this->claimCandidate(
+                $candidate,
+                $worker,
+                $leaseSeconds,
+                $definitionKey,
+                $executorKeys,
+                $processRunIds,
+            );
+
+            if ($claim !== null) {
+                return $claim;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Select optimistically so the database never chooses a lock order across
+     * the joined process and work-item tables. Eligibility is proved again
+     * after both records have been locked in the canonical run-then-item order.
+     *
+     * @param  list<string>|null  $executorKeys
+     * @param  list<int>|null  $processRunIds
+     */
+    private function findClaimCandidate(
+        ?string $definitionKey,
+        ?array $executorKeys,
+        ?array $processRunIds,
+    ): ?ProcessWorkItem {
+        $now = now();
+        $query = ProcessWorkItem::query()
+            ->select('base_workflow_process_work_items.*')
+            ->join(
+                'base_workflow_process_runs',
+                'base_workflow_process_runs.id',
+                '=',
+                'base_workflow_process_work_items.process_run_id'
+            )
+            ->where('base_workflow_process_runs.status', ProcessRunStatus::RUNNING->value)
+            ->whereNull('base_workflow_process_runs.last_error')
+            ->where('base_workflow_process_runs.available_at', '<=', $now)
+            ->where('base_workflow_process_work_items.status', ProcessWorkStatus::AVAILABLE->value)
+            ->where('base_workflow_process_work_items.available_at', '<=', $now);
+
+        if ($definitionKey !== null) {
+            $query->where('base_workflow_process_runs.definition_key', $definitionKey);
+        }
+
+        if ($executorKeys !== null) {
+            $query->whereIn('base_workflow_process_work_items.executor_key', $executorKeys);
+        }
+
+        if ($processRunIds !== null) {
+            $query->whereIn('base_workflow_process_runs.id', $processRunIds);
+        }
+
+        /** @var ProcessWorkItem|null $candidate */
+        $candidate = $query
+            ->orderByDesc('base_workflow_process_runs.priority')
+            ->orderByDesc('base_workflow_process_work_items.priority')
+            ->orderBy('base_workflow_process_work_items.available_at')
+            ->orderBy('base_workflow_process_work_items.id')
+            ->first();
+
+        return $candidate;
+    }
+
+    /**
+     * @param  list<string>|null  $executorKeys
+     * @param  list<int>|null  $processRunIds
+     */
+    private function claimCandidate(
+        ProcessWorkItem $candidate,
+        string $worker,
+        int $leaseSeconds,
+        ?string $definitionKey,
+        ?array $executorKeys,
+        ?array $processRunIds,
+    ): ?WorkClaim {
+        return DB::transaction(function () use ($candidate, $worker, $leaseSeconds, $definitionKey, $executorKeys, $processRunIds): ?WorkClaim {
+            $run = ProcessRun::query()
+                ->whereKey($candidate->process_run_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($run === null) {
+                return null;
+            }
+
+            $workItem = ProcessWorkItem::query()
+                ->whereKey($candidate->getKey())
+                ->lockForUpdate()
+                ->first();
             $now = now();
+
+            if ($workItem === null || ! $this->claimCandidateIsEligible(
+                $run,
+                $workItem,
+                $now,
+                $definitionKey,
+                $executorKeys,
+                $processRunIds,
+            )) {
+                return null;
+            }
+
+            $token = (string) Str::uuid();
 
             $workItem->forceFill([
                 'status' => ProcessWorkStatus::LEASED,
@@ -331,6 +404,31 @@ class ProcessCoordinator
 
             return new WorkClaim($workItem->refresh(), $token);
         });
+    }
+
+    /**
+     * @param  list<string>|null  $executorKeys
+     * @param  list<int>|null  $processRunIds
+     */
+    private function claimCandidateIsEligible(
+        ProcessRun $run,
+        ProcessWorkItem $workItem,
+        Carbon $now,
+        ?string $definitionKey,
+        ?array $executorKeys,
+        ?array $processRunIds,
+    ): bool {
+        return (int) $workItem->process_run_id === (int) $run->getKey()
+            && $run->status === ProcessRunStatus::RUNNING
+            && $run->last_error === null
+            && $run->available_at !== null
+            && $run->available_at->lte($now)
+            && $workItem->status === ProcessWorkStatus::AVAILABLE
+            && $workItem->available_at !== null
+            && $workItem->available_at->lte($now)
+            && ($definitionKey === null || $run->definition_key === $definitionKey)
+            && ($executorKeys === null || in_array($workItem->executor_key, $executorKeys, true))
+            && ($processRunIds === null || in_array((int) $run->getKey(), $processRunIds, true));
     }
 
     public function heartbeat(WorkClaim $claim, int $leaseSeconds = 300): ProcessWorkItem
@@ -354,6 +452,26 @@ class ProcessCoordinator
 
             return $workItem->refresh();
         });
+    }
+
+    /**
+     * Fence an external module mutation to the caller's still-active lease.
+     *
+     * This assertion deliberately requires an existing outer transaction. The
+     * process and work-item locks are then retained until the caller's domain
+     * write commits, preventing recovery or reassignment from racing the result.
+     */
+    public function assertClaimActive(WorkClaim $claim): ProcessWorkItem
+    {
+        if (DB::transactionLevel() < 1) {
+            throw new ProcessCoordinationException(
+                'Claim fencing must run inside the same database transaction as the protected mutation.',
+            );
+        }
+
+        [, $workItem] = $this->lockClaim($claim);
+
+        return $workItem;
     }
 
     /** @param array<string, mixed> $output */
@@ -388,13 +506,18 @@ class ProcessCoordinator
         });
     }
 
-    public function fail(WorkClaim $claim, string $error, ?Carbon $retryAt = null): ProcessWorkItem
-    {
-        if (trim($error) === '') {
-            throw new ProcessCoordinationException('A failed work item needs an error.');
+    public function fail(
+        WorkClaim $claim,
+        string $error,
+        ?Carbon $retryAt = null,
+        bool $retryable = true,
+        string $failureCategory = 'unclassified',
+    ): ProcessWorkItem {
+        if (trim($error) === '' || trim($failureCategory) === '') {
+            throw new ProcessCoordinationException('A failed work item needs an error and failure category.');
         }
 
-        return DB::transaction(function () use ($claim, $error, $retryAt): ProcessWorkItem {
+        return DB::transaction(function () use ($claim, $error, $retryAt, $retryable, $failureCategory): ProcessWorkItem {
             [$run, $workItem] = $this->lockClaim($claim, allowTerminal: true);
 
             if ($workItem->status->terminal()) {
@@ -403,7 +526,12 @@ class ProcessCoordinator
 
             $now = now();
 
-            if ($workItem->attempts < $workItem->max_attempts) {
+            $failure = [
+                'retryable' => $retryable,
+                'category' => $failureCategory,
+            ];
+
+            if ($retryable && $workItem->attempts < $workItem->max_attempts) {
                 $workItem->forceFill([
                     'status' => ProcessWorkStatus::PENDING,
                     'available_at' => $retryAt ?? $now,
@@ -415,11 +543,22 @@ class ProcessCoordinator
                 ])->save();
                 $this->appendEvent($run, $workItem, 'work.retry_scheduled', [
                     'error' => $error,
+                    'failure' => $failure,
                     'available_at' => $workItem->available_at?->toIso8601String(),
                 ]);
             } else {
-                $this->finishWork($workItem, ProcessWorkStatus::FAILED, 'failed', null, $error, $now);
-                $this->appendEvent($run, $workItem, 'work.failed', ['error' => $error]);
+                $this->finishWork(
+                    $workItem,
+                    ProcessWorkStatus::FAILED,
+                    'failed',
+                    ['failure' => $failure],
+                    $error,
+                    $now,
+                );
+                $this->appendEvent($run, $workItem, 'work.failed', [
+                    'error' => $error,
+                    'failure' => $failure,
+                ]);
             }
 
             $this->reconcileLocked($run, $now);
@@ -444,6 +583,45 @@ class ProcessCoordinator
         }
 
         return $this->administrativelyFinish($workItem, ProcessWorkStatus::BLOCKED, 'blocked', $reason);
+    }
+
+    /**
+     * Terminate the currently leased claim as a durable blocker while keeping
+     * the worker's typed diagnostic payload. Administrative block() remains
+     * the owner/operator path and intentionally has no claim output.
+     *
+     * @param  array<string, mixed>  $output
+     */
+    public function blockClaim(
+        WorkClaim $claim,
+        string $reason,
+        array $output = [],
+        ?string $resultRef = null,
+    ): ProcessWorkItem {
+        if (trim($reason) === '') {
+            throw new ProcessCoordinationException('Blocking claimed process work requires a reason.');
+        }
+
+        return DB::transaction(function () use ($claim, $reason, $output, $resultRef): ProcessWorkItem {
+            [$run, $workItem] = $this->lockClaim($claim, allowTerminal: true);
+
+            if ($workItem->status->terminal()) {
+                return $workItem;
+            }
+
+            $now = now();
+            $this->finishWork($workItem, ProcessWorkStatus::BLOCKED, 'blocked', $output, $reason, $now);
+            $workItem->forceFill(['result_ref' => $resultRef ?? $workItem->result_ref])->save();
+            $this->appendEvent($run, $workItem, 'work.blocked', [
+                'outcome' => 'blocked',
+                'reason' => $reason,
+                'output' => $output,
+                'result_ref' => $workItem->result_ref,
+            ]);
+            $this->reconcileLocked($run, $now);
+
+            return $workItem->refresh();
+        });
     }
 
     public function pause(ProcessRun|int $run, string $reason): ProcessRun
@@ -498,6 +676,63 @@ class ProcessCoordinator
             ])->save();
             $this->appendEvent($lockedRun, null, 'process.resumed');
             $this->reconcileLocked($lockedRun, $now);
+
+            return $lockedRun->refresh();
+        });
+    }
+
+    /**
+     * Atomically retire an obsolete process graph without revoking live work.
+     *
+     * A null result means the graph was not superseded because it was already
+     * terminal or a worker still owns an unexpired lease. Expired leases may
+     * be retired because their former worker has already lost the right to
+     * commit through assertClaimActive().
+     */
+    public function supersede(ProcessRun|int $run, string $reason): ?ProcessRun
+    {
+        if (trim($reason) === '') {
+            throw new ProcessCoordinationException('Superseding a process requires a reason.');
+        }
+
+        return DB::transaction(function () use ($run, $reason): ?ProcessRun {
+            $lockedRun = $this->lockRun($this->runId($run));
+
+            if ($lockedRun->status->terminal()) {
+                return null;
+            }
+
+            $items = ProcessWorkItem::query()
+                ->where('process_run_id', $lockedRun->id)
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $now = now();
+            $hasLiveLease = $items->contains(
+                fn (ProcessWorkItem $item): bool => $item->status === ProcessWorkStatus::LEASED
+                    && $item->lease_expires_at !== null
+                    && $item->lease_expires_at->gt($now),
+            );
+
+            if ($hasLiveLease) {
+                return null;
+            }
+
+            foreach ($items as $item) {
+                if ($item->status->terminal()) {
+                    continue;
+                }
+
+                $this->finishWork($item, ProcessWorkStatus::BLOCKED, 'blocked', null, $reason, $now);
+                $this->appendEvent($lockedRun, $item, 'work.blocked', [
+                    'outcome' => 'blocked',
+                    'reason' => $reason,
+                    'cause' => 'process_superseded',
+                ]);
+            }
+
+            $this->finishRunIfTerminal($lockedRun, $now);
+            $this->appendEvent($lockedRun, null, 'process.superseded', ['reason' => $reason]);
 
             return $lockedRun->refresh();
         });
