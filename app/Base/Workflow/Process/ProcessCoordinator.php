@@ -334,15 +334,12 @@ class ProcessCoordinator
             $query->whereIn('base_workflow_process_runs.id', $processRunIds);
         }
 
-        /** @var ProcessWorkItem|null $candidate */
-        $candidate = $query
+        return $query
             ->orderByDesc('base_workflow_process_runs.priority')
             ->orderByDesc('base_workflow_process_work_items.priority')
             ->orderBy('base_workflow_process_work_items.available_at')
             ->orderBy('base_workflow_process_work_items.id')
             ->first();
-
-        return $candidate;
     }
 
     /**

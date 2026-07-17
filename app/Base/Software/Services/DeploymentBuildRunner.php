@@ -13,6 +13,8 @@ class DeploymentBuildRunner
 {
     private const FROZEN_LOCKFILE = '--frozen-lockfile';
 
+    private const NO_INTERACTION = '--no-interaction';
+
     public function composerLockHash(): ?string
     {
         $lock = base_path('composer.lock');
@@ -30,7 +32,7 @@ class DeploymentBuildRunner
     {
         $args = array_merge($this->composerCommand(), [
             'install',
-            '--no-interaction',
+            self::NO_INTERACTION,
             '--prefer-dist',
             '--optimize-autoloader',
         ]);
@@ -51,7 +53,7 @@ class DeploymentBuildRunner
     public function composerDumpAutoload(): string
     {
         $result = Process::path(base_path())->timeout(180)->run(
-            array_merge($this->composerCommand(), ['dump-autoload', '--optimize', '--no-interaction']),
+            array_merge($this->composerCommand(), ['dump-autoload', '--optimize', self::NO_INTERACTION]),
         );
 
         if ($result->successful()) {
@@ -66,7 +68,7 @@ class DeploymentBuildRunner
     {
         $result = Process::path(base_path())
             ->timeout(1200)
-            ->run(PhpCli::current()->artisan(['migrate', '--force', '--no-interaction']));
+            ->run(PhpCli::current()->artisan(['migrate', '--force', self::NO_INTERACTION]));
         $output = trim($result->output()."\n".$result->errorOutput());
 
         return [

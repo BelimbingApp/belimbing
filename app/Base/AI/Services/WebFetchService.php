@@ -47,7 +47,7 @@ class WebFetchService
         bool $allowPrivateNetwork = false,
         array $hostnameAllowlist = [],
     ): array {
-        $result = $this->requestContent(
+        $acquired = $this->acquireBoundedBody(
             $url,
             $timeoutSeconds,
             $allowPrivateNetwork,
@@ -55,40 +55,21 @@ class WebFetchService
             $maxResponseBytes,
         );
 
-        if (! isset($result['response'])) {
-            return $result;
+        if (! isset($acquired['body'])) {
+            return $acquired;
         }
 
         /** @var Response $response */
-        $response = $result['response'];
-        $declaredBytes = $this->declaredContentLength($response);
-
-        if ($declaredBytes !== null && $declaredBytes > $maxResponseBytes) {
-            return $this->responseTooLarge($maxResponseBytes);
-        }
-
-        try {
-            $body = $this->readBoundedBody($response, $maxResponseBytes);
-        } catch (Throwable $exception) {
-            return $this->causedByResponseSizeLimit($exception)
-                ? $this->responseTooLarge($maxResponseBytes)
-                : ['request_error' => $exception->getMessage()];
-        }
-
-        if ($body === null) {
-            return $this->responseTooLarge($maxResponseBytes);
-        }
-
+        $response = $acquired['response'];
         $contentType = strtolower((string) ($response->header('Content-Type') ?? ''));
-        $extracted = $this->extractReadableContent(
-            $body,
+
+        return $this->extractReadableContent(
+            $acquired['body'],
             $contentType,
             $maxChars,
             $extractMode,
-            $result['final_url'] ?? $url,
+            $acquired['final_url'] ?? $url,
         );
-
-        return $extracted;
     }
 
     /**
@@ -108,7 +89,7 @@ class WebFetchService
         bool $allowPrivateNetwork = false,
         array $hostnameAllowlist = [],
     ): array {
-        $result = $this->requestContent(
+        $acquired = $this->acquireBoundedBody(
             $url,
             $timeoutSeconds,
             $allowPrivateNetwork,
@@ -116,35 +97,18 @@ class WebFetchService
             $maxResponseBytes,
         );
 
-        if (! isset($result['response'])) {
-            return $result;
+        if (! isset($acquired['body'])) {
+            return $acquired;
         }
 
         /** @var Response $response */
-        $response = $result['response'];
-        $declaredBytes = $this->declaredContentLength($response);
-
-        if ($declaredBytes !== null && $declaredBytes > $maxResponseBytes) {
-            return $this->responseTooLarge($maxResponseBytes);
-        }
-
-        try {
-            $body = $this->readBoundedBody($response, $maxResponseBytes);
-        } catch (Throwable $exception) {
-            return $this->causedByResponseSizeLimit($exception)
-                ? $this->responseTooLarge($maxResponseBytes)
-                : ['request_error' => $exception->getMessage()];
-        }
-
-        if ($body === null) {
-            return $this->responseTooLarge($maxResponseBytes);
-        }
+        $response = $acquired['response'];
 
         return [
-            'body' => $body,
-            'byte_count' => strlen($body),
+            'body' => $acquired['body'],
+            'byte_count' => strlen($acquired['body']),
             'content_type' => strtolower(trim((string) ($response->header('Content-Type') ?? ''))),
-            'final_url' => $result['final_url'] ?? $url,
+            'final_url' => $acquired['final_url'] ?? $url,
         ];
     }
 
@@ -176,6 +140,61 @@ class WebFetchService
             'content' => $content,
             'char_count' => mb_strlen($content),
             'truncated' => $truncated,
+        ];
+    }
+
+    /**
+     * Request a URL through the SSRF-pinned transport, enforce the byte bound,
+     * and read the streamed body. Shared by {@see fetch()} and {@see download()}
+     * so the redirect-safe request, the Content-Length pre-check, and the
+     * streamed body bound live in one place instead of being duplicated.
+     *
+     * @param  list<string>  $hostnameAllowlist
+     * @return array{response?: Response, body?: string, final_url?: string, validation_error?: string, request_error?: string, response_too_large?: string, http_status?: int}
+     */
+    private function acquireBoundedBody(
+        string $url,
+        int $timeoutSeconds,
+        bool $allowPrivateNetwork,
+        array $hostnameAllowlist,
+        int $maxResponseBytes,
+    ): array {
+        $result = $this->requestContent(
+            $url,
+            $timeoutSeconds,
+            $allowPrivateNetwork,
+            $hostnameAllowlist,
+            $maxResponseBytes,
+        );
+
+        if (! isset($result['response'])) {
+            return $result;
+        }
+
+        /** @var Response $response */
+        $response = $result['response'];
+        $declaredBytes = $this->declaredContentLength($response);
+
+        if ($declaredBytes !== null && $declaredBytes > $maxResponseBytes) {
+            return $this->responseTooLarge($maxResponseBytes);
+        }
+
+        try {
+            $body = $this->readBoundedBody($response, $maxResponseBytes);
+        } catch (Throwable $exception) {
+            return $this->causedByResponseSizeLimit($exception)
+                ? $this->responseTooLarge($maxResponseBytes)
+                : ['request_error' => $exception->getMessage()];
+        }
+
+        if ($body === null) {
+            return $this->responseTooLarge($maxResponseBytes);
+        }
+
+        return [
+            'response' => $response,
+            'body' => $body,
+            'final_url' => $result['final_url'] ?? $url,
         ];
     }
 

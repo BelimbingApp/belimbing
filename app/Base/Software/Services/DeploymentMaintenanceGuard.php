@@ -2,10 +2,10 @@
 
 namespace App\Base\Software\Services;
 
+use App\Base\Software\Exceptions\DeploymentMaintenanceException;
 use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\PhpCli;
 use Illuminate\Support\Facades\Artisan;
-use RuntimeException;
 
 class DeploymentMaintenanceGuard
 {
@@ -35,7 +35,7 @@ class DeploymentMaintenanceGuard
         if (! $started || ! $this->waitUntilArmed($runId)) {
             $this->disarm($runId);
 
-            throw new RuntimeException('The maintenance recovery watchdog could not be armed.');
+            throw new DeploymentMaintenanceException('The maintenance recovery watchdog could not be armed.');
         }
     }
 
@@ -59,18 +59,18 @@ class DeploymentMaintenanceGuard
     public function enter(string $runId): void
     {
         if (app()->isDownForMaintenance()) {
-            throw new RuntimeException('Belimbing was already in maintenance mode before the update started.');
+            throw new DeploymentMaintenanceException('Belimbing was already in maintenance mode before the update started.');
         }
 
         if (Artisan::call('down', ['--retry' => 5]) !== 0) {
-            throw new RuntimeException('Belimbing could not enter maintenance mode.');
+            throw new DeploymentMaintenanceException('Belimbing could not enter maintenance mode.');
         }
 
         $mode = app()->maintenanceMode();
         $mode->activate(array_merge($mode->data(), [self::MAINTENANCE_DATA_RUN_ID => $runId]));
 
         if (! $this->renew($runId)) {
-            throw new RuntimeException('The maintenance recovery lease was lost.');
+            throw new DeploymentMaintenanceException('The maintenance recovery lease was lost.');
         }
     }
 
@@ -154,12 +154,10 @@ class DeploymentMaintenanceGuard
 
         $ownedMaintenance = $this->ownsMaintenance($runId);
 
-        if ($ownedMaintenance) {
-            if (! $this->leave($runId)) {
-                $this->retryRecovery($runId);
+        if ($ownedMaintenance && ! $this->leave($runId)) {
+            $this->retryRecovery($runId);
 
-                return false;
-            }
+            return false;
         }
 
         $history->interruptDeploymentRun(

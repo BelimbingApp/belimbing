@@ -2,6 +2,7 @@
 
 namespace App\Base\Software\Console\Commands;
 
+use App\Base\Software\Exceptions\DeploymentMaintenanceException;
 use App\Base\Software\Services\DeploymentLogClassifier;
 use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Software\Services\DeploymentRunHistory;
@@ -39,7 +40,7 @@ final class SoftwareUpdateCommand extends Command
             $history->appendDeploymentLine($runId, $line);
 
             if ($maintenanceOwned && ! $maintenance->renew($runId)) {
-                throw new \RuntimeException('The update lost its maintenance recovery lease.');
+                throw new DeploymentMaintenanceException('The update lost its maintenance recovery lease.');
             }
 
             $this->line($line);
@@ -58,7 +59,7 @@ final class SoftwareUpdateCommand extends Command
                 manageMaintenance: false,
                 beforeReload: function () use (&$maintenanceOwned, $maintenance, $runId): void {
                     if (! $maintenance->leave($runId)) {
-                        throw new \RuntimeException('Belimbing could not leave maintenance mode before the runtime reload.');
+                        throw new DeploymentMaintenanceException('Belimbing could not leave maintenance mode before the runtime reload.');
                     }
 
                     $maintenanceOwned = false;
