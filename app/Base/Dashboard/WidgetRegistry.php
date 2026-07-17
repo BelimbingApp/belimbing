@@ -6,6 +6,7 @@ use App\Base\Dashboard\DTO\WidgetDefinition;
 use App\Base\Dashboard\Services\WidgetDiscoveryService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Livewire\LivewireManager;
 
 /**
  * All registered dashboard widgets, keyed by id in discovery order.
@@ -21,6 +22,7 @@ class WidgetRegistry
 
     public function __construct(
         protected WidgetDiscoveryService $discovery,
+        protected LivewireManager $livewire,
     ) {}
 
     /**
@@ -39,6 +41,16 @@ class WidgetRegistry
 
             if ($definition === null) {
                 Log::warning('Dashboard widget definition skipped: missing id or component', [
+                    'file' => $raw['_source'] ?? 'unknown',
+                ]);
+
+                continue;
+            }
+
+            if (! $this->livewire->exists($definition->component)) {
+                Log::warning('Dashboard widget definition skipped: Livewire component is unavailable', [
+                    'id' => $definition->id,
+                    'component' => $definition->component,
                     'file' => $raw['_source'] ?? 'unknown',
                 ]);
 

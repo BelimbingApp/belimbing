@@ -1,6 +1,8 @@
 <?php
 
+use App\Base\Dashboard\Services\WidgetDiscoveryService;
 use App\Base\Dashboard\Widget;
+use App\Base\Dashboard\WidgetRegistry;
 use App\Base\Livewire\ComponentDiscoveryException;
 use App\Base\Livewire\ComponentDiscoveryService;
 use App\Base\Perf\Livewire\Widgets\RequestHealth;
@@ -101,4 +103,28 @@ test('component discovery skips a class that fails to link instead of taking the
     // behind the status-bar diagnostics bubble.
     $recorded = array_column(app(ReportedErrorRecorder::class)->recent(), 'exception');
     expect($recorded)->toContain(ComponentDiscoveryException::class);
+});
+
+test('the dashboard registry omits definitions whose Livewire component is unavailable', function (): void {
+    Livewire::component('dashboard.throwing-fixture', ThrowingFixtureWidget::class);
+
+    $discovery = Mockery::mock(WidgetDiscoveryService::class);
+    $discovery->shouldReceive('discover')->once()->andReturn(collect([
+        [
+            'id' => 'working',
+            'label' => 'Working fixture',
+            'component' => 'dashboard.throwing-fixture',
+            '_source' => 'fixture',
+        ],
+        [
+            'id' => 'missing',
+            'label' => 'Missing fixture',
+            'component' => 'dashboard.definitely-missing',
+            '_source' => 'fixture',
+        ],
+    ]));
+
+    $widgets = (new WidgetRegistry($discovery, app('livewire')))->all();
+
+    expect($widgets)->toHaveKey('working')->not->toHaveKey('missing');
 });
