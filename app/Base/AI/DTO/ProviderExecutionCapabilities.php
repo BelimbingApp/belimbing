@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\DTO;
 
 use App\Base\AI\Enums\ReasoningEffort;
@@ -22,6 +23,8 @@ final readonly class ProviderExecutionCapabilities
         ],
         public bool $supportsNativeReasoningBlocks = false,
         public bool $supportsAdaptiveReasoning = false,
+        /** Whether reasoning can be switched on/off per request (hides the mode select when false). */
+        public bool $supportsReasoningModeToggle = true,
         public ?int $defaultReasoningBudget = null,
         public ?string $interleavedThinkingBetaHeader = null,
         public ?ReasoningVisibility $agenticToolLoopReasoningVisibility = null,

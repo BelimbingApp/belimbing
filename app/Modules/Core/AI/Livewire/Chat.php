@@ -2,7 +2,10 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\AI\Enums\ReasoningEffort;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
+use App\Base\AI\Services\ModelCatalogService;
+use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Modules\Core\AI\DTO\Message;
@@ -11,6 +14,7 @@ use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesAttachments;
 use App\Modules\Core\AI\Livewire\Concerns\HandlesStreaming;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesChatSessions;
+use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ChatMarkdownRenderer;
 use App\Modules\Core\AI\Services\ConfigResolver;
@@ -61,6 +65,9 @@ class Chat extends Component
     public ?array $lastRunMeta = null;
 
     public ?string $selectedModel = null;
+
+    /** Per-session reasoning-effort override; null follows the model's configured default. */
+    public ?string $selectedEffort = null;
 
     /** Current page URL sent by the client (window.location.href). */
     public string $pageUrl = '';
@@ -163,6 +170,7 @@ class Chat extends Component
 
         $availableModels = $this->canSelectModel() ? $this->availableModels() : [];
         $this->ensureSelectedModelPopulated($availableModels);
+        $availableEfforts = $this->canSelectModel() ? $this->availableReasoningEfforts() : [];
         $sessionTurnTargets = $agentActivated
             ? $this->sessionTurnTargets($sessions, $activeTurnsBySession)
             : [];
@@ -196,6 +204,7 @@ class Chat extends Component
             'canSelectModel' => $this->canSelectModel(),
             'canAttachFiles' => $canAttach,
             'availableModels' => $availableModels,
+            'availableEfforts' => $availableEfforts,
             'currentModel' => $this->resolveCurrentModelLabel(),
             'sessionUsage' => $sessionUsage,
             'hasPendingDelegations' => $hasPendingDelegations,
@@ -429,6 +438,44 @@ class Chat extends Component
         }
 
         return $this->loadAvailableModels($companyId);
+    }
+
+    /**
+     * Reasoning-effort options supported by the currently selected model.
+     *
+     * Derived from the provider capability registry, so the selector only
+     * offers values the model's wire protocol actually accepts (e.g. Kimi K3
+     * only takes "max"; Codex models take low→xhigh).
+     *
+     * @return list<array{value: string, label: string}>
+     */
+    public function availableReasoningEfforts(): array
+    {
+        $composite = $this->selectedModel;
+
+        if ($composite === null || ! str_contains($composite, self::MODEL_ID_SEPARATOR)) {
+            return [];
+        }
+
+        [$providerId, $modelId] = explode(self::MODEL_ID_SEPARATOR, $composite, 2);
+
+        if ($modelId === '') {
+            return [];
+        }
+
+        $provider = AiProvider::query()->llm()->active()->find((int) $providerId);
+
+        if ($provider === null) {
+            return [];
+        }
+
+        $apiType = app(ModelCatalogService::class)->resolveApiType($provider->name, $modelId);
+        $capabilities = app(ProviderCapabilityRegistry::class)->capabilitiesFor($provider->name, $modelId, $apiType);
+
+        return array_map(
+            fn (ReasoningEffort $effort): array => ['value' => $effort->value, 'label' => $effort->label()],
+            $capabilities->supportedReasoningEffort,
+        );
     }
 
     /**

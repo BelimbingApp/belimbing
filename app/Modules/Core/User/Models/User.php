@@ -93,7 +93,7 @@ class User extends Authenticatable implements CompanyScoped
      */
     public function getLastUsedModel(int $employeeId): ?array
     {
-        $hint = $this->prefs['last_used_model'][(string) $employeeId] ?? null;
+        $hint = $this->prefsArray()['last_used_model'][(string) $employeeId] ?? null;
 
         if (! is_array($hint)) {
             return null;
@@ -126,7 +126,7 @@ class User extends Authenticatable implements CompanyScoped
      */
     public function setLastUsedModel(int $employeeId, ?string $provider, ?string $model): void
     {
-        $prefs = is_array($this->prefs) ? $this->prefs : [];
+        $prefs = $this->prefsArray();
         $hints = is_array($prefs['last_used_model'] ?? null) ? $prefs['last_used_model'] : [];
         $key = (string) $employeeId;
 

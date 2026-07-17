@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ProviderExecutionCapabilities;
@@ -14,12 +15,20 @@ final class ProviderCapabilityRegistry
         if (in_array($apiType, [AiApiType::OpenAiResponses, AiApiType::OpenAiCodexResponses], true)) {
             return new ProviderExecutionCapabilities(
                 supportedReasoningVisibility: [ReasoningVisibility::None, ReasoningVisibility::Summary],
-                supportedReasoningEffort: [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
+                // Codex models take the CLI's effort ladder (xhigh, no minimal);
+                // the public Responses API takes minimal but not xhigh.
+                supportedReasoningEffort: $apiType === AiApiType::OpenAiCodexResponses
+                    ? [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High, ReasoningEffort::XHigh]
+                    : [ReasoningEffort::Minimal, ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
                 supportsReasoningBudget: true,
                 supportsReasoningContextPreservation: true,
                 agenticToolLoopReasoningVisibility: ReasoningVisibility::Summary,
                 preserveReasoningContextInAgenticToolLoops: true,
             );
+        }
+
+        if ($apiType === AiApiType::OpenAiChatCompletions) {
+            return $this->kimiCapabilities($model);
         }
 
         if ($apiType === AiApiType::AnthropicMessages && $this->isAnthropicProvider($providerName)) {
@@ -40,6 +49,33 @@ final class ProviderCapabilityRegistry
         }
 
         return new ProviderExecutionCapabilities;
+    }
+
+    /**
+     * Kimi thinking models expose reasoning controls over Chat Completions.
+     *
+     * K3 dials intensity via `reasoning_effort` (only "max" today) and cannot
+     * be toggled off; K2.5/K2.6 toggle via the `thinking` object, with K2.6
+     * adding preserved reasoning (`keep: "all"`). Always-thinking models
+     * (kimi-k2.7*, kimi-k2-thinking) take no request controls at all.
+     */
+    private function kimiCapabilities(string $model): ProviderExecutionCapabilities
+    {
+        return match (KimiModelFamily::fromModel($model)) {
+            KimiModelFamily::K3 => new ProviderExecutionCapabilities(
+                supportedReasoningEffort: [ReasoningEffort::Max],
+                supportsNativeReasoningBlocks: true,
+                supportsReasoningModeToggle: false,
+            ),
+            KimiModelFamily::K2Thinking => new ProviderExecutionCapabilities(
+                supportsNativeReasoningBlocks: true,
+            ),
+            KimiModelFamily::K2ThinkingKeep => new ProviderExecutionCapabilities(
+                supportsReasoningContextPreservation: true,
+                supportsNativeReasoningBlocks: true,
+            ),
+            default => new ProviderExecutionCapabilities,
+        };
     }
 
     private function isAnthropicProvider(?string $providerName): bool

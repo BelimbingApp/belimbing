@@ -30,6 +30,7 @@ trait ManagesChatSessions
         $this->selectedSessionId = $session->id;
         $this->lastRunMeta = null;
         $this->selectedModel = $this->seedModelFromUserPrefs();
+        $this->selectedEffort = null;
         $this->dispatch('agent-chat-focus-composer');
     }
 
@@ -142,6 +143,67 @@ trait ManagesChatSessions
         }
 
         $this->persistUserLastUsedModel($this->selectedModel);
+
+        // A model switch can invalidate the effort choice (each family has its
+        // own ladder) — drop unsupported values and re-persist the override.
+        $this->selectedEffort = $this->normalizeEffortSelection($this->selectedEffort);
+        $this->persistEffortOverride();
+    }
+
+    /**
+     * Persist the reasoning-effort override when the user picks an effort.
+     *
+     * Livewire lifecycle hook — called automatically when $selectedEffort
+     * is updated via wire:model.live on the effort selector.
+     */
+    public function updatedSelectedEffort(): void
+    {
+        $this->selectedEffort = $this->normalizeEffortSelection($this->selectedEffort);
+        $this->persistEffortOverride();
+    }
+
+    /**
+     * Clamp an effort selection to what the selected model supports.
+     */
+    private function normalizeEffortSelection(mixed $effort): ?string
+    {
+        if (! is_string($effort) || $effort === '') {
+            return null;
+        }
+
+        $allowed = array_column($this->availableReasoningEfforts(), 'value');
+
+        return in_array($effort, $allowed, true) ? $effort : null;
+    }
+
+    /**
+     * Write the effort choice into the session's execution-controls override,
+     * preserving any other override keys the session may carry.
+     */
+    private function persistEffortOverride(): void
+    {
+        if ($this->selectedSessionId === null) {
+            return;
+        }
+
+        $manager = app(SessionManager::class);
+        $override = $manager->getExecutionControlsOverride($this->employeeId, $this->selectedSessionId) ?? [];
+
+        if ($this->selectedEffort === null) {
+            unset($override['reasoning']['effort']);
+
+            if (($override['reasoning'] ?? null) === []) {
+                unset($override['reasoning']);
+            }
+        } else {
+            $override['reasoning']['effort'] = $this->selectedEffort;
+        }
+
+        $manager->updateExecutionControlsOverride(
+            $this->employeeId,
+            $this->selectedSessionId,
+            $override === [] ? null : $override,
+        );
     }
 
     /**
@@ -361,12 +423,16 @@ trait ManagesChatSessions
     {
         if (! is_string($sessionId) || $sessionId === '') {
             $this->selectedModel = null;
+            $this->selectedEffort = null;
 
             return;
         }
 
         $session = app(SessionManager::class)->get($this->employeeId, $sessionId);
         $this->selectedModel = $this->normalizeModelOverride($session?->llm['model_override'] ?? null);
+
+        $overrideEffort = $session?->llm['execution_controls_override']['reasoning']['effort'] ?? null;
+        $this->selectedEffort = is_string($overrideEffort) && $overrideEffort !== '' ? $overrideEffort : null;
 
         if (! $dispatchSelectionEvent) {
             return;

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 use App\Base\AI\DTO\ExecutionControls;
@@ -111,8 +112,12 @@ final class ExecutionControlSchemaFactory
             return [];
         }
 
-        $controlsList = [
-            $this->selectControl(
+        $controlsList = [];
+
+        // Always-on reasoning models (e.g. Kimi K3) accept no per-request
+        // on/off switch; offering one would only produce provider errors.
+        if ($capabilities->supportsReasoningModeToggle) {
+            $controlsList[] = $this->selectControl(
                 path: 'reasoning.mode',
                 label: 'Reasoning mode',
                 description: 'Chooses whether the provider should use advanced reasoning behavior when available.',
@@ -122,8 +127,8 @@ final class ExecutionControlSchemaFactory
                     fn (ReasoningMode $mode): array => ['value' => $mode->value, 'label' => $this->reasoningModeLabel($mode)],
                     ReasoningMode::cases(),
                 ),
-            ),
-        ];
+            );
+        }
 
         if ($capabilities->supportedReasoningVisibility !== []) {
             $controlsList[] = $this->selectControl(
@@ -149,7 +154,7 @@ final class ExecutionControlSchemaFactory
                 options: array_merge(
                     [['value' => '', 'label' => self::SYSTEM_DEFAULT]],
                     array_map(
-                        fn (ReasoningEffort $effort): array => ['value' => $effort->value, 'label' => ucfirst($effort->value)],
+                        fn (ReasoningEffort $effort): array => ['value' => $effort->value, 'label' => $effort->label()],
                         $capabilities->supportedReasoningEffort,
                     ),
                 ),
