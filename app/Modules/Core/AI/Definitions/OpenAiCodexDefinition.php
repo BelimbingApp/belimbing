@@ -28,7 +28,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
     public const KEY = 'openai-codex';
 
     // Default `client_version` query param for ChatGPT Codex models discovery.
-    public const MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION = '0.128.0';
+    public const MODELS_DISCOVERY_DEFAULT_CLIENT_VERSION = '0.144.5';
 
     public const MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY = 'ai.openai_codex.models_discovery_client_version';
 
