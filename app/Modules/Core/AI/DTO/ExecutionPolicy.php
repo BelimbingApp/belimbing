@@ -7,9 +7,9 @@ use App\Modules\Core\AI\Enums\ExecutionMode;
 /**
  * Execution policy for a single AI run.
  *
- * Controls timeout budget, execution mode, and retry eligibility.
- * When not provided, the runtime falls back to config-driven defaults
- * resolved via `ExecutionPolicy::fromConfig()`.
+ * Controls timeout budget, execution mode, retry eligibility, and optional
+ * per-run agentic tool-loop bounds.
+ * A null tool-loop bound leaves the runtime on its config-driven default.
  */
 final readonly class ExecutionPolicy
 {
@@ -17,6 +17,7 @@ final readonly class ExecutionPolicy
         public ExecutionMode $mode,
         public int $timeoutSeconds,
         public bool $allowRetry = true,
+        public ?int $maxToolIterations = null,
     ) {}
 
     /**
@@ -63,5 +64,21 @@ final readonly class ExecutionPolicy
     public static function background(): self
     {
         return self::forMode(ExecutionMode::Background);
+    }
+
+    /**
+     * Limit the number of tool-calling rounds executed for this run.
+     *
+     * One round may contain multiple tool calls. The runtime still permits a
+     * final model response after the last completed tool round.
+     */
+    public function withMaxToolIterations(int $maxToolIterations): self
+    {
+        return new self(
+            mode: $this->mode,
+            timeoutSeconds: $this->timeoutSeconds,
+            allowRetry: $this->allowRetry,
+            maxToolIterations: max(0, $maxToolIterations),
+        );
     }
 }

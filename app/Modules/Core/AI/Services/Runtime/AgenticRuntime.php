@@ -96,6 +96,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         try {
             $policy ??= ExecutionPolicy::interactive();
             $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
+            $maxToolIterations = $this->maxToolIterations($policy);
 
             $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
@@ -152,6 +153,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $systemPrompt,
                 $allowedToolNames,
                 $deadline,
+                $maxToolIterations,
             );
 
             $result['meta'] = $this->withResolvedSkillPackMeta($result['meta'] ?? []);
@@ -215,6 +217,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         try {
             $policy ??= ExecutionPolicy::interactive();
             $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
+            $maxToolIterations = $this->maxToolIterations($policy);
 
             $this->runRecorder->beginExecution(new RunRecorderStartInput(
                 runId: $runId,
@@ -276,6 +279,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $systemPrompt,
                 $allowedToolNames,
                 $deadline,
+                $maxToolIterations,
             );
         } finally {
             $this->sessionContext->clear();
@@ -349,6 +353,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $systemPrompt,
         ?array $allowedToolNames,
         float $deadline,
+        int $maxToolIterations,
     ): array {
         // Hook: PreContextBuild — augment system prompt before message assembly
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
@@ -432,12 +437,12 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $successResult;
             }
 
-            if ($iteration >= $this->maxToolIterations()) {
+            if ($iteration >= $maxToolIterations) {
                 return $this->syncLoopErrorResult(
                     $runId,
                     $employeeId,
                     $config,
-                    $this->toolLoopLimitError(),
+                    $this->toolLoopLimitError($maxToolIterations),
                     $retryAttempts,
                     $hookMetadata,
                     $toolActions,
@@ -834,6 +839,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $systemPrompt,
         ?array $allowedToolNames,
         float $deadline,
+        int $maxToolIterations,
     ): \Generator {
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
 
@@ -926,9 +932,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
-            if ($iteration >= $this->maxToolIterations()) {
+            if ($iteration >= $maxToolIterations) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
-                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolLoopLimitError(), $toolLoopState);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolLoopLimitError($maxToolIterations), $toolLoopState);
 
                 return;
             }
@@ -1497,9 +1503,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         return microtime(true) >= $deadline;
     }
 
-    private function maxToolIterations(): int
+    private function maxToolIterations(ExecutionPolicy $policy): int
     {
-        return max(0, (int) config('ai.llm.agentic.max_tool_iterations', 24));
+        return max(0, $policy->maxToolIterations ?? (int) config('ai.llm.agentic.max_tool_iterations', 24));
     }
 
     private function executionBudgetError(): AiRuntimeError
@@ -1510,10 +1516,8 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         );
     }
 
-    private function toolLoopLimitError(): AiRuntimeError
+    private function toolLoopLimitError(int $limit): AiRuntimeError
     {
-        $limit = $this->maxToolIterations();
-
         return AiRuntimeError::fromType(
             AiErrorType::ToolLoopLimit,
             "The model requested another tool round after the configured limit of {$limit}.",

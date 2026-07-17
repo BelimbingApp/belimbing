@@ -427,6 +427,27 @@ describe('AgenticRuntime (sync tool loop)', function () {
                 ->and($result['meta']['tool_actions'])->toHaveCount(2);
         });
 
+        it('honours a per-run tool-loop limit instead of the global default', function () {
+            config()->set('ai.llm.agentic.max_tool_iterations', 24);
+
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->times(3)
+                ->andReturn($this->makeToolCallResponse('call_policy_loop', 'echo_tool', '{"input":"world"}'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Loop forever',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+                policy: ExecutionPolicy::interactive()->withMaxToolIterations(2),
+            );
+
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)
+                ->and($result['meta']['diagnostic'])->toContain('configured limit of 2')
+                ->and($result['meta']['tool_actions'])->toHaveCount(2);
+        });
+
         it('uses capability-neutral guidance when a tool result is truncated', function () {
             $llmClient = Mockery::mock(LlmClient::class);
             $llmClient->shouldReceive('chat')->once()->andReturn(
@@ -762,7 +783,7 @@ describe('AgenticRuntime (streaming)', function () {
     });
 
     it('persists and emits a streaming tool-loop limit failure', function () {
-        config()->set('ai.llm.agentic.max_tool_iterations', 1);
+        config()->set('ai.llm.agentic.max_tool_iterations', 24);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () {
@@ -801,6 +822,7 @@ describe('AgenticRuntime (streaming)', function () {
             1,
             (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: ExecutionPolicy::interactive()->withMaxToolIterations(1),
         ));
 
         $errorEvent = collect($events)->firstWhere('event', 'error');
