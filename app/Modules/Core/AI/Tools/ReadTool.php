@@ -75,9 +75,7 @@ class ReadTool extends AbstractTool implements ProvidesDisplaySummary
     public function displaySummary(array $arguments): string
     {
         if (($arguments['target'] ?? 'file') === 'data') {
-            $query = is_string($arguments['query'] ?? null) ? trim($arguments['query']) : '';
-
-            return $query !== '' ? __('Query data: :query', ['query' => $query]) : __('Query data');
+            return __('Query data');
         }
 
         $path = is_string($arguments['file_path'] ?? null) ? $arguments['file_path'] : '';

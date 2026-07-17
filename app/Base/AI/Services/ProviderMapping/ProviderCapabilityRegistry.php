@@ -15,11 +15,7 @@ final class ProviderCapabilityRegistry
         if (in_array($apiType, [AiApiType::OpenAiResponses, AiApiType::OpenAiCodexResponses], true)) {
             return new ProviderExecutionCapabilities(
                 supportedReasoningVisibility: [ReasoningVisibility::None, ReasoningVisibility::Summary],
-                // Codex models take the CLI's effort ladder (xhigh, no minimal);
-                // the public Responses API takes minimal but not xhigh.
-                supportedReasoningEffort: $apiType === AiApiType::OpenAiCodexResponses
-                    ? [ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High, ReasoningEffort::XHigh]
-                    : [ReasoningEffort::Minimal, ReasoningEffort::Low, ReasoningEffort::Medium, ReasoningEffort::High],
+                supportedReasoningEffort: $this->openAiReasoningEfforts($model, $apiType),
                 supportsReasoningBudget: true,
                 supportsReasoningContextPreservation: true,
                 agenticToolLoopReasoningVisibility: ReasoningVisibility::Summary,
@@ -49,6 +45,64 @@ final class ProviderCapabilityRegistry
         }
 
         return new ProviderExecutionCapabilities;
+    }
+
+    /**
+     * OpenAI effort controls are model-specific. Unknown models expose no
+     * selector rather than offering values that may be rejected at the wire.
+     *
+     * @return list<ReasoningEffort>
+     */
+    private function openAiReasoningEfforts(string $model, AiApiType $apiType): array
+    {
+        $id = strtolower(str_contains($model, '/') ? basename($model) : $model);
+
+        if ($apiType === AiApiType::OpenAiResponses && str_starts_with($id, 'gpt-5.6')) {
+            return [
+                ReasoningEffort::None,
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+                ReasoningEffort::Max,
+            ];
+        }
+
+        if ($apiType !== AiApiType::OpenAiCodexResponses) {
+            return [];
+        }
+
+        if (str_starts_with($id, 'gpt-5.6-sol') || str_starts_with($id, 'gpt-5.6-terra')) {
+            return [
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+                ReasoningEffort::Max,
+                ReasoningEffort::Ultra,
+            ];
+        }
+
+        if (str_starts_with($id, 'gpt-5.6-luna')) {
+            return [
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+                ReasoningEffort::Max,
+            ];
+        }
+
+        if (str_starts_with($id, 'gpt-5.4')) {
+            return [
+                ReasoningEffort::Low,
+                ReasoningEffort::Medium,
+                ReasoningEffort::High,
+                ReasoningEffort::XHigh,
+            ];
+        }
+
+        return [];
     }
 
     /**

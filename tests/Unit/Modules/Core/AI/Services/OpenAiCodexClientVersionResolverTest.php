@@ -4,12 +4,14 @@ use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\OpenAiCodexClientVersionResolver;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
 const CODEX_GH_LATEST_URL = 'https://api.github.com/repos/openai/codex/releases/latest';
+const CODEX_VERSION_CACHE_KEY = 'ai:openai-codex:latest-client-version';
 
 function codexVersionTestProvider(): AiProvider
 {
@@ -72,6 +74,33 @@ test('resolver returns null on http failure', function (): void {
     ]);
 
     expect(app(OpenAiCodexClientVersionResolver::class)->latest())->toBeNull();
+});
+
+test('resolver fetches the latest version when the cache read fails', function (): void {
+    config()->set('ai.openai_codex.auto_client_version', true);
+
+    Cache::partialMock()->shouldReceive('get')
+        ->once()
+        ->with(CODEX_VERSION_CACHE_KEY)
+        ->andThrow(new RuntimeException('Cache unavailable'));
+    Http::fake([
+        CODEX_GH_LATEST_URL => Http::response(['tag_name' => 'rust-v0.150.2'], 200),
+    ]);
+
+    expect(app(OpenAiCodexClientVersionResolver::class)->latest())->toBe('0.150.2');
+});
+
+test('resolver returns the fetched version when the cache write fails', function (): void {
+    config()->set('ai.openai_codex.auto_client_version', true);
+
+    Cache::partialMock()->shouldReceive('put')
+        ->once()
+        ->andThrow(new RuntimeException('Cache unavailable'));
+    Http::fake([
+        CODEX_GH_LATEST_URL => Http::response(['tag_name' => 'rust-v0.150.2'], 200),
+    ]);
+
+    expect(app(OpenAiCodexClientVersionResolver::class)->latest())->toBe('0.150.2');
 });
 
 test('codex model discovery uses the auto-resolved client_version', function (): void {

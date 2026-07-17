@@ -4,6 +4,7 @@ namespace App\Base\AI\Services\ProviderMapping;
 
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ProviderRequestMapping;
+use App\Base\AI\Enums\ReasoningEffort;
 use App\Base\AI\Enums\ReasoningMode;
 
 final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
@@ -54,7 +55,7 @@ final class OpenAiChatCompletionsRequestMapper implements ProviderRequestMapper
         $family = KimiModelFamily::fromModel($request->model);
 
         if ($family === KimiModelFamily::K3) {
-            if ($reasoning->effort !== null) {
+            if ($reasoning->effort === ReasoningEffort::Max) {
                 $payload['reasoning_effort'] = $reasoning->effort->value;
             }
 

@@ -21,13 +21,13 @@ test('default interactive tools summarize invocations in plain language', functi
         ->toBe('Read app/Models/User.php @200');
 
     expect(app(ReadTool::class)->displaySummary(['target' => 'data', 'query' => 'SELECT id FROM users']))
-        ->toBe('Query data: SELECT id FROM users');
+        ->toBe('Query data');
 
     expect(app(EditTool::class)->displaySummary(['file_path' => 'config/app.php', 'operation' => 'replace']))
         ->toBe('Replace in config/app.php');
 
     expect(app(BashTool::class)->displaySummary(['command' => 'php artisan migrate:status']))
-        ->toBe('$ php artisan migrate:status');
+        ->toBe('Run shell command');
 
     expect(app(ActivePageSnapshotTool::class)->displaySummary([]))
         ->toBe('Inspect the current page');
@@ -39,7 +39,21 @@ test('default interactive tools summarize invocations in plain language', functi
         ->toBe('Search the web for "laravel livewire"');
 
     expect(app(WebFetchTool::class)->displaySummary(['url' => 'https://example.com/docs']))
-        ->toBe('Fetch https://example.com/docs');
+        ->toBe('Fetch example.com');
+});
+
+test('display summaries keep secret-bearing arguments behind raw disclosure', function (): void {
+    expect(app(BashTool::class)->displaySummary(['command' => 'curl -H "Authorization: Bearer secret-token" https://example.com']))
+        ->not->toContain('secret-token');
+
+    expect(app(ReadTool::class)->displaySummary(['target' => 'data', 'query' => "SELECT * FROM users WHERE password = 'secret-value'"]))
+        ->not->toContain('secret-value');
+
+    expect(app(EditTool::class)->displaySummary(['target' => 'data', 'statement' => "UPDATE users SET password = 'secret-value'"]))
+        ->not->toContain('secret-value');
+
+    expect(app(WebFetchTool::class)->displaySummary(['url' => 'https://user:password@example.com/docs?token=secret-token']))
+        ->toBe('Fetch example.com');
 });
 
 test('display summaries tolerate malformed arguments', function (): void {

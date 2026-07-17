@@ -230,6 +230,7 @@ class RunStreamBridge
                 isset($data['duration_ms']) ? (int) $data['duration_ms'] : null,
                 isset($data['result_length']) ? (int) $data['result_length'] : null,
                 is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
+                isset($data['tool_call_index']) ? (int) $data['tool_call_index'] : null,
             )->toSsePayload(),
             $this->publisher->phaseChanged($turn, RunPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),

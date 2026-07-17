@@ -39,7 +39,12 @@ class OpenAiCodexClientVersionResolver
             return null;
         }
 
-        $cached = Cache::get(self::CACHE_KEY);
+        try {
+            $cached = Cache::get(self::CACHE_KEY);
+        } catch (\Throwable $e) {
+            report($e);
+            $cached = null;
+        }
 
         if (is_string($cached) && $cached !== '') {
             return $cached;
@@ -48,7 +53,11 @@ class OpenAiCodexClientVersionResolver
         $version = $this->fetchLatest();
 
         if ($version !== null) {
-            Cache::put(self::CACHE_KEY, $version, self::CACHE_TTL_SECONDS);
+            try {
+                Cache::put(self::CACHE_KEY, $version, self::CACHE_TTL_SECONDS);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         return $version;

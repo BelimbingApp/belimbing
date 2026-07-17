@@ -1375,6 +1375,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             yield ['event' => 'status', 'data' => [
                 'phase' => 'tool_finished',
                 'tool' => $functionName,
+                'tool_call_index' => $toolIndex,
                 'result_preview' => $toolExecution['action']['result_preview'] ?? '',
                 'result_length' => mb_strlen($resultString),
                 'duration_ms' => $durationMs,

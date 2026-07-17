@@ -83,7 +83,9 @@ class ChatTurnRunner
             policy: $this->resolveExecutionPolicy($turn),
             promptMeta: $promptMeta,
             allowedToolNames: $this->interactiveToolSet->enabledToolNames(),
-            executionControlsOverride: $this->sessionManager->getExecutionControlsOverride($employeeId, $sessionId),
+            executionControlsOverride: is_array($runtimeMeta['execution_controls_override'] ?? null)
+                ? $runtimeMeta['execution_controls_override']
+                : null,
         );
 
         try {

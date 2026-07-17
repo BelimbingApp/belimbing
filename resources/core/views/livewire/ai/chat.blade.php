@@ -1007,17 +1007,18 @@
                                     />
                                     @if (count($availableEfforts) > 0)
                                         <label class="sr-only" for="ai-effort-selector">{{ __('Reasoning effort') }}</label>
-                                        <select
+                                        <x-ui.select
                                             id="ai-effort-selector"
+                                            :block="false"
                                             wire:model.live="selectedEffort"
                                             title="{{ __('Reasoning effort') }}"
-                                            class="rounded-lg border border-border-input bg-surface-card !py-0.5 !text-[11px] text-ink px-input-x focus:border-accent focus:ring-0 transition-colors shrink-0"
+                                            class="shrink-0 text-xs"
                                         >
                                             <option value="">{{ __('Effort: auto') }}</option>
                                             @foreach ($availableEfforts as $effort)
                                                 <option value="{{ $effort['value'] }}">{{ $effort['label'] }}</option>
                                             @endforeach
-                                        </select>
+                                        </x-ui.select>
                                     @endif
                                 </div>
                             @else

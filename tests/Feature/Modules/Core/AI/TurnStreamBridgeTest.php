@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\AI\Services\RunStreamBridge;
@@ -197,6 +197,7 @@ describe('RunStreamBridge tool and streaming events', function () {
             ['event' => 'status', 'data' => [
                 'phase' => 'tool_finished',
                 'tool' => 'bash',
+                'tool_call_index' => 0,
                 'status' => 'success',
                 'result_preview' => '10 files',
                 'duration_ms' => 150,
@@ -212,6 +213,13 @@ describe('RunStreamBridge tool and streaming events', function () {
         expect($types)->toContain(RunEventType::ToolStarted)
             ->and($types)->toContain(RunEventType::ToolFinished)
             ->and($types)->toContain(RunEventType::Heartbeat);
+
+        $toolFinished = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::ToolFinished->value)
+            ->firstOrFail();
+
+        expect($toolFinished->payload['tool_call_index'])->toBe(0);
 
         // Tool started should have set phase to running_tool
         $toolStartedEvent = AiRunEvent::query()

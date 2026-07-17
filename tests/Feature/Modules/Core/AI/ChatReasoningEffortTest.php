@@ -3,6 +3,7 @@
 use App\Modules\Core\AI\Livewire\Chat;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -127,5 +128,25 @@ test('the session effort override survives a session switch round-trip', functio
         ->call('createSession')
         ->call('selectSession', $firstSessionId);
 
-    expect($component->get('selectedEffort'))->toBe('max');
+    expect($component->get('selectedSessionId'))->toBe($firstSessionId)
+        ->and($component->get('selectedEffort'))->toBe('max');
+});
+
+test('a queued turn snapshots the effort selected with its model', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = Livewire::test(Chat::class)
+        ->call('createSession')
+        ->set('selectedModel', $provider->id.':::kimi-k3')
+        ->set('selectedEffort', 'max')
+        ->set('messageInput', 'Use the selected model and effort.');
+
+    $result = $component->instance()->prepareStreamingRun();
+    $turn = AiRun::query()->findOrFail($result['runId']);
+
+    expect($turn->runtime_meta['model_override'])->toBe($provider->id.':::kimi-k3')
+        ->and($turn->runtime_meta['execution_controls_override'])->toBe([
+            'reasoning' => ['effort' => 'max'],
+        ]);
 });

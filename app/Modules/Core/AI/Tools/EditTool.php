@@ -81,9 +81,7 @@ class EditTool extends AbstractTool implements ProvidesDisplaySummary
     public function displaySummary(array $arguments): string
     {
         if (($arguments['target'] ?? 'file') === 'data') {
-            $statement = is_string($arguments['statement'] ?? null) ? trim($arguments['statement']) : '';
-
-            return $statement !== '' ? __('Edit data: :statement', ['statement' => $statement]) : __('Edit data');
+            return __('Edit data');
         }
 
         $path = is_string($arguments['file_path'] ?? null) ? $arguments['file_path'] : '';

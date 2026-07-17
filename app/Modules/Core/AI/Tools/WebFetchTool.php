@@ -89,8 +89,11 @@ class WebFetchTool extends AbstractTool implements ProvidesDisplaySummary
     public function displaySummary(array $arguments): string
     {
         $url = is_string($arguments['url'] ?? null) ? trim($arguments['url']) : '';
+        $host = parse_url($url, PHP_URL_HOST);
 
-        return $url !== '' ? __('Fetch :url', ['url' => $url]) : __('Fetch a web page');
+        return is_string($host) && $host !== ''
+            ? __('Fetch :host', ['host' => $host])
+            : __('Fetch a web page');
     }
 
     protected function metadata(): array

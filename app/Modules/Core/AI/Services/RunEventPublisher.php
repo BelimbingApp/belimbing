@@ -263,10 +263,12 @@ class RunEventPublisher
         ?int $durationMs = null,
         ?int $resultLength = null,
         ?array $errorPayload = null,
+        ?int $toolCallIndex = null,
     ): AiRunEvent {
         return $this->publish($turn, RunEventType::ToolFinished, array_filter([
             'tool' => $toolName,
             'status' => $status,
+            'tool_call_index' => $toolCallIndex,
             'result_preview' => $resultPreview,
             'duration_ms' => $durationMs,
             'result_length' => $resultLength,

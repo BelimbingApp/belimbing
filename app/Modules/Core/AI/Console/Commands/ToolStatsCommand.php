@@ -19,7 +19,7 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:ai:tools:stats')]
 class ToolStatsCommand extends Command
 {
-    protected $description = 'Summarize AI tool usage: call volume, failures, denials, unknown-tool attempts, unused tools';
+    protected $description = 'Summarize streamed AI tool usage: call volume, failures, denials, unknown-tool attempts, unused tools';
 
     protected $signature = 'blb:ai:tools:stats
         {--days=30 : Look-back window in days}';
@@ -50,8 +50,12 @@ class ToolStatsCommand extends Command
                     $row ??= ['calls' => 0, 'errors' => 0, 'denials' => 0, 'duration_ms' => 0, 'timed' => 0];
 
                     if ($event->event_type === RunEventType::ToolDenied) {
-                        $row['calls']++;
                         $row['denials']++;
+
+                        // Authorization denials also emit tool.finished; hook denials do not.
+                        if (($payload['source'] ?? 'hook') !== 'authorization') {
+                            $row['calls']++;
+                        }
 
                         continue;
                     }
@@ -113,7 +117,7 @@ class ToolStatsCommand extends Command
 
         if ($unused !== []) {
             sort($unused);
-            $this->components->warn(count($unused).' registered tool(s) saw no use in the window (schema-size candidates):');
+            $this->components->warn(count($unused).' registered tool(s) saw no streamed use in the window (schema-size candidates):');
             $this->line('  '.implode(', ', $unused));
         }
 

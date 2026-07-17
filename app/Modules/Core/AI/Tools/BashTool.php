@@ -67,9 +67,7 @@ class BashTool extends AbstractHighImpactProcessTool implements ProvidesDisplayS
 
     public function displaySummary(array $arguments): string
     {
-        $command = is_string($arguments['command'] ?? null) ? trim($arguments['command']) : '';
-
-        return $command !== '' ? '$ '.$command : __('Run shell command');
+        return __('Run shell command');
     }
 
     protected function metadata(): array

@@ -106,10 +106,33 @@ test('capability registry differentiates responses and codex effort ladders', fu
     $registry = new ProviderCapabilityRegistry;
 
     $responses = $registry->capabilitiesFor('openai', 'gpt-5.6-sol', AiApiType::OpenAiResponses);
-    expect($responses->supportedReasoningEffort)->toContain(ReasoningEffort::Minimal)
-        ->not->toContain(ReasoningEffort::XHigh);
+    expect($responses->supportedReasoningEffort)->toBe([
+        ReasoningEffort::None,
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::XHigh,
+        ReasoningEffort::Max,
+    ]);
 
     $codex = $registry->capabilitiesFor('openai-codex', 'gpt-5.6-sol', AiApiType::OpenAiCodexResponses);
-    expect($codex->supportedReasoningEffort)->toContain(ReasoningEffort::XHigh)
-        ->not->toContain(ReasoningEffort::Minimal);
+    expect($codex->supportedReasoningEffort)->toBe([
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::XHigh,
+        ReasoningEffort::Max,
+        ReasoningEffort::Ultra,
+    ]);
+
+    $olderCodex = $registry->capabilitiesFor('openai-codex', 'gpt-5.4', AiApiType::OpenAiCodexResponses);
+    expect($olderCodex->supportedReasoningEffort)->toBe([
+        ReasoningEffort::Low,
+        ReasoningEffort::Medium,
+        ReasoningEffort::High,
+        ReasoningEffort::XHigh,
+    ]);
+
+    $unknown = $registry->capabilitiesFor('openai-codex', 'future-codex-model', AiApiType::OpenAiCodexResponses);
+    expect($unknown->supportedReasoningEffort)->toBe([]);
 });

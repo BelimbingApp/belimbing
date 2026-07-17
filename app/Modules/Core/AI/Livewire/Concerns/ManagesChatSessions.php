@@ -432,7 +432,11 @@ trait ManagesChatSessions
         $this->selectedModel = $this->normalizeModelOverride($session?->llm['model_override'] ?? null);
 
         $overrideEffort = $session?->llm['execution_controls_override']['reasoning']['effort'] ?? null;
-        $this->selectedEffort = is_string($overrideEffort) && $overrideEffort !== '' ? $overrideEffort : null;
+        $this->selectedEffort = $this->normalizeEffortSelection($overrideEffort);
+
+        if ($overrideEffort !== null && $this->selectedEffort === null) {
+            $this->persistEffortOverride();
+        }
 
         if (! $dispatchSelectionEvent) {
             return;
