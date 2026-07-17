@@ -20,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property int|null $tat
  * @property int|null $actor_id
+ * @property string|null $actor_type
  * @property string|null $actor_role
  * @property string|null $actor_department
  * @property string|null $actor_company
@@ -49,6 +50,7 @@ class StatusHistory extends Model
         'status',
         'tat',
         'actor_id',
+        'actor_type',
         'actor_role',
         'actor_department',
         'actor_company',

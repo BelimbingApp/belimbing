@@ -41,11 +41,13 @@ class SendTransitionNotification
         $channels = $notificationConfig['channels'] ?? ['database'];
         $recipients = $this->collectRecipients($notificationConfig['on_enter'], $event);
 
-        $actorId = $event->context->actor->id;
+        $actorUserId = $event->context->actor->isUser()
+            ? $event->context->actor->id
+            : null;
 
         $recipients = $recipients
-            ->unique(fn (object $user): int => (int) $user->getKey())
-            ->filter(fn (object $user): bool => (int) $user->getKey() !== $actorId);
+            ->unique(fn (object $user): string => $user::class.':'.$user->getKey())
+            ->filter(fn (object $user): bool => $actorUserId === null || (int) $user->getKey() !== $actorUserId);
 
         if ($recipients->isEmpty()) {
             return;
@@ -60,7 +62,7 @@ class SendTransitionNotification
         );
 
         foreach ($recipients as $recipient) {
-            $recipient->notify($notification);
+            $recipient->notify($notification->forNotifiable($recipient));
         }
     }
 
@@ -79,7 +81,9 @@ class SendTransitionNotification
             match ($type) {
                 'reporter' => $this->addModelRelation($recipients, $event->model, 'reporter'),
                 'assignee' => $this->addModelRelation($recipients, $event->model, 'assignee'),
-                'actor' => $this->addActorUser($recipients, $event->context->actor->id),
+                'actor' => $event->context->actor->isUser()
+                    ? $this->addActorUser($recipients, $event->context->actor->id)
+                    : null,
                 'pic' => null, // Future: resolve PIC users from StatusConfig
                 default => null,
             };
@@ -127,12 +131,30 @@ class SendTransitionNotification
         if (method_exists($related, 'user')) {
             $user = $related->user;
 
-            if ($user !== null && method_exists($user, 'notify')) {
+            if ($user !== null && method_exists($user, 'notify') && $this->sharesCompany($related, $user)) {
                 return $user;
             }
         }
 
         return null;
+    }
+
+    private function sharesCompany(object $related, object $user): bool
+    {
+        if (! method_exists($related, 'getAttribute') || ! method_exists($user, 'getAttribute')) {
+            return true;
+        }
+
+        $relatedCompanyId = $related->getAttribute('company_id');
+        $userCompanyId = $user->getAttribute('company_id');
+
+        if ($relatedCompanyId === null && $userCompanyId === null) {
+            return true;
+        }
+
+        return $relatedCompanyId !== null
+            && $userCompanyId !== null
+            && (int) $relatedCompanyId === (int) $userCompanyId;
     }
 
     /**

@@ -1,9 +1,9 @@
 # operation-it-tickets-workspace.md
 
-Status: Complete — PRs open: BelimbingApp/belimbing#193 (land first), BelimbingApp/blb-operation#1
-Last Updated: 2026-07-16
+Status: Complete — reviewed and approved for merge
+Last Updated: 2026-07-17
 Sources: `app/Modules/Operation/IT/*`, `app/Base/Workflow/*`, `DESIGN.md`, root `AGENTS.md`
-Agents: claude/claude-fable-5
+Agents: claude/claude-fable-5, openai/codex
 
 ## Problem Essence
 
@@ -131,7 +131,7 @@ Affected pages: `/it/tickets/board`.
 - [x] `TicketCommentPosted` notification from `postComment` to reporter + assignee users {claude/claude-fable-5}
 - [x] Ticket implements `PresentsWorkflowNotifications` (title + deep-link seam) {claude/claude-fable-5}
 
-### Phase 7 — Homepage widget + menu naming (follow-up request)
+### Phase 6 — Homepage widget + menu naming (follow-up request)
 
 - [x] `TicketQueue` dashboard widget: open/mine/waiting numbers + attention list (unassigned by severity, then blocked), discovered via `IT/Config/dashboard.php`, gated by `operations.it.ticket.list` {claude/claude-fable-5}
 - [x] Menu labels renamed Tickets → IT Tickets, Board → IT Board (pinned items and future boards from other flows keep context) {claude/claude-fable-5}
@@ -139,16 +139,29 @@ Affected pages: `/it/tickets/board`.
 
 Affected pages: `/` (dashboard), sidebar menu.
 
-### Phase 6 — Seeds, tests, verification
+### Phase 7 — Seeds, tests, verification
 
 - [x] Dev seeder: ~20 tickets, all statuses/priorities/categories, several assignees, comments, aged timestamps; fix reporter-as-User bug {claude/claude-fable-5}
 - [x] Pest feature tests: filters, assignment, comment notify, transition notify, board transition {claude/claude-fable-5}
 - [x] Pint clean; `bun run build` {claude/claude-fable-5}
 - [x] Browser e2e: list filters, board drag, ticket conversation, bell {claude/claude-fable-5}
 
-Evidence: `php artisan test app/Modules/Operation/IT/Tests` green (39 passed, 115
-assertions) and `tests/Feature/Workflow` green (17 passed); Pint clean on both
-repos; `bun run build` clean. Browser e2e at `local.blb.lara` as
+Merge review hardened the implementation around four invariants: workflow
+notification delivery is idempotent across queue retries; actor namespaces are
+recorded and resolved without conflating users and agents; ticket assignment is
+atomic, authorized, tenant-scoped, and rejects inactive or cross-company
+employees; and optional module dashboard widgets do not make Base registry
+tests order-fragile. View-only users cannot mutate tickets through either
+Livewire surface, and the AI ticket tool cannot use Lara as a cross-tenant
+fallback. Module UI now uses the shared link, datetime, stat-strip, and stat
+primitives.
+
+Evidence: `php artisan test --compact app/Modules/Operation` green (57 passed,
+163 assertions), the composed workflow and notification-bell suites green (22
+passed, 124 assertions), and the Core AI suite green (85 passed, 335 assertions).
+Pint is clean across the Operation module and all review-touched main-repo
+files; the composed production asset build is clean. Browser e2e at
+`local.blb.lara` as
 `aiman.rahman@blb.my`: list lenses + dropdown filters + stat strip; bell badge,
 dropdown, deep link, mark-read (badge 8→7→…); workspace comment, Submit-for-Review
 transition carrying the composer text, edit-in-place priority (High→Critical),

@@ -1,5 +1,9 @@
 <?php
-/** @var \App\Modules\Core\User\Livewire\Notifications\Bell $this */
+
+use App\Modules\Core\User\Livewire\Notifications\Bell;
+
+/** @var Bell $this */
+$badgeCount = $unreadCount > 99 ? '99+' : (string) $unreadCount;
 ?>
 
 <div
@@ -16,13 +20,13 @@
         aria-haspopup="true"
         :aria-expanded="open.toString()"
         aria-expanded="false"
-        aria-label="{{ $unreadCount > 0 ? trans_choice(':count unread notification|:count unread notifications', $unreadCount, ['count' => $unreadCount]) : __('Notifications') }}"
+        aria-label="{{ $unreadCount > 0 ? trans_choice(':count unread notification|:count unread notifications', $unreadCount, ['count' => $badgeCount]) : __('Notifications') }}"
         title="{{ __('Notifications') }}"
     >
         <x-icon name="heroicon-o-bell" class="w-4 h-4" />
         @if ($unreadCount > 0)
             <span class="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 inline-flex items-center justify-center rounded-full bg-accent text-accent-on text-[9px] font-semibold leading-none tabular-nums">
-                {{ $unreadCount > 9 ? '9+' : $unreadCount }}
+                {{ $badgeCount }}
             </span>
         @endif
     </button>
@@ -70,11 +74,7 @@
                                 <span class="block text-xs text-muted line-clamp-2">{{ $item['body'] }}</span>
                             @endif
                             @if ($item['time'])
-                                <time
-                                    class="block mt-0.5 text-[10px] text-muted"
-                                    datetime="{{ $item['time']->toIso8601String() }}"
-                                    title="{{ $item['time']->format('Y-m-d H:i:s') }}"
-                                >{{ $item['time']->diffForHumans() }}</time>
+                                <x-ui.datetime :value="$item['time']" class="block mt-0.5 text-[10px] text-muted" />
                             @endif
                         </span>
                     </button>

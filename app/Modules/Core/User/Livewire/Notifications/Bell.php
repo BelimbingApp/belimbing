@@ -56,8 +56,7 @@ class Bell extends Component
     {
         $user = Auth::user();
 
-        $notifications = $user?->notifications()->limit(self::RECENT_LIMIT)->get()
-            ?? DatabaseNotification::query()->whereRaw('1 = 0')->get();
+        $notifications = $user?->notifications()->limit(self::RECENT_LIMIT)->get() ?? collect();
 
         return view('livewire.notifications.bell', [
             'items' => $notifications->map(fn (DatabaseNotification $notification): array => $this->present($notification)),

@@ -1,6 +1,8 @@
 <?php
 
 use App\Base\Authz\DTO\Actor;
+use App\Base\Workflow\Contracts\ContextualTransitionGuard;
+use App\Base\Workflow\DTO\GuardResult;
 use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Events\TransitionCompleted;
 use App\Base\Workflow\Models\ProcessEvent;
@@ -20,6 +22,7 @@ use App\Base\Workflow\Process\ProcessDefinitionRegistry;
 use App\Base\Workflow\Services\TransitionOutboxDispatcher;
 use App\Base\Workflow\Services\WorkflowEngine;
 use App\Modules\Core\Company\Models\Company;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Event;
 
 it('serializes competing transitions against the persisted status', function (): void {
@@ -50,6 +53,34 @@ it('serializes competing transitions against the persisted status', function ():
         ->and($company->refresh()->status)->toBe('paused')
         ->and(StatusHistory::query()->where('flow', 'coverage')->where('flow_id', $company->id)->count())->toBe(1)
         ->and(TransitionOutboxMessage::query()->count())->toBe(1);
+});
+
+it('passes transition input to contextual guards and records the actor namespace', function (): void {
+    Event::fake([TransitionCompleted::class]);
+
+    $user = createAdminUser();
+    $company = Company::factory()->create(['status' => 'active']);
+    StatusTransition::query()->create([
+        'flow' => 'contextual-coverage',
+        'from_code' => 'active',
+        'to_code' => 'paused',
+        'guard_class' => ContextAwareCoverageGuard::class,
+        'is_active' => true,
+    ]);
+
+    $result = app(WorkflowEngine::class)->transition(
+        $company,
+        'contextual-coverage',
+        'paused',
+        new TransitionContext(
+            actor: Actor::forUser($user),
+            metadata: ['allow_transition' => true],
+        ),
+    );
+
+    expect($result->success)->toBeTrue()
+        ->and($company->refresh()->status)->toBe('paused')
+        ->and(StatusHistory::query()->sole()->actor_type)->toBe('user');
 });
 
 it('recovers a failed transition event delivery without dispatching a delivered event twice', function (): void {
@@ -369,3 +400,22 @@ it('rejects changing a process definition without publishing a new version', fun
         ->toThrow(ProcessCoordinationException::class, 'publish a new version')
         ->and($run->refresh()->definition_fingerprint)->toHaveLength(64);
 });
+
+final class ContextAwareCoverageGuard implements ContextualTransitionGuard
+{
+    public function evaluate(Model $model, StatusTransition $transition, Actor $actor): GuardResult
+    {
+        return GuardResult::deny('Transition context is required.');
+    }
+
+    public function evaluateWithContext(
+        Model $model,
+        StatusTransition $transition,
+        Actor $actor,
+        TransitionContext $context,
+    ): GuardResult {
+        return ($context->metadata['allow_transition'] ?? false) === true
+            ? GuardResult::allow()
+            : GuardResult::deny('Context denied the transition.');
+    }
+}
