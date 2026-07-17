@@ -329,6 +329,39 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
         $persister->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
     });
 
+    it('correlates summaries for consecutive tool calls by index', function () {
+        $turn = createMaterializerTurn();
+        $pub = app(RunEventPublisher::class);
+
+        $pub->turnStarted($turn);
+        $turn->transitionTo(AiRunStatus::Running);
+        $pub->toolStarted($turn, 'read', '{"file_path":"composer.json"}', 0, 'Read composer.json');
+        $pub->toolFinished($turn, 'read', 'success', 'contents', 10, 8, null, 0);
+        $pub->toolStarted($turn, 'bash', '{"command":"git status"}', 1, 'Run shell command');
+        $pub->toolFinished($turn, 'bash', 'success', 'clean', 20, 5, null, 1);
+        $pub->turnCompleted($turn);
+
+        $mm = mockMessageManager();
+        $entries = [];
+
+        $mm->shouldReceive('appendToolUse')
+            ->twice()
+            ->withArgs(function (...$args) use (&$entries): bool {
+                $entries[] = $args[3];
+
+                return true;
+            });
+        $mm->shouldNotReceive('appendAssistantMessage');
+
+        (new ChatRunPersister)->materializeFromTurn($turn, $mm, $turn->employee_id, MAT_TEST_SESSION);
+
+        expect($entries)->toHaveCount(2)
+            ->and($entries[0]->toolCallIndex)->toBe(0)
+            ->and($entries[0]->displaySummary)->toBe('Read composer.json')
+            ->and($entries[1]->toolCallIndex)->toBe(1)
+            ->and($entries[1]->displaySummary)->toBe('Run shell command');
+    });
+
     it('flushes thinking before persisting the subsequent tool entry', function () {
         $turn = createMaterializerTurn();
         $pub = app(RunEventPublisher::class);

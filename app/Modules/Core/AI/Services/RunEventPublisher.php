@@ -1,9 +1,10 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 use Illuminate\Support\Facades\DB;
@@ -223,11 +224,17 @@ class RunEventPublisher
     /**
      * Emit tool.started when a tool invocation begins.
      */
-    public function toolStarted(AiRun $turn, string $toolName, ?string $argsSummary = null, ?int $toolCallIndex = null): AiRunEvent
-    {
+    public function toolStarted(
+        AiRun $turn,
+        string $toolName,
+        ?string $argsSummary = null,
+        ?int $toolCallIndex = null,
+        ?string $displaySummary = null,
+    ): AiRunEvent {
         return $this->publish($turn, RunEventType::ToolStarted, [
             'tool' => $toolName,
             'args_summary' => $argsSummary,
+            'display_summary' => $displaySummary,
             'tool_call_index' => $toolCallIndex,
         ]);
     }
@@ -256,10 +263,12 @@ class RunEventPublisher
         ?int $durationMs = null,
         ?int $resultLength = null,
         ?array $errorPayload = null,
+        ?int $toolCallIndex = null,
     ): AiRunEvent {
         return $this->publish($turn, RunEventType::ToolFinished, array_filter([
             'tool' => $toolName,
             'status' => $status,
+            'tool_call_index' => $toolCallIndex,
             'result_preview' => $resultPreview,
             'duration_ms' => $durationMs,
             'result_length' => $resultLength,

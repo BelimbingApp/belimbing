@@ -105,6 +105,8 @@ trait HandlesStreaming
             'current_phase' => RunPhase::WaitingForWorker,
             'runtime_meta' => [
                 'model_override' => $this->normalizeModelOverride($this->selectedModel),
+                'execution_controls_override' => app(SessionManager::class)
+                    ->getExecutionControlsOverride($this->employeeId, $this->selectedSessionId),
                 'page_context' => $this->resolvePageContextForDispatch(),
                 'execution_mode' => 'interactive',
             ],

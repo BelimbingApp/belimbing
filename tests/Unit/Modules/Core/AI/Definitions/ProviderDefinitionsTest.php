@@ -12,6 +12,7 @@ use App\Modules\Core\AI\Enums\ProviderOperation;
 use App\Modules\Core\AI\Exceptions\CopilotProxyRuntimeException;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
+use App\Modules\Core\AI\Services\OpenAiCodexClientVersionResolver;
 use App\Modules\Core\AI\Values\ResolvedProviderConfig;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -169,7 +170,7 @@ test('GenericOAuthDefinition refuses runtime resolution without a dedicated flow
 // ── OpenAiCodexDefinition ──
 
 test('OpenAiCodexDefinition has OAuth auth type and default base URL', function (): void {
-    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class), app(OpenAiCodexClientVersionResolver::class));
 
     expect($def->key())->toBe('openai-codex')
         ->and($def->authType())->toBe(AuthType::OAuth)
@@ -177,7 +178,7 @@ test('OpenAiCodexDefinition has OAuth auth type and default base URL', function 
 });
 
 test('OpenAiCodexDefinition validates and normalizes create input without api key', function (): void {
-    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class), app(OpenAiCodexClientVersionResolver::class));
 
     $result = $def->validateAndNormalize([
         'base_url' => PDT_CODEX_BASE_URL,
@@ -191,7 +192,7 @@ test('OpenAiCodexDefinition validates and normalizes create input without api ke
 });
 
 test('OpenAiCodexDefinition edit preserves durable auth state by omitting connection_config', function (): void {
-    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class), app(OpenAiCodexClientVersionResolver::class));
 
     $result = $def->validateAndNormalize([
         'base_url' => PDT_CODEX_BASE_URL,
@@ -205,7 +206,7 @@ test('OpenAiCodexDefinition edit preserves durable auth state by omitting connec
 
 test('OpenAiCodexDefinition does not define fallback model lists', function (): void {
     $provider = new AiProvider;
-    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class));
+    $def = new OpenAiCodexDefinition(app(OpenAiCodexAuthManager::class), app(OpenAiCodexClientVersionResolver::class));
 
     expect($def->discoverModels($provider))->toBeNull();
 });

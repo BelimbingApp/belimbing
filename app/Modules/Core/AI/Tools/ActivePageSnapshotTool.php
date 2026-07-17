@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
@@ -17,7 +18,7 @@ use App\Modules\Core\AI\Services\PageContextHolder;
  * Phase 1 metadata (route, title, etc.) is already in the system prompt;
  * this tool provides the richer Phase 2 data (forms, tables, modals).
  */
-class ActivePageSnapshotTool extends AbstractTool
+class ActivePageSnapshotTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
@@ -53,6 +54,11 @@ class ActivePageSnapshotTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.active-page-snapshot.view';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        return __('Inspect the current page');
     }
 
     protected function toolMetadata(): array

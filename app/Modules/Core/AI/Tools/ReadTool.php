@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
@@ -10,7 +11,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
 use App\Modules\Core\AI\Tools\Concerns\BuildsSurfaceToolPayload;
 
-class ReadTool extends AbstractTool
+class ReadTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use BuildsSurfaceToolPayload;
     use ProvidesToolMetadata;
@@ -69,6 +70,19 @@ class ReadTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.read.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        if (($arguments['target'] ?? 'file') === 'data') {
+            return __('Query data');
+        }
+
+        $path = is_string($arguments['file_path'] ?? null) ? $arguments['file_path'] : '';
+        $offset = $arguments['offset'] ?? null;
+        $suffix = is_numeric($offset) && (int) $offset > 0 ? ' @'.(int) $offset : '';
+
+        return $path !== '' ? __('Read :path', ['path' => $path]).$suffix : __('Read file');
     }
 
     protected function toolMetadata(): array

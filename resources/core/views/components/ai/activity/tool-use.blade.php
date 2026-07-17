@@ -1,6 +1,7 @@
 @props([
     'tool',
     'argsSummary' => '{}',
+    'displaySummary' => '',
     'status' => 'success',
     'durationMs' => null,
     'resultPreview' => '',
@@ -35,7 +36,16 @@
                 </span>
             </div>
 
-            @if ($argsSummary !== '')
+            @if ($displaySummary !== '')
+                {{-- Human-readable invocation line; raw arguments stay one click away for full transparency. --}}
+                <div class="mt-1 text-muted break-words text-[11px]">{{ $displaySummary }}</div>
+                @if ($argsSummary !== '' && $argsSummary !== '{}')
+                    <details class="mt-0.5">
+                        <summary class="cursor-pointer select-none text-[10px] text-muted/70 hover:text-muted">{{ __('Raw arguments') }}</summary>
+                        <div class="mt-1 text-muted whitespace-pre-wrap break-all font-mono text-[11px]">{{ $argsSummary }}</div>
+                    </details>
+                @endif
+            @elseif ($argsSummary !== '')
                 <div @class([
                     'mt-1 text-muted whitespace-pre-wrap break-all font-mono text-[11px]',
                 ])>{{ $argsSummary }}</div>

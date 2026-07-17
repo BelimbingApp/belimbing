@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 
@@ -190,6 +191,7 @@ class RunStreamBridge
                 $toolName,
                 $data['args_summary'] ?? null,
                 isset($data['tool_call_index']) ? (int) $data['tool_call_index'] : null,
+                is_string($data['display_summary'] ?? null) ? $data['display_summary'] : null,
             )->toSsePayload(),
         ];
     }
@@ -228,6 +230,7 @@ class RunStreamBridge
                 isset($data['duration_ms']) ? (int) $data['duration_ms'] : null,
                 isset($data['result_length']) ? (int) $data['result_length'] : null,
                 is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
+                isset($data['tool_call_index']) ? (int) $data['tool_call_index'] : null,
             )->toSsePayload(),
             $this->publisher->phaseChanged($turn, RunPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),

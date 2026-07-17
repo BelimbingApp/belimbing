@@ -33,7 +33,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('api/ai/chat/attachments/{employeeId}/{sessionId}/{attachmentId}', ChatAttachmentController::class)
         ->name('ai.chat.attachments.show')
         ->whereNumber('employeeId')
-        ->where('sessionId', '[0-9]{8}-[0-9]{6}')
+        ->where('sessionId', '[0-9]{8}-[0-9]{6}(?:-[a-z0-9]{6})?')
         ->where('attachmentId', '[a-zA-Z0-9_]+');
     // Lara setup
     Route::get('admin/setup/lara', Lara::class)

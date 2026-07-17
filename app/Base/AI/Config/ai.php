@@ -220,6 +220,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | OpenAI Codex (subscription provider)
+    |--------------------------------------------------------------------------
+    |
+    | The ChatGPT Codex backend filters model discovery by the claimed Codex
+    | CLI client_version. When auto_client_version is enabled, Belimbing
+    | follows the latest stable Codex CLI release (cached daily) unless an
+    | operator pins a version in the provider's advanced settings.
+    |
+    */
+    'openai_codex' => [
+        'auto_client_version' => (bool) env('AI_CODEX_AUTO_CLIENT_VERSION', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Lara (System Agent)
     |--------------------------------------------------------------------------
     |

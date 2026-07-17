@@ -25,6 +25,7 @@ use App\Modules\Core\AI\Console\Commands\PricingSnapshotRefreshCommand;
 use App\Modules\Core\AI\Console\Commands\ReapOrphanRunsCommand;
 use App\Modules\Core\AI\Console\Commands\SchedulesTickCommand;
 use App\Modules\Core\AI\Console\Commands\SweepStaleTurnsCommand;
+use App\Modules\Core\AI\Console\Commands\ToolStatsCommand;
 use App\Modules\Core\AI\Contracts\AgentTaskContextContributor;
 use App\Modules\Core\AI\Providers\Families\LlmProviderFamily;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
@@ -294,6 +295,7 @@ class ServiceProvider extends BaseServiceProvider
                 OperationsStatusCommand::class,
                 ReapOrphanRunsCommand::class,
                 SweepStaleTurnsCommand::class,
+                ToolStatsCommand::class,
                 InspectRunCommand::class,
                 HealthSnapshotCommand::class,
                 LifecyclePreviewCommand::class,

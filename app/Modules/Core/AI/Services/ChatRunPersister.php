@@ -61,7 +61,7 @@ class ChatRunPersister
             /** @var array<string, mixed> */
             public array $usageMeta = [];
 
-            /** @var array<int, array{tool: string, args_summary: string, tool_call_index: int}> */
+            /** @var array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}> */
             public array $pendingToolCalls = [];
         };
         $state->runId = $turn->id;
@@ -205,7 +205,7 @@ class ChatRunPersister
      * Buffer the tool call data until the corresponding ToolFinished arrives.
      *
      * @param  array<string, mixed>  $payload
-     * @param  object{pendingToolCalls: array<int, array{tool: string, args_summary: string, tool_call_index: int}>}  $state
+     * @param  object{pendingToolCalls: array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}>}  $state
      */
     private function materializeToolStarted(
         array $payload,
@@ -216,6 +216,7 @@ class ChatRunPersister
         $state->pendingToolCalls[$index] = [
             'tool' => (string) ($payload['tool'] ?? ''),
             'args_summary' => (string) ($payload['args_summary'] ?? '{}'),
+            'display_summary' => is_string($payload['display_summary'] ?? null) ? $payload['display_summary'] : '',
             'tool_call_index' => $index,
         ];
     }
@@ -224,7 +225,7 @@ class ChatRunPersister
      * Write a single tool_use entry merging buffered call data with the result.
      *
      * @param  array<string, mixed>  $payload
-     * @param  object{runId: ?string, pendingToolCalls: array<int, array{tool: string, args_summary: string, tool_call_index: int}>}  $state
+     * @param  object{runId: ?string, pendingToolCalls: array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}>}  $state
      */
     private function materializeToolFinished(
         MessageManager $mm,
@@ -256,6 +257,7 @@ class ChatRunPersister
                 status: (string) ($payload['status'] ?? 'success'),
                 durationMs: (int) ($payload['duration_ms'] ?? 0),
                 errorPayload: is_array($payload['error_payload'] ?? null) ? $payload['error_payload'] : null,
+                displaySummary: $buffered['display_summary'] ?? '',
             ),
         );
     }

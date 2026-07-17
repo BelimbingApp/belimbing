@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Services\Runtime;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
@@ -294,6 +295,29 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * @param  array<string, mixed>|null  $overlay
      * @return array{execution_controls: ExecutionControls, ...}
      */
+    /**
+     * Human-readable one-liner for a tool invocation, when the tool provides one.
+     *
+     * Never throws: arguments arrive exactly as the LLM produced them, and a
+     * broken summary must not break tool execution.
+     */
+    private function toolDisplaySummary(string $functionName, array $arguments): ?string
+    {
+        $tool = $this->toolRegistry->get($functionName);
+
+        if (! $tool instanceof ProvidesDisplaySummary) {
+            return null;
+        }
+
+        try {
+            $summary = trim($tool->displaySummary($arguments));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $summary !== '' ? Str::limit($summary, 160) : null;
+    }
+
     private function applyExecutionControlsOverlay(array $config, ?array $overlay): array
     {
         if ($overlay === null || $overlay === []) {
@@ -1266,6 +1290,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
                 200,
             );
+            $displaySummary = $this->toolDisplaySummary($functionName, $arguments);
 
             $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
 
@@ -1309,6 +1334,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 'phase' => 'tool_started',
                 'tool' => $functionName,
                 'args_summary' => $argsSummary,
+                'display_summary' => $displaySummary,
                 'tool_call_index' => $toolIndex,
                 'started_at' => now()->toIso8601String(),
                 'run_id' => $runId,
@@ -1349,6 +1375,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             yield ['event' => 'status', 'data' => [
                 'phase' => 'tool_finished',
                 'tool' => $functionName,
+                'tool_call_index' => $toolIndex,
                 'result_preview' => $toolExecution['action']['result_preview'] ?? '',
                 'result_length' => mb_strlen($resultString),
                 'duration_ms' => $durationMs,
