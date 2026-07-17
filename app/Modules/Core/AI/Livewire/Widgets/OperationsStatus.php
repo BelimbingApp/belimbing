@@ -14,7 +14,7 @@ use Illuminate\Contracts\View\View;
  */
 class OperationsStatus extends Widget
 {
-    public function render(OperationsDispatchService $operations): View
+    protected function content(OperationsDispatchService $operations): View
     {
         $counts = $operations->statusCounts();
 

@@ -5,6 +5,7 @@ namespace App\Base\Livewire;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
 use App\Base\Support\Str as BlbStr;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -90,11 +91,23 @@ class ComponentDiscoveryService
 
             $class = $this->classFromPath($file->getPathname());
 
-            if (! $class || ! class_exists($class)) {
+            if (! $class) {
                 continue;
             }
 
-            if (! is_subclass_of($class, Component::class)) {
+            // Loading a class can fatal beyond our control — e.g. it links
+            // against an interface a partially-updated sibling repo doesn't
+            // ship yet. One broken module class must not take down every
+            // request, so skip it and report it (deduplicated — discovery
+            // runs on every request) so it reaches the status-bar
+            // diagnostics instead of staying log-file-only.
+            try {
+                if (! class_exists($class) || ! is_subclass_of($class, Component::class)) {
+                    continue;
+                }
+            } catch (\Throwable $exception) {
+                $this->reportBrokenClass($class, $exception);
+
                 continue;
             }
 
@@ -103,6 +116,33 @@ class ComponentDiscoveryService
             if ($name !== null) {
                 $components[$name] = $class;
             }
+        }
+    }
+
+    /**
+     * Report a component class that failed to load, once per window.
+     *
+     * Discovery runs on every request, so an unthrottled report would write
+     * one log line per request while the break persists. The recorder behind
+     * the status-bar diagnostics fingerprints and counts, so one report per
+     * window keeps the bubble alive without flooding the log.
+     */
+    protected function reportBrokenClass(string $class, \Throwable $exception): void
+    {
+        $fingerprint = sha1($class.'|'.$exception->getMessage());
+
+        try {
+            $shouldReport = Cache::add(
+                'blb.livewire.broken-component.'.$fingerprint,
+                true,
+                now()->addMinutes(15),
+            );
+        } catch (\Throwable) {
+            $shouldReport = true;
+        }
+
+        if ($shouldReport) {
+            report(ComponentDiscoveryException::classFailedToLoad($class, $exception));
         }
     }
 

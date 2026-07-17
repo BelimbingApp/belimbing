@@ -18,7 +18,7 @@ class RequestHealth extends Widget
 {
     private const CACHE_KEY = 'perf.widget-request-health.v1';
 
-    public function render(PerfLog $log): View
+    protected function content(PerfLog $log): View
     {
         // Scalars only in the cache: cache.serializable_classes is disabled.
         $summary = Cache::flexible(
