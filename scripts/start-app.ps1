@@ -470,7 +470,16 @@ try {
         $schedulerTask = Get-ScheduledTask -TaskName 'Belimbing Local Scheduler' -ErrorAction SilentlyContinue
 
         if ($schedulerTask -and $schedulerTask.State -ne 'Disabled') {
-            Write-Information "The 'Belimbing Local Scheduler' Windows task owns schedule:work; not starting another." -InformationAction Continue
+            if ($schedulerTask.State -ne 'Running') {
+                # A registered task can be Ready after an interactive shell or
+                # Task Scheduler cancellation.  It still owns the scheduler,
+                # but only after we restart it; otherwise the application looks
+                # healthy while no scheduled work is being evaluated.
+                Start-ScheduledTask -TaskName 'Belimbing Local Scheduler' -ErrorAction Stop
+                Write-Information "Restarted the stopped 'Belimbing Local Scheduler' Windows task." -InformationAction Continue
+            } else {
+                Write-Information "The 'Belimbing Local Scheduler' Windows task owns schedule:work; not starting another." -InformationAction Continue
+            }
         } else {
             $processes += Start-BelimbingProcess -Name 'Scheduler' -FilePath $phpExe -Arguments @((Join-Path $ProjectRootPath 'artisan'), 'schedule:work')
         }
