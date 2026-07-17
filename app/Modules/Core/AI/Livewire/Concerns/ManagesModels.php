@@ -3,7 +3,6 @@
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Base\AI\Services\ModelCatalogService;
-use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Models\AiProviderModel;
 
 /**
@@ -45,13 +44,14 @@ trait ManagesModels
      */
     public function toggleModelActive(int $modelId): void
     {
-        $model = AiProviderModel::query()->with('provider')->find($modelId);
+        $model = $this->companyLlmModels()->find($modelId);
 
-        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
+        if (! $model) {
             return;
         }
 
         $model->update(['is_active' => ! $model->is_active]);
+        $this->dispatchLaraActivationState();
         $this->notify(__('Model availability updated.'));
     }
 
@@ -70,9 +70,9 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->with('provider')->find($modelId);
+        $model = $this->companyLlmModels()->find($modelId);
 
-        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
+        if (! $model) {
             return;
         }
 
@@ -87,7 +87,7 @@ trait ManagesModels
 
     public function openCreateModel(int $providerId): void
     {
-        if (! AiProvider::query()->llm()->whereKey($providerId)->exists()) {
+        if (! $this->companyLlmProviders()->whereKey($providerId)->exists()) {
             return;
         }
 
@@ -104,7 +104,7 @@ trait ManagesModels
             return;
         }
 
-        if (! AiProvider::query()->llm()->whereKey($this->modelProviderId)->exists()) {
+        if (! $this->companyLlmProviders()->whereKey($this->modelProviderId)->exists()) {
             $this->notifyError(__('Provider was not found.'));
 
             return;
@@ -132,13 +132,14 @@ trait ManagesModels
      */
     public function setDefaultModel(int $modelId): void
     {
-        $model = AiProviderModel::query()->with('provider')->find($modelId);
+        $model = $this->companyLlmModels()->find($modelId);
 
-        if (! $model || ! $this->modelBelongsToLlmProvider($model)) {
+        if (! $model) {
             return;
         }
 
         $model->setAsDefault();
+        $this->dispatchLaraActivationState();
         $this->notify(__('Default model updated.'));
     }
 
@@ -154,9 +155,9 @@ trait ManagesModels
      */
     public function openModelExecutionControls(int $modelId): void
     {
-        $model = AiProviderModel::query()->with('provider')->find($modelId);
+        $model = $this->companyLlmModels()->find($modelId);
 
-        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
+        if ($model === null) {
             return;
         }
 
@@ -197,9 +198,9 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
+        $model = $this->companyLlmModels()->find($this->editingControlsModelId);
 
-        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
+        if ($model === null) {
             return;
         }
 
@@ -220,9 +221,9 @@ trait ManagesModels
             return;
         }
 
-        $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
+        $model = $this->companyLlmModels()->find($this->editingControlsModelId);
 
-        if ($model === null || ! $this->modelBelongsToLlmProvider($model)) {
+        if ($model === null) {
             return;
         }
 
@@ -246,9 +247,9 @@ trait ManagesModels
             return null;
         }
 
-        $model = AiProviderModel::query()->with('provider')->find($this->editingControlsModelId);
+        $model = $this->companyLlmModels()->with('provider')->find($this->editingControlsModelId);
 
-        if ($model === null || $model->provider === null || ! $this->modelBelongsToLlmProvider($model)) {
+        if ($model === null || $model->provider === null) {
             return null;
         }
 
@@ -260,10 +261,5 @@ trait ManagesModels
             apiType: $apiType,
             config: $this->editingExecutionControls,
         );
-    }
-
-    private function modelBelongsToLlmProvider(AiProviderModel $model): bool
-    {
-        return $model->provider?->family === AiProvider::FAMILY_LLM;
     }
 }

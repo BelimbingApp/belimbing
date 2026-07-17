@@ -4,6 +4,7 @@ namespace App\Modules\Core\AI\Livewire\Setup;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Modules\Core\AI\Enums\WorkspaceFileSlot;
+use App\Modules\Core\AI\Livewire\Concerns\DispatchesLaraActivationState;
 use App\Modules\Core\AI\Services\ConfigResolver;
 use App\Modules\Core\AI\Services\LaraInteractiveToolSet;
 use App\Modules\Core\AI\Services\LaraTaskRegistry;
@@ -29,6 +30,7 @@ use Livewire\Component;
  */
 class Lara extends Component
 {
+    use DispatchesLaraActivationState;
     use InteractsWithNotifications;
 
     public ?string $editingSlot = null;
@@ -51,6 +53,8 @@ class Lara extends Component
         if (Employee::provisionLara()) {
             $this->notify(__('Lara has been provisioned.'));
         }
+
+        $this->dispatchLaraActivationState();
     }
 
     /**

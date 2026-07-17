@@ -178,29 +178,30 @@
     {{-- Right: Lara + Version --}}
     <div class="flex items-center gap-4">
         @auth
-            @if ($laraActivated)
-                <button
-                    type="button"
-                    @click="$dispatch('open-agent-chat')"
-                    class="text-accent hover:underline inline-flex items-center gap-1"
-                    title="{{ __('Open Lara chat (Ctrl+K)') }}"
-                    aria-label="{{ __('Open Lara chat (Ctrl+K)') }}"
-                >
-                    <x-ai.lara-identity compact :show-role="false" />
-                    <span x-show="laraBusy" x-cloak class="w-2 h-2 bg-accent rounded-full animate-pulse motion-reduce:animate-none motion-reduce:opacity-70"></span>
-                </button>
-            @else
-                <a
-                    href="{{ route('admin.ai.providers') }}"
-                    wire:navigate
-                    class="text-status-warning hover:underline inline-flex items-center gap-1"
-                    title="{{ __('Activate Lara') }}"
-                    aria-label="{{ __('Activate Lara') }}"
-                >
-                    <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
-                    {{ __('Activate Lara') }}
-                </a>
-            @endif
+            <button
+                type="button"
+                x-show="laraActivated"
+                x-cloak
+                @click="$dispatch('open-agent-chat')"
+                class="text-accent hover:underline inline-flex items-center gap-1"
+                title="{{ __('Open Lara chat (Ctrl+K)') }}"
+                aria-label="{{ __('Open Lara chat (Ctrl+K)') }}"
+            >
+                <x-ai.lara-identity compact :show-role="false" />
+                <span x-show="laraBusy" x-cloak class="w-2 h-2 bg-accent rounded-full animate-pulse motion-reduce:animate-none motion-reduce:opacity-70"></span>
+            </button>
+            <a
+                x-show="!laraActivated"
+                x-cloak
+                href="{{ route('admin.ai.providers') }}"
+                wire:navigate
+                class="text-status-warning hover:underline inline-flex items-center gap-1"
+                title="{{ __('Activate Lara') }}"
+                aria-label="{{ __('Activate Lara') }}"
+            >
+                <x-icon name="heroicon-o-sparkles" class="w-4 h-4" />
+                {{ __('Activate Lara') }}
+            </a>
         @endauth
         <span>v1.0.0</span>
     </div>

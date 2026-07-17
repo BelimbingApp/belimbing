@@ -18,13 +18,14 @@ use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Modules\Core\AI\DTO\PageContext;
+use App\Modules\Core\AI\Livewire\Concerns\DispatchesLaraActivationState;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviders;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
+use App\Modules\Core\AI\Livewire\Concerns\ScopesLlmProviders;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\AiProviderFamilyRegistry;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 use App\Modules\Core\Employee\Models\Employee;
@@ -35,12 +36,14 @@ use Livewire\Component;
 
 class Providers extends Component implements ProvidesLaraPageContext
 {
+    use DispatchesLaraActivationState;
     use FormatsDisplayValues;
     use InteractsWithNotifications;
     use ManagesModels;
     use ManagesProviderHelp;
     use ManagesProviders;
     use ManagesSync;
+    use ScopesLlmProviders;
 
     private const IMAGE_PROVIDER_STATUS_CONFIG_KEY = 'operator_status';
 
@@ -73,7 +76,7 @@ class Providers extends Component implements ProvidesLaraPageContext
      */
     public function toggleProvider(int $providerId): void
     {
-        if (! AiProvider::query()->llm()->whereKey($providerId)->exists()) {
+        if (! $this->companyLlmProviders()->whereKey($providerId)->exists()) {
             return;
         }
 
@@ -275,9 +278,8 @@ class Providers extends Component implements ProvidesLaraPageContext
                 ->get();
 
             if ($this->expandedProviderId !== null) {
-                $expandedModels = AiProviderModel::query()
+                $expandedModels = $this->companyLlmModels()
                     ->where('ai_provider_id', $this->expandedProviderId)
-                    ->whereHas('provider', fn ($query) => $query->llm())
                     ->orderBy('model_id')
                     ->get();
             }
@@ -299,6 +301,8 @@ class Providers extends Component implements ProvidesLaraPageContext
         $imageProviderTestable = $this->imageProviderTestable($imageProviders);
         $imageProviderStatusLines = $companyId !== null ? $this->imageProviderStatusLines($companyId) : [];
 
+        $laraActivated = Employee::laraActivationState() === true;
+
         return view('livewire.admin.ai.providers.providers', [
             'providers' => $providers,
             'expandedModels' => $expandedModels,
@@ -306,7 +310,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             'imageProviders' => $imageProviders,
             'imageProviderTestable' => $imageProviderTestable,
             'imageProviderStatusLines' => $imageProviderStatusLines,
-            'laraActivated' => Employee::laraActivationState() === true,
+            'laraActivated' => $laraActivated,
         ]);
     }
 
