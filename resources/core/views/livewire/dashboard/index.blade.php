@@ -37,11 +37,7 @@
             </x-ui.card>
         @endif
 
-        {{-- Dense flow lets 1-column widgets backfill the gap beside a
-             2-column one, so narrow cards pack to the right instead of
-             leaving holes. Order still follows the user's layout; packing
-             only pulls a later narrow widget up when a slot would go empty. --}}
-        <div class="grid gap-6 md:grid-cols-3 md:grid-flow-row-dense">
+        <div class="grid gap-6 md:grid-cols-3">
             @foreach($widgets as $widget)
                 <div
                     wire:key="widget-{{ $widget->id }}"
