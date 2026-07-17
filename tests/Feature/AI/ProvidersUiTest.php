@@ -6,6 +6,7 @@ use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
 use App\Modules\Core\AI\Livewire\Providers\Providers;
 use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
 use App\Modules\Core\AI\Models\AiProvider;
+use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
@@ -170,6 +171,62 @@ test('providers page explains how to activate Lara when no active model is confi
         ->assertSee('Lara stays inactive until one connected provider has an active model available to Agents.')
         ->assertSee('Connect a provider below and enable at least one model. If Lara still needs provisioning afterward, finish it on the')
         ->assertSee('href="'.route('admin.setup.lara').'"', false);
+});
+
+test('setting the default model refreshes Lara state in persisted chrome', function (): void {
+    Employee::provisionLara();
+    $lara = Employee::query()->findOrFail(Employee::LARA_ID);
+    $employee = Employee::factory()->create(['company_id' => $lara->company_id]);
+    $user = User::factory()->create([
+        'company_id' => $lara->company_id,
+        'employee_id' => $employee->id,
+    ]);
+    $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_SAVED_KEY);
+    $model = AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'gpt-test',
+        'is_active' => true,
+        'is_default' => false,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Providers::class)
+        ->call('setDefaultModel', $model->id)
+        ->assertDispatched('lara-activation-changed', activated: true);
+
+    expect($model->fresh()->is_default)->toBeTrue();
+});
+
+test('provider actions cannot cross the authenticated company boundary', function (): void {
+    $user = createAiProvidersTestUser();
+    $otherUser = createAiProvidersTestUser();
+    $otherProvider = createAiProvidersTestProvider($otherUser, AI_PROVIDERS_SAVED_KEY);
+    $otherModel = AiProviderModel::query()->create([
+        'ai_provider_id' => $otherProvider->id,
+        'model_id' => 'other-company-model',
+        'is_active' => true,
+        'is_default' => false,
+    ]);
+
+    $this->actingAs($user);
+
+    Livewire::test(Providers::class)
+        ->call('toggleProvider', $otherProvider->id)
+        ->assertSet('expandedProviderId', null)
+        ->call('openEditProvider', $otherProvider->id)
+        ->assertSet('showProviderForm', false)
+        ->call('toggleModelActive', $otherModel->id)
+        ->call('setDefaultModel', $otherModel->id)
+        ->call('confirmDeleteProvider', $otherProvider->id)
+        ->assertSet('showDeleteProvider', false)
+        ->set('deletingProviderId', $otherProvider->id)
+        ->call('deleteProvider')
+        ->call('syncProviderModels', $otherProvider->id);
+
+    expect($otherProvider->fresh())->not->toBeNull()
+        ->and($otherModel->fresh()->is_active)->toBeTrue()
+        ->and($otherModel->fresh()->is_default)->toBeFalse();
 });
 
 test('provider catalog is a lazy island kept out of the page initial paint', function (): void {

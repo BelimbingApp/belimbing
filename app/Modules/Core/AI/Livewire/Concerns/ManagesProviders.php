@@ -71,7 +71,7 @@ trait ManagesProviders
 
     public function openEditProvider(int $providerId): void
     {
-        $provider = AiProvider::query()->llm()->find($providerId);
+        $provider = $this->companyLlmProviders()->find($providerId);
 
         if (! $provider) {
             return;
@@ -128,7 +128,7 @@ trait ManagesProviders
         ];
 
         if ($this->isEditingProvider && $this->editingProviderId) {
-            $provider = AiProvider::query()->llm()->find($this->editingProviderId);
+            $provider = $this->companyLlmProviders()->find($this->editingProviderId);
 
             if ($provider) {
                 unset($data['name']);
@@ -153,13 +153,14 @@ trait ManagesProviders
             $this->notify(__('Provider connected.'));
         }
 
+        $this->dispatchLaraActivationState();
         $this->showProviderForm = false;
         $this->resetProviderForm();
     }
 
     public function confirmDeleteProvider(int $providerId): void
     {
-        $provider = AiProvider::query()->llm()->find($providerId);
+        $provider = $this->companyLlmProviders()->find($providerId);
 
         if (! $provider) {
             return;
@@ -176,11 +177,12 @@ trait ManagesProviders
             return;
         }
 
-        $provider = AiProvider::query()->llm()->find($this->deletingProviderId);
+        $provider = $this->companyLlmProviders()->find($this->deletingProviderId);
 
         if ($provider) {
             $provider->models()->delete();
             $provider->delete();
+            $this->dispatchLaraActivationState();
             $this->notify(__('Provider disconnected.'));
         } else {
             $this->notifyError(__('Provider was not found.'));
@@ -200,15 +202,13 @@ trait ManagesProviders
      */
     public function movePriorityUp(int $providerId): void
     {
-        $provider = AiProvider::query()->llm()->find($providerId);
+        $provider = $this->companyLlmProviders()->find($providerId);
 
         if (! $provider || $provider->priority <= 1) {
             return;
         }
 
-        $above = AiProvider::query()
-            ->where('company_id', $provider->company_id)
-            ->llm()
+        $above = $this->companyLlmProviders()
             ->where('priority', $provider->priority - 1)
             ->first();
 

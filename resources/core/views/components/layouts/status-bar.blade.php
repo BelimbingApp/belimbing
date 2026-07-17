@@ -176,11 +176,7 @@
     </div>
 
     {{-- Right: Lara + Version --}}
-    <div
-        class="flex items-center gap-4"
-        x-data="{ laraActivated: @js($laraActivated) }"
-        @lara-activation-changed.window="laraActivated = $event.detail?.activated"
-    >
+    <div class="flex items-center gap-4">
         @auth
             <button
                 type="button"

@@ -13,13 +13,14 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Enums\ProviderOperation;
+use App\Modules\Core\AI\Livewire\Concerns\DispatchesLaraActivationState;
 use App\Modules\Core\AI\Livewire\Concerns\FormatsDisplayValues;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesModels;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesProviderHelp;
 use App\Modules\Core\AI\Livewire\Concerns\ManagesSync;
+use App\Modules\Core\AI\Livewire\Concerns\ScopesLlmProviders;
 use App\Modules\Core\AI\Livewire\Providers\Concerns\HasProviderSetupPresentation;
 use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use App\Modules\Core\AI\Services\ProviderAuthFlowService;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
@@ -32,12 +33,14 @@ use Livewire\Component;
 
 class ProviderSetup extends Component
 {
+    use DispatchesLaraActivationState;
     use FormatsDisplayValues;
     use HasProviderSetupPresentation;
     use InteractsWithNotifications;
     use ManagesModels;
     use ManagesProviderHelp;
     use ManagesSync;
+    use ScopesLlmProviders;
 
     public string $providerKey = '';
 
@@ -166,6 +169,7 @@ class ProviderSetup extends Component
             $provider = $this->connectProvider($companyId);
             $this->cleanupAuthFlows();
             $this->connectedProviderId = $provider->id;
+            $this->dispatchLaraActivationState();
         } catch (ValidationException $e) {
             $mapped = [];
 
@@ -276,10 +280,10 @@ class ProviderSetup extends Component
         $models = collect();
 
         if ($this->connectedProviderId !== null) {
-            $connectedProvider = AiProvider::query()->llm()->find($this->connectedProviderId);
+            $connectedProvider = $this->companyLlmProviders()->find($this->connectedProviderId);
 
             if ($connectedProvider) {
-                $models = AiProviderModel::query()
+                $models = $this->companyLlmModels()
                     ->where('ai_provider_id', $connectedProvider->id)
                     ->orderBy('model_id')
                     ->get();

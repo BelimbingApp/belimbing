@@ -2,7 +2,6 @@
 
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
-use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Log;
@@ -35,7 +34,7 @@ trait ManagesSync
      */
     public function syncProviderModels(int $providerId): void
     {
-        $provider = AiProvider::query()->llm()->find($providerId);
+        $provider = $this->companyLlmProviders()->find($providerId);
 
         if (! $provider) {
             return;
@@ -119,6 +118,7 @@ trait ManagesSync
             },
         };
         $this->syncMessageProviderId = $providerId;
+        $this->dispatchLaraActivationState();
     }
 
     /**
