@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
@@ -18,7 +19,7 @@ use App\Modules\Core\Employee\Models\Employee;
  * Progressive disclosure: the runtime context lists skill ids; this tool
  * pulls the full SKILL.md body when Lara needs the procedure.
  */
-class LoadSkillTool extends AbstractTool
+class LoadSkillTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
@@ -58,6 +59,13 @@ class LoadSkillTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.load-skill.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        $skillId = is_string($arguments['skill_id'] ?? null) ? trim($arguments['skill_id']) : '';
+
+        return $skillId !== '' ? __('Load skill :skill', ['skill' => $skillId]) : __('Load skill');
     }
 
     protected function metadata(): array

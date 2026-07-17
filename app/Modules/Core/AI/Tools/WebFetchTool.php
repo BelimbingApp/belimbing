@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\UrlSafetyGuard;
@@ -23,7 +24,7 @@ use App\Base\AI\Tools\ToolResult;
  *
  * Gated by `admin.ai.tool.web-fetch.execute` authz capability.
  */
-class WebFetchTool extends AbstractTool
+class WebFetchTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
@@ -83,6 +84,13 @@ class WebFetchTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.web-fetch.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        $url = is_string($arguments['url'] ?? null) ? trim($arguments['url']) : '';
+
+        return $url !== '' ? __('Fetch :url', ['url' => $url]) : __('Fetch a web page');
     }
 
     protected function metadata(): array

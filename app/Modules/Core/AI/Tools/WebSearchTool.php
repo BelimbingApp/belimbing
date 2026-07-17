@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Services\WebSearchService;
@@ -22,7 +24,7 @@ use Illuminate\Support\Facades\Cache;
  *
  * Gated by `admin.ai.tool.web-search.execute` authz capability.
  */
-class WebSearchTool extends AbstractTool
+class WebSearchTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
@@ -152,6 +154,13 @@ class WebSearchTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.web-search.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        $query = is_string($arguments['query'] ?? null) ? trim($arguments['query']) : '';
+
+        return $query !== '' ? __('Search the web for ":query"', ['query' => $query]) : __('Search the web');
     }
 
     protected function metadata(): array

@@ -653,6 +653,7 @@
                             $messageStopNote = $message->getMetaString('stop_note');
                             $messageTool = $message->getMetaString('tool', '');
                             $messageArgsSummary = $message->getMetaString('args_summary', '{}');
+                            $messageDisplaySummary = $message->getMetaString('display_summary', '');
                             $messageStatus = $message->getMetaString('status', 'success');
                             $messageDurationMs = $message->getMetaInt('duration_ms');
                             $messageResultPreview = $message->getMetaString('result_preview', '');
@@ -673,6 +674,7 @@
                             <x-ai.activity.tool-use
                                 :tool="$messageTool"
                                 :args-summary="$messageArgsSummary"
+                                :display-summary="$messageDisplaySummary"
                                 :status="$messageStatus"
                                 :duration-ms="$messageDurationMs"
                                 :result-preview="$messageResultPreview"
@@ -840,7 +842,18 @@
                                                     </template>
                                                 </span>
                                             </div>
-                                            <template x-if="entry.argsSummary">
+                                            <template x-if="entry.displaySummary">
+                                                <div>
+                                                    <div class="mt-1 text-muted break-words text-[11px]" x-text="entry.displaySummary"></div>
+                                                    <template x-if="entry.argsSummary && entry.argsSummary !== '{}'">
+                                                        <details class="mt-0.5">
+                                                            <summary class="cursor-pointer select-none text-[10px] text-muted/70 hover:text-muted">{{ __('Raw arguments') }}</summary>
+                                                            <div class="mt-1 text-muted whitespace-pre-wrap break-all font-mono text-[11px]" x-text="entry.argsSummary"></div>
+                                                        </details>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                            <template x-if="!entry.displaySummary && entry.argsSummary">
                                                 <div
                                                     class="mt-1 text-muted whitespace-pre-wrap break-all"
                                                     :class="entry.tool === 'bash' ? 'font-mono text-[11px]' : ''"
@@ -992,6 +1005,20 @@
                                         class="max-w-xs !py-0.5 !text-[11px]"
                                         aria-label="{{ __('AI model') }}"
                                     />
+                                    @if (count($availableEfforts) > 0)
+                                        <label class="sr-only" for="ai-effort-selector">{{ __('Reasoning effort') }}</label>
+                                        <select
+                                            id="ai-effort-selector"
+                                            wire:model.live="selectedEffort"
+                                            title="{{ __('Reasoning effort') }}"
+                                            class="rounded-lg border border-border-input bg-surface-card !py-0.5 !text-[11px] text-ink px-input-x focus:border-accent focus:ring-0 transition-colors shrink-0"
+                                        >
+                                            <option value="">{{ __('Effort: auto') }}</option>
+                                            @foreach ($availableEfforts as $effort)
+                                                <option value="{{ $effort['value'] }}">{{ $effort['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                    @endif
                                 </div>
                             @else
                                 <div class="inline-flex items-center gap-1 text-[11px] text-muted min-w-0">
@@ -2008,6 +2035,7 @@
                 type: 'tool_use',
                 tool: payload.tool || '',
                 argsSummary: payload.args_summary || '',
+                displaySummary: payload.display_summary || '',
                 status: 'running',
                 stdoutBuffer: '',
                 collapsed: false,

@@ -1,8 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
-use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Enums\AiRunStatus;
+use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 
@@ -190,6 +191,7 @@ class RunStreamBridge
                 $toolName,
                 $data['args_summary'] ?? null,
                 isset($data['tool_call_index']) ? (int) $data['tool_call_index'] : null,
+                is_string($data['display_summary'] ?? null) ? $data['display_summary'] : null,
             )->toSsePayload(),
         ];
     }

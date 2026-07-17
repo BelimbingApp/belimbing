@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
@@ -13,7 +14,7 @@ use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
 use SplFileInfo;
 use Symfony\Component\Finder\Finder;
 
-class SearchFilesTool extends AbstractTool
+class SearchFilesTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
@@ -71,6 +72,17 @@ class SearchFilesTool extends AbstractTool
                 'Generated and dependency directories are excluded',
             ],
         ];
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        $query = is_string($arguments['query'] ?? null) ? $arguments['query'] : '';
+        $mode = ($arguments['mode'] ?? 'content') === 'path' ? __('paths') : __('content');
+        $surface = is_string($arguments['target_surface'] ?? null) && $arguments['target_surface'] !== 'core'
+            ? ' · '.$arguments['target_surface']
+            : '';
+
+        return __('Search :mode for ":query"', ['mode' => $mode, 'query' => $query]).$surface;
     }
 
     protected function handle(array $arguments): ToolResult

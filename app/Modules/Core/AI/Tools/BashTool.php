@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Contracts\StreamableTool;
 use App\Base\AI\Exceptions\ShellBackendUnavailableException;
 use App\Base\AI\Services\ShellCommandRunner;
@@ -24,7 +25,7 @@ use App\Base\AI\Tools\ToolResult;
  * `admin.ai.tool.bash.execute` capability restricts which users may trigger it.
  * A per-execution timeout bounds runtime.
  */
-class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
+class BashTool extends AbstractHighImpactProcessTool implements ProvidesDisplaySummary, StreamableTool
 {
     private const TIMEOUT_SECONDS = 30;
 
@@ -62,6 +63,13 @@ class BashTool extends AbstractHighImpactProcessTool implements StreamableTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.bash.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        $command = is_string($arguments['command'] ?? null) ? trim($arguments['command']) : '';
+
+        return $command !== '' ? '$ '.$command : __('Run shell command');
     }
 
     protected function metadata(): array

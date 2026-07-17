@@ -15,6 +15,7 @@
                     <x-ai.activity.tool-use
                         :tool="$message->meta['tool'] ?? ''"
                         :args-summary="$message->meta['args_summary'] ?? '{}'"
+                        :display-summary="$message->meta['display_summary'] ?? ''"
                         :status="$message->meta['status'] ?? 'success'"
                         :duration-ms="$message->meta['duration_ms'] ?? null"
                         :result-preview="$message->meta['result_preview'] ?? ''"

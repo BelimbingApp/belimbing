@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\DTO;
 
 final readonly class ToolUseEntry
@@ -12,6 +13,7 @@ final readonly class ToolUseEntry
      * @param  string  $status  Execution status (success, error, etc.)
      * @param  int  $durationMs  Execution duration in milliseconds
      * @param  array<string, mixed>|null  $errorPayload  Error details when status is not success
+     * @param  string  $displaySummary  Human-readable invocation one-liner ('' when the tool provides none)
      */
     public function __construct(
         public string $toolName,
@@ -22,6 +24,7 @@ final readonly class ToolUseEntry
         public string $status = 'success',
         public int $durationMs = 0,
         public ?array $errorPayload = null,
+        public string $displaySummary = '',
     ) {}
 
     /**
@@ -38,6 +41,10 @@ final readonly class ToolUseEntry
             'status' => $this->status,
             'duration_ms' => $this->durationMs,
         ];
+
+        if ($this->displaySummary !== '') {
+            $meta['display_summary'] = $this->displaySummary;
+        }
 
         if ($this->errorPayload !== null) {
             $meta['error_payload'] = $this->errorPayload;

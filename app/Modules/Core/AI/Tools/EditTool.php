@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Tools;
 
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
 use App\Base\AI\Tools\AbstractTool;
@@ -10,7 +11,7 @@ use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\Services\RepositorySurfaceResolver;
 use App\Modules\Core\AI\Tools\Concerns\BuildsSurfaceToolPayload;
 
-class EditTool extends AbstractTool
+class EditTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use BuildsSurfaceToolPayload;
     use ProvidesToolMetadata;
@@ -75,6 +76,27 @@ class EditTool extends AbstractTool
     public function requiredCapability(): ?string
     {
         return 'admin.ai.tool.edit.execute';
+    }
+
+    public function displaySummary(array $arguments): string
+    {
+        if (($arguments['target'] ?? 'file') === 'data') {
+            $statement = is_string($arguments['statement'] ?? null) ? trim($arguments['statement']) : '';
+
+            return $statement !== '' ? __('Edit data: :statement', ['statement' => $statement]) : __('Edit data');
+        }
+
+        $path = is_string($arguments['file_path'] ?? null) ? $arguments['file_path'] : '';
+
+        if ($path === '') {
+            return __('Edit file');
+        }
+
+        return match ($arguments['operation'] ?? 'write') {
+            'append' => __('Append to :path', ['path' => $path]),
+            'replace' => __('Replace in :path', ['path' => $path]),
+            default => __('Write :path', ['path' => $path]),
+        };
     }
 
     protected function toolMetadata(): array
