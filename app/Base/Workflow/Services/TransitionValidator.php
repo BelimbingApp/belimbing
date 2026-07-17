@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Base\Workflow\Services;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Workflow\Contracts\ContextualTransitionGuard;
 use App\Base\Workflow\Contracts\TransitionGuard;
 use App\Base\Workflow\DTO\GuardResult;
+use App\Base\Workflow\DTO\TransitionContext;
 use App\Base\Workflow\Models\StatusTransition;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
@@ -31,8 +34,12 @@ class TransitionValidator
      * @param  Actor  $actor  The actor triggering the transition
      * @param  Model|null  $model  The workflow participant (required if guard_class is set)
      */
-    public function validate(StatusTransition $transition, Actor $actor, ?Model $model = null): GuardResult
-    {
+    public function validate(
+        StatusTransition $transition,
+        Actor $actor,
+        ?Model $model = null,
+        ?TransitionContext $context = null,
+    ): GuardResult {
         if (! $transition->is_active) {
             return GuardResult::deny('Transition is inactive.');
         }
@@ -52,6 +59,10 @@ class TransitionValidator
 
             /** @var TransitionGuard $guard */
             $guard = $this->container->make($transition->guard_class);
+
+            if ($guard instanceof ContextualTransitionGuard && $context !== null) {
+                return $guard->evaluateWithContext($model, $transition, $actor, $context);
+            }
 
             return $guard->evaluate($model, $transition, $actor);
         }

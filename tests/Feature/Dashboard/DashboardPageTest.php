@@ -99,8 +99,14 @@ it('shows capability-gated widgets to an admin in registry order', function (): 
         ->test(Index::class)
         ->assertViewHas(
             'widgets',
-            // Base providers register before Modules, so the perf widget leads.
-            fn (array $widgets): bool => array_slice(dashboardWidgetIds($widgets), 0, 3) === [DASHBOARD_PERF_WIDGET, DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET],
+            function (array $widgets): bool {
+                $ids = dashboardWidgetIds($widgets);
+
+                // Base providers lead. Optional module widgets may follow in
+                // discovery order before this test's People fixture.
+                return array_slice($ids, 0, 2) === [DASHBOARD_PERF_WIDGET, DASHBOARD_AI_WIDGET]
+                    && in_array(DASHBOARD_LEAVE_WIDGET, $ids, true);
+            },
         );
 });
 

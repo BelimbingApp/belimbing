@@ -1,11 +1,14 @@
 <?php
+
 namespace App\Base\Workflow\Notifications;
 
+use App\Base\Workflow\Contracts\PresentsWorkflowNotifications;
 use App\Base\Workflow\Models\StatusHistory;
 use App\Base\Workflow\Models\StatusTransition;
 use Illuminate\Bus\Queueable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Notifications\Notification;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Notification sent to relevant parties when a workflow transition completes.
@@ -49,15 +52,52 @@ class TransitionNotification extends Notification
      */
     public function toArray(object $notifiable): array
     {
+        $presents = $this->model instanceof PresentsWorkflowNotifications;
+
         return [
             'flow' => $this->flow,
             'model_type' => get_class($this->model),
             'model_id' => $this->model->getKey(),
+            'title' => $presents ? $this->model->workflowNotificationTitle() : null,
+            'url' => $presents ? $this->model->workflowNotificationUrl() : null,
             'from_status' => $this->transition->from_code,
             'to_status' => $this->transition->to_code,
             'transition_label' => $this->transition->resolveLabel(),
             'actor_id' => $this->history->actor_id,
+            'actor_type' => $this->history->actor_type,
             'comment' => $this->history->comment,
         ];
+    }
+
+    /**
+     * Give each recipient a stable notification id so durable outbox retries
+     * cannot create duplicate database notifications.
+     */
+    public function forNotifiable(object $notifiable): self
+    {
+        $notification = clone $this;
+        $type = method_exists($notifiable, 'getMorphClass')
+            ? $notifiable->getMorphClass()
+            : $notifiable::class;
+        $key = method_exists($notifiable, 'getKey') ? $notifiable->getKey() : null;
+
+        $notification->id = Uuid::uuid5(
+            Uuid::NAMESPACE_URL,
+            implode(':', [self::class, $this->flow, $this->history->getKey(), $type, $key]),
+        )->toString();
+
+        return $notification;
+    }
+
+    /**
+     * Treat an already-persisted deterministic id as a successful retry.
+     */
+    public function shouldSend(object $notifiable, string $channel): bool
+    {
+        if ($channel !== 'database' || $this->id === null || ! method_exists($notifiable, 'notifications')) {
+            return true;
+        }
+
+        return ! $notifiable->notifications()->whereKey($this->id)->exists();
     }
 }

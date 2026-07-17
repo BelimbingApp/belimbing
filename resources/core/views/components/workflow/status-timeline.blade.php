@@ -52,9 +52,7 @@
                                     <span>{{ __('System') }}</span>
                                 @endif
                                 <span>&middot;</span>
-                                <time datetime="{{ $entry->transitioned_at->toIso8601String() }}" title="{{ $entry->transitioned_at->format('Y-m-d H:i:s') }}">
-                                    {{ $entry->transitioned_at->diffForHumans() }}
-                                </time>
+                                <x-ui.datetime :value="$entry->transitioned_at" />
                             </div>
                             @if($entry->comment)
                                 @php $agentStyle = $agentTagStyle($entry->comment_tag); @endphp

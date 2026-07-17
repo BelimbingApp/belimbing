@@ -78,7 +78,7 @@ class WorkflowEngine
                 );
             }
 
-            $guardResult = $this->validator->validate($transition, $context->actor, $lockedModel);
+            $guardResult = $this->validator->validate($transition, $context->actor, $lockedModel, $context);
 
             if (! $guardResult->allowed) {
                 return TransitionResult::failure($guardResult->reason ?? 'Transition denied.');
@@ -99,6 +99,7 @@ class WorkflowEngine
                 'status' => $toCode,
                 'tat' => $tat,
                 'actor_id' => $context->actor->id,
+                'actor_type' => $context->actor->type->value,
                 'actor_role' => $context->actor->attributes['role'] ?? null,
                 'actor_department' => $context->actor->attributes['department'] ?? null,
                 'actor_company' => $context->actor->attributes['company'] ?? null,
