@@ -19,6 +19,8 @@ class DocumentTextExtractor
         'application/xml',
     ];
 
+    private const HTML_MEDIA_TYPE = 'text/html';
+
     public function __construct(
         private readonly WebFetchService $webFetchService,
         private readonly PdfTextExtractor $pdfTextExtractor,
@@ -89,7 +91,7 @@ class DocumentTextExtractor
 
         $extracted = $this->webFetchService->extractReadableContent(
             body: $body,
-            contentType: $isHtml ? 'text/html' : $mediaType,
+            contentType: $isHtml ? self::HTML_MEDIA_TYPE : $mediaType,
             maxChars: $maxChars,
             extractMode: 'text',
             baseUrl: $sourceUrl,
@@ -98,7 +100,7 @@ class DocumentTextExtractor
         return DocumentExtractionResult::success(
             content: $extracted['content'],
             sourceUrl: $sourceUrl,
-            mediaType: $isHtml ? 'text/html' : $mediaType,
+            mediaType: $isHtml ? self::HTML_MEDIA_TYPE : $mediaType,
             sourceBytes: $sourceBytes,
             truncated: $extracted['truncated'],
         );

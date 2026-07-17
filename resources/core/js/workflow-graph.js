@@ -214,19 +214,14 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
             const group = document.createElementNS('http://www.w3.org/2000/svg', 'g')
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
             const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-            const emphasized = this.edgeIsEmphasized(edge)
 
             path.setAttribute('d', edge.path)
             path.setAttribute('fill', 'none')
-            path.setAttribute('stroke', emphasized
-                ? 'var(--color-accent)'
-                : (edge.active ? 'var(--color-muted)' : 'var(--color-border-input)'))
+            path.setAttribute('stroke', this.edgeStroke(edge))
             path.setAttribute('stroke-width', '2')
             path.setAttribute('stroke-linecap', 'round')
             path.setAttribute('stroke-linejoin', 'round')
-            path.setAttribute('marker-end', emphasized
-                ? 'url(#workflow-arrow-accent)'
-                : (edge.active ? 'url(#workflow-arrow)' : 'url(#workflow-arrow-inactive)'))
+            path.setAttribute('marker-end', this.edgeMarker(edge))
             path.setAttribute('opacity', this.edgeIsDimmed(edge) ? '0.15' : '1')
 
             if (!edge.active) {
@@ -371,6 +366,22 @@ globalThis.blbWorkflowGraph = (config = {}) => ({
 
     edgeIsDimmed(edge) {
         return this.selected !== null && !this.edgeIsEmphasized(edge)
+    },
+
+    edgeStroke(edge) {
+        if (this.edgeIsEmphasized(edge)) {
+            return 'var(--color-accent)'
+        }
+
+        return edge.active ? 'var(--color-muted)' : 'var(--color-border-input)'
+    },
+
+    edgeMarker(edge) {
+        if (this.edgeIsEmphasized(edge)) {
+            return 'url(#workflow-arrow-accent)'
+        }
+
+        return edge.active ? 'url(#workflow-arrow)' : 'url(#workflow-arrow-inactive)'
     },
 
     selectedNode() {
