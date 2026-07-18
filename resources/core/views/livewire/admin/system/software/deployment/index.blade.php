@@ -27,17 +27,21 @@
             init() {
                 this.restoreAfterRefresh();
 
-                {{-- Livewire renders 503 maintenance responses in a modal overlay
-                    (showHtmlModal in its request error handler). During a software
-                    update, any Livewire call to a non-exempt route — wire:navigate
-                    prefetches on sidebar links, stray clicks, or morph-triggered
-                    requests — 503s and flashes the maintenance page over the
-                    progress modal. Suppress the modal for 503s while maintenance
-                    is active; the progress poller uses the exempt progress route
-                    and is unaffected. --}}
+                {{-- Livewire renders 503 maintenance responses (and 500s during
+                    worker restart) in a modal overlay via showHtmlModal. During a
+                    software update, any Livewire call to a non-exempt route —
+                    wire:navigate prefetches, stray clicks, morph-triggered requests
+                    — 503s or 500s and flashes an error page over the progress modal.
+                    Suppress the modal unconditionally for 503/500: this page has its
+                    own progress UI and never benefits from Livewire's generic error
+                    modal. Checking maintenanceActive here is useless — it is a
+                    one-time @js() snapshot from page load, typically false because
+                    the page loads before the update enters maintenance, so the guard
+                    would never fire. The progress poller uses the exempt progress
+                    route and is unaffected. --}}
                 this._livewire503Guard = window.Livewire?.hook('request', ({ fail }) => {
                     fail(({ status, preventDefault }) => {
-                        if (status === 503 && this.maintenanceActive) {
+                        if (status === 503 || status === 500) {
                             preventDefault();
                         }
                     });
@@ -185,14 +189,14 @@
                 this.refreshing = true;
                 this.rememberAfterRefresh();
                 this._reloadRetries = 0;
-                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 1600);
+                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 500);
             },
             {{-- The post-run reload refreshes the status table to match the code on
                  disk. But the run's final phase just restarted the FrankenPHP workers,
                  and they may still be settling — a blind window.location.reload() would
                  hit a 500 and show the browser's error page. Probe the exempt progress
                  route first; only reload once a worker is actually serving responses.
-                 Fall back to a direct reload after ~60s so the operator is never stuck
+                 Fall back to a direct reload after ~15s so the operator is never stuck
                  in a JS loop if the server is truly down. --}}
             async reloadWhenHealthy() {
                 if (this._destroyed) {
@@ -217,13 +221,13 @@
                     return;
                 }
 
-                if (++this._reloadRetries >= 30) {
+                if (++this._reloadRetries >= 10) {
                     window.location.reload();
 
                     return;
                 }
 
-                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 2000);
+                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 1500);
             },
             closeRunLog() {
                 this.dismissed = true;
