@@ -559,11 +559,11 @@ test('detached update command owns cleanup and records a terminal result', funct
     $deployment = Mockery::mock(DeploymentService::class);
     $deployment->shouldReceive('update')
         ->once()
-        ->withArgs(function (array $keys, callable $progress, bool $reloadWorkers, bool $manageMaintenance, callable $beforeReload): bool {
+        ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
             $progress('Pulling Belimbing (platform)…');
-            $beforeReload();
+            $afterReload();
 
-            return $keys === ['platform'] && $reloadWorkers && ! $manageMaintenance;
+            return $keys === ['platform'];
         })
         ->andReturn([DEPLOYMENT_UPDATE_COMPLETE]);
     app()->instance(DeploymentService::class, $deployment);
@@ -798,7 +798,6 @@ test('a failed frontend rebuild halts the deployment before migrations and reloa
         ->and($log)->not->toContain('FAILED: database migrations did not complete; deployment halted before reload.');
 
     Http::assertNothingSent();
-    expect(app()->isDownForMaintenance())->toBeFalse();
 });
 
 test('a run records a durable deployment last-run with its time and outcome', function (): void {
@@ -1158,5 +1157,4 @@ test('a failed migration halts the deployment before reloading workers', functio
 
     // Workers were never reloaded because the fresh migration process failed.
     Http::assertNothingSent();
-    expect(app()->isDownForMaintenance())->toBeFalse();
 });

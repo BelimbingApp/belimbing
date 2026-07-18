@@ -2,8 +2,6 @@
 
 namespace App\Base\Software\Services;
 
-use Illuminate\Support\Facades\Artisan;
-
 /**
  * Reads the deployment's git state and compares it to GitHub so the operator can
  * see, per Distribution Bundle, the current vs latest commit, its age, and whether it
@@ -81,20 +79,26 @@ class DeploymentService
 
     /**
      * Pull the given Distribution Bundles (by key; empty = all), then refresh autoload,
-     * migrate, and gracefully reload workers — under maintenance mode. Each repo
-     * pulls with its owner's token (public repos pull token-free). Returns a log.
+     * migrate, and gracefully reload workers. Each repo pulls with its owner's token
+     * (public repos pull token-free). Returns a log.
+     *
+     * Maintenance mode is owned by the caller (the detached update command via
+     * DeploymentMaintenanceGuard). Workers are reloaded *before* $afterReload runs,
+     * so the caller lifts maintenance only once every worker serves the new code.
+     * Leaving maintenance earlier opens a mixed-version window: still-running
+     * workers hold the old classes in memory while freshly pulled Blade templates
+     * are already on disk, so any changed view renders against stale component
+     * data (e.g. `count(null)` TypeErrors on variables the update introduced).
      *
      * @param  list<string>  $keys
      * @param  (callable(string): void)|null  $progress
-     * @param  (callable(): void)|null  $beforeReload
+     * @param  (callable(): void)|null  $afterReload  Runs after the worker reload (never on failure paths); the maintenance owner leaves maintenance here.
      * @return list<string>
      */
     public function update(
         array $keys = [],
         ?callable $progress = null,
-        bool $reloadWorkers = true,
-        bool $manageMaintenance = true,
-        ?callable $beforeReload = null,
+        ?callable $afterReload = null,
     ): array {
         $targets = $this->updateTargets($keys);
 
@@ -116,58 +120,48 @@ class DeploymentService
         };
         $composerBefore = $this->buildRunner->composerLockHash();
 
-        if ($manageMaintenance) {
-            Artisan::call('down', ['--retry' => 5]);
+        $this->pullTargets($targets, $record);
+        $this->refreshPhpDependencies($composerBefore, $record);
+
+        if (DeploymentLogClassifier::hasError($log)) {
+            $record((string) __('FAILED: dependency refresh did not complete; deployment halted before migrations and reload.'));
+
+            return $log;
         }
 
-        try {
-            $this->pullTargets($targets, $record);
-            $this->refreshPhpDependencies($composerBefore, $record);
+        $this->buildFrontendAssets($log, $record, $progress);
 
-            if (DeploymentLogClassifier::hasError($log)) {
-                $record((string) __('FAILED: dependency refresh did not complete; deployment halted before migrations and reload.'));
+        if (DeploymentLogClassifier::hasError($log)) {
+            $record((string) __('FAILED: frontend assets did not build; deployment halted before migrations and reload.'));
 
-                return $log;
-            }
-
-            $this->buildFrontendAssets($log, $record, $progress);
-
-            if (DeploymentLogClassifier::hasError($log)) {
-                $record((string) __('FAILED: frontend assets did not build; deployment halted before migrations and reload.'));
-
-                return $log;
-            }
-
-            $record((string) __('Running migrations…'));
-            $migration = $this->buildRunner->migrate();
-            $record($migration['output']);
-
-            if ($migration['status'] !== 0) {
-                $record((string) __('FAILED: database migrations did not complete; deployment halted before reload.'));
-
-                return $log;
-            }
-        } finally {
-            if ($manageMaintenance) {
-                Artisan::call('up');
-            }
+            return $log;
         }
 
-        if ($beforeReload !== null) {
-            $beforeReload();
+        $record((string) __('Running migrations…'));
+        $migration = $this->buildRunner->migrate();
+        $record($migration['output']);
+
+        if ($migration['status'] !== 0) {
+            $record((string) __('FAILED: database migrations did not complete; deployment halted before reload.'));
+
+            return $log;
         }
 
-        if ($reloadWorkers) {
-            foreach ($this->reload() as $line) {
-                $record($line);
-            }
+        // Reload while still in maintenance: the health check hits /up, which
+        // Laravel exempts from maintenance mode, so verification works while down.
+        foreach ($this->reload() as $line) {
+            $record($line);
+        }
+
+        if ($afterReload !== null) {
+            $afterReload();
         }
 
         foreach ($this->bundles->verifyTargets($targets) as $line) {
             $record($line);
         }
 
-        $record($this->completionLine($log, $reloadWorkers));
+        $record($this->completionLine($log));
 
         return $log;
     }
@@ -324,7 +318,7 @@ class DeploymentService
     /**
      * @param  list<string>  $log
      */
-    private function completionLine(array $log, bool $reloadWorkers): string
+    private function completionLine(array $log): string
     {
         if (DeploymentLogClassifier::hasError($log)) {
             return (string) __('Update finished with errors. Some steps did not complete; the Distribution Bundle table and log show what still needs attention.');
@@ -336,10 +330,6 @@ class DeploymentService
             }
 
             return (string) __('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.');
-        }
-
-        if (! $reloadWorkers) {
-            return (string) __('Update complete. Selected Distribution Bundles are up to date; runtime reload still needs to run separately.');
         }
 
         return (string) __('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');

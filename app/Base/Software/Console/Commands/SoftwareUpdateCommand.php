@@ -55,11 +55,12 @@ final class SoftwareUpdateCommand extends Command
             $log = $deployment->update(
                 array_values(array_filter($this->argument('keys'), 'is_string')),
                 $record,
-                reloadWorkers: true,
-                manageMaintenance: false,
-                beforeReload: function () use (&$maintenanceOwned, $maintenance, $runId): void {
+                // Leave maintenance only after the workers were reloaded, so no
+                // request is ever served by old worker code against the freshly
+                // pulled files (mixed-version window).
+                afterReload: function () use (&$maintenanceOwned, $maintenance, $runId): void {
                     if (! $maintenance->leave($runId)) {
-                        throw new DeploymentMaintenanceException('Belimbing could not leave maintenance mode before the runtime reload.');
+                        throw new DeploymentMaintenanceException('Belimbing could not leave maintenance mode after the runtime reload.');
                     }
 
                     $maintenanceOwned = false;
