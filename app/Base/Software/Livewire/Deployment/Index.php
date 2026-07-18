@@ -41,6 +41,7 @@ class Index extends Component
     public function loadLatestStatus(): void
     {
         $this->latestStatusLoaded = true;
+        $this->dispatch('latest-status-loaded');
     }
 
     public function updateRepo(

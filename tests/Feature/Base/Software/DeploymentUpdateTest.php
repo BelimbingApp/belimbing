@@ -946,6 +946,27 @@ test('the updates page suppresses wire:init during maintenance so Livewire 503s 
     }
 });
 
+test('loadLatestStatus dispatches latest-status-loaded so Alpine can re-sync updateAllUnavailable from data-behind', function (): void {
+    // wire:init fires loadLatestStatus on page load. Livewire re-renders with
+    // remote status ($behind changes), but morph does not re-evaluate x-data
+    // expressions — so updateAllUnavailable (initialized from @js(! $behind)
+    // when localStatus had no remote data) stays stale. The component dispatches
+    // latest-status-loaded; Alpine reads the morphed data-behind attribute to
+    // re-sync. This test proves the dispatch and the data-behind attribute exist.
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.index'))
+        ->assertOk()
+        ->assertSee('data-behind=');
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertDispatched('latest-status-loaded');
+});
+
 test('maintenance cleanup is fenced to the detached update that owns it', function (): void {
     $maintenance = app(DeploymentMaintenanceGuard::class);
     $writeLease = new ReflectionMethod($maintenance, 'writeLease');

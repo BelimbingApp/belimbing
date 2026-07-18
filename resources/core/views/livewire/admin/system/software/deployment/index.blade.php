@@ -3,6 +3,7 @@
 
     <div
         class="space-y-section-gap"
+       data-behind="{{ $behind ? '1' : '0' }}"
         @if (! $maintenanceActive && ! $updateInProgress) wire:init="loadLatestStatus" @endif
         x-data="{
             running: false,
@@ -21,11 +22,23 @@
             _pollFailures: 0,
             _reloadRetries: 0,
             _destroyed: false,
+           _statusLoadedHandler: null,
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
             init() {
                 this.restoreAfterRefresh();
+
+               {{-- wire:init's loadLatestStatus re-renders with remote status,
+                   but Livewire morph does not re-evaluate x-data expressions, so
+                   updateAllUnavailable (initialized from @js(! $behind) when
+                   localStatus had no remote data) stays stale at true even after
+                   $behind becomes true. Re-sync from the morphed data-behind
+                   attribute when the Livewire round-trip completes. --}}
+                this._statusLoadedHandler = () => {
+                    this.updateAllUnavailable = this.$root.dataset.behind === '0';
+                };
+               window.addEventListener('latest-status-loaded', this._statusLoadedHandler);
 
                 if (this.updateInProgress && ! ['success', 'warning', 'error'].includes(this.finishedStatus)) {
                     this.followDetachedRun();
@@ -35,6 +48,7 @@
                 this._destroyed = true;
                 window.clearTimeout(this._pollTimer);
                 window.clearTimeout(this.refreshTimer);
+               window.removeEventListener('latest-status-loaded', this._statusLoadedHandler);
             },
             {{-- Detached updates run outside the web workers and append every
                  line to the durable run record. Livewire's endpoint 503s while
