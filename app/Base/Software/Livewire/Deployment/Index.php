@@ -38,10 +38,15 @@ class Index extends Component
 
     public bool $latestStatusLoaded = false;
 
+    // Synced to the browser via Livewire's $wire proxy so Alpine can react to
+    // it (x-bind:disabled depends on $wire.behind). @js(! $behind) in x-data
+    // is a one-time snapshot that Livewire morph never re-evaluates, leaving
+    // "Update all" stuck disabled after wire:init loads remote status.
+    public bool $behind = false;
+
     public function loadLatestStatus(): void
     {
         $this->latestStatusLoaded = true;
-        $this->dispatch('latest-status-loaded');
     }
 
     public function updateRepo(
@@ -154,6 +159,8 @@ class Index extends Component
             ? $deployment->status()
             : $deployment->localStatus();
 
+        $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
+
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
         // time are still there on a fresh visit (or after an interrupted run).
@@ -173,7 +180,6 @@ class Index extends Component
 
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
-            'behind' => collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false),
             'latestStatusLoaded' => $this->latestStatusLoaded,
             'checkFailures' => collect($status)
                 ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)

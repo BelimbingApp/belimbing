@@ -19,6 +19,7 @@ use Livewire\Livewire;
 
 const DEPLOYMENT_UPDATE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const DEPLOYMENT_UPDATE_COMMIT_TRAILER = "\x1fCI\x1fCurrent";
+const DEPLOYMENT_UPDATE_REMOTE_SHA = 'feedfacefeedfacefeedfacefeedfacefeedface';
 const DEPLOYMENT_UPDATE_FRONTEND_BUILT = 'Frontend assets built.';
 const DEPLOYMENT_UPDATE_LAST_RUN_LABEL = 'Last run';
 const DEPLOYMENT_UPDATE_VERIFIED_PLATFORM = 'Verified: Belimbing (platform) is at deadbee and matches main.';
@@ -41,24 +42,29 @@ beforeEach(function (): void {
     app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });
 
-function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): void
+function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null): void
 {
-    Process::fake(function ($process) use ($sha, $remoteError) {
-        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError) ?? Process::result();
+    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha) {
+        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha) ?? Process::result();
     });
 }
 
-function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null): mixed
+function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null): mixed
 {
+    // When $remoteSha is null, the remote HEAD matches the local SHA so bundles
+    // report up_to_date. Pass a distinct $remoteSha to simulate a bundle that
+    // is behind its remote (up_to_date === false after loadLatestStatus).
+    $remoteSha ??= $sha;
+
     return match (gitCommandWithoutConfig($command)) {
         ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
         ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## main...origin/main'),
         ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
         ['git', 'log', '-1', DEPLOYMENT_UPDATE_LOG_FORMAT] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
         ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $remoteError === null
-            ? Process::result($sha."\trefs/heads/main")
+            ? Process::result($remoteSha."\trefs/heads/main")
             : Process::result(errorOutput: $remoteError, exitCode: 1),
-        ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $sha] => Process::result($sha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+        ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $remoteSha] => Process::result($remoteSha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
         ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => Process::result('Already up to date.'),
         default => null,
     };
@@ -946,25 +952,33 @@ test('the updates page suppresses wire:init during maintenance so Livewire 503s 
     }
 });
 
-test('loadLatestStatus dispatches latest-status-loaded so Alpine can re-sync updateAllUnavailable from data-behind', function (): void {
-    // wire:init fires loadLatestStatus on page load. Livewire re-renders with
-    // remote status ($behind changes), but morph does not re-evaluate x-data
-    // expressions — so updateAllUnavailable (initialized from @js(! $behind)
-    // when localStatus had no remote data) stays stale. The component dispatches
-    // latest-status-loaded; Alpine reads the morphed data-behind attribute to
-    // re-sync. This test proves the dispatch and the data-behind attribute exist.
+test('behind is a Livewire public property so Alpine can react to it via $wire after wire:init loads remote status', function (): void {
+    // "Update all" was stuck disabled after remote status loaded because
+    // updateAllUnavailable was initialized from @js(! $behind) — a one-time
+    // snapshot that Livewire morph never re-evaluates. The fix exposes $behind
+    // as a public property synced via $wire, so x-bind:disabled="! $wire.behind"
+    // re-evaluates reactively when the property changes after loadLatestStatus.
     $user = createAdminUser();
-    fakeDeploymentUpdateProcesses();
+    // Remote HEAD differs from the local SHA so the bundle is behind after
+    // loadLatestStatus triggers the remote status fetch.
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA);
     Http::fake();
 
+    // Initial render: localStatus has no remote data, $behind is false.
+    $component = Livewire::test(Index::class);
+    expect($component->get('behind'))->toBeFalse();
+
+    // After loadLatestStatus: remote status loads, $behind becomes true.
+    $component->call('loadLatestStatus')
+        ->assertSet('behind', true);
+
+    // The blade uses $wire.behind in x-bind:disabled, not @js(! $behind) —
+    // @js() is a stale snapshot, $wire is Livewire's reactive proxy.
     $this->actingAs($user)
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
-        ->assertSee('data-behind=');
-
-    Livewire::test(Index::class)
-        ->call('loadLatestStatus')
-        ->assertDispatched('latest-status-loaded');
+        ->assertSee('$wire.behind')
+        ->assertDontSee('updateAllUnavailable');
 });
 
 test('maintenance cleanup is fenced to the detached update that owns it', function (): void {

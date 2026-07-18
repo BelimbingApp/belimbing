@@ -3,7 +3,6 @@
 
     <div
         class="space-y-section-gap"
-       data-behind="{{ $behind ? '1' : '0' }}"
         @if (! $maintenanceActive && ! $updateInProgress) wire:init="loadLatestStatus" @endif
         x-data="{
             running: false,
@@ -13,7 +12,6 @@
             refreshTimer: null,
             finishedStatus: @js(($runStatus ?? 'idle') !== 'idle' ? $runStatus : null),
             justRefreshed: false,
-            updateAllUnavailable: @js(! $behind),
             reloadInProgress: @js($reloadInProgress),
             updateInProgress: @js($updateInProgress),
             maintenanceActive: @js($maintenanceActive),
@@ -22,24 +20,12 @@
             _pollFailures: 0,
             _reloadRetries: 0,
             _destroyed: false,
-            _statusLoadedHandler: null,
             _livewire503Guard: null,
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
             init() {
                 this.restoreAfterRefresh();
-
-               {{-- wire:init's loadLatestStatus re-renders with remote status,
-                   but Livewire morph does not re-evaluate x-data expressions, so
-                   updateAllUnavailable (initialized from @js(! $behind) when
-                   localStatus had no remote data) stays stale at true even after
-                   $behind becomes true. Re-sync from the morphed data-behind
-                   attribute when the Livewire round-trip completes. --}}
-                this._statusLoadedHandler = () => {
-                    this.updateAllUnavailable = this.$root.dataset.behind === '0';
-                };
-                window.addEventListener('latest-status-loaded', this._statusLoadedHandler);
 
                 {{-- Livewire renders 503 maintenance responses in a modal overlay
                     (showHtmlModal in its request error handler). During a software
@@ -65,7 +51,6 @@
                 this._destroyed = true;
                 window.clearTimeout(this._pollTimer);
                 window.clearTimeout(this.refreshTimer);
-                window.removeEventListener('latest-status-loaded', this._statusLoadedHandler);
                 if (this._livewire503Guard) {
                     this._livewire503Guard();
                 }
@@ -356,7 +341,7 @@
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || updateAllUnavailable" :disabled="! $behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
