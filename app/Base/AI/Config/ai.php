@@ -119,7 +119,11 @@ return [
             'download_timeout_seconds' => 30,
             'pdf_timeout_seconds' => 60,
             'pdftotext_path' => env('AI_PDFTOTEXT_PATH'),
-            'max_response_bytes' => 26214400, // 25 MiB
+            // Public annual reports commonly exceed 25 MiB. Extraction still
+            // uses explicit page ranges and output limits, so permit a
+            // realistic filing download rather than making autonomous factual
+            // verification depend on manual file handling.
+            'max_response_bytes' => 104857600, // 100 MiB
             'max_output_chars' => 120000,
             'max_pdf_pages' => 200,
             'max_page_number' => 10000,
