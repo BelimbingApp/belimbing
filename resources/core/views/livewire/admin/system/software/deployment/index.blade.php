@@ -665,7 +665,13 @@
                                 @foreach ($displayLog as $line)
                                     <div class="{{ $this->runLineClass($line) }}">{{ $line }}</div>
                                 @endforeach
-                                @if ($runStatus !== 'idle' && $displayLog !== [])
+                                {{-- Only terminal runs carry the recorded marker. A pending run is
+                                    not recorded yet, and rendering a marker for it lets the
+                                    MutationObserver fire detectRecordedRun prematurely (during the
+                                    updateAll morph), setting markerSeen=true before the real
+                                    terminal marker arrives — so finishRun never fires and the
+                                    "Running" badge sticks on a completed run. --}}
+                                @if (in_array($runStatus, ['success', 'warning', 'error'], true) && $displayLog !== [])
                                     <span class="hidden" aria-hidden="true" data-deployment-run-recorded="true" data-run-outcome="{{ $runStatus }}"></span>
                                 @endif
                             </div>

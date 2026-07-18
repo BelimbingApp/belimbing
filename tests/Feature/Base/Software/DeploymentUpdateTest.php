@@ -734,12 +734,15 @@ test('the previous run log persists at its rest location across page visits', fu
     expect($log)->not->toBeEmpty();
 
     // A fresh visit still shows the last run at rest (it is session-persisted).
-    // The hidden completion marker is harmless because its Alpine detector ignores
-    // markers unless the browser still believes a run is active.
+    // The pending run does NOT carry the recorded marker — only terminal runs
+    // (success/warning/error) do. A pending marker would let the MutationObserver
+    // fire detectRecordedRun prematurely during the updateAll morph, setting
+    // markerSeen=true before the real terminal marker arrives and leaving the
+    // "Running" badge stuck on a completed run.
     Livewire::test(Index::class)
         ->assertSet('log', $log)
         ->assertSee('run-finished.window', false)
-        ->assertSee('data-deployment-run-recorded', false)
+        ->assertDontSee('data-run-outcome=', false)
         ->assertSee('window.location.reload()', false)
         ->assertSee('belimbing.deployment.run-log-after-refresh')
         ->assertSee('Run log saved. Reloading this page so commits and actions match the code on disk.')
@@ -750,6 +753,30 @@ test('the previous run log persists at its rest location across page visits', fu
         ->assertSee('isFloating()', false)
         ->assertSee('h-72', false)
         ->assertSee('scrollToEnd', false);
+});
+
+test('the recorded-run marker is rendered only for terminal runs, not pending', function (): void {
+    // Regression: the server used to render data-deployment-run-recorded whenever
+    // $runStatus !== 'idle', which includes 'pending'. During an updateAll morph,
+    // that pending marker let the MutationObserver fire detectRecordedRun
+    // prematurely, setting markerSeen=true before the real terminal marker
+    // arrived — so finishRun never fired and the "Running" badge stuck on a
+    // completed run. The marker must appear only for terminal statuses, matching
+    // the JS-side check in renderRunProgress.
+    $this->actingAs(createAdminUser());
+    $history = app(DeploymentRunHistory::class);
+
+    // Pending run: no marker.
+    $history->beginDeploymentRun('pending-run', ['platform'], 'Software update scheduled in a detached process.');
+    Livewire::test(Index::class)
+        ->assertSee('Software update scheduled in a detached process.')
+        ->assertDontSee('data-run-outcome=', false);
+
+    // Terminal run: marker present with the outcome.
+    $history->finishDeploymentRun('pending-run', 'success', ['Update complete. Workers reloaded.']);
+    Livewire::test(Index::class)
+        ->assertSee('data-deployment-run-recorded="true"', false)
+        ->assertSee('data-run-outcome="success"', false);
 });
 
 test('manual frontend rebuild installs with the lockfile package manager and builds assets', function (): void {
