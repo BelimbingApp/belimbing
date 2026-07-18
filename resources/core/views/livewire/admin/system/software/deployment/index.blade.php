@@ -3,7 +3,7 @@
 
     <div
         class="space-y-section-gap"
-        wire:init="loadLatestStatus"
+        @if (! $maintenanceActive && ! $updateInProgress) wire:init="loadLatestStatus" @endif
         x-data="{
             running: false,
             runLogOpen: false,
@@ -15,9 +15,11 @@
             updateAllUnavailable: @js(! $behind),
             reloadInProgress: @js($reloadInProgress),
             updateInProgress: @js($updateInProgress),
+            maintenanceActive: @js($maintenanceActive),
             progressUrl: @js(route('admin.system.software.updates.progress')),
             _pollTimer: null,
             _pollFailures: 0,
+            _reloadRetries: 0,
             _destroyed: false,
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
@@ -25,13 +27,14 @@
             init() {
                 this.restoreAfterRefresh();
 
-                if (this.updateInProgress) {
+                if (this.updateInProgress && ! ['success', 'warning', 'error'].includes(this.finishedStatus)) {
                     this.followDetachedRun();
                 }
             },
             destroy() {
                 this._destroyed = true;
                 window.clearTimeout(this._pollTimer);
+                window.clearTimeout(this.refreshTimer);
             },
             {{-- Detached updates run outside the web workers and append every
                  line to the durable run record. Livewire's endpoint 503s while
@@ -152,7 +155,42 @@
 
                 this.refreshing = true;
                 this.rememberAfterRefresh();
-                this.refreshTimer = window.setTimeout(() => window.location.reload(), 1600);
+                this._reloadRetries = 0;
+                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 1600);
+            },
+            {{-- The post-run reload refreshes the status table to match the code on
+                 disk. But the run's final phase just restarted the FrankenPHP workers,
+                 and they may still be settling — a blind window.location.reload() would
+                 hit a 500 and show the browser's error page. Probe the exempt progress
+                 route first; only reload once a worker is actually serving responses.
+                 Fall back to a direct reload after ~60s so the operator is never stuck
+                 in a JS loop if the server is truly down. --}}
+            async reloadWhenHealthy() {
+                if (this._destroyed) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(this.progressUrl, {
+                        headers: { 'Accept': 'application/json' },
+                    });
+
+                    if (response.ok) {
+                        window.location.reload();
+
+                        return;
+                    }
+                } catch (error) {
+                    {{-- Workers still restarting — keep waiting. --}}
+                }
+
+                if (++this._reloadRetries >= 30) {
+                    window.location.reload();
+
+                    return;
+                }
+
+                this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 2000);
             },
             closeRunLog() {
                 this.dismissed = true;
@@ -270,7 +308,7 @@
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || updateAllUnavailable" :disabled="! $behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || updateAllUnavailable" :disabled="! $behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -338,22 +376,26 @@
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
                                 <div class="text-xs text-muted">{{ $s['latest']['ago'] }}</div>
-                            @elseif ($s['error'] === null && ! $latestStatusLoaded)
+                            @elseif ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <span class="inline-flex items-center gap-1.5 text-xs text-muted">
                                     <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
                                     {{ __('Checking latest…') }}
                                 </span>
+                            @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
+                                <span class="text-xs text-muted">—</span>
                             @else
                                 <span class="text-xs text-muted">{{ $s['error'] }}</span>
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-right">
-                            @if ($s['error'] === null && ! $latestStatusLoaded)
+                            @if ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
+                            @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
+                                <span class="text-xs text-muted">—</span>
                             @elseif ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
@@ -390,7 +432,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No composer install has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="rebuildPhp">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildPhp" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="rebuildPhp">
                         <span wire:loading.remove wire:target="rebuildPhp">{{ __('Install PHP dependencies') }}</span>
                         <span wire:loading wire:target="rebuildPhp">{{ __('Running composer install…') }}</span>
                     </x-ui.button>
@@ -415,7 +457,7 @@
                             <p class="mt-1 text-xs text-muted">{{ __('No frontend build has been recorded yet.') }}</p>
                         @endif
                     </div>
-                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress" wire:target="rebuildAssets">
+                    <x-ui.button type="button" variant="outline" class="ml-auto shrink-0" wire:click="rebuildAssets" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="rebuildAssets">
                         <span wire:loading.remove wire:target="rebuildAssets">{{ __('Build frontend assets') }}</span>
                         <span wire:loading wire:target="rebuildAssets">{{ __('Running :pm install & build…', ['pm' => $packageManager]) }}</span>
                     </x-ui.button>
@@ -462,7 +504,7 @@
                         wire:click="reloadOnly"
                         x-on:click="confirmWorkerReload($event)"
                         wire:loading.attr="disabled"
-                        x-bind:disabled="running || refreshing || updateInProgress || reloadInProgress"
+                        x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || reloadInProgress"
                         :disabled="$reloadInProgress"
                         wire:target="reloadOnly"
                     >

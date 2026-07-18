@@ -708,7 +708,7 @@ test('deployment page allows retry when a reload state is stale', function (): v
 
     expect($reloadButton)
         ->toContain('wire:click="reloadOnly"')
-        ->toContain('x-bind:disabled="running || refreshing || updateInProgress || reloadInProgress"')
+        ->toContain('x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || reloadInProgress"')
         ->not->toContain('disabled="disabled"');
 });
 
@@ -910,6 +910,37 @@ test('the update console stays reachable during maintenance and can bring the si
             ->assertSessionHas('status');
 
         expect(app()->isDownForMaintenance())->toBeFalse();
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+test('the updates page suppresses wire:init during maintenance so Livewire 503s do not flash the operator', function (): void {
+    // wire:init fires a Livewire AJAX call on page load. The Livewire endpoint
+    // (livewire/*) is NOT maintenance-exempt, so during an update the call 503s
+    // and Livewire shows the 503 page in an error modal — the primary source of
+    // the 500/503 flashing the operator saw. Suppress the attribute entirely
+    // while maintenance is active; the remote status check is stale mid-update
+    // anyway, and the page reloads with wire:init once maintenance lifts.
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    Artisan::call('down');
+
+    try {
+        $response = $this->actingAs($user)
+            ->get(route('admin.system.software.updates.index'));
+
+        $response->assertOk()
+            ->assertSee('The site is in maintenance mode.')
+            ->assertDontSee('wire:init="loadLatestStatus"', false);
+
+        // The "Checking latest…" spinner would spin forever without wire:init;
+        // it must be replaced by a plain em-dash while maintenance is active.
+        $body = $response->getContent();
+        expect($body)->not->toContain('Checking latest…')
+            ->and($body)->toContain('maintenanceActive');
     } finally {
         Artisan::call('up');
     }
