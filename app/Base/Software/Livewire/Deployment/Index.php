@@ -69,7 +69,7 @@ class Index extends Component
         FrankenPhpDomainRuntimeReloader $runtimeReloader,
     ): void {
         $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
-            $deployment->rebuildPhp(reloadWorkers: false),
+            $deployment->rebuildPhp(),
             $runtimeReloader,
         ));
     }

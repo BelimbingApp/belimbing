@@ -57,6 +57,10 @@
                 this._pollTimer = window.setTimeout(() => this.pollProgress(), delay);
             },
             async pollProgress() {
+                if (this._destroyed) {
+                    return;
+                }
+
                 try {
                     const response = await fetch(this.progressUrl, { headers: { 'Accept': 'application/json' } });
 
@@ -65,6 +69,9 @@
                     }
 
                     const run = await response.json();
+                    if (this._destroyed) {
+                        return;
+                    }
                     this._pollFailures = 0;
                     this.renderRunProgress(run);
 
@@ -78,6 +85,9 @@
                          the web workers, which briefly drops requests. Keep
                          polling, and only fall back to a full reload if the feed
                          stays unreachable for ~90s. --}}
+                    if (this._destroyed) {
+                        return;
+                    }
                     if (++this._pollFailures >= 45) {
                         window.location.reload();
 
@@ -182,6 +192,10 @@
                     }
                 } catch (error) {
                     {{-- Workers still restarting — keep waiting. --}}
+                }
+
+                if (this._destroyed) {
+                    return;
                 }
 
                 if (++this._reloadRetries >= 30) {

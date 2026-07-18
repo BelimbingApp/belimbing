@@ -229,20 +229,17 @@ class DeploymentService
     }
 
     /**
-     * Manually reinstall PHP dependencies (composer install) and reload workers so
-     * the new vendor tree takes effect. The escape hatch for the auto-step in update().
+     * Manually reinstall PHP dependencies (composer install). The caller schedules
+     * the worker reload separately (FrankenPhpDomainRuntimeReloader), so this method
+     * only refreshes the vendor tree — the escape hatch for the auto-step in update().
      *
      * @return list<string>
      */
-    public function rebuildPhp(bool $reloadWorkers = true): array
+    public function rebuildPhp(): array
     {
         $log = [(string) __('Installing PHP dependencies…'), $this->runComposerInstall()];
 
-        if (! $reloadWorkers) {
-            return array_merge($log, [(string) __('PHP dependencies installed; runtime reload must still run before workers use the refreshed vendor tree.')]);
-        }
-
-        return array_merge($log, $this->reload(), [(string) __('Done.')]);
+        return array_merge($log, [(string) __('PHP dependencies installed; runtime reload must still run before workers use the refreshed vendor tree.')]);
     }
 
     /**
