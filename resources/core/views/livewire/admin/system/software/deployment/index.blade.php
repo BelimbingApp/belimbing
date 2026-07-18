@@ -22,7 +22,8 @@
             _pollFailures: 0,
             _reloadRetries: 0,
             _destroyed: false,
-           _statusLoadedHandler: null,
+            _statusLoadedHandler: null,
+            _livewire503Guard: null,
             reloadRequiresConfirmation: @js(app()->environment('production')),
             reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
@@ -38,7 +39,23 @@
                 this._statusLoadedHandler = () => {
                     this.updateAllUnavailable = this.$root.dataset.behind === '0';
                 };
-               window.addEventListener('latest-status-loaded', this._statusLoadedHandler);
+                window.addEventListener('latest-status-loaded', this._statusLoadedHandler);
+
+                {{-- Livewire renders 503 maintenance responses in a modal overlay
+                    (showHtmlModal in its request error handler). During a software
+                    update, any Livewire call to a non-exempt route — wire:navigate
+                    prefetches on sidebar links, stray clicks, or morph-triggered
+                    requests — 503s and flashes the maintenance page over the
+                    progress modal. Suppress the modal for 503s while maintenance
+                    is active; the progress poller uses the exempt progress route
+                    and is unaffected. --}}
+                this._livewire503Guard = window.Livewire?.hook('request', ({ fail }) => {
+                    fail(({ status, preventDefault }) => {
+                        if (status === 503 && this.maintenanceActive) {
+                            preventDefault();
+                        }
+                    });
+                });
 
                 if (this.updateInProgress && ! ['success', 'warning', 'error'].includes(this.finishedStatus)) {
                     this.followDetachedRun();
@@ -48,7 +65,10 @@
                 this._destroyed = true;
                 window.clearTimeout(this._pollTimer);
                 window.clearTimeout(this.refreshTimer);
-               window.removeEventListener('latest-status-loaded', this._statusLoadedHandler);
+                window.removeEventListener('latest-status-loaded', this._statusLoadedHandler);
+                if (this._livewire503Guard) {
+                    this._livewire503Guard();
+                }
             },
             {{-- Detached updates run outside the web workers and append every
                  line to the durable run record. Livewire's endpoint 503s while
@@ -557,7 +577,7 @@
             <div :class="isFloating() ? 'relative z-10 flex min-h-full items-start justify-center p-4 sm:items-center' : ''">
                 <div :class="isFloating() ? 'w-full max-w-2xl shadow-2xl' : ''">
                     <x-ui.card>
-                        <div class="flex items-center justify-between gap-3">
+                        <div class="flex items-start justify-between gap-3">
                             <div>
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h2 id="deployment-run-log-title" class="text-base font-medium text-ink">
