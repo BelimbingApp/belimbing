@@ -90,9 +90,15 @@ class DeploymentService
      * are already on disk, so any changed view renders against stale component
      * data (e.g. `count(null)` TypeErrors on variables the update introduced).
      *
+     * The reload clears runtime caches (compiled views, opcache) before restarting
+     * the worker pool, so a reload that *fails* leaves the old workers live against
+     * a cleared view cache — exactly the mixed-version window above. $afterReload
+     * therefore receives whether the reload produced a clean, healthy pool, and the
+     * caller must keep the site in maintenance when it did not.
+     *
      * @param  list<string>  $keys
      * @param  (callable(string): void)|null  $progress
-     * @param  (callable(): void)|null  $afterReload  Runs after the worker reload (never on failure paths); the maintenance owner leaves maintenance here.
+     * @param  (callable(bool): void)|null  $afterReload  Runs after the worker reload attempt (never on the pre-reload failure paths). Receives whether the reload produced a clean, healthy worker pool; the maintenance owner leaves maintenance only when this is true.
      * @return list<string>
      */
     public function update(
@@ -149,12 +155,16 @@ class DeploymentService
 
         // Reload while still in maintenance: the health check hits /up, which
         // Laravel exempts from maintenance mode, so verification works while down.
-        foreach ($this->reload() as $line) {
+        $reloadLog = $this->reload();
+        $reloadOk = ! DeploymentLogClassifier::hasError($reloadLog)
+            && ! DeploymentLogClassifier::hasWarning($reloadLog);
+
+        foreach ($reloadLog as $line) {
             $record($line);
         }
 
         if ($afterReload !== null) {
-            $afterReload();
+            $afterReload($reloadOk);
         }
 
         foreach ($this->bundles->verifyTargets($targets) as $line) {

@@ -35,6 +35,8 @@ final class SoftwareUpdateCommand extends Command
 
         $log = [];
         $maintenanceOwned = false;
+        $reloadAttempted = false;
+        $reloadOk = false;
         $record = function (string $line) use (&$log, &$maintenanceOwned, $history, $maintenance, $runId): void {
             $log[] = $line;
             $history->appendDeploymentLine($runId, $line);
@@ -57,8 +59,21 @@ final class SoftwareUpdateCommand extends Command
                 $record,
                 // Leave maintenance only after the workers were reloaded, so no
                 // request is ever served by old worker code against the freshly
-                // pulled files (mixed-version window).
-                afterReload: function () use (&$maintenanceOwned, $maintenance, $runId): void {
+                // pulled files (mixed-version window). If the reload failed, the
+                // old workers are still live and the reload already cleared the
+                // compiled-view/opcache caches, so reopening would render the new
+                // templates against the old component code — the count(null)
+                // TypeError this command exists to prevent. Stay in maintenance
+                // for manual recovery instead; the operator brings the site back
+                // online once the reload is fixed.
+                afterReload: function (bool $reloadSucceeded) use (&$maintenanceOwned, &$reloadAttempted, &$reloadOk, $maintenance, $runId): void {
+                    $reloadAttempted = true;
+                    $reloadOk = $reloadSucceeded;
+
+                    if (! $reloadSucceeded) {
+                        return;
+                    }
+
                     if (! $maintenance->leave($runId)) {
                         throw new DeploymentMaintenanceException('Belimbing could not leave maintenance mode after the runtime reload.');
                     }
@@ -84,7 +99,15 @@ final class SoftwareUpdateCommand extends Command
 
             return self::FAILURE;
         } finally {
-            if ($maintenance->leave($runId)) {
+            // When the worker reload was attempted but failed, keep the site in
+            // maintenance for manual recovery (see afterReload). The process has
+            // completed normally rather than crashed, so disarm the crash-recovery
+            // watchdog — the operator owns bringing the site back. Every other
+            // reachable path (success, pre-reload failure, exception) leaves
+            // maintenance here as a safety net.
+            if ($reloadAttempted && ! $reloadOk) {
+                $maintenance->disarm($runId);
+            } elseif ($maintenance->leave($runId)) {
                 $maintenance->disarm($runId);
             }
 

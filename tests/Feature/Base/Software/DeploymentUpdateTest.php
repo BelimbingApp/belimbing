@@ -561,7 +561,7 @@ test('detached update command owns cleanup and records a terminal result', funct
         ->once()
         ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
             $progress('Pulling Belimbing (platform)…');
-            $afterReload();
+            $afterReload(true);
 
             return $keys === ['platform'];
         })
@@ -579,6 +579,51 @@ test('detached update command owns cleanup and records a terminal result', funct
         'status' => 'success',
         'summary' => DEPLOYMENT_UPDATE_COMPLETE,
         'log' => [DEPLOYMENT_UPDATE_COMPLETE],
+    ]);
+});
+
+test('a failed worker reload keeps the deployment in maintenance for manual recovery', function (): void {
+    // The reload clears compiled-view/opcache caches before restarting the pool.
+    // If the restart fails, the old workers are still live against a cleared view
+    // cache — reopening the site would render the freshly pulled templates against
+    // the old component code (the mixed-version window this command prevents), so
+    // the run stays in maintenance and the operator brings the site back manually.
+    $runId = 'deployment-command-reload-failed';
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
+
+    $maintenance = Mockery::mock(DeploymentMaintenanceGuard::class);
+    $maintenance->shouldReceive('arm')->once()->with($runId);
+    $maintenance->shouldReceive('enter')->once()->with($runId);
+    $maintenance->shouldReceive('renew')->atLeast()->once()->with($runId)->andReturnTrue();
+    $maintenance->shouldNotReceive('leave');
+    $maintenance->shouldReceive('disarm')->once()->with($runId);
+    app()->instance(DeploymentMaintenanceGuard::class, $maintenance);
+
+    $deployment = Mockery::mock(DeploymentService::class);
+    $deployment->shouldReceive('update')
+        ->once()
+        ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
+            $progress('Pulling Belimbing (platform)…');
+            $progress('Warning: web workers were not reloaded because the FrankenPHP admin API could not be reached.');
+            $afterReload(false);
+
+            return $keys === ['platform'];
+        })
+        ->andReturn(['Warning: web workers were not reloaded.']);
+    app()->instance(DeploymentService::class, $deployment);
+
+    expect(Artisan::call('blb:software:update', [
+        'keys' => ['platform'],
+        '--run-id' => $runId,
+    ]))->toBe(0)
+        ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+
+    $run = $history->lastDeploymentRun();
+    expect($run)->toMatchArray([
+        'status' => 'warning',
+        'summary' => 'Warning: web workers were not reloaded.',
     ]);
 });
 
