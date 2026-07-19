@@ -1,8 +1,9 @@
 <?php
 
+use App\Modules\Core\AI\DTO\ToolFinishedPayload;
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\AI\Services\RunEventPublisher;
@@ -225,7 +226,11 @@ describe('RunEventPublisher', function () {
         $turn->transitionTo(AiRunStatus::Running);
 
         $started = $publisher->toolStarted($turn, 'bash', 'ls -la', 0);
-        $finished = $publisher->toolFinished($turn, 'bash', 'success', '10 files', 150);
+        $finished = $publisher->toolFinished($turn, 'bash', new ToolFinishedPayload(
+            status: 'success',
+            resultPreview: '10 files',
+            durationMs: 150,
+        ));
 
         expect($started->event_type)->toBe(RunEventType::ToolStarted)
             ->and($started->payload['tool'])->toBe('bash')
@@ -297,7 +302,7 @@ describe('RunEventPublisher', function () {
         $publisher->turnStarted($turn);
         $publisher->phaseChanged($turn, RunPhase::AwaitingLlm);
         $publisher->toolStarted($turn, 'bash', 'echo hello');
-        $publisher->toolFinished($turn, 'bash', 'success');
+        $publisher->toolFinished($turn, 'bash', new ToolFinishedPayload(status: 'success'));
         $publisher->outputDelta($turn, 'Output');
         $publisher->heartbeat($turn, 1000);
 

@@ -29,6 +29,8 @@ const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
 const DEPLOYMENT_UPDATE_LOG_FORMAT = '--format=%H%x1f%cI%x1f%an%x1f%s';
 const DEPLOYMENT_UPDATE_FF_ONLY = '--ff-only';
 const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
+const DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE = 'Software update scheduled in a detached process.';
+const DEPLOYMENT_UPDATE_PULLING_PLATFORM = 'Pulling Belimbing (platform)…';
 const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
 const DEPLOYMENT_UPDATE_ADMIN_HOST_ENV = 'CADDY_SERVER_ADMIN_HOST='.DEPLOYMENT_UPDATE_ADMIN_HOST;
 const DEPLOYMENT_UPDATE_ADMIN_BASE_URL = 'http://127.0.0.1:2643';
@@ -187,6 +189,29 @@ function expectDeploymentReloadUsesAdminEndpoint(string $baseUrl): void
     expect($log)->toContain(DEPLOYMENT_UPDATE_RELOADED);
     Http::assertSent(fn ($request): bool => $request->url() === deploymentAdminRestartUrl($baseUrl));
     Http::assertNotSent(fn ($request): bool => str_contains($request->url(), ':2019/'));
+}
+
+/**
+ * @param  array<string, mixed>  $options
+ */
+function expectDeploymentRuntimeReloadCommandSucceeds(array $options = []): void
+{
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
+
+    $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0, ...$options]);
+    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
+    $state = app(DeploymentRunHistory::class)->reloadState();
+
+    expect($status)->toBe(0)
+        ->and($stored)->toBeArray()
+        ->and($stored['ok'])->toBeTrue()
+        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
+        ->and($state)->toMatchArray(['status' => 'success', 'message' => DEPLOYMENT_UPDATE_RELOADED])
+        ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
+
+    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
 }
 
 /**
@@ -476,41 +501,11 @@ test('software update runtime reload starts in a detached background command wit
 });
 
 test('domain runtime reload command reloads workers without clearing runtime caches', function (): void {
-    fakeDeploymentUpdateProcesses();
-    fakeDeploymentUpdateHttp();
-    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
-
-    $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0]);
-    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
-    $state = app(DeploymentRunHistory::class)->reloadState();
-
-    expect($status)->toBe(0)
-        ->and($stored)->toBeArray()
-        ->and($stored['ok'])->toBeTrue()
-        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
-        ->and($state)->toMatchArray(['status' => 'success', 'message' => DEPLOYMENT_UPDATE_RELOADED])
-        ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
-
-    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+    expectDeploymentRuntimeReloadCommandSucceeds();
 });
 
 test('software update runtime reload command reloads workers after clearing runtime caches', function (): void {
-    fakeDeploymentUpdateProcesses();
-    fakeDeploymentUpdateHttp();
-    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
-
-    $status = Artisan::call('blb:domain-runtime:reload', ['--delay' => 0, '--clear-runtime-caches' => true]);
-    $stored = app(SettingsService::class)->get('system.update.frankenphp.last_reload');
-    $state = app(DeploymentRunHistory::class)->reloadState();
-
-    expect($status)->toBe(0)
-        ->and($stored)->toBeArray()
-        ->and($stored['ok'])->toBeTrue()
-        ->and($stored['message'])->toBe(DEPLOYMENT_UPDATE_RELOADED)
-        ->and($state)->toMatchArray(['status' => 'success', 'message' => DEPLOYMENT_UPDATE_RELOADED])
-        ->and(Cache::has(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY))->toBeFalse();
-
-    Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
+    expectDeploymentRuntimeReloadCommandSucceeds(['--clear-runtime-caches' => true]);
 });
 
 test('component updates launch a durable process instead of updating inside the web worker', function (): void {
@@ -536,7 +531,7 @@ test('component updates launch a durable process instead of updating inside the 
 
         expect($run)->toBeArray()
             ->and($run['status'])->toBe('pending')
-            ->and($run['summary'])->toContain('Software update scheduled in a detached process.')
+            ->and($run['summary'])->toContain(DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE)
             ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue()
             ->and(app()->isDownForMaintenance())->toBeFalse();
 
@@ -566,7 +561,7 @@ test('detached update command owns cleanup and records a terminal result', funct
     $deployment->shouldReceive('update')
         ->once()
         ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
-            $progress('Pulling Belimbing (platform)…');
+            $progress(DEPLOYMENT_UPDATE_PULLING_PLATFORM);
             $afterReload(true);
 
             return $keys === ['platform'];
@@ -611,7 +606,7 @@ test('a failed worker reload keeps the deployment in maintenance for manual reco
     $deployment->shouldReceive('update')
         ->once()
         ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
-            $progress('Pulling Belimbing (platform)…');
+            $progress(DEPLOYMENT_UPDATE_PULLING_PLATFORM);
             $progress('Warning: web workers were not reloaded because the FrankenPHP admin API could not be reached.');
             $afterReload(false);
 
@@ -767,9 +762,9 @@ test('the recorded-run marker is rendered only for terminal runs, not pending', 
     $history = app(DeploymentRunHistory::class);
 
     // Pending run: no marker.
-    $history->beginDeploymentRun('pending-run', ['platform'], 'Software update scheduled in a detached process.');
+    $history->beginDeploymentRun('pending-run', ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
     Livewire::test(Index::class)
-        ->assertSee('Software update scheduled in a detached process.')
+        ->assertSee(DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE)
         ->assertDontSee('data-run-outcome=', false);
 
     // Terminal run: marker present with the outcome.
@@ -904,7 +899,7 @@ test('the run box shows the last run, with its time, on a fresh visit', function
 
     // A durable record stands in for a run from an earlier session (the session log is gone).
     app(DeploymentRunHistory::class)->rememberDeploymentRun(
-        ['Pulling Belimbing (platform)…', DEPLOYMENT_UPDATE_COMPLETE],
+        [DEPLOYMENT_UPDATE_PULLING_PLATFORM, DEPLOYMENT_UPDATE_COMPLETE],
         'success',
     );
 

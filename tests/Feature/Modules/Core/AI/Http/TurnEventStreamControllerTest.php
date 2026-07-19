@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Core\AI\DTO\ToolFinishedPayload;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Jobs\RunChatTurnJob;
@@ -58,7 +59,12 @@ function createTurnWithReplayEvents(int $userId): AiRun
     $pub->thinkingStarted($turn);
     $pub->phaseChanged($turn, RunPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
-    $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
+    $pub->toolFinished($turn, 'bash', new ToolFinishedPayload(
+        status: 'success',
+        resultPreview: '10 files',
+        durationMs: 150,
+        resultLength: 32,
+    ));
     $pub->phaseChanged($turn, RunPhase::StreamingAnswer, 'Responding…');
     $pub->outputDelta($turn, 'Hello world');
     $pub->outputBlockCommitted($turn, 'markdown', 'Hello world');

@@ -237,12 +237,7 @@ class WebFetchService
                     $maxResponseBytes,
                 );
             } catch (Throwable $e) {
-                if ($this->causedByResponseSizeLimit($e)) {
-                    $result = $this->responseTooLarge($maxResponseBytes ?? 0);
-                    break;
-                }
-
-                $result = ['request_error' => $e->getMessage()];
+                $result = $this->requestErrorFromException($e, $maxResponseBytes ?? 0);
                 break;
             }
 
@@ -352,6 +347,16 @@ class WebFetchService
         }
 
         return $request->get($url);
+    }
+
+    /**
+     * @return array{request_error?: string, response_too_large?: string}
+     */
+    private function requestErrorFromException(Throwable $exception, int $maxResponseBytes): array
+    {
+        return $this->causedByResponseSizeLimit($exception)
+            ? $this->responseTooLarge($maxResponseBytes)
+            : ['request_error' => $exception->getMessage()];
     }
 
     private function isRedirect(Response $response): bool

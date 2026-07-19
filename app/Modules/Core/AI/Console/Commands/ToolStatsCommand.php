@@ -6,6 +6,7 @@ use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Models\AiRunEvent;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
@@ -29,54 +30,7 @@ class ToolStatsCommand extends Command
         $days = max(1, (int) $this->option('days'));
         $since = now()->subDays($days);
 
-        $stats = [];
-        $unknownAttempts = [];
-        $missingCodes = ['unknown_tool', 'tool_not_available'];
-
-        AiRunEvent::query()
-            ->whereIn('event_type', [RunEventType::ToolFinished->value, RunEventType::ToolDenied->value])
-            ->where('created_at', '>=', $since)
-            ->orderBy('created_at')
-            ->chunk(500, function ($events) use (&$stats, &$unknownAttempts, $missingCodes): void {
-                foreach ($events as $event) {
-                    $payload = is_array($event->payload) ? $event->payload : [];
-                    $tool = (string) ($payload['tool'] ?? '');
-
-                    if ($tool === '') {
-                        continue;
-                    }
-
-                    $row = &$stats[$tool];
-                    $row ??= ['calls' => 0, 'errors' => 0, 'denials' => 0, 'duration_ms' => 0, 'timed' => 0];
-
-                    if ($event->event_type === RunEventType::ToolDenied) {
-                        $row['denials']++;
-
-                        // Authorization denials also emit tool.finished; hook denials do not.
-                        if (($payload['source'] ?? 'hook') !== 'authorization') {
-                            $row['calls']++;
-                        }
-
-                        continue;
-                    }
-
-                    $row['calls']++;
-
-                    if (($payload['status'] ?? 'success') === 'error') {
-                        $row['errors']++;
-
-                        $code = $payload['error_payload']['code'] ?? null;
-                        if (in_array($code, $missingCodes, true)) {
-                            $unknownAttempts[$tool] = ($unknownAttempts[$tool] ?? 0) + 1;
-                        }
-                    }
-
-                    if (isset($payload['duration_ms']) && is_numeric($payload['duration_ms'])) {
-                        $row['duration_ms'] += (int) $payload['duration_ms'];
-                        $row['timed']++;
-                    }
-                }
-            });
+        [$stats, $unknownAttempts] = $this->collectToolStats($since);
 
         if ($stats === []) {
             $this->components->info("No tool activity recorded in the last {$days} day(s).");
@@ -122,5 +76,100 @@ class ToolStatsCommand extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array{0: array<string, array{calls: int, errors: int, denials: int, duration_ms: int, timed: int}>, 1: array<string, int>}
+     */
+    private function collectToolStats(Carbon $since): array
+    {
+        $stats = [];
+        $unknownAttempts = [];
+        $missingCodes = ['unknown_tool', 'tool_not_available'];
+
+        AiRunEvent::query()
+            ->whereIn('event_type', [RunEventType::ToolFinished->value, RunEventType::ToolDenied->value])
+            ->where('created_at', '>=', $since)
+            ->orderBy('created_at')
+            ->chunk(500, function ($events) use (&$stats, &$unknownAttempts, $missingCodes): void {
+                foreach ($events as $event) {
+                    $this->recordToolEvent($event, $stats, $unknownAttempts, $missingCodes);
+                }
+            });
+
+        return [$stats, $unknownAttempts];
+    }
+
+    /**
+     * @param  array<string, array{calls: int, errors: int, denials: int, duration_ms: int, timed: int}>  $stats
+     * @param  array<string, int>  $unknownAttempts
+     * @param  list<string>  $missingCodes
+     */
+    private function recordToolEvent(
+        AiRunEvent $event,
+        array &$stats,
+        array &$unknownAttempts,
+        array $missingCodes,
+    ): void {
+        $payload = is_array($event->payload) ? $event->payload : [];
+        $tool = (string) ($payload['tool'] ?? '');
+
+        if ($tool === '') {
+            return;
+        }
+
+        $stats[$tool] ??= ['calls' => 0, 'errors' => 0, 'denials' => 0, 'duration_ms' => 0, 'timed' => 0];
+
+        if ($event->event_type === RunEventType::ToolDenied) {
+            $this->recordToolDenial($stats[$tool], $payload);
+
+            return;
+        }
+
+        $this->recordToolFinish($stats[$tool], $unknownAttempts, $tool, $payload, $missingCodes);
+    }
+
+    /**
+     * @param  array{calls: int, errors: int, denials: int, duration_ms: int, timed: int}  $row
+     * @param  array<string, mixed>  $payload
+     */
+    private function recordToolDenial(array &$row, array $payload): void
+    {
+        $row['denials']++;
+
+        // Authorization denials also emit tool.finished; hook denials do not.
+        if (($payload['source'] ?? 'hook') !== 'authorization') {
+            $row['calls']++;
+        }
+    }
+
+    /**
+     * @param  array{calls: int, errors: int, denials: int, duration_ms: int, timed: int}  $row
+     * @param  array<string, int>  $unknownAttempts
+     * @param  array<string, mixed>  $payload
+     * @param  list<string>  $missingCodes
+     */
+    private function recordToolFinish(
+        array &$row,
+        array &$unknownAttempts,
+        string $tool,
+        array $payload,
+        array $missingCodes,
+    ): void {
+        $row['calls']++;
+
+        if (($payload['status'] ?? 'success') === 'error') {
+            $row['errors']++;
+
+            $code = $payload['error_payload']['code'] ?? null;
+            if (in_array($code, $missingCodes, true)) {
+                $unknownAttempts[$tool] = ($unknownAttempts[$tool] ?? 0) + 1;
+            }
+        }
+
+        if (isset($payload['duration_ms']) && is_numeric($payload['duration_ms'])) {
+            $row['duration_ms'] += (int) $payload['duration_ms'];
+            $row['timed']++;
+        }
     }
 }

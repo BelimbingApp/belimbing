@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\AI\DTO\Message;
+use App\Modules\Core\AI\DTO\ToolFinishedPayload;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
@@ -59,7 +60,12 @@ function populateHappyPathEvents(AiRun $turn, RunEventPublisher $pub): void
     $pub->thinkingStarted($turn);
     $pub->phaseChanged($turn, RunPhase::RunningTool, 'bash');
     $pub->toolStarted($turn, 'bash', '{"cmd":"ls"}', 0);
-    $pub->toolFinished($turn, 'bash', 'success', '10 files', 150, 32);
+    $pub->toolFinished($turn, 'bash', new ToolFinishedPayload(
+        status: 'success',
+        resultPreview: '10 files',
+        durationMs: 150,
+        resultLength: 32,
+    ));
     $pub->phaseChanged($turn, RunPhase::AwaitingLlm, RunPhase::AwaitingLlm->label());
     $pub->heartbeat($turn, 500);
     $pub->phaseChanged($turn, RunPhase::StreamingAnswer, 'Responding…');
@@ -302,10 +308,16 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
         $pub->turnStarted($turn);
         $turn->transitionTo(AiRunStatus::Running);
         $pub->toolStarted($turn, 'bash', '{"cmd":"rm -rf /"}', 0);
-        $pub->toolFinished($turn, 'bash', 'error', 'Permission denied', 80, 17, [
-            'code' => 'permission_denied',
-            'message' => 'Not allowed',
-        ]);
+        $pub->toolFinished($turn, 'bash', new ToolFinishedPayload(
+            status: 'error',
+            resultPreview: 'Permission denied',
+            durationMs: 80,
+            resultLength: 17,
+            errorPayload: [
+                'code' => 'permission_denied',
+                'message' => 'Not allowed',
+            ],
+        ));
         $pub->outputBlockCommitted($turn, 'markdown', 'Error occurred');
         $pub->turnCompleted($turn);
 
@@ -336,9 +348,21 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
         $pub->turnStarted($turn);
         $turn->transitionTo(AiRunStatus::Running);
         $pub->toolStarted($turn, 'read', '{"file_path":"composer.json"}', 0, 'Read composer.json');
-        $pub->toolFinished($turn, 'read', 'success', 'contents', 10, 8, null, 0);
+        $pub->toolFinished($turn, 'read', new ToolFinishedPayload(
+            status: 'success',
+            resultPreview: 'contents',
+            durationMs: 10,
+            resultLength: 8,
+            toolCallIndex: 0,
+        ));
         $pub->toolStarted($turn, 'bash', '{"command":"git status"}', 1, 'Run shell command');
-        $pub->toolFinished($turn, 'bash', 'success', 'clean', 20, 5, null, 1);
+        $pub->toolFinished($turn, 'bash', new ToolFinishedPayload(
+            status: 'success',
+            resultPreview: 'clean',
+            durationMs: 20,
+            resultLength: 5,
+            toolCallIndex: 1,
+        ));
         $pub->turnCompleted($turn);
 
         $mm = mockMessageManager();
@@ -361,7 +385,9 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
             ->and($entries[1]->toolCallIndex)->toBe(1)
             ->and($entries[1]->displaySummary)->toBe('Run shell command');
     });
+});
 
+describe('ChatRunPersister materializeFromTurn tool transcript ordering', function () {
     it('flushes thinking before persisting the subsequent tool entry', function () {
         $turn = createMaterializerTurn();
         $pub = app(RunEventPublisher::class);
@@ -372,7 +398,12 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
         $pub->thinkingDelta($turn, 'Need the current page before continuing.');
         $pub->iterationCompleted($turn, 'tool_calls', 0, 1);
         $pub->toolStarted($turn, 'active_page_snapshot', '{}', 0);
-        $pub->toolFinished($turn, 'active_page_snapshot', 'success', 'snapshot', 25, 8);
+        $pub->toolFinished($turn, 'active_page_snapshot', new ToolFinishedPayload(
+            status: 'success',
+            resultPreview: 'snapshot',
+            durationMs: 25,
+            resultLength: 8,
+        ));
         $pub->turnCompleted($turn);
 
         $mm = mockMessageManager();

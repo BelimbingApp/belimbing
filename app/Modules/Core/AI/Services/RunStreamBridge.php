@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\DTO\ToolFinishedPayload;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunPhase;
 use App\Modules\Core\AI\Models\AiRun;
@@ -225,12 +226,7 @@ class RunStreamBridge
             $this->publisher->toolFinished(
                 $turn,
                 $toolName,
-                (string) ($data['status'] ?? 'success'),
-                $data['result_preview'] ?? null,
-                isset($data['duration_ms']) ? (int) $data['duration_ms'] : null,
-                isset($data['result_length']) ? (int) $data['result_length'] : null,
-                is_array($data['error_payload'] ?? null) ? $data['error_payload'] : null,
-                isset($data['tool_call_index']) ? (int) $data['tool_call_index'] : null,
+                ToolFinishedPayload::fromStreamData($data),
             )->toSsePayload(),
             $this->publisher->phaseChanged($turn, RunPhase::AwaitingLlm, $postToolLabel)->toSsePayload(),
             $this->publisher->heartbeat($turn, $elapsedMs)->toSsePayload(),

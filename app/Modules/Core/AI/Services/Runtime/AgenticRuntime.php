@@ -92,24 +92,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $executionControlsOverride = null,
         ?RuntimeInvocationContext $context = null,
     ): array {
-        $this->beginSessionContext($sessionId, $employeeId, $messages);
-
         try {
-            $policy ??= ExecutionPolicy::interactive();
-            $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
-            $maxToolIterations = $this->maxToolIterations($policy);
-
-            $this->runRecorder->beginExecution(new RunRecorderStartInput(
-                runId: $runId,
+            [$policy, $deadline, $maxToolIterations, $config] = $this->initializeRuntimeInvocation(
+                messages: $messages,
                 employeeId: $employeeId,
-                source: $context?->source ?? 'chat',
-                executionMode: $policy->mode->value,
+                runId: $runId,
+                policy: $policy,
                 sessionId: $sessionId,
-                actingForUserId: auth()->id(),
-                timeoutSeconds: $policy->timeoutSeconds,
-            ));
-
-            $config = $configOverride ?? $this->configResolver->resolveDefault($employeeId);
+                configOverride: $configOverride,
+                source: $context?->source ?? 'chat',
+            );
 
             if ($config === null) {
                 $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
@@ -213,24 +205,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?array $executionControlsOverride = null,
         ?RuntimeInvocationContext $context = null,
     ): \Generator {
-        $this->beginSessionContext($sessionId, $employeeId, $messages);
-
         try {
-            $policy ??= ExecutionPolicy::interactive();
-            $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
-            $maxToolIterations = $this->maxToolIterations($policy);
-
-            $this->runRecorder->beginExecution(new RunRecorderStartInput(
-                runId: $runId,
+            [$policy, $deadline, $maxToolIterations, $config] = $this->initializeRuntimeInvocation(
+                messages: $messages,
                 employeeId: $employeeId,
-                source: $context?->source ?? 'stream',
-                executionMode: $policy->mode->value,
+                runId: $runId,
+                policy: $policy,
                 sessionId: $sessionId,
-                actingForUserId: auth()->id(),
-                timeoutSeconds: $policy->timeoutSeconds,
-            ));
-
-            $config = $configOverride ?? $this->configResolver->resolveDefault($employeeId);
+                configOverride: $configOverride,
+                source: $context?->source ?? 'stream',
+            );
 
             if ($config === null) {
                 $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
@@ -327,6 +311,44 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         $config['execution_controls'] = ExecutionControls::fromConfig($overlay, $config['execution_controls']);
 
         return $config;
+    }
+
+    /**
+     * @param  list<Message>  $messages
+     * @param  array<string, mixed>|null  $configOverride
+     * @return array{0: ExecutionPolicy, 1: float, 2: int, 3: array<string, mixed>|null}
+     */
+    private function initializeRuntimeInvocation(
+        array $messages,
+        int $employeeId,
+        string $runId,
+        ?ExecutionPolicy $policy,
+        ?string $sessionId,
+        ?array $configOverride,
+        string $source,
+    ): array {
+        $this->beginSessionContext($sessionId, $employeeId, $messages);
+
+        $policy ??= ExecutionPolicy::interactive();
+        $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
+        $maxToolIterations = $this->maxToolIterations($policy);
+
+        $this->runRecorder->beginExecution(new RunRecorderStartInput(
+            runId: $runId,
+            employeeId: $employeeId,
+            source: $source,
+            executionMode: $policy->mode->value,
+            sessionId: $sessionId,
+            actingForUserId: auth()->id(),
+            timeoutSeconds: $policy->timeoutSeconds,
+        ));
+
+        return [
+            $policy,
+            $deadline,
+            $maxToolIterations,
+            $configOverride ?? $this->configResolver->resolveDefault($employeeId),
+        ];
     }
 
     /**
