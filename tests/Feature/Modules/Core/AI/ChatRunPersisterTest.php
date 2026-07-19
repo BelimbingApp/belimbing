@@ -385,7 +385,9 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
             ->and($entries[1]->toolCallIndex)->toBe(1)
             ->and($entries[1]->displaySummary)->toBe('Run shell command');
     });
+});
 
+describe('ChatRunPersister materializeFromTurn tool transcript ordering', function () {
     it('flushes thinking before persisting the subsequent tool entry', function () {
         $turn = createMaterializerTurn();
         $pub = app(RunEventPublisher::class);

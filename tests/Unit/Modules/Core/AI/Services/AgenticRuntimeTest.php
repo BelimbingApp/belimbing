@@ -37,6 +37,7 @@ uses(TestCase::class, MakesRuntimeResponses::class);
 const AGENTIC_RUNTIME_SYSTEM_PROMPT = 'You are Lara.';
 const AGENTIC_RUNTIME_TOO_MANY_REQUESTS = 'HTTP 429: Too Many Requests';
 const AGENTIC_RUNTIME_HELLO_RESPONSE = 'Hello, I am Lara!';
+const AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS = '{"input":"world"}';
 
 final class StreamAdvancedBeforeConsumption extends RuntimeException {}
 const AGENTIC_RUNTIME_WIRE_LOG_EXTENSION = '.jsonl';
@@ -264,7 +265,7 @@ function runToolLoopLimitScenario(
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chat')
         ->times(3)
-        ->andReturn(test()->makeToolCallResponse($callId, 'echo_tool', '{"input":"world"}'));
+        ->andReturn(test()->makeToolCallResponse($callId, 'echo_tool', AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS));
 
     return runAgenticConversation(
         $llmClient,
@@ -582,7 +583,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
                         'type' => 'function',
                         'function' => [
                             'name' => 'echo_tool',
-                            'arguments' => '{"input":"world"}',
+                            'arguments' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
                         ],
                     ],
                 ],
@@ -792,7 +793,7 @@ describe('AgenticRuntime (streaming)', function () {
                 'index' => 0,
                 'id' => 'call_loop',
                 'name' => 'echo_tool',
-                'arguments_delta' => '{"input":"world"}',
+                'arguments_delta' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
             ];
             yield [
                 'type' => 'done',
