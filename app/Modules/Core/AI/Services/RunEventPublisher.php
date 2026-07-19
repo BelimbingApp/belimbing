@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Modules\Core\AI\DTO\ToolFinishedPayload;
 use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Enums\RunPhase;
@@ -252,28 +253,10 @@ class RunEventPublisher
 
     /**
      * Emit tool.finished when a tool invocation completes.
-     *
-     * @param  array<string, mixed>|null  $errorPayload  Structured error data when status is 'error'
      */
-    public function toolFinished(
-        AiRun $turn,
-        string $toolName,
-        string $status,
-        ?string $resultPreview = null,
-        ?int $durationMs = null,
-        ?int $resultLength = null,
-        ?array $errorPayload = null,
-        ?int $toolCallIndex = null,
-    ): AiRunEvent {
-        return $this->publish($turn, RunEventType::ToolFinished, array_filter([
-            'tool' => $toolName,
-            'status' => $status,
-            'tool_call_index' => $toolCallIndex,
-            'result_preview' => $resultPreview,
-            'duration_ms' => $durationMs,
-            'result_length' => $resultLength,
-            'error_payload' => $errorPayload,
-        ], fn ($v) => $v !== null));
+    public function toolFinished(AiRun $turn, string $toolName, ToolFinishedPayload $payload): AiRunEvent
+    {
+        return $this->publish($turn, RunEventType::ToolFinished, $payload->toEventPayload($toolName));
     }
 
     /**

@@ -29,7 +29,6 @@ class ChatTurnRunner
         private readonly ChatRunPersister $persister,
         private readonly RunStreamBridge $bridge,
         private readonly RunEventPublisher $turnPublisher,
-        private readonly SessionManager $sessionManager,
         private readonly LaraInteractiveToolSet $interactiveToolSet,
     ) {}
 

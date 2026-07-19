@@ -254,6 +254,27 @@ function runAgenticConversation(
         ->run([test()->makeMessage('user', $userMessage)], 1, (string) Str::ulid(), $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
+function runToolLoopLimitScenario(
+    int $globalLimit,
+    string $callId,
+    ?ExecutionPolicy $policy = null,
+): array {
+    config()->set('ai.llm.agentic.max_tool_iterations', $globalLimit);
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chat')
+        ->times(3)
+        ->andReturn(test()->makeToolCallResponse($callId, 'echo_tool', '{"input":"world"}'));
+
+    return runAgenticConversation(
+        $llmClient,
+        toolRegistry: test()->makeToolRegistry(buildEchoTool()),
+        userMessage: 'Loop forever',
+        systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        policy: $policy,
+    );
+}
+
 describe('AgenticRuntime (sync)', function () {
     it('returns direct response when LLM produces no tool calls', function () {
         $llmClient = Mockery::mock(LlmClient::class);
@@ -409,38 +430,17 @@ describe('AgenticRuntime (sync tool loop)', function () {
         });
 
         it('stops before executing tools beyond the configured loop limit', function () {
-            config()->set('ai.llm.agentic.max_tool_iterations', 2);
-
-            $llmClient = Mockery::mock(LlmClient::class);
-            $llmClient->shouldReceive('chat')
-                ->times(3)
-                ->andReturn($this->makeToolCallResponse('call_loop', 'echo_tool', '{"input":"world"}'));
-
-            $result = runAgenticConversation(
-                $llmClient,
-                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-                userMessage: 'Loop forever',
-                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
-            );
+            $result = runToolLoopLimitScenario(2, 'call_loop');
 
             expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)
                 ->and($result['meta']['tool_actions'])->toHaveCount(2);
         });
 
         it('honours a per-run tool-loop limit instead of the global default', function () {
-            config()->set('ai.llm.agentic.max_tool_iterations', 24);
-
-            $llmClient = Mockery::mock(LlmClient::class);
-            $llmClient->shouldReceive('chat')
-                ->times(3)
-                ->andReturn($this->makeToolCallResponse('call_policy_loop', 'echo_tool', '{"input":"world"}'));
-
-            $result = runAgenticConversation(
-                $llmClient,
-                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
-                userMessage: 'Loop forever',
-                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
-                policy: ExecutionPolicy::interactive()->withMaxToolIterations(2),
+            $result = runToolLoopLimitScenario(
+                24,
+                'call_policy_loop',
+                ExecutionPolicy::interactive()->withMaxToolIterations(2),
             );
 
             expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)

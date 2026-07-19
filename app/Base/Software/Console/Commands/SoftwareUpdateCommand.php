@@ -34,14 +34,17 @@ final class SoftwareUpdateCommand extends Command
         }
 
         $log = [];
-        $maintenanceOwned = false;
+        $maintenanceState = new class
+        {
+            public bool $owned = false;
+        };
         $reloadAttempted = false;
         $reloadOk = false;
-        $record = function (string $line) use (&$log, &$maintenanceOwned, $history, $maintenance, $runId): void {
+        $record = function (string $line) use (&$log, $maintenanceState, $history, $maintenance, $runId): void {
             $log[] = $line;
             $history->appendDeploymentLine($runId, $line);
 
-            if ($maintenanceOwned && ! $maintenance->renew($runId)) {
+            if ($maintenanceState->owned && ! $maintenance->renew($runId)) {
                 throw new DeploymentMaintenanceException('The update lost its maintenance recovery lease.');
             }
 
@@ -51,7 +54,7 @@ final class SoftwareUpdateCommand extends Command
         try {
             $maintenance->arm($runId);
             $maintenance->enter($runId);
-            $maintenanceOwned = true;
+            $maintenanceState->owned = true;
             $record((string) __('Detached update process started; automatic maintenance recovery is armed.'));
 
             $log = $deployment->update(
@@ -66,7 +69,7 @@ final class SoftwareUpdateCommand extends Command
                 // TypeError this command exists to prevent. Stay in maintenance
                 // for manual recovery instead; the operator brings the site back
                 // online once the reload is fixed.
-                afterReload: function (bool $reloadSucceeded) use (&$maintenanceOwned, &$reloadAttempted, &$reloadOk, $maintenance, $runId): void {
+                afterReload: function (bool $reloadSucceeded) use ($maintenanceState, &$reloadAttempted, &$reloadOk, $maintenance, $runId): void {
                     $reloadAttempted = true;
                     $reloadOk = $reloadSucceeded;
 
@@ -78,7 +81,7 @@ final class SoftwareUpdateCommand extends Command
                         throw new DeploymentMaintenanceException('Belimbing could not leave maintenance mode after the runtime reload.');
                     }
 
-                    $maintenanceOwned = false;
+                    $maintenanceState->owned = false;
                     $maintenance->disarm($runId);
                 },
             );
@@ -105,13 +108,26 @@ final class SoftwareUpdateCommand extends Command
             // watchdog — the operator owns bringing the site back. Every other
             // reachable path (success, pre-reload failure, exception) leaves
             // maintenance here as a safety net.
-            if ($reloadAttempted && ! $reloadOk) {
-                $maintenance->disarm($runId);
-            } elseif ($maintenance->leave($runId)) {
-                $maintenance->disarm($runId);
-            }
+            $this->finishMaintenance($maintenance, $runId, $reloadAttempted, $reloadOk);
 
             $lock->release();
+        }
+    }
+
+    private function finishMaintenance(
+        DeploymentMaintenanceGuard $maintenance,
+        string $runId,
+        bool $reloadAttempted,
+        bool $reloadOk,
+    ): void {
+        if ($reloadAttempted && ! $reloadOk) {
+            $maintenance->disarm($runId);
+
+            return;
+        }
+
+        if ($maintenance->leave($runId)) {
+            $maintenance->disarm($runId);
         }
     }
 }
