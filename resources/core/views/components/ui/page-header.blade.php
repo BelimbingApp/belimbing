@@ -25,7 +25,7 @@
         "
     @endif
 >
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0 flex-1">
             <div class="inline-flex items-center gap-2 max-w-full mb-1">
                 <h1 class="min-w-0 text-xl font-medium tracking-tight text-ink">{{ $title }}</h1>
@@ -64,7 +64,7 @@
                  themselves. Scoped here rather than on x-ui.link globally,
                  which has 8 existing callers that already patch their own
                  size (text-xs/text-sm) at the call site. --}}
-            <div class="shrink-0 flex items-center gap-2 text-sm">
+            <div class="flex w-full shrink-0 flex-wrap items-center gap-2 text-sm sm:w-auto sm:justify-end">
                 {{ $actions }}
             </div>
         @endif
