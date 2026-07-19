@@ -120,13 +120,7 @@ final class SoftwareUpdateCommand extends Command
         bool $reloadAttempted,
         bool $reloadOk,
     ): void {
-        if ($reloadAttempted && ! $reloadOk) {
-            $maintenance->disarm($runId);
-
-            return;
-        }
-
-        if ($maintenance->leave($runId)) {
+        if (($reloadAttempted && ! $reloadOk) || $maintenance->leave($runId)) {
             $maintenance->disarm($runId);
         }
     }
