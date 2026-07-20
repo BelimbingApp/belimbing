@@ -37,14 +37,14 @@
             </x-ui.card>
         @endif
 
-        <div class="grid gap-6 md:grid-cols-3">
+        <div class="grid gap-6 lg:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3">
             @foreach($widgets as $widget)
                 <div
                     wire:key="widget-{{ $widget->id }}"
                     @class([
-                        'md:col-span-1' => $widget->size === 1,
-                        'md:col-span-2' => $widget->size === 2,
-                        'md:col-span-3' => $widget->size === 3,
+                        'lg:col-span-1 xl:col-start-3' => $widget->size === 1,
+                        'lg:col-span-2 xl:col-span-2' => $widget->size === 2,
+                        'lg:col-span-2 xl:col-span-3' => $widget->size === 3,
                     ])
                 >
                     @if($editing)

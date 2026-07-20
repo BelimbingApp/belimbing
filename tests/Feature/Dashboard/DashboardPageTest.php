@@ -110,6 +110,14 @@ it('shows capability-gated widgets to an admin in registry order', function (): 
         );
 });
 
+it('uses one column by default and keeps narrow widgets in the trailing wide-screen column', function (): void {
+    Livewire::actingAs(createAdminUser())
+        ->test(Index::class)
+        ->assertSeeHtml('class="grid gap-6 lg:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3"')
+        ->assertSeeHtml('lg:col-span-1 xl:col-start-3')
+        ->assertSeeHtml('lg:col-span-2 xl:col-span-2');
+});
+
 it('persists remove, reorder, and add as a whole prefs layout', function (): void {
     $admin = createAdminUser();
     $initialIds = dashboardWidgetIds(app(DashboardLayout::class)->layoutFor($admin));
