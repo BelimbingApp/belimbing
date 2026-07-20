@@ -4,6 +4,13 @@ use App\Modules\Core\User\Livewire\Notifications\Bell;
 
 /** @var Bell $this */
 $badgeCount = $unreadCount > 99 ? '99+' : (string) $unreadCount;
+$unreadNotificationLabel = $unreadCount === 1 ? __('notification') : __('notifications');
+$notificationAriaLabel = $unreadCount > 0
+    ? __(':count unread :label', [
+        'count' => $badgeCount,
+        'label' => $unreadNotificationLabel,
+    ])
+    : __('Notifications');
 ?>
 
 <div
@@ -20,7 +27,7 @@ $badgeCount = $unreadCount > 99 ? '99+' : (string) $unreadCount;
         aria-haspopup="true"
         :aria-expanded="open.toString()"
         aria-expanded="false"
-        aria-label="{{ $unreadCount > 0 ? trans_choice(':count unread notification|:count unread notifications', $unreadCount, ['count' => $badgeCount]) : __('Notifications') }}"
+        aria-label="{{ $notificationAriaLabel }}"
         title="{{ __('Notifications') }}"
     >
         <x-icon name="heroicon-o-bell" class="w-4 h-4" />
