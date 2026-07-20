@@ -214,6 +214,33 @@ function expectDeploymentRuntimeReloadCommandSucceeds(array $options = []): void
     Process::assertRan(fn ($process): bool => $process->command === PhpCli::current()->artisan(['about', '--only=environment']));
 }
 
+function beginDeploymentCommandRun(string $runId): DeploymentRunHistory
+{
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
+
+    return $history;
+}
+
+function expectDeploymentCommandMaintenance(string $runId, bool $reloadSucceeded): void
+{
+    $maintenance = Mockery::mock(DeploymentMaintenanceGuard::class);
+    $maintenance->shouldReceive('arm')->once()->with($runId);
+    $maintenance->shouldReceive('enter')->once()->with($runId);
+    $maintenance->shouldReceive('renew')->atLeast()->once()->with($runId)->andReturnTrue();
+
+    if ($reloadSucceeded) {
+        $maintenance->shouldReceive('leave')->twice()->with($runId)->andReturnTrue();
+        $maintenance->shouldReceive('disarm')->twice()->with($runId);
+    } else {
+        $maintenance->shouldNotReceive('leave');
+        $maintenance->shouldReceive('disarm')->once()->with($runId);
+    }
+
+    app()->instance(DeploymentMaintenanceGuard::class, $maintenance);
+}
+
 /**
  * @param  array<string, mixed>  $overrides
  * @return array<string, array<string, mixed>>
@@ -545,17 +572,8 @@ test('component updates launch a durable process instead of updating inside the 
 
 test('detached update command owns cleanup and records a terminal result', function (): void {
     $runId = 'deployment-command-test';
-    $history = app(DeploymentRunHistory::class);
-    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
-    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
-
-    $maintenance = Mockery::mock(DeploymentMaintenanceGuard::class);
-    $maintenance->shouldReceive('arm')->once()->with($runId);
-    $maintenance->shouldReceive('enter')->once()->with($runId);
-    $maintenance->shouldReceive('renew')->atLeast()->once()->with($runId)->andReturnTrue();
-    $maintenance->shouldReceive('leave')->twice()->with($runId)->andReturnTrue();
-    $maintenance->shouldReceive('disarm')->twice()->with($runId);
-    app()->instance(DeploymentMaintenanceGuard::class, $maintenance);
+    $history = beginDeploymentCommandRun($runId);
+    expectDeploymentCommandMaintenance($runId, reloadSucceeded: true);
 
     $deployment = Mockery::mock(DeploymentService::class);
     $deployment->shouldReceive('update')
@@ -590,17 +608,8 @@ test('a failed worker reload keeps the deployment in maintenance for manual reco
     // the old component code (the mixed-version window this command prevents), so
     // the run stays in maintenance and the operator brings the site back manually.
     $runId = 'deployment-command-reload-failed';
-    $history = app(DeploymentRunHistory::class);
-    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
-    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $runId)->get();
-
-    $maintenance = Mockery::mock(DeploymentMaintenanceGuard::class);
-    $maintenance->shouldReceive('arm')->once()->with($runId);
-    $maintenance->shouldReceive('enter')->once()->with($runId);
-    $maintenance->shouldReceive('renew')->atLeast()->once()->with($runId)->andReturnTrue();
-    $maintenance->shouldNotReceive('leave');
-    $maintenance->shouldReceive('disarm')->once()->with($runId);
-    app()->instance(DeploymentMaintenanceGuard::class, $maintenance);
+    $history = beginDeploymentCommandRun($runId);
+    expectDeploymentCommandMaintenance($runId, reloadSucceeded: false);
 
     $deployment = Mockery::mock(DeploymentService::class);
     $deployment->shouldReceive('update')
