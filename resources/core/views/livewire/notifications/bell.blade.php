@@ -4,10 +4,11 @@ use App\Modules\Core\User\Livewire\Notifications\Bell;
 
 /** @var Bell $this */
 $badgeCount = $unreadCount > 99 ? '99+' : (string) $unreadCount;
+$unreadNotificationLabel = $unreadCount === 1 ? __('notification') : __('notifications');
 $notificationAriaLabel = $unreadCount > 0
     ? __(':count unread :label', [
         'count' => $badgeCount,
-        'label' => $unreadCount === 1 ? __('notification') : __('notifications'),
+        'label' => $unreadNotificationLabel,
     ])
     : __('Notifications');
 ?>
