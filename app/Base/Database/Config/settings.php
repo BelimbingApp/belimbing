@@ -66,7 +66,7 @@ return [
                     'scope' => 'global',
                     'default' => '',
                     'placeholder' => 'postgresql://user:password@host:5432/postgres?sslmode=require',
-                    'help' => 'Advanced recovery for Supabase, and the normal setup for generic PostgreSQL. Use a direct or session-pooler URL that permits table DDL and data changes. It is encrypted and remains write-only after save.',
+                    'help' => 'The database user must be allowed to create tables and write data. Belimbing encrypts the URL and keeps it write-only after save.',
                     'rules' => ['nullable', 'string', 'max:2048'],
                     'encrypted' => true,
                     'actions' => [

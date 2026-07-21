@@ -49,7 +49,9 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
 
 <div
     class="space-y-6"
-    x-init="if (window.location.hash === '#mirror') { $wire.dataShareTabSelected('mirror') }"
+    @if(! $mirrorCatalogLoaded)
+        x-init="if (window.location.hash === '#mirror') { $wire.dataShareTabSelected('mirror') }"
+    @endif
 >
     <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div class="max-w-3xl">
@@ -127,29 +129,24 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 <p class="mt-1 text-sm text-muted">{{ __('Reconcile the Base table registry on the source and target, then refresh this catalog.') }}</p>
             </div>
         @else
-            <div class="grid gap-4 lg:grid-cols-[minmax(12rem,0.35fr)_minmax(16rem,0.65fr)]">
+            <div class="grid gap-4 lg:grid-cols-[minmax(16rem,0.65fr)_minmax(12rem,0.35fr)]">
+                <x-ui.search-input
+                    id="data-share-mirror-search"
+                    wire:model.live.debounce.250ms="mirrorSearch"
+                    :placeholder="__('Search tables…')"
+                    :aria-label="__('Search tables')"
+                />
+
                 <x-ui.select
                     id="data-share-mirror-module"
                     wire:model.live="mirrorModulePath"
-                    :label="__('Module filter')"
-                    :help="__('Filtering never changes the explicit selection.')"
+                    :aria-label="__('Filter by module')"
                 >
                     <option value="">{{ __('All modules') }}</option>
                     @foreach($mirrorModules as $module)
                         <option value="{{ $module['path'] }}">{{ $module['name'] }} · {{ $module['path'] }}</option>
                     @endforeach
                 </x-ui.select>
-
-                <div class="space-y-1.5">
-                    <label for="data-share-mirror-search" class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
-                        {{ __('Search tables') }}
-                    </label>
-                    <x-ui.search-input
-                        id="data-share-mirror-search"
-                        wire:model.live.debounce.250ms="mirrorSearch"
-                        :placeholder="__('Table or module…')"
-                    />
-                </div>
             </div>
 
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -167,7 +164,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         wire:loading.attr="disabled"
                         wire:target="executeMirror"
                     >
-                        {{ __('Select all visible') }}
+                        {{ trans_choice('Select all :count table|Select all :count tables', $visibleMirrorTables->count(), ['count' => $visibleMirrorTables->count()]) }}
                     </x-ui.button>
                     <x-ui.button
                         variant="ghost"
@@ -177,13 +174,14 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         wire:loading.attr="disabled"
                         wire:target="executeMirror"
                     >
-                        {{ __('Clear selection') }}
+                        {{ __('Deselect all') }}
                     </x-ui.button>
                 </div>
             </div>
 
             <x-ui.table
                 :caption="__('Development mirror table picker')"
+                container="plain"
                 :empty="$visibleMirrorTables->isEmpty()"
                 :empty-colspan="5"
                 :empty-message="__('No tables match this filter. Your explicit selection is unchanged.')"
@@ -262,7 +260,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         wire:click="reviewMirror('push')"
                         :disabled="$mirrorSelectedCount === 0 || ! $canExecuteMirror"
                         wire:loading.attr="disabled"
-                        wire:target="reviewMirror,executeMirror"
+                        wire:target="reviewMirror,executeMirror,forcePushMirror"
                     >
                         <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
                         <span wire:loading.remove wire:target="reviewMirror">
@@ -277,7 +275,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         wire:click="reviewMirror('pull')"
                         :disabled="$mirrorSelectedCount === 0 || ! $canExecuteMirror"
                         wire:loading.attr="disabled"
-                        wire:target="reviewMirror,executeMirror"
+                        wire:target="reviewMirror,executeMirror,forcePushMirror"
                     >
                         <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
                         <span wire:loading.remove wire:target="reviewMirror">
@@ -347,15 +345,31 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                     {{ __('Unselected tables are outside this operation. There is no row merge, automatic dependency expansion, or DROP CASCADE.') }}
                 </p>
                 <div class="flex items-center gap-2">
-                    <x-ui.button variant="ghost" wire:click="cancelMirrorReview" wire:loading.attr="disabled" wire:target="executeMirror">
+                    <x-ui.button variant="ghost" wire:click="cancelMirrorReview" wire:loading.attr="disabled" wire:target="executeMirror,forcePushMirror">
                         {{ __('Cancel review') }}
                     </x-ui.button>
+                    @if($mirrorDirection === 'push' && ($mirrorReview['_can_force_push'] ?? false))
+                        <x-ui.button
+                            variant="danger"
+                            wire:click="forcePushMirror"
+                            wire:confirm="{{ __('Force push this exact selection? Missing or incompatible remote tables will be dropped and recreated, and their remote rows will be replaced by Local. Unselected remote tables are untouched. Local schema and data will not be changed.') }}"
+                            :disabled="! $canExecuteMirror"
+                            wire:loading.attr="disabled"
+                            wire:target="forcePushMirror"
+                        >
+                            <x-icon name="heroicon-o-exclamation-triangle" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="forcePushMirror">
+                                {{ trans_choice('Force push :count selected table|Force push :count selected tables', $mirrorSelectedCount, ['count' => $mirrorSelectedCount]) }}
+                            </span>
+                            <span wire:loading wire:target="forcePushMirror">{{ __('Replacing selected remote tables…') }}</span>
+                        </x-ui.button>
+                    @endif
                     <x-ui.button
                         :variant="$mirrorDirection === 'push' ? 'primary' : 'secondary'"
                         wire:click="executeMirror"
                         :disabled="($mirrorReview['has_blockers'] ?? true) || ! $canExecuteMirror"
                         wire:loading.attr="disabled"
-                        wire:target="executeMirror"
+                        wire:target="executeMirror,forcePushMirror"
                     >
                         <x-icon name="heroicon-o-check" class="h-4 w-4" />
                         <span wire:loading.remove wire:target="executeMirror">
@@ -383,5 +397,31 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 'deleted' => $deletedCount,
             ]) }}</p>
         </x-ui.alert>
+        <x-ui.table :caption="__('Mirror row counts after the completed operation')" size="xs" container="plain">
+            <x-slot name="head">
+                <tr>
+                    <x-ui.th>{{ __('Table') }}</x-ui.th>
+                    <x-ui.th>{{ __('Action') }}</x-ui.th>
+                    <x-ui.th class="text-right">{{ __('Local rows') }}</x-ui.th>
+                    <x-ui.th class="text-right">{{ __('Remote rows') }}</x-ui.th>
+                </tr>
+            </x-slot>
+            <x-slot name="body">
+                @foreach((array) ($mirrorResult['items'] ?? []) as $item)
+                    <tr wire:key="mirror-result-{{ $item['table'] }}">
+                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $item['table'] }}</td>
+                        <td class="px-table-cell-x py-table-cell-y">
+                            <x-ui.badge :variant="$mirrorActionVariant($item['action'])">{{ __(ucfirst($item['action'])) }}</x-ui.badge>
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">
+                            {{ array_key_exists('local_rows', $item) ? number_format((int) $item['local_rows']) : '—' }}
+                        </td>
+                        <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">
+                            {{ array_key_exists('remote_rows', $item) ? number_format((int) $item['remote_rows']) : '—' }}
+                        </td>
+                    </tr>
+                @endforeach
+            </x-slot>
+        </x-ui.table>
     @endif
 </div>

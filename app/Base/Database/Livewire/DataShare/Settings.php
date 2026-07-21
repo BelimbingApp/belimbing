@@ -14,8 +14,6 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Livewire\SettingsForm;
 use App\Base\Settings\Support\SettingsFieldValue;
 use App\Base\Support\Str as BlbStr;
-use Illuminate\Contracts\Encryption\DecryptException;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -25,7 +23,7 @@ class Settings extends SettingsForm
 {
     use AuthorizesDataShareOperations;
 
-    private const SUPABASE_ACCESS_TOKEN_SESSION_KEY = 'data_share.mirror.supabase.setup_token';
+    private const SUPABASE_SETUP_STATE_SESSION_KEY = 'data_share.mirror.supabase.setup_state';
 
     public string $originalMirrorProvider = 'supabase';
 
@@ -41,7 +39,9 @@ class Settings extends SettingsForm
 
     public bool $replaceSavedSupabaseConnection = false;
 
-    public string $supabaseSetupChoice = 'new';
+    public string $supabaseConnectionPath = 'setup';
+
+    public string $supabaseSetupChoice = '';
 
     public string $supabaseOrganizationSlug = '';
 
@@ -52,6 +52,8 @@ class Settings extends SettingsForm
     public string $supabaseRegionGroup = 'apac';
 
     public string $supabaseDatabasePassword = '';
+
+    public string $supabaseManualDatabasePassword = '';
 
     public function mount(SettingsService $settings): void
     {
@@ -72,7 +74,12 @@ class Settings extends SettingsForm
         $this->originalMirrorProvider = $this->selectedMirrorProvider();
         $this->supabaseProjectName = Str::limit($instance->name.' development mirror', 80, '');
         $this->supabaseRegionGroup = $this->defaultSupabaseRegionGroup();
-        session()->forget(self::SUPABASE_ACCESS_TOKEN_SESSION_KEY);
+        $this->restoreSupabaseSetupState();
+
+        if (! $this->supabaseDiscoveryComplete
+            && app(SupabaseMirrorSetupService::class)->savedAccessToken() !== null) {
+            $this->supabaseConnectionPath = 'existing';
+        }
     }
 
     protected function group(): string
@@ -102,6 +109,8 @@ class Settings extends SettingsForm
             return $config;
         }
 
+        $config['autosave'] = true;
+
         $options = app(DataShareMirrorManager::class)->providerOptions();
         foreach ($config['fields'] ?? [] as $index => $field) {
             if (($field['key'] ?? null) !== 'data_share.mirror.provider') {
@@ -118,20 +127,58 @@ class Settings extends SettingsForm
     public function discoverSupabase(SupabaseMirrorSetupService $setup): void
     {
         $this->requireCapability('admin.system.data-share-settings.manage');
-        $validated = $this->validate([
+        $accessToken = trim($this->supabaseAccessToken);
+        $this->supabaseAccessToken = '';
+        $this->dispatch('clear-secret-input', id: 'supabase-management-access-token');
+        $validated = validator(['supabaseAccessToken' => $accessToken], [
             'supabaseAccessToken' => ['required', 'string', 'max:2048'],
-        ]);
-
+        ])->validate();
         $accessToken = trim($validated['supabaseAccessToken']);
 
         try {
             $discovery = $setup->discover($accessToken);
         } catch (SupabaseMirrorSetupException $exception) {
             $this->failProperty('supabaseAccessToken', $exception->getMessage());
-        } catch (Throwable) {
-            $this->failProperty('supabaseAccessToken', __('Supabase setup is unavailable right now. Check the network connection and try again.'));
+        } catch (Throwable $exception) {
+            $this->failProperty('supabaseAccessToken', DataShareMirrorException::unexpected('supabase_discovery', $exception)->getMessage());
         }
 
+        $setup->rememberAccessToken($accessToken);
+        $this->completeSupabaseDiscovery($accessToken, $discovery);
+    }
+
+    public function continueSupabaseWithSavedToken(SupabaseMirrorSetupService $setup): void
+    {
+        $this->requireCapability('admin.system.data-share-settings.manage');
+        $accessToken = $setup->savedAccessToken();
+
+        if ($accessToken === null) {
+            $this->failProperty('supabaseAccessToken', __('No saved Supabase personal access token is available. Create a new token to continue.'));
+        }
+
+        try {
+            $discovery = $setup->discover($accessToken);
+        } catch (SupabaseMirrorSetupException $exception) {
+            if ($exception->reasonCode === 'invalid_token') {
+                $this->failExpiredSupabaseAccessToken($setup, $accessToken);
+            }
+
+            $this->failProperty('supabaseAccessToken', $exception->getMessage());
+        } catch (Throwable $exception) {
+            $this->failProperty(
+                'supabaseAccessToken',
+                DataShareMirrorException::unexpected('supabase_discovery', $exception)->getMessage().' '.__('The saved token was kept.'),
+            );
+        }
+
+        $this->completeSupabaseDiscovery($accessToken, $discovery);
+    }
+
+    /**
+     * @param  array{organizations: list<array{id: string, slug: string, name: string}>, projects: list<array{ref: string, name: string, organization_slug: string, region: string, status: string, database_host: string}>}  $discovery
+     */
+    private function completeSupabaseDiscovery(string $accessToken, array $discovery): void
+    {
         $this->supabaseOrganizations = $discovery['organizations'];
         $this->supabaseProjects = array_map(
             static fn (array $project): array => [
@@ -144,29 +191,34 @@ class Settings extends SettingsForm
             $discovery['projects'],
         );
         $this->supabaseDiscoveryComplete = true;
-        session()->put(self::SUPABASE_ACCESS_TOKEN_SESSION_KEY, Crypt::encryptString($accessToken));
         $this->supabaseAccessToken = '';
         $this->supabaseOrganizationSlug = $this->supabaseOrganizations[0]['slug'] ?? '';
         $this->supabaseProjectRef = $this->supabaseProjects[0]['ref'] ?? '';
-        $this->supabaseSetupChoice = $this->supabaseOrganizations !== [] ? 'new' : 'existing';
+        $this->supabaseSetupChoice = 'new';
         $this->resetValidation([
             'supabaseAccessToken',
             'supabaseOrganizationSlug',
             'supabaseProjectRef',
             'supabaseDatabasePassword',
         ]);
+        $this->storeSupabaseSetupState();
     }
 
     public function resetSupabaseDiscovery(): void
     {
-        session()->forget(self::SUPABASE_ACCESS_TOKEN_SESSION_KEY);
+        session()->forget([
+            self::SUPABASE_SETUP_STATE_SESSION_KEY,
+        ]);
         $this->supabaseAccessToken = '';
         $this->supabaseOrganizations = [];
         $this->supabaseProjects = [];
         $this->supabaseDiscoveryComplete = false;
+        $this->supabaseSetupChoice = '';
         $this->supabaseOrganizationSlug = '';
         $this->supabaseProjectRef = '';
         $this->supabaseDatabasePassword = '';
+        $this->dispatch('clear-secret-input', id: 'supabase-management-access-token');
+        $this->dispatch('clear-secret-input', id: 'supabase-existing-database-password');
         $this->resetValidation([
             'supabaseAccessToken',
             'supabaseOrganizationSlug',
@@ -177,10 +229,45 @@ class Settings extends SettingsForm
         ]);
     }
 
+    public function updatedSupabaseSetupChoice(): void
+    {
+        $this->storeSupabaseSetupState();
+    }
+
+    public function returnToSupabaseConnectionChoice(): void
+    {
+        $this->requireCapability('admin.system.data-share-settings.manage');
+        $this->supabaseConnectionPath = app(SupabaseMirrorSetupService::class)->savedAccessToken() === null
+            ? 'setup'
+            : 'existing';
+        $this->resetSupabaseDiscovery();
+    }
+
+    public function updatedSupabaseOrganizationSlug(): void
+    {
+        $this->storeSupabaseSetupState();
+    }
+
+    public function updatedSupabaseProjectRef(): void
+    {
+        $this->storeSupabaseSetupState();
+    }
+
+    public function updatedSupabaseProjectName(): void
+    {
+        $this->storeSupabaseSetupState();
+    }
+
+    public function updatedSupabaseRegionGroup(): void
+    {
+        $this->storeSupabaseSetupState();
+    }
+
     public function startSupabaseReplacement(): void
     {
         $this->requireCapability('admin.system.data-share-settings.manage');
         $this->replaceSavedSupabaseConnection = true;
+        $this->supabaseConnectionPath = 'existing';
         $this->resetSupabaseDiscovery();
     }
 
@@ -200,20 +287,27 @@ class Settings extends SettingsForm
             'supabaseProjectName' => ['required', 'string', 'max:100'],
             'supabaseRegionGroup' => ['required', Rule::in(['apac', 'emea', 'americas'])],
         ]);
+        $accessToken = $this->supabaseSetupAccessToken();
 
         try {
             $status = $setup->createDedicatedProject(
-                $this->supabaseSetupAccessToken(),
+                $accessToken,
                 trim($validated['supabaseOrganizationSlug']),
                 trim($validated['supabaseProjectName']),
                 trim($validated['supabaseRegionGroup']),
             );
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (SupabaseMirrorSetupException|DataShareMirrorException $exception) {
+        } catch (SupabaseMirrorSetupException $exception) {
+            if ($exception->reasonCode === 'invalid_token') {
+                $this->failExpiredSupabaseAccessToken($setup, $accessToken);
+            }
+
             $this->failCreatedSupabaseProject($exception->getMessage());
-        } catch (Throwable) {
-            $this->failCreatedSupabaseProject(__('The Supabase project could not be configured. No database credential was exposed.'));
+        } catch (DataShareMirrorException $exception) {
+            $this->failCreatedSupabaseProject($exception->getMessage());
+        } catch (Throwable $exception) {
+            $this->failCreatedSupabaseProject(DataShareMirrorException::unexpected('supabase_create', $exception, outcomeIndeterminate: true)->getMessage());
         }
 
         $this->completeSupabaseSetupAction($status, created: true);
@@ -227,21 +321,31 @@ class Settings extends SettingsForm
             'supabaseProjectRef' => ['required', 'string', Rule::in($projectRefs)],
             'supabaseDatabasePassword' => ['required', 'string', 'max:512'],
         ]);
+        $databasePassword = $validated['supabaseDatabasePassword'];
+        $accessToken = $this->supabaseSetupAccessToken();
 
         try {
             $status = $setup->useExistingProject(
-                $this->supabaseSetupAccessToken(),
+                $accessToken,
                 trim($validated['supabaseProjectRef']),
-                $validated['supabaseDatabasePassword'],
+                $databasePassword,
             );
         } catch (ValidationException $exception) {
             throw $exception;
-        } catch (SupabaseMirrorSetupException|DataShareMirrorException $exception) {
+        } catch (SupabaseMirrorSetupException $exception) {
+            if ($exception->reasonCode === 'invalid_token') {
+                $this->failExpiredSupabaseAccessToken($setup, $accessToken);
+            }
+
             $this->failProperty('supabaseDatabasePassword', $exception->getMessage());
-        } catch (Throwable) {
-            $this->failProperty('supabaseDatabasePassword', __('The selected Supabase project could not be configured. Check its database password and try again.'));
+        } catch (DataShareMirrorException $exception) {
+            $this->failProperty('supabaseDatabasePassword', $exception->getMessage());
+        } catch (Throwable $exception) {
+            $this->failProperty('supabaseDatabasePassword', DataShareMirrorException::unexpected('supabase_connect', $exception)->getMessage());
         }
 
+        $this->supabaseDatabasePassword = '';
+        $this->dispatch('clear-secret-input', id: 'supabase-existing-database-password');
         $this->completeSupabaseSetupAction($status);
     }
 
@@ -253,8 +357,11 @@ class Settings extends SettingsForm
             $status = $setup->finish();
         } catch (SupabaseMirrorSetupException|DataShareMirrorException $exception) {
             $this->fail($this->formKey('data_share.mirror.url'), $exception->getMessage());
-        } catch (Throwable) {
-            $this->fail($this->formKey('data_share.mirror.url'), __('Supabase setup could not finish. The saved connection was kept so you can try again.'));
+        } catch (Throwable $exception) {
+            $this->fail(
+                $this->formKey('data_share.mirror.url'),
+                DataShareMirrorException::unexpected('initialize', $exception, outcomeIndeterminate: true)->getMessage().' '.__('The saved connection was kept.'),
+            );
         }
 
         $this->notify($status->message, $status->available ? 'success' : 'warning');
@@ -294,6 +401,7 @@ class Settings extends SettingsForm
 
         if ($this->originalMirrorProvider !== 'supabase') {
             app(SupabaseMirrorSetupService::class)->forgetProjectMetadata();
+            $this->resetSupabaseDiscovery();
         }
     }
 
@@ -303,35 +411,64 @@ class Settings extends SettingsForm
         $key = $this->formKey('data_share.mirror.url');
         $value = trim((string) ($this->values[$key] ?? ''));
         $provider = $this->selectedMirrorProvider();
+        $passwordWasEntered = $provider === 'supabase' && $this->supabaseManualDatabasePassword !== '';
 
         try {
+            $value = $this->applySupabaseManualPassword($value, $provider, $settings, clearPassword: false);
+
             if ($this->isSavedMirrorMask($value)) {
                 $savedUrl = $settings->get('data_share.mirror.url');
-                $status = is_string($savedUrl) ? $mirror->testConnection($savedUrl, $provider) : $mirror->status();
+                if (! is_string($savedUrl) || trim($savedUrl) === '') {
+                    $this->fail($key, __('Enter a PostgreSQL URL before testing the mirror connection.'));
+                }
+
+                $value = $savedUrl;
             } elseif ($value === '') {
                 if (! $settings->has('data_share.mirror.url')) {
                     $this->fail($key, __('Enter a PostgreSQL URL before testing the mirror connection.'));
                 }
 
                 $savedUrl = $settings->get('data_share.mirror.url');
-                $status = is_string($savedUrl) ? $mirror->testConnection($savedUrl, $provider) : $mirror->status();
-            } else {
-                $this->validateMirrorUrl($key, $value);
-                $status = $mirror->testConnection($value, $provider);
+                if (! is_string($savedUrl) || trim($savedUrl) === '') {
+                    $this->fail($key, __('The saved mirror credential could not be read. Replace it and try again.'));
+                }
+
+                $value = $savedUrl;
             }
 
+            $this->validateMirrorUrl($key, $value);
+            $status = $mirror->testConnection($value, $provider);
             $result = $status->toArray();
 
             if (! ($result['reachable'] ?? false)) {
-                $this->fail($key, (string) ($result['message'] ?? __('The mirror connection is unavailable.')));
+                $errorKey = $passwordWasEntered ? 'supabaseManualDatabasePassword' : $key;
+                $this->failProperty($errorKey, (string) ($result['message'] ?? __('The mirror connection is unavailable.')));
             }
 
+            $settings->set('data_share.mirror.provider', $provider);
+            $settings->set('data_share.mirror.url', $value, encrypted: true);
+            $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
+            $this->originalMirrorProvider = $provider;
+            $this->replaceSavedSupabaseConnection = false;
             $this->resetValidation('values.'.$key);
-            $this->notify((string) ($result['message'] ?? __('Development mirror connection verified.')), ($result['available'] ?? false) ? 'success' : 'warning');
+            $this->resetValidation('supabaseManualDatabasePassword');
+
+            if ($passwordWasEntered) {
+                $this->supabaseManualDatabasePassword = '';
+                $this->dispatch('clear-secret-input', id: 'supabase-manual-database-password');
+            }
+
+            $this->notify(
+                ($result['available'] ?? false)
+                    ? __('Connection successful and saved.')
+                    : __('Connection successful and saved. Use Check and prepare mirror when the database is ready.'),
+                ($result['available'] ?? false) ? 'success' : 'warning',
+            );
         } catch (ValidationException $e) {
             throw $e;
-        } catch (Throwable) {
-            $this->fail($key, __('The mirror connection could not be tested. Check the provider and database URL.'));
+        } catch (Throwable $exception) {
+            $errorKey = $passwordWasEntered ? 'supabaseManualDatabasePassword' : $key;
+            $this->failProperty($errorKey, DataShareMirrorException::unexpected('connection', $exception)->getMessage());
         }
     }
 
@@ -344,8 +481,11 @@ class Settings extends SettingsForm
             $this->notify(__('Provider schema initialized. Continue in the Mirror tab to review and copy the initial selected table data.'), 'success');
         } catch (DataShareMirrorException $exception) {
             $this->fail($this->formKey('data_share.mirror.url'), $exception->getMessage());
-        } catch (Throwable) {
-            $this->fail($this->formKey('data_share.mirror.url'), __('The provider schema could not be initialized. No table data was mirrored.'));
+        } catch (Throwable $exception) {
+            $this->fail(
+                $this->formKey('data_share.mirror.url'),
+                DataShareMirrorException::unexpected('initialize', $exception, outcomeIndeterminate: true)->getMessage(),
+            );
         }
     }
 
@@ -362,6 +502,7 @@ class Settings extends SettingsForm
         $this->values[$key] = '';
         $this->replaceSavedSupabaseConnection = false;
         $this->resetValidation('values.'.$key);
+        $this->resetSupabaseDiscovery();
         $this->notify(__('Development mirror connection removed.'), 'success');
     }
 
@@ -388,11 +529,18 @@ class Settings extends SettingsForm
         ];
     }
 
+    public function getHasSavedSupabaseAccessTokenProperty(): bool
+    {
+        return app(SupabaseMirrorSetupService::class)->savedAccessToken() !== null;
+    }
+
     private function prepareAndTestMirrorUrl(SettingsService $settings, DataShareMirrorManager $mirror): void
     {
         $key = $this->formKey('data_share.mirror.url');
         $value = trim((string) ($this->values[$key] ?? ''));
         $provider = $this->selectedMirrorProvider();
+        $value = $this->applySupabaseManualPassword($value, $provider, $settings);
+        $this->values[$key] = $value;
 
         if (($value === '' || $this->isSavedMirrorMask($value)) && $settings->has('data_share.mirror.url')) {
             $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
@@ -405,8 +553,8 @@ class Settings extends SettingsForm
 
                 try {
                     $status = $mirror->testConnection($savedUrl, $provider)->toArray();
-                } catch (Throwable) {
-                    $this->fail($key, __('The mirror connection could not be tested. Check the provider and database URL.'));
+                } catch (Throwable $exception) {
+                    $this->fail($key, DataShareMirrorException::unexpected('connection', $exception)->getMessage());
                 }
                 if (! ($status['reachable'] ?? false)) {
                     $this->fail($key, (string) ($status['message'] ?? __('The mirror connection is unavailable.')));
@@ -424,13 +572,52 @@ class Settings extends SettingsForm
 
         try {
             $status = $mirror->testConnection($value, $provider)->toArray();
-        } catch (Throwable) {
-            $this->fail($key, __('The mirror connection could not be tested. Check the provider and database URL.'));
+        } catch (Throwable $exception) {
+            $this->fail($key, DataShareMirrorException::unexpected('connection', $exception)->getMessage());
         }
 
         if (! ($status['reachable'] ?? false)) {
             $this->fail($key, (string) ($status['message'] ?? __('The mirror connection is unavailable.')));
         }
+    }
+
+    private function applySupabaseManualPassword(
+        string $url,
+        string $provider,
+        SettingsService $settings,
+        bool $clearPassword = true,
+    ): string {
+        $password = $this->supabaseManualDatabasePassword;
+
+        if ($clearPassword) {
+            $this->supabaseManualDatabasePassword = '';
+            $this->dispatch('clear-secret-input', id: 'supabase-manual-database-password');
+        }
+
+        if ($provider !== 'supabase' || $password === '') {
+            return $url;
+        }
+
+        if ($url === '' || $this->isSavedMirrorMask($url)) {
+            $savedUrl = $settings->get('data_share.mirror.url');
+
+            if (is_string($savedUrl)) {
+                $url = $savedUrl;
+            }
+        }
+
+        $updatedUrl = preg_replace_callback(
+            '/\A(postgres(?:ql)?:\/\/)([^\/?#@]+)@/i',
+            static function (array $matches) use ($password): string {
+                $username = explode(':', $matches[2], 2)[0];
+
+                return $matches[1].$username.':'.rawurlencode($password).'@';
+            },
+            $url,
+            1,
+        );
+
+        return is_string($updatedUrl) ? $updatedUrl : $url;
     }
 
     private function selectedMirrorProvider(): string
@@ -459,7 +646,7 @@ class Settings extends SettingsForm
 
         $this->notify(
             $created
-                ? __('The Supabase project was created and its encrypted connection was saved. Supabase may still be provisioning it; use Finish setup when it is ready.')
+                ? __('The Supabase project was created and its encrypted connection was saved. Supabase may still be provisioning it; use Check and prepare mirror when it is ready.')
                 : $status->message,
             'warning',
         );
@@ -475,7 +662,7 @@ class Settings extends SettingsForm
             $this->resetSupabaseDiscovery();
             $this->fail(
                 $this->formKey('data_share.mirror.url'),
-                $message.' '.__('The encrypted project connection was kept; use Finish setup after resolving the problem.'),
+                $message.' '.__('The encrypted project connection was kept; use Check and prepare mirror after resolving the problem.'),
             );
         }
 
@@ -501,13 +688,7 @@ class Settings extends SettingsForm
 
     private function supabaseSetupAccessToken(): string
     {
-        $encrypted = session()->get(self::SUPABASE_ACCESS_TOKEN_SESSION_KEY);
-
-        try {
-            $accessToken = is_string($encrypted) ? trim(Crypt::decryptString($encrypted)) : '';
-        } catch (DecryptException) {
-            $accessToken = '';
-        }
+        $accessToken = app(SupabaseMirrorSetupService::class)->savedAccessToken() ?? '';
 
         if ($accessToken !== '') {
             return $accessToken;
@@ -515,6 +696,86 @@ class Settings extends SettingsForm
 
         $this->resetSupabaseDiscovery();
         $this->failProperty('supabaseAccessToken', __('The Supabase setup session expired. Paste a new access token to continue.'));
+    }
+
+    private function failExpiredSupabaseAccessToken(SupabaseMirrorSetupService $setup, string $attemptedToken): never
+    {
+        if (! $setup->forgetAccessTokenIfMatches($attemptedToken)) {
+            $this->resetSupabaseDiscovery();
+            $this->failProperty('supabaseAccessToken', __('The saved Supabase token changed during setup. Continue with the current saved token and try again.'));
+        }
+
+        $this->resetSupabaseDiscovery();
+        $this->failProperty('supabaseAccessToken', __('The saved Supabase personal access token has expired or was revoked. Create a new token to continue.'));
+    }
+
+    private function restoreSupabaseSetupState(): void
+    {
+        $state = session()->get(self::SUPABASE_SETUP_STATE_SESSION_KEY);
+        $hasSavedAccessToken = app(SupabaseMirrorSetupService::class)->savedAccessToken() !== null;
+
+        if (! $hasSavedAccessToken || ! is_array($state)) {
+            session()->forget(self::SUPABASE_SETUP_STATE_SESSION_KEY);
+
+            return;
+        }
+
+        $organizations = $state['organizations'] ?? null;
+        $projects = $state['projects'] ?? null;
+
+        if (! is_array($organizations) || ! is_array($projects)) {
+            session()->forget(self::SUPABASE_SETUP_STATE_SESSION_KEY);
+
+            return;
+        }
+
+        $this->supabaseOrganizations = array_values($organizations);
+        $this->supabaseProjects = array_values($projects);
+        $this->supabaseDiscoveryComplete = true;
+
+        $organizationSlugs = array_column($this->supabaseOrganizations, 'slug');
+        $projectRefs = array_column($this->supabaseProjects, 'ref');
+        $choice = (string) ($state['choice'] ?? '');
+        $organizationSlug = (string) ($state['organization_slug'] ?? '');
+        $projectRef = (string) ($state['project_ref'] ?? '');
+        $projectName = trim((string) ($state['project_name'] ?? ''));
+        $regionGroup = (string) ($state['region_group'] ?? '');
+
+        $this->supabaseSetupChoice = in_array($choice, ['new', 'existing'], true)
+            ? $choice
+            : '';
+        $this->supabaseOrganizationSlug = in_array($organizationSlug, $organizationSlugs, true)
+            ? $organizationSlug
+            : ($organizationSlugs[0] ?? '');
+        $this->supabaseProjectRef = in_array($projectRef, $projectRefs, true)
+            ? $projectRef
+            : ($projectRefs[0] ?? '');
+
+        if ($projectName !== '') {
+            $this->supabaseProjectName = Str::limit($projectName, 100, '');
+        }
+
+        if (in_array($regionGroup, ['apac', 'emea', 'americas'], true)) {
+            $this->supabaseRegionGroup = $regionGroup;
+        }
+    }
+
+    private function storeSupabaseSetupState(): void
+    {
+        if (! $this->supabaseDiscoveryComplete
+            || app(SupabaseMirrorSetupService::class)->savedAccessToken() === null) {
+            return;
+        }
+
+        session()->put(self::SUPABASE_SETUP_STATE_SESSION_KEY, [
+            'organizations' => $this->supabaseOrganizations,
+            'projects' => $this->supabaseProjects,
+            'choice' => $this->supabaseSetupChoice,
+            'organization_slug' => $this->supabaseOrganizationSlug,
+            'project_ref' => $this->supabaseProjectRef,
+            'project_name' => $this->supabaseProjectName,
+            'region_group' => $this->supabaseRegionGroup,
+        ]);
     }
 
     private function validateMirrorUrl(string $formKey, string $value): void

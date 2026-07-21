@@ -15,7 +15,9 @@ class DataShareMirrorOperationLock
     /** @template TReturn @param callable(): TReturn $operation @return TReturn */
     public function run(callable $operation): mixed
     {
-        $connection = $this->connections->mirror();
+        // Review and engine setup may purge the manager-owned connection. The
+        // clone keeps this dedicated PDO alive until its advisory lock is released.
+        $connection = clone $this->connections->mirror();
         $timeoutMs = max(100, min(60000, (int) config('data_share.mirror.lock_timeout_ms', 30000)));
         $deadline = hrtime(true) + ($timeoutMs * 1_000_000);
         $acquired = false;

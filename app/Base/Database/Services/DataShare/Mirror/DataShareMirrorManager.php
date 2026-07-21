@@ -6,6 +6,8 @@ use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorConnectionStatus;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
+use App\Base\Database\Enums\DataShareMirrorAction;
 use App\Base\Database\Enums\DataShareMirrorDirection;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use Throwable;
@@ -36,6 +38,11 @@ class DataShareMirrorManager
         return $this->connections->providerOptions();
     }
 
+    public function configurationFingerprint(): string
+    {
+        return $this->connections->configurationFingerprint();
+    }
+
     public function disconnect(): void
     {
         $this->connections->purge();
@@ -48,8 +55,8 @@ class DataShareMirrorManager
             return $this->catalog->catalog();
         } catch (DataShareMirrorException $exception) {
             throw $exception;
-        } catch (Throwable) {
-            throw DataShareMirrorException::unavailable(__('The development mirror catalog could not be inspected.'));
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::unexpected('catalog', $exception);
         }
     }
 
@@ -60,8 +67,8 @@ class DataShareMirrorManager
             return $this->reviewer->review(DataShareMirrorDirection::parse($direction), $tableNames);
         } catch (DataShareMirrorException $exception) {
             throw $exception;
-        } catch (Throwable) {
-            throw DataShareMirrorException::unavailable(__('The selected tables could not be reviewed safely.'));
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::unexpected('review', $exception);
         }
     }
 
@@ -90,8 +97,60 @@ class DataShareMirrorManager
             });
         } catch (DataShareMirrorException $exception) {
             throw $exception;
-        } catch (Throwable) {
-            throw DataShareMirrorException::processFailed(__('Mirror engine'));
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::unexpected('execute', $exception, outcomeIndeterminate: true);
         }
+    }
+
+    /** @param list<string> $tableNames */
+    public function forcePush(array $tableNames): DataShareMirrorExecutionResult
+    {
+        try {
+            $review = $this->forceablePushReview(
+                $this->reviewer->review(DataShareMirrorDirection::Push, $tableNames),
+            );
+
+            if ($review->hasBlockers) {
+                throw DataShareMirrorException::blocked();
+            }
+
+            return $this->operationLock->run(
+                fn (): DataShareMirrorExecutionResult => $this->engines->forMode('native')->execute($review),
+            );
+        } catch (DataShareMirrorException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::unexpected('force_push', $exception, outcomeIndeterminate: true);
+        }
+    }
+
+    private function forceablePushReview(DataShareMirrorReview $review): DataShareMirrorReview
+    {
+        $forceableCodes = ['schema_missing_at_endpoint', 'schema_incompatible'];
+        $items = array_map(function (DataShareMirrorReviewItem $item) use ($forceableCodes): DataShareMirrorReviewItem {
+            $blockers = array_values(array_filter(
+                $item->blockers,
+                fn ($blocker): bool => ! in_array($blocker->code, $forceableCodes, true),
+            ));
+
+            return new DataShareMirrorReviewItem(
+                $item->table,
+                $blockers === [] ? $item->intendedAction : DataShareMirrorAction::Blocked,
+                $item->intendedAction,
+                $blockers,
+            );
+        }, $review->items);
+        $counts = ['create' => 0, 'replace' => 0, 'delete' => 0, 'blocked' => 0];
+        foreach ($items as $item) {
+            $counts[$item->action->value]++;
+        }
+
+        return new DataShareMirrorReview(
+            DataShareMirrorDirection::Push,
+            $items,
+            $counts['blocked'] > 0,
+            $counts,
+            $review->stateToken,
+        );
     }
 }

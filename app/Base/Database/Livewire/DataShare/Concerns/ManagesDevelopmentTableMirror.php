@@ -8,6 +8,8 @@ use Throwable;
 
 trait ManagesDevelopmentTableMirror
 {
+    private const MIRROR_CATALOG_SESSION_KEY = 'data_share.mirror.catalog_snapshot';
+
     /** @var array<string, mixed> */
     public array $mirrorConnectionStatus = [];
 
@@ -31,18 +33,34 @@ trait ManagesDevelopmentTableMirror
 
     public string $mirrorDirection = 'push';
 
+    private function restoreMirrorCatalogSnapshotOnMount(DataShareMirrorManager $mirror): void
+    {
+        $this->mirrorCatalogLoaded = $this->restoreMirrorCatalogSnapshot($mirror);
+    }
+
     public function dataShareTabSelected(string $tab, DataShareMirrorManager $mirror): void
     {
         if ($tab === 'mirror' && ! $this->mirrorCatalogLoaded) {
-            $this->refreshMirrorCatalog($mirror);
+            $this->loadMirrorCatalog($mirror);
         }
     }
 
     public function refreshMirrorCatalog(DataShareMirrorManager $mirror): void
     {
+        $this->loadMirrorCatalog($mirror, force: true);
+    }
+
+    private function loadMirrorCatalog(DataShareMirrorManager $mirror, bool $force = false): void
+    {
         $this->requireCapability('admin.system.data-share.view');
         $this->mirrorCatalogLoaded = true;
         $this->mirrorReview = null;
+
+        if (! $force && $this->restoreMirrorCatalogSnapshot($mirror)) {
+            return;
+        }
+
+        session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
 
         try {
             $status = $mirror->status()->toArray();
@@ -62,6 +80,7 @@ trait ManagesDevelopmentTableMirror
                 ], SORT_NATURAL | SORT_FLAG_CASE)
                 ->values()
                 ->all();
+            $this->storeMirrorCatalogSnapshot($mirror);
 
         } catch (DataShareMirrorException $exception) {
             $this->mirrorConnectionStatus = [
@@ -72,13 +91,14 @@ trait ManagesDevelopmentTableMirror
                 'message' => $exception->getMessage(),
             ];
             $this->mirrorTables = [];
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $failure = DataShareMirrorException::unexpected('catalog', $exception);
             $this->mirrorConnectionStatus = [
                 'configured' => false,
                 'available' => false,
                 'reachable' => false,
-                'reason_code' => 'connection_check_failed',
-                'message' => __('The development mirror could not be inspected. Check its saved provider and database URL.'),
+                'reason_code' => $failure->reasonCode,
+                'message' => $failure->getMessage(),
             ];
             $this->mirrorTables = [];
         }
@@ -115,6 +135,7 @@ trait ManagesDevelopmentTableMirror
     public function reviewMirror(string $direction, DataShareMirrorManager $mirror): void
     {
         $this->requireCapability('admin.system.data-share-mirror.execute');
+        $this->extendMirrorRequestTimeLimit();
         $this->validateMirrorSelection($direction);
 
         try {
@@ -122,6 +143,15 @@ trait ManagesDevelopmentTableMirror
             $this->mirrorDirection = $direction;
             $this->mirrorReview = $this->normalizeMirrorReview($review);
             $this->mirrorReview['_selected_tables'] = $this->mirrorSelectedTables;
+            $this->mirrorReview['_can_force_push'] = $direction === 'push'
+                && ($this->mirrorReview['has_blockers'] ?? false)
+                && collect($this->mirrorReview['items'] ?? [])
+                    ->flatMap(fn (array $item): array => (array) ($item['blockers'] ?? []))
+                    ->every(fn (array $blocker): bool => in_array(
+                        (string) ($blocker['code'] ?? ''),
+                        ['schema_missing_at_endpoint', 'schema_incompatible'],
+                        true,
+                    ));
             $this->mirrorResult = null;
             $this->setStatus(
                 ($this->mirrorReview['has_blockers'] ?? false)
@@ -132,15 +162,16 @@ trait ManagesDevelopmentTableMirror
         } catch (DataShareMirrorException $exception) {
             $this->mirrorReview = null;
             $this->setStatus($exception->getMessage(), 'danger');
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
             $this->mirrorReview = null;
-            $this->setStatus(__('The mirror review could not be prepared. No tables were changed.'), 'danger');
+            $this->setStatus(DataShareMirrorException::unexpected('review', $exception)->getMessage(), 'danger');
         }
     }
 
     public function executeMirror(DataShareMirrorManager $mirror): void
     {
         $this->requireCapability('admin.system.data-share-mirror.execute');
+        $this->extendMirrorRequestTimeLimit();
         $this->validateMirrorSelection($this->mirrorDirection);
 
         if (! $this->reviewMatchesCurrentMirrorSelection()) {
@@ -181,25 +212,70 @@ trait ManagesDevelopmentTableMirror
                     ], SORT_NATURAL | SORT_FLAG_CASE)
                     ->values()
                     ->all();
-            } catch (Throwable) {
-                // The mutation succeeded; the operator can refresh discovery separately.
+                $this->storeMirrorCatalogSnapshot($mirror);
+            } catch (Throwable $exception) {
+                $this->setStatus(
+                    __('The mirror committed successfully, but the catalog could not be refreshed. :error', [
+                        'error' => DataShareMirrorException::unexpected('catalog', $exception)->getMessage(),
+                    ]),
+                    'warning',
+                );
             }
         } catch (DataShareMirrorException $exception) {
             $this->mirrorResult = null;
             $this->mirrorReview = null;
             $this->setStatus(
                 $exception->outcomeIndeterminate
-                    ? __('The mirror did not report a successful commit. Refresh the catalog and inspect the selected tables before retrying; the outcome may be indeterminate if the connection ended during commit.')
+                    ? $exception->getMessage().' '.__('The commit outcome could not be confirmed. Refresh the catalog and inspect the selected tables before retrying.')
                     : $exception->getMessage(),
                 in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'danger',
             );
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $this->mirrorResult = null;
+            $this->mirrorReview = null;
+            $this->setStatus(DataShareMirrorException::unexpected('execute', $exception, outcomeIndeterminate: true)->getMessage(), 'danger');
+        }
+    }
+
+    public function forcePushMirror(DataShareMirrorManager $mirror): void
+    {
+        $this->requireCapability('admin.system.data-share-mirror.execute');
+        $this->extendMirrorRequestTimeLimit();
+        $this->validateMirrorSelection('push');
+
+        if (! $this->reviewMatchesCurrentMirrorSelection() || $this->mirrorDirection !== 'push') {
+            $this->setStatus(__('Review this exact push selection before forcing it.'), 'warning');
+
+            return;
+        }
+
+        try {
+            $this->mirrorResult = $this->normalizeMirrorResult(
+                $mirror->forcePush($this->mirrorSelectedTables)->toArray(),
+            );
+            $this->mirrorReview = null;
+            session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
+            $this->setStatus(
+                trans_choice(
+                    'Force push completed. Local replaced :count selected remote table; Local was not changed.|Force push completed. Local replaced :count selected remote tables; Local was not changed.',
+                    count($this->mirrorSelectedTables),
+                    ['count' => count($this->mirrorSelectedTables)],
+                ),
+                'success',
+            );
+        } catch (DataShareMirrorException $exception) {
             $this->mirrorResult = null;
             $this->mirrorReview = null;
             $this->setStatus(
-                __('The mirror did not report a successful commit. Refresh the catalog and inspect the selected tables before retrying; the outcome may be indeterminate if the connection ended during commit.'),
-                'danger',
+                $exception->outcomeIndeterminate
+                    ? $exception->getMessage().' '.__('The remote outcome could not be confirmed. Local was not changed. Refresh the catalog and inspect the selected remote tables before retrying.')
+                    : $exception->getMessage(),
+                in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'danger',
             );
+        } catch (Throwable $exception) {
+            $this->mirrorResult = null;
+            $this->mirrorReview = null;
+            $this->setStatus(DataShareMirrorException::unexpected('force_push', $exception, outcomeIndeterminate: true)->getMessage(), 'danger');
         }
     }
 
@@ -212,6 +288,40 @@ trait ManagesDevelopmentTableMirror
     {
         $this->mirrorReview = null;
         $this->mirrorResult = null;
+    }
+
+    private function extendMirrorRequestTimeLimit(): void
+    {
+        if (function_exists('set_time_limit')) {
+            set_time_limit(max(60, min(7200, (int) config('data_share.mirror.timeout_seconds', 3600))));
+        }
+    }
+
+    private function restoreMirrorCatalogSnapshot(DataShareMirrorManager $mirror): bool
+    {
+        $snapshot = session()->get(self::MIRROR_CATALOG_SESSION_KEY);
+        if (! is_array($snapshot)
+            || (int) ($snapshot['expires_at'] ?? 0) < now()->timestamp
+            || ! hash_equals((string) ($snapshot['fingerprint'] ?? ''), $mirror->configurationFingerprint())
+            || ! is_array($snapshot['status'] ?? null)
+            || ! is_array($snapshot['tables'] ?? null)) {
+            return false;
+        }
+
+        $this->mirrorConnectionStatus = $snapshot['status'];
+        $this->mirrorTables = $snapshot['tables'];
+
+        return true;
+    }
+
+    private function storeMirrorCatalogSnapshot(DataShareMirrorManager $mirror): void
+    {
+        session()->put(self::MIRROR_CATALOG_SESSION_KEY, [
+            'fingerprint' => $mirror->configurationFingerprint(),
+            'expires_at' => now()->addSeconds(max(1, (int) config('data_share.mirror.catalog_cache_seconds', 300)))->timestamp,
+            'status' => $this->mirrorConnectionStatus,
+            'tables' => $this->mirrorTables,
+        ]);
     }
 
     /** @return list<string> */

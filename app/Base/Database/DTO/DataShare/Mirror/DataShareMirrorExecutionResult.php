@@ -8,7 +8,7 @@ final readonly class DataShareMirrorExecutionResult
 {
     /**
      * @param  array{create: int, replace: int, delete: int}  $counts
-     * @param  list<array{table: string, action: string}>  $items
+     * @param  list<array{table: string, action: string, local_rows?: int, remote_rows?: int}>  $items
      */
     public function __construct(
         public DataShareMirrorDirection $direction,

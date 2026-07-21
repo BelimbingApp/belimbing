@@ -47,6 +47,14 @@ use App\Base\Settings\Livewire\SettingsForm;
                                     @include('livewire.settings.partials.fields-grid', ['group' => $group['config']])
                                 @endif
                             </x-ui.card>
+                            @if (! ($group['config']['autosave'] ?? false))
+                                <div class="mt-6 flex items-center gap-3">
+                                    <x-ui.button type="submit" variant="primary">
+                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                        {{ __('Save Settings') }}
+                                    </x-ui.button>
+                                </div>
+                            @endif
                         </x-ui.tab>
                     @endforeach
                 </x-ui.tabs>
@@ -61,12 +69,14 @@ use App\Base\Settings\Livewire\SettingsForm;
                 </x-ui.card>
             @endif
 
-            <div class="flex items-center gap-3">
-                <x-ui.button type="submit" variant="primary">
-                    <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                    {{ __('Save Settings') }}
-                </x-ui.button>
-            </div>
+            @if (! $multiGroup)
+                <div class="flex items-center gap-3">
+                    <x-ui.button type="submit" variant="primary">
+                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                        {{ __('Save Settings') }}
+                    </x-ui.button>
+                </div>
+            @endif
         </form>
     </div>
 </div>

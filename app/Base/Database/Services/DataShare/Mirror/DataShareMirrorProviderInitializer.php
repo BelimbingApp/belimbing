@@ -28,14 +28,7 @@ final readonly class DataShareMirrorProviderInitializer
     private function initializeProvider(): void
     {
         $connection = $this->connections->mirrorForInitialization();
-        $exitCode = Artisan::call('migrate', [
-            '--database' => DataShareMirrorConnectionManager::CONNECTION,
-            '--force' => true,
-        ]);
-
-        if ($exitCode !== Command::SUCCESS) {
-            throw DataShareMirrorException::initializationFailed();
-        }
+        $this->runMigrations();
 
         $now = now();
         $this->putSetting($connection, 'data_share.instance.id', 'mirror-'.Str::lower((string) Str::uuid()), $now);
@@ -43,8 +36,21 @@ final readonly class DataShareMirrorProviderInitializer
         $this->putSetting($connection, 'data_share.instance.role', DataShareInstanceRole::Development->value, $now);
         $this->connections->purge();
 
-        if (! $this->connections->status()->available) {
-            throw DataShareMirrorException::initializationFailed();
+        $status = $this->connections->status();
+        if (! $status->available) {
+            throw DataShareMirrorException::unavailable($status->message);
+        }
+    }
+
+    private function runMigrations(): void
+    {
+        $exitCode = Artisan::call('migrate', [
+            '--database' => DataShareMirrorConnectionManager::CONNECTION,
+            '--force' => true,
+        ]);
+
+        if ($exitCode !== Command::SUCCESS) {
+            throw DataShareMirrorException::initializationCommandFailed($exitCode);
         }
     }
 

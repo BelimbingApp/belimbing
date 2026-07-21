@@ -127,7 +127,7 @@ if ($instance->role->value === 'development') {
             <x-ui.tabs
                 :tabs="$dataShareTabs"
                 default="share"
-                wire-action="dataShareTabSelected"
+                :wire-action="$mirrorCatalogLoaded ? null : 'dataShareTabSelected'"
             >
                 <x-ui.tab id="share">
                     <div class="space-y-6">

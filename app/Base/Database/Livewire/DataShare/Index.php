@@ -17,6 +17,7 @@ use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use App\Base\Database\Services\DataShare\DataShareSettings;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Route;
 use Livewire\Component;
@@ -76,11 +77,15 @@ class Index extends Component
 
     public ?string $statusVariant = null;
 
-    public function mount(DataShareScopeCatalog $catalog, DiagnosticRowCapture $diagnostics): void
-    {
+    public function mount(
+        DataShareScopeCatalog $catalog,
+        DiagnosticRowCapture $diagnostics,
+        DataShareMirrorManager $mirror,
+    ): void {
         $this->scopes = $this->scopeRows($catalog);
         $this->diagnosticPackages = $diagnostics->listPackages();
         $this->refreshOperations();
+        $this->restoreMirrorCatalogSnapshotOnMount($mirror);
     }
 
     public function previewShare(DataSharePackageExporter $exporter): void

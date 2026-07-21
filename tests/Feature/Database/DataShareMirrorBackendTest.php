@@ -1,13 +1,21 @@
 <?php
 
+use App\Base\Database\Contracts\DataShareMirrorEngine;
 use App\Base\Database\Contracts\DataShareMirrorProcessRunner;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorConnectionStatus;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
+use App\Base\Database\Enums\DataShareMirrorAction;
 use App\Base\Database\Enums\DataShareMirrorDirection;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorCatalog;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorConnectionManager;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorDependencyInspector;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorEndpoint;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorEngineRegistry;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorOperationLock;
@@ -170,10 +178,103 @@ it('refuses empty duplicate and malformed table selections before endpoint disco
     'malformed' => [['module_records; DROP TABLE users']],
 ]);
 
+it('determines transfer mode before acquiring review endpoint connections', function (): void {
+    $connection = Mockery::mock(Connection::class);
+    $schema = Mockery::mock();
+    $schema->shouldReceive('hasTable')->andReturnFalse();
+    $connection->shouldReceive('getSchemaBuilder')->andReturn($schema);
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('status')->once()->ordered()->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: null,
+        message: 'Ready.',
+        transferMode: 'portable',
+    ));
+    $connections->shouldReceive('source')->once()->ordered()->andReturn(new DataShareMirrorEndpoint('Local', $connection, [], 'sqlite'));
+    $connections->shouldReceive('target')->once()->ordered()->andReturn(new DataShareMirrorEndpoint('Mirror', $connection, [], 'pgsql'));
+    $catalog = Mockery::mock(DataShareMirrorCatalog::class);
+    $catalog->shouldReceive('catalog')->once()->andReturn([new DataShareMirrorCatalogTable(
+        'sbg_records',
+        'Sbg',
+        'blb/sbg',
+        null,
+        false,
+        false,
+        null,
+        null,
+        true,
+    )]);
+    $dependencies = Mockery::mock(DataShareMirrorDependencyInspector::class)->shouldIgnoreMissing();
+    $dependencies->shouldReceive('foreignKeys')->andReturn([]);
+    $dependencies->shouldReceive('uniqueKeys')->andReturn([]);
+    $dependencies->shouldReceive('insertionOrder')->andReturn(['sbg_records']);
+
+    $review = (new DataShareMirrorReviewer(
+        $connections,
+        $catalog,
+        $dependencies,
+        Mockery::mock(DataShareMirrorSchemaComparator::class)->shouldIgnoreMissing(),
+    ))->review(DataShareMirrorDirection::Push, ['sbg_records']);
+
+    expect($review->items)->toHaveCount(1);
+});
+
 it('keeps the mirror command read-only and refuses an unspecified selection', function (): void {
     $this->artisan('blb:db:mirror-tables')
         ->expectsOutputToContain('at least one --table')
         ->assertExitCode(2);
+});
+
+it('force pushes only the exact selected local tables through the native engine', function (): void {
+    $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
+    $reviewer->shouldReceive('review')
+        ->once()
+        ->with(DataShareMirrorDirection::Push, ['sbg_records'])
+        ->andReturn(new DataShareMirrorReview(
+            DataShareMirrorDirection::Push,
+            [new DataShareMirrorReviewItem(
+                'sbg_records',
+                DataShareMirrorAction::Blocked,
+                DataShareMirrorAction::Replace,
+                [new DataShareMirrorBlocker('schema_incompatible', 'Schemas differ.')],
+            )],
+            true,
+            ['create' => 0, 'replace' => 0, 'delete' => 0, 'blocked' => 1],
+            'force-state',
+        ));
+    $engine = Mockery::mock(DataShareMirrorEngine::class);
+    $engine->shouldReceive('execute')->once()->with(Mockery::on(
+        fn (DataShareMirrorReview $review): bool => $review->direction === DataShareMirrorDirection::Push
+            && ! $review->hasBlockers
+            && count($review->items) === 1
+            && $review->items[0]->table === 'sbg_records'
+            && $review->items[0]->action === DataShareMirrorAction::Replace,
+    ))->andReturn(new DataShareMirrorExecutionResult(
+        DataShareMirrorDirection::Push,
+        ['create' => 0, 'replace' => 1, 'delete' => 0],
+        [['table' => 'sbg_records', 'action' => 'replace']],
+    ));
+    $engines = Mockery::mock(DataShareMirrorEngineRegistry::class);
+    $engines->shouldReceive('forMode')->once()->with('native')->andReturn($engine);
+    $lock = Mockery::mock(DataShareMirrorOperationLock::class);
+    $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $manager = new DataShareMirrorManager(
+        Mockery::mock(DataShareMirrorConnectionManager::class),
+        Mockery::mock(DataShareMirrorCatalog::class),
+        $reviewer,
+        $engines,
+        $lock,
+    );
+
+    expect($manager->forcePush(['sbg_records'])->counts['replace'])->toBe(1);
 });
 
 it('redacts unexpected database diagnostics at the public service boundary', function (): void {
