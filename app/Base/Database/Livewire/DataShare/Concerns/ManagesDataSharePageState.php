@@ -71,6 +71,8 @@ trait ManagesDataSharePageState
     /** @return list<array<string, mixed>> */
     private function scopeRows(DataShareScopeCatalog $catalog): array
     {
+        $discovery = $catalog->discover();
+        $this->scopeIssues = $discovery['rejected'];
         $rows = array_values(array_map(function ($scope): array {
             return [
                 'name' => $scope->name,
@@ -83,7 +85,7 @@ trait ManagesDataSharePageState
                     'shareable' => $table->primaryKeyColumns !== [],
                 ], $scope->tables),
             ];
-        }, $catalog->scopes()));
+        }, $discovery['scopes']));
 
         usort($rows, fn (array $a, array $b): int => strnatcasecmp($a['label'], $b['label']));
 

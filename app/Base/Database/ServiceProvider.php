@@ -12,6 +12,7 @@ use App\Base\Database\Console\Commands\FreshCommand;
 use App\Base\Database\Console\Commands\ImportDiagnosticDataSharePackageCommand;
 use App\Base\Database\Console\Commands\InspectDataSharePackageCommand;
 use App\Base\Database\Console\Commands\MigrateCommand;
+use App\Base\Database\Console\Commands\MirrorTablesCommand;
 use App\Base\Database\Console\Commands\PlanDataSharePackageCommand;
 use App\Base\Database\Console\Commands\PruneDataSharePackagesCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
@@ -22,12 +23,22 @@ use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\SanitizeDevelopmentDatabaseCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
+use App\Base\Database\Contracts\DataShareMirrorEngine;
+use App\Base\Database\Contracts\DataShareMirrorProcessRunner;
+use App\Base\Database\Contracts\DataShareMirrorProvider;
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorEngineRegistry;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorProviderRegistry;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorTableImageEngine;
+use App\Base\Database\Services\DataShare\Mirror\GenericPostgresMirrorProvider;
+use App\Base\Database\Services\DataShare\Mirror\PortableDataShareMirrorEngine;
+use App\Base\Database\Services\DataShare\Mirror\SupabaseMirrorProvider;
+use App\Base\Database\Services\DataShare\Mirror\SymfonyDataShareMirrorProcessRunner;
 use App\Base\Database\Services\DevelopmentInstanceGuard;
 use App\Base\Database\Services\DevelopmentSanitizer;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
@@ -55,6 +66,21 @@ class ServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(__DIR__.'/Config/data_share.php', 'data_share');
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
+        $this->app->bind(DataShareMirrorProcessRunner::class, SymfonyDataShareMirrorProcessRunner::class);
+        $this->app->tag([
+            PortableDataShareMirrorEngine::class,
+            DataShareMirrorTableImageEngine::class,
+        ], DataShareMirrorEngine::CONTAINER_TAG);
+        $this->app->singleton(DataShareMirrorEngineRegistry::class, fn ($app) => new DataShareMirrorEngineRegistry(
+            $app->tagged(DataShareMirrorEngine::CONTAINER_TAG),
+        ));
+        $this->app->tag([
+            SupabaseMirrorProvider::class,
+            GenericPostgresMirrorProvider::class,
+        ], DataShareMirrorProvider::CONTAINER_TAG);
+        $this->app->singleton(DataShareMirrorProviderRegistry::class, fn ($app) => new DataShareMirrorProviderRegistry(
+            $app->tagged(DataShareMirrorProvider::CONTAINER_TAG),
+        ));
         $this->app->singleton(DevelopmentInstanceGuard::class);
         $this->app->tag(SessionStateDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
         $this->app->singleton(DevelopmentSanitizer::class, fn ($app) => new DevelopmentSanitizer(
@@ -122,6 +148,7 @@ class ServiceProvider extends BaseServiceProvider
             FetchDataShareTransferOfferCommand::class,
             ImportDiagnosticDataSharePackageCommand::class,
             InspectDataSharePackageCommand::class,
+            MirrorTablesCommand::class,
             PlanDataSharePackageCommand::class,
             PruneDataSharePackagesCommand::class,
             RekeyCommand::class,

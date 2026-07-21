@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Console\Commands;
 
+use App\Base\Database\Exceptions\DataShareDefinitionException;
 use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -15,16 +16,22 @@ class DataShareScopesCommand extends Command
 
     public function handle(DataShareScopeCatalog $catalog): int
     {
-        $scopes = array_map(fn ($scope): array => [
-            'name' => $scope->name,
-            'label' => $scope->label,
-            'module_path' => $scope->modulePath,
-            'tables' => array_map(fn ($table): array => [
-                'name' => $table->table,
-                'primary_key' => $table->primaryKeyColumns,
-                'shareable' => $table->primaryKeyColumns !== [],
-            ], $scope->tables),
-        ], $catalog->scopes());
+        try {
+            $scopes = array_map(fn ($scope): array => [
+                'name' => $scope->name,
+                'label' => $scope->label,
+                'module_path' => $scope->modulePath,
+                'tables' => array_map(fn ($table): array => [
+                    'name' => $table->table,
+                    'primary_key' => $table->primaryKeyColumns,
+                    'shareable' => $table->primaryKeyColumns !== [],
+                ], $scope->tables),
+            ], $catalog->scopes());
+        } catch (DataShareDefinitionException $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
 
         if ($this->option('json')) {
             $this->line(json_encode(array_values($scopes), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));

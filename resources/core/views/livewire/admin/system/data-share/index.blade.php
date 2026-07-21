@@ -23,6 +23,20 @@ $scopeOptions = collect($scopes)->map(fn (array $scope): array => [
     'label' => "{$scope['label']} · {$scope['module_path']}",
 ])->values()->all();
 $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMorphClass();
+$dataShareTabs = [
+    ['id' => 'share', 'label' => __('Share'), 'icon' => 'heroicon-o-share'],
+    ['id' => 'published', 'label' => __('Published'), 'icon' => 'heroicon-o-link'],
+    ['id' => 'incoming', 'label' => __('Incoming'), 'icon' => 'heroicon-o-inbox-arrow-down'],
+    ['id' => 'diagnostics', 'label' => __('Diagnostics'), 'icon' => 'heroicon-o-wrench-screwdriver'],
+];
+
+if ($instance->role->value === 'development') {
+    array_splice($dataShareTabs, 1, 0, [[
+        'id' => 'mirror',
+        'label' => __('Mirror'),
+        'icon' => 'heroicon-o-arrows-right-left',
+    ]]);
+}
 ?>
 
 <div
@@ -42,7 +56,7 @@ $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMor
 
     <x-ui.page-header
         :title="__('Data Share')"
-        :subtitle="__('Publish an immutable source offer, then let an authorized target fetch, verify, plan, and apply it.')"
+        :subtitle="__('Mirror exact development tables directly, or publish an immutable offer for separately reviewed promotion.')"
         :help-label="__('How Data Share works')"
     >
         <x-slot name="actions">
@@ -61,7 +75,7 @@ $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMor
         <x-slot name="help">
             <div class="max-w-3xl text-ink">
                 <p class="leading-6">
-                    {{ __('Data Share is a one-way, user-approved transfer. The source publishes; only the target can fetch, plan, and apply.') }}
+                    {{ __('Transfer offers are one-way and user-approved: the source publishes; only the target can fetch, plan, and apply. Development Mirror is a separate direct handoff for explicitly selected complete tables.') }}
                 </p>
                 <ol class="mt-3 list-decimal space-y-2 pl-5 leading-6 marker:font-medium marker:text-ink">
                     <li>
@@ -111,13 +125,9 @@ $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMor
 
         <x-ui.card>
             <x-ui.tabs
-                :tabs="[
-                    ['id' => 'share', 'label' => __('Share'), 'icon' => 'heroicon-o-share'],
-                    ['id' => 'published', 'label' => __('Published'), 'icon' => 'heroicon-o-link'],
-                    ['id' => 'incoming', 'label' => __('Incoming'), 'icon' => 'heroicon-o-inbox-arrow-down'],
-                    ['id' => 'diagnostics', 'label' => __('Diagnostics'), 'icon' => 'heroicon-o-wrench-screwdriver'],
-                ]"
+                :tabs="$dataShareTabs"
                 default="share"
+                wire-action="dataShareTabSelected"
             >
                 <x-ui.tab id="share">
                     <div class="space-y-6">
@@ -127,6 +137,14 @@ $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMor
                                 {{ __('Pick a module, then choose the exact tables to include. Selecting the whole module shares everything registered under it; deselect any table you want to leave out.') }}
                             </p>
                         </div>
+
+                        @if($scopeIssues !== [])
+                            <x-ui.alert variant="warning" :announce="false">
+                                {{ __('Some table scopes are unavailable for sharing: :scopes. Their registered relationships do not have a safe generic insert order. Other scopes and the development mirror remain available.', [
+                                    'scopes' => implode(', ', array_column($scopeIssues, 'label')),
+                                ]) }}
+                            </x-ui.alert>
+                        @endif
 
                         @if($scopes === [])
                             <div class="py-8 text-center">
@@ -297,6 +315,12 @@ $offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMor
                         @endif
                     </div>
                 </x-ui.tab>
+
+                @if($instance->role->value === 'development')
+                    <x-ui.tab id="mirror">
+                        @include('livewire.admin.system.data-share.partials.mirror')
+                    </x-ui.tab>
+                @endif
 
                 <x-ui.tab id="incoming">
                     <div class="space-y-5">

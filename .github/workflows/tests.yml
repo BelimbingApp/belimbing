@@ -55,3 +55,75 @@ jobs:
 
       - name: Run Tests
         run: ./vendor/bin/pest
+
+  postgres-mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: Testing
+    env:
+      APP_ENV: testing
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: blb_mirror_source
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      MIRROR_TEST_DB_HOST: 127.0.0.1
+      MIRROR_TEST_DB_PORT: 5432
+      MIRROR_TEST_DB_DATABASE: blb_mirror_target
+      MIRROR_TEST_DB_USERNAME: postgres
+      MIRROR_TEST_DB_PASSWORD: postgres
+      BLB_POSTGRES_MIRROR_TESTS: 'true'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: blb_mirror_source
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d blb_mirror_source"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
+        with:
+          php-version: '8.5'
+          extensions: pdo_pgsql, pdo_sqlite, sqlite3
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PostgreSQL client tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client-16
+          pg_dump --version
+          psql --version
+
+      - name: Install Dependencies
+        run: composer install --no-interaction --prefer-dist --optimize-autoloader
+
+      - name: Copy Environment File
+        run: cp .env.example .env
+
+      - name: Generate Application Key
+        run: php artisan key:generate
+
+      - name: Create isolated mirror target
+        run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'
+        env:
+          PGPASSWORD: postgres
+
+      - name: Run native and portable mirror integration tests
+        run: |
+          ./vendor/bin/pest tests/Integration/Database/DevelopmentTableMirrorPostgresTest.php
+          DB_CONNECTION=sqlite DB_DATABASE=:memory: ./vendor/bin/pest tests/Integration/Database/PortableDevelopmentTableMirrorTest.php

@@ -1,9 +1,9 @@
 # Base Data Export and Data Share
 
 Status: In progress — the Base-owned relational package, source-published Data Share offer transport, target-side planning/apply, CLI, settings, and web surfaces are built and locally verified; deployed fetch, LIVENPC, PostgreSQL, recovery, and production-pilot evidence remains
-Last Updated: 2026-07-11
-Sources: `docs/brief.md`; `docs/architecture/module-system.md`; `docs/runbooks/data-share.md`; `DESIGN.md`; `app/Base/Database`; RFC 6750
-Agents: Claude Fable 5; Codex/Sol
+Last Updated: 2026-07-20
+Sources: `docs/brief.md`; `docs/architecture/module-system.md`; `docs/runbooks/data-share.md`; `docs/plans/base-development-table-mirror.md`; `DESIGN.md`; `app/Base/Database`; RFC 6750
+Agents: Claude Fable 5; Codex/Sol; Codex/GPT-5
 
 ## Problem Essence
 
@@ -53,6 +53,10 @@ LAN and Cloudflare are peers: both are source routes selected by the target. For
 
 The offer shape deliberately permits future catalogs or subscriptions: a target could discover offers or subscribe to a source-owned feed later. No discovery, polling, persistent token, schedule, cursor, or subscription state is built until a concrete use case defines it.
 
+### Development table mirroring is a separate contract
+
+Development work may be handed among local and cloud machines by explicitly pushing or pulling complete selected-table data through a configured provider database. Supabase is the first provider; generic PostgreSQL uses the same provider boundary. Local SQLite uses portable row transfer into migration-owned PostgreSQL schema without local PostgreSQL client tools, while two qualified PostgreSQL endpoints may use an optional native table-image mode. That destructive lateral workflow is tracked in [`base-development-table-mirror.md`](base-development-table-mirror.md). It reuses Base table ownership and the Data Share operator area but does not create offers/packages or add update/delete behavior to this plan's production-facing planner and applier.
+
 ## Public Contract
 
 - Canonical package format is `belimbing-data-share/package/v1` as bounded canonical NDJSON; transfer offers use `belimbing-data-share/offer/v1`.
@@ -61,7 +65,7 @@ The offer shape deliberately permits future catalogs or subscriptions: a target 
 - Binary and invalid UTF-8 values use an explicit Base64 envelope. JSON, booleans, numbers, dates, and datetimes normalize deterministically.
 - Package, table, record, line, and scalar limits are enforced before unbounded allocation or insertion.
 - Instance identity, offer routes, offer lifetime, fetch timeout, storage paths, retention, and limits live in global `base_settings` with code defaults and an authorized settings UI; `.env` is not the operator contract.
-- Default direction is upward only: development to staging or production, and staging to production. Lateral and downward transfer fail closed on the target.
+- Offer-based Data Share direction is upward only by default: development to staging or production, and staging to production. Lateral and downward offer transfer fail closed on the target; the separate development-only table mirror has its own policy and cannot target staging or production.
 - Offer endpoints are HTTPS, contain no credentials/query/fragment, and match the exact public offer ID.
 - Offer secrets never enter URLs, package bytes, logs, ledger metadata, or persisted plaintext; the offer record holds only application-encrypted ciphertext so an authorized source operator can recopy an available bundle.
 - A package ID cannot be rebound to different bytes or another offer. An applied package cannot be applied again.

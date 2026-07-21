@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Settings\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -25,6 +26,8 @@ class DatabaseSettingsService implements SettingsService
      * Prevents repeated DB queries for keys with no override.
      */
     private const CACHE_MISS_SENTINEL = '__blb_settings_miss__';
+
+    private const CACHE_ENCRYPTION_SUFFIX = ':is-encrypted';
 
     public function __construct(
         private readonly CacheRepository $cache,
@@ -135,27 +138,38 @@ class DatabaseSettingsService implements SettingsService
     {
         $ttl = (int) config('settings.cache_ttl', 3600);
         $cacheKey = $this->cacheKey($key, $scope);
-        $value = null;
 
         if ($ttl <= 0) {
-            $value = $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
-        } else {
+            return $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+        }
+
+        $encryptionKey = $cacheKey.self::CACHE_ENCRYPTION_SUFFIX;
+        $isEncrypted = $this->cache->get($encryptionKey);
+
+        if ($isEncrypted === true) {
+            return $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+        }
+
+        if ($isEncrypted === false) {
             $cached = $this->cache->get($cacheKey);
 
-            if ($cached !== self::CACHE_MISS_SENTINEL) {
-                $value = $cached;
-            }
-
-            if ($cached === null) {
-                $value = $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
-
-                $this->cache->put(
-                    $cacheKey,
-                    $value ?? self::CACHE_MISS_SENTINEL,
-                    $ttl
-                );
-            }
+            return $cached === self::CACHE_MISS_SENTINEL ? null : $cached;
         }
+
+        $setting = Setting::findByKeyAndScope($key, $scope);
+
+        if ($setting?->is_encrypted) {
+            // Credentials are decrypted only for the caller. Never persist their
+            // plaintext in a database, Redis, or filesystem cache store.
+            $this->cache->forget($cacheKey);
+            $this->cache->put($encryptionKey, true, $ttl);
+
+            return $this->resolveSettingValue($setting);
+        }
+
+        $value = $this->resolveSettingValue($setting);
+        $this->cache->put($encryptionKey, false, $ttl);
+        $this->cache->put($cacheKey, $value ?? self::CACHE_MISS_SENTINEL, $ttl);
 
         return $value;
     }
@@ -209,6 +223,9 @@ class DatabaseSettingsService implements SettingsService
      */
     private function bustCache(string $key, ?Scope $scope): void
     {
-        $this->cache->forget($this->cacheKey($key, $scope));
+        $cacheKey = $this->cacheKey($key, $scope);
+
+        $this->cache->forget($cacheKey);
+        $this->cache->forget($cacheKey.self::CACHE_ENCRYPTION_SUFFIX);
     }
 }

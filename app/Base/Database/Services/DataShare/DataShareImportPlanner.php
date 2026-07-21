@@ -40,7 +40,7 @@ class DataShareImportPlanner
                 'status' => 'planning',
                 'planned_at' => now('UTC'),
             ]);
-            $this->destination->reset();
+            $this->destination->reset((string) $verified->manifest['scope']['name']);
             $counts = [
                 'insert' => 0,
                 'unchanged' => 0,

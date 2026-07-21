@@ -5,6 +5,7 @@ namespace App\Base\Database\Livewire\DataShare;
 use App\Base\Database\Enums\DataShareInstanceRole;
 use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesDataSharePageState;
+use App\Base\Database\Livewire\DataShare\Concerns\ManagesDevelopmentTableMirror;
 use App\Base\Database\Livewire\DataShare\Concerns\ManagesTransferOffers;
 use App\Base\Database\Models\DataSharePlan;
 use App\Base\Database\Models\DataShareReceipt;
@@ -25,10 +26,14 @@ class Index extends Component
 {
     use AuthorizesDataShareOperations;
     use ManagesDataSharePageState;
+    use ManagesDevelopmentTableMirror;
     use ManagesTransferOffers;
 
     /** @var list<array<string, mixed>> */
     public array $scopes = [];
+
+    /** @var list<array{name: string, label: string, message: string}> */
+    public array $scopeIssues = [];
 
     /** @var list<string> */
     public array $selectedTables = [];
@@ -215,6 +220,7 @@ class Index extends Component
             'canReceive' => $this->capabilityAllows('admin.system.data-share-offer.accept'),
             'canPlan' => $this->capabilityAllows('admin.system.data-share-plan.review'),
             'canApply' => $this->capabilityAllows('admin.system.data-share-apply.execute'),
+            'canExecuteMirror' => $this->capabilityAllows('admin.system.data-share-mirror.execute'),
             'canManageSettings' => $this->capabilityAllows('admin.system.data-share-settings.manage'),
             'canDelete' => $this->capabilityAllows('admin.system.data-share.delete'),
             'passwordConfirmationUrl' => Route::has('password.confirm') ? route('password.confirm') : null,

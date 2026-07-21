@@ -102,7 +102,7 @@ class DataSharePackageApplier
             throw DataShareApplyException::stalePlan();
         }
 
-        $this->destination->reset();
+        $this->destination->reset((string) $verified->manifest['scope']['name']);
         $sequence = 0;
         $actionHash = hash_init('sha256');
         $actionBuffer = [];

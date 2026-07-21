@@ -22,17 +22,15 @@ class DataShareDestinationMapper
         private readonly DataShareScopeCatalog $catalog,
     ) {}
 
-    public function reset(): void
+    public function reset(string $scopeName): void
     {
         $this->knownReferences = [];
         $this->uniqueIndexes = [];
         $targets = [];
 
-        foreach ($this->catalog->scopes() as $scope) {
-            foreach ($scope->tables as $table) {
-                foreach ($table->references as $reference) {
-                    $targets[$reference->targetTable][CanonicalJson::encode($reference->targetColumns)] = $reference->targetColumns;
-                }
+        foreach ($this->catalog->scope($scopeName)->tables as $table) {
+            foreach ($table->references as $reference) {
+                $targets[$reference->targetTable][CanonicalJson::encode($reference->targetColumns)] = $reference->targetColumns;
             }
         }
 

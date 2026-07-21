@@ -41,7 +41,11 @@ use App\Base\Settings\Livewire\SettingsForm;
                                 @if ($group['config']['description'] ?? null)
                                     <p class="mb-5 text-sm leading-6 text-muted">{{ __($group['config']['description']) }}</p>
                                 @endif
-                                @include('livewire.settings.partials.fields-grid', ['group' => $group['config']])
+                                @if ($group['config']['view'] ?? null)
+                                    @include($group['config']['view'], ['group' => $group['config']])
+                                @else
+                                    @include('livewire.settings.partials.fields-grid', ['group' => $group['config']])
+                                @endif
                             </x-ui.card>
                         </x-ui.tab>
                     @endforeach
@@ -49,7 +53,11 @@ use App\Base\Settings\Livewire\SettingsForm;
             @else
                 @php($group = $groups[0])
                 <x-ui.card wire:key="settings-group-{{ $group['id'] }}">
-                    @include('livewire.settings.partials.fields-grid', ['group' => $group['config']])
+                    @if ($group['config']['view'] ?? null)
+                        @include($group['config']['view'], ['group' => $group['config']])
+                    @else
+                        @include('livewire.settings.partials.fields-grid', ['group' => $group['config']])
+                    @endif
                 </x-ui.card>
             @endif
 

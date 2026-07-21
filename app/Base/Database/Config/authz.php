@@ -28,6 +28,7 @@ return [
         'admin.system.data-share-offer.accept',
         'admin.system.data-share-plan.review',
         'admin.system.data-share-apply.execute',
+        'admin.system.data-share-mirror.execute',
         'admin.system.data-share-settings.manage',
     ],
 ];

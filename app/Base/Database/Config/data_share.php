@@ -28,6 +28,16 @@ return [
 
     'receiving_path_prefix' => 'data-share/receiving',
 
+    'mirror' => [
+        'temp_path' => storage_path('app/private/data-share/mirror'),
+        'timeout_seconds' => 3600,
+        'lock_timeout_ms' => 30000,
+        'executables' => [
+            'pg_dump' => env('DATA_SHARE_MIRROR_PG_DUMP'),
+            'psql' => env('DATA_SHARE_MIRROR_PSQL'),
+        ],
+    ],
+
     'offers' => [
         'expiry_minutes' => 60,
         'fetch_timeout_seconds' => 600,

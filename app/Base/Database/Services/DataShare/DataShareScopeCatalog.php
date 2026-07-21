@@ -7,12 +7,21 @@ use App\Base\Database\DTO\DataShare\DataShareScopeDefinition;
 use App\Base\Database\DTO\DataShare\DataShareTableDefinition;
 use App\Base\Database\Exceptions\DataShareDefinitionException;
 use App\Base\Database\Models\TableRegistry;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
 
 class DataShareScopeCatalog
 {
-    /** @return array<string, DataShareScopeDefinition> */
-    public function scopes(): array
+    /**
+     * Inspect the complete catalog without letting one invalid scope hide valid page options.
+     * Operational callers use scope(), table(), or the strict scopes() method instead.
+     *
+     * @return array{
+     *     scopes: array<string, DataShareScopeDefinition>,
+     *     rejected: list<array{name: string, label: string, message: string}>
+     * }
+     */
+    public function discover(): array
     {
         $available = array_fill_keys(TableRegistry::getAvailableTableNames(), true);
         $rows = TableRegistry::query()
@@ -23,34 +32,53 @@ class DataShareScopeCatalog
             ->filter(fn (TableRegistry $row): bool => isset($available[$row->table_name]))
             ->groupBy('module_path');
         $scopes = [];
+        $rejected = [];
 
         foreach ($rows as $modulePath => $tables) {
-            $definitions = [];
-
-            foreach ($tables as $table) {
-                $definitions[] = $this->tableDefinition($table->table_name);
-            }
-
             $name = (string) $modulePath;
-            $moduleName = (string) ($tables->first()->module_name ?: basename($name));
-            $scopes[$name] = new DataShareScopeDefinition(
-                name: $name,
-                label: mb_strlen($moduleName) <= 3
-                    ? mb_strtoupper($moduleName)
-                    : str($moduleName)->headline()->toString(),
-                modulePath: $name,
-                tables: $this->dependencyOrder($definitions),
-            );
+            $label = $this->scopeLabel($name, $tables);
+
+            try {
+                $scopes[$name] = $this->scopeDefinition($name, $tables);
+            } catch (DataShareDefinitionException $exception) {
+                $rejected[] = [
+                    'name' => $name,
+                    'label' => $label,
+                    'message' => $exception->getMessage(),
+                ];
+            }
         }
 
-        return $scopes;
+        return ['scopes' => $scopes, 'rejected' => $rejected];
+    }
+
+    /** @return array<string, DataShareScopeDefinition> */
+    public function scopes(): array
+    {
+        $discovery = $this->discover();
+
+        if ($discovery['rejected'] !== []) {
+            throw new DataShareDefinitionException($discovery['rejected'][0]['message']);
+        }
+
+        return $discovery['scopes'];
     }
 
     /** @param list<string> $selectedTables */
     public function scope(string $name, array $selectedTables = []): DataShareScopeDefinition
     {
-        $scope = $this->scopes()[$name]
-            ?? throw DataShareDefinitionException::invalid(__('unknown export scope :scope.', ['scope' => $name]));
+        $available = array_fill_keys(TableRegistry::getAvailableTableNames(), true);
+        $tables = TableRegistry::query()
+            ->where('module_path', $name)
+            ->orderBy('table_name')
+            ->get()
+            ->filter(fn (TableRegistry $row): bool => isset($available[$row->table_name]));
+
+        if ($tables->isEmpty()) {
+            throw DataShareDefinitionException::invalid(__('unknown export scope :scope.', ['scope' => $name]));
+        }
+
+        $scope = $this->scopeDefinition($name, $tables);
 
         if ($selectedTables === []) {
             return $scope;
@@ -71,15 +99,38 @@ class DataShareScopeCatalog
 
     public function table(string $table): DataShareTableDefinition
     {
-        foreach ($this->scopes() as $scope) {
-            foreach ($scope->tables as $definition) {
-                if ($definition->table === $table) {
-                    return $definition;
-                }
-            }
+        if (! in_array($table, TableRegistry::getAvailableTableNames(), true)
+            || ! TableRegistry::query()->where('table_name', $table)->whereNotNull('module_path')->exists()) {
+            throw DataShareDefinitionException::unclassifiedTable($table);
         }
 
-        throw DataShareDefinitionException::unclassifiedTable($table);
+        return $this->tableDefinition($table);
+    }
+
+    /** @param Collection<int, TableRegistry> $tables */
+    private function scopeDefinition(string $name, Collection $tables): DataShareScopeDefinition
+    {
+        $definitions = $tables
+            ->map(fn (TableRegistry $table): DataShareTableDefinition => $this->tableDefinition($table->table_name))
+            ->values()
+            ->all();
+
+        return new DataShareScopeDefinition(
+            name: $name,
+            label: $this->scopeLabel($name, $tables),
+            modulePath: $name,
+            tables: $this->dependencyOrder($definitions),
+        );
+    }
+
+    /** @param Collection<int, TableRegistry> $tables */
+    private function scopeLabel(string $name, Collection $tables): string
+    {
+        $moduleName = (string) ($tables->first()?->module_name ?: basename($name));
+
+        return mb_strlen($moduleName) <= 3
+            ? mb_strtoupper($moduleName)
+            : str($moduleName)->headline()->toString();
     }
 
     private function tableDefinition(string $table): DataShareTableDefinition

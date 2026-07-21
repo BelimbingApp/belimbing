@@ -33,6 +33,7 @@ use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
 use App\Base\Database\Services\DataShare\DataShareValueNormalizer;
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -220,6 +221,40 @@ it('rejects a selected foreign-key cycle that has no generic insert order', func
 
         expect(fn () => app(DataShareScopeCatalog::class)->scope($scope))
             ->toThrow(DataShareDefinitionException::class, 'foreign-key cycle');
+    } finally {
+        TableRegistry::unregister($second);
+        TableRegistry::unregister($first);
+        Schema::dropIfExists($second);
+        Schema::dropIfExists($first);
+        Schema::enableForeignKeyConstraints();
+    }
+});
+
+it('keeps the Data Share page available when one registered scope has a foreign-key cycle', function (): void {
+    $first = 'test_data_share_page_cycle_first';
+    $second = 'test_data_share_page_cycle_second';
+    $scope = 'tests/fixtures/data-share-page-cycle';
+    Schema::disableForeignKeyConstraints();
+
+    try {
+        DB::statement("CREATE TABLE {$first} (id INTEGER PRIMARY KEY, second_id INTEGER NOT NULL, FOREIGN KEY(second_id) REFERENCES {$second}(id))");
+        DB::statement("CREATE TABLE {$second} (id INTEGER PRIMARY KEY, first_id INTEGER NOT NULL, FOREIGN KEY(first_id) REFERENCES {$first}(id))");
+        TableRegistry::register($first, 'Data Share Page Cycle Fixture', $scope, 'test');
+        TableRegistry::register($second, 'Data Share Page Cycle Fixture', $scope, 'test');
+        $this->actingAs(createAdminUser());
+
+        expect(Artisan::call('blb:db:share:scopes'))->toBe(1)
+            ->and(Artisan::output())->toContain('foreign-key cycle');
+
+        $component = Livewire::test(DataShareIndex::class)
+            ->assertSee('Some table scopes are unavailable for sharing:')
+            ->assertSee('Data Share Page Cycle Fixture')
+            ->assertSee('Other scopes and the development mirror remain available.');
+
+        expect(array_column($component->get('scopes'), 'name'))
+            ->toContain(GENERIC_SHARE_SCOPE)
+            ->not->toContain($scope);
+        expect(array_column($component->get('scopeIssues'), 'name'))->toContain($scope);
     } finally {
         TableRegistry::unregister($second);
         TableRegistry::unregister($first);

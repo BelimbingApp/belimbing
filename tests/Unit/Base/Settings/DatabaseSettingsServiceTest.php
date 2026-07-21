@@ -3,7 +3,9 @@
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Models\Setting;
+use App\Base\Settings\Services\DatabaseSettingsService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
@@ -207,6 +209,20 @@ it('encrypted values are not stored as plaintext in DB', function (): void {
     // The raw value should not contain the plaintext
     expect($setting->value)->not->toBe('my-secret-token');
     expect($setting->value)->not->toContain('my-secret-token');
+});
+
+it('never writes decrypted settings to a persistent cache store', function (): void {
+    config(['settings.cache_ttl' => 3600]);
+    $cache = app('cache')->store('database');
+    $service = new DatabaseSettingsService($cache);
+    $secret = 'postgresql://mirror-user:cache-secret@example.test/postgres';
+
+    $service->set('data_share.mirror.credentials', $secret, encrypted: true);
+
+    expect($service->get('data_share.mirror.credentials'))->toBe($secret)
+        ->and(DB::table(config('cache.stores.database.table', 'cache'))
+            ->where('value', 'like', '%cache-secret%')
+            ->exists())->toBeFalse();
 });
 
 it('encrypted values work with scope cascade', function (): void {

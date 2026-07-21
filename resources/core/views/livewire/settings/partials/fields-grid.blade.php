@@ -100,18 +100,64 @@ use App\Base\Settings\Livewire\SettingsForm;
                 @endif
             </div>
         @elseif (($field['type'] ?? 'text') === 'password')
-            <x-ui.secret-input
-                id="{{ $id }}"
-                wire:model="values.{{ $formKey }}"
-                value="{{ (string) ($values[$formKey] ?? '') }}"
-                label="{{ __($field['label']) }}"
-                :placeholder="$this->hasEncryptedValue($field) ? '' : __($field['placeholder'] ?? '')"
-                :help="filled($field['help'] ?? null) ? __($field['help']) : null"
-                :error="$errors->first('values.' . $formKey)"
-                :has-value="$this->hasEncryptedValue($field)"
-                :show-reveal-button="(bool) ($field['show_reveal_button'] ?? false)"
-                :saved-mask="$this->savedSecretMask($field)"
-            />
+            <div class="space-y-3">
+                <x-ui.secret-input
+                    id="{{ $id }}"
+                    wire:model="values.{{ $formKey }}"
+                    value="{{ (string) ($values[$formKey] ?? '') }}"
+                    label="{{ __($field['label']) }}"
+                    :placeholder="$this->hasEncryptedValue($field) ? '' : __($field['placeholder'] ?? '')"
+                    :help="filled($field['help'] ?? null) ? __($field['help']) : null"
+                    :error="$errors->first('values.' . $formKey)"
+                    :has-value="$this->hasEncryptedValue($field)"
+                    :show-reveal-button="(bool) ($field['show_reveal_button'] ?? false)"
+                    :saved-mask="$this->savedSecretMask($field)"
+                    autocomplete="new-password"
+                    autocapitalize="none"
+                    spellcheck="false"
+                />
+
+                @if(($field['actions'] ?? []) !== [])
+                    <div class="flex flex-wrap items-center gap-2">
+                        @foreach($field['actions'] as $action)
+                            @if(! ($action['when_saved'] ?? false) || $this->hasEncryptedValue($field))
+                                @if($action['confirm'] ?? null)
+                                    <x-ui.button
+                                        type="button"
+                                        :variant="$action['variant'] ?? 'control'"
+                                        size="sm"
+                                        wire:click="{{ $action['method'] }}"
+                                        wire:loading.attr="disabled"
+                                        wire:target="{{ $action['method'] }}"
+                                        wire:confirm="{{ __($action['confirm']) }}"
+                                    >
+                                        @if($action['icon'] ?? null)
+                                            <x-icon :name="$action['icon']" class="h-4 w-4" />
+                                        @endif
+                                        <span wire:loading.remove wire:target="{{ $action['method'] }}">{{ __($action['label']) }}</span>
+                                        <span wire:loading wire:target="{{ $action['method'] }}">{{ __('Working…') }}</span>
+                                    </x-ui.button>
+                                @else
+                                    <x-ui.button
+                                        type="button"
+                                        :variant="$action['variant'] ?? 'control'"
+                                        size="sm"
+                                        wire:click="{{ $action['method'] }}"
+                                        wire:loading.attr="disabled"
+                                        wire:target="{{ $action['method'] }}"
+                                    >
+                                        @if($action['icon'] ?? null)
+                                            <x-icon :name="$action['icon']" class="h-4 w-4" />
+                                        @endif
+                                        <span wire:loading.remove wire:target="{{ $action['method'] }}">{{ __($action['label']) }}</span>
+                                        <span wire:loading wire:target="{{ $action['method'] }}">{{ __('Working…') }}</span>
+                                    </x-ui.button>
+                                @endif
+                            @endif
+                        @endforeach
+                    </div>
+                @endif
+            </div>
         @else
             <x-ui.input
                 id="{{ $id }}"
