@@ -124,12 +124,25 @@ it('persists remove, reorder, and add as a whole prefs layout', function (): voi
     $withoutAi = array_values(array_diff($initialIds, [DASHBOARD_AI_WIDGET]));
     $withAiAppended = [...$withoutAi, DASHBOARD_AI_WIDGET];
     $withAiMovedEarlier = $withAiAppended;
+    $visible = app(DashboardLayout::class)->visibleFor($admin);
     $aiIndex = array_search(DASHBOARD_AI_WIDGET, $withAiMovedEarlier, true);
+    $aiSize = $visible[DASHBOARD_AI_WIDGET]->size;
+    $targetIndex = false;
 
-    if ($aiIndex !== false && $aiIndex > 0) {
-        [$withAiMovedEarlier[$aiIndex - 1], $withAiMovedEarlier[$aiIndex]] = [
+    if ($aiIndex !== false) {
+        for ($candidate = $aiIndex - 1; $candidate >= 0; $candidate--) {
+            if ($visible[$withAiMovedEarlier[$candidate]]->size === $aiSize) {
+                $targetIndex = $candidate;
+
+                break;
+            }
+        }
+    }
+
+    if ($aiIndex !== false && $targetIndex !== false) {
+        [$withAiMovedEarlier[$targetIndex], $withAiMovedEarlier[$aiIndex]] = [
             $withAiMovedEarlier[$aiIndex],
-            $withAiMovedEarlier[$aiIndex - 1],
+            $withAiMovedEarlier[$targetIndex],
         ];
     }
 
@@ -151,6 +164,44 @@ it('persists remove, reorder, and add as a whole prefs layout', function (): voi
     expect($admin->refresh()->prefsArray())
         ->not->toHaveKey(DashboardLayout::PREF_KEY);
 });
+
+it('persists a drag-drop reorder as a whole prefs layout', function (): void {
+    $admin = createAdminUser();
+    $initialIds = dashboardWidgetIds(app(DashboardLayout::class)->layoutFor($admin));
+
+    expect(count($initialIds))->toBeGreaterThan(1);
+
+    $movedId = $initialIds[0];
+    $destination = count($initialIds) - 1;
+
+    $component = Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('reorder', $movedId, $destination);
+
+    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
+        ->toBe([...array_slice($initialIds, 1), $movedId]);
+
+    $component->call('reorder', $movedId, 0);
+
+    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
+        ->toBe($initialIds);
+});
+
+it('ignores invalid drag-drop reorders without creating a custom layout', function (string $id, int $position): void {
+    $admin = createAdminUser();
+    $initialIds = dashboardWidgetIds(app(DashboardLayout::class)->layoutFor($admin));
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('reorder', $id === 'visible-widget' ? $initialIds[0] : $id, $position);
+
+    expect($admin->refresh()->prefsArray())
+        ->not->toHaveKey(DashboardLayout::PREF_KEY);
+})->with([
+    'unknown widget' => ['unknown-widget', 0],
+    'negative position' => ['visible-widget', -1],
+    'position past the end' => ['visible-widget', PHP_INT_MAX],
+]);
 
 it('skips stale or invisible widget ids in a saved layout silently', function (): void {
     $admin = createAdminUser();
