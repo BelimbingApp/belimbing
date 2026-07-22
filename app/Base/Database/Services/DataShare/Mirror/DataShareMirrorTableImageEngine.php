@@ -8,6 +8,7 @@ use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
 use App\Base\Database\Enums\DataShareMirrorAction;
+use App\Base\Database\Enums\DataShareMirrorDirection;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use Illuminate\Database\Connection;
 use Illuminate\Filesystem\Filesystem;
@@ -104,7 +105,14 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
             $items = [];
             foreach ($review->items as $item) {
                 $counts[$item->intendedAction->value]++;
-                $items[] = ['table' => $item->table, 'action' => $item->intendedAction->value];
+                $sourceRows = $this->rowCount($source->connection, $item->table);
+                $targetRows = $this->rowCount($target->connection, $item->table);
+                $items[] = [
+                    'table' => $item->table,
+                    'action' => $item->intendedAction->value,
+                    'local_rows' => $review->direction === DataShareMirrorDirection::Push ? $sourceRows : $targetRows,
+                    'remote_rows' => $review->direction === DataShareMirrorDirection::Push ? $targetRows : $sourceRows,
+                ];
             }
 
             return new DataShareMirrorExecutionResult($review->direction, $counts, $items);
@@ -119,6 +127,15 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                 }
             }
         }
+    }
+
+    private function rowCount(Connection $connection, string $table): int
+    {
+        if (! $connection->getSchemaBuilder()->hasTable($table)) {
+            return 0;
+        }
+
+        return (int) $connection->table($table)->count();
     }
 
     /**

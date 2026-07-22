@@ -66,7 +66,12 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
             return new DataShareMirrorExecutionResult(
                 $review->direction,
                 ['create' => 0, 'replace' => count($tables), 'delete' => 0],
-                array_map(fn (string $table): array => ['table' => $table, 'action' => 'replace'], $tables),
+                array_map(fn (string $table): array => [
+                    'table' => $table,
+                    'action' => 'replace',
+                    'local_rows' => $snapshot['counts'][$table],
+                    'remote_rows' => $snapshot['counts'][$table],
+                ], $tables),
             );
         } finally {
             if (is_file($snapshotPath)) {

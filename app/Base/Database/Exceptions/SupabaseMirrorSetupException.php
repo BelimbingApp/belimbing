@@ -2,6 +2,8 @@
 
 namespace App\Base\Database\Exceptions;
 
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -11,18 +13,19 @@ final class SupabaseMirrorSetupException extends RuntimeException
         string $message,
         public readonly string $reasonCode = 'supabase_setup_failed',
         ?Throwable $previous = null,
+        public readonly ?string $diagnosticReference = null,
     ) {
         parent::__construct($message, 0, $previous);
     }
 
     public static function invalidToken(): self
     {
-        return new self(__('Supabase did not accept this access token. Create a new token and try again.'), 'invalid_token');
+        return new self(__('Supabase did not accept this personal access token. Create a new token in your Supabase account and try again.'), 'invalid_token');
     }
 
     public static function forbidden(): self
     {
-        return new self(__('This Supabase token does not have permission for the selected organization or project.'), 'forbidden');
+        return new self(__('This Supabase personal access token cannot manage the selected organization or project. Check its permissions or use another token.'), 'forbidden');
     }
 
     public static function rateLimited(): self
@@ -37,12 +40,35 @@ final class SupabaseMirrorSetupException extends RuntimeException
 
     public static function unavailable(?Throwable $previous = null): self
     {
-        return new self(__('Supabase setup is unavailable right now. Check the network connection and try again.'), 'unavailable', $previous);
+        if ($previous === null) {
+            return new self(__('The Supabase Management API returned an unexpected response.'), 'unavailable');
+        }
+
+        $reference = Str::upper(Str::random(8));
+        Log::error('Unexpected Supabase Management API connection failure.', [
+            'diagnostic_reference' => $reference,
+            'exception' => $previous,
+        ]);
+
+        return new self(
+            __('Belimbing could not reach the Supabase Management API. Check this machine’s internet and DNS connection. Diagnostic reference: :reference.', ['reference' => $reference]),
+            'unavailable',
+            $previous,
+            $reference,
+        );
+    }
+
+    public static function apiError(int $status): self
+    {
+        return new self(
+            __('The Supabase Management API returned HTTP :status instead of completing the request. Try again later or check Supabase status.', ['status' => $status]),
+            'api_error',
+        );
     }
 
     public static function invalidResponse(): self
     {
-        return new self(__('Supabase returned an incomplete setup response. Try again or use the advanced connection option.'), 'invalid_response');
+        return new self(__('Supabase returned an incomplete setup response. Try again or connect to an existing mirror.'), 'invalid_response');
     }
 
     public static function databaseUnavailable(string $message): self

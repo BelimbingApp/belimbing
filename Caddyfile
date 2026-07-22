@@ -58,8 +58,8 @@
 	# types and websockets. Biggest benefit for large pages and network access.
 	encode zstd gzip
 
-	# Dev launchers import Vite/HMR routes; staging/production import an empty
-	# snippet so /@fs and other dev-only paths cannot proxy to another instance.
+	# The Vite routes resolve only while the local development server is running.
+	# The server sends reload updates only when VITE_HOT_RELOAD is enabled.
 	import {$CADDY_VITE_SNIPPET:scripts/caddy-snippets/vite-disabled.caddy}
 
 	# Laravel — FrankenPHP serves PHP and static files directly (no intermediate proxy)

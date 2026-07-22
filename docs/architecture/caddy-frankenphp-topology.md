@@ -12,7 +12,7 @@ BLB uses one core native topology across environments:
 - each BLB instance runs its own FrankenPHP process locally through Octane
 - the BLB instance binds to a high, non-privileged loopback port
 - the system Caddy routes the BLB frontend and backend hostnames to that local listener
-- Vite remains a separate internal process behind the same BLB-local routing surface
+- Vite remains a separate internal process behind the same BLB-local routing surface when source serving is needed
 
 This is the default and recommended topology because it works for a single BLB instance, multiple BLB instances on one machine, and BLB deployed alongside unrelated sites. The same shape applies in development, staging, and production; the environment differences are intentionally narrow.
 
@@ -60,7 +60,7 @@ Each BLB instance owns its own:
 - FrankenPHP process
 - Octane worker lifecycle
 - queue worker
-- Vite process in environments where frontend hot reload is needed
+- Vite process when source serving is needed; hot reload is an installation-level opt-in
 
 The BLB instance binds FrankenPHP to a loopback-only high port. That port is private infrastructure, not part of the public contract.
 
@@ -98,7 +98,7 @@ The differences between environments should be limited to operational values suc
 - TLS material and trust model
 - service supervision details
 - capacity settings such as workers or process limits
-- whether Vite runs as a live dev server or built assets are served
+- whether Vite runs as a local source server or built assets are served
 
 The topology itself should not change:
 
@@ -112,7 +112,7 @@ That is the minimum-diff path. Development is not a special architecture; it is 
 
 ### Development
 
-Development usually keeps the same shared-ingress shape, with local domains and development-oriented TLS trust. Setup may provision or reuse a local system Caddy daemon, and Vite typically runs as a live dev server for hot reload.
+Development usually keeps the same shared-ingress shape, with local domains and development-oriented TLS trust. Setup may provision or reuse a local system Caddy daemon. Vite may serve local source assets, but browser reloads are disabled by default; a licensee may opt into Vite hot reload with `VITE_HOT_RELOAD=true` in its `.env`.
 
 ### Staging
 

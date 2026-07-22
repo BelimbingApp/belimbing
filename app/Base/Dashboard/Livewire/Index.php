@@ -62,6 +62,24 @@ class Index extends Component
         $this->layoutService()->reset(Auth::user());
     }
 
+    public function reorder(string $id, int $position): void
+    {
+        $ids = $this->currentIds();
+        $currentPosition = array_search($id, $ids, true);
+
+        if ($currentPosition === false
+            || $position < 0
+            || $position >= count($ids)
+            || $currentPosition === $position) {
+            return;
+        }
+
+        array_splice($ids, $currentPosition, 1);
+        array_splice($ids, $position, 0, [$id]);
+
+        $this->layoutService()->save(Auth::user(), $ids);
+    }
+
     public function render(): View
     {
         $layout = $this->layoutService();
@@ -79,18 +97,23 @@ class Index extends Component
 
     private function move(string $id, int $offset): void
     {
-        $ids = $this->currentIds();
+        $widgets = $this->layoutService()->layoutFor(Auth::user());
+        $ids = array_map(fn (WidgetDefinition $widget): string => $widget->id, $widgets);
         $index = array_search($id, $ids, true);
 
         if ($index === false) {
             return;
         }
 
-        $target = $index + $offset;
+        $target = $index;
 
-        if ($target < 0 || $target >= count($ids)) {
-            return;
-        }
+        do {
+            $target += $offset;
+
+            if ($target < 0 || $target >= count($widgets)) {
+                return;
+            }
+        } while ($widgets[$target]->size !== $widgets[$index]->size);
 
         [$ids[$index], $ids[$target]] = [$ids[$target], $ids[$index]];
 

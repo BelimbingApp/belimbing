@@ -99,6 +99,14 @@ class DataShareMirrorConnectionManager
         return $this->providers->options();
     }
 
+    public function configurationFingerprint(): string
+    {
+        return hash('sha256', implode("\0", [
+            (string) $this->settings->get(self::PROVIDER_SETTING_KEY, 'supabase'),
+            (string) ($this->storedUrl() ?? ''),
+        ]));
+    }
+
     public function purge(): void
     {
         $this->database->purge(self::CONNECTION);
@@ -217,8 +225,10 @@ class DataShareMirrorConnectionManager
             if ($localRole !== DataShareInstanceRole::Development->value) {
                 return $this->unavailable(true, false, 'local_role_denied', __('The local Data Share role must be Development.'), $driver, $localRole, localDriver: $localDriver, provider: $provider);
             }
-        } catch (Throwable) {
-            return $this->unavailable(true, false, 'local_policy_unavailable', __('The local development policy could not be verified.'), $driver, $localRole, localDriver: $localDriver, provider: $provider);
+        } catch (Throwable $exception) {
+            $failure = DataShareMirrorException::unexpected('connection', $exception);
+
+            return $this->unavailable(true, false, 'local_policy_unavailable', $failure->getMessage(), $driver, $localRole, localDriver: $localDriver, provider: $provider);
         }
 
         try {
@@ -340,19 +350,22 @@ class DataShareMirrorConnectionManager
 
             $tooling = $this->tooling();
             if ($tooling['pg_dump'] === null || $tooling['psql'] === null) {
-                return $this->unavailable(
-                    true,
-                    true,
-                    'tooling_missing',
-                    __('Install compatible pg_dump and psql client tools on this host.'),
-                    $driver,
-                    $localRole,
-                    $remoteRole,
-                    (string) $remoteInfo['version'],
-                    $tooling['pg_dump'],
-                    $tooling['psql'],
+                return new DataShareMirrorConnectionStatus(
+                    configured: true,
+                    available: true,
+                    reachable: true,
+                    driver: $driver,
+                    localRole: $localRole,
+                    remoteRole: $remoteRole,
+                    serverVersion: (string) $remoteInfo['version'],
+                    pgDumpVersion: $tooling['pg_dump'],
+                    psqlVersion: $tooling['psql'],
+                    reasonCode: null,
+                    message: __('The :provider mirror is ready for portable PostgreSQL data transfer.', ['provider' => $provider->label()]),
+                    providerKey: $provider->key(),
+                    providerLabel: $provider->label(),
                     localDriver: $localDriver,
-                    provider: $provider,
+                    transferMode: 'portable',
                 );
             }
 
@@ -368,19 +381,22 @@ class DataShareMirrorConnectionManager
                 || $pgDumpMajor !== $localServerMajor
                 || $psqlMajor === null
                 || $psqlMajor < $localServerMajor) {
-                return $this->unavailable(
-                    true,
-                    true,
-                    'tooling_incompatible',
-                    __('Bidirectional mirroring requires both databases and pg_dump to use the same PostgreSQL major version, with psql at least that version.'),
-                    $driver,
-                    $localRole,
-                    $remoteRole,
-                    (string) $remoteInfo['version'],
-                    $tooling['pg_dump'],
-                    $tooling['psql'],
+                return new DataShareMirrorConnectionStatus(
+                    configured: true,
+                    available: true,
+                    reachable: true,
+                    driver: $driver,
+                    localRole: $localRole,
+                    remoteRole: $remoteRole,
+                    serverVersion: (string) $remoteInfo['version'],
+                    pgDumpVersion: $tooling['pg_dump'],
+                    psqlVersion: $tooling['psql'],
+                    reasonCode: null,
+                    message: __('The :provider mirror is ready for portable PostgreSQL data transfer.', ['provider' => $provider->label()]),
+                    providerKey: $provider->key(),
+                    providerLabel: $provider->label(),
                     localDriver: $localDriver,
-                    provider: $provider,
+                    transferMode: 'portable',
                 );
             }
 
@@ -401,12 +417,14 @@ class DataShareMirrorConnectionManager
                 localDriver: $localDriver,
                 transferMode: 'native',
             );
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            $failure = DataShareMirrorException::unexpected('connection', $exception);
+
             return $this->unavailable(
                 true,
                 false,
                 'connection_failed',
-                __('The mirror database could not be reached or verified.'),
+                $this->connectionFailureMessage($provider, $exception, $failure->diagnosticReference),
                 $driver,
                 $localRole,
                 localDriver: $localDriver,
@@ -417,6 +435,28 @@ class DataShareMirrorConnectionManager
                 $this->database->purge($connectionName);
             }
         }
+    }
+
+    private function connectionFailureMessage(DataShareMirrorProvider $provider, Throwable $exception, ?string $reference): string
+    {
+        $diagnostic = mb_strtolower($exception->getMessage());
+        $message = match (true) {
+            str_contains($diagnostic, 'password authentication failed'),
+            str_contains($diagnostic, 'authentication failed') => __(':provider rejected the database username or password. Enter the project’s Database Password, not a personal access token or API key.', ['provider' => $provider->label()]),
+            str_contains($diagnostic, 'could not translate host name'),
+            str_contains($diagnostic, 'name or service not known'),
+            str_contains($diagnostic, 'nodename nor servname provided') => __('The database hostname could not be resolved. Check the project URL and this machine’s DNS connection.'),
+            str_contains($diagnostic, 'network is unreachable'),
+            str_contains($diagnostic, 'no route to host') => __('This machine has no network route to the database host. Use the Supabase session-pooler URL when direct IPv6 connectivity is unavailable.'),
+            str_contains($diagnostic, 'connection timed out'),
+            str_contains($diagnostic, 'timeout expired') => __('The database host did not respond before the connection timed out. Check the network, host, and port.'),
+            str_contains($diagnostic, 'connection refused') => __('The database host refused the connection. Check that the URL uses an active direct or session-pooler endpoint and the correct port.'),
+            default => __('Belimbing reached the connection check, but an unexpected database error prevented verification.'),
+        };
+
+        return $reference === null
+            ? $message
+            : $message.' '.__('Diagnostic reference: :reference.', ['reference' => $reference]);
     }
 
     /** @return array{database: string, address: string, port: string, version: string} */

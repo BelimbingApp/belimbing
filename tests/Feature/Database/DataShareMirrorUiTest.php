@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorConnectionStatus;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
@@ -18,6 +19,7 @@ use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
@@ -118,6 +120,56 @@ it('materializes only visible table names and never auto-selects on module chang
         ->assertSet('mirrorSelectedTables', []);
 });
 
+it('restores a fresh mirror catalog snapshot on page reload and refreshes it only on demand', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
+    $manager->shouldReceive('configurationFingerprint')->times(3)->andReturn('saved-mirror-fingerprint');
+    $manager->shouldReceive('status')->twice()->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: null,
+        message: 'Ready.',
+        providerKey: 'supabase',
+        providerLabel: 'Supabase',
+        localDriver: 'pgsql',
+        transferMode: 'portable',
+    ));
+    $manager->shouldReceive('catalog')->twice()->andReturn([
+        new DataShareMirrorCatalogTable(
+            'ham_orders',
+            'Ham',
+            'blb/ham',
+            null,
+            true,
+            true,
+            'table',
+            'table',
+            true,
+        ),
+    ]);
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareIndex::class)
+        ->call('dataShareTabSelected', 'mirror')
+        ->assertSet('mirrorCatalogLoaded', true)
+        ->assertSet('mirrorTables.0.table', 'ham_orders');
+
+    Livewire::test(DataShareIndex::class)
+        ->assertSet('mirrorCatalogLoaded', true)
+        ->assertSet('mirrorTables.0.table', 'ham_orders')
+        ->call('refreshMirrorCatalog')
+        ->assertSet('mirrorTables.0.table', 'ham_orders');
+});
+
 it('reviews an exact push payload before executing the same payload and state token', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
@@ -150,6 +202,7 @@ it('reviews an exact push payload before executing the same payload and state to
             [['table' => 'ham_orders', 'action' => 'create']],
         ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
+    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)
@@ -202,8 +255,51 @@ it('reports a commit-time connection failure as indeterminate', function (): voi
         ->assertSet('mirrorReview', null)
         ->assertSet('mirrorResult', null)
         ->assertSet('statusVariant', 'danger')
-        ->assertSet('statusMessage', 'The mirror did not report a successful commit. Refresh the catalog and inspect the selected tables before retrying; the outcome may be indeterminate if the connection ended during commit.')
+        ->assertSet('statusMessage', 'psql could not complete the mirror operation. (exit 1) The commit outcome could not be confirmed. Refresh the catalog and inspect the selected tables before retrying.')
         ->assertDontSee('no selected-table changes were committed');
+});
+
+it('offers destructive force push for schema blockers but never force pull', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $blockedReview = fn (DataShareMirrorDirection $direction) => new DataShareMirrorReview(
+        $direction,
+        [new DataShareMirrorReviewItem(
+            'ham_orders',
+            DataShareMirrorAction::Blocked,
+            DataShareMirrorAction::Replace,
+            [new DataShareMirrorBlocker('schema_incompatible', 'Schemas differ.')],
+        )],
+        true,
+        ['create' => 0, 'replace' => 0, 'delete' => 0, 'blocked' => 1],
+        'blocked-schema-state',
+    );
+    $manager->shouldReceive('review')->once()->with('push', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Push));
+    $manager->shouldReceive('forcePush')->once()->with(['ham_orders'])->andReturn(new DataShareMirrorExecutionResult(
+        DataShareMirrorDirection::Push,
+        ['create' => 0, 'replace' => 1, 'delete' => 0],
+        [['table' => 'ham_orders', 'action' => 'replace', 'local_rows' => 1234, 'remote_rows' => 1234]],
+    ));
+    $manager->shouldReceive('review')->once()->with('pull', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Pull));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    $component = Livewire::test(DataShareIndex::class)
+        ->set('mirrorSelectedTables', ['ham_orders'])
+        ->call('reviewMirror', 'push')
+        ->assertSet('mirrorReview._can_force_push', true)
+        ->assertSee('Force push 1 selected table')
+        ->call('forcePushMirror')
+        ->assertSet('mirrorResult.counts.replace', 1)
+        ->assertSet('statusVariant', 'success')
+        ->assertSee('Local rows')
+        ->assertSee('Remote rows')
+        ->assertSee('1,234');
+
+    $component
+        ->call('reviewMirror', 'pull')
+        ->assertSet('mirrorReview._can_force_push', false)
+        ->assertDontSee('Force push 1 selected table');
 });
 
 it('reports a stale final review as safe to review again rather than indeterminate', function (): void {
@@ -232,6 +328,35 @@ it('reports a stale final review as safe to review again rather than indetermina
         ->assertSet('statusVariant', 'warning')
         ->assertSet('statusMessage', 'The table state changed after review. Review the selected tables again before executing.')
         ->assertDontSee('outcome may be indeterminate');
+});
+
+it('reports and references an unexpected review failure without exposing its diagnostics', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    Log::spy();
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('review')
+        ->once()
+        ->andThrow(new RuntimeException('postgresql://private-user:private-password@private-host.example/database'));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    $component = Livewire::test(DataShareIndex::class)
+        ->set('mirrorSelectedTables', ['ham_orders'])
+        ->call('reviewMirror', 'push')
+        ->assertSet('mirrorReview', null)
+        ->assertSet('statusVariant', 'danger')
+        ->assertDontSee('private-user')
+        ->assertDontSee('private-password')
+        ->assertDontSee('private-host.example');
+
+    expect($component->get('statusMessage'))
+        ->toStartWith('An unexpected database error prevented the selected tables from being reviewed. No data was changed. Diagnostic reference:')
+        ->toMatch('/[A-Z0-9]{8}\.$/');
+    Log::shouldHaveReceived('error')->once()->withArgs(
+        fn (string $message, array $context): bool => $message === 'Unexpected Data Share mirror failure.'
+            && $context['operation'] === 'review'
+            && preg_match('/^[A-Z0-9]{8}$/', $context['diagnostic_reference']) === 1,
+    );
 });
 
 it('keeps a blocked review visible and never calls execution', function (): void {
@@ -306,8 +431,8 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
         ->assertSee('Cloud provider')
         ->assertSee('Supabase')
         ->assertSee('PostgreSQL')
-        ->assertSee('Test connection')
-        ->assertSee('Finish setup')
+        ->assertSee('Check and prepare mirror')
+        ->assertDontSee('Finish setup')
         ->assertSee('Remove connection')
         ->set('values.data_share__mirror__url', '')
         ->call('save')
@@ -317,7 +442,8 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
         ->call('startSupabaseReplacement')
         ->assertSet('replaceSavedSupabaseConnection', true)
         ->assertSee('Change Supabase connection')
-        ->assertSee('Find my projects')
+        ->assertSee('Belimbing already knows which Supabase database to use')
+        ->assertSee('Test and save connection')
         ->call('cancelSupabaseReplacement')
         ->assertSet('replaceSavedSupabaseConnection', false)
         ->assertSee('Supabase connection saved');
@@ -331,24 +457,159 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase', 'postgresql' => 'PostgreSQL']);
     $manager->shouldReceive('disconnect')->once();
     app()->instance(DataShareMirrorManager::class, $manager);
+    $settings->set(
+        'data_share.mirror.supabase.access_token',
+        'sbp_remove-with-connection',
+        encrypted: true,
+    );
+    $component = Livewire::test(DataShareSettingsPage::class);
+    session()->put('data_share.mirror.supabase.setup_state', ['projects' => []]);
 
-    Livewire::test(DataShareSettingsPage::class)
+    $component
         ->call('removeMirrorConnection')
         ->assertSet('values.data_share__mirror__url', '');
 
-    expect($settings->has('data_share.mirror.url'))->toBeFalse();
+    expect($settings->has('data_share.mirror.url'))->toBeFalse()
+        ->and($settings->has('data_share.mirror.supabase.access_token'))->toBeFalse()
+        ->and(session()->has('data_share.mirror.supabase.setup_state'))->toBeFalse();
 });
 
-it('renders Supabase as guided account and project setup instead of requiring a database URL', function (): void {
+it('renders distinct guided and existing-mirror Supabase setup paths', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
 
     Livewire::test(DataShareSettingsPage::class)
-        ->assertSee('Connect Supabase')
-        ->assertSee('Get Supabase access token')
-        ->assertSee('Find my projects')
-        ->assertSee('You never need to assemble a database URL.')
-        ->assertSee('Advanced connection');
+        ->assertSee('Set up Supabase')
+        ->assertSee('to continue with the same development data on another machine')
+        ->assertSee('Nothing moves automatically')
+        ->assertSee('Setup does not change or wipe your local database.')
+        ->assertSee('Choose your situation')
+        ->assertSee('Set up a mirror')
+        ->assertSee('Connect to an existing mirror')
+        ->assertSee('Use a mirror that was already prepared from another Belimbing installation.')
+        ->assertSee('Set up a mirror on Supabase')
+        ->assertSee('After that, you choose whether to create a dedicated mirror project or prepare an existing project.')
+        ->assertSee('Open Supabase Personal Access Tokens.')
+        ->assertSee('Sign in or create a Supabase account, then generate a token to grant that permission.')
+        ->assertSee('Check token and find projects')
+        ->assertDontSee('Connect this machine to an existing mirror')
+        ->set('supabaseConnectionPath', 'existing')
+        ->assertSee('Connect this machine to an existing mirror')
+        ->assertDontSee('Supabase personal access token')
+        ->assertSee('The URL tells this machine which project and database to connect to')
+        ->assertSee('the password below replaces that placeholder')
+        ->assertSee('Enter the Supabase project database password')
+        ->assertSee('not a personal access token or project API key')
+        ->assertSee('Test and save connection')
+        ->set('values.data_share__mirror__provider', 'postgresql')
+        ->assertSee('Connect PostgreSQL')
+        ->assertSee('The database user must be allowed to create tables and write data.')
+        ->assertDontSee('Connect this machine to an existing mirror')
+        ->assertDontSee('personal access token');
+});
+
+it('tests and saves an existing Supabase mirror URL with its separate password', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $password = 'mirror p@ss/word';
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
+        'supabase' => 'Supabase',
+        'postgresql' => 'PostgreSQL',
+    ]);
+    $manager->shouldReceive('testConnection')
+        ->once()
+        ->with(
+            'postgresql://postgres.project:'.rawurlencode($password).'@example.supabase.com:6543/postgres',
+            'supabase',
+        )
+        ->andReturn(new DataShareMirrorConnectionStatus(
+            configured: true,
+            available: true,
+            reachable: true,
+            driver: 'pgsql',
+            localRole: 'development',
+            remoteRole: 'development',
+            serverVersion: '17',
+            pgDumpVersion: null,
+            psqlVersion: null,
+            reasonCode: null,
+            message: 'Supabase mirror ready.',
+            providerKey: 'supabase',
+            providerLabel: 'Supabase',
+            localDriver: 'sqlite',
+            transferMode: 'portable',
+        ));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->set('supabaseConnectionPath', 'existing')
+        ->set('values.data_share__mirror__url', 'postgresql://postgres.project:[YOUR-PASSWORD]@example.supabase.com:6543/postgres')
+        ->set('supabaseManualDatabasePassword', $password)
+        ->call('testMirrorConnection')
+        ->assertHasNoErrors()
+        ->assertSet('supabaseManualDatabasePassword', '')
+        ->assertSet('values.data_share__mirror__url', '******')
+        ->assertSee('Supabase connection saved')
+        ->assertDontSee($password);
+
+    expect(app(SettingsService::class)->get('data_share.mirror.url'))
+        ->toBe('postgresql://postgres.project:'.rawurlencode($password).'@example.supabase.com:6543/postgres');
+});
+
+it('updates the password in a saved Supabase mirror URL without repeating guided setup', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $password = 'replacement p@ssword';
+    app(SettingsService::class)->set(
+        'data_share.mirror.url',
+        'postgresql://postgres.project:old-password@example.supabase.com:6543/postgres',
+        encrypted: true,
+    );
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
+        'supabase' => 'Supabase',
+        'postgresql' => 'PostgreSQL',
+    ]);
+    $manager->shouldReceive('testConnection')
+        ->once()
+        ->with(
+            'postgresql://postgres.project:'.rawurlencode($password).'@example.supabase.com:6543/postgres',
+            'supabase',
+        )
+        ->andReturn(new DataShareMirrorConnectionStatus(
+            configured: true,
+            available: true,
+            reachable: true,
+            driver: 'pgsql',
+            localRole: 'development',
+            remoteRole: 'development',
+            serverVersion: '17',
+            pgDumpVersion: null,
+            psqlVersion: null,
+            reasonCode: null,
+            message: 'Supabase mirror ready.',
+            providerKey: 'supabase',
+            providerLabel: 'Supabase',
+            localDriver: 'sqlite',
+            transferMode: 'portable',
+        ));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->assertSet('values.data_share__mirror__url', '******')
+        ->assertDontSee('supabase-manual-database-password')
+        ->call('startSupabaseReplacement')
+        ->assertSee('Belimbing already knows which Supabase database to use')
+        ->set('supabaseManualDatabasePassword', $password)
+        ->call('testMirrorConnection')
+        ->assertHasNoErrors()
+        ->assertSet('supabaseManualDatabasePassword', '')
+        ->assertSee('Supabase connection saved')
+        ->assertDontSee($password);
+
+    expect(app(SettingsService::class)->get('data_share.mirror.url'))
+        ->toBe('postgresql://postgres.project:'.rawurlencode($password).'@example.supabase.com:6543/postgres');
 });
 
 it('discovers Supabase organizations and projects from a transient access token', function (): void {
@@ -378,14 +639,178 @@ it('discovers Supabase organizations and projects from a transient access token'
         ->assertSet('supabaseDiscoveryComplete', true)
         ->assertSet('supabaseOrganizationSlug', 'acme-dev')
         ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
-        ->assertSee('Create a dedicated project')
-        ->assertSee('Use an existing development project')
-        ->assertSee('Acme Development')
+        ->assertSet('supabaseSetupChoice', 'new')
+        ->assertSee('Create a Supabase project for this mirror')
+        ->assertSee('Skip this if a Supabase project already exists for this Belimbing mirror.')
+        ->assertSee('Supabase creates the PostgreSQL database with the project')
+        ->assertSee('Belimbing generates and securely saves its database password')
+        ->assertDontSee('Use a Supabase project I already created')
+        ->assertDontSee('Database password')
+        ->assertSee('Back')
         ->assertDontSee('sbp_transient-token-do-not-store');
 
-    $encryptedSessionToken = session()->get('data_share.mirror.supabase.setup_token');
+    $settings = app(SettingsService::class);
+    $storedAccessToken = Setting::query()->where('key', 'data_share.mirror.supabase.access_token')->firstOrFail();
+    expect($settings->get('data_share.mirror.supabase.access_token'))->toBe('sbp_transient-token-do-not-store')
+        ->and($storedAccessToken->is_encrypted)->toBeTrue()
+        ->and($storedAccessToken->getRawOriginal('value'))->not->toContain('sbp_transient-token-do-not-store')
+        ->and(session()->has('data_share.mirror.supabase.setup_token'))->toBeFalse();
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->assertSet('supabaseAccessToken', '')
+        ->assertSet('supabaseDiscoveryComplete', true)
+        ->assertSet('supabaseSetupChoice', 'new')
+        ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->assertSee('Create project and set up mirror')
+        ->assertDontSee('Database password')
+        ->assertDontSee('Check token and find projects')
+        ->assertDontSee('sbp_transient-token-do-not-store');
+
+    session()->forget('data_share.mirror.supabase.setup_state');
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->assertSet('supabaseConnectionPath', 'existing')
+        ->assertSee('Connect this machine to an existing mirror')
+        ->assertDontSee('Supabase personal access token')
+        ->assertSee('Find my project')
+        ->assertDontSee('Supabase PostgreSQL URL')
+        ->call('continueSupabaseWithSavedToken')
+        ->assertHasNoErrors()
+        ->assertSet('supabaseDiscoveryComplete', true)
+        ->assertSee('Choose the existing mirror project')
+        ->assertSee('no URL is needed')
+        ->assertSee('Enter the selected project’s database password')
+        ->assertDontSee('Supabase PostgreSQL URL')
+        ->call('returnToSupabaseConnectionChoice')
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->set('supabaseConnectionPath', 'setup')
+        ->assertSee('Continue with this account')
+        ->call('continueSupabaseWithSavedToken')
+        ->assertHasNoErrors()
+        ->assertSet('supabaseDiscoveryComplete', true)
+        ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->call('returnToSupabaseConnectionChoice')
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->assertSet('supabaseSetupChoice', '')
+        ->assertSet('supabaseConnectionPath', 'existing')
+        ->assertSee('Choose your situation')
+        ->assertSee('Connect this machine to an existing mirror');
+});
+
+it('forgets an expired saved Supabase token and asks for a replacement', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    app(SettingsService::class)->set(
+        'data_share.mirror.supabase.access_token',
+        'sbp_expired-token',
+        encrypted: true,
+    );
+    Http::fake([
+        'api.supabase.com/v1/organizations' => Http::response([], 401),
+    ]);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->assertSet('supabaseConnectionPath', 'existing')
+        ->set('supabaseConnectionPath', 'setup')
+        ->assertSee('Continue with this account')
+        ->call('continueSupabaseWithSavedToken')
+        ->assertHasErrors(['supabaseAccessToken'])
+        ->assertSee('The saved Supabase personal access token has expired or was revoked. Create a new token to continue.')
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->assertDontSee('Continue with this account');
+
+    expect(app(SettingsService::class)->has('data_share.mirror.supabase.access_token'))->toBeFalse();
+});
+
+it('forgets a saved Supabase token that expires while configuring a project', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    Http::fake([
+        'api.supabase.com/v1/organizations' => Http::response([
+            ['id' => 'org-id', 'slug' => 'acme-dev', 'name' => 'Acme Development'],
+        ]),
+        'api.supabase.com/v1/projects' => Http::response([
+            [
+                'ref' => 'abcdefghijklmnopqrst',
+                'name' => 'Existing Development',
+                'organization_slug' => 'acme-dev',
+                'region' => 'ap-southeast-1',
+                'status' => 'ACTIVE_HEALTHY',
+                'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
+            ],
+        ]),
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst' => Http::response([], 401),
+    ]);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->set('supabaseAccessToken', 'sbp_expires-during-setup')
+        ->call('discoverSupabase')
+        ->set('supabaseSetupChoice', 'existing')
+        ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->set('supabaseDatabasePassword', 'temporary password')
+        ->call('useExistingSupabaseProject')
+        ->assertHasErrors(['supabaseAccessToken'])
+        ->assertSet('supabaseAccessToken', '')
+        ->assertSet('supabaseDatabasePassword', '')
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->assertSee('The saved Supabase personal access token has expired or was revoked. Create a new token to continue.')
+        ->assertDontSee('sbp_expires-during-setup');
+
     expect(app(SettingsService::class)->has('data_share.mirror.supabase.access_token'))->toBeFalse()
-        ->and($encryptedSessionToken)->toBeString()->not->toContain('sbp_transient-token-do-not-store');
+        ->and(session()->has('data_share.mirror.supabase.setup_state'))->toBeFalse();
+});
+
+it('does not delete a newer Supabase token when an in-flight token expires', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    Http::fake(function (Request $request) {
+        if ($request->url() === 'https://api.supabase.com/v1/organizations') {
+            return Http::response([
+                ['id' => 'org-id', 'slug' => 'acme-dev', 'name' => 'Acme Development'],
+            ]);
+        }
+
+        if ($request->url() === 'https://api.supabase.com/v1/projects') {
+            return Http::response([
+                [
+                    'ref' => 'abcdefghijklmnopqrst',
+                    'name' => 'Existing Development',
+                    'organization_slug' => 'acme-dev',
+                    'region' => 'ap-southeast-1',
+                    'status' => 'ACTIVE_HEALTHY',
+                    'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
+                ],
+            ]);
+        }
+
+        if ($request->url() === 'https://api.supabase.com/v1/projects/abcdefghijklmnopqrst') {
+            app(SettingsService::class)->set(
+                'data_share.mirror.supabase.access_token',
+                'sbp_newer-token',
+                encrypted: true,
+            );
+
+            return Http::response([], 401);
+        }
+
+        return Http::response([], 404);
+    });
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->set('supabaseAccessToken', 'sbp_old-token')
+        ->call('discoverSupabase')
+        ->set('supabaseSetupChoice', 'existing')
+        ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->set('supabaseDatabasePassword', 'temporary password')
+        ->call('useExistingSupabaseProject')
+        ->assertHasErrors(['supabaseAccessToken'])
+        ->assertSee('The saved Supabase token changed during setup. Continue with the current saved token and try again.')
+        ->assertSet('supabaseDiscoveryComplete', false)
+        ->assertDontSee('sbp_old-token')
+        ->assertDontSee('sbp_newer-token');
+
+    expect(app(SettingsService::class)->get('data_share.mirror.supabase.access_token'))->toBe('sbp_newer-token');
 });
 
 it('turns Supabase authentication failures into a safe actionable field error', function (): void {
@@ -401,7 +826,8 @@ it('turns Supabase authentication failures into a safe actionable field error', 
         ->set('supabaseAccessToken', 'sbp_private-token')
         ->call('discoverSupabase')
         ->assertHasErrors(['supabaseAccessToken'])
-        ->assertSee('Supabase did not accept this access token. Create a new token and try again.')
+        ->assertSet('supabaseAccessToken', '')
+        ->assertSee('Supabase did not accept this personal access token. Create a new token in your Supabase account and try again.')
         ->assertDontSee('internal response')
         ->assertDontSee('sbp_private-token')
         ->assertSet('supabaseDiscoveryComplete', false);
@@ -436,9 +862,11 @@ it('configures and initializes an existing Supabase project without asking for i
             'status' => 'ACTIVE_HEALTHY',
             'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
         ]),
-        'api.supabase.com/v1/projects/abcdefghijklmnopqrst/config/database/pgbouncer' => Http::response([
-            'connection_string' => 'postgres://postgres.abcdefghijklmnopqrst:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
-        ]),
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst/config/database/pooler' => Http::response([[
+            'database_type' => 'PRIMARY',
+            'pool_mode' => 'transaction',
+            'connection_string' => 'postgres://postgres.abcdefghijklmnopqrst:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
+        ]]),
     ]);
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
@@ -565,7 +993,8 @@ it('creates a dedicated Supabase project with a generated password that never en
         ->assertSet('supabaseAccessToken', '')
         ->assertSet('values.data_share__mirror__url', '******')
         ->assertSee('Supabase connection saved')
-        ->assertSee('Finish setup')
+        ->assertSee('Check and prepare mirror')
+        ->assertDontSee('Finish setup')
         ->assertDontSee('sbp_create-project-token');
 
     expect($generatedPassword)->toBeString()->toHaveLength(48);
@@ -637,14 +1066,14 @@ it('preserves a generated project password when database preflight fails after S
         ->and($stored->getRawOriginal('value'))->not->toContain($generatedPassword);
 });
 
-it('tests a replacement URL before saving it encrypted and write-only', function (): void {
+it('tests and saves a replacement URL encrypted and write-only', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $candidateUrl = 'postgresql://mirror-user:new-secret@example.test:5432/postgres?sslmode=require';
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase', 'postgresql' => 'PostgreSQL']);
     $manager->shouldReceive('testConnection')
-        ->twice()
+        ->once()
         ->with($candidateUrl, 'supabase')
         ->andReturn(new DataShareMirrorConnectionStatus(
             configured: true,
@@ -665,12 +1094,6 @@ it('tests a replacement URL before saving it encrypted and write-only', function
     $component = Livewire::test(DataShareSettingsPage::class)
         ->set('values.data_share__mirror__url', $candidateUrl)
         ->call('testMirrorConnection')
-        ->assertHasNoErrors();
-
-    expect($settings->has('data_share.mirror.url'))->toBeFalse();
-
-    $component
-        ->call('save')
         ->assertHasNoErrors()
         ->assertSet('values.data_share__mirror__url', '******')
         ->assertDontSee($candidateUrl);
@@ -688,7 +1111,7 @@ it('accepts a reachable empty provider so it can be saved and initialized', func
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase', 'postgresql' => 'PostgreSQL']);
     $manager->shouldReceive('testConnection')
-        ->twice()
+        ->once()
         ->with($candidateUrl, 'supabase')
         ->andReturn(new DataShareMirrorConnectionStatus(
             configured: true,
@@ -713,8 +1136,6 @@ it('accepts a reachable empty provider so it can be saved and initialized', func
     Livewire::test(DataShareSettingsPage::class)
         ->set('values.data_share__mirror__url', $candidateUrl)
         ->call('testMirrorConnection')
-        ->assertHasNoErrors()
-        ->call('save')
         ->assertHasNoErrors()
         ->assertSet('values.data_share__mirror__url', '******');
 

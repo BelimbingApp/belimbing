@@ -31,6 +31,7 @@ return [
     'mirror' => [
         'temp_path' => storage_path('app/private/data-share/mirror'),
         'timeout_seconds' => 3600,
+        'catalog_cache_seconds' => 300,
         'lock_timeout_ms' => 30000,
         'executables' => [
             'pg_dump' => env('DATA_SHARE_MIRROR_PG_DUMP'),

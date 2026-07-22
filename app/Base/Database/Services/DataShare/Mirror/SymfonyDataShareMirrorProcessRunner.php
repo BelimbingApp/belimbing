@@ -22,13 +22,10 @@ final class SymfonyDataShareMirrorProcessRunner implements DataShareMirrorProces
             return $configured;
         }
 
-        $discovered = (new ExecutableFinder)->find($executable);
-        if ($discovered !== null) {
-            return $discovered;
-        }
-
         $suffix = DIRECTORY_SEPARATOR.$executable.(PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
-        $patterns = [];
+        $patterns = PHP_OS_FAMILY === 'Linux'
+            ? ['/usr/lib/postgresql/*/bin'.$suffix]
+            : [];
         $localAppData = getenv('LOCALAPPDATA');
         if (is_string($localAppData) && $localAppData !== '') {
             $patterns[] = $localAppData.DIRECTORY_SEPARATOR.'Belimbing'.DIRECTORY_SEPARATOR.'PostgreSQL'.DIRECTORY_SEPARATOR.'*'.DIRECTORY_SEPARATOR.'pgsql'.DIRECTORY_SEPARATOR.'bin'.$suffix;
@@ -46,7 +43,7 @@ final class SymfonyDataShareMirrorProcessRunner implements DataShareMirrorProces
 
         usort($candidates, static fn (string $left, string $right): int => strnatcasecmp($right, $left));
 
-        return $candidates[0] ?? null;
+        return $candidates[0] ?? (new ExecutableFinder)->find($executable);
     }
 
     public function run(array $command, array $environment = [], int $timeout = 30): DataShareMirrorProcessResult

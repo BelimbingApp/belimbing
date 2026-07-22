@@ -1,86 +1,47 @@
 import {
-    defineConfig
+    defineConfig,
+    loadEnv,
 } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from "@tailwindcss/vite";
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-// Vite is launched outside Laravel and does not auto-load .env, so we parse the
-// few values we need ourselves. Each instance (main, worktree) has its own
-// domain; don't derive from APP_ENV.
-let envFileContents = '';
-try {
-    envFileContents = readFileSync(resolve(__dirname, '.env'), 'utf8');
-} catch (e) {
-    if (e.code !== 'ENOENT') {
-        throw e;
-    }
-}
-
-function readEnv(key, fallback = '') {
-    if (process.env[key]) {
-        return process.env[key];
-    }
-    const match = new RegExp(`^${key}=(.+)$`, 'm').exec(envFileContents);
-    return match ? stripWrappingQuotes(match[1].trim()) : fallback;
-}
-
-function stripWrappingQuotes(value) {
-    const isDoubleQuoted = value.startsWith('"') && value.endsWith('"');
-    const isSingleQuoted = value.startsWith("'") && value.endsWith("'");
-
-    return isDoubleQuoted || isSingleQuoted ? value.slice(1, -1) : value;
-}
-
-function isEnvFlagEnabled(value) {
-    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
-}
-
-const frontendDomain = readEnv('FRONTEND_DOMAIN', 'local.blb.lara');
-const viteNoRefresh = isEnvFlagEnabled(readEnv('VITE_NO_REFRESH', ''));
 const bladeRefreshPaths = [
     'resources/core/views/**/*.blade.php',
     'app/Modules/*/*/Views/**/*.blade.php',
     'extensions/*/*/Views/**/*.blade.php',
 ];
 
-function suppressMarkdownReloads() {
+export default defineConfig(({ mode }) => {
+    const environment = loadEnv(mode, process.cwd(), '');
+    const hotReloadEnabled = ['1', 'true', 'yes', 'on'].includes(
+        (environment.VITE_HOT_RELOAD ?? 'false').trim().toLowerCase(),
+    );
+    const frontendDomain = environment.FRONTEND_DOMAIN || 'local.blb.lara';
+
     return {
-        name: 'blb-suppress-markdown-reloads',
-        handleHotUpdate(context) {
-            if (context.file.endsWith('.md')) {
-                return [];
-            }
+        plugins: [
+            laravel({
+                input: ['resources/app.css', 'resources/core/js/app.js'],
+                // Hot reload is opt-in because it can interrupt work in an open
+                // browser tab. Licensees choose it with VITE_HOT_RELOAD in .env.
+                refresh: hotReloadEnabled ? bladeRefreshPaths : false,
+            }),
+            tailwindcss(),
+        ],
+        server: {
+            host: '127.0.0.1',
+            port: Number.parseInt(environment.VITE_PORT || '5173'),
+            strictPort: true,
+            origin: `https://${frontendDomain}`,
+            hmr: hotReloadEnabled ? {
+                host: frontendDomain,
+                protocol: 'wss',
+                clientPort: 443,
+            } : false,
+            cors: true,
+            watch: {
+                ignored: ['**/*.md'],
+            },
         },
     };
-}
-
-export default defineConfig({
-    plugins: [
-        laravel({
-            input: ['resources/app.css', 'resources/core/js/app.js'],
-            // Set VITE_NO_REFRESH=1 in local .env to disable auto-reload on file
-            // changes (per-machine workaround for chokidar firing phantom mtime
-            // events — e.g. Defender/indexing churn on Windows).
-            refresh: viteNoRefresh ? false : bladeRefreshPaths,
-        }),
-        tailwindcss(),
-        suppressMarkdownReloads(),
-    ],
-    server: {
-        host: '127.0.0.1',
-        port: Number.parseInt(process.env.VITE_PORT || '5173'),
-        strictPort: true,
-        origin: `https://${frontendDomain}`,
-        hmr: viteNoRefresh ? false : {
-            host: frontendDomain,
-            protocol: 'wss',
-            clientPort: 443,
-        },
-        cors: true,
-        watch: {
-            ignored: ['**/*.md'],
-        },
-    },
 });

@@ -17,9 +17,15 @@
     $usesSentinelMask = $hasValue && ! $showRevealButton;
 
     $wireModel = null;
+    $wireMode = 'deferred';
     foreach (['wire:model.live', 'wire:model.blur', 'wire:model.defer', 'wire:model'] as $wireKey) {
         if ($inputAttributes->has($wireKey)) {
             $wireModel = (string) $inputAttributes->get($wireKey);
+            $wireMode = match ($wireKey) {
+                'wire:model.live' => 'live',
+                'wire:model.blur' => 'blur',
+                default => 'deferred',
+            };
             $inputAttributes = $inputAttributes->except($wireKey);
             break;
         }
@@ -56,6 +62,7 @@
         usesSentinel: @js($usesSentinelMask),
         showRevealButton: @js($showRevealButton),
         wireModel: @js($wireModel),
+        wireMode: @js($wireMode),
         focusSnapshot: '',
         pendingSecret: @js($initialSecret),
         didEdit: false,
@@ -67,7 +74,7 @@
             return this.pendingSecret !== null && this.pendingSecret !== '';
         },
         showRevealAffordance() {
-            return this.showRevealButton && this.hasRealSecret();
+            return this.showRevealButton;
         },
         syncInputValue() {
             this.hasInputValue = $refs.input.value.length > 0;
@@ -79,9 +86,16 @@
             $refs.input.value = value;
             this.syncInputValue();
         },
-        syncWire(value) {
+        clearSecret() {
+            this.pendingSecret = null;
+            this.didEdit = false;
+            this.reveal = false;
+            this.setDisplay('');
+            this.syncWire('');
+        },
+        syncWire(value, live = this.wireMode === 'live') {
             if (this.wireModel !== null) {
-                $wire.set(this.wireModel, value);
+                $wire.set(this.wireModel, value, live);
             }
         },
         lengthMask(secret) {
@@ -143,7 +157,7 @@
             if (! this.didEdit || value === this.focusSnapshot) {
                 const resting = this.restingState();
                 this.setDisplay(resting.display);
-                this.syncWire(resting.wire);
+                this.syncWire(resting.wire, this.wireMode === 'blur');
 
                 return;
             }
@@ -151,7 +165,7 @@
             if (value === '') {
                 this.pendingSecret = null;
                 this.setDisplay('');
-                this.syncWire('');
+                this.syncWire('', this.wireMode === 'blur');
 
                 return;
             }
@@ -161,13 +175,13 @@
             if (secret === '') {
                 this.pendingSecret = null;
                 this.setDisplay('');
-                this.syncWire('');
+                this.syncWire('', this.wireMode === 'blur');
 
                 return;
             }
 
             this.pendingSecret = secret;
-            this.syncWire(secret);
+            this.syncWire(secret, this.wireMode === 'blur');
             this.setDisplay(this.lengthMask(secret));
         },
         toggleReveal() {
@@ -189,6 +203,7 @@
 
         syncInputValue();
     })"
+    x-on:clear-secret-input.window="if ($event.detail.id === @js($id)) clearSecret()"
 >
     @if($label)
         <label for="{{ $id }}" class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
@@ -225,13 +240,15 @@
         @if($showRevealButton)
             <button
                 type="button"
-                class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-2xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+                class="absolute inset-y-0 right-0 inline-flex w-11 items-center justify-center rounded-r-2xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-default disabled:opacity-40"
                 x-show="showRevealAffordance()"
                 x-cloak
+                x-bind:disabled="! hasRealSecret()"
                 x-bind:class="reveal ? 'text-accent' : 'text-muted'"
                 x-bind:aria-label="reveal ? @js(__('Hide secret')) : @js(__('Show secret'))"
                 x-bind:aria-pressed="reveal.toString()"
-                @click="toggleReveal(); $el.blur()"
+                x-on:mousedown.prevent
+                x-on:click="toggleReveal()"
             >
                 <x-icon name="heroicon-o-eye" class="h-4 w-4" />
             </button>

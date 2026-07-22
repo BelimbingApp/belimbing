@@ -125,7 +125,7 @@ final class SupabaseMirrorManagementClient
             402 => SupabaseMirrorSetupException::billingRequired(),
             403, 404 => SupabaseMirrorSetupException::forbidden(),
             429 => SupabaseMirrorSetupException::rateLimited(),
-            default => SupabaseMirrorSetupException::unavailable(),
+            default => SupabaseMirrorSetupException::apiError($response->status()),
         };
     }
 
@@ -185,14 +185,24 @@ final class SupabaseMirrorManagementClient
         try {
             $payload = $this->request(
                 'GET',
-                '/projects/'.rawurlencode($projectRef).'/config/database/pgbouncer',
+                '/projects/'.rawurlencode($projectRef).'/config/database/pooler',
                 $accessToken,
             )->json();
-        } catch (SupabaseMirrorSetupException) {
+        } catch (SupabaseMirrorSetupException $exception) {
+            if ($exception->reasonCode === 'invalid_token') {
+                throw $exception;
+            }
+
             return null;
         }
 
-        $template = is_array($payload) ? trim((string) ($payload['connection_string'] ?? '')) : '';
+        $pooler = is_array($payload)
+            ? collect($payload)->first(fn (mixed $value): bool => is_array($value)
+                && ($value['database_type'] ?? '') === 'PRIMARY')
+            : null;
+        $template = is_array($pooler)
+            ? trim((string) ($pooler['connection_string'] ?? $pooler['connectionString'] ?? ''))
+            : '';
         if ($template === '') {
             return null;
         }
@@ -204,13 +214,16 @@ final class SupabaseMirrorManagementClient
         $port = is_array($parts) ? (int) ($parts['port'] ?? 5432) : 0;
 
         if ($host === ''
-            || ! str_ends_with($host, '.supabase.com')
-            || ! str_starts_with($user, 'postgres')
-            || $port !== 5432) {
+            || ! str_ends_with($host, '.pooler.supabase.com')
+            || $user !== 'postgres.'.$projectRef
+            || ! in_array($port, [5432, 6543], true)) {
             return null;
         }
 
-        return $this->postgresUrl($user, $databasePassword, $host, $port);
+        // Supabase's Management API currently returns the shared pooler's
+        // transaction URL on 6543. The same host uses 5432 for session mode,
+        // which supports persistent clients and PostgreSQL tooling on IPv4.
+        return $this->postgresUrl($user, $databasePassword, $host, 5432);
     }
 
     /** @param array{ref: string, database_host: string} $project */

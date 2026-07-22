@@ -29,9 +29,9 @@ class DataShareMirrorReviewer
             throw DataShareMirrorException::invalidSelection(__('Unknown or unregistered mirror table: :table.', ['table' => $unknown[0]]));
         }
 
+        $portable = $this->connections->status()->transferMode === 'portable';
         $source = $this->connections->source($direction)->connection;
         $target = $this->connections->target($direction)->connection;
-        $portable = $this->connections->status()->transferMode === 'portable';
         $sourceForeignKeys = $this->dependencies->foreignKeys($source);
         $targetForeignKeys = $this->dependencies->foreignKeys($target);
         $targetUniqueKeys = $this->dependencies->uniqueKeys($target);

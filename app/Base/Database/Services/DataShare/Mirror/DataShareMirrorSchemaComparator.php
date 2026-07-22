@@ -20,6 +20,7 @@ class DataShareMirrorSchemaComparator
             'type' => $this->portableType((string) ($column['type'] ?? $column['type_name'] ?? '')),
             'nullable' => (bool) ($column['nullable'] ?? false),
         ], $schema->getColumns($table));
+        usort($columns, fn (array $left, array $right): int => strcmp($left['name'], $right['name']));
         $indexes = array_map(fn (array $index): array => [
             'columns' => array_values($index['columns']),
             'unique' => (bool) ($index['unique'] ?? false),
