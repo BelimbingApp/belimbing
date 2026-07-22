@@ -5,6 +5,7 @@ namespace App\Base\AI;
 use App\Base\AI\Console\Commands\AiCatalogSyncCommand;
 use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\Providers\Help\ProviderHelpRegistry;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\DocumentTextExtractor;
 use App\Base\AI\Services\GithubCopilotAuthService;
 use App\Base\AI\Services\KnowledgeNavigator;
@@ -52,12 +53,10 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(WebFetchService::class);
         $this->app->singleton(PdfToTextRunner::class);
         $this->app->singleton(PdfTextExtractor::class, function ($app): PdfTextExtractor {
-            $configuredBinary = $app['config']->get('ai.tools.document_analysis.pdftotext_path');
-
             return new PdfTextExtractor(
                 $app->make(ExecutableLocator::class),
                 $app->make(PdfToTextRunner::class),
-                is_string($configuredBinary) ? $configuredBinary : null,
+                runtimeSettings: $app->make(AiRuntimeSettings::class),
             );
         });
         $this->app->singleton(DocumentTextExtractor::class);

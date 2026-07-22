@@ -8,6 +8,7 @@ use Illuminate\Support\Number;
 /** @var array<string, mixed>|null $runView */
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
+/** @var bool $canManageRuntimeGuardrails */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 ?>
 <div>
@@ -15,7 +16,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
     <x-ui.page-header
         :title="__('Operator Control Plane')"
-        :subtitle="__('Inspect runs end-to-end via the Wire Log card, review health signals, and manage AI lifecycle operations from one operator surface.')"
+        :subtitle="__('Inspect runs end-to-end, review health signals, and manage AI runtime guardrails and lifecycle operations from one operator surface.')"
     >
         <x-slot name="actions">
             @if ($operationsBreadcrumb)
@@ -44,6 +45,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
         :tabs="[
             ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
             ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],
+            ['id' => 'runtime', 'label' => __('Runtime Guardrails'), 'icon' => 'heroicon-o-shield-check'],
             ['id' => 'lifecycle', 'label' => __('Lifecycle Controls'), 'icon' => 'heroicon-o-arrow-path'],
         ]"
         :default="$activeTab"
@@ -224,6 +226,63 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
 
                     </x-ui.table>
+                </x-ui.card>
+            </div>
+        </x-ui.tab>
+
+        <x-ui.tab id="runtime">
+            <div class="space-y-section-gap">
+                <x-ui.card>
+                    <div class="max-w-3xl space-y-5">
+                        <div>
+                            <h3 class="text-sm font-medium tracking-tight text-ink">{{ __('Agent tool loop') }}</h3>
+                            <p class="mt-1 text-sm leading-6 text-muted">
+                                {{ __('Cap the number of completed tool-calling rounds in one agent turn. The model still receives one final response round after reaching the limit, but it cannot invoke more tools.') }}
+                            </p>
+                        </div>
+
+                        <form wire:submit="saveRuntimeGuardrails" class="space-y-4">
+                            <x-ui.input
+                                id="runtime-max-tool-iterations"
+                                wire:model="maxToolIterations"
+                                type="number"
+                                inputmode="numeric"
+                                min="1"
+                                max="500"
+                                :label="__('Maximum tool rounds per turn')"
+                                :help="__('One round may contain several parallel tool calls. The shipped default is 100; higher limits permit longer work but can also increase run time and provider cost when a model loops.')"
+                                :error="$errors->first('maxToolIterations')"
+                                :disabled="! $canManageRuntimeGuardrails"
+                            />
+
+                            @if ($canManageRuntimeGuardrails)
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <x-ui.button
+                                        type="submit"
+                                        variant="primary"
+                                        wire:loading.attr="disabled"
+                                        wire:target="saveRuntimeGuardrails"
+                                    >
+                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                        {{ __('Save Guardrails') }}
+                                    </x-ui.button>
+                                    <x-ui.button
+                                        type="button"
+                                        variant="secondary"
+                                        wire:click="restoreRuntimeGuardrailDefaults"
+                                        wire:loading.attr="disabled"
+                                        wire:target="restoreRuntimeGuardrailDefaults"
+                                    >
+                                        {{ __('Restore Default') }}
+                                    </x-ui.button>
+                                </div>
+                            @else
+                                <x-ui.alert variant="info">
+                                    {{ __('You can review this guardrail, but changing global AI runtime settings requires Control Plane management access.') }}
+                                </x-ui.alert>
+                            @endif
+                        </form>
+                    </div>
                 </x-ui.card>
             </div>
         </x-ui.tab>

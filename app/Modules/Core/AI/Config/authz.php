@@ -112,6 +112,8 @@ $capabilities = array_values(array_unique([
     // Grants access to the operator-facing AI diagnostics surfaces:
     // the control plane itself plus standalone run drill-down pages.
     'admin.ai.control-plane.view',
+    // Grants write access to global runtime guardrails in the control plane.
+    'admin.ai.control-plane.manage',
 ]));
 
 return [
@@ -155,6 +157,7 @@ return [
                 'admin.ai.pricing-override.manage',
                 'admin.ai.tool.manage',
                 'admin.ai.control-plane.view',
+                'admin.ai.control-plane.manage',
             ],
         ],
         'messaging_reader' => [

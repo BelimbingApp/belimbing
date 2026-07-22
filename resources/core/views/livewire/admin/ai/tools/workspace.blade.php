@@ -39,7 +39,11 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
                 </div>
                 <div class="flex items-center gap-2 shrink-0">
                     <x-ui.badge :variant="$readiness->color()">{{ $readiness->label() }}</x-ui.badge>
-                    @if($lastVerified)
+                    @if($toolName === 'document_analysis' && $documentExtractorCheck !== null)
+                        <x-ui.badge :variant="$documentExtractorCheck['success'] ? 'success' : 'warning'">
+                            {{ $documentExtractorCheck['success'] ? __('Extractor Available') : __('Extractor Missing') }}
+                        </x-ui.badge>
+                    @elseif($lastVerified)
                         <x-ui.badge :variant="$lastVerified['success'] ? 'success' : 'danger'">
                             {{ $lastVerified['success'] ? __('Verified') : __('Failed') }}
                         </x-ui.badge>
@@ -194,7 +198,15 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
                 {{-- Verification Status --}}
                 <x-ui.card>
                     <h3 class="text-base font-semibold text-ink mb-2">{{ __('Verification') }}</h3>
-                    @if($lastVerified)
+                    @if($toolName === 'document_analysis' && $documentExtractorCheck !== null)
+                        <div class="flex items-start gap-2">
+                            <x-icon
+                                :name="$documentExtractorCheck['success'] ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle'"
+                                class="mt-0.5 h-5 w-5 shrink-0 {{ $documentExtractorCheck['success'] ? 'text-status-success' : 'text-status-warning' }}"
+                            />
+                            <p class="text-sm leading-5 text-muted">{{ $documentExtractorCheck['message'] }}</p>
+                        </div>
+                    @elseif($lastVerified)
                         <div class="space-y-2">
                             <div class="flex items-center gap-2">
                                 @if($lastVerified['success'])
@@ -301,6 +313,30 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
                                 @endif
                             @endif
                         </form>
+
+                        @if($toolName === 'document_analysis' && $documentExtractorCheck !== null)
+                            <div class="mt-4 border-t border-border-default pt-4">
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div class="flex min-w-0 items-start gap-2">
+                                        <x-icon
+                                            :name="$documentExtractorCheck['success'] ? 'heroicon-o-check-circle' : 'heroicon-o-exclamation-triangle'"
+                                            class="mt-0.5 h-4 w-4 shrink-0 {{ $documentExtractorCheck['success'] ? 'text-status-success' : 'text-status-warning' }}"
+                                        />
+                                        <p class="text-xs leading-5 text-muted">{{ $documentExtractorCheck['message'] }}</p>
+                                    </div>
+                                    <x-ui.button
+                                        type="button"
+                                        variant="secondary"
+                                        size="sm"
+                                        wire:click="verifyDocumentExtractor"
+                                        wire:loading.attr="disabled"
+                                        wire:target="verifyDocumentExtractor"
+                                    >
+                                        {{ __('Check Again') }}
+                                    </x-ui.button>
+                                </div>
+                            </div>
+                        @endif
                     </x-ui.card>
                 @endif
 

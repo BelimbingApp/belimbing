@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Contracts\Tool;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Modules\Core\AI\DTO\ToolConfigField;
 use App\Modules\Core\AI\DTO\ToolMetadata;
 
@@ -142,6 +144,14 @@ class ToolMetadataRegistry
                     label: 'Chromium Path',
                     type: 'text',
                     help: 'Path to the Chromium executable. Leave empty for auto-detection.',
+                ),
+            ],
+            'document_analysis' => [
+                new ToolConfigField(
+                    key: AiRuntimeSettings::PDFTOTEXT_PATH_KEY,
+                    label: 'pdftotext executable',
+                    type: 'text',
+                    help: 'Absolute path to the Poppler pdftotext executable. Leave empty to detect it from PATH.',
                 ),
             ],
             default => [],

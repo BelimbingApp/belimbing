@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Concerns;
 
 use App\Modules\Core\AI\DTO\ControlPlane\HealthSnapshot;
@@ -11,7 +12,7 @@ trait MapsControlPlaneState
 {
     private function resolveTab(string $tab): string
     {
-        return in_array($tab, ['inspector', 'health', 'lifecycle'], true)
+        return in_array($tab, ['inspector', 'health', 'runtime', 'lifecycle'], true)
             ? $tab
             : 'inspector';
     }

@@ -8,6 +8,7 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Support\Json as BlbJson;
@@ -55,6 +56,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         private readonly RuntimeSessionContext $sessionContext,
         private readonly WireLogger $wireLogger,
         private readonly AgenticExecutionControlResolver $executionControls,
+        private readonly AiRuntimeSettings $runtimeSettings,
     ) {}
 
     /**
@@ -1554,7 +1556,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
     private function maxToolIterations(ExecutionPolicy $policy): int
     {
-        return max(0, $policy->maxToolIterations ?? (int) config('ai.llm.agentic.max_tool_iterations', 24));
+        return max(0, $policy->maxToolIterations ?? $this->runtimeSettings->maxToolIterations());
     }
 
     private function executionBudgetError(): AiRuntimeError

@@ -1,12 +1,17 @@
 <?php
+
 //
 // Per-tool Workspace — overview, setup configuration, Try It console, and verification.
 
 namespace App\Modules\Core\AI\Livewire\Tools;
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\WebSearchService;
 use App\Base\AI\Tools\ToolResult;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Support\ExecutableLocator;
 use App\Base\Support\Str as BlbStr;
 use App\Modules\Core\AI\Enums\ToolReadiness;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -45,6 +50,9 @@ class Workspace extends Component
     /** @var string|null Error message when saving verification status (e.g. DB schema mismatch) */
     public ?string $verificationError = null;
 
+    /** @var array{success: bool, message: string}|null */
+    public ?array $documentExtractorCheck = null;
+
     // ── Web Search provider management ──────────────────────────────
 
     /** @var list<array{name: string, api_key: string, has_key: bool, key_preview: string, enabled: bool}> */
@@ -54,6 +62,10 @@ class Workspace extends Component
     {
         $this->loadConfigValues();
         $this->loadWebSearchProviders();
+
+        if ($this->toolName === 'document_analysis') {
+            $this->checkDocumentExtractor(persistVerification: false);
+        }
     }
 
     /**
@@ -63,6 +75,8 @@ class Workspace extends Component
      */
     public function saveConfig(): void
     {
+        $this->authorizeToolManagement();
+
         $settings = app(SettingsService::class);
         $metadata = app(ToolMetadataRegistry::class)->get($this->toolName);
 
@@ -110,6 +124,21 @@ class Workspace extends Component
         $this->clearTryItResult();
         $this->loadConfigValues();
         $this->loadWebSearchProviders();
+
+        if ($this->toolName === 'document_analysis') {
+            $this->checkDocumentExtractor(persistVerification: true);
+        }
+    }
+
+    public function verifyDocumentExtractor(): void
+    {
+        $this->authorizeToolManagement();
+
+        if ($this->toolName !== 'document_analysis') {
+            return;
+        }
+
+        $this->checkDocumentExtractor(persistVerification: true);
     }
 
     /**
@@ -490,5 +519,38 @@ class Workspace extends Component
             'at' => $at,
             'success' => (bool) $settings->get("ai.tools.{$this->toolName}.last_verified_success", false),
         ];
+    }
+
+    private function checkDocumentExtractor(bool $persistVerification): void
+    {
+        $this->verificationError = null;
+
+        $resolved = app(ExecutableLocator::class)->find(
+            app(AiRuntimeSettings::class)->pdfToTextCandidates(),
+        );
+        $success = is_string($resolved) && $resolved !== '';
+
+        $this->documentExtractorCheck = [
+            'success' => $success,
+            'message' => $success
+                ? __('pdftotext is available to the document extraction tool.')
+                : __('pdftotext was not found. Enter its absolute path or add it to the application PATH.'),
+        ];
+
+        if ($persistVerification) {
+            $this->storeVerification(! $success);
+        }
+    }
+
+    private function authorizeToolManagement(): void
+    {
+        $user = auth()->user();
+
+        abort_if($user === null, 403);
+
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser($user),
+            'admin.ai.tool.manage',
+        );
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Database\Livewire\Residue\Index as ResidueIndex;
 use App\Base\Foundation\Services\DomainResidueScanner;
 use App\Base\Settings\Models\Setting;
@@ -93,6 +94,26 @@ it('does not flag runtime-claimed settings as residue', function (): void {
 
     expect($orphanKeys)->not->toContain('commerce.marketplace.ebay.orders_synced_through');
 })->skip(fn (): bool => ! is_dir(app_path('Modules/Commerce')), 'Commerce domain not installed');
+
+it('does not flag AI runtime and tool settings as residue', function (): void {
+    foreach ([
+        AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY => 100,
+        AiRuntimeSettings::PDFTOTEXT_PATH_KEY => 'C:\\Poppler\\pdftotext.exe',
+    ] as $key => $value) {
+        Setting::query()->create([
+            'key' => $key,
+            'value' => $value,
+            'scope_type' => null,
+            'scope_id' => null,
+        ]);
+    }
+
+    $orphanKeys = array_column(app(DomainResidueScanner::class)->scan()['orphanSettings'], 'key');
+
+    expect($orphanKeys)
+        ->not->toContain(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY)
+        ->not->toContain(AiRuntimeSettings::PDFTOTEXT_PATH_KEY);
+});
 
 it('drops selected orphan tables and prunes their ledger rows after typed confirmation', function (): void {
     $this->actingAs(createAdminUser());

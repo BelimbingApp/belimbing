@@ -6,9 +6,11 @@ use App\Base\AI\Contracts\Tool;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -142,6 +144,7 @@ trait MakesRuntimeResponses
         ?ConfigResolver $configResolver = null,
         ?AgentToolRegistry $toolRegistry = null,
         ?RunRecorder $runRecorder = null,
+        ?AiRuntimeSettings $runtimeSettings = null,
     ): AgenticRuntime {
         $runRecorder ??= \Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
         $responseFactory = new RuntimeResponseFactory;
@@ -164,7 +167,23 @@ trait MakesRuntimeResponses
             app(RuntimeSessionContext::class),
             \Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
             app(AgenticExecutionControlResolver::class),
+            $runtimeSettings ?? $this->makeAiRuntimeSettings(),
         );
+    }
+
+    protected function makeAiRuntimeSettings(?int $maxToolIterations = null): AiRuntimeSettings
+    {
+        $settings = \Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')
+            ->andReturnUsing(function (string $key, mixed $default = null) use ($maxToolIterations): mixed {
+                if ($key === AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY && $maxToolIterations !== null) {
+                    return $maxToolIterations;
+                }
+
+                return config($key, $default);
+            });
+
+        return new AiRuntimeSettings($settings);
     }
 
     protected function makeToolCallResponse(string $callId, string $toolName, string $arguments): array

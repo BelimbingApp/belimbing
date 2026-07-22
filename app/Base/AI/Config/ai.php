@@ -54,7 +54,7 @@ return [
     */
     'llm' => [
         'agentic' => [
-            'max_tool_iterations' => (int) env('AI_AGENTIC_MAX_TOOL_ITERATIONS', 24),
+            'max_tool_iterations' => (int) env('AI_AGENTIC_MAX_TOOL_ITERATIONS', 100),
         ],
         'execution_controls' => [
             'limits' => [

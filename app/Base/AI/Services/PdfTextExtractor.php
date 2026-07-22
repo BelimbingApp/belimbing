@@ -15,6 +15,7 @@ class PdfTextExtractor
         private readonly ExecutableLocator $executableLocator,
         private readonly PdfToTextRunner $runner,
         private readonly ?string $configuredBinary = null,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     /**
@@ -82,6 +83,10 @@ class PdfTextExtractor
      */
     private function binaryCandidates(): array
     {
+        if ($this->runtimeSettings !== null) {
+            return $this->runtimeSettings->pdfToTextCandidates();
+        }
+
         $candidates = [];
 
         if (is_string($this->configuredBinary) && trim($this->configuredBinary) !== '') {

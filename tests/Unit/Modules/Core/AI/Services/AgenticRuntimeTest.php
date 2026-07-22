@@ -7,6 +7,7 @@ use App\Base\AI\DTO\ProviderRequestMapping;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Tools\ToolResult;
 use App\Modules\Core\AI\DTO\ExecutionPolicy;
@@ -249,9 +250,15 @@ function runAgenticConversation(
     string $systemPrompt = 'Prompt',
     ?ExecutionPolicy $policy = null,
     ?array $allowedToolNames = null,
+    ?AiRuntimeSettings $runtimeSettings = null,
 ): array {
     return test()
-        ->makeAgenticRuntime($llmClient, $configResolver ?? defaultAgenticConfigResolver(), $toolRegistry)
+        ->makeAgenticRuntime(
+            $llmClient,
+            $configResolver ?? defaultAgenticConfigResolver(),
+            $toolRegistry,
+            runtimeSettings: $runtimeSettings,
+        )
         ->run([test()->makeMessage('user', $userMessage)], 1, (string) Str::ulid(), $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
@@ -260,8 +267,6 @@ function runToolLoopLimitScenario(
     string $callId,
     ?ExecutionPolicy $policy = null,
 ): array {
-    config()->set('ai.llm.agentic.max_tool_iterations', $globalLimit);
-
     $llmClient = Mockery::mock(LlmClient::class);
     $llmClient->shouldReceive('chat')
         ->times(3)
@@ -273,6 +278,7 @@ function runToolLoopLimitScenario(
         userMessage: 'Loop forever',
         systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
         policy: $policy,
+        runtimeSettings: test()->makeAiRuntimeSettings($globalLimit),
     );
 }
 
@@ -344,6 +350,7 @@ describe('AgenticRuntime (sync)', function () {
             app(RuntimeSessionContext::class),
             $wireLogger,
             app(AgenticExecutionControlResolver::class),
+            $this->makeAiRuntimeSettings(),
         );
 
         $result = $runtime->run(
@@ -540,6 +547,7 @@ describe('AgenticRuntime (sync tool loop)', function () {
                 app(RuntimeSessionContext::class),
                 Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
                 app(AgenticExecutionControlResolver::class),
+                $this->makeAiRuntimeSettings(),
             );
 
             $result = $runtime->run(

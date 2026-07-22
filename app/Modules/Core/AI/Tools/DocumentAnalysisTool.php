@@ -111,7 +111,7 @@ class DocumentAnalysisTool extends AbstractTool
     {
         return [
             'Outbound access to the public document URL',
-            'A current Poppler pdftotext binary on PATH or configured with AI_PDFTOTEXT_PATH for PDF documents',
+            'A current Poppler pdftotext binary on PATH or configured in this tool workspace for PDF documents',
         ];
     }
 
@@ -175,7 +175,7 @@ class DocumentAnalysisTool extends AbstractTool
                     code: $result->errorCode,
                     message: $result->errorMessage ?? 'PDF text extraction is unavailable.',
                     hint: 'Install a current Poppler pdftotext on the application host and put it on PATH, '
-                        .'or set AI_PDFTOTEXT_PATH to its executable.',
+                        .'or configure its executable under Administration > AI > Tools > Document Text Extraction.',
                 );
             }
 

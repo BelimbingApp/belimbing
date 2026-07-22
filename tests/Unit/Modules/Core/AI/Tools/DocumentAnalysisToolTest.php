@@ -199,7 +199,7 @@ describe('extracted content boundary', function () {
 
         expect($missingResult->errorPayload?->code)
             ->toBe('pdf_extractor_unavailable')
-            ->and($missingResult->errorPayload?->hint)->toContain('AI_PDFTOTEXT_PATH')
+            ->and($missingResult->errorPayload?->hint)->toContain('Administration > AI > Tools > Document Text Extraction')
             ->and($oversized->execute(['url' => DOCUMENT_EXTRACTION_URL])->errorPayload?->code)
             ->toBe('response_too_large');
     });

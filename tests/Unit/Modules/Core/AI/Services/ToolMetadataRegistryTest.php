@@ -62,6 +62,14 @@ it('provides complete metadata for each tool', function () {
     }
 });
 
+it('exposes pdftotext configuration on the document extraction workspace', function () {
+    $metadata = app(ToolMetadataRegistry::class)->get('document_analysis');
+
+    expect($metadata?->configFields)->toHaveCount(1)
+        ->and($metadata?->configFields[0]->key)->toBe('ai.tools.document_analysis.pdftotext_path')
+        ->and($metadata?->configFields[0]->label)->toBe('pdftotext executable');
+});
+
 it('allows registering custom tool metadata', function () {
     $registry = app(ToolMetadataRegistry::class);
 

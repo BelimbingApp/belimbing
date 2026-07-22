@@ -5,6 +5,11 @@
 
 namespace App\Modules\Core\AI\Livewire;
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\DTO\ControlPlane\HealthSnapshot;
 use App\Modules\Core\AI\DTO\ControlPlane\LifecycleRequest as LifecycleRequestDTO;
 use App\Modules\Core\AI\Enums\LifecycleAction;
@@ -23,9 +28,12 @@ use Livewire\WithPagination;
 
 class ControlPlane extends Component
 {
+    use InteractsWithNotifications;
     use ManagesWireLogWindow;
     use MapsControlPlaneState;
     use WithPagination;
+
+    private const int MAX_CONFIGURABLE_TOOL_ITERATIONS = 500;
 
     public string $activeTab = 'inspector';
 
@@ -64,6 +72,8 @@ class ControlPlane extends Component
 
     public string $lifecycleSessionId = '';
 
+    public string $maxToolIterations = (string) AiRuntimeSettings::DEFAULT_MAX_TOOL_ITERATIONS;
+
     /** @var array<string, mixed>|null */
     public ?array $lifecyclePreview = null;
 
@@ -75,12 +85,13 @@ class ControlPlane extends Component
     /** @var list<array<string, mixed>> */
     public array $recentLifecycleRequests = [];
 
-    public function mount(): void
+    public function mount(AiRuntimeSettings $runtimeSettings): void
     {
         $this->activeTab = $this->resolveTab((string) request()->query('tab', 'inspector'));
         $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
+        $this->maxToolIterations = (string) $runtimeSettings->maxToolIterations();
 
         $this->loadAgentOptions();
         $this->refreshInspectorLists();
@@ -267,6 +278,39 @@ class ControlPlane extends Component
         );
     }
 
+    public function saveRuntimeGuardrails(SettingsService $settings): void
+    {
+        $this->authorizeRuntimeGuardrailManagement();
+
+        $validated = $this->validate([
+            'maxToolIterations' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:'.self::MAX_CONFIGURABLE_TOOL_ITERATIONS,
+            ],
+        ]);
+
+        $value = (int) $validated['maxToolIterations'];
+
+        $settings->set(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY, $value);
+        $this->maxToolIterations = (string) $value;
+        $this->resetValidation('maxToolIterations');
+        $this->notify(__('Runtime guardrails saved.'));
+    }
+
+    public function restoreRuntimeGuardrailDefaults(
+        SettingsService $settings,
+        AiRuntimeSettings $runtimeSettings,
+    ): void {
+        $this->authorizeRuntimeGuardrailManagement();
+
+        $settings->forget(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY);
+        $this->maxToolIterations = (string) $runtimeSettings->maxToolIterations();
+        $this->resetValidation('maxToolIterations');
+        $this->notify(__('Runtime guardrails restored to their configured defaults.'));
+    }
+
     public function render(): View
     {
         $diagnostics = app(RunDiagnosticService::class);
@@ -285,12 +329,34 @@ class ControlPlane extends Component
 
         return view('livewire.admin.ai.control-plane', [
             'activeTab' => $this->activeTab,
+            'canManageRuntimeGuardrails' => $this->canManageRuntimeGuardrails(),
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
         ]);
+    }
+
+    private function canManageRuntimeGuardrails(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && app(AuthorizationService::class)
+            ->can(Actor::forUser($user), 'admin.ai.control-plane.manage')
+            ->allowed;
+    }
+
+    private function authorizeRuntimeGuardrailManagement(): void
+    {
+        $user = auth()->user();
+
+        abort_if($user === null, 403);
+
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser($user),
+            'admin.ai.control-plane.manage',
+        );
     }
 
     private function loadAgentOptions(): void
