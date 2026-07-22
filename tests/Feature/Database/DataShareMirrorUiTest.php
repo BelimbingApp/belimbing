@@ -13,6 +13,7 @@ use App\Base\Database\Livewire\DataShare\Index as DataShareIndex;
 use App\Base\Database\Livewire\DataShare\Settings as DataShareSettingsPage;
 use App\Base\Database\Services\DataShare\DataShareScopeCatalog;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
+use App\Base\Database\Services\DataShare\Mirror\SupabaseMirrorSetupService;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
 use App\Modules\Core\Company\Models\Company;
@@ -923,6 +924,115 @@ it('configures and initializes an existing Supabase project without asking for i
         ->and($settings->get('data_share.mirror.supabase.project_name'))->toBe('Existing Development');
 
     Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), $databasePassword));
+});
+
+function seedSavedSupabaseMirrorConnection(): void
+{
+    $settings = app(SettingsService::class);
+    $settings->set(SupabaseMirrorSetupService::ACCESS_TOKEN_SETTING, 'sbp_saved-token', encrypted: true);
+    $settings->set(SupabaseMirrorSetupService::PROJECT_REF_SETTING, 'abcdefghijklmnopqrst');
+    $settings->set(SupabaseMirrorSetupService::PROJECT_NAME_SETTING, 'Existing Development');
+    $settings->set('data_share.mirror.provider', 'supabase');
+    $settings->set(
+        'data_share.mirror.url',
+        'postgres://postgres.abcdefghijklmnopqrst:old@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
+        encrypted: true,
+    );
+}
+
+function fakeSupabaseSavedProjectLookup(): void
+{
+    Http::fake([
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst' => Http::response([
+            'ref' => 'abcdefghijklmnopqrst',
+            'name' => 'Existing Development',
+            'organization_slug' => 'acme-dev',
+            'region' => 'ap-southeast-1',
+            'status' => 'ACTIVE_HEALTHY',
+            'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
+        ]),
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst/config/database/pooler' => Http::response([[
+            'database_type' => 'PRIMARY',
+            'pool_mode' => 'transaction',
+            'connection_string' => 'postgres://postgres.abcdefghijklmnopqrst:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
+        ]]),
+    ]);
+}
+
+it('updates the Supabase database password inline using the saved project without re-discovery', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    seedSavedSupabaseMirrorConnection();
+    fakeSupabaseSavedProjectLookup();
+
+    $newPassword = 'brand-new-db-password';
+    $manager = Mockery::mock(DataShareMirrorManager::class)->shouldIgnoreMissing();
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase', 'postgresql' => 'PostgreSQL']);
+    $manager->shouldReceive('testConnection')
+        ->withArgs(fn (string $url, string $provider): bool => $provider === 'supabase' && str_contains($url, rawurlencode($newPassword)))
+        ->andReturn(new DataShareMirrorConnectionStatus(
+            configured: true, available: true, reachable: true, driver: 'pgsql',
+            localRole: 'development', remoteRole: 'development', serverVersion: '17',
+            pgDumpVersion: null, psqlVersion: null, reasonCode: null, message: 'Ready.',
+            providerKey: 'supabase', providerLabel: 'Supabase', localDriver: 'sqlite', transferMode: 'portable',
+        ));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->assertSee('Supabase connection saved')
+        ->call('beginSupabasePasswordUpdate')
+        ->assertHasNoErrors()
+        ->assertSet('updatingSupabaseDatabasePassword', true)
+        ->set('supabaseDatabasePassword', $newPassword)
+        ->call('updateSupabaseDatabasePassword')
+        ->assertHasNoErrors()
+        ->assertSet('updatingSupabaseDatabasePassword', false)
+        ->assertSet('supabaseDatabasePassword', '')
+        ->assertDontSee($newPassword);
+
+    // The single project was fetched by ref; the list-all-projects discovery endpoint was never hit.
+    Http::assertNotSent(fn (Request $request): bool => $request->url() === 'https://api.supabase.com/v1/projects');
+    expect(app(SettingsService::class)->get('data_share.mirror.url'))->toContain('aws-0-ap-southeast-1.pooler.supabase.com');
+    Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), $newPassword));
+});
+
+it('keeps the inline password field open and its value when the update fails', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    seedSavedSupabaseMirrorConnection();
+    fakeSupabaseSavedProjectLookup();
+
+    $manager = Mockery::mock(DataShareMirrorManager::class)->shouldIgnoreMissing();
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase', 'postgresql' => 'PostgreSQL']);
+    $manager->shouldReceive('testConnection')->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true, available: false, reachable: false, driver: 'pgsql',
+        localRole: 'development', remoteRole: null, serverVersion: null,
+        pgDumpVersion: null, psqlVersion: null, reasonCode: 'connection_failed',
+        message: 'The mirror connection is unavailable.',
+        providerKey: 'supabase', providerLabel: 'Supabase', localDriver: 'sqlite', transferMode: 'portable',
+    ));
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->call('beginSupabasePasswordUpdate')
+        ->set('supabaseDatabasePassword', 'wrong-password')
+        ->call('updateSupabaseDatabasePassword')
+        ->assertHasErrors(['supabaseDatabasePassword'])
+        ->assertSet('updatingSupabaseDatabasePassword', true)
+        ->assertSet('supabaseDatabasePassword', 'wrong-password');
+});
+
+it('falls back to the full replacement flow when no Supabase token is saved', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $settings = app(SettingsService::class);
+    $settings->set(SupabaseMirrorSetupService::PROJECT_REF_SETTING, 'abcdefghijklmnopqrst');
+    $settings->set('data_share.mirror.url', 'postgres://x@host:5432/postgres', encrypted: true);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->call('beginSupabasePasswordUpdate')
+        ->assertSet('updatingSupabaseDatabasePassword', false)
+        ->assertSet('replaceSavedSupabaseConnection', true);
 });
 
 it('creates a dedicated Supabase project with a generated password that never enters browser state', function (): void {

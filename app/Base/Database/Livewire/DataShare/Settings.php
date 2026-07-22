@@ -55,6 +55,8 @@ class Settings extends SettingsForm
 
     public string $supabaseManualDatabasePassword = '';
 
+    public bool $updatingSupabaseDatabasePassword = false;
+
     public function mount(SettingsService $settings): void
     {
         parent::mount($settings);
@@ -276,6 +278,74 @@ class Settings extends SettingsForm
         $this->requireCapability('admin.system.data-share-settings.manage');
         $this->replaceSavedSupabaseConnection = false;
         $this->resetSupabaseDiscovery();
+    }
+
+    /**
+     * Reveal the inline "new database password" field on the saved-connection
+     * card. Because the project ref and access token are already saved, a
+     * password change never needs the project-discovery round trip; it only
+     * needs the new password. When either is missing we fall back to the full
+     * replacement flow so the operator can paste a token and pick the project.
+     */
+    public function beginSupabasePasswordUpdate(): void
+    {
+        $this->requireCapability('admin.system.data-share-settings.manage');
+
+        if (! $this->hasSavedSupabaseAccessToken || $this->savedSupabaseProject === null) {
+            $this->startSupabaseReplacement();
+
+            return;
+        }
+
+        $this->updatingSupabaseDatabasePassword = true;
+        $this->supabaseDatabasePassword = '';
+        $this->resetValidation('supabaseDatabasePassword');
+        $this->dispatch('clear-secret-input', id: 'supabase-update-database-password');
+    }
+
+    public function cancelSupabasePasswordUpdate(): void
+    {
+        $this->updatingSupabaseDatabasePassword = false;
+        $this->supabaseDatabasePassword = '';
+        $this->resetValidation('supabaseDatabasePassword');
+        $this->dispatch('clear-secret-input', id: 'supabase-update-database-password');
+    }
+
+    public function updateSupabaseDatabasePassword(SupabaseMirrorSetupService $setup): void
+    {
+        $this->requireCapability('admin.system.data-share-settings.manage');
+
+        $savedProject = $this->savedSupabaseProject;
+        if ($savedProject === null) {
+            $this->failProperty('supabaseDatabasePassword', __('No saved Supabase project was found. Reconnect the mirror instead.'));
+        }
+
+        $validated = $this->validate([
+            'supabaseDatabasePassword' => ['required', 'string', 'max:512'],
+        ]);
+        $databasePassword = $validated['supabaseDatabasePassword'];
+        $accessToken = $this->supabaseSetupAccessToken();
+
+        try {
+            $status = $setup->useExistingProject($accessToken, $savedProject['ref'], $databasePassword);
+        } catch (SupabaseMirrorSetupException $exception) {
+            if ($exception->reasonCode === 'invalid_token') {
+                $this->failExpiredSupabaseAccessToken($setup, $accessToken);
+            }
+
+            $this->failProperty('supabaseDatabasePassword', $exception->getMessage());
+        } catch (DataShareMirrorException $exception) {
+            $this->failProperty('supabaseDatabasePassword', $exception->getMessage());
+        } catch (Throwable $exception) {
+            $this->failProperty('supabaseDatabasePassword', DataShareMirrorException::unexpected('supabase_connect', $exception)->getMessage());
+        }
+
+        // Success only: failProperty throws (: never), so on failure the inline
+        // field stays open with the error and the typed password preserved.
+        $this->updatingSupabaseDatabasePassword = false;
+        $this->supabaseDatabasePassword = '';
+        $this->dispatch('clear-secret-input', id: 'supabase-update-database-password');
+        $this->completeSupabaseSetupAction($status);
     }
 
     public function createSupabaseMirror(SupabaseMirrorSetupService $setup): void

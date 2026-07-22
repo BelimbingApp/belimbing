@@ -87,7 +87,8 @@ $savedProject = $this->savedSupabaseProject;
                         type="button"
                         variant="ghost"
                         size="sm"
-                        wire:click="startSupabaseReplacement"
+                        wire:click="beginSupabasePasswordUpdate"
+                        :disabled="$updatingSupabaseDatabasePassword"
                     >
                         {{ __('Update database password') }}
                     </x-ui.button>
@@ -105,6 +106,41 @@ $savedProject = $this->savedSupabaseProject;
 
                 @if ($errors->first('values.'.$urlFormKey))
                     <p class="text-sm text-status-danger">{{ $errors->first('values.'.$urlFormKey) }}</p>
+                @endif
+
+                @if ($updatingSupabaseDatabasePassword)
+                    <div class="max-w-xl space-y-3 border-t border-border-default pt-4">
+                        <p class="text-sm text-muted">
+                            {{ __('Enter the database password for :project. Belimbing verifies it against Supabase, then replaces the saved encrypted credential — the project stays the same, so there is nothing else to choose.', ['project' => $savedProject['name'] ?? __('this project')]) }}
+                        </p>
+                        <x-ui.secret-input
+                            id="supabase-update-database-password"
+                            wire:model="supabaseDatabasePassword"
+                            :label="__('Database password')"
+                            :placeholder="__('Enter the Supabase project database password')"
+                            :help="__('This is the password created with the Supabase project, not a personal access token or project API key.')"
+                            :error="$errors->first('supabaseDatabasePassword')"
+                            :show-reveal-button="true"
+                            autocomplete="new-password"
+                        />
+                        <div class="flex flex-wrap items-center gap-2">
+                            <x-ui.button
+                                type="button"
+                                variant="primary"
+                                size="sm"
+                                wire:click="updateSupabaseDatabasePassword"
+                                wire:loading.attr="disabled"
+                                wire:target="updateSupabaseDatabasePassword"
+                            >
+                                <x-icon name="heroicon-o-signal" class="h-4 w-4" />
+                                <span wire:loading.remove wire:target="updateSupabaseDatabasePassword">{{ __('Save new password') }}</span>
+                                <span wire:loading wire:target="updateSupabaseDatabasePassword">{{ __('Saving…') }}</span>
+                            </x-ui.button>
+                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="cancelSupabasePasswordUpdate">
+                                {{ __('Cancel') }}
+                            </x-ui.button>
+                        </div>
+                    </div>
                 @endif
             </section>
         @else
