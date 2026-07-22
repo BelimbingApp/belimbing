@@ -55,6 +55,49 @@ it('rejects PostgreSQL URL options outside the narrow connection policy', functi
     'nested allowed option' => 'postgresql://mirror_user:secret@example.test/database?sslmode%5B0%5D=require',
 ]);
 
+it('reports a missing PostgreSQL driver explicitly instead of a generic connection error', function (): void {
+    $manager = Mockery::mock(DataShareMirrorConnectionManager::class.'[availablePdoDrivers]', [
+        app(SettingsService::class),
+        app(DatabaseManager::class),
+        app(DataShareInstanceIdentityResolver::class),
+        app(DataShareMirrorProcessRunner::class),
+        app(DataShareMirrorProviderRegistry::class),
+    ])->shouldAllowMockingProtectedMethods();
+    $manager->shouldReceive('availablePdoDrivers')->andReturn(['sqlite']);
+
+    $status = $manager->testConnection('postgresql://mirror_user:secret@example.test/database?sslmode=require');
+
+    expect($status->reachable)->toBeFalse()
+        ->and($status->reasonCode)->toBe('driver_unloaded')
+        ->and($status->message)->toContain('pdo_pgsql')
+        ->and($status->message)->toContain('restart')
+        ->and($status->message)->not->toContain('unexpected database error');
+});
+
+it('surfaces the real DNS failure instead of masking it behind a reconnect error', function (): void {
+    // Regression: connectUsing() built the candidate connection without
+    // registering its config. Laravel classifies "could not translate host
+    // name" as a lost connection and retries via reconnect(), which then
+    // threw "Database connection [data_share_mirror_candidate] not
+    // configured" — replacing the actionable DNS error with the generic
+    // "unexpected database error" diagnostic (reference QJ1MS4EG, 2026-07-22).
+    app(SettingsService::class)->set('data_share.instance.id', 'mirror-backend-local');
+    app(SettingsService::class)->set('data_share.instance.name', 'Mirror Backend Local');
+    app(SettingsService::class)->set('data_share.instance.role', 'development');
+
+    $status = app(DataShareMirrorManager::class)->testConnection(
+        'postgresql://mirror_user:secret@blb-nonexistent-mirror-host.invalid:5432/postgres?sslmode=require',
+    );
+
+    expect($status->reachable)->toBeFalse()
+        ->and($status->reasonCode)->toBe('connection_failed')
+        ->and($status->message)->toContain('hostname could not be resolved')
+        ->and($status->message)->not->toContain('unexpected database error');
+})->skip(
+    fn (): bool => ! in_array('pgsql', PDO::getAvailableDrivers(), true),
+    'pdo_pgsql is not loaded in this test runner',
+);
+
 it('uses the already normalized PDO endpoint for PostgreSQL process tooling', function (): void {
     $connection = Mockery::mock(Connection::class);
     $connection->shouldReceive('getConfig')->once()->andReturn([

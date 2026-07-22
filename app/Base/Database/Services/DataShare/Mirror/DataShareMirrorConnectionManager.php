@@ -12,6 +12,7 @@ use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
+use PDO;
 use Throwable;
 
 class DataShareMirrorConnectionManager
@@ -207,6 +208,21 @@ class DataShareMirrorConnectionManager
             return $this->unavailable(true, false, 'unsupported_driver', __('This provider adapter requires PostgreSQL.'), $driver ?: null, provider: $provider);
         }
 
+        // Check the PDO driver before attempting a connection. Without this,
+        // a missing pdo_pgsql surfaces as PDOException "could not find driver"
+        // deep inside the connection attempt and reads like a database-side
+        // failure — it cost a long debugging detour before this check existed.
+        if (! in_array($driver, $this->availablePdoDrivers(), true)) {
+            return $this->unavailable(
+                true,
+                false,
+                'driver_unloaded',
+                __("PHP's PostgreSQL driver (pdo_pgsql) is not loaded in this server process. Enable it in the loaded php.ini, then restart the application server process — reloading workers cannot load extensions."),
+                $driver,
+                provider: $provider,
+            );
+        }
+
         $localRole = null;
         $localDriver = null;
 
@@ -233,7 +249,14 @@ class DataShareMirrorConnectionManager
 
         try {
             $this->database->purge($connectionName);
-            $remote = $this->database->connectUsing($connectionName, $config, true);
+            // Register the configuration instead of connectUsing(): connectUsing
+            // builds the connection without recording its config, so when Laravel
+            // classifies a connect failure as a lost connection and retries via
+            // reconnect(), the DatabaseManager cannot find the config and throws
+            // "Database connection [...] not configured" — masking the real
+            // failure (DNS, timeout) behind a generic diagnostic message.
+            config(["database.connections.{$connectionName}" => $config]);
+            $remote = $this->database->connection($connectionName);
             $remoteInfo = $this->serverInfo($remote);
 
             if ($localDriver === 'pgsql') {
@@ -433,14 +456,25 @@ class DataShareMirrorConnectionManager
         } finally {
             if ($purgeAfter) {
                 $this->database->purge($connectionName);
+                // Drop the candidate credential from the config repository; the
+                // persistent mirror connection keeps its config so mid-operation
+                // reconnects can rebuild it.
+                config(["database.connections.{$connectionName}" => null]);
             }
         }
+    }
+
+    /** @return list<string> */
+    protected function availablePdoDrivers(): array
+    {
+        return PDO::getAvailableDrivers();
     }
 
     private function connectionFailureMessage(DataShareMirrorProvider $provider, Throwable $exception, ?string $reference): string
     {
         $diagnostic = mb_strtolower($exception->getMessage());
         $message = match (true) {
+            str_contains($diagnostic, 'could not find driver') => __("PHP's PostgreSQL driver (pdo_pgsql) is not loaded in this server process. Enable it in the loaded php.ini, then restart the application server process — reloading workers cannot load extensions."),
             str_contains($diagnostic, 'password authentication failed'),
             str_contains($diagnostic, 'authentication failed') => __(':provider rejected the database username or password. Enter the project’s Database Password, not a personal access token or API key.', ['provider' => $provider->label()]),
             str_contains($diagnostic, 'could not translate host name'),
