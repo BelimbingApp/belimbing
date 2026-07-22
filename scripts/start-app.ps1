@@ -389,6 +389,30 @@ $AppPort = [int] $appPortValue
 $VitePort = [int] $vitePortValue
 $CaddyAdminPort = [int] $caddyAdminPortValue
 
+# Pre-flight: if Belimbing already answers on the pinned HTTPS origin, another
+# instance owns the ports. Starting a second FrankenPHP would only fail to bind
+# ("Only one usage of each socket address...") and exit 1 — which then cascades
+# into this launcher tearing down its other children (Vite, queue). Detect the
+# running instance and stop gracefully with a message instead of a hard failure.
+# Fail-open: any probe error leaves $originStatus empty so a normal start still
+# proceeds. (Staging/production returned earlier to the supervised runtime.)
+$httpsPort = [int] $httpsPortValue
+$originResolve = '{0}:{1}:127.0.0.1' -f $frontendDomain, $httpsPort
+$originUrl = 'https://{0}:{1}/up' -f $frontendDomain, $httpsPort
+$originStatus = ''
+try {
+    $originStatus = (& curl.exe -k -s -o NUL -w '%{http_code}' --max-time 3 --resolve $originResolve $originUrl 2>$null | Out-String).Trim()
+} catch {
+    $originStatus = ''
+}
+if ($originStatus -match '^[1-5][0-9][0-9]$') {
+    Write-Host ''
+    Write-Host "Belimbing is already running at https://$frontendDomain (origin responded HTTP $originStatus)." -ForegroundColor Yellow
+    Write-Host 'Nothing to start. To restart, stop it first, then run this script again:' -ForegroundColor Yellow
+    Write-Host '    Get-Process frankenphp | Stop-Process -Force' -ForegroundColor Yellow
+    return
+}
+
 $env:Path = "$frankenPhpHome;$env:Path"
 $env:PHPRC = $PhpConfigDir
 $env:PHP_BINARY = $phpExe
