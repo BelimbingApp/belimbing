@@ -1,0 +1,4 @@
+interface:
+  display_name: "BLB Human Tester Audit"
+  short_description: "Audit functional and UI workflows with evidence"
+  default_prompt: "Use $blb-human-tester-audit to meticulously test the target as a human user, including applicable roles and workflow branches; prefer the in-app Browser, automatically use a capable fallback when needed, and build a validated screenshot-backed HTML report."
