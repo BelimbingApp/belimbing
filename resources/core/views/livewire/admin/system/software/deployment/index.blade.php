@@ -333,6 +333,41 @@
             </x-ui.alert>
         @endif
 
+        {{-- FrankenPHP loads PHP extensions once, at OS-process startup. If php.ini
+             was edited after this process started, "Reload FrankenPHP" below cannot
+             pick up the change — it only re-executes the worker script, not PHP's
+             module init. Surface that distinctly so operators do not waste a reload
+             on it, and direct the restart through the host that owns the process. --}}
+        @if ($missingExtensions !== [])
+            <x-ui.alert variant="danger">
+                <div class="w-full space-y-3">
+                    <div>
+                        <p class="font-medium">
+                            {{ trans_choice(':count PHP extension enabled in php.ini is not loaded in the running process|:count PHP extensions enabled in php.ini are not loaded in the running process', count($missingExtensions), ['count' => count($missingExtensions)]) }}
+                        </p>
+                        <p class="mt-1 font-mono text-xs">{{ implode(', ', $missingExtensions) }}</p>
+                        <p class="mt-1 text-sm">{{ __('Reloading FrankenPHP workers will not fix this — extensions load once when the process starts. Restart FrankenPHP from the host after any software update or maintenance action finishes.') }}</p>
+                    </div>
+
+                    <x-ui.disclosure
+                        :title="__('Restart from the host')"
+                        variant="card-header"
+                        content-class="mt-2 max-w-prose space-y-2 text-sm"
+                    >
+                        @if (app()->environment('local'))
+                            <p>{{ __('Stop the development launcher with Ctrl+C, then start it again from the project directory:') }}</p>
+                            <p class="inline-block rounded bg-surface-subtle px-input-x py-input-y font-mono text-xs text-ink">
+                                {{ PHP_OS_FAMILY === 'Windows' ? '.\\scripts\\start-app.ps1' : './scripts/start-app.sh' }}
+                            </p>
+                        @else
+                            <p>{{ __('Restart the application service with the supervisor configured for this deployment, such as Task Scheduler, systemd, or the container platform. This page does not stop the process because it cannot verify that an external supervisor will bring it back.') }}</p>
+                            <p>{{ __('Return here after the service is healthy. This warning disappears when the new process has loaded the configured extensions.') }}</p>
+                        @endif
+                    </x-ui.disclosure>
+                </div>
+            </x-ui.alert>
+        @endif
+
         <x-ui.card>
             <div x-data="{ helpOpen: false }" class="mb-4">
                 <div class="flex flex-wrap items-start justify-between gap-3">

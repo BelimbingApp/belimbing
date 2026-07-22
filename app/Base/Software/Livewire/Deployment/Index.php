@@ -8,6 +8,7 @@ use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -154,6 +155,7 @@ class Index extends Component
         DeploymentService $deployment,
         DeploymentRunHistory $history,
         SoftwareUpdateLauncher $launcher,
+        PhpExtensionDriftProbe $extensionDrift,
     ): View {
         $status = $this->latestStatusLoaded
             ? $deployment->status()
@@ -202,6 +204,7 @@ class Index extends Component
             'lastComposerRun' => $history->lastComposerRun(),
             'lastFrontendRun' => $history->lastFrontendRun(),
             'updateInProgress' => $launcher->inProgress(),
+            'missingExtensions' => $extensionDrift->missingExtensions(),
         ]);
     }
 

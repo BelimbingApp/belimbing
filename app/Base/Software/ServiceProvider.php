@@ -10,6 +10,7 @@ use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
 use App\Base\Software\Services\FrontendBuildStatusDiagnosticProvider;
 use App\Base\Software\Services\InventoryContributionDiscoveryService;
 use App\Base\Software\Services\InventoryContributionRegistry;
+use App\Base\Software\Services\PhpExtensionDriftStatusDiagnosticProvider;
 use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use Illuminate\Console\Scheduling\Schedule;
@@ -31,9 +32,11 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(FrankenPhpWorkerStatusDiagnosticProvider::class);
         $this->app->singleton(FrontendBuildStatusDiagnosticProvider::class);
         $this->app->singleton(SoftwareInventoryStatusDiagnosticProvider::class);
+        $this->app->singleton(PhpExtensionDriftStatusDiagnosticProvider::class);
         $this->app->tag(FrankenPhpWorkerStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(FrontendBuildStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(SoftwareInventoryStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
+        $this->app->tag(PhpExtensionDriftStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
 
         // Register on booted() (not bootstrap/app.php withSchedule) so the
         // admin Schedule page sees it too. Warming every ten minutes keeps
