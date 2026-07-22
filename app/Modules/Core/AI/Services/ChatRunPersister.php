@@ -433,6 +433,14 @@ class ChatRunPersister
             $meta['latency_ms'] = $run->latency_ms;
         }
 
+        foreach (['tool_round_count', 'tool_call_count', 'max_tool_rounds'] as $key) {
+            $value = $run->meta[$key] ?? null;
+
+            if (is_int($value)) {
+                $meta[$key] = $value;
+            }
+        }
+
         $aiActiveDurationMs = app(AiRunDurations::class)->activeMilliseconds($run);
         if ($aiActiveDurationMs !== null) {
             $meta['ai_active_duration_ms'] = $aiActiveDurationMs;

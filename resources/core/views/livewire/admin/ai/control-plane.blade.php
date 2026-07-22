@@ -243,15 +243,15 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
 
                         <form wire:submit="saveRuntimeGuardrails" class="space-y-4">
                             <x-ui.input
-                                id="runtime-max-tool-iterations"
-                                wire:model="maxToolIterations"
+                                id="runtime-max-tool-rounds"
+                                wire:model="maxToolRounds"
                                 type="number"
                                 inputmode="numeric"
                                 min="1"
                                 max="500"
                                 :label="__('Maximum tool rounds per turn')"
-                                :help="__('One round may contain several parallel tool calls. The shipped default is 100; higher limits permit longer work but can also increase run time and provider cost when a model loops.')"
-                                :error="$errors->first('maxToolIterations')"
+                                :help="__('One round may contain several parallel tool calls. At 80% of the limit, the chat warns the user and asks the agent to prioritize completion. The shipped default is 100; higher limits can increase run time and provider cost when a model loops.')"
+                                :error="$errors->first('maxToolRounds')"
                                 :disabled="! $canManageRuntimeGuardrails"
                             />
 

@@ -22,7 +22,8 @@ enum AiErrorType: string
     case BadRequest = 'bad_request';
     case EmptyResponse = 'empty_response';
     case ConfigError = 'config_error';
-    case ToolLoopLimit = 'tool_loop_limit';
+    // Backing value retained for compatibility with persisted run errors.
+    case ToolRoundLimit = 'tool_loop_limit';
     case UnexpectedError = 'unexpected_error';
 
     /**
@@ -64,7 +65,7 @@ enum AiErrorType: string
             self::UnsupportedResponseShape => __('Unexpected response format.'),
             self::EmptyResponse => __('Empty response.'),
             self::ConfigError => __('Configuration error.'),
-            self::ToolLoopLimit => __('Tool iteration limit reached.'),
+            self::ToolRoundLimit => __('Tool round limit reached.'),
             self::UnexpectedError => __('An unexpected error occurred.'),
         };
     }

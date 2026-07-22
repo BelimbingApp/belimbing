@@ -57,3 +57,22 @@ BLADE,
         ->toContain('Total Tokens')
         ->toContain('1,245');
 });
+
+it('shows completed tool-round and tool-call totals without calling rounds tools', function (): void {
+    $html = html_entity_decode(Blade::render(
+        <<<'BLADE'
+<x-ai.message-meta
+    :timestamp="$timestamp"
+    run-id="run-12345678"
+    :tool-round-count="18"
+    :tool-call-count="31"
+/>
+BLADE,
+        ['timestamp' => now()]
+    ));
+
+    expect($html)
+        ->toContain('Completed in 18 tool rounds')
+        ->toContain('31 tool calls')
+        ->not->toContain('18 tools');
+});

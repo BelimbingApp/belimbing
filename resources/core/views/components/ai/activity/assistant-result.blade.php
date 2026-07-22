@@ -8,6 +8,8 @@
     'tokens' => null,
     'latencyMs' => null,
     'aiActiveDurationMs' => null,
+    'toolRoundCount' => null,
+    'toolCallCount' => null,
     'timeoutSeconds' => null,
     'retryAttempts' => null,
     'runStatus' => null,
@@ -33,6 +35,8 @@
             :tokens="$tokens"
             :latencyMs="$latencyMs"
             :aiActiveDurationMs="$aiActiveDurationMs"
+            :toolRoundCount="$toolRoundCount"
+            :toolCallCount="$toolCallCount"
             :timeoutSeconds="$timeoutSeconds"
             :retryAttempts="$retryAttempts"
             :runStatus="$runStatus"

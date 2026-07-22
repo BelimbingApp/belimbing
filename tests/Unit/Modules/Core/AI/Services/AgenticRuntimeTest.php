@@ -262,7 +262,7 @@ function runAgenticConversation(
         ->run([test()->makeMessage('user', $userMessage)], 1, (string) Str::ulid(), $systemPrompt, null, $policy, null, null, $allowedToolNames);
 }
 
-function runToolLoopLimitScenario(
+function runToolRoundLimitScenario(
     int $globalLimit,
     string $callId,
     ?ExecutionPolicy $policy = null,
@@ -438,20 +438,20 @@ describe('AgenticRuntime (sync tool loop)', function () {
         });
 
         it('stops before executing tools beyond the configured loop limit', function () {
-            $result = runToolLoopLimitScenario(2, 'call_loop');
+            $result = runToolRoundLimitScenario(2, 'call_loop');
 
-            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolRoundLimit->value)
                 ->and($result['meta']['tool_actions'])->toHaveCount(2);
         });
 
-        it('honours a per-run tool-loop limit instead of the global default', function () {
-            $result = runToolLoopLimitScenario(
+        it('honours a per-run tool-round limit instead of the global default', function () {
+            $result = runToolRoundLimitScenario(
                 24,
                 'call_policy_loop',
-                ExecutionPolicy::interactive()->withMaxToolIterations(2),
+                ExecutionPolicy::interactive()->withMaxToolRounds(2),
             );
 
-            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolLoopLimit->value)
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolRoundLimit->value)
                 ->and($result['meta']['diagnostic'])->toContain('configured limit of 2')
                 ->and($result['meta']['tool_actions'])->toHaveCount(2);
         });
@@ -791,8 +791,8 @@ describe('AgenticRuntime (streaming)', function () {
         expect(collect($events)->pluck('event')->all())->not->toContain('done');
     });
 
-    it('persists and emits a streaming tool-loop limit failure', function () {
-        config()->set('ai.llm.agentic.max_tool_iterations', 24);
+    it('persists and emits a streaming tool-round limit failure', function () {
+        config()->set('ai.llm.agentic.max_tool_rounds', 24);
 
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () {
@@ -818,7 +818,7 @@ describe('AgenticRuntime (streaming)', function () {
             ->withArgs(function (string $runId, AiRuntimeError $error, array $meta) use (&$recordedFailure): bool {
                 $recordedFailure = [$runId, $error->errorType, $meta['error_type'] ?? null];
 
-                return $error->errorType === AiErrorType::ToolLoopLimit;
+                return $error->errorType === AiErrorType::ToolRoundLimit;
             });
 
         $runtime = $this->makeAgenticRuntime(
@@ -831,15 +831,83 @@ describe('AgenticRuntime (streaming)', function () {
             1,
             (string) Str::ulid(),
             AGENTIC_RUNTIME_SYSTEM_PROMPT,
-            policy: ExecutionPolicy::interactive()->withMaxToolIterations(1),
+            policy: ExecutionPolicy::interactive()->withMaxToolRounds(1),
         ));
 
         $errorEvent = collect($events)->firstWhere('event', 'error');
 
-        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::ToolLoopLimit->value)
+        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::ToolRoundLimit->value)
             ->and(collect($events)->where('data.phase', 'tool_finished'))->toHaveCount(1)
-            ->and($recordedFailure[1] ?? null)->toBe(AiErrorType::ToolLoopLimit)
-            ->and($recordedFailure[2] ?? null)->toBe(AiErrorType::ToolLoopLimit->value);
+            ->and($recordedFailure[1] ?? null)->toBe(AiErrorType::ToolRoundLimit)
+            ->and($recordedFailure[2] ?? null)->toBe(AiErrorType::ToolRoundLimit->value);
+    });
+
+    it('warns at 80 percent, nudges completion, and reports final tool totals', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $requests = [];
+        $callNumber = 0;
+
+        $llmClient->shouldReceive('chatStream')
+            ->times(5)
+            ->andReturnUsing(function (ChatRequest $request) use (&$requests, &$callNumber) {
+                $requests[] = $request;
+                $callNumber++;
+
+                if ($callNumber <= 4) {
+                    yield [
+                        'type' => 'tool_call_delta',
+                        'index' => 0,
+                        'id' => 'call_round_'.$callNumber,
+                        'name' => 'echo_tool',
+                        'arguments_delta' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
+                    ];
+                    yield [
+                        'type' => 'done',
+                        'finish_reason' => 'tool_calls',
+                        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                        'latency_ms' => 20,
+                    ];
+
+                    return;
+                }
+
+                yield ['type' => 'content_delta', 'text' => 'Finished safely.'];
+                yield [
+                    'type' => 'done',
+                    'finish_reason' => 'stop',
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                    'latency_ms' => 20,
+                ];
+            });
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+        );
+        $events = collect(iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Complete this task')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: ExecutionPolicy::interactive()->withMaxToolRounds(5),
+        )));
+
+        $warning = $events->firstWhere('data.phase', 'tool_round_warning');
+        $done = $events->firstWhere('event', 'done');
+        $finalRequestSystemMessages = collect($requests[4]->messages)
+            ->where('role', 'system')
+            ->pluck('content');
+
+        expect($warning['data']['tool_round_count'] ?? null)->toBe(4)
+            ->and($warning['data']['max_tool_rounds'] ?? null)->toBe(5)
+            ->and($done['data']['meta']['tool_round_count'] ?? null)->toBe(4)
+            ->and($done['data']['meta']['tool_call_count'] ?? null)->toBe(4)
+            ->and($done['data']['meta']['max_tool_rounds'] ?? null)->toBe(5)
+            ->and($finalRequestSystemMessages->contains(
+                fn (mixed $content): bool => is_string($content)
+                    && str_contains($content, 'completed 4 of 5 allowed tool-calling rounds')
+                    && str_contains($content, 'Prioritize completing'),
+            ))->toBeTrue();
     });
 
     it('enforces the execution deadline before opening a stream', function () {

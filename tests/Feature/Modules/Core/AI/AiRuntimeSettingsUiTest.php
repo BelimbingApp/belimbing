@@ -16,7 +16,7 @@ const AI_RUNTIME_SETTINGS_PDFTOTEXT_PATH = 'C:\\Runtime Settings\\pdftotext.exe'
 beforeEach(function (): void {
     Company::provisionLicensee(AI_RUNTIME_SETTINGS_LICENSEE);
     Employee::provisionLara();
-    config()->set(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY, AiRuntimeSettings::DEFAULT_MAX_TOOL_ITERATIONS);
+    config()->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, AiRuntimeSettings::DEFAULT_MAX_TOOL_ROUNDS);
     config()->set(AiRuntimeSettings::PDFTOTEXT_PATH_KEY, null);
 });
 
@@ -28,21 +28,40 @@ it('stores and restores the global tool-loop guardrail from the control plane', 
         ->withQueryParams(['tab' => 'runtime'])
         ->test(ControlPlane::class)
         ->assertSet('activeTab', 'runtime')
-        ->assertSet('maxToolIterations', '100')
+        ->assertSet('maxToolRounds', '100')
         ->assertSee('Maximum tool rounds per turn')
-        ->set('maxToolIterations', '160')
+        ->set('maxToolRounds', '160')
         ->call('saveRuntimeGuardrails')
         ->assertHasNoErrors();
 
-    expect($settings->get(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY))->toBe(160);
+    expect($settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(160);
 
     Livewire::actingAs($user)
         ->withQueryParams(['tab' => 'runtime'])
         ->test(ControlPlane::class)
         ->call('restoreRuntimeGuardrailDefaults')
-        ->assertSet('maxToolIterations', '100');
+        ->assertSet('maxToolRounds', '100');
 
-    expect($settings->has(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY))->toBeFalse();
+    expect($settings->has(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBeFalse();
+});
+
+it('reads the legacy iteration key until an operator saves the renamed round setting', function (): void {
+    $user = createAdminUser();
+    $settings = app(SettingsService::class);
+    $settings->set(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY, 64);
+
+    expect(app(AiRuntimeSettings::class)->maxToolRounds())->toBe(64);
+
+    Livewire::actingAs($user)
+        ->withQueryParams(['tab' => 'runtime'])
+        ->test(ControlPlane::class)
+        ->assertSet('maxToolRounds', '64')
+        ->set('maxToolRounds', '72')
+        ->call('saveRuntimeGuardrails')
+        ->assertHasNoErrors();
+
+    expect($settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(72)
+        ->and($settings->has(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY))->toBeFalse();
 });
 
 it('rejects invalid or unauthorized runtime guardrail writes', function (): void {
@@ -50,13 +69,13 @@ it('rejects invalid or unauthorized runtime guardrail writes', function (): void
 
     Livewire::actingAs($admin)
         ->test(ControlPlane::class)
-        ->set('maxToolIterations', '501')
+        ->set('maxToolRounds', '501')
         ->call('saveRuntimeGuardrails')
-        ->assertHasErrors(['maxToolIterations' => 'max']);
+        ->assertHasErrors(['maxToolRounds' => 'max']);
 
     expect(fn () => Livewire::actingAs(createTenantOwnerUser())
         ->test(ControlPlane::class)
-        ->set('maxToolIterations', '80')
+        ->set('maxToolRounds', '80')
         ->call('saveRuntimeGuardrails'))
         ->toThrow(AuthorizationDeniedException::class);
 });

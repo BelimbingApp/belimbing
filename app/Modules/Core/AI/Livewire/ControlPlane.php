@@ -72,7 +72,7 @@ class ControlPlane extends Component
 
     public string $lifecycleSessionId = '';
 
-    public string $maxToolIterations = (string) AiRuntimeSettings::DEFAULT_MAX_TOOL_ITERATIONS;
+    public string $maxToolRounds = (string) AiRuntimeSettings::DEFAULT_MAX_TOOL_ROUNDS;
 
     /** @var array<string, mixed>|null */
     public ?array $lifecyclePreview = null;
@@ -91,7 +91,7 @@ class ControlPlane extends Component
         $this->inspectRunId = (string) (request()->query('runId') ?? request()->query('inspectRunId') ?? '');
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
-        $this->maxToolIterations = (string) $runtimeSettings->maxToolIterations();
+        $this->maxToolRounds = (string) $runtimeSettings->maxToolRounds();
 
         $this->loadAgentOptions();
         $this->refreshInspectorLists();
@@ -283,7 +283,7 @@ class ControlPlane extends Component
         $this->authorizeRuntimeGuardrailManagement();
 
         $validated = $this->validate([
-            'maxToolIterations' => [
+            'maxToolRounds' => [
                 'required',
                 'integer',
                 'min:1',
@@ -291,11 +291,12 @@ class ControlPlane extends Component
             ],
         ]);
 
-        $value = (int) $validated['maxToolIterations'];
+        $value = (int) $validated['maxToolRounds'];
 
-        $settings->set(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY, $value);
-        $this->maxToolIterations = (string) $value;
-        $this->resetValidation('maxToolIterations');
+        $settings->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, $value);
+        $settings->forget(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY);
+        $this->maxToolRounds = (string) $value;
+        $this->resetValidation('maxToolRounds');
         $this->notify(__('Runtime guardrails saved.'));
     }
 
@@ -305,9 +306,10 @@ class ControlPlane extends Component
     ): void {
         $this->authorizeRuntimeGuardrailManagement();
 
-        $settings->forget(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY);
-        $this->maxToolIterations = (string) $runtimeSettings->maxToolIterations();
-        $this->resetValidation('maxToolIterations');
+        $settings->forget(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
+        $settings->forget(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY);
+        $this->maxToolRounds = (string) $runtimeSettings->maxToolRounds();
+        $this->resetValidation('maxToolRounds');
         $this->notify(__('Runtime guardrails restored to their configured defaults.'));
     }
 

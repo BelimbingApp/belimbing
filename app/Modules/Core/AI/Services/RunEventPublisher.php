@@ -191,12 +191,28 @@ class RunEventPublisher
         string $finishReason,
         ?int $iteration = null,
         ?int $toolCallCount = null,
+        ?int $toolRound = null,
+        ?int $maxToolRounds = null,
     ): AiRunEvent {
         return $this->publish($turn, RunEventType::AssistantIterationCompleted, array_filter([
             'finish_reason' => $finishReason,
             'iteration' => $iteration,
             'tool_call_count' => $toolCallCount,
+            'tool_round' => $toolRound,
+            'max_tool_rounds' => $maxToolRounds,
         ], fn ($v) => $v !== null));
+    }
+
+    /**
+     * Emit one warning when a run crosses its configured tool-round threshold.
+     */
+    public function toolRoundWarning(AiRun $turn, int $toolRoundCount, int $maxToolRounds): AiRunEvent
+    {
+        return $this->publish($turn, RunEventType::AssistantToolRoundWarning, [
+            'tool_round_count' => $toolRoundCount,
+            'max_tool_rounds' => $maxToolRounds,
+            'percent_used' => (int) floor($toolRoundCount / max(1, $maxToolRounds) * 100),
+        ]);
     }
 
     /**

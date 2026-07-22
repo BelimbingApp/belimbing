@@ -33,7 +33,7 @@ use Illuminate\Support\Str;
  *
  * Extends the standard agent runtime pattern with an iterative tool-calling loop:
  * LLM call → tool execution → feed results back → LLM call → ... until the
- * LLM produces a final text response or the maximum iteration limit is reached.
+ * LLM produces a final text response or the maximum tool-round limit is reached.
  *
  * Resilience strategy:
  * - Single retry on transient failures within the same provider/model
@@ -42,6 +42,8 @@ use Illuminate\Support\Str;
 class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
 {
     private const MAX_TOOL_RESULT_CHARS = 20000;
+
+    private const TOOL_ROUND_WARNING_PERCENT = 80;
 
     public function __construct(
         private readonly ConfigResolver $configResolver,
@@ -95,7 +97,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?RuntimeInvocationContext $context = null,
     ): array {
         try {
-            [$policy, $deadline, $maxToolIterations, $config] = $this->initializeRuntimeInvocation(
+            [$policy, $deadline, $maxToolRounds, $config] = $this->initializeRuntimeInvocation(
                 messages: $messages,
                 employeeId: $employeeId,
                 runId: $runId,
@@ -148,7 +150,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $systemPrompt,
                 $allowedToolNames,
                 $deadline,
-                $maxToolIterations,
+                $maxToolRounds,
             );
 
             $result['meta'] = $this->withResolvedSkillPackMeta($result['meta'] ?? []);
@@ -208,7 +210,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?RuntimeInvocationContext $context = null,
     ): \Generator {
         try {
-            [$policy, $deadline, $maxToolIterations, $config] = $this->initializeRuntimeInvocation(
+            [$policy, $deadline, $maxToolRounds, $config] = $this->initializeRuntimeInvocation(
                 messages: $messages,
                 employeeId: $employeeId,
                 runId: $runId,
@@ -266,7 +268,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 $systemPrompt,
                 $allowedToolNames,
                 $deadline,
-                $maxToolIterations,
+                $maxToolRounds,
             );
         } finally {
             $this->sessionContext->clear();
@@ -333,7 +335,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
 
         $policy ??= ExecutionPolicy::interactive();
         $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
-        $maxToolIterations = $this->maxToolIterations($policy);
+        $maxToolRounds = $this->maxToolRounds($policy);
 
         $this->runRecorder->beginExecution(new RunRecorderStartInput(
             runId: $runId,
@@ -348,7 +350,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         return [
             $policy,
             $deadline,
-            $maxToolIterations,
+            $maxToolRounds,
             $configOverride ?? $this->configResolver->resolveDefault($employeeId),
         ];
     }
@@ -401,7 +403,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $systemPrompt,
         ?array $allowedToolNames,
         float $deadline,
-        int $maxToolIterations,
+        int $maxToolRounds,
     ): array {
         // Hook: PreContextBuild — augment system prompt before message assembly
         $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
@@ -477,6 +479,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     $clientActions,
                 );
                 $successResult['meta']['retry_attempts'] = $retryAttempts;
+                $successResult['meta']['tool_round_count'] = $iteration;
+                $successResult['meta']['tool_call_count'] = count($toolActions);
+                $successResult['meta']['max_tool_rounds'] = $maxToolRounds;
 
                 // Hook: PostRun on success
                 $this->hookCoordinator->postRun($runId, $employeeId, true, $hookMetadata);
@@ -485,12 +490,12 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return $successResult;
             }
 
-            if ($iteration >= $maxToolIterations) {
+            if ($iteration >= $maxToolRounds) {
                 return $this->syncLoopErrorResult(
                     $runId,
                     $employeeId,
                     $config,
-                    $this->toolLoopLimitError($maxToolIterations),
+                    $this->toolRoundLimitError($maxToolRounds),
                     $retryAttempts,
                     $hookMetadata,
                     $toolActions,
@@ -523,6 +528,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             }
 
             $iteration++;
+
+            if ($this->shouldWarnForToolRound($iteration, $maxToolRounds)) {
+                $this->appendToolRoundLimitNudge($apiMessages, $iteration, $maxToolRounds);
+            }
         }
     }
 
@@ -887,9 +896,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         ?string $systemPrompt,
         ?array $allowedToolNames,
         float $deadline,
-        int $maxToolIterations,
+        int $maxToolRounds,
     ): \Generator {
         $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
+        $toolLoopState['maxToolRounds'] = $maxToolRounds;
 
         if ($toolLoopState['removedTools'] !== []) {
             yield ['event' => 'status', 'data' => [
@@ -963,6 +973,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     'finish_reason' => $iterResult['finish_reason'],
                     'iteration' => $iteration,
                     'tool_call_count' => count($iterResult['tool_calls'] ?? []),
+                    'tool_round' => ($iterResult['tool_calls'] ?? []) !== [] && $iteration < $maxToolRounds
+                        ? $iteration + 1
+                        : null,
+                    'max_tool_rounds' => $maxToolRounds,
                     'run_id' => $runId,
                 ]];
             }
@@ -975,17 +989,23 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                     $config,
                     $iterResult,
                     $toolLoopState,
+                    $toolLoopState['toolRoundCount'],
+                    $toolLoopState['toolCallCount'],
+                    $maxToolRounds,
                 );
 
                 return;
             }
 
-            if ($iteration >= $maxToolIterations) {
+            if ($iteration >= $maxToolRounds) {
                 $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
-                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolLoopLimitError($maxToolIterations), $toolLoopState);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolRoundLimitError($maxToolRounds), $toolLoopState);
 
                 return;
             }
+
+            $toolLoopState['toolRoundCount'] = $iteration + 1;
+            $toolLoopState['toolCallCount'] += count($iterResult['tool_calls']);
 
             // Determine phase for context continuity: only commentary content is preserved
             $phase = ($iterResult['commentary'] ?? '') !== '' ? 'commentary' : null;
@@ -1008,7 +1028,18 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 return;
             }
 
-            $iteration++;
+            $iteration = $toolLoopState['toolRoundCount'];
+
+            if ($this->shouldWarnForToolRound($iteration, $maxToolRounds)) {
+                $this->appendToolRoundLimitNudge($toolLoopState['apiMessages'], $iteration, $maxToolRounds);
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_round_warning',
+                    'tool_round_count' => $iteration,
+                    'max_tool_rounds' => $maxToolRounds,
+                    'run_id' => $runId,
+                ]];
+            }
         }
     }
 
@@ -1025,6 +1056,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         array $config,
         array $iterResult,
         array $toolLoopState,
+        int $toolRoundCount,
+        int $toolCallCount,
+        int $maxToolRounds,
     ): \Generator {
         $fullContent = $this->finalContentFromIterationResult($iterResult, $toolLoopState);
 
@@ -1034,21 +1068,25 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 'Streaming response completed with no content',
                 latencyMs: (int) ($iterResult['latency_ms'] ?? 0),
             );
-            $this->runRecorder->fail($runId, $emptyError);
+            $errorMeta = array_merge(
+                $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $emptyError,
+                ),
+                [
+                    'retry_attempts' => $toolLoopState['retryAttempts'],
+                    'tool_round_count' => $toolRoundCount,
+                    'tool_call_count' => $toolCallCount,
+                    'max_tool_rounds' => $maxToolRounds,
+                ],
+            );
+            $this->runRecorder->fail($runId, $emptyError, $errorMeta);
 
             yield ['event' => 'error', 'data' => [
                 'message' => $emptyError->userMessage,
                 'run_id' => $runId,
-                'meta' => array_merge(
-                    $this->responseFactory->errorMeta(
-                        $config['model'],
-                        (string) ($config['provider_name'] ?? 'unknown'),
-                        $emptyError,
-                    ),
-                    [
-                        'retry_attempts' => $toolLoopState['retryAttempts'],
-                    ],
-                ),
+                'meta' => $errorMeta,
             ]];
 
             return;
@@ -1070,6 +1108,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
                 'completion' => null,
             ],
             'retry_attempts' => $toolLoopState['retryAttempts'],
+            'tool_round_count' => $toolRoundCount,
+            'tool_call_count' => $toolCallCount,
+            'max_tool_rounds' => $maxToolRounds,
         ];
 
         if (is_array($iterResult['provider_mapping'] ?? null) && $iterResult['provider_mapping'] !== []) {
@@ -1175,7 +1216,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      *     hookMetadata: array<string, mixed>,
      *     removedTools: list<string>,
      *     allowedToolNames: list<string>|null,
-     *     cancelRequested: Closure|null
+     *     cancelRequested: Closure|null,
+     *     toolRoundCount: int,
+     *     toolCallCount: int,
+     *     maxToolRounds: int
      * }
      */
     private function initializeToolLoopState(
@@ -1212,6 +1256,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             'removedTools' => $removedTools,
             'allowedToolNames' => $allowedToolNames,
             'cancelRequested' => $this->cancellationCallbackForTurn($runId),
+            'toolRoundCount' => 0,
+            'toolCallCount' => 0,
+            'maxToolRounds' => 0,
         ];
     }
 
@@ -1260,6 +1307,9 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             [
                 'retry_attempts' => $toolLoopState['retryAttempts'],
                 'hooks' => $toolLoopState['hookMetadata'],
+                'tool_round_count' => (int) ($toolLoopState['toolRoundCount'] ?? 0),
+                'tool_call_count' => (int) ($toolLoopState['toolCallCount'] ?? 0),
+                'max_tool_rounds' => (int) ($toolLoopState['maxToolRounds'] ?? 0),
             ],
         );
 
@@ -1554,9 +1604,46 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         return microtime(true) >= $deadline;
     }
 
-    private function maxToolIterations(ExecutionPolicy $policy): int
+    private function maxToolRounds(ExecutionPolicy $policy): int
     {
-        return max(0, $policy->maxToolIterations ?? $this->runtimeSettings->maxToolIterations());
+        return max(0, $policy->maxToolRounds ?? $this->runtimeSettings->maxToolRounds());
+    }
+
+    private function shouldWarnForToolRound(int $completedToolRounds, int $maxToolRounds): bool
+    {
+        if ($maxToolRounds <= 1 || $completedToolRounds >= $maxToolRounds) {
+            return false;
+        }
+
+        return $completedToolRounds === (int) ceil($maxToolRounds * self::TOOL_ROUND_WARNING_PERCENT / 100);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $apiMessages
+     */
+    private function appendToolRoundLimitNudge(
+        array &$apiMessages,
+        int $completedToolRounds,
+        int $maxToolRounds,
+    ): void {
+        $nudge = "Runtime guardrail: You have completed {$completedToolRounds} of {$maxToolRounds} allowed tool-calling rounds. "
+            ."Prioritize completing the user's request. Avoid opening new work, verify only what is essential, "
+            .'and produce the final response as soon as the task can be handed off safely.';
+
+        foreach ($apiMessages as $index => $message) {
+            if (($message['role'] ?? null) !== 'system') {
+                continue;
+            }
+
+            $apiMessages[$index]['content'] = trim((string) ($message['content'] ?? ''))."\n\n{$nudge}";
+
+            return;
+        }
+
+        array_unshift($apiMessages, [
+            'role' => 'system',
+            'content' => $nudge,
+        ]);
     }
 
     private function executionBudgetError(): AiRuntimeError
@@ -1567,10 +1654,10 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         );
     }
 
-    private function toolLoopLimitError(int $limit): AiRuntimeError
+    private function toolRoundLimitError(int $limit): AiRuntimeError
     {
         return AiRuntimeError::fromType(
-            AiErrorType::ToolLoopLimit,
+            AiErrorType::ToolRoundLimit,
             "The model requested another tool round after the configured limit of {$limit}.",
         );
     }

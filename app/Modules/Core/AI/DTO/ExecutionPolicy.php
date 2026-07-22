@@ -17,7 +17,7 @@ final readonly class ExecutionPolicy
         public ExecutionMode $mode,
         public int $timeoutSeconds,
         public bool $allowRetry = true,
-        public ?int $maxToolIterations = null,
+        public ?int $maxToolRounds = null,
     ) {}
 
     /**
@@ -72,13 +72,13 @@ final readonly class ExecutionPolicy
      * One round may contain multiple tool calls. The runtime still permits a
      * final model response after the last completed tool round.
      */
-    public function withMaxToolIterations(int $maxToolIterations): self
+    public function withMaxToolRounds(int $maxToolRounds): self
     {
         return new self(
             mode: $this->mode,
             timeoutSeconds: $this->timeoutSeconds,
             allowRetry: $this->allowRetry,
-            maxToolIterations: max(0, $maxToolIterations),
+            maxToolRounds: max(0, $maxToolRounds),
         );
     }
 }

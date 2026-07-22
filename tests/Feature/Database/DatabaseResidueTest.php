@@ -97,7 +97,7 @@ it('does not flag runtime-claimed settings as residue', function (): void {
 
 it('does not flag AI runtime and tool settings as residue', function (): void {
     foreach ([
-        AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY => 100,
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY => 100,
         AiRuntimeSettings::PDFTOTEXT_PATH_KEY => 'C:\\Poppler\\pdftotext.exe',
     ] as $key => $value) {
         Setting::query()->create([
@@ -111,7 +111,7 @@ it('does not flag AI runtime and tool settings as residue', function (): void {
     $orphanKeys = array_column(app(DomainResidueScanner::class)->scan()['orphanSettings'], 'key');
 
     expect($orphanKeys)
-        ->not->toContain(AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY)
+        ->not->toContain(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY)
         ->not->toContain(AiRuntimeSettings::PDFTOTEXT_PATH_KEY);
 });
 

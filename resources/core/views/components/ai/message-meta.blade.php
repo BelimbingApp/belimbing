@@ -7,6 +7,8 @@
     'tokens' => null,
     'latencyMs' => null,
     'aiActiveDurationMs' => null,
+    'toolRoundCount' => null,
+    'toolCallCount' => null,
     'timeoutSeconds' => null,
     'retryAttempts' => null,
     'errorType' => null,
@@ -82,7 +84,7 @@
     }
 @endphp
 
-<div x-data="{ tooltipOpen: false, copiedRunId: false }" class="relative mt-1 inline-flex max-w-full text-[10px]">
+<div x-data="{ tooltipOpen: false, copiedRunId: false }" class="relative mt-1 inline-flex max-w-full flex-col items-start text-[10px]">
     <span
         class="{{ $toneClasses }} inline-flex max-w-full items-center gap-1 rounded-md tabular-nums outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-0"
     >
@@ -251,6 +253,24 @@
             </span>
         @endif
     </span>
+
+    @if ((is_int($toolRoundCount) && $toolRoundCount > 0) || (is_int($toolCallCount) && $toolCallCount > 0))
+        <span class="mt-0.5 inline-flex flex-wrap items-center gap-1 text-muted tabular-nums">
+            @if (is_int($toolRoundCount) && $toolRoundCount > 0)
+                <span>
+                    {{ __('Completed in :rounds', [
+                        'rounds' => trans_choice(':count tool round|:count tool rounds', $toolRoundCount, ['count' => number_format($toolRoundCount)]),
+                    ]) }}
+                </span>
+            @endif
+            @if (is_int($toolRoundCount) && $toolRoundCount > 0 && is_int($toolCallCount) && $toolCallCount > 0)
+                <span aria-hidden="true">·</span>
+            @endif
+            @if (is_int($toolCallCount) && $toolCallCount > 0)
+                <span>{{ trans_choice(':count tool call|:count tool calls', $toolCallCount, ['count' => number_format($toolCallCount)]) }}</span>
+            @endif
+        </span>
+    @endif
 
     <span
         x-show="tooltipOpen"

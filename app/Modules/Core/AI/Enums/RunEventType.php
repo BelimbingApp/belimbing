@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Enums;
 
 /**
@@ -50,6 +51,9 @@ enum RunEventType: string
 
     /** One agentic loop iteration completed (think → tools → draft). */
     case AssistantIterationCompleted = 'assistant.iteration_completed';
+
+    /** Tool-round usage crossed the configured warning threshold. */
+    case AssistantToolRoundWarning = 'assistant.tool_round_warning';
 
     /** Incremental text chunk from the assistant response stream. */
     case AssistantOutputDelta = 'assistant.output_delta';
@@ -107,7 +111,7 @@ enum RunEventType: string
     {
         return match ($this) {
             self::RunFailed => 'error',
-            self::ToolDenied => 'warning',
+            self::ToolDenied, self::AssistantToolRoundWarning => 'warning',
             default => 'info',
         };
     }
@@ -127,6 +131,7 @@ enum RunEventType: string
             self::AssistantThinkingStarted => 'Thinking',
             self::AssistantThinkingDelta => 'Thinking Delta',
             self::AssistantIterationCompleted => 'Iteration Completed',
+            self::AssistantToolRoundWarning => 'Tool Round Warning',
             self::AssistantOutputDelta => 'Output Delta',
             self::AssistantOutputBlockCommitted => 'Block Committed',
             self::ToolStarted => 'Tool Started',

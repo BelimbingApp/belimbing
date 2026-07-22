@@ -9,21 +9,29 @@ use App\Base\Settings\Contracts\SettingsService;
  */
 final readonly class AiRuntimeSettings
 {
-    public const string MAX_TOOL_ITERATIONS_KEY = 'ai.llm.agentic.max_tool_iterations';
+    public const string MAX_TOOL_ROUNDS_KEY = 'ai.llm.agentic.max_tool_rounds';
+
+    public const string LEGACY_MAX_TOOL_ITERATIONS_KEY = 'ai.llm.agentic.max_tool_iterations';
 
     public const string PDFTOTEXT_PATH_KEY = 'ai.tools.document_analysis.pdftotext_path';
 
-    public const int DEFAULT_MAX_TOOL_ITERATIONS = 100;
+    public const int DEFAULT_MAX_TOOL_ROUNDS = 100;
 
     public function __construct(
         private SettingsService $settings,
     ) {}
 
-    public function maxToolIterations(): int
+    public function maxToolRounds(): int
     {
+        $key = match (true) {
+            $this->settings->has(self::MAX_TOOL_ROUNDS_KEY) => self::MAX_TOOL_ROUNDS_KEY,
+            $this->settings->has(self::LEGACY_MAX_TOOL_ITERATIONS_KEY) => self::LEGACY_MAX_TOOL_ITERATIONS_KEY,
+            default => self::MAX_TOOL_ROUNDS_KEY,
+        };
+
         return max(0, (int) $this->settings->get(
-            self::MAX_TOOL_ITERATIONS_KEY,
-            self::DEFAULT_MAX_TOOL_ITERATIONS,
+            $key,
+            self::DEFAULT_MAX_TOOL_ROUNDS,
         ));
     }
 

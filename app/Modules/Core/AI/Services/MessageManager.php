@@ -481,6 +481,14 @@ class MessageManager
             $meta['tool_actions'] = $run->tool_actions;
         }
 
+        foreach (['tool_round_count', 'tool_call_count', 'max_tool_rounds'] as $key) {
+            $value = $run->meta[$key] ?? null;
+
+            if (is_int($value)) {
+                $meta[$key] = $value;
+            }
+        }
+
         return $meta;
     }
 
@@ -519,6 +527,12 @@ class MessageManager
 
         if (is_int($meta['ai_active_duration_ms'] ?? null)) {
             $persisted['ai_active_duration_ms'] = $meta['ai_active_duration_ms'];
+        }
+
+        foreach (['tool_round_count', 'tool_call_count', 'max_tool_rounds'] as $key) {
+            if (is_int($meta[$key] ?? null)) {
+                $persisted[$key] = $meta[$key];
+            }
         }
 
         return $persisted;

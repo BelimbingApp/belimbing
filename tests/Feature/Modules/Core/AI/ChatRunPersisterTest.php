@@ -388,6 +388,40 @@ describe('ChatRunPersister materializeFromTurn tool transcripts', function () {
 });
 
 describe('ChatRunPersister materializeFromTurn tool transcript ordering', function () {
+    it('carries completed tool-round and tool-call totals into the assistant transcript', function () {
+        $turn = createMaterializerTurn();
+        $turn->update(['meta' => [
+            'tool_round_count' => 18,
+            'tool_call_count' => 31,
+            'max_tool_rounds' => 100,
+        ]]);
+        $pub = app(RunEventPublisher::class);
+
+        $pub->turnStarted($turn);
+        $turn->transitionTo(AiRunStatus::Running);
+        $pub->outputBlockCommitted($turn, 'markdown', MAT_ASSISTANT_OUTPUT);
+        $pub->turnCompleted($turn);
+
+        $mm = mockMessageManager();
+        $mm->shouldReceive('appendAssistantMessage')
+            ->once()
+            ->withArgs(fn (...$args): bool => ($args[4]['tool_round_count'] ?? null) === 18
+                && ($args[4]['tool_call_count'] ?? null) === 31
+                && ($args[4]['max_tool_rounds'] ?? null) === 100)
+            ->andReturn(new Message(
+                role: 'assistant',
+                content: MAT_ASSISTANT_OUTPUT,
+                timestamp: new DateTimeImmutable,
+            ));
+
+        (new ChatRunPersister)->materializeFromTurn(
+            $turn,
+            $mm,
+            $turn->employee_id,
+            MAT_TEST_SESSION,
+        );
+    });
+
     it('flushes thinking before persisting the subsequent tool entry', function () {
         $turn = createMaterializerTurn();
         $pub = app(RunEventPublisher::class);

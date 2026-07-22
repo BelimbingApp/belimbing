@@ -243,6 +243,8 @@ describe('RunStreamBridge tool and streaming events', function () {
                 'finish_reason' => 'tool_calls',
                 'iteration' => 0,
                 'tool_call_count' => 1,
+                'tool_round' => 1,
+                'max_tool_rounds' => 100,
                 'run_id' => BRIDGE_TEST_RUN_ID,
             ]],
             ['event' => 'status', 'data' => [
@@ -265,7 +267,9 @@ describe('RunStreamBridge tool and streaming events', function () {
         expect($iterationEvent)->not()->toBeNull()
             ->and($iterationEvent->payload['finish_reason'])->toBe('tool_calls')
             ->and($iterationEvent->payload['iteration'])->toBe(0)
-            ->and($iterationEvent->payload['tool_call_count'])->toBe(1);
+            ->and($iterationEvent->payload['tool_call_count'])->toBe(1)
+            ->and($iterationEvent->payload['tool_round'])->toBe(1)
+            ->and($iterationEvent->payload['max_tool_rounds'])->toBe(100);
 
         $types = turnEventTypes($turn);
         $normalizedTypes = array_map(
@@ -278,6 +282,51 @@ describe('RunStreamBridge tool and streaming events', function () {
         expect($iterationIndex)->toBeInt()
             ->and($toolStartedIndex)->toBeInt()
             ->and($iterationIndex)->toBeLessThan($toolStartedIndex);
+    });
+
+    it('maps the tool-round threshold warning to a durable warning event', function () {
+        $turn = createBridgeTurn();
+        $bridge = app(RunStreamBridge::class);
+
+        $stream = runtimeStream([
+            ['event' => 'status', 'data' => ['phase' => RunPhase::AwaitingLlm->value, 'run_id' => BRIDGE_TEST_RUN_ID]],
+            ['event' => 'status', 'data' => [
+                'phase' => 'tool_round_warning',
+                'tool_round_count' => 80,
+                'max_tool_rounds' => 100,
+                'run_id' => BRIDGE_TEST_RUN_ID,
+            ]],
+            ['event' => 'done', 'data' => [
+                'content' => 'Finished',
+                'run_id' => BRIDGE_TEST_RUN_ID,
+                'meta' => [
+                    'tool_round_count' => 80,
+                    'tool_call_count' => 96,
+                    'max_tool_rounds' => 100,
+                ],
+            ]],
+        ]);
+
+        iterator_to_array($bridge->wrap($turn, $stream));
+
+        $warning = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::AssistantToolRoundWarning->value)
+            ->firstOrFail();
+        $completed = AiRunEvent::query()
+            ->where('run_id', $turn->id)
+            ->where('event_type', RunEventType::RunCompleted->value)
+            ->firstOrFail();
+
+        expect($warning->payload)->toMatchArray([
+            'tool_round_count' => 80,
+            'max_tool_rounds' => 100,
+            'percent_used' => 80,
+        ])->and($completed->payload)->toMatchArray([
+            'tool_round_count' => 80,
+            'tool_call_count' => 96,
+            'max_tool_rounds' => 100,
+        ]);
     });
 });
 

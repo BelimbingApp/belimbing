@@ -121,6 +121,7 @@ class RunStreamBridge
             RunPhase::Cancelled->value => [$this->publisher->turnCancelled($turn, 'User cancelled')->toSsePayload()],
             'thinking_delta' => $this->onThinkingDelta($turn, $data),
             'iteration_completed' => $this->onIterationCompleted($turn, $data),
+            'tool_round_warning' => $this->onToolRoundWarning($turn, $data),
             'tool_started' => $this->onToolStarted($turn, $data),
             'tool_stdout' => $this->onToolStdout($turn, $data),
             'tool_finished' => $this->onToolFinished($turn, $data, $turnStartedAt),
@@ -173,6 +174,23 @@ class RunStreamBridge
                 $finishReason,
                 isset($data['iteration']) ? (int) $data['iteration'] : null,
                 isset($data['tool_call_count']) ? (int) $data['tool_call_count'] : null,
+                isset($data['tool_round']) ? (int) $data['tool_round'] : null,
+                isset($data['max_tool_rounds']) ? (int) $data['max_tool_rounds'] : null,
+            )->toSsePayload(),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array<string, mixed>>
+     */
+    private function onToolRoundWarning(AiRun $turn, array $data): array
+    {
+        return [
+            $this->publisher->toolRoundWarning(
+                $turn,
+                (int) ($data['tool_round_count'] ?? 0),
+                (int) ($data['max_tool_rounds'] ?? 0),
             )->toSsePayload(),
         ];
     }
@@ -296,6 +314,9 @@ class RunStreamBridge
         $events[] = $this->publisher->turnCompleted($turn, [
             'run_id' => $data['run_id'] ?? null,
             'elapsed_ms' => $elapsedMs,
+            'tool_round_count' => $meta['tool_round_count'] ?? 0,
+            'tool_call_count' => $meta['tool_call_count'] ?? 0,
+            'max_tool_rounds' => $meta['max_tool_rounds'] ?? null,
         ])->toSsePayload();
 
         // turnCompleted also publishes ReadyForInput for chat — read it back.

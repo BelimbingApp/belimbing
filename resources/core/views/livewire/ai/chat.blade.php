@@ -616,6 +616,8 @@
                     reasoningLabel: @js(__('Reasoning…')),
                     writingLabel: @js(__('Writing…')),
                     runningToolLabelTemplate: @js(__('Running :tool…')),
+                    toolRoundsLabelTemplate: @js(__('Tool rounds :current/:limit')),
+                    toolRoundWarningTemplate: @js(__('Approaching the tool-round limit (:current/:limit). The agent is prioritizing completion.')),
                     replayUrlTemplate: @js(route('ai.chat.turn.events', ['runId' => '__TURN__'])),
                 })"
                 x-effect="window.dispatchEvent(new CustomEvent(isBusy ? 'agent-chat-busy' : 'agent-chat-idle'))"
@@ -645,6 +647,8 @@
                             $messageTokens = $message->getMeta('tokens');
                             $messageLatencyMs = $message->getMetaInt('latency_ms');
                             $messageAiActiveDurationMs = $message->getMetaInt('ai_active_duration_ms');
+                            $messageToolRoundCount = $message->getMetaInt('tool_round_count');
+                            $messageToolCallCount = $message->getMetaInt('tool_call_count');
                             $messageTimeoutSeconds = $message->getMetaInt('timeout_seconds');
                             $messageRetryAttempts = $message->getMetaInt('retry_attempts');
                             $messageErrorType = $message->getMetaString('error_type');
@@ -708,6 +712,8 @@
                                 :model="$messageModel"
                                 :markdown="$markdown"
                                 :latency-ms="$messageLatencyMs"
+                                :tool-round-count="$messageToolRoundCount"
+                                :tool-call-count="$messageToolCallCount"
                             />
                         @elseif ($message->role === 'assistant' && $messageOrchestrationStatus !== null)
                             {{-- Action message (navigation, guide, models, etc.) --}}
@@ -725,9 +731,11 @@
                                         :run-id="$message->runId"
                                         :tokens="$messageTokens"
                                         :latency-ms="$messageLatencyMs"
+                                        :tool-round-count="$messageToolRoundCount"
+                                        :tool-call-count="$messageToolCallCount"
                                         :timeout-seconds="$messageTimeoutSeconds"
                                         :retry-attempts="$messageRetryAttempts"
-                                                :error-type="$messageErrorType"
+                                        :error-type="$messageErrorType"
                                         :error-message="$messageErrorMessage"
                                         :run-status="$messageRunStatus"
                                     />
@@ -744,6 +752,8 @@
                                 :tokens="$messageTokens"
                                 :latency-ms="$messageLatencyMs"
                                 :ai-active-duration-ms="$messageAiActiveDurationMs"
+                                :tool-round-count="$messageToolRoundCount"
+                                :tool-call-count="$messageToolCallCount"
                                 :timeout-seconds="$messageTimeoutSeconds"
                                 :retry-attempts="$messageRetryAttempts"
                                 :run-status="$messageRunStatus"
@@ -928,6 +938,17 @@
                                 </div>
                             </template>
 
+                            {{-- Tool-round warning --}}
+                            <template x-if="entry.type === 'tool_round_warning'">
+                                <div
+                                    role="status"
+                                    class="flex items-start gap-2 rounded-lg border border-status-warning-border bg-status-warning-subtle px-2.5 py-2 text-xs text-status-warning"
+                                >
+                                    <x-icon name="heroicon-o-exclamation-triangle" class="mt-0.5 h-4 w-4 shrink-0" />
+                                    <span x-text="toolRoundWarningText(entry.toolRoundCount, entry.maxToolRounds)"></span>
+                                </div>
+                            </template>
+
                             {{-- Error --}}
                             <template x-if="entry.type === 'error'">
                                 <div class="flex justify-start">
@@ -961,10 +982,17 @@
                     x-show="isBusy"
                     x-cloak
                     aria-live="polite"
-                    class="border-t border-border-default bg-surface-subtle/60 px-4 py-1.5 flex items-center gap-3 text-xs shrink-0"
+                    class="border-t border-border-default bg-surface-subtle/60 px-4 py-1.5 flex items-center gap-2 sm:gap-3 text-xs shrink-0"
                 >
                     <span class="w-2 h-2 bg-accent rounded-full animate-pulse shrink-0"></span>
-                    <span class="text-muted truncate" x-text="runLabel || '{{ __('Processing…') }}'"></span>
+                    <span class="min-w-0 flex-1 text-muted truncate" x-text="runLabel || '{{ __('Processing…') }}'"></span>
+                    <span
+                        x-show="toolRoundCount > 0 && maxToolRounds > 0"
+                        x-cloak
+                        class="shrink-0 tabular-nums"
+                        :class="toolRoundWarning ? 'font-medium text-status-warning' : 'text-muted/70'"
+                        x-text="toolRoundsText(toolRoundCount, maxToolRounds)"
+                    ></span>
                     <span class="tabular-nums text-muted/70 shrink-0" x-text="
                         elapsedSeconds < 60
                             ? elapsedSeconds + 's'
@@ -974,9 +1002,10 @@
                         <a
                             href="{{ route('admin.ai.control-plane', ['tab' => 'inspector', 'runId' => $selectedSessionTurnTarget['run_id']]) }}"
                             wire:navigate
+                            aria-label="{{ __('Open this run in the Control Panel') }}"
                             class="ml-auto inline-flex items-center gap-1 rounded-full border border-border-default bg-surface-card px-2 py-0.5 text-[11px] text-accent hover:border-accent/40 hover:bg-surface-subtle transition-colors shrink-0"
                         >
-                            <span>{{ __('Control Panel') }}</span>
+                            <span class="hidden sm:inline">{{ __('Control Panel') }}</span>
                             <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3 w-3" />
                         </a>
                     @endif
@@ -1247,6 +1276,9 @@
         reasoningLabel: config.reasoningLabel ?? 'Reasoning…',
         writingLabel: config.writingLabel ?? 'Writing…',
         runningToolLabelTemplate: config.runningToolLabelTemplate ?? 'Running :tool…',
+        toolRoundsLabelTemplate: config.toolRoundsLabelTemplate ?? 'Tool rounds :current/:limit',
+        toolRoundWarningTemplate: config.toolRoundWarningTemplate
+            ?? 'Approaching the tool-round limit (:current/:limit). The agent is prioritizing completion.',
         replayUrlTemplate: config.replayUrlTemplate ?? '',
         terminalTurnStatuses: ['succeeded', 'failed', 'cancelled', 'timed_out'],
 
@@ -1278,6 +1310,18 @@
             return this.selectedRunState?.elapsedSeconds || 0;
         },
 
+        get toolRoundCount() {
+            return this.selectedRunState?.toolRoundCount || 0;
+        },
+
+        get maxToolRounds() {
+            return this.selectedRunState?.maxToolRounds || 0;
+        },
+
+        get toolRoundWarning() {
+            return !!this.selectedRunState?.toolRoundWarning;
+        },
+
         get toolsCollapsed() {
             return this.selectedRunState?.toolsCollapsed || false;
         },
@@ -1296,6 +1340,9 @@
                 lastSeq: 0,
                 toolMap: {},
                 completedToolCount: 0,
+                toolRoundCount: 0,
+                maxToolRounds: 0,
+                toolRoundWarning: false,
                 toolsCollapsed: false,
                 deltaBuffer: '',
                 deltaFlushTimer: null,
@@ -1887,6 +1934,14 @@
                     this.onThinkingDelta(data, activeTurnId);
                     break;
 
+                case 'assistant.iteration_completed':
+                    this.onIterationCompleted(data, activeTurnId);
+                    break;
+
+                case 'assistant.tool_round_warning':
+                    this.onToolRoundWarning(data, activeTurnId);
+                    break;
+
                 case 'tool.started':
                     this.onToolStarted(data, activeTurnId);
                     break;
@@ -2010,6 +2065,42 @@
             }
             entry.active = true;
             entry.thinkingContent = (entry.thinkingContent || '') + delta;
+        },
+
+        onIterationCompleted(data, runId) {
+            const payload = data?.payload || data || {};
+            const state = this.ensureRunState(runId);
+            if (!state) {
+                return;
+            }
+
+            const toolRound = Number.parseInt(payload.tool_round ?? 0, 10) || 0;
+            const maxToolRounds = Number.parseInt(payload.max_tool_rounds ?? 0, 10) || 0;
+
+            if (toolRound > 0) {
+                state.toolRoundCount = Math.max(state.toolRoundCount, toolRound);
+            }
+
+            if (maxToolRounds > 0) {
+                state.maxToolRounds = maxToolRounds;
+            }
+        },
+
+        onToolRoundWarning(data, runId) {
+            const payload = data?.payload || data || {};
+            const state = this.ensureRunState(runId);
+            if (!state || state.toolRoundWarning) {
+                return;
+            }
+
+            state.toolRoundCount = Number.parseInt(payload.tool_round_count ?? state.toolRoundCount, 10) || 0;
+            state.maxToolRounds = Number.parseInt(payload.max_tool_rounds ?? state.maxToolRounds, 10) || 0;
+            state.toolRoundWarning = true;
+            state.streamEntries.push({
+                type: 'tool_round_warning',
+                toolRoundCount: state.toolRoundCount,
+                maxToolRounds: state.maxToolRounds,
+            });
         },
 
         onToolStarted(data, runId) {
@@ -2145,6 +2236,18 @@
             }
 
             return this.runningToolLabelTemplate.replace(':tool', tool);
+        },
+
+        toolRoundsText(current, limit) {
+            return this.toolRoundsLabelTemplate
+                .replace(':current', current)
+                .replace(':limit', limit);
+        },
+
+        toolRoundWarningText(current, limit) {
+            return this.toolRoundWarningTemplate
+                .replace(':current', current)
+                .replace(':limit', limit);
         },
 
         deactivateThinking(runId = null) {

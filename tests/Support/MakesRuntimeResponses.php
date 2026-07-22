@@ -171,13 +171,16 @@ trait MakesRuntimeResponses
         );
     }
 
-    protected function makeAiRuntimeSettings(?int $maxToolIterations = null): AiRuntimeSettings
+    protected function makeAiRuntimeSettings(?int $maxToolRounds = null): AiRuntimeSettings
     {
         $settings = \Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('has')
+            ->andReturnUsing(fn (string $key): bool => $maxToolRounds !== null
+                && $key === AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
         $settings->shouldReceive('get')
-            ->andReturnUsing(function (string $key, mixed $default = null) use ($maxToolIterations): mixed {
-                if ($key === AiRuntimeSettings::MAX_TOOL_ITERATIONS_KEY && $maxToolIterations !== null) {
-                    return $maxToolIterations;
+            ->andReturnUsing(function (string $key, mixed $default = null) use ($maxToolRounds): mixed {
+                if ($key === AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY && $maxToolRounds !== null) {
+                    return $maxToolRounds;
                 }
 
                 return config($key, $default);

@@ -8,6 +8,8 @@
     'markdown',
     'errorMessage' => null,
     'latencyMs' => null,
+    'toolRoundCount' => null,
+    'toolCallCount' => null,
 ])
 
 <div class="flex justify-start">
@@ -26,6 +28,8 @@
             :model="$model"
             :run-id="$runId"
             :latency-ms="$latencyMs"
+            :tool-round-count="$toolRoundCount"
+            :tool-call-count="$toolCallCount"
             :error-type="$errorType"
             :error-message="$errorMessage"
         />
