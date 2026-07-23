@@ -4,10 +4,15 @@
     $tzLabel = $tzMode->label();
     $companyTz = $tzService->currentCompanyTimezone();
     $companyTzExplicit = $tzService->isCompanyTimezoneExplicit();
+    $companyTimezoneSettingsUrl = null;
     $theme = 'system';
 
     if (auth()->check()) {
         $user = auth()->user();
+        $companyId = $user->getCompanyId();
+        $companyTimezoneSettingsUrl = $companyId !== null
+            ? route('admin.companies.show', $companyId)
+            : null;
         $theme = (string) app(\App\Base\Settings\Contracts\SettingsService::class)->get(
             'ui.theme',
             \App\Base\Settings\DTO\Scope::user((int) $user->getKey(), $user->getCompanyId()),
@@ -47,6 +52,7 @@
         tzLabel: @js($tzLabel),
         companyTz: @js($companyTz),
         companyTzExplicit: @js($companyTzExplicit),
+        companyTimezoneSettingsUrl: @js($companyTimezoneSettingsUrl),
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
@@ -105,6 +111,9 @@
             if (mode === 'utc') return 'UTC';
             return this.companyTzExplicit ? this.tzCity(this.companyTz) : '{{ __('(not set)') }}';
         },
+        goToCompanyTimezoneSettings() {
+            window.location.href = this.companyTimezoneSettingsUrl;
+        },
         setTz(mode) {
             if (this.tzSaving || mode === this.tzMode) { this.tzOpen = false; return; }
             this.tzSaving = true;
@@ -134,7 +143,7 @@
             <div class="relative" @click.outside="tzOpen = false" @keydown.escape.window="tzOpen = false">
                 <button
                     type="button"
-                    @click="tzOpen = !tzOpen"
+                    @click="(tzMode === 'company' && !companyTzExplicit && companyTimezoneSettingsUrl) ? goToCompanyTimezoneSettings() : tzOpen = !tzOpen"
                     :disabled="tzSaving"
                     class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle transition-colors"
                     :class="[

@@ -5,8 +5,10 @@ use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Models\Setting;
+use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Js;
 
 const TZ_SET_COMPANY_TIMEZONE_KL = 'Asia/Kuala_Lumpur';
 
@@ -90,15 +92,16 @@ it('persists mode against the user even when the account has an employee id', fu
         ->toBeFalse();
 });
 
-it('keeps the top-bar timezone selector available when the company timezone is unset', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
+it('routes an unset company timezone to the authenticated users company settings', function (): void {
+    $company = Company::factory()->create();
+    $user = User::factory()->create(['company_id' => $company->id]);
 
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('aria-label="Select timezone display mode"', false)
-        ->assertSee('@click="tzOpen = !tzOpen"', false)
-        ->assertDontSee(route('admin.companies.show', 1), false);
+        ->assertSee((string) Js::from(route('admin.companies.show', $company)), false)
+        ->assertDontSee((string) Js::from(route('admin.companies.show', Company::LICENSEE_ID)), false);
 });
 
 it('rejects invalid mode values', function (): void {
