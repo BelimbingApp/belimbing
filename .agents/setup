@@ -63,6 +63,10 @@ use_supabase=false
 if [[ -n "${SUPABASE_DB_URL:-}" && -n "${SUPABASE_DB_CA_CERT:-}" ]]; then
     use_supabase=true
     source "$PROJECT_ROOT/.agents/setup-supabase"
+    # Persistent Supabase DB already has the AI agent user with known
+    # credentials for browser-based E2E and UX tasks.
+    set_env TEST_LOGIN_EMAIL 'ai@agent.my'
+    set_env TEST_LOGIN_PASSWORD 'password'
 else
     set_env DB_CONNECTION sqlite
     set_env DB_DATABASE "$PROJECT_ROOT/database/database.sqlite"
