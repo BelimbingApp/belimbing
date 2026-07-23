@@ -51,22 +51,35 @@ if ! grep -q '^APP_KEY=' .env; then
 fi
 set_env APP_SCHEME http
 set_env APP_URL http://127.0.0.1:8000
-set_env DB_CONNECTION sqlite
-set_env DB_DATABASE "$PROJECT_ROOT/database/database.sqlite"
 set_env CACHE_STORE file
 set_env QUEUE_CONNECTION sync
 set_env SESSION_DRIVER file
 set_env AI_BROWSER_HEADLESS true
 
+# Database: orbs use the Supabase primary database for persistent development
+# data. When Supabase credentials are present, configure pgsql with verify-full
+# TLS. Otherwise fall back to a disposable local SQLite database.
+use_supabase=false
+if [[ -n "${SUPABASE_DB_URL:-}" && -n "${SUPABASE_DB_CA_CERT:-}" ]]; then
+    use_supabase=true
+    source "$PROJECT_ROOT/.agents/setup-supabase"
+else
+    set_env DB_CONNECTION sqlite
+    set_env DB_DATABASE "$PROJECT_ROOT/database/database.sqlite"
+fi
+
 mkdir -p \
-    database \
     storage/app/sqlite-ext \
     storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/testing \
     storage/framework/views \
     storage/logs
-touch database/database.sqlite
+
+if [[ "$use_supabase" == false ]]; then
+    mkdir -p database
+    touch database/database.sqlite
+fi
 
 install_bundle() {
     local repository=$1
@@ -108,15 +121,21 @@ if ! grep -q '^APP_KEY=base64:' .env; then
 fi
 
 echo '==> Preparing the application database and assets'
-admin_bootstrap_file=$(mktemp)
-trap 'rm -f "$admin_bootstrap_file"' EXIT
-printf '%s\n' 'Orb Admin' 'admin@example.test' 'password' > "$admin_bootstrap_file"
-LICENSEE_COMPANY_NAME='Belimbing Orb' \
-LICENSEE_COMPANY_CODE='BLB' \
-BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
-    php artisan migrate --seed --force --no-interaction
-rm -f "$admin_bootstrap_file"
-trap - EXIT
+if [[ "$use_supabase" == true ]]; then
+    # The Supabase primary database is persistent across orb lifecycles.
+    # Apply pending migrations and seeders per the BLB dev convention.
+    php artisan migrate --dev --force --no-interaction
+else
+    admin_bootstrap_file=$(mktemp)
+    trap 'rm -f "$admin_bootstrap_file"' EXIT
+    printf '%s\n' 'Orb Admin' 'admin@example.test' 'password' > "$admin_bootstrap_file"
+    LICENSEE_COMPANY_NAME='Belimbing Orb' \
+    LICENSEE_COMPANY_CODE='BLB' \
+    BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
+        php artisan migrate --seed --force --no-interaction
+    rm -f "$admin_bootstrap_file"
+    trap - EXIT
+fi
 bun run build
 
 echo '==> Orb setup complete'

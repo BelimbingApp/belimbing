@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Supabase pooler discovery and .env configuration for orbs.
+#
+# Sourced by .agents/setup when SUPABASE_DB_URL and SUPABASE_DB_CA_CERT are
+# present. The direct db.<ref>.supabase.co endpoint is IPv6-only, which orbs
+# cannot reach. This script discovers the IPv4 Shared Pooler (Supavisor) host
+# by probing cluster/region combinations, then writes pgsql .env settings with
+# verify-full TLS.
+#
+# Supabase assigns projects to pooler clusters non-deterministically (aws-0,
+# aws-1, aws-2, …) across regions, so probing is required.
+#
+# Inputs (environment):
+#   SUPABASE_DB_URL       postgresql://postgres:password@db.<ref>.supabase.co:5432/postgres
+#   SUPABASE_DB_CA_CERT   Supabase Root CA, stored as single-line PEM (spaces for newlines)
+#
+# Outputs:
+#   Writes DB_* settings to .env via set_env (provided by the caller).
+#   Writes the reconstructed CA cert to ~/.supabase-ca.pem.
+
+set -euo pipefail
+
+# --- guard: only run when Supabase env vars are present ---
+[[ -n "${SUPABASE_DB_URL:-}" ]] || return 0
+[[ -n "${SUPABASE_DB_CA_CERT:-}" ]] || return 0
+
+echo '==> Configuring Supabase primary database'
+
+# --- ensure psql is available for pooler probing ---
+if ! command -v psql >/dev/null 2>&1; then
+    echo '    Installing postgresql-client for pooler discovery'
+    sudo apt-get install -y -qq postgresql-client
+fi
+
+# --- reconstruct CA cert to proper PEM ---
+cert_file="$HOME/.supabase-ca.pem"
+python3 - <<'PY'
+import os
+cert = os.environ['SUPABASE_DB_CA_CERT'].strip()
+header = '-----BEGIN CERTIFICATE-----'
+footer = '-----END CERTIFICATE-----'
+if not cert.startswith(header) or not cert.endswith(footer):
+    raise SystemExit('SUPABASE_DB_CA_CERT: unexpected PEM framing')
+body = cert[len(header):len(cert) - len(footer)].strip()
+b64 = '\n'.join(body.split())
+pem = f'{header}\n{b64}\n{footer}\n'
+path = os.path.expanduser('~/.supabase-ca.pem')
+with open(path, 'w') as f:
+    f.write(pem)
+os.chmod(path, 0o600)
+print(f'    CA cert written to {path}')
+PY
+
+# --- parse project ref and password from SUPABASE_DB_URL ---
+project_ref=$(python3 -c "
+import os, urllib.parse as up
+p = up.urlparse(os.environ['SUPABASE_DB_URL'])
+host = p.hostname or ''
+# host is db.<ref>.supabase.co
+parts = host.split('.')
+print(parts[1] if len(parts) >= 2 else '')
+")
+db_password=$(python3 -c "
+import os, urllib.parse as up
+p = up.urlparse(os.environ['SUPABASE_DB_URL'])
+print(p.password or '')
+")
+
+if [[ -z "$project_ref" ]]; then
+    echo '    ERROR: could not parse project ref from SUPABASE_DB_URL' >&2
+    return 1
+fi
+echo "    Project ref: $project_ref"
+
+# --- discover the Supabase Shared Pooler host ---
+# Probe cluster indices (aws-0, aws-1, …) across known regions on port 5432
+# (session mode). Stop on first successful connection.
+regions=(
+    us-east-1 us-east-2 us-west-1 us-west-2
+    eu-west-1 eu-west-2 eu-central-1 eu-central-2
+    ap-southeast-1 ap-northeast-1 ap-northeast-2 ap-south-1
+    ap-east-1 ap-southeast-2 sa-east-1 ca-central-1
+)
+pooler_host=""
+
+export PGPASSWORD="$db_password"
+export PGSSLMODE=verify-full
+export PGSSLROOTCERT="$cert_file"
+
+for cluster in 0 1 2 3 4; do
+    [[ -z "$pooler_host" ]] || break
+    for region in "${regions[@]}"; do
+        host="aws-${cluster}-${region}.pooler.supabase.com"
+        # Skip hosts without an A record (fast DNS check)
+        if ! getent hosts "$host" >/dev/null 2>&1; then
+            continue
+        fi
+        if psql -h "$host" -p 5432 -U "postgres.${project_ref}" -d postgres \
+               -tAc 'SELECT 1;' -w -v connect_timeout=6 >/dev/null 2>&1; then
+            pooler_host="$host"
+            echo "    Pooler discovered: $pooler_host"
+            break
+        fi
+    done
+done
+
+if [[ -z "$pooler_host" ]]; then
+    echo '    ERROR: could not discover a reachable Supabase pooler host' >&2
+    echo '    Tried clusters aws-0..aws-4 across all known regions.' >&2
+    return 1
+fi
+
+# --- write pgsql .env settings ---
+set_env DB_CONNECTION pgsql
+set_env DB_HOST "$pooler_host"
+set_env DB_PORT 5432
+set_env DB_DATABASE postgres
+set_env DB_USERNAME "postgres.${project_ref}"
+set_env DB_PASSWORD "$db_password"
+set_env DB_SSLMODE verify-full
+set_env DB_SSLROOTCERT "$cert_file"
+
+echo '    Supabase primary database configured (verify-full TLS).'

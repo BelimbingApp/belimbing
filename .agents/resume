@@ -6,9 +6,10 @@ readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
-# The orb uses SQLite and file-backed Laravel stores, so there are no external
-# services to reconnect. Repair only the writable runtime paths that may be
-# removed by test cleanup or an interrupted command.
+# The orb uses the Supabase primary database (pgsql) for persistent development
+# data, with file-backed Laravel stores for cache/sessions/queues. There are no
+# external services to reconnect. Repair only the writable runtime paths that
+# may be removed by test cleanup or an interrupted command.
 mkdir -p \
     storage/framework/cache/data \
     storage/framework/sessions \
