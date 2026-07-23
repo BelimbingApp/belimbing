@@ -124,7 +124,7 @@ echo '==> Preparing the application database and assets'
 if [[ "$use_supabase" == true ]]; then
     # The Supabase primary database is persistent across orb lifecycles.
     # Apply pending migrations and seeders per the BLB dev convention.
-    php artisan migrate --dev --force --no-interaction
+    php artisan migrate --dev --no-interaction
 else
     admin_bootstrap_file=$(mktemp)
     trap 'rm -f "$admin_bootstrap_file"' EXIT
@@ -132,7 +132,7 @@ else
     LICENSEE_COMPANY_NAME='Belimbing Orb' \
     LICENSEE_COMPANY_CODE='BLB' \
     BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
-        php artisan migrate --seed --force --no-interaction
+        php artisan migrate --seed --no-interaction
     rm -f "$admin_bootstrap_file"
     trap - EXIT
 fi
