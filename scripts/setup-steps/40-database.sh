@@ -381,11 +381,11 @@ install_postgresql() {
                             # Update existing file to use signed-by if it doesn't already
                             if ! grep -q "signed-by" "$pg_sources_file"; then
                                 echo -e "${CYAN}Updating repository file to use modern signed-by method...${NC}"
-                                sudo sed -i "s|deb http://apt.postgresql.org|deb [signed-by=$pg_key_file] http://apt.postgresql.org|g" "$pg_sources_file"
+                                sudo sed -i "s|deb https*://apt.postgresql.org|deb [signed-by=$pg_key_file] https://apt.postgresql.org|g" "$pg_sources_file"
                             fi
                         else
                             # Create new repository file with modern method
-                            echo "deb [signed-by=$pg_key_file] http://apt.postgresql.org/pub/repos/apt $distro_codename-pgdg main" | \
+                            echo "deb [signed-by=$pg_key_file] https://apt.postgresql.org/pub/repos/apt $distro_codename-pgdg main" | \
                                 sudo tee "$pg_sources_file" >/dev/null
                         fi
 

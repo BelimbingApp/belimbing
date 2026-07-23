@@ -99,7 +99,7 @@ install_docker() {
 
     if command_exists apt-get; then
         # Install Docker via official script
-        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        curl -fsSL --proto '=https' --proto-redir '=https' https://get.docker.com -o /tmp/get-docker.sh
         sudo sh /tmp/get-docker.sh
         rm /tmp/get-docker.sh
 

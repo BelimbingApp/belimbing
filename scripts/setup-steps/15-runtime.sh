@@ -473,13 +473,13 @@ install_composer() {
     local composer_installer
     composer_installer=$(mktemp)
 
-    curl -fsSL --max-time 30 "$COMPOSER_INSTALLER_URL" -o "$composer_installer" || {
+    curl -fsSL --proto '=https' --proto-redir '=https' --max-time 30 "$COMPOSER_INSTALLER_URL" -o "$composer_installer" || {
         echo -e "${RED}✗${NC} Failed to download Composer installer" >&2
         rm -f "$composer_installer"; return 1
     }
 
     local expected_signature actual_signature
-    expected_signature=$(curl -fsSL --max-time 30 "$COMPOSER_SIGNATURE_URL") || {
+    expected_signature=$(curl -fsSL --proto '=https' --proto-redir '=https' --max-time 30 "$COMPOSER_SIGNATURE_URL") || {
         echo -e "${RED}✗${NC} Failed to download Composer installer signature" >&2
         rm -f "$composer_installer"; return 1
     }

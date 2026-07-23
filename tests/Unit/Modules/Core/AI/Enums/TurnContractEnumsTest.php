@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Core\AI\Enums\AiRunStatus;
 use App\Modules\Core\AI\Enums\RunEventType;
 use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Enums\AiRunStatus;
 
 const TURN_STATUS_TERMINAL_STATES = ['succeeded', 'failed', 'cancelled', 'timed_out'];
 
@@ -129,8 +129,8 @@ describe('RunPhase', function () {
 // ------------------------------------------------------------------
 
 describe('RunEventType', function () {
-    it('has nineteen cases', function () {
-        expect(RunEventType::cases())->toHaveCount(17);
+    it('has eighteen cases', function () {
+        expect(RunEventType::cases())->toHaveCount(18);
     });
 
     it('uses dot-separated naming convention except for single-word events', function () {

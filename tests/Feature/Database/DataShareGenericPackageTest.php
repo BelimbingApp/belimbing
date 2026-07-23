@@ -456,7 +456,7 @@ it('explains the publish and pull workflow and orients Data Share settings', fun
     $this->get(route('admin.system.data-share.settings'))
         ->assertOk()
         ->assertSee('About Data Share settings')
-        ->assertSee('The source publishes an expiring offer');
+        ->assertSee('Choose and initialize a development provider here');
 });
 
 it('stores Data Share operator configuration in Base Settings and validates source routes', function (): void {
