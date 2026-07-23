@@ -22,7 +22,9 @@ it('builds registry from configured catalog', function (): void {
     $catalog = CapabilityCatalog::fromConfig($authzConfig);
     $registry = CapabilityRegistry::fromCatalog($catalog);
 
+    expect($catalog->rejected())->toBe([]);
     expect($registry->has('admin.user.view'))->toBeTrue();
+    expect($registry->has('base.settings.user.manage'))->toBeTrue();
     expect($registry->forDomain('admin'))->toContain('admin.company.view');
 });
 

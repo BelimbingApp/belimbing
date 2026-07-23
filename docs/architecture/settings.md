@@ -300,10 +300,10 @@ Settings authorization follows ownership:
 
 | Capability | Intended actor | Description |
 |------------|----------------|-------------|
-| `base.settings.manage_global` | Platform administrator | Manage installation-wide settings |
-| `base.settings.manage_company` | Authorized company administrator | Manage settings owned by the active company |
-| `base.settings.manage_user` | Authenticated user | Manage the user’s own preferences |
-| `base.settings.support_override` | Explicitly authorized support operator | Repair another user’s preferences through an audited support workflow |
+| `base.settings.global.manage` | Platform administrator | Manage installation-wide settings |
+| `base.settings.company.manage` | Authorized company administrator | Manage settings owned by the active company |
+| `base.settings.user.manage` | Authenticated user | Manage the user’s own preferences |
+| `base.settings.support-override.manage` | Explicitly authorized support operator | Repair another user’s preferences through an audited support workflow |
 
 Managing personal preferences is not an employee-supervision capability. A company administrator does not automatically gain permission to change a user’s theme, locale, landing page, or timezone mode. Support impersonation or administrative preference repair requires an explicit capability and audit trail.
 

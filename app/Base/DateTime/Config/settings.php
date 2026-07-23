@@ -31,7 +31,7 @@ return [
             'label' => 'Timezone display mode',
             'help' => 'Choose the company timezone, browser-local time, or stored UTC values.',
             'editable' => 'profile.appearance',
-            'capability' => 'base.settings.manage_user',
+            'capability' => 'base.settings.user.manage',
         ],
     ],
 ];

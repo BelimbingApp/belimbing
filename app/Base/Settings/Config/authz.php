@@ -1,10 +1,14 @@
 <?php
 
 return [
+    'domains' => [
+        'base' => 'Framework-owned application capabilities',
+    ],
+
     'capabilities' => [
-        'base.settings.manage_global',
-        'base.settings.manage_company',
-        'base.settings.manage_user',
-        'base.settings.support_override',
+        'base.settings.global.manage',
+        'base.settings.company.manage',
+        'base.settings.user.manage',
+        'base.settings.support-override.manage',
     ],
 ];

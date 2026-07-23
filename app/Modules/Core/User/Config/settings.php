@@ -12,7 +12,7 @@ return [
             'label' => 'Theme',
             'help' => 'Choose a light, dark, or operating-system-controlled color theme.',
             'editable' => 'profile.appearance',
-            'capability' => 'base.settings.manage_user',
+            'capability' => 'base.settings.user.manage',
         ],
         'ui.landing_menu_id' => [
             'type' => 'string',
@@ -24,7 +24,7 @@ return [
             'label' => 'Landing page',
             'help' => 'The first available menu page opened after sign-in.',
             'editable' => 'profile.profile',
-            'capability' => 'base.settings.manage_user',
+            'capability' => 'base.settings.user.manage',
         ],
         'ui.dashboard.layout' => [
             'type' => 'array',
@@ -36,7 +36,7 @@ return [
             'label' => 'Dashboard layout',
             'help' => 'The ordered dashboard widgets selected by this account.',
             'editable' => 'dashboard.customize',
-            'capability' => 'base.settings.manage_user',
+            'capability' => 'base.settings.user.manage',
         ],
         'ai.last_used_model_hints' => [
             'type' => 'array',
@@ -48,7 +48,7 @@ return [
             'label' => 'Last-used AI models',
             'help' => 'Per-agent model hints used to restore this account’s recent AI choices.',
             'editable' => 'ai.chat',
-            'capability' => 'base.settings.manage_user',
+            'capability' => 'base.settings.user.manage',
         ],
     ],
 ];
