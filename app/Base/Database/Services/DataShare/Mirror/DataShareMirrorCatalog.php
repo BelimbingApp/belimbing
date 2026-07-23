@@ -189,12 +189,19 @@ class DataShareMirrorCatalog
 
         $tracker = app(DataFreshnessTracker::class);
         $driverTracks = $tracker->driverSupportsTracking();
+        $trackingStatus = $driverTracks
+            ? $tracker->trackingStatus(array_map(fn (DataShareMirrorCatalogTable $table): string => $table->table, $tables))
+            : [];
 
-        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks): DataShareMirrorCatalogTable {
+        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks, $trackingStatus): DataShareMirrorCatalogTable {
             $observation = $observations->get($table->table);
 
             $freshness = $driverTracks
-                ? $tracker->state($table->table, $observation?->acknowledged_generation)->value
+                ? $tracker->state(
+                    $table->table,
+                    $observation?->acknowledged_generation,
+                    trackingInstalled: $trackingStatus[$table->table] ?? false,
+                )->value
                 : DataFreshnessState::Unknown->value;
 
             return $table->withObservation(

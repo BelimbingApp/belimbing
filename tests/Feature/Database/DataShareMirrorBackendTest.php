@@ -49,6 +49,22 @@ it('stores the mirror URL encrypted and never includes it in safe connection sta
         ->and($status->available)->toBeFalse();
 });
 
+it('scopes endpoint identity by normalized host port and database without credentials', function (): void {
+    $settings = app(SettingsService::class);
+    $connections = app(DataShareMirrorConnectionManager::class);
+
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://first:secret@DB.EXAMPLE.test:5432/blb?sslmode=require', encrypted: true);
+    $first = $connections->endpointIdentity();
+
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:5432/blb?sslmode=require', encrypted: true);
+    expect($connections->endpointIdentity())->toBe($first);
+
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:6432/blb?sslmode=require', encrypted: true);
+    expect($connections->endpointIdentity())->not->toBe($first)
+        ->and($first)->toStartWith('remote:v1:')
+        ->and($first)->not->toContain('secret', 'DB.EXAMPLE.test', 'blb');
+});
+
 it('rejects PostgreSQL URL options outside the narrow connection policy', function (string $url): void {
     $status = app(DataShareMirrorManager::class)->testConnection($url);
 
@@ -314,8 +330,10 @@ it('force pushes only the exact selected local tables through the native engine'
     $engines->shouldReceive('forMode')->once()->with('native')->andReturn($engine);
     $lock = Mockery::mock(DataShareMirrorOperationLock::class);
     $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('endpointIdentity')->once()->andReturn('remote:v1:test');
     $manager = new DataShareMirrorManager(
-        Mockery::mock(DataShareMirrorConnectionManager::class),
+        $connections,
         Mockery::mock(DataShareMirrorCatalog::class),
         $reviewer,
         $engines,
@@ -399,6 +417,7 @@ it('captures a labelled retrospective baseline of current Local and remote count
     $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
     $connections->shouldReceive('local')->andReturn($local);
     $connections->shouldReceive('mirror')->andReturn($remote);
+    $connections->shouldReceive('endpointIdentity')->andReturn('remote:v1:test');
     $connections->shouldReceive('status')->andReturn(new DataShareMirrorConnectionStatus(
         configured: true, available: true, reachable: true, driver: 'pgsql',
         localRole: 'development', remoteRole: 'development',
@@ -444,6 +463,61 @@ it('captures a labelled retrospective baseline of current Local and remote count
     expect($observation->local_rows)->toBe(10)->and($observation->remote_rows)->toBe(8);
 });
 
+it('fails a partial baseline without replacing prior observations', function (): void {
+    $localBuilder = Mockery::mock();
+    $localBuilder->shouldReceive('count')->twice()->andReturn(10, 20);
+    $remoteBuilder = Mockery::mock();
+    $remoteBuilder->shouldReceive('count')->once()->andReturn(8);
+    $remoteBuilder->shouldReceive('count')->once()->andThrow(new RuntimeException('remote count failed'));
+    $local = Mockery::mock(Connection::class);
+    $local->shouldReceive('table')->twice()->andReturn($localBuilder);
+    $remote = Mockery::mock(Connection::class);
+    $remote->shouldReceive('table')->twice()->andReturn($remoteBuilder);
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('local')->twice()->andReturn($local);
+    $connections->shouldReceive('mirror')->twice()->andReturn($remote);
+    $connections->shouldReceive('endpointIdentity')->andReturn('remote:v1:test');
+
+    DataShareMirrorObservation::query()->create([
+        'local_instance_id' => app(DataShareInstanceIdentityResolver::class)->current()->id,
+        'remote_instance_id' => 'remote:v1:test',
+        'table_name' => 'sbg_one',
+        'local_rows' => 7,
+        'remote_rows' => 7,
+        'observed_at' => now()->subDay(),
+    ]);
+
+    $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
+    $reviewer->shouldReceive('review')->andReturn(new DataShareMirrorReview(
+        DataShareMirrorDirection::Push,
+        [
+            new DataShareMirrorReviewItem('sbg_one', DataShareMirrorAction::Replace, DataShareMirrorAction::Replace, []),
+            new DataShareMirrorReviewItem('sbg_two', DataShareMirrorAction::Replace, DataShareMirrorAction::Replace, []),
+        ],
+        false,
+        ['create' => 0, 'replace' => 2, 'delete' => 0, 'blocked' => 0],
+        'token',
+    ));
+    $lock = Mockery::mock(DataShareMirrorOperationLock::class);
+    $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $manager = new DataShareMirrorManager(
+        $connections,
+        Mockery::mock(DataShareMirrorCatalog::class),
+        $reviewer,
+        Mockery::mock(DataShareMirrorEngineRegistry::class),
+        $lock,
+        app(DataOperationRecorder::class),
+    );
+
+    expect(fn () => $manager->captureBaseline(['sbg_one', 'sbg_two']))
+        ->toThrow(DataShareMirrorException::class, 'No observation was recorded');
+
+    $run = DataOperationRun::query()->latest('id')->firstOrFail();
+    expect($run->status->value)->toBe('failed')
+        ->and($run->tables()->count())->toBe(0)
+        ->and(DataShareMirrorObservation::query()->where('table_name', 'sbg_one')->sole()->local_rows)->toBe(7);
+});
+
 it('records a determinate engine failure as failed and an uncertain one as indeterminate', function (): void {
     $review = new DataShareMirrorReview(
         DataShareMirrorDirection::Push,
@@ -462,9 +536,11 @@ it('records a determinate engine failure as failed and an uncertain one as indet
         $engines->shouldReceive('forMode')->andReturn($engine);
         $lock = Mockery::mock(DataShareMirrorOperationLock::class);
         $lock->shouldReceive('run')->andReturnUsing(fn (callable $operation) => $operation());
+        $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+        $connections->shouldReceive('endpointIdentity')->andReturn('remote:v1:test');
 
         return new DataShareMirrorManager(
-            Mockery::mock(DataShareMirrorConnectionManager::class),
+            $connections,
             Mockery::mock(DataShareMirrorCatalog::class),
             $reviewer,
             $engines,
@@ -482,6 +558,151 @@ it('records a determinate engine failure as failed and an uncertain one as indet
     expect(fn () => $makeManager(DataShareMirrorException::processFailed('psql', 1))->forcePush(['sbg_records']))
         ->toThrow(DataShareMirrorException::class);
     expect(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('indeterminate');
+});
+
+it('rejects an engine result whose action differs from the reviewed manifest', function (): void {
+    $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
+    $reviewer->shouldReceive('review')->once()->andReturn(new DataShareMirrorReview(
+        DataShareMirrorDirection::Push,
+        [new DataShareMirrorReviewItem('sbg_records', DataShareMirrorAction::Replace, DataShareMirrorAction::Replace)],
+        false,
+        ['create' => 0, 'replace' => 1, 'delete' => 0, 'blocked' => 0],
+        'tok',
+    ));
+    $engine = Mockery::mock(DataShareMirrorEngine::class);
+    $engine->shouldReceive('execute')->once()->andReturn(new DataShareMirrorExecutionResult(
+        DataShareMirrorDirection::Push,
+        ['create' => 1, 'replace' => 0, 'delete' => 0],
+        [['table' => 'sbg_records', 'action' => 'create']],
+    ));
+    $engines = Mockery::mock(DataShareMirrorEngineRegistry::class);
+    $engines->shouldReceive('forMode')->once()->with('native')->andReturn($engine);
+    $lock = Mockery::mock(DataShareMirrorOperationLock::class);
+    $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('endpointIdentity')->once()->andReturn('remote:v1:test');
+    $manager = new DataShareMirrorManager(
+        $connections,
+        Mockery::mock(DataShareMirrorCatalog::class),
+        $reviewer,
+        $engines,
+        $lock,
+        app(DataOperationRecorder::class),
+    );
+
+    expect(fn () => $manager->forcePush(['sbg_records']))
+        ->toThrow(DataShareMirrorException::class, 'result manifest could not be verified');
+
+    $run = DataOperationRun::query()->latest('id')->firstOrFail();
+    expect($run->status->value)->toBe('indeterminate')
+        ->and($run->tables()->where('table_name', 'sbg_records')->sole()->actions)->toBe(['replace']);
+});
+
+it('rolls back successful observations when terminal bookkeeping fails', function (): void {
+    $localId = app(DataShareInstanceIdentityResolver::class)->current()->id;
+    DataShareMirrorObservation::query()->create([
+        'local_instance_id' => $localId,
+        'remote_instance_id' => 'remote:v1:test',
+        'table_name' => 'sbg_records',
+        'local_rows' => 7,
+        'remote_rows' => 7,
+        'observed_at' => now()->subDay(),
+    ]);
+
+    $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
+    $reviewer->shouldReceive('review')->once()->andReturn(new DataShareMirrorReview(
+        DataShareMirrorDirection::Push,
+        [new DataShareMirrorReviewItem('sbg_records', DataShareMirrorAction::Replace, DataShareMirrorAction::Replace)],
+        false,
+        ['create' => 0, 'replace' => 1, 'delete' => 0, 'blocked' => 0],
+        'tok',
+    ));
+    $engine = Mockery::mock(DataShareMirrorEngine::class);
+    $engine->shouldReceive('execute')->once()->andReturn(new DataShareMirrorExecutionResult(
+        DataShareMirrorDirection::Push,
+        ['create' => 0, 'replace' => 1, 'delete' => 0],
+        [['table' => 'sbg_records', 'action' => 'replace', 'local_rows' => 12, 'remote_rows' => 12]],
+    ));
+    $engines = Mockery::mock(DataShareMirrorEngineRegistry::class);
+    $engines->shouldReceive('forMode')->once()->with('native')->andReturn($engine);
+    $lock = Mockery::mock(DataShareMirrorOperationLock::class);
+    $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('endpointIdentity')->once()->andReturn('remote:v1:test');
+    $delegate = app(DataOperationRecorder::class);
+    $recorder = new class($delegate) implements DataOperationRecorder
+    {
+        public function __construct(private readonly DataOperationRecorder $delegate) {}
+
+        public function open(string $operationType, array $attributes = []): int
+        {
+            return $this->delegate->open($operationType, $attributes);
+        }
+
+        public function resume(int $runId): void
+        {
+            $this->delegate->resume($runId);
+        }
+
+        public function recordTable(int $runId, string $table, array $effect): void
+        {
+            $this->delegate->recordTable($runId, $table, $effect);
+        }
+
+        public function finalize(int $runId, string $status, array $attributes = []): void
+        {
+            if ($status === 'succeeded') {
+                throw new RuntimeException('terminal bookkeeping failed');
+            }
+
+            $this->delegate->finalize($runId, $status, $attributes);
+        }
+    };
+    $manager = new DataShareMirrorManager(
+        $connections,
+        Mockery::mock(DataShareMirrorCatalog::class),
+        $reviewer,
+        $engines,
+        $lock,
+        $recorder,
+    );
+
+    expect(fn () => $manager->forcePush(['sbg_records']))->toThrow(DataShareMirrorException::class);
+
+    $observation = DataShareMirrorObservation::query()->where('table_name', 'sbg_records')->sole();
+    expect($observation->local_rows)->toBe(7)
+        ->and($observation->remote_rows)->toBe(7)
+        ->and(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('indeterminate');
+});
+
+it('never mutates tables when durable operation history is unavailable', function (): void {
+    $review = new DataShareMirrorReview(
+        DataShareMirrorDirection::Push,
+        [new DataShareMirrorReviewItem('sbg_records', DataShareMirrorAction::Replace, DataShareMirrorAction::Replace, [])],
+        false,
+        ['create' => 0, 'replace' => 1, 'delete' => 0, 'blocked' => 0],
+        'tok',
+    );
+    $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
+    $reviewer->shouldReceive('review')->once()->andReturn($review);
+    $engines = Mockery::mock(DataShareMirrorEngineRegistry::class);
+    $engines->shouldReceive('forMode')->never();
+    $lock = Mockery::mock(DataShareMirrorOperationLock::class);
+    $lock->shouldReceive('run')->once()->andReturnUsing(fn (callable $operation) => $operation());
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('endpointIdentity')->once()->andReturn('remote:v1:test');
+
+    $manager = new DataShareMirrorManager(
+        $connections,
+        Mockery::mock(DataShareMirrorCatalog::class),
+        $reviewer,
+        $engines,
+        $lock,
+        new NullDataOperationRecorder,
+    );
+
+    expect(fn () => $manager->forcePush(['sbg_records']))
+        ->toThrow(DataShareMirrorException::class, 'durable operation history');
 });
 
 it('builds the Local catalog with no remote call at all', function (): void {

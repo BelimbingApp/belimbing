@@ -5,6 +5,7 @@ namespace App\Base\Database\Services\DataOperation;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
+use App\Base\Database\Exceptions\DataOperationException;
 use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataOperationTableSummary;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
@@ -12,8 +13,8 @@ use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Support\TraceId;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -69,8 +70,14 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
             return;
         }
 
-        if (! DataOperationRun::query()->whereKey($runId)->exists()) {
-            throw new RuntimeException("Cannot resume data operation run #{$runId}: it does not exist.");
+        $run = DataOperationRun::query()->find($runId);
+
+        if ($run === null) {
+            throw DataOperationException::missing($runId);
+        }
+
+        if ($run->status !== DataOperationStatus::Running) {
+            throw DataOperationException::notRunning($runId);
         }
     }
 
@@ -80,37 +87,49 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
             return;
         }
 
-        // Upsert on (run_id, table_name) so a resumed/retried operation updates the
-        // same summary instead of duplicating it (guarded by the unique index).
-        DataOperationTableSummary::query()->updateOrCreate(
-            ['run_id' => $runId, 'table_name' => $table],
-            [
-                'actions' => array_values($effect['actions'] ?? []),
-                'rows_source' => $effect['rows_source'] ?? null,
-                'rows_attempted' => $effect['rows_attempted'] ?? null,
-                'rows_inserted' => $effect['rows_inserted'] ?? null,
-                'rows_updated' => $effect['rows_updated'] ?? null,
-                'rows_written' => $effect['rows_written'] ?? null,
-                'rows_deleted' => $effect['rows_deleted'] ?? null,
-                'rows_unchanged' => $effect['rows_unchanged'] ?? null,
-                'rows_rejected' => $effect['rows_rejected'] ?? null,
-                'rows_before' => $effect['rows_before'] ?? null,
-                'rows_after' => $effect['rows_after'] ?? null,
-                'key_columns' => $effect['key_columns'] ?? null,
-                'range_kind' => $effect['range_kind'] ?? null,
-                'first_key' => $effect['first_key'] ?? null,
-                'last_key' => $effect['last_key'] ?? null,
-                'local_schema_fingerprint' => $effect['local_schema_fingerprint'] ?? null,
-                'remote_schema_fingerprint' => $effect['remote_schema_fingerprint'] ?? null,
-                'terminal_status' => $effect['terminal_status'] ?? null,
-                'observed_at' => $effect['observed_at'] ?? null,
-            ],
-        );
+        DB::transaction(function () use ($runId, $table, $effect): void {
+            $run = DataOperationRun::query()->whereKey($runId)->lockForUpdate()->first();
 
-        // Recompute (not increment) so the count is idempotent under retries.
-        DataOperationRun::query()->whereKey($runId)->update([
-            'table_count' => DataOperationTableSummary::query()->where('run_id', $runId)->count(),
-        ]);
+            if ($run === null) {
+                throw DataOperationException::missing($runId);
+            }
+
+            if ($run->status !== DataOperationStatus::Running) {
+                throw DataOperationException::notRunning($runId);
+            }
+
+            // Upsert on (run_id, table_name) so a resumed/retried operation updates
+            // the same summary instead of duplicating it.
+            DataOperationTableSummary::query()->updateOrCreate(
+                ['run_id' => $runId, 'table_name' => $table],
+                [
+                    'actions' => array_values($effect['actions'] ?? []),
+                    'rows_source' => $effect['rows_source'] ?? null,
+                    'rows_attempted' => $effect['rows_attempted'] ?? null,
+                    'rows_inserted' => $effect['rows_inserted'] ?? null,
+                    'rows_updated' => $effect['rows_updated'] ?? null,
+                    'rows_written' => $effect['rows_written'] ?? null,
+                    'rows_deleted' => $effect['rows_deleted'] ?? null,
+                    'rows_unchanged' => $effect['rows_unchanged'] ?? null,
+                    'rows_rejected' => $effect['rows_rejected'] ?? null,
+                    'rows_before' => $effect['rows_before'] ?? null,
+                    'rows_after' => $effect['rows_after'] ?? null,
+                    'key_columns' => $effect['key_columns'] ?? null,
+                    'range_kind' => $effect['range_kind'] ?? null,
+                    'first_key' => $effect['first_key'] ?? null,
+                    'last_key' => $effect['last_key'] ?? null,
+                    'local_schema_fingerprint' => $effect['local_schema_fingerprint'] ?? null,
+                    'remote_schema_fingerprint' => $effect['remote_schema_fingerprint'] ?? null,
+                    'terminal_status' => $effect['terminal_status'] ?? null,
+                    'observed_at' => $effect['observed_at'] ?? null,
+                ],
+            );
+
+            // Recompute (not increment) so the count is idempotent under retries.
+            $run->update([
+                'table_count' => DataOperationTableSummary::query()->where('run_id', $runId)->count(),
+            ]);
+        });
     }
 
     public function finalize(int $runId, string $status, array $attributes = []): void
@@ -119,35 +138,37 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
             return;
         }
 
-        $run = DataOperationRun::query()->find($runId);
+        $terminalRun = DB::transaction(function () use ($runId, $status, $attributes): ?DataOperationRun {
+            $run = DataOperationRun::query()->whereKey($runId)->lockForUpdate()->first();
 
-        if ($run === null) {
-            return;
-        }
+            if ($run === null || $run->status !== DataOperationStatus::Running) {
+                return null;
+            }
 
-        $startedAt = $run->started_at instanceof Carbon ? $run->started_at : now();
-        $finishedAt = now();
-
-        // Atomically claim terminalization: first terminal status wins, and a
-        // concurrent finalize (resumed child + parent fallback, or reconciler)
-        // cannot both write. Only a still-running run can be terminalized.
-        $claimed = DataOperationRun::query()
-            ->whereKey($runId)
-            ->where('status', DataOperationStatus::Running->value)
-            ->update([
+            $startedAt = $run->started_at instanceof Carbon ? $run->started_at : now();
+            $finishedAt = now();
+            $run->update([
                 'status' => $status,
                 'finished_at' => $finishedAt,
                 'duration_ms' => max(0, (int) $startedAt->diffInMilliseconds($finishedAt)),
                 'total_rows_affected' => $attributes['total_rows_affected'] ?? $this->sumAffected($run),
                 'failure_summary' => $attributes['failure_summary'] ?? null,
-                'updated_at' => now(),
             ]);
 
-        if ($claimed === 0) {
-            return; // already terminal — do not overwrite or re-project
+            return $run->refresh();
+        });
+
+        if ($terminalRun === null) {
+            return;
         }
 
-        $this->projectSemanticAction($run->refresh());
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit(fn () => $this->projectSemanticAction($terminalRun));
+
+            return;
+        }
+
+        $this->projectSemanticAction($terminalRun);
     }
 
     /**
@@ -157,16 +178,16 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
      */
     private function projectSemanticAction(DataOperationRun $run): void
     {
-        $claimed = DataOperationRun::query()
-            ->whereKey($run->id)
-            ->whereNull('audit_projection_attempted_at')
-            ->update(['audit_projection_attempted_at' => now(), 'updated_at' => now()]);
-
-        if ($claimed === 0) {
-            return; // another finalize already emitted (or is emitting) the action
-        }
-
         try {
+            $claimed = DataOperationRun::query()
+                ->whereKey($run->id)
+                ->whereNull('audit_projection_attempted_at')
+                ->update(['audit_projection_attempted_at' => now(), 'updated_at' => now()]);
+
+            if ($claimed === 0) {
+                return; // another finalize already emitted (or is emitting) the action
+            }
+
             $type = $run->operation_type instanceof DataOperationType
                 ? $run->operation_type
                 : DataOperationType::tryFrom((string) $run->operation_type);
@@ -197,7 +218,8 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
                 result: $status === DataOperationStatus::Succeeded ? 'succeeded' : 'failed',
             );
         } catch (Throwable) {
-            // Best-effort by contract: a failed projection never affects the ledger.
+            // Best-effort by contract: neither claiming nor writing the audit
+            // projection may change the completed operation's outcome.
         }
     }
 
@@ -287,6 +309,7 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
 
     private function ready(): bool
     {
-        return Schema::hasTable(self::RUNS_TABLE);
+        return Schema::hasTable(self::RUNS_TABLE)
+            && Schema::hasTable('base_database_data_operation_tables');
     }
 }

@@ -69,8 +69,12 @@ final class DataFreshnessTracker
         string $table,
         ?int $acknowledgedGeneration,
         ?Connection $connection = null,
+        ?bool $trackingInstalled = null,
     ): DataFreshnessState {
-        if (! $this->driverSupportsTracking($connection)) {
+        $connection ??= DB::connection();
+
+        if (! $this->driverSupportsTracking($connection)
+            || ! ($trackingInstalled ?? $this->isTrackingInstalled($table, $connection))) {
             return DataFreshnessState::Unknown;
         }
 
@@ -97,17 +101,77 @@ final class DataFreshnessTracker
             return;
         }
 
-        $latest = DB::table(self::EVENTS_TABLE)
-            ->selectRaw('MAX(id) as max_id')
-            ->groupBy('table_name')
-            ->pluck('max_id')
-            ->all();
+        // One statement makes compaction safe against concurrent trigger inserts:
+        // only a row for which a newer same-table row exists is removed.
+        DB::delete(<<<'SQL'
+            DELETE FROM base_database_data_freshness_events AS older
+            WHERE EXISTS (
+                SELECT 1
+                FROM base_database_data_freshness_events AS newer
+                WHERE newer.table_name = older.table_name
+                  AND newer.id > older.id
+            )
+            SQL);
+    }
 
-        if ($latest === []) {
-            return;
+    public function isTrackingInstalled(string $table, ?Connection $connection = null): bool
+    {
+        $connection ??= DB::connection();
+
+        if (! $this->driverSupportsTracking($connection)) {
+            return false;
         }
 
-        DB::table(self::EVENTS_TABLE)->whereNotIn('id', $latest)->delete();
+        $installed = $connection->selectOne(<<<'SQL'
+            SELECT EXISTS (
+                SELECT 1
+                FROM pg_trigger trigger
+                JOIN pg_class relation ON relation.oid = trigger.tgrelid
+                JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+                JOIN pg_proc procedure ON procedure.oid = trigger.tgfoid
+                WHERE namespace.nspname = 'public'
+                  AND relation.relname = ?
+                  AND trigger.tgname = ?
+                  AND NOT trigger.tgisinternal
+                  AND trigger.tgenabled IN ('O', 'A')
+                  AND procedure.proname = ?
+                  AND (trigger.tgtype & 1) = 0
+                  AND (trigger.tgtype & 60) = 60
+            ) AS installed
+            SQL, [$table, self::TRIGGER_NAME, self::FUNCTION_NAME]);
+
+        return filter_var($installed?->installed ?? false, FILTER_VALIDATE_BOOL);
+    }
+
+    /** @param list<string> $tables @return array<string, bool> */
+    public function trackingStatus(array $tables, ?Connection $connection = null): array
+    {
+        $connection ??= DB::connection();
+        $status = array_fill_keys($tables, false);
+
+        if ($tables === [] || ! $this->driverSupportsTracking($connection)) {
+            return $status;
+        }
+
+        $installed = $connection->table('pg_catalog.pg_trigger as trigger')
+            ->join('pg_catalog.pg_class as relation', 'relation.oid', '=', 'trigger.tgrelid')
+            ->join('pg_catalog.pg_namespace as namespace', 'namespace.oid', '=', 'relation.relnamespace')
+            ->join('pg_catalog.pg_proc as procedure', 'procedure.oid', '=', 'trigger.tgfoid')
+            ->where('namespace.nspname', 'public')
+            ->whereIn('relation.relname', $tables)
+            ->where('trigger.tgname', self::TRIGGER_NAME)
+            ->where('trigger.tgisinternal', false)
+            ->whereIn('trigger.tgenabled', ['O', 'A'])
+            ->where('procedure.proname', self::FUNCTION_NAME)
+            ->whereRaw('(trigger.tgtype & 1) = 0')
+            ->whereRaw('(trigger.tgtype & 60) = 60')
+            ->pluck('relation.relname');
+
+        foreach ($installed as $table) {
+            $status[(string) $table] = true;
+        }
+
+        return $status;
     }
 
     public function functionSql(): string
