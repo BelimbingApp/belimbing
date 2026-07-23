@@ -3,9 +3,97 @@
 $pathRules = ['required', 'string', 'max:255', 'regex:/^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/'];
 
 return [
+    'definitions' => [
+        'backup.enabled' => [
+            'type' => 'boolean',
+            'scopes' => ['global'],
+            'default' => true,
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => ['required', 'boolean'],
+            'label' => 'Application backups',
+            'help' => 'Run Belimbing-managed database backups on this installation.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'backup.disk' => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => 'local',
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => ['required', 'string', 'max:64'],
+            'label' => 'Backup disk',
+            'help' => 'Private Laravel filesystem disk used for backup artifacts.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'backup.path_prefix' => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => 'backups',
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => $pathRules,
+            'label' => 'Backup path',
+            'help' => 'Private path prefix used for backup artifacts and manifests.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'backup.encryption.mode' => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => 'app-key',
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => ['required', 'string', 'max:64'],
+            'label' => 'Backup encryption',
+            'help' => 'Registered encryption mode used for newly created backup artifacts.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'backup.retention.keep_days' => [
+            'type' => 'integer',
+            'scopes' => ['global'],
+            'default' => 30,
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => ['required', 'integer', 'min:0', 'max:3650'],
+            'label' => 'Backup age retention',
+            'help' => 'Delete eligible backup artifacts older than this many days. Use 0 to disable age pruning.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'backup.retention.keep_count' => [
+            'type' => 'integer',
+            'scopes' => ['global'],
+            'default' => 7,
+            'nullable' => false,
+            'encrypted' => false,
+            'rules' => ['required', 'integer', 'min:0', 'max:10000'],
+            'label' => 'Minimum backup count',
+            'help' => 'Always preserve at least this many recent backups. Use 0 to disable the count floor.',
+            'editable' => 'admin.system.database-backups',
+            'capability' => 'admin.system.database-backup.manage',
+        ],
+        'data_share.mirror.supabase.access_token' => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => true,
+            'rules' => ['nullable', 'string', 'max:4096'],
+            'label' => 'Supabase access token',
+            'help' => 'Temporary encrypted token used while configuring the development mirror.',
+            'editable' => 'data_share_mirror',
+            'capability' => 'admin.system.data-share-settings.manage',
+        ],
+    ],
+
     'editable' => [
         'data_share_identity' => [
             'label' => 'Identity',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'How this Belimbing instance identifies itself in transfer offers, packages, policy checks, and the audit ledger.',
             'fields' => [
                 [
@@ -46,6 +134,7 @@ return [
         ],
         'data_share_mirror' => [
             'label' => 'Development mirror',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'Connect a provider account, let Belimbing configure and initialize its development database, then mirror explicitly selected complete-table data.',
             'view' => 'livewire.admin.system.data-share.partials.mirror-provider-setup',
             'fields' => [
@@ -98,6 +187,7 @@ return [
         ],
         'data_share_transport' => [
             'label' => 'Transport',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'Source-owned transfer-offer availability and HTTPS routes advertised to a target operator.',
             'fields' => [
                 [
@@ -132,6 +222,7 @@ return [
         ],
         'data_share_storage' => [
             'label' => 'Storage',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'Private filesystem placement and retention. Changing a path does not move existing packages.',
             'fields' => [
                 [
@@ -201,6 +292,7 @@ return [
         ],
         'data_share_transfer_limits' => [
             'label' => 'Transfer limits',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'Hard bounds applied to every bulk Data Export and Data Share package.',
             'fields' => [
                 [
@@ -252,6 +344,7 @@ return [
         ],
         'data_share_diagnostic_limits' => [
             'label' => 'Diagnostics',
+            'capability' => 'admin.system.data-share-settings.manage',
             'description' => 'Smaller bounds for development-only row captures and foreign-key parent closure.',
             'fields' => [
                 [
@@ -313,6 +406,9 @@ return [
     ],
 
     'runtime' => [
-        'backup.retention.*',
+        'data_share.mirror.supabase.organization_slug',
+        'data_share.mirror.supabase.project_name',
+        'data_share.mirror.supabase.project_ref',
+        'data_share.mirror.supabase.region',
     ],
 ];

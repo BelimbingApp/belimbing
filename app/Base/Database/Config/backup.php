@@ -12,7 +12,7 @@ return [
     | snapshots and BLB should not run a parallel backup system.
     |
     */
-    'enabled' => env('BACKUP_ENABLED', true),
+    'enabled' => true,
 
     /*
     |--------------------------------------------------------------------------
@@ -38,7 +38,7 @@ return [
     | identity.
     |
     */
-    'disk' => env('BACKUP_DISK', 'local'),
+    'disk' => 'local',
 
     /*
     |--------------------------------------------------------------------------
@@ -61,7 +61,7 @@ return [
     | Final layout: {prefix}/{environment}/{timestamp}-{backup_id}.bak[.enc]
     |
     */
-    'path_prefix' => env('BACKUP_PATH_PREFIX', 'backups'),
+    'path_prefix' => 'backups',
 
     /*
     |--------------------------------------------------------------------------
@@ -81,7 +81,7 @@ return [
     |
     */
     'encryption' => [
-        'mode' => env('BACKUP_ENCRYPTION_MODE', 'app-key'),
+        'mode' => 'app-key',
 
         // Example keys for extension-registered modes (consumed only if a mode uses them).
         'recipients' => [],
@@ -100,7 +100,7 @@ return [
     |
     */
     'retention' => [
-        'keep_days' => (int) env('BACKUP_KEEP_DAYS', 30),
-        'keep_count' => (int) env('BACKUP_KEEP_COUNT', 7),
+        'keep_days' => 30,
+        'keep_count' => 7,
     ],
 ];

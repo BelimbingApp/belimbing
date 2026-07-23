@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Browser;
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Modules\Core\AI\DTO\BrowserSessionState;
 use App\Modules\Core\AI\DTO\BrowserTabState;
 use App\Modules\Core\AI\Models\BrowserSession;
@@ -20,6 +22,7 @@ class BrowserSessionManager
         private readonly BrowserSessionRepository $repository,
         private readonly BrowserRuntimeAdapter $runtimeAdapter,
         private readonly BrowserContextFactory $contextFactory,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     /**
@@ -176,7 +179,7 @@ class BrowserSessionManager
      */
     public function isAvailable(): bool
     {
-        return config('ai.tools.browser.enabled', false)
+        return $this->runtimeSettings()->browserEnabled()
             && $this->contextFactory->isAvailable()
             && $this->runtimeAdapter->isAvailable();
     }
@@ -236,5 +239,10 @@ class BrowserSessionManager
     private function sessionTtl(): int
     {
         return (int) config('ai.tools.browser.context_idle_timeout_seconds', 300);
+    }
+
+    private function runtimeSettings(): AiRuntimeSettings
+    {
+        return $this->runtimeSettings ?? app(AiRuntimeSettings::class);
     }
 }

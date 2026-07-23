@@ -5,6 +5,7 @@ namespace App\Base\Database\Livewire\Backups;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Database\Exceptions\BackupException;
+use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Settings\Contracts\SettingsService;
@@ -26,6 +27,15 @@ use Throwable;
  */
 class Index extends Component
 {
+    private const array EDITABLE_SETTING_KEYS = [
+        'backup.enabled',
+        'backup.disk',
+        'backup.path_prefix',
+        'backup.encryption.mode',
+        'backup.retention.keep_days',
+        'backup.retention.keep_count',
+    ];
+
     /**
      * @var array<int, array<string, mixed>>
      */
@@ -261,12 +271,12 @@ class Index extends Component
         $this->requireCapability('admin.system.database-backup.manage');
 
         $coerced = match ($field) {
-            'backup.enabled' => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
+            'backup.enabled' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
             'backup.disk' => trim((string) $value),
             'backup.path_prefix' => trim((string) $value),
             'backup.encryption.mode' => trim((string) $value),
-            'backup.retention.keep_days' => (string) max(0, (int) $value),
-            'backup.retention.keep_count' => (string) max(0, (int) $value),
+            'backup.retention.keep_days' => max(0, (int) $value),
+            'backup.retention.keep_count' => max(0, (int) $value),
             default => null,
         };
 
@@ -277,33 +287,24 @@ class Index extends Component
         app(SettingsService::class)->set($field, $coerced);
     }
 
+    public function restoreSettingDefaults(): void
+    {
+        $this->requireCapability('admin.system.database-backup.manage');
+        $settings = app(SettingsService::class);
+
+        foreach (self::EDITABLE_SETTING_KEYS as $key) {
+            $settings->forget($key);
+        }
+
+        $this->flash(__('Backup settings restored to their defaults.'), 'success');
+    }
+
     /**
-     * Build the effective backup config by overlaying operator-editable settings
-     * (from SettingsService) on top of the config-file baseline.
-     *
-     * Only the five operational knobs are overridable via settings:
-     *   enabled, disk, path_prefix, retention.keep_days, retention.keep_count.
-     * Encryption and connection keys remain config-file-only.
-     *
      * @return array<string, mixed>
      */
     private function resolveConfig(): array
     {
-        $settings = app(SettingsService::class);
-        $base = (array) config('backup', []);
-
-        return array_replace($base, [
-            'enabled' => (bool) filter_var($settings->get('backup.enabled', $base['enabled'] ?? true), FILTER_VALIDATE_BOOLEAN),
-            'disk' => (string) $settings->get('backup.disk', $base['disk'] ?? 'local'),
-            'path_prefix' => (string) $settings->get('backup.path_prefix', $base['path_prefix'] ?? 'backups'),
-            'encryption' => array_replace($base['encryption'] ?? [], [
-                'mode' => (string) $settings->get('backup.encryption.mode', $base['encryption']['mode'] ?? 'app-key'),
-            ]),
-            'retention' => array_replace($base['retention'] ?? [], [
-                'keep_days' => (int) $settings->get('backup.retention.keep_days', $base['retention']['keep_days'] ?? 30),
-                'keep_count' => (int) $settings->get('backup.retention.keep_count', $base['retention']['keep_count'] ?? 7),
-            ]),
-        ]);
+        return app(BackupRuntimeSettings::class)->configuration();
     }
 
     private function resolveTrigger(): string

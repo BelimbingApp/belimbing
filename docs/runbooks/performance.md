@@ -36,9 +36,10 @@ on the table it may be creating or replacing.
 
 Upgrade note: deployments that previously set `PERF_LOG_ENABLED`,
 `PERF_LOG_MIN_MS`, `PERF_LOG_SLOW_SQL_MIN_MS`, `PERF_LOG_PATH`, or
-`PERF_LOG_RETENTION_DAYS` must enter the corresponding values in Recording
-settings. Those environment names are no longer read and can then be removed
-from the deployment environment.
+`PERF_LOG_RETENTION_DAYS` can preview
+`php artisan blb:settings:import-environment`, apply the import after review,
+and then remove those names from the deployment environment. The same values
+remain editable in Recording settings.
 
 ```bash
 # Slowest routes/jobs/commands, aggregated (hits, p50/p95/max, avg DB ms, queries, subprocesses)

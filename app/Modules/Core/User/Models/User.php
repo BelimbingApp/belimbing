@@ -4,6 +4,8 @@ namespace App\Modules\Core\User\Models;
 
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Foundation\Contracts\CompanyScoped;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\ExternalAccess;
@@ -36,7 +38,7 @@ class User extends Authenticatable implements CompanyScoped
      *
      * @var list<string>
      */
-    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password', 'email_verified_at', 'prefs'];
+    protected $fillable = ['company_id', 'employee_id', 'name', 'email', 'password', 'email_verified_at'];
 
     /**
      * The attributes that should be hidden for serialization.
@@ -60,25 +62,7 @@ class User extends Authenticatable implements CompanyScoped
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            'prefs' => 'array',
         ];
-    }
-
-    /**
-     * Prefs as an array, reloading the model when this instance was hydrated
-     * without the prefs column (e.g. Livewire's auth re-resolution) — reading
-     * it directly would trip strict attribute mode, and writing prefs back
-     * from a partial instance would silently wipe the stored value.
-     *
-     * @return array<string, mixed>
-     */
-    public function prefsArray(): array
-    {
-        if (! array_key_exists('prefs', $this->getAttributes()) && $this->exists) {
-            $this->refresh();
-        }
-
-        return is_array($this->prefs) ? $this->prefs : [];
     }
 
     /**
@@ -93,7 +77,11 @@ class User extends Authenticatable implements CompanyScoped
      */
     public function getLastUsedModel(int $employeeId): ?array
     {
-        $hint = $this->prefsArray()['last_used_model'][(string) $employeeId] ?? null;
+        $hints = app(SettingsService::class)->get(
+            'ai.last_used_model_hints',
+            Scope::user((int) $this->getKey(), $this->getCompanyId()),
+        );
+        $hint = is_array($hints) ? ($hints[(string) $employeeId] ?? null) : null;
 
         if (! is_array($hint)) {
             return null;
@@ -126,8 +114,10 @@ class User extends Authenticatable implements CompanyScoped
      */
     public function setLastUsedModel(int $employeeId, ?string $provider, ?string $model): void
     {
-        $prefs = $this->prefsArray();
-        $hints = is_array($prefs['last_used_model'] ?? null) ? $prefs['last_used_model'] : [];
+        $settings = app(SettingsService::class);
+        $scope = Scope::user((int) $this->getKey(), $this->getCompanyId());
+        $stored = $settings->get('ai.last_used_model_hints', $scope);
+        $hints = is_array($stored) ? $stored : [];
         $key = (string) $employeeId;
 
         if ($provider === null || $provider === '' || $model === null || $model === '') {
@@ -137,13 +127,12 @@ class User extends Authenticatable implements CompanyScoped
         }
 
         if ($hints === []) {
-            unset($prefs['last_used_model']);
-        } else {
-            $prefs['last_used_model'] = $hints;
+            $settings->forget('ai.last_used_model_hints', $scope);
+
+            return;
         }
 
-        $this->prefs = $prefs === [] ? null : $prefs;
-        $this->save();
+        $settings->set('ai.last_used_model_hints', $hints, $scope);
     }
 
     /**

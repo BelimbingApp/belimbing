@@ -36,7 +36,7 @@
 
         @if (! $enabled)
             <x-ui.alert variant="warning">
-                {{ __('Backups are disabled (config: backup.enabled=false). Managed-DB deployments rely on provider snapshots.') }}
+                {{ __('Backups are disabled. Managed-DB deployments commonly rely on provider snapshots.') }}
             </x-ui.alert>
         @endif
 
@@ -114,6 +114,16 @@
                         help="Always retain at least <span x-text='val'></span> recent backups regardless of age."
                     />
                 </dl>
+                <div class="mt-5">
+                    <x-ui.button
+                        type="button"
+                        variant="secondary"
+                        wire:click="restoreSettingDefaults"
+                        wire:confirm="{{ __('Restore every backup setting to its declared default?') }}"
+                    >
+                        {{ __('Restore Defaults') }}
+                    </x-ui.button>
+                </div>
             @else
                 <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>

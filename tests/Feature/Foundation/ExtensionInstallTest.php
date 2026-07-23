@@ -102,7 +102,7 @@ function createExtensionInstallFakeCheckout(): string
 }
 
 it('marks a catalog extension token-ready when a token is stored for its owner', function (): void {
-    app(SettingsService::class)->set('integrations.github.token.'.EXTENSION_INSTALL_OWNER, EXTENSION_INSTALL_TOKEN, encrypted: true);
+    app(SettingsService::class)->set('integrations.github.token.'.EXTENSION_INSTALL_OWNER, EXTENSION_INSTALL_TOKEN);
 
     $available = app(ExtensionInstaller::class)->available();
 
@@ -120,7 +120,7 @@ it('lists available extensions on the Available tab', function (): void {
 });
 
 it('clones an extension with the stored github token and redirects', function (): void {
-    app(SettingsService::class)->set('integrations.github.token.'.EXTENSION_INSTALL_OWNER, EXTENSION_INSTALL_TOKEN, encrypted: true);
+    app(SettingsService::class)->set('integrations.github.token.'.EXTENSION_INSTALL_OWNER, EXTENSION_INSTALL_TOKEN);
     $this->actingAs(createAdminUser());
     Process::fake();
 

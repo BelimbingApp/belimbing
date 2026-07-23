@@ -10,6 +10,7 @@ use App\Base\System\Console\Commands\TestCommand;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Base\System\Services\ReportedErrorStatusDiagnosticProvider;
+use App\Base\System\Services\RuntimeConfigurationApplier;
 use App\Base\System\Services\StatusBarDiagnostics;
 use App\Base\System\Services\SystemHealthProbe;
 use App\Base\System\Services\SystemHealthStatusDiagnosticProvider;
@@ -31,6 +32,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->tag(SystemHealthStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->singleton(ReportedErrorRecorder::class);
         $this->app->singleton(ReportedErrorStatusDiagnosticProvider::class);
+        $this->app->singleton(RuntimeConfigurationApplier::class);
         $this->app->tag(ReportedErrorStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
 
         $this->commands([
@@ -38,5 +40,10 @@ class ServiceProvider extends BaseServiceProvider
             PageWeightAuditCommand::class,
             SecurityCheckCommand::class,
         ]);
+    }
+
+    public function boot(RuntimeConfigurationApplier $configuration): void
+    {
+        $configuration->apply();
     }
 }

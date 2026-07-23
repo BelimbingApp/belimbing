@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Database\Livewire\Backups\Index;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -16,9 +17,9 @@ const BACKUPS_TEST_MANIFEST_SUFFIX = '.manifest.json';
 beforeEach(function (): void {
     setupAuthzRoles();
     Storage::fake(BACKUPS_TEST_DISK);
-    config()->set('backup.disk', BACKUPS_TEST_DISK);
-    config()->set('backup.path_prefix', 'backups');
-    config()->set('backup.encryption.mode', 'none');
+    app(SettingsService::class)->set('backup.disk', BACKUPS_TEST_DISK);
+    app(SettingsService::class)->set('backup.path_prefix', 'backups');
+    app(SettingsService::class)->set('backup.encryption.mode', 'none');
 });
 
 test('admin sees the backups page with config snapshot', function (): void {
@@ -105,7 +106,7 @@ test('delete action removes the manifest and artifact pair', function (): void {
 
 test('disabled backup config short-circuits the run-backup action', function (): void {
     $this->actingAs(createAdminUser());
-    config()->set('backup.enabled', false);
+    app(SettingsService::class)->set('backup.enabled', false);
 
     Livewire::test(Index::class)
         ->call('runBackup')
@@ -130,7 +131,7 @@ test('runBackup flashes configuration error when encryption mode is not register
     DB::connection('backup_ui_source')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
 
     config()->set('backup.connection', 'backup_ui_source');
-    config()->set('backup.encryption.mode', 'ext-unregistered-mode-for-test');
+    app(SettingsService::class)->set('backup.encryption.mode', 'ext-unregistered-mode-for-test');
 
     try {
         Livewire::test(Index::class)
@@ -144,6 +145,10 @@ test('runBackup flashes configuration error when encryption mode is not register
 });
 
 test('runBackup completes in app-key mode and writes an encrypted artifact plus manifest', function (): void {
+    if (! extension_loaded('sodium')) {
+        $this->markTestSkipped('ext-sodium is required for app-key backup encryption.');
+    }
+
     $this->actingAs(createAdminUser());
 
     $sourcePath = sys_get_temp_dir().'/blb-ui-appkey-'.bin2hex(random_bytes(4)).'.sqlite';
@@ -160,7 +165,7 @@ test('runBackup completes in app-key mode and writes an encrypted artifact plus 
     DB::connection('backup_ui_source')->statement('CREATE TABLE t (id INTEGER PRIMARY KEY)');
 
     config()->set('backup.connection', 'backup_ui_source');
-    config()->set('backup.encryption.mode', 'app-key');
+    app(SettingsService::class)->set('backup.encryption.mode', 'app-key');
 
     try {
         Livewire::test(Index::class)
@@ -186,19 +191,7 @@ test('runBackup completes in app-key mode and writes an encrypted artifact plus 
 test('render reflects a retention keep_days override stored in base_settings', function (): void {
     $this->actingAs(createAdminUser());
 
-    // Seed a global base_settings row that overrides the config-file default.
-    DB::table('base_settings')->insert([
-        'key' => 'backup.retention.keep_days',
-        'value' => json_encode('99'),
-        'is_encrypted' => false,
-        'scope_type' => null,
-        'scope_id' => null,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    // Config default is 30; the DB row should win.
-    config()->set('backup.retention.keep_days', 30);
+    app(SettingsService::class)->set('backup.retention.keep_days', 99);
 
     Livewire::test(Index::class)
         ->assertSee('99');
@@ -215,7 +208,7 @@ test('saveField persists a backup setting override via SettingsService', functio
             ->where('key', 'backup.retention.keep_days')
             ->whereNull('scope_type')
             ->value('value')
-    )->toBe('"14"');
+    )->toBe('14');
 });
 
 test('saveField ignores unknown field names', function (): void {
@@ -227,4 +220,20 @@ test('saveField ignores unknown field names', function (): void {
     expect(
         DB::table('base_settings')->where('key', 'backup.internal_secret')->exists()
     )->toBeFalse();
+});
+
+test('restoreSettingDefaults deletes backup overrides', function (): void {
+    $this->actingAs(createAdminUser());
+    $settings = app(SettingsService::class);
+    $settings->set('backup.enabled', false);
+    $settings->set('backup.retention.keep_days', 14);
+
+    Livewire::test(Index::class)
+        ->call('restoreSettingDefaults')
+        ->assertSet('statusVariant', 'success');
+
+    expect($settings->has('backup.enabled'))->toBeFalse()
+        ->and($settings->has('backup.retention.keep_days'))->toBeFalse()
+        ->and($settings->get('backup.enabled'))->toBeTrue()
+        ->and($settings->get('backup.retention.keep_days'))->toBe(30);
 });

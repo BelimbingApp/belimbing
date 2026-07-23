@@ -6,10 +6,12 @@ use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\System\Livewire\Localization\Index as LocalizationIndex;
+use App\Base\System\Services\StatusBarDiagnostics;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Geonames\Models\Country;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
 
@@ -22,6 +24,13 @@ const FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country
 const FEATURE_TIMEZONE_KUALA_LUMPUR = 'Asia/Kuala_Lumpur';
 
 beforeEach(function (): void {
+    $diagnosticApplication = Mockery::mock(Application::class);
+    $diagnosticApplication->shouldReceive('tagged')->andReturn([]);
+    $this->app->instance(
+        StatusBarDiagnostics::class,
+        new StatusBarDiagnostics($diagnosticApplication),
+    );
+
     config(['settings.cache_ttl' => 0]);
     setupAuthzRoles();
     $this->user = createAdminUser();
@@ -99,10 +108,9 @@ it('shows a status-bar warning while the inferred locale is unconfirmed', functi
     seedFeatureLicenseeLocale();
     app()->forgetInstance(LocaleContext::class);
 
-    $response = $this->get(route('admin.system.info.index'));
+    $response = $this->blade('<x-layouts.status-bar />');
 
-    $response->assertOk()
-        ->assertSee('Locale inferred: en-MY');
+    $response->assertSee('Locale inferred: en-MY');
 });
 
 it('clears the status-bar warning after the locale is confirmed', function (): void {
@@ -117,10 +125,9 @@ it('clears the status-bar warning after the locale is confirmed', function (): v
 
     app()->forgetInstance(LocaleContext::class);
 
-    $response = $this->get(route('admin.system.info.index'));
+    $response = $this->blade('<x-layouts.status-bar />');
 
-    $response->assertOk()
-        ->assertDontSee('Locale inferred: en-MY')
+    $response->assertDontSee('Locale inferred: en-MY')
         ->assertDontSee('Locale not confirmed');
 });
 

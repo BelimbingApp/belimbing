@@ -49,7 +49,7 @@ The app **layout shell** (zones A, B, E, plus Lara chrome when open) stays mount
 - **Height:** `h-7`, fixed, `shrink-0`
 - **Surface:** `bg-surface-bar`, bottom border
 - **Left:** Sidebar toggle button (dispatches `toggle-sidebar`), app title "Belimbing"
-- **Right (authenticated):** Timezone display mode control (persists via server + reload). **Right (all):** Dark/light theme toggle (persisted to `localStorage` on `theme`). Lara is **not** on the top bar; it is launched from the [Status Bar](#e-status-bar) (or keyboard shortcuts).
+- **Right (authenticated):** Timezone display mode and theme controls persist as user-scoped settings. The theme is mirrored to `localStorage` only as a pre-paint cache; anonymous visitors use that device-local cache directly. Lara is **not** on the top bar; it is launched from the [Status Bar](#e-status-bar) (or keyboard shortcuts).
 
 ### B. Sidebar
 

@@ -314,7 +314,7 @@ echo "Services stopped."
 #### 3.1 Development Environment (.env)
 
 ```env
-APP_NAME="BLB Development"
+BLB_INSTANCE_NAME="Development"
 APP_ENV=local
 APP_DEBUG=true
 APP_URL=https://dev.lara.blb
@@ -325,7 +325,7 @@ APP_URL=https://dev.lara.blb
 #### 3.2 Staging Environment (.env)
 
 ```env
-APP_NAME="BLB Staging"
+BLB_INSTANCE_NAME="Staging"
 APP_ENV=staging
 APP_DEBUG=true
 APP_URL=https://stage.lara.blb

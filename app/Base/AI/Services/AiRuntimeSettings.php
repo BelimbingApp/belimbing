@@ -13,9 +13,19 @@ final readonly class AiRuntimeSettings
 {
     public const string MAX_TOOL_ROUNDS_KEY = 'ai.llm.agentic.max_tool_rounds';
 
-    public const string LEGACY_MAX_TOOL_ITERATIONS_KEY = 'ai.llm.agentic.max_tool_iterations';
-
     public const string PDFTOTEXT_PATH_KEY = 'ai.tools.document_analysis.pdftotext_path';
+
+    public const string LARA_PROMPT_EXTENSION_PATH_KEY = 'ai.lara.prompt_extension_path';
+
+    public const string BASH_TOOL_ENABLED_KEY = 'ai.tools.bash.enabled';
+
+    public const string WEB_FETCH_TIMEOUT_KEY = 'ai.tools.web_fetch.timeout_seconds';
+
+    public const string WEB_FETCH_MAX_BYTES_KEY = 'ai.tools.web_fetch.max_response_bytes';
+
+    public const string BROWSER_ENABLED_KEY = 'ai.tools.browser.enabled';
+
+    public const string BROWSER_EXECUTABLE_PATH_KEY = 'ai.tools.browser.executable_path';
 
     public function __construct(
         private SettingsService $settings,
@@ -24,20 +34,19 @@ final readonly class AiRuntimeSettings
 
     public function maxToolRounds(): int
     {
-        $key = match (true) {
-            $this->settings->has(self::MAX_TOOL_ROUNDS_KEY) => self::MAX_TOOL_ROUNDS_KEY,
-            $this->settings->has(self::LEGACY_MAX_TOOL_ITERATIONS_KEY) => self::LEGACY_MAX_TOOL_ITERATIONS_KEY,
-            default => self::MAX_TOOL_ROUNDS_KEY,
-        };
-
         return max(1, (int) $this->settings->get(
-            $key,
+            self::MAX_TOOL_ROUNDS_KEY,
         ));
     }
 
     public function maxToolRoundsDefinition(): SettingDefinition
     {
-        return $this->definitions->get(self::MAX_TOOL_ROUNDS_KEY);
+        return $this->definition(self::MAX_TOOL_ROUNDS_KEY);
+    }
+
+    public function definition(string $key): SettingDefinition
+    {
+        return $this->definitions->get($key);
     }
 
     public function defaultMaxToolRounds(): int
@@ -62,6 +71,40 @@ final readonly class AiRuntimeSettings
         }
 
         return trim($path);
+    }
+
+    public function laraPromptExtensionPath(): ?string
+    {
+        $path = $this->settings->get(self::LARA_PROMPT_EXTENSION_PATH_KEY);
+
+        return is_string($path) && trim($path) !== '' ? trim($path) : null;
+    }
+
+    public function bashToolEnabled(): bool
+    {
+        return (bool) $this->settings->get(self::BASH_TOOL_ENABLED_KEY);
+    }
+
+    public function webFetchTimeoutSeconds(): int
+    {
+        return (int) $this->settings->get(self::WEB_FETCH_TIMEOUT_KEY);
+    }
+
+    public function webFetchMaxResponseBytes(): int
+    {
+        return (int) $this->settings->get(self::WEB_FETCH_MAX_BYTES_KEY);
+    }
+
+    public function browserEnabled(): bool
+    {
+        return (bool) $this->settings->get(self::BROWSER_ENABLED_KEY);
+    }
+
+    public function browserExecutablePath(): ?string
+    {
+        $path = $this->settings->get(self::BROWSER_EXECUTABLE_PATH_KEY);
+
+        return is_string($path) && trim($path) !== '' ? trim($path) : null;
     }
 
     /**

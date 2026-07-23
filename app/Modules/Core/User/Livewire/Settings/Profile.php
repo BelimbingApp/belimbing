@@ -3,6 +3,8 @@
 namespace App\Modules\Core\User\Livewire\Settings;
 
 use App\Base\Foundation\Services\LandingPageResolver;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +31,11 @@ class Profile extends Component
     {
         $this->name = Auth::user()->name;
         $this->email = Auth::user()->email;
-        $this->landingMenuId = (string) (Auth::user()->prefsArray()[LandingPageResolver::PREF_KEY] ?? '');
+        $user = Auth::user();
+        $this->landingMenuId = (string) app(SettingsService::class)->get(
+            LandingPageResolver::SETTING_KEY,
+            Scope::user((int) $user->getKey(), $user->getCompanyId()),
+        );
     }
 
     /**
@@ -64,28 +70,25 @@ class Profile extends Component
             throw $exception;
         }
 
-        // Read prefs before fill(): prefsArray() may refresh a partially
-        // hydrated instance, which would discard pending attribute changes.
-        $prefs = $user->prefsArray();
-
         $user->fill([
             'name' => $validated['name'],
             'email' => $validated['email'],
         ]);
-
-        if ($this->landingMenuId === '') {
-            unset($prefs[LandingPageResolver::PREF_KEY]);
-        } else {
-            $prefs[LandingPageResolver::PREF_KEY] = $this->landingMenuId;
-        }
-
-        $user->prefs = $prefs === [] ? null : $prefs;
 
         if ($user->isDirty('email')) {
             $user->email_verified_at = null;
         }
 
         $user->save();
+
+        $settings = app(SettingsService::class);
+        $scope = Scope::user((int) $user->getKey(), $user->getCompanyId());
+
+        if ($this->landingMenuId === '') {
+            $settings->forget(LandingPageResolver::SETTING_KEY, $scope);
+        } else {
+            $settings->set(LandingPageResolver::SETTING_KEY, $this->landingMenuId, $scope);
+        }
 
         Session::flash('success', __('Profile saved.'));
     }

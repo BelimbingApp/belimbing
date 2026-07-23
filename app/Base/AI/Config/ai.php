@@ -9,7 +9,7 @@ foreach ([
     'email' => 30,
 ] as $channel => $rateLimit) {
     $messagingChannels[$channel] = [
-        'enabled' => env('AI_MESSAGING_'.strtoupper($channel).'_ENABLED', false),
+        'enabled' => false,
         'rate_limit_per_minute' => $rateLimit,
     ];
 }
@@ -79,38 +79,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Tool Configuration
+    | Structural Tool Policy
     |--------------------------------------------------------------------------
     |
-    | Per-tool settings. Tools read from config('ai.tools.*') as defaults;
-    | per-company overrides may be stored in `ai_tool_configs` (future).
+    | Versioned policy and infrastructure shared by tool implementations.
+    | Operator-managed runtime parameters are declared in the owning module's
+    | Config/settings.php and resolved through SettingsService instead.
     |
     */
     'tools' => [
-        'bash' => [
-            // The bash tool runs arbitrary shell commands with the app's OS
-            // privileges — the most powerful tool in the agent surface. It is
-            // gated by the admin.ai.tool.bash.execute capability AND this flag,
-            // which defaults OFF in production so a prompt injection reaching a
-            // privileged agent cannot silently become remote code execution.
-            // Enable deliberately (ideally alongside an OS-level sandbox) via
-            // AI_BASH_TOOL_ENABLED=true.
-            'enabled' => env('AI_BASH_TOOL_ENABLED', env('APP_ENV', 'production') !== 'production'),
-        ],
-        'web_search' => [
-            'provider' => env('AI_WEB_SEARCH_PROVIDER', 'parallel'),
-            'parallel' => [
-                'api_key' => env('AI_WEB_SEARCH_PARALLEL_API_KEY'),
-            ],
-            'brave' => [
-                'api_key' => env('AI_WEB_SEARCH_BRAVE_API_KEY'),
-            ],
-            'cache_ttl_minutes' => 15,
-        ],
         'web_fetch' => [
-            'timeout_seconds' => 30,
-            'max_response_bytes' => 5242880, // 5MB
-            'ssrf_allow_private' => env('AI_WEB_FETCH_SSRF_ALLOW_PRIVATE', false),
+            'ssrf_allow_private' => false,
         ],
         'document_analysis' => [
             'download_timeout_seconds' => 30,
@@ -122,9 +101,7 @@ return [
             'max_page_segments' => 20,
         ],
         'browser' => [
-            'enabled' => env('AI_BROWSER_ENABLED', true),
-            'executable_path' => env('AI_BROWSER_PATH', null),
-            'headless' => env('AI_BROWSER_HEADLESS', env('APP_ENV', 'production') !== 'local'),
+            'headless' => true,
             'max_contexts_per_company' => 3,
             'context_idle_timeout_seconds' => 300,
             'ref_stale_seconds' => 300,
@@ -192,8 +169,8 @@ return [
     |
     */
     'wire_logging' => [
-        'enabled' => env('AI_WIRE_LOGGING_ENABLED', env('APP_ENV', 'production') !== 'production'),
-        'retention_days' => (int) env('AI_WIRE_LOGGING_RETENTION_DAYS', 7),
+        'enabled' => false,
+        'retention_days' => 7,
     ],
 
     /*
@@ -207,11 +184,8 @@ return [
     |
     */
     'pricing' => [
-        'litellm_snapshot_url' => env(
-            'AI_PRICING_LITELLM_SNAPSHOT_URL',
-            'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json',
-        ),
-        'refresh_timeout_seconds' => (int) env('AI_PRICING_REFRESH_TIMEOUT_SECONDS', 30),
+        'litellm_snapshot_url' => 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json',
+        'refresh_timeout_seconds' => 30,
     ],
 
     /*
@@ -226,24 +200,7 @@ return [
     |
     */
     'openai_codex' => [
-        'auto_client_version' => (bool) env('AI_CODEX_AUTO_CLIENT_VERSION', true),
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Lara (System Agent)
-    |--------------------------------------------------------------------------
-    |
-    | Lara's core prompt is platform-managed and non-configurable.
-    | Licensees may append additive guidance through an extension file.
-    | The extension is append-only and must not override core policy.
-    |
-    */
-    'lara' => [
-        'prompt' => [
-            // Relative path from project root. Leave null to disable extension.
-            'extension_path' => env('AI_LARA_PROMPT_EXTENSION_PATH'),
-        ],
+        'auto_client_version' => true,
     ],
 
     /*

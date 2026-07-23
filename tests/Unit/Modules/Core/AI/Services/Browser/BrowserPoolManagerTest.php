@@ -1,5 +1,8 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\Services\Browser\BrowserContextFactory;
 use App\Modules\Core\AI\Services\Browser\BrowserPoolManager;
 use Tests\TestCase;
@@ -8,26 +11,32 @@ uses(TestCase::class);
 
 beforeEach(function (): void {
     $this->factory = Mockery::mock(BrowserContextFactory::class);
-    $this->manager = new BrowserPoolManager($this->factory);
+    $this->browserEnabled = false;
+    $settings = Mockery::mock(SettingsService::class);
+    $settings->shouldReceive('get')
+        ->with(AiRuntimeSettings::BROWSER_ENABLED_KEY)
+        ->andReturnUsing(fn (): bool => $this->browserEnabled);
+    $runtimeSettings = new AiRuntimeSettings($settings, new SettingDefinitionRegistry);
+    $this->manager = new BrowserPoolManager($this->factory, $runtimeSettings);
 });
 
 describe('isAvailable', function (): void {
     it('returns false when browser disabled', function (): void {
-        config()->set('ai.tools.browser.enabled', false);
+        $this->browserEnabled = false;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
 
         expect($this->manager->isAvailable())->toBeFalse();
     });
 
     it('returns false when factory unavailable', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(false);
 
         expect($this->manager->isAvailable())->toBeFalse();
     });
 
     it('returns true when enabled and factory available', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
 
         expect($this->manager->isAvailable())->toBeTrue();
@@ -36,20 +45,20 @@ describe('isAvailable', function (): void {
 
 describe('acquireContext', function (): void {
     it('returns false when disabled', function (): void {
-        config()->set('ai.tools.browser.enabled', false);
+        $this->browserEnabled = false;
 
         expect($this->manager->acquireContext(1, 'sess1'))->toBeFalse();
     });
 
     it('returns false when factory unavailable', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(false);
 
         expect($this->manager->acquireContext(1, 'sess1'))->toBeFalse();
     });
 
     it('acquires context successfully', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
 
@@ -57,7 +66,7 @@ describe('acquireContext', function (): void {
     });
 
     it('returns existing context for same company+session', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->once()->andReturn('ctx_1_sess1');
 
@@ -69,7 +78,7 @@ describe('acquireContext', function (): void {
     });
 
     it('enforces per-company limit', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         config()->set('ai.tools.browser.max_contexts_per_company', 2);
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
@@ -82,7 +91,7 @@ describe('acquireContext', function (): void {
     });
 
     it('allows different companies to have their own contexts', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         config()->set('ai.tools.browser.max_contexts_per_company', 1);
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
@@ -95,7 +104,7 @@ describe('acquireContext', function (): void {
 
 describe('releaseContext', function (): void {
     it('releases context', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
 
@@ -106,7 +115,7 @@ describe('releaseContext', function (): void {
     });
 
     it('frees slot for new context', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         config()->set('ai.tools.browser.max_contexts_per_company', 1);
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
@@ -125,7 +134,7 @@ describe('hasContext', function (): void {
     });
 
     it('returns true for active context', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
 
@@ -141,7 +150,7 @@ describe('getActiveContextCount', function (): void {
     });
 
     it('counts correctly', function (): void {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->factory->shouldReceive('isAvailable')->andReturn(true);
         $this->factory->shouldReceive('createContextId')->with(1, 'sess1')->andReturn('ctx_1_sess1');
         $this->factory->shouldReceive('createContextId')->with(1, 'sess2')->andReturn('ctx_1_sess2');

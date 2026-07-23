@@ -5,7 +5,7 @@
 **Sources:**
 - `docs/architecture/module-system.md` — Vocabulary note that defines Module / Distribution Bundle (Bundle) / adapter / extension seam and records "plugin" as retired on operator surfaces.
 - `docs/plans/plugin-manager-ui.md` — the shipped dashboard this plan renames; its Design Decisions are partly stale and are corrected here.
-- `app/Base/Foundation/Services/LandingPageResolver.php` — in-repo precedent for aliasing renamed menu IDs that are persisted as user prefs.
+- `app/Base/Foundation/Services/LandingPageResolver.php` — in-repo precedent for aliasing renamed menu IDs that are persisted in user-scoped settings.
 
 **Agents:** claud/opus-4.8
 

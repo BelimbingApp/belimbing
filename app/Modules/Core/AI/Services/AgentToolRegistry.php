@@ -34,6 +34,11 @@ class AgentToolRegistry
         $this->tools[$tool->name()] = $tool;
     }
 
+    public function unregister(string $name): void
+    {
+        unset($this->tools[$name]);
+    }
+
     /**
      * Get the names of all registered tools (regardless of authz).
      *

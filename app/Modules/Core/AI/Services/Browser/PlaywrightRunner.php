@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Services\Browser;
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\Json as BlbJson;
 use App\Base\Support\Str as BlbStr;
@@ -55,6 +56,7 @@ class PlaywrightRunner
 
     public function __construct(
         private readonly ?DetachedProcessLauncher $launcher = null,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     /**
@@ -202,7 +204,8 @@ class PlaywrightRunner
             'action' => $action,
             'headless' => $headless,
             'keepOpen' => $keepOpen,
-            'executablePath' => config('ai.tools.browser.executable_path'),
+            'executablePath' => ($this->runtimeSettings ?? app(AiRuntimeSettings::class))
+                ->browserExecutablePath(),
             ...$arguments,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
     }

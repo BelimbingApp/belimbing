@@ -10,6 +10,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore as ImageProviderCredentialStoreContract;
 use App\Base\Menu\Services\MenuConditionRegistry;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Modules\Core\AI\Console\Commands\BrowserSweepCommand;
 use App\Modules\Core\AI\Console\Commands\CodexAuthListenCommand;
@@ -389,7 +390,10 @@ class ServiceProvider extends BaseServiceProvider
                 }
             }
 
-            return new ToolMetadataRegistry($allTools);
+            return new ToolMetadataRegistry(
+                $allTools,
+                $app->make(SettingDefinitionRegistry::class),
+            );
         });
     }
 

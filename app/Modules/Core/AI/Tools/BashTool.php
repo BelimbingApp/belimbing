@@ -5,6 +5,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Contracts\StreamableTool;
 use App\Base\AI\Exceptions\ShellBackendUnavailableException;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\ShellCommandRunner;
 use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
@@ -20,7 +21,7 @@ use App\Base\AI\Tools\ToolResult;
  * command runs, enabling real-time output in the agent console UI.
  *
  * Safety: two independent gates must both pass. The `ai.tools.bash.enabled`
- * config flag (default OFF in production) is a hard kill-switch so a prompt
+ * runtime setting (default OFF) is a hard kill-switch so a prompt
  * injection cannot become RCE on a live deployment, and the
  * `admin.ai.tool.bash.execute` capability restricts which users may trigger it.
  * A per-execution timeout bounds runtime.
@@ -35,6 +36,7 @@ class BashTool extends AbstractHighImpactProcessTool implements ProvidesDisplayS
 
     public function __construct(
         private readonly ?ShellCommandRunner $shell = null,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     public function name(): string
@@ -275,20 +277,20 @@ class BashTool extends AbstractHighImpactProcessTool implements ProvidesDisplayS
 
     /**
      * Hard kill-switch, independent of authz. When the bash tool is disabled
-     * (default in production) no command runs, whatever capability the actor
+     * (default disabled) no command runs, whatever capability the actor
      * holds. Returns an unavailable result to surface in both the sync and
      * streaming paths, or null when execution may proceed.
      */
     private function disabledResult(): ?ToolResult
     {
-        if ((bool) config('ai.tools.bash.enabled', false)) {
+        if (($this->runtimeSettings ?? app(AiRuntimeSettings::class))->bashToolEnabled()) {
             return null;
         }
 
         return ToolResult::unavailable(
             'bash_disabled',
-            'The shell tool is disabled on this environment.',
-            'Set AI_BASH_TOOL_ENABLED=true to enable it — ideally only alongside an OS-level sandbox for the shell backend.',
+            'The shell tool is disabled for this installation.',
+            'An authorized operator can enable it in AI Control Plane → Runtime Guardrails. Use an OS-level sandbox for the shell backend.',
         );
     }
 

@@ -5,6 +5,15 @@
     $companyTz = $tzService->currentCompanyTimezone();
     $companyTzExplicit = $tzService->isCompanyTimezoneExplicit();
     $companyTimezoneSettingsUrl = route('admin.companies.show', \App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+    $theme = 'system';
+
+    if (auth()->check()) {
+        $user = auth()->user();
+        $theme = (string) app(\App\Base\Settings\Contracts\SettingsService::class)->get(
+            'ui.theme',
+            \App\Base\Settings\DTO\Scope::user((int) $user->getKey(), $user->getCompanyId()),
+        );
+    }
 @endphp
 
 <div class="h-7 bg-surface-bar border-b border-border-default flex items-center justify-between px-2 shrink-0 z-10">
@@ -31,7 +40,9 @@
 
     {{-- Right: Notifications + Timezone selector + Theme selector --}}
     <div class="flex items-center gap-3" x-data="{
-        theme: 'light',
+        theme: @js($theme),
+        themeSaving: false,
+        themeMedia: null,
         tzOpen: false,
         tzMode: @js($tzMode->value),
         tzLabel: @js($tzLabel),
@@ -41,13 +52,45 @@
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
-            const storedTheme = localStorage.getItem('theme');
-
-            this.theme = ['light', 'dark'].includes(storedTheme) ? storedTheme : 'light';
+            this.theme = ['light', 'dark', 'system'].includes(this.theme) ? this.theme : 'system';
+            localStorage.setItem('theme', this.theme);
             this.applyTheme();
+            this.themeMedia = matchMedia('(prefers-color-scheme: dark)');
+            this.themeMedia.addEventListener('change', () => {
+                if (this.theme === 'system') this.applyTheme();
+            });
+            window.addEventListener('theme-changed', event => {
+                this.theme = event.detail?.theme ?? 'system';
+                localStorage.setItem('theme', this.theme);
+                this.applyTheme();
+            });
         },
         applyTheme() {
-            document.documentElement.classList.toggle('dark', this.theme === 'dark');
+            const dark = this.theme === 'dark'
+                || (this.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+            document.documentElement.classList.toggle('dark', dark);
+        },
+        setTheme(theme) {
+            if (this.themeSaving || !['light', 'dark', 'system'].includes(theme)) return;
+            const previousTheme = this.theme;
+            this.theme = theme;
+            localStorage.setItem('theme', theme);
+            this.applyTheme();
+            @auth
+                this.themeSaving = true;
+                fetch('{{ route('theme.set') }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content },
+                    body: JSON.stringify({ theme }),
+                })
+                .then(r => r.ok ? r.json() : Promise.reject(r))
+                .catch(() => {
+                    this.theme = previousTheme;
+                    localStorage.setItem('theme', previousTheme);
+                    this.applyTheme();
+                })
+                .finally(() => { this.themeSaving = false; });
+            @endauth
         },
         tzDisplay(mode) {
             if (mode === 'local') return this.browserTz;
@@ -152,15 +195,14 @@
             :options="[
                 ['value' => 'light', 'label' => __('Light'), 'icon' => 'heroicon-o-sun'],
                 ['value' => 'dark', 'label' => __('Dark'), 'icon' => 'heroicon-o-moon'],
+                ['value' => 'system', 'label' => __('System'), 'icon' => 'heroicon-o-computer-desktop'],
             ]"
-            value="light"
+            :value="$theme"
             :label="__('Theme')"
             :show-labels="false"
             x-model="theme"
             @segmented-control-change="
-                theme = $event.detail.value;
-                localStorage.setItem('theme', theme);
-                applyTheme();
+                setTheme($event.detail.value);
             "
         />
     </div>

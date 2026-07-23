@@ -2,11 +2,13 @@
 
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
+use App\Base\Settings\Contracts\SettingsService;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
-uses(TestCase::class);
+uses(TestCase::class, LazilyRefreshDatabase::class);
 
 /**
  * Set up a fresh on-disk SQLite database with one tiny table and a few rows,
@@ -35,14 +37,20 @@ function bcSetupSqliteEnvironment(): string
     DB::connection('backup_source')->statement(
         'CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL)'
     );
+    DB::connection('backup_source')->statement(
+        'CREATE TABLE base_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT, is_encrypted INTEGER NOT NULL DEFAULT 0, scope_type TEXT, scope_id INTEGER, created_at TEXT, updated_at TEXT)'
+    );
+    DB::connection('backup_source')->statement(
+        'CREATE UNIQUE INDEX base_settings_scope_unique ON base_settings (key, scope_type, scope_id)'
+    );
     DB::connection('backup_source')->insert("INSERT INTO widgets (id, name) VALUES (1, 'apple'), (2, 'belimbing'), (3, 'cherry')");
 
     Storage::fake('local');
 
-    config()->set('backup.disk', 'local');
+    app(SettingsService::class)->set('backup.disk', 'local');
     config()->set('backup.local_disk', 'local');
-    config()->set('backup.path_prefix', 'backups');
-    config()->set('backup.encryption.mode', 'app-key');
+    app(SettingsService::class)->set('backup.path_prefix', 'backups');
+    app(SettingsService::class)->set('backup.encryption.mode', 'app-key');
 
     return $sourcePath;
 }
@@ -53,7 +61,15 @@ function bcCleanup(string $sourcePath): void
     @unlink($sourcePath);
 }
 
+function bcRequireSodium(): void
+{
+    if (! extension_loaded('sodium')) {
+        test()->markTestSkipped('The app-key backup mode requires ext-sodium.');
+    }
+}
+
 it('dry-run validates configuration and writes nothing', function (): void {
+    bcRequireSodium();
     $src = bcSetupSqliteEnvironment();
 
     try {
@@ -69,6 +85,7 @@ it('dry-run validates configuration and writes nothing', function (): void {
 });
 
 it('creates an encrypted artifact and manifest in app-key mode', function (): void {
+    bcRequireSodium();
     $src = bcSetupSqliteEnvironment();
 
     try {
@@ -109,7 +126,7 @@ it('creates an encrypted artifact and manifest in app-key mode', function (): vo
 
 it('warns and writes plain artifact in none mode', function (): void {
     $src = bcSetupSqliteEnvironment();
-    config()->set('backup.encryption.mode', 'none');
+    app(SettingsService::class)->set('backup.encryption.mode', 'none');
 
     try {
         $this->artisan('blb:db:backup')
@@ -132,8 +149,9 @@ it('--prune deletes only artifacts older than keep_days while preserving keep_co
     $src = bcSetupSqliteEnvironment();
 
     // Aggressive policy: prune anything older than 1 day; keep at least 1 newest.
-    config()->set('backup.retention.keep_days', 1);
-    config()->set('backup.retention.keep_count', 1);
+    app(SettingsService::class)->set('backup.encryption.mode', 'none');
+    app(SettingsService::class)->set('backup.retention.keep_days', 1);
+    app(SettingsService::class)->set('backup.retention.keep_count', 1);
 
     try {
         // Two backups (newest + older); we'll backdate the older one.
@@ -165,7 +183,7 @@ it('--prune deletes only artifacts older than keep_days while preserving keep_co
 
 it('skips work when backup.enabled is false', function (): void {
     $src = bcSetupSqliteEnvironment();
-    config()->set('backup.enabled', false);
+    app(SettingsService::class)->set('backup.enabled', false);
 
     try {
         $this->artisan('blb:db:backup')
@@ -189,7 +207,7 @@ it('resolves an extension-registered encryption mode via the registry', function
             fn (array $config) => new NoneEncryption,
         );
 
-        config()->set('backup.encryption.mode', 'ext-test-noop');
+        app(SettingsService::class)->set('backup.encryption.mode', 'ext-test-noop');
 
         $this->artisan('blb:db:backup --dry-run')
             ->expectsOutputToContain('Dry run OK.')
@@ -200,6 +218,7 @@ it('resolves an extension-registered encryption mode via the registry', function
 });
 
 it('aborts with fingerprint mismatch when kek_fingerprint in manifest differs from current APP_KEY', function (): void {
+    bcRequireSodium();
     $src = bcSetupSqliteEnvironment();
 
     try {
@@ -225,6 +244,7 @@ it('aborts with fingerprint mismatch when kek_fingerprint in manifest differs fr
 });
 
 it('preflight ignores non-app-key manifests on the disk', function (): void {
+    bcRequireSodium();
     $src = bcSetupSqliteEnvironment();
 
     try {
@@ -246,4 +266,3 @@ it('preflight ignores non-app-key manifests on the disk', function (): void {
         bcCleanup($src);
     }
 });
-

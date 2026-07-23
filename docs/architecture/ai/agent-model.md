@@ -576,7 +576,10 @@ The runtime resolves LLM configuration with a cascade:
 - If a Lara task config is missing, incomplete, or points to an inactive provider/model → fall back to Lara's primary chat model.
 - If a configured provider cannot be resolved (inactive/not found) or has missing credentials → runtime returns `config_error` for that model (non-transient), and fallback stops at that point.
 
-The settings-model migration is tracked in `docs/plans/settings-model-evolution.md`. The tool-round limit and `pdftotext` path are the first definition-backed parameters; other AI controls still contain transitional config-backed defaults. New AI runtime parameters must follow the target `base_settings` → declared default contract in `docs/architecture/settings.md`.
+AI runtime parameters use discovered definitions and the
+`base_settings` → declared default contract in `docs/architecture/settings.md`.
+Runtime consumers use `AiRuntimeSettings`; structural model/provider metadata
+remains versioned configuration.
 
 ### 15.4 Authorization for Provider Management
 

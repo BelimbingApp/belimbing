@@ -5,8 +5,8 @@ namespace App\Base\Settings\DTO;
 /**
  * Identifies the scope for a settings lookup.
  *
- * User and legacy employee contexts may carry a company id so definitions
- * that allow organizational inheritance can continue through company scope.
+ * User contexts may carry a company id so definitions that allow
+ * organizational inheritance can continue through company scope.
  */
 final readonly class Scope
 {
@@ -30,13 +30,5 @@ final readonly class Scope
     public static function user(int $userId, ?int $companyId = null): self
     {
         return new self(ScopeType::USER, $userId, $companyId);
-    }
-
-    /**
-     * Create an employee scope with company cascade.
-     */
-    public static function employee(int $employeeId, int $companyId): self
-    {
-        return new self(ScopeType::EMPLOYEE, $employeeId, $companyId);
     }
 }

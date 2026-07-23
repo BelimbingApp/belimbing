@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -55,7 +56,7 @@ class ToolReadinessService
 
         return [
             'at' => $at,
-            'success' => (bool) $this->settings->get("ai.tools.{$toolName}.last_verified_success", false),
+            'success' => (bool) $this->settings->get("ai.tools.{$toolName}.last_verified_success"),
         ];
     }
 

@@ -97,7 +97,7 @@ class SecurityCheckCommand extends Command
 
     private function trustsAllProxies(): bool
     {
-        $configured = trim((string) env('TRUSTED_PROXIES', ''));
+        $configured = trim((string) config('security.trusted_proxies', ''));
 
         return $configured === '*';
     }

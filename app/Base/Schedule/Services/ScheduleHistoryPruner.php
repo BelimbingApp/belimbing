@@ -52,9 +52,6 @@ class ScheduleHistoryPruner
 
     public function keepDays(): int
     {
-        return max(0, (int) $this->settings->get(
-            self::KEEP_DAYS_KEY,
-            self::DEFAULT_KEEP_DAYS,
-        ));
+        return max(0, (int) $this->settings->get(self::KEEP_DAYS_KEY));
     }
 }

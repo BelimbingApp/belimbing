@@ -170,7 +170,7 @@ These tools directly serve Lara's core mission and build on existing infrastruct
 
 **1b. `WebSearchTool`** — Search the web for information
 - **OpenClaw parallel:** `web_search`
-- **BLB approach:** Server-side HTTP via Laravel's `Http` facade. Configurable search provider via `config('ai.tools.web_search.provider')`. API key per-provider via `config('ai.tools.web_search.{provider}.api_key')`.
+- **BLB approach:** Server-side HTTP via Laravel's `Http` facade. The provider and encrypted per-provider credentials are declared runtime settings managed from the AI tool workspace and resolved through `SettingsService`.
 - **Supported providers:**
   - **Parallel** (recommended) — `api.parallel.ai/v1beta/search`. AI-native search with semantic objectives and LLM-optimized excerpts. Supports `objective` + `search_queries` + `max_results` + `excerpts`. Auth: `x-api-key` header. Best accuracy/cost ratio for agentic use.
   - **Brave Search** — `api.search.brave.com/res/v1/web/search`. Simple keyword search with structured results. Auth: `X-Subscription-Token` header.

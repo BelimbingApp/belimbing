@@ -92,12 +92,12 @@ it('infers and persists an unconfirmed locale from the licensee address country'
         ->and($this->settings->get(LOCALE_CONFIRMED_AT_SETTINGS_KEY))->toBeNull();
 });
 
-it('falls back to the configured app locale when no licensee locale can be inferred', function (): void {
+it('uses the declared locale default when no licensee locale can be inferred', function (): void {
     config(['app.locale' => 'fr']);
 
     $context = freshLocaleContext();
 
-    expect($context->currentLocale())->toBe('fr-FR')
-        ->and($context->source())->toBe(LocaleSource::CONFIG_DEFAULT->value)
+    expect($context->currentLocale())->toBe('en-MY')
+        ->and($context->source())->toBe(LocaleSource::DECLARED_DEFAULT->value)
         ->and($context->requiresConfirmation())->toBeTrue();
 });

@@ -149,7 +149,7 @@ final class DataShareSettings
     private function value(string $key, mixed $default): mixed
     {
         if (! array_key_exists($key, $this->resolved)) {
-            $value = $this->settings->get($key, $default);
+            $value = $this->settings->get($key);
             $this->resolved[$key] = $value ?? $default;
         }
 

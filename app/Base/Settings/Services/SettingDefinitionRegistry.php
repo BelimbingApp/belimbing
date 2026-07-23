@@ -14,7 +14,28 @@ final class SettingDefinitionRegistry
 
     public function find(string $key): ?SettingDefinition
     {
-        return $this->all()[$key] ?? null;
+        $definitions = $this->all();
+
+        if (isset($definitions[$key])) {
+            return $definitions[$key];
+        }
+
+        $patterns = array_filter(
+            $definitions,
+            fn (SettingDefinition $definition): bool => str_contains($definition->key, '*'),
+        );
+        uasort(
+            $patterns,
+            fn (SettingDefinition $left, SettingDefinition $right): int => strlen($right->key) <=> strlen($left->key),
+        );
+
+        foreach ($patterns as $definition) {
+            if ($definition->matches($key)) {
+                return $definition;
+            }
+        }
+
+        return null;
     }
 
     public function get(string $key): SettingDefinition

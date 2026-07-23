@@ -103,7 +103,7 @@ class Workspace extends Component
                     $value = (bool) $value;
                 }
 
-                $settings->set($field->key, $value, encrypted: $field->encrypted);
+                $settings->set($field->key, $value);
             }
 
             $this->saveWebSearchProviders($settings);
@@ -128,6 +128,40 @@ class Workspace extends Component
         if ($this->toolName === 'document_analysis') {
             $this->checkDocumentExtractor(persistVerification: true);
         }
+    }
+
+    public function restoreConfig(): void
+    {
+        $this->authorizeToolManagement();
+
+        $settings = app(SettingsService::class);
+        $metadata = app(ToolMetadataRegistry::class)->get($this->toolName);
+
+        if ($metadata === null) {
+            return;
+        }
+
+        foreach ($metadata->configFields as $field) {
+            $settings->forget($field->key);
+        }
+
+        if ($this->toolName === 'web_search') {
+            $settings->forget('ai.tools.web_search.providers');
+            $settings->forget('ai.tools.web_search.provider');
+
+            foreach (array_keys(WebSearchTool::PROVIDERS) as $provider) {
+                $settings->forget("ai.tools.web_search.{$provider}.api_key");
+            }
+        }
+
+        $this->refreshConditionalTool();
+        $this->configValues = [];
+        $this->webSearchProviders = [];
+        $this->configSaveError = false;
+        $this->configSaved = __('Configuration restored to its defaults.');
+        $this->clearTryItResult();
+        $this->loadConfigValues();
+        $this->loadWebSearchProviders();
     }
 
     public function verifyDocumentExtractor(): void
@@ -346,7 +380,7 @@ class Workspace extends Component
         }
 
         // Fallback: bootstrap from legacy single-provider config
-        $provider = $settings->get('ai.tools.web_search.provider', 'parallel');
+        $provider = $settings->get('ai.tools.web_search.provider');
         $apiKey = $settings->get("ai.tools.web_search.{$provider}.api_key");
 
         $this->webSearchProviders = [
@@ -426,7 +460,7 @@ class Workspace extends Component
             ];
         }
 
-        $settings->set('ai.tools.web_search.providers', $providers, encrypted: true);
+        $settings->set('ai.tools.web_search.providers', $providers);
     }
 
     /**
@@ -447,7 +481,11 @@ class Workspace extends Component
 
         if ($tool !== null) {
             $registry->register($tool);
+
+            return;
         }
+
+        $registry->unregister($this->toolName);
     }
 
     /**
@@ -516,7 +554,7 @@ class Workspace extends Component
 
         return [
             'at' => $at,
-            'success' => (bool) $settings->get("ai.tools.{$this->toolName}.last_verified_success", false),
+            'success' => (bool) $settings->get("ai.tools.{$this->toolName}.last_verified_success"),
         ];
     }
 

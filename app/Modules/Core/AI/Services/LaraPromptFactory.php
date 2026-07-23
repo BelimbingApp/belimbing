@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\AI\Services;
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
 use App\Modules\Core\AI\DTO\PromptPackage;
@@ -26,6 +27,7 @@ class LaraPromptFactory
         private readonly WorkspaceValidator $workspaceValidator,
         private readonly PromptPackageFactory $packageFactory,
         private readonly PromptRenderer $renderer,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     /**
@@ -151,12 +153,13 @@ class LaraPromptFactory
      * Load the legacy extension prompt from the configured path.
      *
      * Backward compatibility: when no workspace extension.md exists,
-     * check the AI_LARA_PROMPT_EXTENSION_PATH config for a deployment-level
+     * check the operator-managed extension path for an installation-level
      * extension file. Returns null if not configured or file is absent.
      */
     private function legacyExtensionSection(): ?PromptSection
     {
-        $configuredPath = config('ai.lara.prompt.extension_path');
+        $configuredPath = ($this->runtimeSettings ?? app(AiRuntimeSettings::class))
+            ->laraPromptExtensionPath();
 
         if (! is_string($configuredPath) || trim($configuredPath) === '') {
             return null;

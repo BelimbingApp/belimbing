@@ -6,13 +6,15 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Dashboard\DTO\WidgetDefinition;
 use App\Base\Dashboard\WidgetRegistry;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use Illuminate\Support\Collection;
 
 /**
  * Resolves the dashboard widget layout for a user.
  *
  * Precedence mirrors LandingPageResolver:
- *  1. The user's own layout (prefs.dashboard) — an ordered list of widget
+ *  1. The user's own `ui.dashboard.layout` setting — an ordered list of widget
  *     ids. Ids pointing at widgets the user can no longer see (revoked
  *     capability, uninstalled module) are skipped silently instead of
  *     erroring every visit.
@@ -23,7 +25,7 @@ use Illuminate\Support\Collection;
  */
 class DashboardLayout
 {
-    public const PREF_KEY = 'dashboard';
+    public const SETTING_KEY = 'ui.dashboard.layout';
 
     /**
      * Widgets shown by default before the user personalizes.
@@ -33,6 +35,7 @@ class DashboardLayout
     public function __construct(
         private readonly WidgetRegistry $registry,
         private readonly AuthorizationService $authz,
+        private readonly SettingsService $settings,
     ) {}
 
     /**
@@ -96,11 +99,7 @@ class DashboardLayout
             ->values()
             ->all();
 
-        $prefs = $user->prefsArray();
-        $prefs[self::PREF_KEY] = $ids;
-
-        $user->prefs = $prefs;
-        $user->save();
+        $this->settings->set(self::SETTING_KEY, $ids, $this->scopeFor($user));
     }
 
     /**
@@ -108,11 +107,7 @@ class DashboardLayout
      */
     public function reset(mixed $user): void
     {
-        $prefs = $user->prefsArray();
-        unset($prefs[self::PREF_KEY]);
-
-        $user->prefs = $prefs === [] ? null : $prefs;
-        $user->save();
+        $this->settings->forget(self::SETTING_KEY, $this->scopeFor($user));
     }
 
     /**
@@ -122,14 +117,34 @@ class DashboardLayout
      */
     private function savedIds(mixed $user): ?array
     {
-        $saved = method_exists($user, 'prefsArray')
-            ? ($user->prefsArray()[self::PREF_KEY] ?? null)
-            : null;
+        $scope = $this->scopeFor($user);
+
+        if (! $this->settings->has(self::SETTING_KEY, $scope)) {
+            return null;
+        }
+
+        $saved = $this->settings->get(self::SETTING_KEY, $scope);
 
         if (! is_array($saved)) {
             return null;
         }
 
         return collect($saved)->filter(fn (mixed $id): bool => is_string($id))->values()->all();
+    }
+
+    private function scopeFor(mixed $user): Scope
+    {
+        $userId = method_exists($user, 'getKey') ? $user->getKey() : null;
+
+        if (! is_numeric($userId)) {
+            throw new \InvalidArgumentException('Dashboard preferences require a persisted user.');
+        }
+
+        $companyId = method_exists($user, 'getCompanyId') ? $user->getCompanyId() : null;
+
+        return Scope::user(
+            (int) $userId,
+            is_numeric($companyId) ? (int) $companyId : null,
+        );
     }
 }

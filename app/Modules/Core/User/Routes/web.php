@@ -3,6 +3,7 @@
 use App\Modules\Core\User\Actions\Logout;
 use App\Modules\Core\User\Controllers\Auth\VerifyEmailController;
 use App\Modules\Core\User\Controllers\PinController;
+use App\Modules\Core\User\Controllers\ThemeController;
 use App\Modules\Core\User\Livewire\Auth\ConfirmPassword;
 use App\Modules\Core\User\Livewire\Auth\ForgotPassword;
 use App\Modules\Core\User\Livewire\Auth\Login;
@@ -61,6 +62,8 @@ Route::middleware('auth')->group(function () {
         ->name('pins.toggle');
     Route::post('api/pins/reorder', [PinController::class, 'reorder'])
         ->name('pins.reorder');
+    Route::post('api/theme', ThemeController::class)
+        ->name('theme.set');
 });
 
 Route::post('logout', Logout::class)

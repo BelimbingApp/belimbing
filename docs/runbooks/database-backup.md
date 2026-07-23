@@ -2,7 +2,7 @@
 
 **Document Type:** Operational runbook
 **Scope:** Self-hosted BLB deployments using `blb:db:backup`
-**Last Updated:** 2026-05-30
+**Last Updated:** 2026-07-23
 
 This runbook covers how to choose an encryption tier, how the artifact format
 works, how to run restore drills, key rotation, and what to do on suspected
@@ -21,15 +21,17 @@ this document is the operator-facing companion.
 |---|---|
 | Self-hosted Postgres | Use `blb:db:backup` on a schedule. |
 | Self-hosted SQLite | Use `blb:db:backup` on a schedule. |
-| Managed Postgres (RDS, Cloud SQL, Neon, Supabase, DigitalOcean) | Set `BACKUP_ENABLED=false`. Rely on the provider's encrypted snapshots. |
-| Managed SQLite-replacement (Turso, LiteFS Cloud) | Set `BACKUP_ENABLED=false`. Rely on the provider. |
+| Managed Postgres (RDS, Cloud SQL, Neon, Supabase, DigitalOcean) | Turn off **Application backups** in Administration → System → Database → Backups. Rely on the provider's encrypted snapshots. |
+| Managed SQLite-replacement (Turso, LiteFS Cloud) | Turn off **Application backups** in Administration → System → Database → Backups. Rely on the provider. |
 
 Running BLB backups *and* a managed-snapshot policy doubles complexity without
 adding recovery capability. Pick one path per environment.
 
 ## Encryption tier selection
 
-`blb:db:backup` selects an encryption mode from `config('backup.encryption.mode')`.
+`blb:db:backup` selects its encryption mode from the global
+`backup.encryption.mode` runtime setting. Its definition owns the `app-key`
+default; the Backups page saves an override or restores the declared default.
 
 | Mode | Use when | Implemented |
 |---|---|---|
@@ -205,7 +207,7 @@ encryption credential has been exposed:
 | `Required tool not available: pg_dump` | `pg_dump` is missing on the host running the backup. | `apt-get install postgresql-client` on Debian/Ubuntu, or the equivalent for your OS. The version should match (or exceed) the server major version. |
 | `Cannot back up an in-memory SQLite database (:memory:)` | The active connection points at `:memory:`. | Configure a file-based SQLite database for any environment that needs backups. |
 | Partial / corrupt restore target left on disk | Restore process interrupted. | Delete the partial target file or drop the partial database before retrying. |
-| `Backup is disabled` from `blb:db:backup` | `backup.enabled` is `false`. | Intended on managed-DB deployments; otherwise set `BACKUP_ENABLED=true`. |
+| `Backup is disabled` from `blb:db:backup` | `backup.enabled` is `false`. | Intended on managed-DB deployments; otherwise turn on **Application backups** in the Backups page. |
 
 ## References
 

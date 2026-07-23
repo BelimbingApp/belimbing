@@ -19,7 +19,7 @@ beforeEach(function (): void {
 test('integration parameters page renders under system integrations', function (): void {
     $this->get(route('admin.system.integration-parameters.index'))
         ->assertOk()
-        ->assertSee('Integration Parameters')
+        ->assertSee('Integration Secrets')
         ->assertSee('No integration parameters stored yet.');
 });
 
@@ -28,13 +28,12 @@ test('a secret parameter is stored encrypted and displayed write-only', function
         ->call('openAddModal')
         ->set('newSystem', 'cloudflare')
         ->set('newName', 'api_token')
-        ->set('newType', 'secret')
         ->set('newDescription', 'Tunnel-config token, expires 2026-06-13')
         ->set('newValue', 'super-secret-value-a4f9')
         ->call('addParameter')
         ->assertHasNoErrors()
         ->assertSet('addModalOpen', false)
-        ->assertSee('••••a4f9')
+        ->assertSee('Stored securely')
         ->assertDontSee('super-secret-value-a4f9');
 
     $row = Setting::query()
@@ -48,24 +47,23 @@ test('a secret parameter is stored encrypted and displayed write-only', function
         ->and(app(SettingsService::class)->get('integrations.cloudflare.api_token.description'))->toBe('Tunnel-config token, expires 2026-06-13');
 });
 
-test('a text parameter stays readable and the entry modal prefills it', function (): void {
+test('every dynamic integration value is encrypted and write-only', function (): void {
     Livewire::test(IntegrationParametersIndex::class)
         ->call('openAddModal')
         ->set('newSystem', 'cloudflare')
         ->set('newName', 'account_id')
-        ->set('newType', 'text')
         ->set('newValue', INTEGRATION_PARAMETERS_ACCOUNT_ID)
         ->call('addParameter')
         ->assertHasNoErrors()
-        // text parameters display their value — that is the point of the type
-        ->assertSee(INTEGRATION_PARAMETERS_ACCOUNT_ID);
+        ->assertSee('Stored securely')
+        ->assertDontSee(INTEGRATION_PARAMETERS_ACCOUNT_ID);
 
-    expect(Setting::query()->where('key', 'integrations.cloudflare.account_id')->firstOrFail()->is_encrypted)->toBeFalse();
+    expect(Setting::query()->where('key', 'integrations.cloudflare.account_id')->firstOrFail()->is_encrypted)->toBeTrue();
 
     Livewire::test(IntegrationParametersIndex::class)
         ->call('openEntry', 'integrations.cloudflare.account_id')
         ->assertSet('entryModalOpen', true)
-        ->assertSet('entryValue', INTEGRATION_PARAMETERS_ACCOUNT_ID)
+        ->assertSet('entryValue', '')
         ->set('entryValue', 'new-account-id')
         ->call('saveEntry')
         ->assertHasNoErrors()
@@ -75,7 +73,7 @@ test('a text parameter stays readable and the entry modal prefills it', function
 });
 
 test('parameter keys must be unique, well-formed, and not reserved', function (): void {
-    app(SettingsService::class)->set('integrations.cloudflare.api_token', 'existing', encrypted: true);
+    app(SettingsService::class)->set('integrations.cloudflare.api_token', 'existing');
 
     Livewire::test(IntegrationParametersIndex::class)
         ->set('newSystem', 'cloudflare')
@@ -101,7 +99,7 @@ test('parameter keys must be unique, well-formed, and not reserved', function ()
 });
 
 test('a secret edit starts blank, blank keeps the stored value, and a new value stays encrypted', function (): void {
-    app(SettingsService::class)->set('integrations.cloudflare.api_token', 'old-secret', encrypted: true);
+    app(SettingsService::class)->set('integrations.cloudflare.api_token', 'old-secret');
 
     // blank value = keep current secret (only the description changed)
     Livewire::test(IntegrationParametersIndex::class)
@@ -136,7 +134,7 @@ test('a secret edit starts blank, blank keeps the stored value, and a new value 
 
 test('deleting a parameter from the entry modal removes the value and its description', function (): void {
     $settings = app(SettingsService::class);
-    $settings->set('integrations.cloudflare.api_token', 'doomed', encrypted: true);
+    $settings->set('integrations.cloudflare.api_token', 'doomed');
     $settings->set('integrations.cloudflare.api_token.description', 'temp');
 
     Livewire::test(IntegrationParametersIndex::class)
@@ -150,8 +148,8 @@ test('deleting a parameter from the entry modal removes the value and its descri
 
 test('the list searches by key and sorts by key or recency', function (): void {
     $settings = app(SettingsService::class);
-    $settings->set('integrations.cloudflare.api_token', 'a', encrypted: true);
-    $settings->set('integrations.wechat.ingest_app_secret', 'b', encrypted: true);
+    $settings->set('integrations.cloudflare.api_token', 'a');
+    $settings->set('integrations.wechat.ingest_app_secret', 'b');
 
     Livewire::test(IntegrationParametersIndex::class)
         ->set('search', 'wechat')

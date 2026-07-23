@@ -53,6 +53,14 @@ use App\Base\Settings\Livewire\SettingsForm;
                                         <x-icon name="heroicon-o-check" class="h-4 w-4" />
                                         {{ __('Save Settings') }}
                                     </x-ui.button>
+                                    <x-ui.button
+                                        type="button"
+                                        variant="secondary"
+                                        wire:click="restoreDefaults"
+                                        wire:confirm="{{ __('Restore every setting on this page to its declared default?') }}"
+                                    >
+                                        {{ __('Restore Defaults') }}
+                                    </x-ui.button>
                                 </div>
                             @endif
                         </x-ui.tab>
@@ -74,6 +82,14 @@ use App\Base\Settings\Livewire\SettingsForm;
                     <x-ui.button type="submit" variant="primary">
                         <x-icon name="heroicon-o-check" class="h-4 w-4" />
                         {{ __('Save Settings') }}
+                    </x-ui.button>
+                    <x-ui.button
+                        type="button"
+                        variant="secondary"
+                        wire:click="restoreDefaults"
+                        wire:confirm="{{ __('Restore every setting on this page to its declared default?') }}"
+                    >
+                        {{ __('Restore Defaults') }}
                     </x-ui.button>
                 </div>
             @endif

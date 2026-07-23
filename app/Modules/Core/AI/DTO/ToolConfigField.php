@@ -1,5 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\DTO;
+
+use App\Base\Settings\DTO\SettingDefinition;
 
 /**
  * Describes a configurable setting for a Agent tool.
@@ -10,21 +13,27 @@ namespace App\Modules\Core\AI\DTO;
 final readonly class ToolConfigField
 {
     /**
-     * @param  string  $key  Settings key (e.g., 'ai.tools.web_search.provider')
-     * @param  string  $label  Human-readable label for the form
      * @param  string  $type  Field type: 'text', 'secret', 'select', 'boolean'
-     * @param  bool  $encrypted  Whether to store encrypted in Settings
-     * @param  string|null  $help  Optional help text shown below the field
      * @param  array<string, string>  $options  For 'select' type: value => label pairs
      * @param  string|null  $showWhen  Conditional display: 'key=value' (e.g., 'ai.tools.web_search.provider=parallel')
      */
     public function __construct(
-        public string $key,
-        public string $label,
+        SettingDefinition $definition,
         public string $type = 'text',
-        public bool $encrypted = false,
-        public ?string $help = null,
         public array $options = [],
         public ?string $showWhen = null,
-    ) {}
+    ) {
+        $this->key = $definition->key;
+        $this->label = $definition->label ?? $definition->key;
+        $this->encrypted = $definition->encrypted;
+        $this->help = $definition->help;
+    }
+
+    public string $key;
+
+    public string $label;
+
+    public bool $encrypted;
+
+    public ?string $help;
 }

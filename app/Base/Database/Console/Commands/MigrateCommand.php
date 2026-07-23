@@ -409,8 +409,8 @@ class MigrateCommand extends IlluminateMigrateCommand
             $bootstrapFile,
         );
 
-        $companyName = env('LICENSEE_COMPANY_NAME');
-        $companyCode = env('LICENSEE_COMPANY_CODE');
+        $companyName = config('app.licensee_company_name');
+        $companyCode = config('app.licensee_company_code');
 
         $provisioner->provision($companyName, $companyCode);
     }

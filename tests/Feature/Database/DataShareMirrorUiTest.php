@@ -465,7 +465,7 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
     $this->actingAs(createAdminUser());
     $settings = app(SettingsService::class);
     $secretUrl = 'postgresql://mirror-user:do-not-render@example.test:5432/postgres?sslmode=require';
-    $settings->set('data_share.mirror.url', $secretUrl, encrypted: true);
+    $settings->set('data_share.mirror.url', $secretUrl);
 
     $component = Livewire::test(DataShareSettingsPage::class)
         ->assertSet('values.data_share__mirror__url', '******')
@@ -502,7 +502,6 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
     $settings->set(
         'data_share.mirror.supabase.access_token',
         'sbp_remove-with-connection',
-        encrypted: true,
     );
     $component = Livewire::test(DataShareSettingsPage::class);
     session()->put('data_share.mirror.supabase.setup_state', ['projects' => []]);
@@ -606,7 +605,6 @@ it('updates the password in a saved Supabase mirror URL without repeating guided
     app(SettingsService::class)->set(
         'data_share.mirror.url',
         'postgresql://postgres.project:old-password@example.supabase.com:6543/postgres',
-        encrypted: true,
     );
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
@@ -746,7 +744,6 @@ it('forgets an expired saved Supabase token and asks for a replacement', functio
     app(SettingsService::class)->set(
         'data_share.mirror.supabase.access_token',
         'sbp_expired-token',
-        encrypted: true,
     );
     Http::fake([
         'api.supabase.com/v1/organizations' => Http::response([], 401),
@@ -830,7 +827,6 @@ it('does not delete a newer Supabase token when an in-flight token expires', fun
             app(SettingsService::class)->set(
                 'data_share.mirror.supabase.access_token',
                 'sbp_newer-token',
-                encrypted: true,
             );
 
             return Http::response([], 401);
@@ -970,14 +966,13 @@ it('configures and initializes an existing Supabase project without asking for i
 function seedSavedSupabaseMirrorConnection(): void
 {
     $settings = app(SettingsService::class);
-    $settings->set(SupabaseMirrorSetupService::ACCESS_TOKEN_SETTING, 'sbp_saved-token', encrypted: true);
+    $settings->set(SupabaseMirrorSetupService::ACCESS_TOKEN_SETTING, 'sbp_saved-token');
     $settings->set(SupabaseMirrorSetupService::PROJECT_REF_SETTING, 'abcdefghijklmnopqrst');
     $settings->set(SupabaseMirrorSetupService::PROJECT_NAME_SETTING, 'Existing Development');
     $settings->set('data_share.mirror.provider', 'supabase');
     $settings->set(
         'data_share.mirror.url',
         'postgres://postgres.abcdefghijklmnopqrst:old@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres',
-        encrypted: true,
     );
 }
 
@@ -1068,7 +1063,7 @@ it('falls back to the full replacement flow when no Supabase token is saved', fu
     $this->actingAs(createAdminUser());
     $settings = app(SettingsService::class);
     $settings->set(SupabaseMirrorSetupService::PROJECT_REF_SETTING, 'abcdefghijklmnopqrst');
-    $settings->set('data_share.mirror.url', 'postgres://x@host:5432/postgres', encrypted: true);
+    $settings->set('data_share.mirror.url', 'postgres://x@host:5432/postgres');
 
     Livewire::test(DataShareSettingsPage::class)
         ->call('beginSupabasePasswordUpdate')

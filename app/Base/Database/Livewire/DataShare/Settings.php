@@ -516,7 +516,7 @@ class Settings extends SettingsForm
             }
 
             $settings->set('data_share.mirror.provider', $provider);
-            $settings->set('data_share.mirror.url', $value, encrypted: true);
+            $settings->set('data_share.mirror.url', $value);
             $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
             $this->originalMirrorProvider = $provider;
             $this->replaceSavedSupabaseConnection = false;
@@ -585,7 +585,7 @@ class Settings extends SettingsForm
     public function getSavedSupabaseProjectProperty(): ?array
     {
         $settings = app(SettingsService::class);
-        $ref = trim((string) $settings->get(SupabaseMirrorSetupService::PROJECT_REF_SETTING, ''));
+        $ref = trim((string) $settings->get(SupabaseMirrorSetupService::PROJECT_REF_SETTING));
 
         if ($ref === '') {
             return null;
@@ -593,9 +593,9 @@ class Settings extends SettingsForm
 
         return [
             'ref' => $ref,
-            'name' => trim((string) $settings->get(SupabaseMirrorSetupService::PROJECT_NAME_SETTING, $ref)),
-            'organization' => trim((string) $settings->get(SupabaseMirrorSetupService::ORGANIZATION_SETTING, '')),
-            'region' => trim((string) $settings->get(SupabaseMirrorSetupService::REGION_SETTING, '')),
+            'name' => trim((string) $settings->get(SupabaseMirrorSetupService::PROJECT_NAME_SETTING)),
+            'organization' => trim((string) $settings->get(SupabaseMirrorSetupService::ORGANIZATION_SETTING)),
+            'region' => trim((string) $settings->get(SupabaseMirrorSetupService::REGION_SETTING)),
         ];
     }
 

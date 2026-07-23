@@ -1,5 +1,8 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\Enums\BrowserSessionStatus;
 use App\Modules\Core\AI\Models\BrowserSession;
 use App\Modules\Core\AI\Services\Browser\BrowserContextFactory;
@@ -37,25 +40,32 @@ beforeEach(function () {
     $this->repository = Mockery::mock(BrowserSessionRepository::class);
     $this->runtimeAdapter = Mockery::mock(BrowserRuntimeAdapter::class);
     $this->contextFactory = Mockery::mock(BrowserContextFactory::class);
+    $this->browserEnabled = false;
+    $settings = Mockery::mock(SettingsService::class);
+    $settings->shouldReceive('get')
+        ->with(AiRuntimeSettings::BROWSER_ENABLED_KEY)
+        ->andReturnUsing(fn (): bool => $this->browserEnabled);
+    $runtimeSettings = new AiRuntimeSettings($settings, new SettingDefinitionRegistry);
 
     $this->manager = new BrowserSessionManager(
         $this->repository,
         $this->runtimeAdapter,
         $this->contextFactory,
+        $runtimeSettings,
     );
 });
 
 describe('isAvailable', function () {
-    it('returns true when config enabled, factory available, and runtime available', function () {
-        config()->set('ai.tools.browser.enabled', true);
+    it('returns true when the runtime setting is enabled and browser dependencies are available', function () {
+        $this->browserEnabled = true;
         $this->contextFactory->shouldReceive('isAvailable')->andReturn(true);
         $this->runtimeAdapter->shouldReceive('isAvailable')->andReturn(true);
 
         expect($this->manager->isAvailable())->toBeTrue();
     });
 
-    it('returns false when config disabled', function () {
-        config()->set('ai.tools.browser.enabled', false);
+    it('returns false when the runtime setting is disabled', function () {
+        $this->browserEnabled = false;
         $this->contextFactory->shouldReceive('isAvailable')->andReturn(true);
         $this->runtimeAdapter->shouldReceive('isAvailable')->andReturn(true);
 
@@ -63,7 +73,7 @@ describe('isAvailable', function () {
     });
 
     it('returns false when factory unavailable', function () {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->contextFactory->shouldReceive('isAvailable')->andReturn(false);
         $this->runtimeAdapter->shouldReceive('isAvailable')->andReturn(true);
 
@@ -71,7 +81,7 @@ describe('isAvailable', function () {
     });
 
     it('returns false when runtime unavailable', function () {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         $this->contextFactory->shouldReceive('isAvailable')->andReturn(true);
         $this->runtimeAdapter->shouldReceive('isAvailable')->andReturn(false);
 
@@ -81,7 +91,7 @@ describe('isAvailable', function () {
 
 describe('open', function () {
     beforeEach(function () {
-        config()->set('ai.tools.browser.enabled', true);
+        $this->browserEnabled = true;
         config()->set('ai.tools.browser.max_contexts_per_company', 3);
         config()->set('ai.tools.browser.context_idle_timeout_seconds', 300);
         $this->contextFactory->shouldReceive('isAvailable')->andReturn(true);
@@ -111,7 +121,7 @@ describe('open', function () {
     });
 
     it('throws when browser is not available', function () {
-        config()->set('ai.tools.browser.enabled', false);
+        $this->browserEnabled = false;
 
         expect(fn () => $this->manager->open(1, 1, 10, true))
             ->toThrow(BrowserSessionException::class, 'not available');

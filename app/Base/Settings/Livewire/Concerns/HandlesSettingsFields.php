@@ -59,7 +59,7 @@ trait HandlesSettingsFields
     /**
      * @param  array<string, mixed>  $field
      */
-    private function passwordFieldDisplayValue(SettingsService $settings, array $field, Scope $scope, mixed $value): string
+    private function passwordFieldDisplayValue(SettingsService $settings, array $field, ?Scope $scope, mixed $value): string
     {
         $fieldScope = $this->scopeForField($field, $scope);
 
@@ -133,7 +133,12 @@ trait HandlesSettingsFields
             return SettingsFieldValue::checkboxList($value, $field, $allowed);
         }
 
-        return $value;
+        return match ($field['value_type'] ?? 'string') {
+            'integer' => (int) $value,
+            'float' => (float) $value,
+            'boolean' => filter_var($value, FILTER_VALIDATE_BOOLEAN),
+            default => $value,
+        };
     }
 
     private function companyScope(): Scope
@@ -152,11 +157,13 @@ trait HandlesSettingsFields
     /**
      * @param  array<string, mixed>  $field
      */
-    private function scopeForField(array $field, Scope $companyScope): ?Scope
+    private function scopeForField(array $field, ?Scope $companyScope): ?Scope
     {
-        return ($field['scope'] ?? 'global') === 'company'
-            ? $companyScope
-            : null;
+        if (($field['scope'] ?? 'global') !== 'company') {
+            return null;
+        }
+
+        return $companyScope ?? $this->companyScope();
     }
 
     /**
@@ -165,5 +172,11 @@ trait HandlesSettingsFields
     private function isReadonlyField(array $field): bool
     {
         return in_array(($field['type'] ?? 'text'), ['readonly'], true);
+    }
+
+    private function requiresCompanyScope(): bool
+    {
+        return collect($this->allFields())
+            ->contains(fn (array $field): bool => ($field['scope'] ?? 'global') === 'company');
     }
 }

@@ -47,7 +47,6 @@ class CredentialSettingsDevelopmentSanitizer implements DevelopmentSanitizationC
 
             $scope = match ($scopeType) {
                 ScopeType::COMPANY => Scope::company((int) $setting->scope_id),
-                ScopeType::EMPLOYEE => new Scope(ScopeType::EMPLOYEE, (int) $setting->scope_id),
                 ScopeType::USER => Scope::user((int) $setting->scope_id),
                 null => null,
             };

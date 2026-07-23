@@ -299,9 +299,20 @@ use App\Modules\Core\AI\Livewire\Tools\Workspace;
                                 @endif
                             @endforeach
 
-                            <x-ui.button type="submit" variant="primary" size="sm" class="w-full">
-                                {{ __('Save Configuration') }}
-                            </x-ui.button>
+                            <div class="flex flex-wrap gap-2">
+                                <x-ui.button type="submit" variant="primary" size="sm">
+                                    {{ __('Save Configuration') }}
+                                </x-ui.button>
+                                <x-ui.button
+                                    type="button"
+                                    variant="secondary"
+                                    size="sm"
+                                    wire:click="restoreConfig"
+                                    wire:confirm="{{ __('Restore this tool configuration to its declared defaults?') }}"
+                                >
+                                    {{ __('Restore Defaults') }}
+                                </x-ui.button>
+                            </div>
 
                             @if($configSaved)
                                 @if($configSaveError)

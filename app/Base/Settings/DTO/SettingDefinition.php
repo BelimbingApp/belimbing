@@ -6,6 +6,7 @@ use App\Base\Settings\Exceptions\InvalidSettingDefinitionException;
 use App\Base\Settings\Exceptions\InvalidSettingScopeException;
 use App\Base\Settings\Exceptions\InvalidSettingValueException;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 final readonly class SettingDefinition
 {
@@ -38,6 +39,9 @@ final readonly class SettingDefinition
         public array $rules,
         public ?string $label,
         public ?string $help,
+        public string $owner,
+        public ?string $editable,
+        public ?string $capability,
     ) {}
 
     /**
@@ -50,6 +54,9 @@ final readonly class SettingDefinition
         $rules = $attributes['rules'] ?? [];
         $label = $attributes['label'] ?? null;
         $help = $attributes['help'] ?? null;
+        $owner = $attributes['owner'] ?? null;
+        $editable = $attributes['editable'] ?? null;
+        $capability = $attributes['capability'] ?? null;
 
         if ($key === '') {
             throw new InvalidSettingDefinitionException('Setting definition keys cannot be empty.');
@@ -112,6 +119,26 @@ final readonly class SettingDefinition
             }
         }
 
+        if (! is_string($owner) || trim($owner) === '') {
+            throw new InvalidSettingDefinitionException(
+                "Setting [{$key}] must declare its module owner.",
+            );
+        }
+
+        foreach (['editable' => $editable, 'capability' => $capability] as $field => $value) {
+            if ($value !== null && (! is_string($value) || trim($value) === '')) {
+                throw new InvalidSettingDefinitionException(
+                    "Setting [{$key}] {$field} must be a non-empty string when declared.",
+                );
+            }
+        }
+
+        if ($editable !== null && ($label === null || $help === null)) {
+            throw new InvalidSettingDefinitionException(
+                "Editable setting [{$key}] must declare label and help metadata.",
+            );
+        }
+
         $definition = new self(
             key: $key,
             type: $type,
@@ -122,6 +149,9 @@ final readonly class SettingDefinition
             rules: $rules,
             label: $label,
             help: $help,
+            owner: $owner,
+            editable: $editable,
+            capability: $capability,
         );
 
         if (! $definition->accepts($definition->default)) {
@@ -142,6 +172,11 @@ final readonly class SettingDefinition
     public function allowsScope(?Scope $scope): bool
     {
         return in_array($scope?->type->value ?? 'global', $this->scopes, true);
+    }
+
+    public function matches(string $key): bool
+    {
+        return Str::is($this->key, $key);
     }
 
     public function assertScopeAllowed(?Scope $scope): void

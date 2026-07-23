@@ -10,6 +10,9 @@
 
 return [
 
+    // Reverse-proxy network boundary used during HTTP middleware bootstrap.
+    'trusted_proxies' => env('TRUSTED_PROXIES', ''),
+
     // Master switch. When false the middleware is a pass-through.
     'enabled' => (bool) env('SECURITY_HEADERS_ENABLED', true),
 

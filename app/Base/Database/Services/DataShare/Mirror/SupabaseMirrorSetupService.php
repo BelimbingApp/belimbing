@@ -52,7 +52,7 @@ final class SupabaseMirrorSetupService
                 $this->settings->forget(self::ACCESS_TOKEN_SETTING);
             }
 
-            $this->settings->set(self::ACCESS_TOKEN_SETTING, trim($accessToken), encrypted: true);
+            $this->settings->set(self::ACCESS_TOKEN_SETTING, trim($accessToken));
         });
     }
 
@@ -229,7 +229,7 @@ final class SupabaseMirrorSetupService
     private function persist(array $project, string $url): void
     {
         $this->settings->set(DataShareMirrorConnectionManager::PROVIDER_SETTING_KEY, 'supabase');
-        $this->settings->set(DataShareMirrorConnectionManager::SETTING_KEY, $url, encrypted: true);
+        $this->settings->set(DataShareMirrorConnectionManager::SETTING_KEY, $url);
         $this->settings->set(self::PROJECT_REF_SETTING, $project['ref']);
         $this->settings->set(self::PROJECT_NAME_SETTING, $project['name']);
 

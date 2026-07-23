@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Console\Commands;
 
+use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Filesystem\Filesystem;
@@ -31,9 +32,9 @@ final class RekeyCommand extends Command
 
     protected $description = 'Re-wrap database-backup DEKs under the current APP_KEY after key rotation';
 
-    public function handle(FilesystemManager $fsm): int
+    public function handle(FilesystemManager $fsm, BackupRuntimeSettings $runtimeSettings): int
     {
-        $config = (array) config('backup', []);
+        $config = $runtimeSettings->configuration();
         $diskName = (string) ($config['disk'] ?? 'local');
         $disk = $fsm->disk($diskName);
 

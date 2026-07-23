@@ -280,7 +280,7 @@ class Index extends Component
         return match ($source) {
             LocaleSource::MANUAL => __('Confirmed manually'),
             LocaleSource::LICENSEE_ADDRESS => __('Inferred from licensee address'),
-            LocaleSource::CONFIG_DEFAULT => __('Using application default'),
+            LocaleSource::DECLARED_DEFAULT => __('Using declared default'),
         };
     }
 }

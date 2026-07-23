@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Tools\WebFetchTool;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -122,16 +124,16 @@ describe('content fetching', function () {
     });
 
     it('returns a truthful error when the response exceeds the byte limit', function () {
-        config(['ai.tools.web_fetch.max_response_bytes' => 100]);
+        app(SettingsService::class)->set(AiRuntimeSettings::WEB_FETCH_MAX_BYTES_KEY, 1024);
 
         Http::fake([
-            '*' => Http::response(str_repeat('x', 101), 200, ['Content-Type' => 'text/plain']),
+            '*' => Http::response(str_repeat('x', 1025), 200, ['Content-Type' => 'text/plain']),
         ]);
         $result = $this->tool->execute(['url' => 'http://example.com/page']);
 
         expect($result->errorPayload?->code)->toBe('response_too_large')
-            ->and((string) $result)->toContain('100-byte limit')
-            ->and((string) $result)->not->toContain(str_repeat('x', 100));
+            ->and((string) $result)->toContain('1024-byte limit')
+            ->and((string) $result)->not->toContain(str_repeat('x', 1024));
     });
 
     it('returns error for failed HTTP requests', function () {

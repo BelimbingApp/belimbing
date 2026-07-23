@@ -28,7 +28,7 @@ class SessionManager
      */
     public function create(int $employeeId, ?string $title = null): Session
     {
-        $id = now(env('BLB_LOCAL_TIMEZONE', config('app.timezone')))->format('Ymd-His').'-'.Str::lower(Str::random(6));
+        $id = now('UTC')->format('Ymd-His').'-'.Str::lower(Str::random(6));
         $now = new DateTimeImmutable;
 
         $session = new Session(

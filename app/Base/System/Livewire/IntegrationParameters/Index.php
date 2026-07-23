@@ -12,13 +12,10 @@ use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Facades\Auth;
 
 /**
- * Operator-managed parameters for external integrations, Postman-style: each
+ * Operator-managed secrets for external integrations: each
  * entry is a key-value pair under `integrations.<system>.<name>` at the
- * global settings layer, and **secret is a per-entry type** — secrets are
- * stored encrypted and displayed write-only (masked tail, replace-don't-read)
- * while text parameters stay readable and editable. The stored row's
- * `is_encrypted` flag is the type, so the list cannot misrepresent what is
- * protected. Consumers read either kind straight from SettingsService by key.
+ * global settings layer. Definition-owned encryption makes every value
+ * write-only; operators may replace a secret but cannot read it back.
  *
  * Module-owned configuration (e.g. eBay OAuth credentials) stays on its
  * module settings page next to its diagnostics — this list is for
@@ -56,8 +53,6 @@ class Index extends SearchablePaginatedList
 
     public string $newName = '';
 
-    public string $newType = 'secret';
-
     public string $newDescription = '';
 
     public string $newValue = '';
@@ -75,7 +70,6 @@ class Index extends SearchablePaginatedList
         $this->authorizeManage();
 
         $this->reset('newSystem', 'newName', 'newDescription', 'newValue');
-        $this->newType = 'secret';
         $this->resetErrorBag();
         $this->addModalOpen = true;
     }
@@ -89,7 +83,6 @@ class Index extends SearchablePaginatedList
             // 'description' is reserved: the free-text description is stored as
             // a `<key>.description` sibling setting and would collide.
             'newName' => ['required', 'string', 'max:64', 'regex:/^[a-z0-9][a-z0-9_-]*$/', 'not_in:description'],
-            'newType' => ['required', 'in:secret,text'],
             'newDescription' => ['nullable', 'string', 'max:500'],
             'newValue' => ['required', 'string', 'max:5000'],
         ], [
@@ -105,7 +98,7 @@ class Index extends SearchablePaginatedList
             return;
         }
 
-        $settings->set($key, $validated['newValue'], encrypted: $validated['newType'] === 'secret');
+        $settings->set($key, $validated['newValue']);
 
         if (trim((string) $validated['newDescription']) !== '') {
             $settings->set($key.self::DESCRIPTION_SUFFIX, trim((string) $validated['newDescription']));
@@ -113,9 +106,7 @@ class Index extends SearchablePaginatedList
 
         $this->addModalOpen = false;
 
-        $this->notify($validated['newType'] === 'secret'
-            ? __('Secret stored encrypted as :key.', ['key' => $key])
-            : __('Parameter stored as :key.', ['key' => $key]));
+        $this->notify(__('Secret stored encrypted as :key.', ['key' => $key]));
     }
 
     public function openEntry(string $key, SettingsService $settings): void
@@ -129,10 +120,9 @@ class Index extends SearchablePaginatedList
         }
 
         $this->entryKey = $key;
-        $this->entryDescription = (string) $settings->get($key.self::DESCRIPTION_SUFFIX, '');
-        // Secrets are write-only: the value field starts blank and blank means
-        // "keep the current secret". Text values prefill for editing.
-        $this->entryValue = $row->is_encrypted ? '' : (string) $settings->get($key, '');
+        $this->entryDescription = (string) $settings->get($key.self::DESCRIPTION_SUFFIX);
+        // Secrets are write-only: blank means keep the current value.
+        $this->entryValue = '';
         $this->resetErrorBag();
         $this->entryModalOpen = true;
     }
@@ -150,18 +140,15 @@ class Index extends SearchablePaginatedList
         }
 
         $validated = $this->validate([
-            // Secret + untouched (blank or the saved-value sentinel) = keep
-            // the stored value; text params need a value.
-            'entryValue' => [$row->is_encrypted ? 'nullable' : 'required', 'string', 'max:5000'],
+            'entryValue' => ['nullable', 'string', 'max:5000'],
             'entryDescription' => ['nullable', 'string', 'max:500'],
         ]);
 
         $value = trim((string) ($validated['entryValue'] ?? ''));
-        $secretUntouched = $row->is_encrypted && ($value === '' || $value === self::SECRET_KEPT_SENTINEL);
+        $secretUntouched = $value === '' || $value === self::SECRET_KEPT_SENTINEL;
 
         if ($value !== '' && ! $secretUntouched) {
-            // The stored type is immutable: a secret stays encrypted.
-            $settings->set($row->key, $validated['entryValue'], encrypted: $row->is_encrypted);
+            $settings->set($row->key, $validated['entryValue']);
         }
 
         if (trim((string) ($validated['entryDescription'] ?? '')) !== '') {
@@ -206,31 +193,21 @@ class Index extends SearchablePaginatedList
     /**
      * Row presentation for the table: type + displayable value + description.
      *
-     * @return array{secret: bool, display: string, description: string}
+     * @return array{display: string, description: string}
      */
     public function rowData(Setting $row): array
     {
         $settings = app(SettingsService::class);
-        $value = (string) $settings->get($row->key, '');
-
-        if ($row->is_encrypted) {
-            $display = $value === '' ? '' : '••••'.substr($value, -4);
-        } else {
-            $display = $value;
-        }
 
         return [
-            'secret' => (bool) $row->is_encrypted,
-            'display' => $display,
-            'description' => (string) $settings->get($row->key.self::DESCRIPTION_SUFFIX, ''),
+            'display' => __('Stored securely'),
+            'description' => (string) $settings->get($row->key.self::DESCRIPTION_SUFFIX),
         ];
     }
 
     public function entryIsSecret(): bool
     {
-        $row = $this->entryKey !== null ? $this->settingRow($this->entryKey) : null;
-
-        return (bool) $row?->is_encrypted;
+        return true;
     }
 
     protected function query(): EloquentBuilder

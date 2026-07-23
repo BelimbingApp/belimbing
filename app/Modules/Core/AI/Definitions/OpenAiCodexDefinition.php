@@ -217,7 +217,7 @@ final readonly class OpenAiCodexDefinition implements ProviderDefinition
                 return null;
             }
 
-            $pinned = $settings->get(self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY, null, scope: null);
+            $pinned = $settings->get(self::MODELS_DISCOVERY_CLIENT_VERSION_SETTINGS_KEY, scope: null);
 
             return is_string($pinned) && $pinned !== '' ? $pinned : null;
         } catch (\Throwable) {

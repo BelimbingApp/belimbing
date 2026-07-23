@@ -5,12 +5,12 @@ use App\Base\Settings\Models\Setting;
 ?>
 
 <div>
-    <x-slot name="title">{{ __('Integration Parameters') }}</x-slot>
+    <x-slot name="title">{{ __('Integration Secrets') }}</x-slot>
 
     <div class="space-y-section-gap">
         <x-ui.page-header
-            :title="__('Integration Parameters')"
-            :subtitle="__('Key-value parameters for external integrations — Cloudflare, WeChat ingest, legacy AX, … — stored as global settings under integrations.<system>.<name>; code reads them by that key. Secret is a per-entry type: secrets are encrypted and write-only, text parameters stay readable. Configuration owned by a module (e.g. eBay) belongs on that module’s settings page, not here.')"
+            :title="__('Integration Secrets')"
+            :subtitle="__('Encrypted, write-only values for cross-cutting external integrations such as Cloudflare, WeChat ingest, or legacy AX. Module-owned credentials belong on that module’s settings page.')"
         />
 
         <x-ui.session-flash />
@@ -27,7 +27,7 @@ use App\Base\Settings\Models\Setting;
 
                 <x-ui.button type="button" variant="primary" size="sm" wire:click="openAddModal">
                     <x-icon name="heroicon-o-plus" class="h-4 w-4" />
-                    {{ __('Add parameter') }}
+                    {{ __('Add secret') }}
                 </x-ui.button>
             </div>
 
@@ -40,7 +40,6 @@ use App\Base\Settings\Models\Setting;
                     <x-slot name="head">
                         <tr>
                             <x-ui.sortable-th column="key" :sort-by="$sortBy" :sort-dir="$sortDir" :label="__('Key')" />
-                            <x-ui.th>{{ __('Type') }}</x-ui.th>
                             <x-ui.th>{{ __('Description') }}</x-ui.th>
                             <x-ui.th>{{ __('Value') }}</x-ui.th>
                             <x-ui.sortable-th column="updated_at" :sort-by="$sortBy" :sort-dir="$sortDir" :label="__('Updated')" />
@@ -59,13 +58,10 @@ use App\Base\Settings\Models\Setting;
                                 <span class="font-mono text-xs font-medium text-accent">{{ $row->key }}</span>
                             </td>
                             <td class="px-table-cell-x py-table-cell-y align-top">
-                                <x-ui.badge :variant="$data['secret'] ? 'warning' : 'default'">{{ $data['secret'] ? __('Secret') : __('Text') }}</x-ui.badge>
-                            </td>
-                            <td class="px-table-cell-x py-table-cell-y align-top">
                                 <span class="text-sm text-muted">{{ $data['description'] !== '' ? $data['description'] : '—' }}</span>
                             </td>
                             <td class="px-table-cell-x py-table-cell-y align-top">
-                                <span class="break-all font-mono text-xs {{ $data['secret'] ? 'text-muted' : 'text-ink' }}">{{ $data['display'] }}</span>
+                                <span class="text-xs text-muted">{{ $data['display'] }}</span>
                             </td>
                             <td class="px-table-cell-x py-table-cell-y align-top">
                                 <span class="text-xs text-muted" title="{{ $row->updated_at?->format('Y-m-d H:i:s') }}">{{ $row->updated_at?->diffForHumans() }}</span>
@@ -84,8 +80,8 @@ use App\Base\Settings\Models\Setting;
         <x-ui.modal wire:model="addModalOpen" class="max-w-lg">
             <div class="space-y-4 p-6">
                 <div>
-                    <h3 class="text-base font-medium tracking-tight text-ink">{{ __('Add parameter') }}</h3>
-                    <p class="mt-1 text-sm text-muted">{{ __('Stored as integrations.<system>.<name> in global settings.') }}</p>
+                    <h3 class="text-base font-medium tracking-tight text-ink">{{ __('Add integration secret') }}</h3>
+                    <p class="mt-1 text-sm text-muted">{{ __('Stored encrypted as integrations.<system>.<name>. The value cannot be read back after saving.') }}</p>
                 </div>
 
                 <form wire:submit="addParameter" class="space-y-4">
@@ -106,17 +102,6 @@ use App\Base\Settings\Models\Setting;
                         />
                     </div>
 
-                    <x-ui.select
-                        id="integration-parameter-type"
-                        wire:model.live="newType"
-                        :label="__('Type')"
-                        :help="__('Secrets are encrypted and never displayed again. Text stays readable.')"
-                        :error="$errors->first('newType')"
-                    >
-                        <option value="secret">{{ __('Secret (encrypted, write-only)') }}</option>
-                        <option value="text">{{ __('Text (readable)') }}</option>
-                    </x-ui.select>
-
                     <x-ui.input
                         id="integration-parameter-description"
                         wire:model="newDescription"
@@ -125,27 +110,18 @@ use App\Base\Settings\Models\Setting;
                         :error="$errors->first('newDescription')"
                     />
 
-                    @if ($newType === 'secret')
-                        <x-ui.secret-input
-                            id="integration-parameter-value-secret"
-                            wire:model="newValue"
-                            :label="__('Secret value')"
-                            :error="$errors->first('newValue')"
-                        />
-                    @else
-                        <x-ui.input
-                            id="integration-parameter-value-text"
-                            wire:model="newValue"
-                            :label="__('Value')"
-                            :error="$errors->first('newValue')"
-                        />
-                    @endif
+                    <x-ui.secret-input
+                        id="integration-parameter-value-secret"
+                        wire:model="newValue"
+                        :label="__('Secret value')"
+                        :error="$errors->first('newValue')"
+                    />
 
                     <div class="flex justify-end gap-2">
                         <x-ui.button type="button" variant="ghost" size="sm" wire:click="$set('addModalOpen', false)">{{ __('Cancel') }}</x-ui.button>
                         <x-ui.button type="submit" variant="primary" size="sm">
                             <x-icon name="heroicon-o-key" class="h-4 w-4" />
-                            {{ __('Add parameter') }}
+                            {{ __('Add secret') }}
                         </x-ui.button>
                     </div>
                 </form>
@@ -170,22 +146,14 @@ use App\Base\Settings\Models\Setting;
                         :error="$errors->first('entryDescription')"
                     />
 
-                    @if ($this->entryIsSecret())
-                        <x-ui.secret-input
-                            id="integration-parameter-entry-value"
-                            wire:model="entryValue"
-                            :label="__('Secret value')"
-                            :has-value="true"
-                            :error="$errors->first('entryValue')"
-                        />
-                    @else
-                        <x-ui.input
-                            id="integration-parameter-entry-value"
-                            wire:model="entryValue"
-                            :label="__('Value')"
-                            :error="$errors->first('entryValue')"
-                        />
-                    @endif
+                    <x-ui.secret-input
+                        id="integration-parameter-entry-value"
+                        wire:model="entryValue"
+                        :label="__('Replacement secret')"
+                        :help="__('Leave blank to keep the stored value.')"
+                        :has-value="true"
+                        :error="$errors->first('entryValue')"
+                    />
 
                     <div class="flex items-center justify-between gap-2">
                         <x-ui.button

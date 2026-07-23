@@ -76,9 +76,8 @@ class WebSearchTool extends AbstractTool implements ProvidesDisplaySummary
     /**
      * Create an instance if at least one provider has an API key configured.
      *
-     * Checks the SettingsService providers array first, then falls back to
-     * the legacy single-provider config keys. Returns null when no provider
-     * is available, allowing the registry to skip registration.
+     * Checks the canonical SettingsService provider records. Returns null
+     * when no provider is available, allowing the registry to skip registration.
      */
     public static function createIfConfigured(?WebSearchService $webSearchService = null): ?self
     {
@@ -96,19 +95,10 @@ class WebSearchTool extends AbstractTool implements ProvidesDisplaySummary
                 }
             }
         } catch (\Throwable) {
-            // Settings table may not exist yet (e.g. during initial setup or unit tests).
-            // Fall through to legacy config check.
+            // Settings table may not exist yet during initial setup.
         }
 
-        // Fallback to legacy single-provider config (env-based)
-        $provider = config('ai.tools.web_search.provider', 'parallel');
-        $apiKey = config('ai.tools.web_search.'.$provider.'.api_key');
-
-        if (! is_string($apiKey) || trim($apiKey) === '') {
-            return null;
-        }
-
-        return new self(webSearchService: $webSearchService);
+        return null;
     }
 
     public function name(): string
@@ -294,7 +284,7 @@ class WebSearchTool extends AbstractTool implements ProvidesDisplaySummary
         }
 
         // Fallback to legacy single-provider config
-        $provider = $settings->get('ai.tools.web_search.provider', 'parallel');
+        $provider = $settings->get('ai.tools.web_search.provider');
         $apiKey = $settings->get("ai.tools.web_search.{$provider}.api_key");
 
         if (is_string($apiKey) && trim($apiKey) !== '') {
@@ -315,7 +305,7 @@ class WebSearchTool extends AbstractTool implements ProvidesDisplaySummary
 
         $settings = app(SettingsService::class);
 
-        return (int) $settings->get('ai.tools.web_search.cache_ttl_minutes', self::DEFAULT_CACHE_TTL_MINUTES);
+        return (int) $settings->get('ai.tools.web_search.cache_ttl_minutes');
     }
 
     /**

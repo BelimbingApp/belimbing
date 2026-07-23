@@ -72,6 +72,10 @@ class ControlPlane extends Component
 
     public string $maxToolRounds = '';
 
+    public string $laraPromptExtensionPath = '';
+
+    public bool $bashToolEnabled = false;
+
     /** @var array<string, mixed>|null */
     public ?array $lifecyclePreview = null;
 
@@ -90,6 +94,8 @@ class ControlPlane extends Component
 
         $this->lifecycleRetentionDays = app(WireLogger::class)->retentionDays();
         $this->maxToolRounds = (string) $runtimeSettings->maxToolRounds();
+        $this->laraPromptExtensionPath = $runtimeSettings->laraPromptExtensionPath() ?? '';
+        $this->bashToolEnabled = $runtimeSettings->bashToolEnabled();
 
         $this->loadAgentOptions();
         $this->refreshInspectorLists();
@@ -284,14 +290,32 @@ class ControlPlane extends Component
 
         $validated = $this->validate([
             'maxToolRounds' => $runtimeSettings->maxToolRoundsRules(),
+            'laraPromptExtensionPath' => $runtimeSettings
+                ->definition(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY)
+                ->rules,
+            'bashToolEnabled' => $runtimeSettings
+                ->definition(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY)
+                ->rules,
         ]);
 
         $value = (int) $validated['maxToolRounds'];
 
         $settings->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, $value);
-        $settings->forget(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY);
+        $extensionPath = trim((string) $validated['laraPromptExtensionPath']);
+
+        if ($extensionPath === '') {
+            $settings->forget(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY);
+        } else {
+            $settings->set(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY, $extensionPath);
+        }
+
+        $settings->set(
+            AiRuntimeSettings::BASH_TOOL_ENABLED_KEY,
+            (bool) $validated['bashToolEnabled'],
+        );
         $this->maxToolRounds = (string) $value;
-        $this->resetValidation('maxToolRounds');
+        $this->laraPromptExtensionPath = $extensionPath;
+        $this->resetValidation();
         $this->notify(__('Runtime guardrails saved.'));
     }
 
@@ -302,9 +326,12 @@ class ControlPlane extends Component
         $this->authorizeRuntimeGuardrailManagement();
 
         $settings->forget(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
-        $settings->forget(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY);
+        $settings->forget(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY);
+        $settings->forget(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY);
         $this->maxToolRounds = (string) $runtimeSettings->maxToolRounds();
-        $this->resetValidation('maxToolRounds');
+        $this->laraPromptExtensionPath = $runtimeSettings->laraPromptExtensionPath() ?? '';
+        $this->bashToolEnabled = $runtimeSettings->bashToolEnabled();
+        $this->resetValidation();
         $this->notify(__('Runtime guardrail restored to its shipped default.'));
     }
 
@@ -331,6 +358,10 @@ class ControlPlane extends Component
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
             'maxToolRoundsDefinition' => $maxToolRoundsDefinition,
+            'laraPromptExtensionPathDefinition' => app(AiRuntimeSettings::class)
+                ->definition(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY),
+            'bashToolEnabledDefinition' => app(AiRuntimeSettings::class)
+                ->definition(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY),
             'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),

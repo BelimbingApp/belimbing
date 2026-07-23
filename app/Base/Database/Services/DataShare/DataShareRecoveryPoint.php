@@ -4,6 +4,7 @@ namespace App\Base\Database\Services\DataShare;
 
 use App\Base\Database\Enums\DataShareInstanceRole;
 use App\Base\Database\Exceptions\DataShareApplyException;
+use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
 use Illuminate\Filesystem\FilesystemManager;
 
@@ -12,6 +13,7 @@ class DataShareRecoveryPoint
     public function __construct(
         private readonly DataShareInstanceIdentityResolver $instances,
         private readonly BackupService $backups,
+        private readonly BackupRuntimeSettings $backupSettings,
         private readonly FilesystemManager $disks,
     ) {}
 
@@ -22,7 +24,7 @@ class DataShareRecoveryPoint
             return null;
         }
 
-        $config = (array) config('backup', []);
+        $config = $this->backupSettings->configuration();
 
         if (($config['enabled'] ?? true) === false) {
             throw DataShareApplyException::backupRequired(__('backup.enabled is false and no provider snapshot adapter is configured.'));

@@ -7,8 +7,10 @@ use App\Base\Database\Middleware\DatabaseConnectionRecovery;
 use App\Base\Foundation\Enums\FoundationErrorCode;
 use App\Base\Foundation\Exceptions\BlbException;
 use App\Base\Foundation\Http\Middleware\SecurityHeaders;
+use App\Base\Foundation\Http\Middleware\TrustConfiguredProxies;
 use App\Base\Locale\Middleware\ApplyLocaleContext;
 use App\Base\Perf\Http\Middleware\RecordRequestPerformance;
+use App\Base\System\Http\Middleware\ApplyRuntimeConfiguration;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Modules\Core\AI\Enums\AIErrorCode;
 use App\Modules\Core\Company\Enums\CompanyErrorCode;
@@ -17,6 +19,7 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
@@ -136,23 +139,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // as PHP, so the forwarding hop is loopback/private by default. Override with
         // TRUSTED_PROXIES (comma-separated IPs/CIDRs) when a distinct L7 proxy fronts
         // the app; set it to '*' only if that proxy strips inbound forwarded headers.
-        $configuredProxies = trim((string) env('TRUSTED_PROXIES', ''));
-
-        $middleware->trustProxies(at: match (true) {
-            $configuredProxies === '*' => '*',
-            $configuredProxies !== '' => array_values(array_filter(
-                array_map(trim(...), explode(',', $configuredProxies)),
-                static fn (string $proxy): bool => $proxy !== '',
-            )),
-            default => [
-                '127.0.0.1',
-                '::1',
-                '10.0.0.0/8',
-                '172.16.0.0/12',
-                '192.168.0.0/16',
-                'fc00::/7',
-            ],
-        });
+        $middleware->replace(
+            TrustProxies::class,
+            TrustConfiguredProxies::class,
+        );
 
         $middleware->alias([
             'authz' => AuthorizeCapability::class,
@@ -178,6 +168,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // perf-*.jsonl. Prepended so its timing wraps the whole web stack.
         // Query with `php artisan perf:slowest` / `perf:requests`.
         $middleware->web(prepend: [
+            ApplyRuntimeConfiguration::class,
             RecordRequestPerformance::class,
         ]);
 

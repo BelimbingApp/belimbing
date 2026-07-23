@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\AI\Tools\BashTool;
 
 // The tool only resolves a ShellCommandRunner once the gate passes, so a
@@ -7,7 +9,7 @@ use App\Modules\Core\AI\Tools\BashTool;
 // failed open, the result would instead carry the command's output.
 
 it('refuses to run when disabled', function (): void {
-    config()->set('ai.tools.bash.enabled', false);
+    app(SettingsService::class)->set(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY, false);
 
     $result = (new BashTool)->execute(['command' => 'echo pwned']);
 
@@ -16,7 +18,7 @@ it('refuses to run when disabled', function (): void {
 });
 
 it('also blocks the streaming path when disabled', function (): void {
-    config()->set('ai.tools.bash.enabled', false);
+    app(SettingsService::class)->set(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY, false);
 
     $generator = (new BashTool)->executeStreaming(['command' => 'echo pwned']);
 
@@ -26,10 +28,12 @@ it('also blocks the streaming path when disabled', function (): void {
     expect($generator->getReturn()->errorPayload?->code)->toBe('bash_disabled');
 });
 
-it('defaults to disabled outside local/dev environments', function (): void {
-    // Mirrors the config('ai.tools.bash.enabled') default expression.
-    $enabled = fn (string $env): bool => $env !== 'production';
+it('uses the safe declared default in every environment', function (): void {
+    config()->set('app.env', 'local');
 
-    expect($enabled('production'))->toBeFalse()
-        ->and($enabled('local'))->toBeTrue();
+    expect(app(AiRuntimeSettings::class)->bashToolEnabled())->toBeFalse();
+
+    config()->set('app.env', 'production');
+
+    expect(app(AiRuntimeSettings::class)->bashToolEnabled())->toBeFalse();
 });

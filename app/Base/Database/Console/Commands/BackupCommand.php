@@ -3,6 +3,7 @@
 namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Exceptions\BackupException;
+use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
 use App\Base\Database\Services\Backup\RetentionPolicy;
 use Illuminate\Console\Command;
@@ -25,12 +26,12 @@ final class BackupCommand extends Command
 
     protected $description = 'Create an encrypted database backup using the configured disk and encryption mode';
 
-    public function handle(BackupService $service): int
+    public function handle(BackupService $service, BackupRuntimeSettings $runtimeSettings): int
     {
-        $config = (array) config('backup', []);
+        $config = $runtimeSettings->configuration();
 
         if (($config['enabled'] ?? true) === false) {
-            $this->components->info('Backup is disabled (config: backup.enabled=false). Managed-DB deployments rely on provider snapshots.');
+            $this->components->info('Backup is disabled in System → Database Backups. Managed-DB deployments may rely on provider snapshots.');
 
             return self::SUCCESS;
         }

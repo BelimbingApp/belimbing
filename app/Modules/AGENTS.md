@@ -16,13 +16,13 @@ A module plugs into shared platform surfaces through convention-discovered files
 
 ## Dashboard Widgets
 
-The dashboard (`/dashboard`) renders module-contributed widgets filtered per user by authz, in a per-user order stored in `users.prefs['dashboard']`. Reference implementations: `app/Modules/People/Leave/` (`people.leave.pending-approvals`) and `app/Modules/Core/AI/` (`ai.operations-status`).
+The dashboard (`/dashboard`) renders module-contributed widgets filtered per user by authz, in a per-user order stored by the user-scoped `ui.dashboard.layout` setting. Reference implementations: `app/Modules/People/Leave/` (`people.leave.pending-approvals`) and `app/Modules/Core/AI/` (`ai.operations-status`).
 
 ### Declare
 
 `Config/dashboard.php` returns `['widgets' => [...]]`. Each entry:
 
-- `id` — stable, module-namespaced (`people.leave.pending-approvals`). Persisted in user prefs; renaming orphans saved layouts silently.
+- `id` — stable, module-namespaced (`people.leave.pending-approvals`). Persisted in `ui.dashboard.layout`; renaming orphans saved layouts silently.
 - `label`, optional `description` — plain English; views translate with `__()`.
 - `icon` — a name registered in `resources/core/views/components/icon.blade.php`; add missing icons there, never rely on the fallback glyph.
 - `permission` — capability gating visibility. Must exist in a `Config/authz.php` vocabulary or the authz service denies it for everyone. Omit only for widgets every authenticated user may see.

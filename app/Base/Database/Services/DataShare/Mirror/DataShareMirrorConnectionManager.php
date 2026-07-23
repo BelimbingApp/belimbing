@@ -88,7 +88,7 @@ class DataShareMirrorConnectionManager
 
     public function provider(): DataShareMirrorProvider
     {
-        $value = $this->settings->get(self::PROVIDER_SETTING_KEY, 'supabase');
+        $value = $this->settings->get(self::PROVIDER_SETTING_KEY);
         $key = is_string($value) && trim($value) !== '' ? trim($value) : 'supabase';
 
         return $this->providers->get($key);
@@ -103,7 +103,7 @@ class DataShareMirrorConnectionManager
     public function configurationFingerprint(): string
     {
         return hash('sha256', implode("\0", [
-            (string) $this->settings->get(self::PROVIDER_SETTING_KEY, 'supabase'),
+            (string) $this->settings->get(self::PROVIDER_SETTING_KEY),
             (string) ($this->storedUrl() ?? ''),
         ]));
     }

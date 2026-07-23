@@ -10,6 +10,8 @@ use Illuminate\Support\Number;
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 /** @var bool $canManageRuntimeGuardrails */
 /** @var \App\Base\Settings\DTO\SettingDefinition $maxToolRoundsDefinition */
+/** @var \App\Base\Settings\DTO\SettingDefinition $laraPromptExtensionPathDefinition */
+/** @var \App\Base\Settings\DTO\SettingDefinition $bashToolEnabledDefinition */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 ?>
 <div>
@@ -255,6 +257,35 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 :error="$errors->first('maxToolRounds')"
                                 :disabled="! $canManageRuntimeGuardrails"
                             />
+
+                            <div class="border-t border-border-default pt-4">
+                                <h4 class="text-sm font-medium text-ink">{{ __('Installation tool policy') }}</h4>
+                                <p class="mt-1 text-xs leading-5 text-muted">{{ __('These controls apply to every company on this compatible application runtime.') }}</p>
+                            </div>
+
+                            <x-ui.input
+                                id="runtime-lara-prompt-extension"
+                                wire:model="laraPromptExtensionPath"
+                                type="text"
+                                :label="__($laraPromptExtensionPathDefinition->label)"
+                                :help="__($laraPromptExtensionPathDefinition->help)"
+                                :error="$errors->first('laraPromptExtensionPath')"
+                                :disabled="! $canManageRuntimeGuardrails"
+                            />
+
+                            <div class="space-y-2 rounded-2xl border border-status-warning/30 bg-status-warning/5 p-card-inner">
+                                <x-ui.checkbox
+                                    id="runtime-bash-enabled"
+                                    wire:model="bashToolEnabled"
+                                    :label="__($bashToolEnabledDefinition->label)"
+                                    :disabled="! $canManageRuntimeGuardrails"
+                                />
+                                <p class="text-xs leading-5 text-muted">{{ __($bashToolEnabledDefinition->help) }}</p>
+                                <p class="text-xs font-medium text-status-warning">{{ __('Enabling this gives authorized agents the application process’s shell privileges. Constrain the process with an OS-level sandbox or least-privileged account.') }}</p>
+                                @error('bashToolEnabled')
+                                    <p class="text-xs text-status-danger">{{ $message }}</p>
+                                @enderror
+                            </div>
 
                             @if ($canManageRuntimeGuardrails)
                                 <div class="flex flex-wrap items-center gap-3">

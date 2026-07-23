@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Belimbing'),
+    'name' => 'Belimbing',
 
     /*
     |--------------------------------------------------------------------------
@@ -73,6 +73,14 @@ return [
 
     'git_executable' => env('BLB_GIT_EXECUTABLE') ?: env('GIT_EXECUTABLE'),
 
+    'caddy_server_admin_host' => env('CADDY_SERVER_ADMIN_HOST'),
+
+    'caddy_server_admin_port' => env('CADDY_SERVER_ADMIN_PORT'),
+
+    'licensee_company_name' => env('LICENSEE_COMPANY_NAME'),
+
+    'licensee_company_code' => env('LICENSEE_COMPANY_CODE'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
@@ -97,9 +105,11 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en-MY'),
+    // Translation selection uses a language code. Regional formatting comes
+    // from the declared ui.locale setting through LocaleContext.
+    'locale' => 'en',
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en-MY'),
+    'fallback_locale' => 'en',
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 

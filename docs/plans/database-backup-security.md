@@ -248,10 +248,14 @@ Goal: let operators change operational knobs from the admin UI without touching 
 **Implementation tasks:**
 
 - [x] Add `app/Base/Database/Config/settings.php` declaring the `backup_storage` editable group with the five fields above {Copilot/claude-sonnet-4-6}
-- [x] Update `Backups\Index` to read these five keys via `SettingsService::get()` (with `config()` value as default) via a private `resolveConfig()` helper, instead of reading `config()` directly {Copilot/claude-sonnet-4-6}
+- [x] Update backup UI and commands to read canonical definitions through
+  `BackupRuntimeSettings`; declared keys do not fall back to config or `.env`
+  {Copilot/claude-sonnet-4-6; Codex/GPT-5}
 - [x] Add help note on `backup.disk` field: "Changing the disk does not migrate existing artifacts. Old backups remain on the previous disk and must be managed manually." {Copilot/claude-sonnet-4-6}
 - [x] The backup config display on `admin/system/database-backups` links to the settings group via a conditional "Edit backup settings" link (visible when `admin.settings.manage` capability is held) {Copilot/claude-sonnet-4-6}
-- [x] Tests: `BackupsIndexTest` seeds a `base_settings` row for `backup.retention.keep_days` and asserts the UI reflects the DB value over the config fallback {Copilot/claude-sonnet-4-6}
+- [x] Tests: `BackupsIndexTest` covers definition defaults, explicit overrides,
+  typed saves, and restore behavior without a config fallback
+  {Copilot/claude-sonnet-4-6; Codex/GPT-5}
 
 ### Phase 7 — APP_KEY envelope encryption (app-key mode)
 

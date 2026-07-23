@@ -11,8 +11,7 @@ use Illuminate\Support\Carbon;
 /**
  * Setting model for the base_settings table.
  *
- * Stores key-value pairs scoped to global, company, user, or legacy employee
- * level.
+ * Stores key-value pairs scoped to global, company, or user level.
  *
  * @property int $id
  * @property string $key

@@ -3,6 +3,8 @@
 use App\Base\Dashboard\DTO\WidgetDefinition;
 use App\Base\Dashboard\Livewire\Index;
 use App\Base\Dashboard\Services\DashboardLayout;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
@@ -80,6 +82,25 @@ function createDashboardUser(): User
     ]);
 }
 
+function dashboardSavedLayout(User $user): ?array
+{
+    $settings = app(SettingsService::class);
+    $scope = Scope::user((int) $user->getKey(), $user->getCompanyId());
+
+    return $settings->has(DashboardLayout::SETTING_KEY, $scope)
+        ? $settings->get(DashboardLayout::SETTING_KEY, $scope)
+        : null;
+}
+
+function storeDashboardLayout(User $user, array $ids): void
+{
+    app(SettingsService::class)->set(
+        DashboardLayout::SETTING_KEY,
+        $ids,
+        Scope::user((int) $user->getKey(), $user->getCompanyId()),
+    );
+}
+
 it('shows no widgets to a user without any granting role', function (): void {
     $user = createDashboardUser();
 
@@ -149,20 +170,16 @@ it('persists remove, reorder, and add as a whole prefs layout', function (): voi
     $component = Livewire::actingAs($admin)->test(Index::class);
 
     $component->call('remove', DASHBOARD_AI_WIDGET);
-    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe($withoutAi);
+    expect(dashboardSavedLayout($admin))->toBe($withoutAi);
 
     $component->call('add', DASHBOARD_AI_WIDGET);
-    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe($withAiAppended);
+    expect(dashboardSavedLayout($admin))->toBe($withAiAppended);
 
     $component->call('moveUp', DASHBOARD_AI_WIDGET);
-    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe($withAiMovedEarlier);
+    expect(dashboardSavedLayout($admin))->toBe($withAiMovedEarlier);
 
     $component->call('resetLayout');
-    expect($admin->refresh()->prefsArray())
-        ->not->toHaveKey(DashboardLayout::PREF_KEY);
+    expect(dashboardSavedLayout($admin))->toBeNull();
 });
 
 it('persists a drag-drop reorder as a whole prefs layout', function (): void {
@@ -178,13 +195,12 @@ it('persists a drag-drop reorder as a whole prefs layout', function (): void {
         ->test(Index::class)
         ->call('reorder', $movedId, $destination);
 
-    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
+    expect(dashboardSavedLayout($admin))
         ->toBe([...array_slice($initialIds, 1), $movedId]);
 
     $component->call('reorder', $movedId, 0);
 
-    expect($admin->refresh()->prefsArray()[DashboardLayout::PREF_KEY])
-        ->toBe($initialIds);
+    expect(dashboardSavedLayout($admin))->toBe($initialIds);
 });
 
 it('ignores invalid drag-drop reorders without creating a custom layout', function (string $id, int $position): void {
@@ -195,8 +211,7 @@ it('ignores invalid drag-drop reorders without creating a custom layout', functi
         ->test(Index::class)
         ->call('reorder', $id === 'visible-widget' ? $initialIds[0] : $id, $position);
 
-    expect($admin->refresh()->prefsArray())
-        ->not->toHaveKey(DashboardLayout::PREF_KEY);
+    expect(dashboardSavedLayout($admin))->toBeNull();
 })->with([
     'unknown widget' => ['unknown-widget', 0],
     'negative position' => ['visible-widget', -1],
@@ -205,8 +220,7 @@ it('ignores invalid drag-drop reorders without creating a custom layout', functi
 
 it('skips stale or invisible widget ids in a saved layout silently', function (): void {
     $admin = createAdminUser();
-    $admin->prefs = [DashboardLayout::PREF_KEY => ['bogus.widget', DASHBOARD_LEAVE_WIDGET]];
-    $admin->save();
+    storeDashboardLayout($admin, ['bogus.widget', DASHBOARD_LEAVE_WIDGET]);
 
     Livewire::actingAs($admin)
         ->test(Index::class)
@@ -219,8 +233,7 @@ it('skips stale or invisible widget ids in a saved layout silently', function ()
 
 it('respects an explicitly emptied layout instead of restoring the default', function (): void {
     $admin = createAdminUser();
-    $admin->prefs = [DashboardLayout::PREF_KEY => []];
-    $admin->save();
+    storeDashboardLayout($admin, []);
 
     Livewire::actingAs($admin)
         ->test(Index::class)
@@ -234,6 +247,5 @@ it('never persists a widget id the user cannot see', function (): void {
         ->test(Index::class)
         ->call('add', DASHBOARD_LEAVE_WIDGET);
 
-    expect($user->refresh()->prefsArray())
-        ->not->toHaveKey(DashboardLayout::PREF_KEY);
+    expect(dashboardSavedLayout($user))->toBeNull();
 });

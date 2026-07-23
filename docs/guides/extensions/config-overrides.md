@@ -167,4 +167,7 @@ Extension tests should prove:
 
 ## Current Migration Note
 
-The resolver now uses canonical definitions for migrated parameters, beginning with the AI tool-round limit and `pdftotext` path. Undeclared legacy keys still support Laravel config and caller-default fallback, and not every extension/runtime parameter has a definition yet. Do not build new extension APIs around that transitional path. Follow the target contract here and in `docs/architecture/settings.md`; implementation progress is tracked in `docs/plans/settings-model-evolution.md`.
+The resolver requires a discovered definition for every runtime parameter and a
+module-owned runtime claim for internal state. Unknown keys fail closed; there
+is no config, `.env`, caller-default, or caller-encryption compatibility path.
+Follow the canonical contract here and in `docs/architecture/settings.md`.

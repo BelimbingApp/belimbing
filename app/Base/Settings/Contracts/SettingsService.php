@@ -15,17 +15,13 @@ interface SettingsService
     public function getMany(array $keys, ?Scope $scope = null): array;
 
     /**
-     * Resolve a setting value through the cascade.
+     * Resolve a declared runtime parameter or claimed runtime-state value.
      *
-     * Declared runtime parameters resolve from their allowed DB scopes to the
-     * definition-owned code default. Undeclared keys temporarily retain the
-     * legacy DB → config → caller-default path during migration.
-     *
-     * @param  string  $key  Dot-notation key (e.g., 'ai.tools.web_search.cache_ttl_minutes')
-     * @param  mixed  $default  Fallback if no layer provides a value
-     * @param  Scope|null  $scope  Target scope; null resolves global DB → config only
+     * Parameters resolve through definition-approved scopes to their declared
+     * default. Claimed runtime state resolves through the supplied context and
+     * returns null when no row exists.
      */
-    public function get(string $key, mixed $default = null, ?Scope $scope = null): mixed;
+    public function get(string $key, ?Scope $scope = null): mixed;
 
     /**
      * Write a setting to the DB layer at the given scope.
@@ -33,9 +29,8 @@ interface SettingsService
      * @param  string  $key  Dot-notation key
      * @param  mixed  $value  Value to store (must be JSON-serializable)
      * @param  Scope|null  $scope  Target scope; null = global
-     * @param  bool  $encrypted  Whether to encrypt the value at rest
      */
-    public function set(string $key, mixed $value, ?Scope $scope = null, bool $encrypted = false): void;
+    public function set(string $key, mixed $value, ?Scope $scope = null): void;
 
     /**
      * Remove a DB-layer override, falling back to the next layer.

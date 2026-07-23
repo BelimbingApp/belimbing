@@ -1,5 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Browser;
+
+use App\Base\AI\Services\AiRuntimeSettings;
 
 /**
  * Manages isolated browser context creation for browser automation.
@@ -11,17 +14,21 @@ namespace App\Modules\Core\AI\Services\Browser;
  */
 class BrowserContextFactory
 {
+    public function __construct(
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
+    ) {}
+
     /**
      * Resolve the path to the Playwright CLI binary.
      *
-     * Checks config('ai.tools.browser.executable_path') first, then
-     * falls back to auto-detection of npx playwright in the project.
+     * Checks the declared installation setting first, then falls back to
+     * auto-detection of npx playwright in the project.
      *
      * @return string|null Path to binary, or null if not found
      */
     public function resolvePlaywrightPath(): ?string
     {
-        $configured = config('ai.tools.browser.executable_path');
+        $configured = $this->runtimeSettings()->browserExecutablePath();
 
         if (is_string($configured) && $configured !== '') {
             return $configured;
@@ -44,7 +51,7 @@ class BrowserContextFactory
      */
     public function isAvailable(): bool
     {
-        return config('ai.tools.browser.enabled', false)
+        return $this->runtimeSettings()->browserEnabled()
             && $this->resolvePlaywrightPath() !== null
             && file_exists(resource_path('core/scripts/browser-runner.mjs'));
     }
@@ -62,5 +69,10 @@ class BrowserContextFactory
     public function createContextId(int $companyId, string $sessionId): string
     {
         return 'ctx_'.$companyId.'_'.$sessionId;
+    }
+
+    private function runtimeSettings(): AiRuntimeSettings
+    {
+        return $this->runtimeSettings ?? app(AiRuntimeSettings::class);
     }
 }

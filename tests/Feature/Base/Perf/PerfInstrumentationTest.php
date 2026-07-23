@@ -251,7 +251,7 @@ it('keeps shared-chrome page renders within the query budget', function (): void
 
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
 
-    // Measured 92 on 2026-07-23 after definition-backed performance settings
-    // added one batched global-settings read to the request boundary.
+    // Definition-backed settings preload sparse overrides once per active
+    // scope so shared chrome does not pay one query per declared parameter.
     expect($queries)->toBeLessThanOrEqual(95);
 });

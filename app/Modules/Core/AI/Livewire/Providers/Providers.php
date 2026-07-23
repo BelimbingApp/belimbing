@@ -165,7 +165,7 @@ class Providers extends Component implements ProvidesLaraPageContext
             $default = $schema['default'];
 
             $overridden = $settings->has($settingsKey, scope: null);
-            $value = $settings->get($settingsKey, default: null, scope: null);
+            $value = $settings->get($settingsKey, scope: null);
 
             $current = $overridden && $value !== null && $value !== ''
                 ? $value

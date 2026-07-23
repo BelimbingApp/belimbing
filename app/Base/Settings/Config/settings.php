@@ -38,6 +38,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Runtime State Claims
+    |--------------------------------------------------------------------------
+    |
+    | Module-owned operational state keys and wildcard namespaces. Claims are
+    | deliberately separate from runtime parameter definitions: they establish
+    | ownership but do not provide defaults, validation, or editable metadata.
+    |
+    */
+    'runtime' => [],
+
+    /*
+    |--------------------------------------------------------------------------
     | Operator-Editable Settings
     |--------------------------------------------------------------------------
     |

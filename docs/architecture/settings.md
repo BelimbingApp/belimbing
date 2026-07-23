@@ -1,7 +1,7 @@
 # Settings Architecture
 
 **Document Type:** Architecture Specification
-**Status:** Approved target; implementation in progress
+**Status:** Implemented
 **Last Updated:** 2026-07-23
 **Related:** `docs/architecture/database.md`, `docs/architecture/authorization.md`, `docs/architecture/module-system.md`, `docs/plans/settings-model-evolution.md`
 
@@ -36,6 +36,35 @@ base_settings → declared code default
 ```
 
 `base_settings` may contain a value at an allowed user, company, or global scope. The definition supplies the final default when no applicable row exists.
+
+The environment-owned lane is separate and names its files explicitly:
+
+```text
+.env / process environment → config/*.php or module Config/*.php → config()
+```
+
+Only configuration files call `env()`. Application consumers use `config()` for
+that lane. Typical environment-owned values are `APP_KEY`, database/cache/session
+drivers and connections, filesystem credentials, ingress and worker controls,
+and explicit cache/Redis/session namespaces. Sonar and similar external tools
+may read `.env` themselves. None of these values is a fallback for a declared
+runtime parameter.
+
+Environment-owned inputs are intentionally narrow:
+
+| Concern | Named source examples | Why it stays outside settings |
+|---------|-----------------------|-------------------------------|
+| Application bootstrap and cryptography | `.env`: `APP_ENV`, `APP_KEY`, `APP_URL` | Required before the settings table and its encrypted rows can be used |
+| Settings infrastructure | `.env`: `DB_*`, `CACHE_*`, `REDIS_*` | The resolver depends on these services |
+| Process/session transport | `.env`: `SESSION_DRIVER`, `SESSION_COOKIE`, `QUEUE_CONNECTION`, `FILESYSTEM_DISK`, `BROADCAST_CONNECTION` | Selects infrastructure constructed during bootstrap |
+| Web/process topology | `.env`: ingress domains, ports, Caddy/FrankenPHP and worker inputs | Consumed by launchers or before request handling |
+| Native storage/toolchain topology | owning module config: `AI_WORKSPACE_PATH`, `AI_SHELL_*`, `AI_SQLITE_VEC_*`, `BLB_PDF_DISK`, `BLB_PDF_ARTIFACT_DIR`, `BLB_PDF_TOKEN_CACHE_STORE`, `BLB_PDF_QPDF_BINARY`, `DATA_SHARE_MIRROR_PG_DUMP`, `DATA_SHARE_MIRROR_PSQL`, `SBG_AX_PHP_BINARY` | Deployment-provided filesystem, executable, or service dependency rather than mutable product policy |
+| Development and external tooling | `.env`: `APP_FAKER_LOCALE`, `SONAR_TOKEN`; CI/deployment secret stores | Used outside normal product runtime |
+
+Behavioral defaults such as browser headless policy, wire-log retention, pricing
+refresh policy, PDF paper format, and render timeouts are versioned structural
+defaults unless the product exposes a declared setting for them. They are not
+hidden environment overrides.
 
 ---
 
@@ -155,7 +184,7 @@ Durable authenticated-user preferences belong in user-scoped `base_settings`.
 |------------|-------|------------------|-------|
 | `ui.theme` | User | `system` | `light`, `dark`, or `system`; follows the account across browsers |
 | `ui.timezone.mode` | User | `company` | Chooses company, browser-local, or UTC display |
-| `ui.locale` | User | Installation or negotiated locale | User choice overrides the general locale policy |
+| `ui.locale` | User, global | `en-MY` | User choice overrides an installation-wide locale; Laravel’s translation-language fallback remains versioned code |
 | Landing page | User | Product-defined landing page | Durable navigation preference |
 | Dashboard layout | User | Visible default widget order | Small JSON value is acceptable when read and written as one preference |
 | Last-used AI model hints | User | No hint | User interaction preference, optionally keyed by agent |
@@ -173,7 +202,10 @@ Theme follows the same ownership rule:
 - `localStorage` may mirror the value to avoid a flash before authentication state is hydrated, but it is not the authenticated source of truth.
 - Anonymous or pre-login device preference may remain browser-local.
 
-The existing `users.prefs` JSON column is transitional storage for preferences created before user-scoped settings existed. Preferences that match this contract should migrate to `base_settings`; unrelated relational collections or high-volume user data should use purpose-built tables.
+The former `users.prefs` values for landing page, dashboard layout, AI model
+hints, and theme migrate to user-scoped settings. The column is removed after
+that migration. Unrelated relational collections or high-volume user data use
+purpose-built tables.
 
 ---
 
@@ -224,14 +256,16 @@ Laravel config is not a runtime-parameter layer. Config files remain valid for s
 Indexes:
 
 - Unique `(key, scope_type, scope_id)`.
+- Unique global `key` where both scope columns are null.
 - Index `(scope_type, scope_id)`.
 - Prefix ownership and residue queries may use `key LIKE 'namespace.%'`.
 
-Constraints:
+Storage invariants:
 
 - `scope_type` and `scope_id` are both null or both non-null.
 - `scope_type` must be an implemented `ScopeType`.
 - The application validates that the selected scope is allowed by the setting definition.
+- The database prevents duplicate global rows; `SettingsService` is the only application write path and enforces the remaining scope invariants.
 - `value` is never null; clearing an override deletes its row.
 
 ### 8.2 Installation and Machine-Specific Values
@@ -269,6 +303,7 @@ Settings authorization follows ownership:
 | `base.settings.manage_global` | Platform administrator | Manage installation-wide settings |
 | `base.settings.manage_company` | Authorized company administrator | Manage settings owned by the active company |
 | `base.settings.manage_user` | Authenticated user | Manage the user’s own preferences |
+| `base.settings.support_override` | Explicitly authorized support operator | Repair another user’s preferences through an audited support workflow |
 
 Managing personal preferences is not an employee-supervision capability. A company administrator does not automatically gain permission to change a user’s theme, locale, landing page, or timezone mode. Support impersonation or administrative preference repair requires an explicit capability and audit trail.
 
@@ -307,26 +342,30 @@ The setting definition declares encryption. Callers and UI components must not i
 
 ---
 
-## 13. Current Implementation Divergence
+## 13. Implemented Boundaries
 
-This document records the approved target before implementation, by request.
-
-Current code still differs in material ways:
-
-- Canonical definitions and definition-aware resolution are implemented for the AI tool-round limit, `pdftotext` path, all five Performance instrumentation controls, company timezone, and user timezone display mode.
-- System → Diagnostics → Performance provides authorized global editing and restore-default behavior; instrumentation and pruning no longer read `PERF_*` environment or config fallbacks.
-- User scope is implemented. Employee scope remains temporarily available only for undeclared legacy settings while their account preferences are migrated.
-- Undeclared legacy keys still fall back to Laravel config and caller-supplied defaults.
-- The legacy method signatures still expose caller-supplied read defaults and
-  caller-selected encryption for undeclared keys; definitions own both
-  concerns for migrated parameters.
-- Callers may supply repeated defaults instead of resolving a declared definition.
-- Some durable user preferences live in `users.prefs`.
-- Theme is stored only in browser `localStorage`.
-- Company timezone and user timezone mode use their canonical company- and user-scoped definitions.
-- Most runtime parameters have not yet migrated to canonical definitions and may still read from config or `.env`.
-
-`docs/plans/settings-model-evolution.md` is the implementation and migration source of truth. Until its phases land, code behavior—not this target contract—describes production behavior.
+- `Config/settings.php` manifests are discovered across Base, Core modules, and
+  extensions. They compile to one canonical definition registry, presentation
+  fields, and a separate runtime-state claim registry.
+- `SettingsService` accepts only declared parameter keys or claimed runtime
+  state. Callers cannot supply defaults or choose encryption.
+- User, company, and global are the complete settings scopes. Definition-specific
+  scope chains determine inheritance.
+- Theme, locale, timezone mode, landing page, dashboard layout, and last-used
+  model hints use user scope. Browser theme storage is a synchronized pre-paint
+  cache.
+- System identity, session lifetime, mail, AI guardrails/tool setup, Performance,
+  backups, localization, integration secrets, and module settings have
+  definition-backed UI paths. Generic settings forms authorize both save and
+  restore actions.
+- Framework services that initialize from runtime parameters use typed wrappers
+  and a request/worker-safe runtime projection where Laravel needs config before
+  middleware or mail services resolve.
+- `.env.example` contains environment-owned application inputs and external-tool
+  inputs only. `blb:settings:import-environment` provides a preview-first,
+  value-redacting upgrade path for removed legacy runtime variables.
+- Architecture tests reject legacy environment sources, caller-owned defaults or
+  encryption, UI-definition drift, and reintroduction of employee scope.
 
 ---
 

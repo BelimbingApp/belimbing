@@ -14,7 +14,7 @@ final class DeploymentAdminEndpointResolver
      * Candidate host+port pairs for the FrankenPHP/Caddy admin API.
      *
      * octane:start records it in its server-state file, so we read it from there
-     * rather than guessing. Explicit env vars still win; otherwise probe the
+     * rather than guessing. Explicit environment config still wins; otherwise probe the
      * detected state before Caddy's stock 2019. Do not guess Windows launcher
      * ports: they may belong to another instance or WSL relay.
      *
@@ -22,8 +22,8 @@ final class DeploymentAdminEndpointResolver
      */
     public function candidates(): array
     {
-        $host = env('CADDY_SERVER_ADMIN_HOST') ?: (getenv('CADDY_SERVER_ADMIN_HOST') ?: null);
-        $port = env('CADDY_SERVER_ADMIN_PORT') ?: (getenv('CADDY_SERVER_ADMIN_PORT') ?: null);
+        $host = config('app.caddy_server_admin_host');
+        $port = config('app.caddy_server_admin_port');
         [$stateHost, $statePort] = $this->octaneAdminEndpoint($this->octaneState());
 
         if ($host !== null || $port !== null) {

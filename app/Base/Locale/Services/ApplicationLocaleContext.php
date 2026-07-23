@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Locale\Services;
 
 use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
@@ -23,6 +24,7 @@ class ApplicationLocaleContext implements LocaleContext
         private readonly SettingsService $settings,
         private readonly LocaleCatalog $catalog,
         private readonly LicenseeLocaleBootstrapSource $bootstrapSource,
+        private readonly LocaleSettings $localeSettings,
     ) {}
 
     public function currentLocale(): string
@@ -81,10 +83,29 @@ class ApplicationLocaleContext implements LocaleContext
             return $this->resolved;
         }
 
-        $storedLocale = $this->safeGet(self::SETTINGS_KEY_LOCALE);
-        $storedSource = $this->safeGet(self::SETTINGS_KEY_SOURCE);
-        $confirmedAt = $this->safeGet(self::SETTINGS_KEY_CONFIRMED_AT);
-        $storedCountry = $this->safeGet(self::SETTINGS_KEY_INFERRED_COUNTRY);
+        $user = auth()->user();
+
+        if ($user !== null && $this->localeSettings->hasUserOverride($user)) {
+            return $this->resolved = $this->buildResolvedLocale(
+                locale: $this->localeSettings->forUser($user),
+                source: LocaleSource::MANUAL,
+                confirmed: true,
+            );
+        }
+
+        $hasStoredLocale = $this->safeHas(self::SETTINGS_KEY_LOCALE);
+        $storedLocale = $hasStoredLocale
+            ? $this->safeGet(self::SETTINGS_KEY_LOCALE)
+            : null;
+        $storedSource = $hasStoredLocale
+            ? $this->safeGet(self::SETTINGS_KEY_SOURCE)
+            : null;
+        $confirmedAt = $hasStoredLocale
+            ? $this->safeGet(self::SETTINGS_KEY_CONFIRMED_AT)
+            : null;
+        $storedCountry = $hasStoredLocale
+            ? $this->safeGet(self::SETTINGS_KEY_INFERRED_COUNTRY)
+            : null;
 
         $normalizedStoredLocale = $this->catalog->normalize($storedLocale);
 
@@ -115,8 +136,8 @@ class ApplicationLocaleContext implements LocaleContext
         }
 
         return $this->resolved = $this->buildResolvedLocale(
-            locale: $this->fallbackLocale(),
-            source: LocaleSource::CONFIG_DEFAULT,
+            locale: $this->localeSettings->global(),
+            source: LocaleSource::DECLARED_DEFAULT,
             confirmed: false,
         );
     }
@@ -154,7 +175,7 @@ class ApplicationLocaleContext implements LocaleContext
     private function resolveStoredSource(mixed $source, string $storedLocale): LocaleSource
     {
         if (! is_string($source) || $source === '') {
-            return $storedLocale !== '' ? LocaleSource::MANUAL : LocaleSource::CONFIG_DEFAULT;
+            return $storedLocale !== '' ? LocaleSource::MANUAL : LocaleSource::DECLARED_DEFAULT;
         }
 
         return LocaleSource::tryFrom($source) ?? LocaleSource::MANUAL;
@@ -179,6 +200,15 @@ class ApplicationLocaleContext implements LocaleContext
             return $this->settings->get($key);
         } catch (\Throwable) {
             return null;
+        }
+    }
+
+    private function safeHas(string $key): bool
+    {
+        try {
+            return $this->settings->has($key);
+        } catch (\Throwable) {
+            return false;
         }
     }
 }

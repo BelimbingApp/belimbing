@@ -8,6 +8,7 @@ use App\Modules\Core\AI\Livewire\ControlPlane;
 use App\Modules\Core\AI\Livewire\Tools\Workspace;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 const AI_RUNTIME_SETTINGS_LICENSEE = 'AI Runtime Settings Licensee';
@@ -50,23 +51,26 @@ it('stores and restores the global tool-loop guardrail from the control plane', 
     expect($settings->has(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBeFalse();
 });
 
-it('reads the legacy iteration key until an operator saves the renamed round setting', function (): void {
-    $user = createAdminUser();
-    $settings = app(SettingsService::class);
-    $settings->set(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY, 64);
+it('migrates the legacy iteration row to the canonical round setting', function (): void {
+    DB::table('base_settings')->insert([
+        'key' => 'ai.llm.agentic.max_tool_iterations',
+        'value' => json_encode(64, JSON_THROW_ON_ERROR),
+        'is_encrypted' => false,
+        'scope_type' => null,
+        'scope_id' => null,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
-    expect(app(AiRuntimeSettings::class)->maxToolRounds())->toBe(64);
+    $migration = require app_path(
+        'Modules/Core/AI/Database/Migrations/0200_02_01_000017_rename_max_tool_iterations_setting.php',
+    );
+    $migration->up();
 
-    Livewire::actingAs($user)
-        ->withQueryParams(['tab' => 'runtime'])
-        ->test(ControlPlane::class)
-        ->assertSet('maxToolRounds', '64')
-        ->set('maxToolRounds', '72')
-        ->call('saveRuntimeGuardrails')
-        ->assertHasNoErrors();
-
-    expect($settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(72)
-        ->and($settings->has(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY))->toBeFalse();
+    expect(app(AiRuntimeSettings::class)->maxToolRounds())->toBe(64)
+        ->and(DB::table('base_settings')
+            ->where('key', 'ai.llm.agentic.max_tool_iterations')
+            ->exists())->toBeFalse();
 });
 
 it('rejects invalid or unauthorized runtime guardrail writes', function (): void {
@@ -119,4 +123,23 @@ it('configures and verifies pdftotext from the document extraction workspace', f
         ->toBe(AI_RUNTIME_SETTINGS_PDFTOTEXT_PATH)
         ->and($settings->get('ai.tools.document_analysis.last_verified_success'))
         ->toBeTrue();
+});
+
+it('restores tool workspace overrides by deleting their setting rows', function (): void {
+    $user = createAdminUser();
+    $settings = app(SettingsService::class);
+    $settings->set(AiRuntimeSettings::WEB_FETCH_TIMEOUT_KEY, 90);
+    $settings->set(AiRuntimeSettings::WEB_FETCH_MAX_BYTES_KEY, 10_000);
+
+    Livewire::actingAs($user)
+        ->test(Workspace::class, ['toolName' => 'web_fetch'])
+        ->assertSet('configValues.'.AiRuntimeSettings::WEB_FETCH_TIMEOUT_KEY, 90)
+        ->assertSet('configValues.'.AiRuntimeSettings::WEB_FETCH_MAX_BYTES_KEY, 10_000)
+        ->call('restoreConfig')
+        ->assertHasNoErrors()
+        ->assertSet('configValues.'.AiRuntimeSettings::WEB_FETCH_TIMEOUT_KEY, 30)
+        ->assertSet('configValues.'.AiRuntimeSettings::WEB_FETCH_MAX_BYTES_KEY, 5_242_880);
+
+    expect($settings->has(AiRuntimeSettings::WEB_FETCH_TIMEOUT_KEY))->toBeFalse()
+        ->and($settings->has(AiRuntimeSettings::WEB_FETCH_MAX_BYTES_KEY))->toBeFalse();
 });

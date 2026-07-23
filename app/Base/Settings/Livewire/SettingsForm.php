@@ -2,12 +2,15 @@
 
 namespace App\Base\Settings\Livewire;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Livewire\Concerns\HandlesSettingsFields;
 use App\Base\Settings\Support\SettingsFieldValue;
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
 /**
@@ -30,44 +33,15 @@ abstract class SettingsForm extends Component
 
     public function mount(SettingsService $settings): void
     {
-        $scope = $this->companyScope();
-
-        foreach ($this->allFields() as $field) {
-            if ($this->isReadonlyField($field)) {
-                continue;
-            }
-
-            $key = $field['key'];
-            $formKey = SettingsFieldValue::formKey($key);
-
-            if ($field['encrypted'] ?? false) {
-                $fieldScope = $this->scopeForField($field, $scope);
-
-                if ($this->shouldHydrateEncryptedValue($field)) {
-                    $value = $settings->get($key, '', $fieldScope);
-                } elseif ($settings->has($key, $fieldScope)) {
-                    $value = $this->savedSecretMask($field);
-                } else {
-                    $value = '';
-                }
-
-                $this->values[$formKey] = is_scalar($value) ? (string) $value : '';
-
-                continue;
-            }
-
-            $value = $settings->get($key, $field['default'] ?? '', $this->scopeForField($field, $scope));
-
-            $this->values[$formKey] = ($field['type'] ?? 'text') === 'checkbox-list'
-                ? SettingsFieldValue::checkboxList($value, $field)
-                : (string) $value;
-        }
+        $this->authorizeManage();
+        $this->loadSettingValues($settings);
     }
 
     public function save(SettingsService $settings): void
     {
+        $this->authorizeManage();
         $validated = $this->validate($this->rules());
-        $scope = $this->companyScope();
+        $scope = $this->requiresCompanyScope() ? $this->companyScope() : null;
 
         foreach ($this->allFields() as $field) {
             if ($this->isReadonlyField($field)) {
@@ -98,7 +72,6 @@ abstract class SettingsForm extends Component
                 $key,
                 $value,
                 $this->scopeForField($field, $scope),
-                (bool) ($field['encrypted'] ?? false),
             );
 
             if ($field['type'] === 'password') {
@@ -109,6 +82,32 @@ abstract class SettingsForm extends Component
         }
 
         $this->notify(__('Settings saved.'));
+    }
+
+    /**
+     * Remove this page's explicit overrides so every field resolves from its
+     * definition-owned default (or the next allowed scope).
+     */
+    public function restoreDefaults(SettingsService $settings): void
+    {
+        $this->authorizeManage();
+        $scope = $this->requiresCompanyScope() ? $this->companyScope() : null;
+
+        foreach ($this->allFields() as $field) {
+            if ($this->isReadonlyField($field)) {
+                continue;
+            }
+
+            $settings->forget(
+                $field['key'],
+                $this->scopeForField($field, $scope),
+            );
+        }
+
+        $this->values = [];
+        $this->resetValidation();
+        $this->loadSettingValues($settings);
+        $this->notify(__('Settings restored to their defaults.'));
     }
 
     public function render(): View
@@ -191,5 +190,57 @@ abstract class SettingsForm extends Component
         return $groupId === $this->group()
             ? $this->groupConfig()
             : (config('settings.editable', [])[$groupId] ?? []);
+    }
+
+    private function loadSettingValues(SettingsService $settings): void
+    {
+        $scope = $this->requiresCompanyScope() ? $this->companyScope() : null;
+
+        foreach ($this->allFields() as $field) {
+            if ($this->isReadonlyField($field)) {
+                continue;
+            }
+
+            $key = $field['key'];
+            $formKey = SettingsFieldValue::formKey($key);
+
+            if ($field['encrypted'] ?? false) {
+                $fieldScope = $this->scopeForField($field, $scope);
+
+                if ($this->shouldHydrateEncryptedValue($field)) {
+                    $value = $settings->get($key, $fieldScope);
+                } elseif ($settings->has($key, $fieldScope)) {
+                    $value = $this->savedSecretMask($field);
+                } else {
+                    $value = '';
+                }
+
+                $this->values[$formKey] = is_scalar($value) ? (string) $value : '';
+
+                continue;
+            }
+
+            $value = $settings->get($key, $this->scopeForField($field, $scope));
+
+            $this->values[$formKey] = ($field['type'] ?? 'text') === 'checkbox-list'
+                ? SettingsFieldValue::checkboxList($value, $field)
+                : $value;
+        }
+    }
+
+    private function authorizeManage(): void
+    {
+        $actor = Actor::forUser(Auth::user());
+        $authorization = app(AuthorizationService::class);
+
+        foreach ($this->groups() as $groupId) {
+            $capability = $this->groupConfigFor($groupId)['capability'] ?? null;
+
+            if (! is_string($capability) || $capability === '') {
+                throw new \LogicException("Editable settings group [{$groupId}] has no management capability.");
+            }
+
+            $authorization->authorize($actor, $capability);
+        }
     }
 }

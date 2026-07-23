@@ -34,7 +34,7 @@ beforeEach(function (): void {
     $settings->set('data_share.instance.name', 'Portable mirror local');
     $settings->set('data_share.instance.role', 'development');
     $settings->set(DataShareMirrorConnectionManager::PROVIDER_SETTING_KEY, 'supabase');
-    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, portableMirrorPostgresUrl(), encrypted: true);
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, portableMirrorPostgresUrl());
 
     portableCreateFixtureSchema();
 });

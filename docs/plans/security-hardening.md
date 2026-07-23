@@ -107,9 +107,11 @@ Evidence: `tests/Feature/Foundation/TrustedProxiesTest.php` (2 passing); `.env.e
 ### Phase 3 — AI shell tool sandbox & gating (C1)
 Goal: the Bash tool cannot be an unsandboxed RCE path; it is off unless an operator knowingly enables it, and every command is audited.
 Scope: `BashTool`, `ShellCommandRunner`, `AgentToolRegistry::currentUserCanUse()`, `DetachedProcessLauncher`.
-Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing); `config('ai.tools.bash.enabled')`; `.env.example` documents `AI_BASH_TOOL_ENABLED`.
+Evidence (opt-in gate): `tests/Feature/AI/BashToolGateTest.php` (3 passing);
+the canonical `ai.tools.bash.enabled` definition has a safe `false` default;
+Control Plane → Runtime guardrails provides authorized editing and restore.
 
-- [x] Gate execution behind an explicit per-environment opt-in (`ai.tools.bash.enabled`, default OFF in production) in addition to `admin.ai.tool.bash.execute`; enforced as a hard kill-switch in both the sync and streaming execution paths — claude/claude-fable-5
+- [x] Gate execution behind the explicit installation setting `ai.tools.bash.enabled` (declared default OFF) in addition to `admin.ai.tool.bash.execute`; enforced as a hard kill-switch in both the sync and streaming execution paths — claude/claude-fable-5
 - [x] Verify the actor is threaded through queued/Octane agent runs — the runtime jobs establish it explicitly via `Auth::loginUsingId($…->acting_for_user_id)` (`RunAgentTaskJob`, `RunChatTurnJob`, `RunLaraTaskProfileJob`, `SpawnAgentSessionJob`), so `AgentToolRegistry::currentUserCanUse()` resolves the real actor and fails closed when absent. No ambient-authority gap. — claude/claude-fable-5
 - [x] Harden `DetachedProcessLauncher`: extract the detached command-line builder (detachment needs a shell string, so a pure `Process` arg-vector is not viable) and cover it with a test asserting command tokens, env values, and redirect paths are all shell-escaped — claude/claude-fable-5
 - [ ] Residual (infra/ops, out of code scope): run the shell backend as a distinct least-privileged OS user / sandbox with a scratch working dir; scope down `-ExecutionPolicy Bypass`. Deferred defense-in-depth: audit-log actor/command/exit-code before execution and add a per-user rate limit.

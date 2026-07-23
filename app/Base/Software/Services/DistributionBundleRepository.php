@@ -192,7 +192,7 @@ class DistributionBundleRepository
 
     public function saveToken(string $owner, string $token): void
     {
-        $this->settings->set(self::TOKEN_PREFIX.strtolower($owner), trim($token), encrypted: true);
+        $this->settings->set(self::TOKEN_PREFIX.strtolower($owner), trim($token));
     }
 
     /**

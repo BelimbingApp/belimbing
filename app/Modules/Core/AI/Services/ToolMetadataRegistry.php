@@ -4,6 +4,7 @@ namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\DTO\ToolConfigField;
 use App\Modules\Core\AI\DTO\ToolMetadata;
 
@@ -22,13 +23,17 @@ class ToolMetadataRegistry
     /** @var array<string, ToolMetadata> */
     private array $metadata = [];
 
+    private readonly SettingDefinitionRegistry $definitions;
+
     /**
      * Build the registry from tool instances.
      *
      * @param  array<string, Tool>  $tools  All tool instances to index, keyed by name
      */
-    public function __construct(array $tools = [])
+    public function __construct(array $tools = [], ?SettingDefinitionRegistry $definitions = null)
     {
+        $this->definitions = $definitions ?? app(SettingDefinitionRegistry::class);
+
         foreach ($tools as $tool) {
             $this->metadata[$tool->name()] = $this->assembleFromTool($tool);
         }
@@ -103,7 +108,7 @@ class ToolMetadataRegistry
      *
      * These reference Settings keys and UI field types — concerns that belong
      * in the Core governance layer, not on the stateless Base tool contract.
-     * Only 3 of 20 tools currently have configurable settings.
+     * Only a small subset of tools currently has configurable settings.
      *
      * @return list<ToolConfigField>
      */
@@ -111,50 +116,28 @@ class ToolMetadataRegistry
     {
         return match ($toolName) {
             'web_search' => [
-                new ToolConfigField(
-                    key: 'ai.tools.web_search.cache_ttl_minutes',
-                    label: 'Cache TTL (minutes)',
-                    type: 'text',
-                    help: 'How long to cache search results.',
-                ),
+                $this->field('ai.tools.web_search.cache_ttl_minutes'),
             ],
             'web_fetch' => [
-                new ToolConfigField(
-                    key: 'ai.tools.web_fetch.timeout_seconds',
-                    label: 'Timeout (seconds)',
-                    type: 'text',
-                    help: 'Maximum time to wait for a response.',
-                ),
-                new ToolConfigField(
-                    key: 'ai.tools.web_fetch.max_response_bytes',
-                    label: 'Max Response Size (bytes)',
-                    type: 'text',
-                    help: 'Maximum response body size.',
-                ),
+                $this->field('ai.tools.web_fetch.timeout_seconds'),
+                $this->field('ai.tools.web_fetch.max_response_bytes'),
             ],
             'browser' => [
-                new ToolConfigField(
-                    key: 'ai.tools.browser.enabled',
-                    label: 'Enable Browser Tool',
-                    type: 'boolean',
-                    help: 'Whether browser automation is enabled.',
-                ),
-                new ToolConfigField(
-                    key: 'ai.tools.browser.executable_path',
-                    label: 'Chromium Path',
-                    type: 'text',
-                    help: 'Path to the Chromium executable. Leave empty for auto-detection.',
-                ),
+                $this->field('ai.tools.browser.enabled', 'boolean'),
+                $this->field('ai.tools.browser.executable_path'),
             ],
             'document_analysis' => [
-                new ToolConfigField(
-                    key: AiRuntimeSettings::PDFTOTEXT_PATH_KEY,
-                    label: 'pdftotext executable',
-                    type: 'text',
-                    help: 'Absolute path to the Poppler pdftotext executable. Leave empty to detect it from PATH.',
-                ),
+                $this->field(AiRuntimeSettings::PDFTOTEXT_PATH_KEY),
             ],
             default => [],
         };
+    }
+
+    private function field(string $key, string $type = 'text'): ToolConfigField
+    {
+        return new ToolConfigField(
+            definition: $this->definitions->get($key),
+            type: $type,
+        );
     }
 }

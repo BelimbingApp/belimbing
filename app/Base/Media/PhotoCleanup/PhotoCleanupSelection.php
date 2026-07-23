@@ -37,7 +37,7 @@ class PhotoCleanupSelection
     public function activeProviderKey(?int $companyId): string
     {
         $key = $companyId !== null
-            ? $this->settings->get(self::SETTING_KEY, self::DEFAULT_PROVIDER, Scope::company($companyId))
+            ? $this->settings->get(self::SETTING_KEY, Scope::company($companyId))
             : self::DEFAULT_PROVIDER;
 
         return is_string($key) && $key !== '' ? $key : self::DEFAULT_PROVIDER;

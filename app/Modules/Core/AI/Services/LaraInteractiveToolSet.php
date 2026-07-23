@@ -33,7 +33,7 @@ class LaraInteractiveToolSet
      */
     public function extraToolNames(): array
     {
-        $stored = $this->settings->get(self::EXTRA_TOOLS_SETTING, []);
+        $stored = $this->settings->get(self::EXTRA_TOOLS_SETTING);
 
         if (! is_array($stored)) {
             return [];

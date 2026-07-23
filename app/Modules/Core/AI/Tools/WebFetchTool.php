@@ -5,6 +5,7 @@ namespace App\Modules\Core\AI\Tools;
 use App\Base\AI\Contracts\ProvidesDisplaySummary;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\AI\Services\WebFetchService;
 use App\Base\AI\Tools\AbstractTool;
@@ -28,16 +29,14 @@ class WebFetchTool extends AbstractTool implements ProvidesDisplaySummary
 {
     use ProvidesToolMetadata;
 
-    private const DEFAULT_TIMEOUT_SECONDS = 30;
-
-    private const DEFAULT_MAX_RESPONSE_BYTES = 5242880; // 5MB
-
     private const DEFAULT_MAX_CHARS = 50000;
 
     private readonly WebFetchService $webFetchService;
 
-    public function __construct(?WebFetchService $webFetchService = null)
-    {
+    public function __construct(
+        ?WebFetchService $webFetchService = null,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
+    ) {
         $this->webFetchService = $webFetchService ?? new WebFetchService(new UrlSafetyGuard);
     }
 
@@ -138,8 +137,9 @@ class WebFetchTool extends AbstractTool implements ProvidesDisplaySummary
         $maxChars = $this->optionalInt($arguments, 'max_chars', self::DEFAULT_MAX_CHARS, min: 1);
         $extractMode = $this->requireEnum($arguments, 'extract_mode', ['text', 'markdown'], 'text');
 
-        $timeout = (int) config('ai.tools.web_fetch.timeout_seconds', self::DEFAULT_TIMEOUT_SECONDS);
-        $maxBytes = (int) config('ai.tools.web_fetch.max_response_bytes', self::DEFAULT_MAX_RESPONSE_BYTES);
+        $runtimeSettings = $this->runtimeSettings ?? app(AiRuntimeSettings::class);
+        $timeout = $runtimeSettings->webFetchTimeoutSeconds();
+        $maxBytes = $runtimeSettings->webFetchMaxResponseBytes();
 
         $result = $this->webFetchService->fetch(
             url: $url,

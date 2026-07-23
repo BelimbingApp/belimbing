@@ -1,5 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Browser;
+
+use App\Base\AI\Services\AiRuntimeSettings;
 
 /**
  * Manages a pool of browser contexts with per-company concurrency limits.
@@ -16,6 +19,7 @@ class BrowserPoolManager
 
     public function __construct(
         private readonly BrowserContextFactory $contextFactory,
+        private readonly ?AiRuntimeSettings $runtimeSettings = null,
     ) {}
 
     /**
@@ -29,7 +33,7 @@ class BrowserPoolManager
      */
     public function acquireContext(int $companyId, string $sessionId): string|false
     {
-        if (! config('ai.tools.browser.enabled', false) || ! $this->contextFactory->isAvailable()) {
+        if (! $this->runtimeSettings()->browserEnabled() || ! $this->contextFactory->isAvailable()) {
             return false;
         }
 
@@ -89,7 +93,7 @@ class BrowserPoolManager
      */
     public function isAvailable(): bool
     {
-        return config('ai.tools.browser.enabled', false) && $this->contextFactory->isAvailable();
+        return $this->runtimeSettings()->browserEnabled() && $this->contextFactory->isAvailable();
     }
 
     /**
@@ -128,5 +132,10 @@ class BrowserPoolManager
         ];
 
         return $contextId;
+    }
+
+    private function runtimeSettings(): AiRuntimeSettings
+    {
+        return $this->runtimeSettings ?? app(AiRuntimeSettings::class);
     }
 }

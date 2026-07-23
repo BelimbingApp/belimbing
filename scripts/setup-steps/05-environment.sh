@@ -31,8 +31,8 @@ source "$SCRIPTS_DIR/shared/interactive.sh"
 
 APP_ENV="${1:-local}"
 
-# Detect app name from git remote or directory name.
-detect_app_name() {
+# Detect an installation name from git remote or directory name.
+detect_instance_name() {
     if command_exists git && [[ -d "$PROJECT_ROOT/.git" ]]; then
         local repo_name
         repo_name=$(git remote get-url origin 2>/dev/null | sed 's/.*\///' | sed 's/\.git$//' || echo "")
@@ -67,15 +67,15 @@ create_env_file() {
     fi
     echo ""
 
-    local app_name app_name_default
-    app_name_default=$(get_env_var "APP_NAME" "$(detect_app_name)")
+    local instance_name instance_name_default
+    instance_name_default=$(get_env_var "BLB_INSTANCE_NAME" "$(detect_instance_name)")
     if [[ -t 0 ]]; then
-        app_name=$(ask_input "APP_NAME" "$app_name_default")
+        instance_name=$(ask_input "BLB_INSTANCE_NAME" "$instance_name_default")
     else
-        app_name="$app_name_default"
+        instance_name="$instance_name_default"
     fi
 
-    update_env_file "APP_NAME" "$app_name"
+    update_env_file "BLB_INSTANCE_NAME" "$instance_name"
     update_env_file "APP_ENV" "$APP_ENV"
 
     # APP_DEBUG is auto-derived for local; only prompt for staging/production.

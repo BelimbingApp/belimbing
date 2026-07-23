@@ -203,12 +203,6 @@ final class GitRepository
             return $configured;
         }
 
-        $configured = function_exists('env') ? env('BLB_GIT_EXECUTABLE') : null;
-
-        if (is_string($configured) && $configured !== '') {
-            return $configured;
-        }
-
         $environmentExecutable = getenv('BLB_GIT_EXECUTABLE') ?: getenv('GIT_EXECUTABLE');
 
         return is_string($environmentExecutable) && $environmentExecutable !== ''

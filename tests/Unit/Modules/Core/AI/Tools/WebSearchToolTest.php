@@ -36,27 +36,20 @@ describe('tool metadata', function () {
 
 describe('factory method', function () {
     it('returns null when no API key configured', function () {
-        config([
-            'ai.tools.web_search.provider' => 'parallel',
-            'ai.tools.web_search.parallel.api_key' => null,
-        ]);
-
         expect(WebSearchTool::createIfConfigured())->toBeNull();
     });
 
-    it('returns instance when API key configured via env/config', function () {
-        config([
-            'ai.tools.web_search.provider' => 'parallel',
-            'ai.tools.web_search.parallel.api_key' => 'test-key',
+    it('returns instance when a provider is configured in settings', function () {
+        app(SettingsService::class)->set('ai.tools.web_search.providers', [
+            ['name' => 'parallel', 'api_key' => 'test-key', 'enabled' => true],
         ]);
 
         expect(WebSearchTool::createIfConfigured())->toBeInstanceOf(WebSearchTool::class);
     });
 
-    it('reads provider from config', function () {
-        config([
-            'ai.tools.web_search.provider' => 'brave',
-            'ai.tools.web_search.brave.api_key' => 'test-key',
+    it('accepts any supported provider from settings', function () {
+        app(SettingsService::class)->set('ai.tools.web_search.providers', [
+            ['name' => 'brave', 'api_key' => 'test-key', 'enabled' => true],
         ]);
 
         expect(WebSearchTool::createIfConfigured())->toBeInstanceOf(WebSearchTool::class);
@@ -66,11 +59,6 @@ describe('factory method', function () {
         $settings = app(SettingsService::class);
         $settings->set('ai.tools.web_search.providers', [
             ['name' => 'parallel', 'api_key' => 'test-key', 'enabled' => true],
-        ], encrypted: true);
-
-        config([
-            'ai.tools.web_search.provider' => 'parallel',
-            'ai.tools.web_search.parallel.api_key' => null,
         ]);
 
         expect(WebSearchTool::createIfConfigured())->toBeInstanceOf(WebSearchTool::class);
@@ -80,11 +68,6 @@ describe('factory method', function () {
         $settings = app(SettingsService::class);
         $settings->set('ai.tools.web_search.providers', [
             ['name' => 'parallel', 'api_key' => 'test-key', 'enabled' => false],
-        ], encrypted: true);
-
-        config([
-            'ai.tools.web_search.provider' => 'parallel',
-            'ai.tools.web_search.parallel.api_key' => null,
         ]);
 
         expect(WebSearchTool::createIfConfigured())->toBeNull();
@@ -205,7 +188,7 @@ describe('multi-provider fallback', function () {
         $settings->set('ai.tools.web_search.providers', [
             ['name' => 'parallel', 'api_key' => 'bad-key', 'enabled' => true],
             ['name' => 'brave', 'api_key' => 'good-key', 'enabled' => true],
-        ], encrypted: true);
+        ]);
 
         Http::fake([
             'api.parallel.ai/*' => Http::response('Unauthorized', 401),
@@ -231,7 +214,7 @@ describe('multi-provider fallback', function () {
         $settings->set('ai.tools.web_search.providers', [
             ['name' => 'parallel', 'api_key' => 'bad-key-1', 'enabled' => true],
             ['name' => 'brave', 'api_key' => 'bad-key-2', 'enabled' => true],
-        ], encrypted: true);
+        ]);
 
         Http::fake([
             'api.parallel.ai/*' => Http::response('Unauthorized', 401),
@@ -250,7 +233,7 @@ describe('multi-provider fallback', function () {
         $settings->set('ai.tools.web_search.providers', [
             ['name' => 'parallel', 'api_key' => 'key-1', 'enabled' => false],
             ['name' => 'brave', 'api_key' => 'key-2', 'enabled' => true],
-        ], encrypted: true);
+        ]);
 
         Http::fake([
             'api.parallel.ai/*' => Http::response([
@@ -271,11 +254,6 @@ describe('multi-provider fallback', function () {
 
     it('returns unconfigured error when no providers available', function () {
         $tool = new WebSearchTool;
-
-        config([
-            'ai.tools.web_search.provider' => 'parallel',
-            'ai.tools.web_search.parallel.api_key' => null,
-        ]);
 
         $result = $tool->execute(['query' => 'no providers']);
 

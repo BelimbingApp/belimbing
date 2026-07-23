@@ -1,7 +1,10 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\DTO\WorkspaceFileEntry;
 use App\Modules\Core\AI\DTO\WorkspaceManifest;
 use App\Modules\Core\AI\DTO\WorkspaceValidationResult;
@@ -123,46 +126,51 @@ it('throws configuration exception when Lara workspace validation fails', functi
 });
 
 it('gracefully skips missing legacy extension path without throwing', function (): void {
-    config()->set('ai.lara.prompt.extension_path', 'storage/app/testing/missing_lara_extension.md');
+    $manifest = validLaraManifest();
+    $validation = new WorkspaceValidationResult(
+        valid: true,
+        errors: [],
+        warnings: [],
+        loadOrder: [WorkspaceFileSlot::SystemPrompt],
+    );
 
-    try {
-        $manifest = validLaraManifest();
-        $validation = new WorkspaceValidationResult(
-            valid: true,
-            errors: [],
-            warnings: [],
-            loadOrder: [WorkspaceFileSlot::SystemPrompt],
-        );
+    $resolver = Mockery::mock(WorkspaceResolver::class);
+    $resolver->shouldReceive('resolve')->with(Employee::LARA_ID)->andReturn($manifest);
 
-        $resolver = Mockery::mock(WorkspaceResolver::class);
-        $resolver->shouldReceive('resolve')->with(Employee::LARA_ID)->andReturn($manifest);
+    $validator = Mockery::mock(WorkspaceValidator::class);
+    $validator->shouldReceive('validate')->with($manifest)->andReturn($validation);
 
-        $validator = Mockery::mock(WorkspaceValidator::class);
-        $validator->shouldReceive('validate')->with($manifest)->andReturn($validation);
+    $contextProvider = Mockery::mock(LaraContextProvider::class);
+    $contextProvider->shouldReceive('contextForCurrentUser')->once()->andReturn([
+        'app' => ['name' => 'Belimbing'],
+    ]);
 
-        $contextProvider = Mockery::mock(LaraContextProvider::class);
-        $contextProvider->shouldReceive('contextForCurrentUser')->once()->andReturn([
-            'app' => ['name' => 'Belimbing'],
-        ]);
+    $capabilityCatalog = Mockery::mock(AgentCapabilityCatalog::class);
+    $capabilityCatalog->shouldReceive('delegableDescriptorsForCurrentUser')->once()->andReturn([]);
 
-        $capabilityCatalog = Mockery::mock(AgentCapabilityCatalog::class);
-        $capabilityCatalog->shouldReceive('delegableDescriptorsForCurrentUser')->once()->andReturn([]);
+    $settings = Mockery::mock(SettingsService::class);
+    $settings->shouldReceive('get')
+        ->with(AiRuntimeSettings::LARA_PROMPT_EXTENSION_PATH_KEY)
+        ->once()
+        ->andReturn('storage/app/testing/missing_lara_extension.md');
+    $runtimeSettings = new AiRuntimeSettings(
+        $settings,
+        new SettingDefinitionRegistry,
+    );
 
-        $factory = new LaraPromptFactory(
-            $contextProvider,
-            $capabilityCatalog,
-            new PageContextHolder,
-            $resolver,
-            $validator,
-            new PromptPackageFactory,
-            new PromptRenderer,
-        );
+    $factory = new LaraPromptFactory(
+        $contextProvider,
+        $capabilityCatalog,
+        new PageContextHolder,
+        $resolver,
+        $validator,
+        new PromptPackageFactory,
+        new PromptRenderer,
+        $runtimeSettings,
+    );
 
-        $prompt = $factory->buildForCurrentUser();
+    $prompt = $factory->buildForCurrentUser();
 
-        expect($prompt)->toBeString()
-            ->and($prompt)->not->toContain('missing_lara_extension');
-    } finally {
-        config()->set('ai.lara.prompt.extension_path', null);
-    }
+    expect($prompt)->toBeString()
+        ->and($prompt)->not->toContain('missing_lara_extension');
 });

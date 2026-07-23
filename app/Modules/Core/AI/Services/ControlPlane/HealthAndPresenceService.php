@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\ControlPlane;
 
 use App\Base\Settings\Contracts\SettingsService;
@@ -134,7 +135,7 @@ class HealthAndPresenceService
     public function providerSnapshot(string $providerName): HealthSnapshot
     {
         $lastTest = $this->settings->get('ai.providers.'.$providerName.self::PROVIDER_LAST_TEST_AT_SUFFIX);
-        $lastTestSuccess = (bool) $this->settings->get('ai.providers.'.$providerName.self::PROVIDER_LAST_TEST_SUCCESS_SUFFIX, false);
+        $lastTestSuccess = (bool) $this->settings->get('ai.providers.'.$providerName.self::PROVIDER_LAST_TEST_SUCCESS_SUFFIX);
 
         $readiness = ToolReadiness::READY;
         $health = $this->computeProviderHealth($lastTest, $lastTestSuccess);

@@ -84,7 +84,7 @@ test('edit provider advanced settings can be saved and reset (global)', function
         ->assertHasNoErrors();
 
     $settings = app(SettingsService::class);
-    expect($settings->get($settingsKey, default: null, scope: null))->toBe('0.129.0');
+    expect($settings->get($settingsKey))->toBe('0.129.0');
 
     Livewire::test(Providers::class)
         ->call('openEditProvider', $provider->id)

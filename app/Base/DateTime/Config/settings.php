@@ -14,6 +14,8 @@ return [
             'rules' => ['required', 'string', 'timezone:all'],
             'label' => 'Company timezone',
             'help' => 'IANA timezone used for Company-mode date and time display.',
+            'editable' => 'admin.system.localization',
+            'capability' => 'admin.system.localization.manage',
         ],
         TimezoneSettings::MODE_KEY => [
             'type' => 'string',
@@ -28,6 +30,8 @@ return [
             ],
             'label' => 'Timezone display mode',
             'help' => 'Choose the company timezone, browser-local time, or stored UTC values.',
+            'editable' => 'profile.appearance',
+            'capability' => 'base.settings.manage_user',
         ],
     ],
 ];

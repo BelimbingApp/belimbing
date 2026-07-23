@@ -5,16 +5,17 @@ namespace App\Base\Settings\Services;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\DTO\ScopeType;
+use App\Base\Settings\Exceptions\InvalidSettingDefinitionException;
 use App\Base\Settings\Models\Setting;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * Resolves declared runtime parameters and legacy settings.
+ * Resolves declared runtime parameters and claimed operational state.
  *
  * Declared parameters resolve through their allowed DB scopes and then their
- * definition-owned default. Undeclared keys temporarily retain the legacy
- * DB → config → caller-default path during the settings-model migration.
+ * definition-owned default. Runtime state has no fallback and returns null
+ * when its owning module has not stored a row.
  *
  * Each DB lookup is independently cached to keep invalidation simple:
  * on set/forget, only the specific (key, scope) cache entry is busted.
@@ -32,9 +33,22 @@ class DatabaseSettingsService implements SettingsService
 
     private const CACHE_ENCRYPTION_SUFFIX = ':is-encrypted';
 
+    /**
+     * Request/job-scoped memo of decoded database values.
+     *
+     * @var array<string, mixed>
+     */
+    private array $resolvedValues = [];
+
+    /**
+     * @var array<string, true>
+     */
+    private array $preloadedDefinitionScopes = [];
+
     public function __construct(
         private readonly CacheRepository $cache,
         private readonly SettingDefinitionRegistry $definitions,
+        private readonly RuntimeSettingClaimRegistry $runtimeClaims,
     ) {}
 
     /**
@@ -79,38 +93,48 @@ class DatabaseSettingsService implements SettingsService
             $definitions[$key] = $definition;
         }
 
-        $rows = Setting::query()
-            ->whereIn('key', $keys)
-            ->whereNull('scope_type')
-            ->whereNull('scope_id')
-            ->get()
-            ->keyBy('key');
+        $unresolvedKeys = array_values(array_filter(
+            $keys,
+            fn (string $key): bool => ! array_key_exists(
+                $this->cacheKey($key, null),
+                $this->resolvedValues,
+            ),
+        ));
+        $rows = $unresolvedKeys === []
+            ? collect()
+            : Setting::query()
+                ->whereIn('key', $unresolvedKeys)
+                ->whereNull('scope_type')
+                ->whereNull('scope_id')
+                ->get()
+                ->keyBy('key');
 
         $values = [];
 
         foreach ($keys as $key) {
-            $row = $rows->get($key);
-            $values[$key] = $row instanceof Setting
-                ? $this->resolveSettingValue($row)
-                : $definitions[$key]->default;
+            $cacheKey = $this->cacheKey($key, null);
+
+            if (! array_key_exists($cacheKey, $this->resolvedValues)) {
+                $row = $rows->get($key);
+                $databaseValue = $row instanceof Setting
+                    ? $this->resolveSettingValue($row)
+                    : null;
+                $this->rememberResolvedValue($cacheKey, $databaseValue);
+            }
+
+            $databaseValue = $this->resolvedValues[$cacheKey] === self::CACHE_MISS_SENTINEL
+                ? null
+                : $this->resolvedValues[$cacheKey];
+            $values[$key] = $databaseValue ?? $definitions[$key]->default;
         }
 
         return $values;
     }
 
-    /**
-     * Resolve a setting value through the cascade.
-     *
-     * Declared parameters ignore config and caller defaults. Undeclared keys
-     * retain the legacy fallback path until their definitions are migrated.
-     *
-     * @param  string  $key  Dot-notation key (e.g., 'ai.tools.web_search.cache_ttl_minutes')
-     * @param  mixed  $default  Fallback if no layer provides a value
-     * @param  Scope|null  $scope  Target scope; null resolves global DB → config only
-     */
-    public function get(string $key, mixed $default = null, ?Scope $scope = null): mixed
+    public function get(string $key, ?Scope $scope = null): mixed
     {
         $definition = $this->definitions->find($key);
+        $this->assertKeyIsClaimed($key, $definition !== null);
         $scopeChain = $definition === null
             ? $this->buildScopeChain($scope)
             : array_values(array_filter(
@@ -119,6 +143,12 @@ class DatabaseSettingsService implements SettingsService
             ));
 
         foreach ($scopeChain as $chainScope) {
+            if ($definition !== null
+                && $definition->key === $key
+                && ! $definition->encrypted) {
+                $this->preloadDeclaredScope($chainScope);
+            }
+
             $value = $this->getFromDb($key, $chainScope);
 
             if ($value !== null) {
@@ -130,7 +160,7 @@ class DatabaseSettingsService implements SettingsService
             return $definition->default;
         }
 
-        return config($key, $default);
+        return null;
     }
 
     /**
@@ -139,11 +169,12 @@ class DatabaseSettingsService implements SettingsService
      * @param  string  $key  Dot-notation key
      * @param  mixed  $value  Value to store (must be JSON-serializable)
      * @param  Scope|null  $scope  Target scope; null = global
-     * @param  bool  $encrypted  Whether to encrypt the value at rest
      */
-    public function set(string $key, mixed $value, ?Scope $scope = null, bool $encrypted = false): void
+    public function set(string $key, mixed $value, ?Scope $scope = null): void
     {
         $definition = $this->definitions->find($key);
+        $this->assertKeyIsClaimed($key, $definition !== null);
+        $encrypted = false;
 
         if ($definition !== null) {
             $definition->assertScopeAllowed($scope);
@@ -168,7 +199,9 @@ class DatabaseSettingsService implements SettingsService
      */
     public function forget(string $key, ?Scope $scope = null): void
     {
-        $this->definitions->find($key)?->assertScopeAllowed($scope);
+        $definition = $this->definitions->find($key);
+        $this->assertKeyIsClaimed($key, $definition !== null);
+        $definition?->assertScopeAllowed($scope);
 
         Setting::query()
             ->where($this->scopeAttributes($key, $scope))
@@ -182,7 +215,15 @@ class DatabaseSettingsService implements SettingsService
      */
     public function has(string $key, ?Scope $scope = null): bool
     {
-        $this->definitions->find($key)?->assertScopeAllowed($scope);
+        $definition = $this->definitions->find($key);
+        $this->assertKeyIsClaimed($key, $definition !== null);
+        $definition?->assertScopeAllowed($scope);
+
+        if ($definition !== null
+            && $definition->key === $key
+            && ! $definition->encrypted) {
+            $this->preloadDeclaredScope($scope);
+        }
 
         return $this->getFromDb($key, $scope) !== null;
     }
@@ -191,7 +232,6 @@ class DatabaseSettingsService implements SettingsService
      * Build the scope chain for cascade resolution.
      *
      * User scope cascades: user → company → global.
-     * Employee scope cascades: employee → company → global.
      * Company scope cascades: company → global.
      * Null scope: global only.
      *
@@ -203,7 +243,7 @@ class DatabaseSettingsService implements SettingsService
             return [null];
         }
 
-        if (in_array($scope->type, [ScopeType::USER, ScopeType::EMPLOYEE], true)) {
+        if ($scope->type === ScopeType::USER) {
             $chain = [$scope];
 
             if ($scope->companyId !== null) {
@@ -229,19 +269,32 @@ class DatabaseSettingsService implements SettingsService
         $ttl = (int) config('settings.cache_ttl', self::DEFAULT_CACHE_TTL_SECONDS);
         $cacheKey = $this->cacheKey($key, $scope);
 
+        if (array_key_exists($cacheKey, $this->resolvedValues)) {
+            return $this->resolvedValues[$cacheKey] === self::CACHE_MISS_SENTINEL
+                ? null
+                : $this->resolvedValues[$cacheKey];
+        }
+
         if ($ttl <= 0) {
-            return $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+            $value = $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+            $this->rememberResolvedValue($cacheKey, $value);
+
+            return $value;
         }
 
         $encryptionKey = $cacheKey.self::CACHE_ENCRYPTION_SUFFIX;
         $isEncrypted = $this->cache->get($encryptionKey);
 
         if ($isEncrypted === true) {
-            return $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+            $value = $this->resolveSettingValue(Setting::findByKeyAndScope($key, $scope));
+            $this->rememberResolvedValue($cacheKey, $value);
+
+            return $value;
         }
 
         if ($isEncrypted === false) {
             $cached = $this->cache->get($cacheKey);
+            $this->resolvedValues[$cacheKey] = $cached;
 
             return $cached === self::CACHE_MISS_SENTINEL ? null : $cached;
         }
@@ -253,13 +306,16 @@ class DatabaseSettingsService implements SettingsService
             // plaintext in a database, Redis, or filesystem cache store.
             $this->cache->forget($cacheKey);
             $this->cache->put($encryptionKey, true, $ttl);
+            $value = $this->resolveSettingValue($setting);
+            $this->rememberResolvedValue($cacheKey, $value);
 
-            return $this->resolveSettingValue($setting);
+            return $value;
         }
 
         $value = $this->resolveSettingValue($setting);
         $this->cache->put($encryptionKey, false, $ttl);
         $this->cache->put($cacheKey, $value ?? self::CACHE_MISS_SENTINEL, $ttl);
+        $this->rememberResolvedValue($cacheKey, $value);
 
         return $value;
     }
@@ -317,5 +373,76 @@ class DatabaseSettingsService implements SettingsService
 
         $this->cache->forget($cacheKey);
         $this->cache->forget($cacheKey.self::CACHE_ENCRYPTION_SUFFIX);
+        unset($this->resolvedValues[$cacheKey]);
+    }
+
+    private function rememberResolvedValue(string $cacheKey, mixed $value): void
+    {
+        $this->resolvedValues[$cacheKey] = $value ?? self::CACHE_MISS_SENTINEL;
+    }
+
+    private function preloadDeclaredScope(?Scope $scope): void
+    {
+        $scopeKey = $scope === null
+            ? 'global'
+            : $scope->type->value.':'.$scope->id;
+
+        if (isset($this->preloadedDefinitionScopes[$scopeKey])) {
+            return;
+        }
+
+        $keys = [];
+
+        foreach ($this->definitions->all() as $definition) {
+            if ($definition->encrypted
+                || str_contains($definition->key, '*')
+                || ! $definition->allowsScope($scope)) {
+                continue;
+            }
+
+            $cacheKey = $this->cacheKey($definition->key, $scope);
+
+            if (! array_key_exists($cacheKey, $this->resolvedValues)) {
+                $keys[] = $definition->key;
+            }
+        }
+
+        if ($keys === []) {
+            $this->preloadedDefinitionScopes[$scopeKey] = true;
+
+            return;
+        }
+
+        $query = Setting::query()->whereIn('key', $keys);
+
+        if ($scope === null) {
+            $query->whereNull('scope_type')->whereNull('scope_id');
+        } else {
+            $query->where('scope_type', $scope->type->value)
+                ->where('scope_id', $scope->id);
+        }
+
+        $rows = $query->get()->keyBy('key');
+
+        foreach ($keys as $key) {
+            $row = $rows->get($key);
+            $this->rememberResolvedValue(
+                $this->cacheKey($key, $scope),
+                $row instanceof Setting ? $this->resolveSettingValue($row) : null,
+            );
+        }
+
+        $this->preloadedDefinitionScopes[$scopeKey] = true;
+    }
+
+    private function assertKeyIsClaimed(string $key, bool $hasDefinition): void
+    {
+        if ($hasDefinition || $this->runtimeClaims->claims($key)) {
+            return;
+        }
+
+        throw new InvalidSettingDefinitionException(
+            "Setting [{$key}] has no discovered parameter definition or runtime-state claim.",
+        );
     }
 }

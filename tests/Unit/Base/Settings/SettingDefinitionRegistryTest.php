@@ -17,6 +17,9 @@ it('discovers canonical AI runtime parameter definitions', function (): void {
     $pdfToTextPath = $registry->get(AiRuntimeSettings::PDFTOTEXT_PATH_KEY);
 
     expect($maxToolRounds->type)->toBe('integer')
+        ->and($maxToolRounds->owner)->toBe('core.ai')
+        ->and($maxToolRounds->editable)->toBe('admin.ai.control-plane')
+        ->and($maxToolRounds->capability)->toBe('admin.ai.control-plane.manage')
         ->and($maxToolRounds->scopes)->toBe(['global'])
         ->and($maxToolRounds->default)->toBe(100)
         ->and($maxToolRounds->nullable)->toBeFalse()
@@ -57,6 +60,13 @@ it('discovers distinct company timezone and user display mode definitions', func
         ->and($mode->default)->toBe(TimezoneMode::COMPANY->value);
 });
 
+it('matches wildcard definitions by the most specific declared pattern', function (): void {
+    $registry = app(SettingDefinitionRegistry::class);
+
+    expect($registry->get('integrations.cloudflare.api_token')->encrypted)->toBeTrue()
+        ->and($registry->get('integrations.cloudflare.api_token.description')->encrypted)->toBeFalse();
+});
+
 it('rejects incomplete or internally inconsistent definitions', function (array $definition): void {
     expect(fn () => SettingDefinition::fromArray('example.setting', $definition))
         ->toThrow(InvalidSettingDefinitionException::class);
@@ -64,46 +74,68 @@ it('rejects incomplete or internally inconsistent definitions', function (array 
     'missing type' => [[
         'scopes' => ['global'],
         'default' => 10,
+        'owner' => 'tests.settings',
     ]],
     'missing scopes' => [[
         'type' => 'integer',
         'default' => 10,
+        'owner' => 'tests.settings',
     ]],
     'missing default' => [[
         'type' => 'integer',
         'scopes' => ['global'],
+        'owner' => 'tests.settings',
     ]],
     'incompatible default' => [[
         'type' => 'integer',
         'scopes' => ['global'],
         'default' => '10',
+        'owner' => 'tests.settings',
     ]],
     'null without nullable' => [[
         'type' => 'string',
         'scopes' => ['global'],
         'default' => null,
+        'owner' => 'tests.settings',
     ]],
     'unsupported scope' => [[
         'type' => 'string',
         'scopes' => ['employee'],
         'default' => '',
+        'owner' => 'tests.settings',
     ]],
     'blank label' => [[
         'type' => 'string',
         'scopes' => ['global'],
         'default' => '',
         'label' => ' ',
+        'owner' => 'tests.settings',
     ]],
     'default outside validation rules' => [[
         'type' => 'integer',
         'scopes' => ['global'],
         'default' => 0,
         'rules' => ['required', 'integer', 'min:1'],
+        'owner' => 'tests.settings',
     ]],
     'string encryption flag' => [[
         'type' => 'string',
         'scopes' => ['global'],
         'default' => '',
         'encrypted' => 'false',
+        'owner' => 'tests.settings',
+    ]],
+    'missing owner' => [[
+        'type' => 'string',
+        'scopes' => ['global'],
+        'default' => '',
+    ]],
+    'editable without help metadata' => [[
+        'type' => 'string',
+        'scopes' => ['global'],
+        'default' => '',
+        'owner' => 'tests.settings',
+        'editable' => 'tests.form',
+        'label' => 'Example',
     ]],
 ]);

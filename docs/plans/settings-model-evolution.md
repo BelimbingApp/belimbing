@@ -1,6 +1,6 @@
 # settings-model-evolution
 
-**Status:** In progress; definition registry plus AI, Performance, and timezone slices implemented
+**Status:** Complete
 **Last Updated:** 2026-07-23
 **Sources:** `docs/architecture/settings.md`; `docs/architecture/module-system.md`; `.env.example`; `config/app.php`; `config/mail.php`; `config/session.php`; `app/Base/AI/Config/ai.php`; `app/Base/Settings/`; `app/Base/DateTime/`; `app/Modules/Core/User/Models/User.php`; user discussion on environment ownership, runtime settings, and user preferences
 **Agents:** Codex/GPT-5
@@ -79,61 +79,61 @@ Goal: the approved target, terminology, preference ownership, and current implem
 
 Goal: one module-owned definition controls every runtime parameter and `SettingsService` resolves database rows to that definition’s default without config fallback.
 
-Evidence: focused settings, AI runtime, extraction, and residue suites pass (100 tests, 350 assertions); the Performance evidence is recorded with its Phase 4 slice; Pint, UI detector, and diff checks pass.
+Evidence: the canonical registry/resolver, architecture, settings UI, AI, Performance, and module-consumer suites pass. Definitions are discovered across Base, Core modules, Commerce, and extensions; Pint and the UI detector pass.
 
 - [x] Land the first vertical slice: introduce definition discovery and validation, make migrated keys use definition-owned fallback instead of config/caller fallbacks, distinguish definitions from runtime-state claims, and migrate AI tool rounds plus `pdftotext` {Codex/GPT-5}
-- [ ] Extend discovered module settings declarations with exact definitions, types, scopes, defaults, validation, encryption, ownership, and editability
-- [ ] Make editable UI fields refer to definitions rather than repeat defaults or rules
-- [ ] Change the settings read contract so callers do not supply or duplicate parameter defaults
-- [ ] Separate runtime-state namespace claims from runtime parameter definitions
-- [ ] Add contract tests for missing definitions, invalid scopes, nullable defaults, encryption, caching, and restore-default behavior
+- [x] Extend discovered module settings declarations with exact definitions, types, scopes, defaults, validation, encryption, ownership, and editability {Codex/GPT-5}
+- [x] Make editable UI fields derive defaults, rules, labels, help, encryption, and scope from canonical definitions {Codex/GPT-5}
+- [x] Change the settings read contract so callers cannot supply or duplicate parameter defaults {Codex/GPT-5}
+- [x] Separate runtime-state namespace claims from runtime parameter definitions {Codex/GPT-5}
+- [x] Add contract tests for missing definitions, invalid scopes, nullable defaults, encryption, caching, global uniqueness, and restore-default behavior {Codex/GPT-5}
 
 ### Phase 3 — User scope and durable preferences
 
 Affected pages: profile appearance, application top bar, localization settings, dashboard, profile settings
 Goal: authenticated preferences follow the user account across sessions and devices without depending on an employee record.
 
-Evidence for the timezone slice: focused definition, resolver, migration, display,
-endpoint, company, Localization UI, residue, and migration-discovery tests pass
-(118 tests, 259 assertions); Pint and diff checks pass.
+Evidence: user-scope resolver, preference migration, appearance, top-bar theme,
+timezone, locale, landing-page, dashboard, and AI model-hint tests pass. Users
+without employee records have complete preference behavior.
 
-- [ ] Replace employee settings scope with user scope and migrate any employee-scoped setting rows that represent account preferences
+- [x] Replace the unused employee settings scope with user scope; no deployed employee-scoped preference rows existed to migrate {Codex/GPT-5}
 - [x] Store `ui.timezone.mode` in user scope and migrate legacy effective preferences; rename the company IANA setting to `localization.timezone` with declared `UTC` default {Codex/GPT-5}
-- [ ] Store authenticated theme preference in user scope with system as the declared default; retain browser storage only for anonymous state or synchronized pre-paint
-- [ ] Classify and migrate appropriate `users.prefs` values, including landing page, dashboard layout, and AI model hints
-- [ ] Replace employee settings authorization with self-owned user preference authorization and explicit support override capability
-- [ ] Verify users without employee records receive complete preference behavior
+- [x] Store authenticated theme preference in user scope with `system` as the declared default; retain browser storage only for anonymous state or synchronized pre-paint {Codex/GPT-5}
+- [x] Migrate landing page, dashboard layout, AI model hints, and theme from `users.prefs` to user-scoped settings, then remove the preference blob {Codex/GPT-5}
+- [x] Authorize self-owned user preferences independently from employee identity and declare an explicit support-override capability {Codex/GPT-5}
+- [x] Verify users without employee records receive complete preference behavior {Codex/GPT-5}
 
 ### Phase 4 — Environment and runtime-parameter migration
 
 Goal: every post-boot parameter is UI-managed and no deployment changes behavior silently when config fallback is removed.
 
-Evidence for the Performance slice: focused resolver, registry, dashboard
-authorization/save/restore, instrumentation, pruning, diagnostics, bootstrap
-degradation, and settings tests pass (79 tests, 214 assertions); adjacent AI
-and residue compatibility suites pass; Pint and the UI detector pass.
+Evidence: focused runtime UI, import, mail, session, localization, backup,
+Performance, AI, Data Share, schedule, media, software, Commerce, Kiat, and SBG
+consumer suites pass. `.env.example` contains only environment-owned and
+external-tool inputs; the upgrade importer is preview-first and redacts values.
 
-- [ ] Inventory `.env.example`, Laravel config, module config, and direct `env()` or `config()` reads by consumer category
+- [x] Inventory `.env.example`, Laravel config, module config, and direct `env()` or `config()` reads by consumer category {Codex/GPT-5}
 - [x] Migrate Performance logging controls (`enabled`, minimum request time, slow-SQL threshold, retention, and log path) to global definitions and the authorized Performance UI; remove their environment/config fallbacks {Codex/GPT-5}
-- [ ] Migrate `APP_LOCALE` to the existing `ui.locale` setting contract and Localization UI; put its default in the setting definition, keep the missing-translation fallback in versioned code, and retain `APP_FAKER_LOCALE` only as a development/test input
-- [ ] Migrate mail transport, endpoint, credentials, and sender identity from `MAIL_*` to encrypted global settings with an authorized Email/Integrations UI and a safe code default
-- [ ] Migrate the Lara prompt-extension path and Bash-tool enablement from `AI_LARA_PROMPT_EXTENSION_PATH` and `AI_BASH_TOOL_ENABLED` to global AI definitions and authorized UI; use a safe disabled Bash default
-- [ ] Migrate `SESSION_LIFETIME` to a global session-policy definition resolved before session middleware needs it; keep session storage, cookie transport, and encryption bootstrap inputs environment-owned
-- [ ] Split `APP_NAME`: store the user-facing product name as a global branding/system-identity setting and give cache, Redis, session, deployment, and process namespaces explicit environment-owned keys
-- [ ] Remove `EARLY_HINTS_ENABLED` from `.env.example` after confirming it remains unconsumed; do not create a setting for dead configuration
-- [ ] Keep bootstrap and external tooling inputs environment-owned and documented
-- [ ] Add missing settings definitions and authorized UIs for post-boot parameters
-- [ ] Provide a deliberate import or operator migration path for existing environment-backed runtime values
-- [ ] Remove runtime-parameter environment entries and config fallbacks only after their values and UI paths are accounted for
-- [ ] Define and validate the installation invariant for machine-specific global settings
+- [x] Migrate `APP_LOCALE` to `ui.locale` and the Localization/Profile UIs; keep the translation-language fallback in versioned code and `APP_FAKER_LOCALE` as a development/test input {Codex/GPT-5}
+- [x] Migrate mail transport, endpoint, credentials, and sender identity from `MAIL_*` to global definitions with encrypted credentials, an authorized Email UI, and safe defaults {Codex/GPT-5}
+- [x] Migrate the Lara prompt-extension path and Bash-tool enablement to global AI definitions and authorized UI, with Bash disabled by default {Codex/GPT-5}
+- [x] Migrate `SESSION_LIFETIME` to a global session-policy definition projected before session middleware; keep session storage, cookie transport, and encryption environment-owned {Codex/GPT-5}
+- [x] Split `APP_NAME`: store the user-facing product name globally while cache, Redis, session, deployment, and process namespaces use explicit environment-owned names {Codex/GPT-5}
+- [x] Remove the unconsumed `EARLY_HINTS_ENABLED` variable without creating a setting {Codex/GPT-5}
+- [x] Keep bootstrap, infrastructure, native toolchain topology, and external-tool inputs environment-owned and document their boundary {Codex/GPT-5}
+- [x] Add definitions and authorized UIs for the remaining inventoried post-boot parameters across Base, Core modules, Commerce, Kiat, and SBG {Codex/GPT-5}
+- [x] Provide `blb:settings:import-environment` as a deliberate preview-first, value-redacting migration path for legacy environment-backed runtime values {Codex/GPT-5}
+- [x] Remove runtime-parameter environment entries and config fallbacks after their definitions, UI paths, and import mappings are present {Codex/GPT-5}
+- [x] Define and validate the single-compatible-runtime invariant for machine-specific global settings {Codex/GPT-5}
 
 ### Phase 5 — Enforcement and completion
 
 Goal: the repository mechanically protects the simplified mental model.
 
-- [ ] Add architecture tests that reject environment or config sources for declared runtime parameters
-- [ ] Add tests that every editable field references a declared parameter and every persisted key is claimed
-- [ ] Add tests that defaults, scopes, validation, encryption, and UI reset behavior come from one definition
-- [ ] Update affected runbooks and guides after implementation matches the architecture
-- [ ] Remove transitional compatibility code, stale employee terminology, and obsolete preference storage
-- [ ] Mark `docs/architecture/settings.md` implemented and this plan complete only after behavior and documentation agree
+- [x] Add architecture tests that reject environment or config sources for declared runtime parameters {Codex/GPT-5}
+- [x] Add tests that every editable field references a declared parameter and every persisted key is claimed {Codex/GPT-5}
+- [x] Add tests that defaults, scopes, validation, encryption, and UI reset behavior come from one definition {Codex/GPT-5}
+- [x] Update affected runbooks, guides, architecture docs, and related plans after implementation matches the architecture {Codex/GPT-5}
+- [x] Remove transitional runtime fallbacks, stale settings-scope terminology, and obsolete `users.prefs` storage {Codex/GPT-5}
+- [x] Mark `docs/architecture/settings.md` implemented and this plan complete after behavior and documentation agree {Codex/GPT-5}

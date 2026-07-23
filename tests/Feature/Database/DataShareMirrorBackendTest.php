@@ -37,7 +37,7 @@ use Illuminate\Support\Facades\DB;
 
 it('stores the mirror URL encrypted and never includes it in safe connection status', function (): void {
     $url = 'postgresql://mirror_user:private-password@example.test:5432/belimbing?sslmode=require&application_name=private-password';
-    app(SettingsService::class)->set(DataShareMirrorConnectionManager::SETTING_KEY, $url, encrypted: true);
+    app(SettingsService::class)->set(DataShareMirrorConnectionManager::SETTING_KEY, $url);
 
     $row = Setting::query()->where('key', DataShareMirrorConnectionManager::SETTING_KEY)->firstOrFail();
     $status = app(DataShareMirrorManager::class)->status();
@@ -188,7 +188,7 @@ it('purges the named mirror connection when no credential is configured', functi
     $settings = Mockery::mock(SettingsService::class);
     $settings->shouldReceive('get')
         ->once()
-        ->with(DataShareMirrorConnectionManager::PROVIDER_SETTING_KEY, 'supabase')
+        ->with(DataShareMirrorConnectionManager::PROVIDER_SETTING_KEY)
         ->andReturn('supabase');
     $settings->shouldReceive('get')
         ->once()

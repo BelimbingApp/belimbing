@@ -18,7 +18,8 @@ The dashboard renders real, module-owned widgets filtered by the user's authoriz
 - Widget registry (`app/Base/Dashboard/`): framework infrastructure, sibling in shape to `app/Base/Menu/`. Modules register widget definitions from their ServiceProviders; the registry exposes the authz-filtered widget set for a user.
 - Widget definition contract: stable id, label, icon, required authz capability, size hint, and the Livewire component that renders it.
 - Dashboard Livewire page (Core-owned, `resources/core/views/livewire/dashboard/`): replaces the static Blade view; resolves the user's layout, intersects it with visible widgets, renders each widget as a lazy Livewire component.
-- Per-user layout storage: `users.prefs['dashboard']` — an ordered list of widget ids with optional size overrides, following the `prefs.landing_menu_id` precedent.
+- Per-user layout storage: user-scoped `ui.dashboard.layout` in
+  `base_settings` — an ordered list of widget ids with optional size overrides.
 - Edit mode: add/remove/reorder UI on the dashboard page persisting to prefs.
 - Initial widgets: one or two real widgets from existing modules proving the contract end to end.
 
@@ -32,13 +33,15 @@ Recommendation: registry and contracts in `Base/Dashboard`; screen in Core views
 
 Implementation refinement: widgets are contributed via `Config/dashboard.php` files discovered by glob (the menu-discovery pattern), not ServiceProvider registration as originally drafted. Config-file discovery routes through `DomainState::filterPaths`, so widgets of disabled domains vanish automatically, and extensions contribute (or override, last-definition-wins) with no code hook.
 
-### Layout storage: prefs JSON vs dedicated table vs Base/Settings
+### Layout storage: user settings vs dedicated table
 
-- **`users.prefs['dashboard']`** — the layout is small, per-user, self-contained, read whole in one place and written whole in one place. Nothing queries it across users, nothing joins it, and widget ids are code-defined registry strings with nothing to foreign-key against; validity must be enforced at render time by intersecting with the authz-filtered registry regardless of storage. This is the same category of data as `landing_menu_id`, which already lives in prefs with silent fall-through on read.
 - **Dedicated table** — buys cross-user queryability, FKs, and partial updates, none of which apply. Costs a migration, model, and second lifecycle for data with one reader and one writer. The switch trigger is layouts ceasing to be purely personal (shared/team dashboards, admin-audited layouts); migrating prefs blobs to rows at that point is cheap and mechanical.
-- **`Base/Settings`** — was the wrong fit when this phase shipped because its implemented scopes were `COMPANY` and `EMPLOYEE`, while the dashboard belongs to the login user and users without an employee record still need a dashboard. The approved target in `docs/architecture/settings.md` adds user-scoped settings and treats small durable account preferences as runtime parameters. `users.prefs['dashboard']` remains the implemented storage until that foundational migration lands; the settings-model plan now owns moving the layout to user-scoped `base_settings` without changing the widget contract.
+- **`Base/Settings`** — now has user scope, so the whole-list preference uses
+  `ui.dashboard.layout`. Users without employee records have the same behavior,
+  and reset deletes the user override.
 
-Implemented decision: `users.prefs['dashboard']` remains the current storage. Target decision: migrate it to user-scoped `base_settings` with a declared visible-widget-order default during `docs/plans/settings-model-evolution.md`. A dedicated table remains unnecessary unless layouts become shared, relational, or independently queryable.
+Implemented decision: user-scoped `base_settings`. A dedicated table remains
+unnecessary unless layouts become shared, relational, or independently queryable.
 
 ### Widget rendering: server-composed Blade partials vs lazy Livewire components
 
@@ -57,7 +60,10 @@ Recommendation: edit mode with catalog + simple reorder; no grid-packing library
 - A widget definition declares: `id` (stable, namespaced by module, e.g. `people.leave.pending-approvals`), `label` and optional `description` (translatable), `icon` (registry icon name), `permission` (authz capability string required to see it; null means visible to all authenticated users), `size` (column-span hint: 1, 2, or 3 of a 3-column grid), and `component` (the Livewire component name that renders it).
 - Modules contribute widgets via `Config/dashboard.php` returning `['widgets' => [...]]`, discovered by glob at Base, domain, module, and extension levels (`App\Base\Dashboard\Services\WidgetDiscoveryService`). Discovery order defines default layout order; duplicate ids follow last-definition-wins.
 - The registry exposes, for a given user, the ordered set of widget definitions whose capability the user holds — the same authz-filter-then-intersect approach `LandingPageResolver` uses for menu options.
-- `users.prefs['dashboard']` holds the personal layout: an ordered list of widget ids. Ids not present in the user's visible set are skipped silently on read; saving rewrites the whole list. (Per-widget size overrides are Phase 3; until then size comes from the definition.)
+- `ui.dashboard.layout` holds the personal layout at user scope. Ids not
+  present in the user's visible set are skipped silently on read; saving
+  rewrites the whole list. (Per-widget size overrides are Phase 3; until then
+  size comes from the definition.)
 - No saved layout means the default layout: visible widgets in registry order, capped to a sane count.
 - Widgets render as lazy Livewire components; each widget owns its own queries and empty/error states. A widget must degrade to an inline empty state, never a page error.
 - Widget UI uses `x-ui.card`, `x-ui.stat-strip`/`x-ui.stat`, and other `x-ui.*` primitives per `resources/core/views/AGENTS.md`; semantic tokens only.
@@ -84,7 +90,9 @@ Affected pages: `/dashboard`
 Goal: a user can add, remove, and reorder widgets; the layout persists across sessions; a revoked/uninstalled widget in a saved layout is skipped silently.
 Validation: Pest tests for prefs round-trip and stale-id fall-through.
 
-- [x] Layout read/write in `users.prefs['dashboard']` with whole-list saves and silent skip of unknown/invisible ids; an explicitly emptied layout is respected, not replaced by the default {Amp/claude-fable-5}
+- [x] Layout read/write in user-scoped `ui.dashboard.layout` with whole-list
+  saves and silent skip of unknown/invisible ids; an explicitly emptied layout
+  is respected, not replaced by the default {Amp/claude-fable-5; Codex/GPT-5}
 - [x] Edit mode on the dashboard page: catalog of visible widgets to add, remove control per widget, move up/down reorder controls {Amp/claude-fable-5}
 - [x] Reset-to-default action clearing the pref (shown only when a custom layout exists) {Amp/claude-fable-5}
 - [x] Tests: pref round-trip (remove/add/reorder), stale widget id skipped, reset clears pref, invisible id never persists {Amp/claude-fable-5}

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Locale\Services;
 
 use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
@@ -41,8 +42,7 @@ class LocaleCatalog
 
     public function fallbackLocale(): string
     {
-        return $this->normalize(config('app.locale'))
-            ?? $this->normalize(config('locale.fallback_locale'))
+        return $this->normalize(config('locale.fallback_locale'))
             ?? 'en-US';
     }
 
