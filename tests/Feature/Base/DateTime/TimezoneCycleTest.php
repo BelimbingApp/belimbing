@@ -90,6 +90,17 @@ it('persists mode against the user even when the account has an employee id', fu
         ->toBeFalse();
 });
 
+it('keeps the top-bar timezone selector available when the company timezone is unset', function (): void {
+    $user = User::factory()->create(['company_id' => 1]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertSee('aria-label="Select timezone display mode"', false)
+        ->assertSee('@click="tzOpen = !tzOpen"', false)
+        ->assertDontSee(route('admin.companies.show', 1), false);
+});
+
 it('rejects invalid mode values', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
 

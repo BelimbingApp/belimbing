@@ -4,7 +4,6 @@
     $tzLabel = $tzMode->label();
     $companyTz = $tzService->currentCompanyTimezone();
     $companyTzExplicit = $tzService->isCompanyTimezoneExplicit();
-    $companyTimezoneSettingsUrl = route('admin.companies.show', \App\Modules\Core\Company\Models\Company::LICENSEE_ID);
     $theme = 'system';
 
     if (auth()->check()) {
@@ -48,7 +47,6 @@
         tzLabel: @js($tzLabel),
         companyTz: @js($companyTz),
         companyTzExplicit: @js($companyTzExplicit),
-        companyTimezoneSettingsUrl: @js($companyTimezoneSettingsUrl),
         browserTz: Intl.DateTimeFormat().resolvedOptions().timeZone,
         tzSaving: false,
         init() {
@@ -107,9 +105,6 @@
             if (mode === 'utc') return 'UTC';
             return this.companyTzExplicit ? this.tzCity(this.companyTz) : '{{ __('(not set)') }}';
         },
-        goToCompanyTimezoneSettings() {
-            window.location.href = this.companyTimezoneSettingsUrl;
-        },
         setTz(mode) {
             if (this.tzSaving || mode === this.tzMode) { this.tzOpen = false; return; }
             this.tzSaving = true;
@@ -139,7 +134,7 @@
             <div class="relative" @click.outside="tzOpen = false" @keydown.escape.window="tzOpen = false">
                 <button
                     type="button"
-                    @click="(tzMode === 'company' && !companyTzExplicit) ? goToCompanyTimezoneSettings() : tzOpen = !tzOpen"
+                    @click="tzOpen = !tzOpen"
                     :disabled="tzSaving"
                     class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle transition-colors"
                     :class="[
