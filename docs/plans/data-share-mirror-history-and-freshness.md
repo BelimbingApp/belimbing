@@ -2,7 +2,7 @@
 
 **Status:** Proposed
 **Last Updated:** 2026-07-22
-**Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `docs/plans/base-schedule-observability.md`
+**Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `docs/plans/base-schedule-observability.md`
 **Agents:** Amp/OpenAI Codex
 
 ## Problem Essence
@@ -11,7 +11,7 @@ Mirror results currently exist only in transient Livewire state, so the Local an
 
 ## Desired Outcome
 
-Every attempted mirror mutation has one durable, actor-attributed operation record and one compact summary per explicitly selected table. The Mirror catalog retains the latest successful Local and remote observations across refreshes, operators can inspect prior push, force-push, and pull runs, and PostgreSQL installations can later identify Local tables changed since their last successful push without logging every changed row or coupling every scheduled command to Data Share.
+Every attempted mirror mutation has one durable, actor-attributed operation record and one compact summary per explicitly selected table. The Local catalog renders immediately without waiting for Supabase, retains the latest successful Local and remote observations across refreshes, and enriches remote state independently when available. Operators can inspect prior push, force-push, and pull runs, and PostgreSQL installations can later identify Local tables changed since their last successful push without logging every changed row or coupling every scheduled command to Data Share.
 
 ## Top-Level Components
 
@@ -26,6 +26,16 @@ The ledger is the authoritative history. Audit actions project meaningful mirror
 A compact projection keyed by Local instance, remote instance, and table stores only the latest successful observations. The main Mirror table reads this projection on every render, independently of the five-minute remote catalog cache, so endpoint changes never display counts from a different mirror and history retention never removes the current state.
 
 The projection labels counts as **last observed**, not verified equality. Portable transfer can prove snapshot count and content equality; native transfer observes endpoint counts after its external transaction and concurrent Local writes may already have changed the source.
+
+### Local-first catalog and remote enrichment
+
+The Local table registry is the catalog source of truth and renders synchronously without testing or scanning Supabase. Remote-only registry entries do not expand the picker: application code and Local migration ownership must exist before a table can be safely pulled. A registered Local table remains visible even when its Local relation is missing, which preserves recovery use cases.
+
+The page immediately merges two non-blocking sources into those Local rows: persisted successful observations and a shared last-known remote catalog snapshot keyed to the stable endpoint. If the snapshot is absent or stale, a separate Livewire request refreshes remote presence, relation kind, ownership, and connection status, then enriches the existing rows. A remote failure leaves the Local catalog usable and reports the remote columns as unavailable; it never replaces the table with a page-level loading state or empties Local results.
+
+The remote snapshot uses shared stale-while-revalidate semantics rather than the current session-only cache because endpoint catalog state is not user-specific. Explicit **Refresh remote data** bypasses freshness, while automatic refresh serves stale data with its observation time until a new successful snapshot arrives. A queued refresh job is deferred unless measurement shows that a separate Livewire request still harms worker availability.
+
+Catalog enrichment never performs live row counts for every table. Row counts come from completed operations or an explicit baseline/observation action and persist in the current observation projection. Live review remains authoritative and inspects only the exact selected tables, so cached presence and counts are display hints rather than mutation permission.
 
 ### Audit bridge
 
@@ -42,6 +52,8 @@ Freshness is an operator aid, not automatic synchronization. It may power **Chan
 ### Mirror history UI
 
 The Mirror catalog gains persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns. A bounded History section lists operations with actor, direction, endpoint, table count, result, and duration; opening a run shows its per-table observations and safe failure details. Audit Log Actions links to the same operation subject for organization-wide chronology.
+
+Once durable history and catalog observations exist, the current transient post-operation result table is removed. A completed operation updates the catalog projection in place and shows a compact success summary with a link to its durable run; users no longer need to know that a temporary result table exists below the review panel, and refresh no longer destroys the only visible evidence.
 
 ## Design Decisions
 
@@ -76,6 +88,16 @@ The Local ledger and an external `psql` transaction cannot commit atomically. A 
 
 No Local database transaction remains open during a potentially hour-long dump or restore. A future remote receipt protocol may resolve recurring indeterminate commits, but distributed-transaction simulation is not part of this design.
 
+### Render Local first and cache remote state at endpoint scope
+
+Three loading approaches were considered:
+
+1. **Keep one blocking combined catalog and rely on the session cache.** Rejected. The first visit remains slow, cache work is repeated across sessions, and a remote failure prevents Local tables from rendering even though Local owns selection.
+2. **Render Local, then perform remote enrichment in the same Livewire component with a shared stale snapshot.** Recommended. It gives immediate useful UI, keeps remote state endpoint-scoped, preserves simple request/error handling, and avoids introducing a job protocol solely to load one screen.
+3. **Queue every remote refresh and poll for completion.** Operationally isolated but premature. It adds durable job state, worker dependency, polling, and cancellation concerns before a separate post-render request has been measured as harmful.
+
+The catalog never treats cached remote state as review evidence. The exact selected-table review still performs fresh endpoint checks immediately before mutation. This keeps the display fast without creating a stale-write safety gap.
+
 ### Do not fabricate history for the completed 43-table push
 
 The existing `sbg_` push predates the ledger. Its 43 schemas and row counts were verified after completion, but the system did not persist an operation identity at mutation time. After Phase 1, an authorized **Capture baseline observation** action may record current fingerprints and counts as a clearly labelled retrospective baseline with the actor and time of observation. It must not be presented as the original push or infer an original user from nearby logs.
@@ -103,6 +125,15 @@ The existing `sbg_` push predates the ledger. Its 43 schemas and row counts were
 - Schema fingerprints are endpoint observations tied to the run. Portable verified content hashes are retained only when actually computed and verified.
 - Failed and indeterminate runs remain visible but never replace the latest successful catalog projection.
 
+### Catalog loading
+
+- Local rows render without a configured or reachable remote endpoint and remain searchable/selectable while remote enrichment is pending.
+- The picker is Local-registry-driven; remote-only ownership cannot introduce executable tables into this checkout.
+- Persisted observations and shared last-known remote state render immediately with explicit observation times.
+- Automatic remote enrichment runs separately and updates only remote fields. Failure preserves Local rows and last-known observations while showing an honest remote error.
+- Remote enrichment does not count all tables. Explicit baseline/observation and completed operations own durable counts.
+- Review and execution do not trust cached remote state; they freshly inspect the exact selection.
+
 ### Freshness generations
 
 - Only ordinary mirror-eligible registered PostgreSQL tables receive tracking triggers. Audit, schedule, registry, mirror ledger, observation, and generation infrastructure are always protected and excluded.
@@ -124,19 +155,24 @@ The existing `sbg_` push predates the ledger. Its 43 schemas and row counts were
 
 Affected pages: `/admin/system/data-share#mirror`, `/admin/audit/actions`
 
-Goal: A completed or interrupted mirror operation remains understandable after refresh, and the main catalog shows the latest successful endpoint observations.
+Goal: Local tables appear immediately on first visit, remote state fills in independently, and a completed or interrupted mirror operation remains understandable after refresh with persistent endpoint observations in the main catalog.
 
+- [ ] Split `DataShareMirrorCatalog` into an immediate Local registry catalog and exact remote enrichment so Local rendering has no provider-status or remote-snapshot dependency.
+- [ ] Replace the session-only combined snapshot with a shared endpoint-scoped stale-while-revalidate remote snapshot carrying an observation time and explicit invalidation when the configured endpoint changes.
+- [ ] Render Local rows and persisted observations on mount, start remote enrichment as a separate request when needed, and preserve Local rows plus last-known remote state on timeout or failure.
+- [ ] Keep search, filtering, and selection responsive while enrichment runs; disable only actions whose fresh selected-table review is actively running rather than the entire catalog.
 - [ ] Add incubating Base Database storage for mirror runs, per-table summaries, and current endpoint-scoped observations, with protected-table registration and indexes for endpoint, status, actor, trace, and time.
 - [ ] Keep mirror bookkeeping out of global mutation audit while using the Foundation semantic action contract for one retained terminal action per operation.
 - [ ] Consolidate normal push, force push, and pull under one locked execution lifecycle with fresh in-lock review and strict succeeded, failed, indeterminate, and stale-running semantics.
 - [ ] Persist planned table summaries before engine mutation and finalize observations without holding a Local transaction across external transfer work.
 - [ ] Record nullable, timestamped row counts and schema fingerprints without overstating native count equality as transfer verification.
 - [ ] Merge current observations into every catalog render independently of the remote catalog session cache and isolate observations by stable endpoint IDs.
-- [ ] Add persistent catalog columns and a bounded operation History UI with actor, direction, force status, endpoint, result, timing, aggregates, and per-table details.
+- [ ] Add persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** catalog columns plus a bounded operation History UI with actor, direction, force status, endpoint, result, timing, aggregates, and per-table details.
+- [ ] Replace the transient post-operation table with an in-place catalog projection update, compact completion summary, and durable run link.
 - [ ] Add an explicit baseline-observation workflow that labels the existing 43-table state as retrospective rather than inventing a historical push.
-- [ ] Cover browser and CLI attribution, normal and force push, pull, pre-mutation failure, indeterminate `psql`, portable rollback, stale-run reconciliation, endpoint replacement, Local finalization failure, audit projection failure, and cache refresh behavior.
+- [ ] Cover first uncached visit, shared cached visit, stale refresh, remote timeout/failure, endpoint replacement, browser and CLI attribution, normal and force push, pull, pre-mutation failure, indeterminate `psql`, portable rollback, stale-run reconciliation, Local finalization failure, audit projection failure, and cache refresh behavior.
 
-Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integration; portable integration; browser verification of refresh, endpoint switch, baseline, and Audit Action link; credential redaction assertions; Pint and UI convention scan.
+Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integration; portable integration; browser timing proof that Local rows render before delayed remote enrichment; browser verification of refresh, endpoint switch, baseline, and Audit Action link; credential redaction assertions; Pint and UI convention scan.
 
 ### Phase 2 — PostgreSQL freshness proof gate
 
