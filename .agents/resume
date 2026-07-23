@@ -7,14 +7,21 @@ readonly PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # The orb uses the Supabase primary database (pgsql) for persistent development
-# data, with file-backed Laravel stores for cache/sessions/queues. There are no
-# external services to reconnect. Repair only the writable runtime paths that
-# may be removed by test cleanup or an interrupted command.
+# data, with file-backed Laravel stores for cache/sessions/queues.
+# Repair writable runtime paths that may be removed by test cleanup or an
+# interrupted command.
 mkdir -p \
     storage/framework/cache/data \
     storage/framework/sessions \
     storage/framework/testing \
     storage/framework/views \
     storage/logs
+
+# Ensure the Octane worker stub exists (gitignored, may be absent after resume).
+cp -- vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php \
+      public/frankenphp-worker.php 2>/dev/null || true
+
+# Restart the web service if it was stopped or lost during pause/resume.
+amp orb services ensure 2>/dev/null || true
 
 echo 'Orb runtime paths are ready.'

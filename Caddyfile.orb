@@ -1,0 +1,37 @@
+# Orb Caddyfile — used by scripts/orb-serve.sh when the app is exposed through
+# an Amp orb portal. The portal provides public HTTPS; this config serves
+# plain HTTP on $PORT and matches any Host header (the portal's public host).
+#
+# Differences from the project Caddyfile:
+#   - Single catch-all site block (:{$PORT}) instead of domain-specific blocks
+#   - No TLS directive (portal terminates TLS)
+#   - No Vite proxying (orb serves pre-built assets via bun run build)
+#   - Keeps the upload-limit php_ini directives from the project Caddyfile
+
+{
+	servers {
+		protocols h1 h2 h3
+	}
+
+	frankenphp {
+		php_ini upload_max_filesize 12M
+		php_ini post_max_size 130M
+
+		worker {
+			file {$APP_PUBLIC_PATH}/frankenphp-worker.php
+		}
+	}
+
+	admin 127.0.0.1:{$CADDY_SERVER_ADMIN_PORT:2020}
+}
+
+:{$PORT:8000} {
+	bind 127.0.0.1
+
+	encode zstd gzip
+
+	handle {
+		root * public
+		php_server
+	}
+}

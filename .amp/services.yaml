@@ -1,0 +1,6 @@
+services:
+  web:
+    command: bash scripts/orb-serve.sh
+    portal:
+      title: Belimbing
+      description: Use ai@agent.my / password to log in.
