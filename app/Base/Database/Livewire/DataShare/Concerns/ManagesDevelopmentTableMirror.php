@@ -28,6 +28,9 @@ trait ManagesDevelopmentTableMirror
 
     public bool $mirrorCatalogLoaded = false;
 
+    /** True after Local rows render, until the separate remote enrichment runs. */
+    public bool $mirrorRemotePending = false;
+
     public string $mirrorModulePath = '';
 
     public string $mirrorSearch = '';
@@ -58,41 +61,20 @@ trait ManagesDevelopmentTableMirror
         $this->mirrorReview = null;
 
         if (! $force && $this->restoreMirrorCatalogSnapshot($mirror)) {
+            $this->mirrorRemotePending = false;
+
             return;
         }
 
         session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
 
+        // Local-first: render the Local registry immediately with no remote call.
+        // Remote presence, counts, and freshness arrive from enrichMirrorRemote(),
+        // which the view fires as a separate request after the first paint.
         try {
-            $status = $mirror->status()->toArray();
-            $this->mirrorConnectionStatus = $this->normalizeMirrorStatus($status);
-
-            if (! ($this->mirrorConnectionStatus['available'] ?? false)) {
-                $this->mirrorTables = [];
-
-                return;
-            }
-
-            $this->mirrorTables = collect($mirror->catalog())
-                ->reject(fn (DataShareMirrorCatalogTable $table): bool => $this->isPermanentlyProtectedTable($table))
-                ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
-                ->sortBy([
-                    ['module_name', 'asc'],
-                    ['table', 'asc'],
-                ], SORT_NATURAL | SORT_FLAG_CASE)
-                ->values()
-                ->all();
-            $this->storeMirrorCatalogSnapshot($mirror);
-
-        } catch (DataShareMirrorException $exception) {
-            $this->mirrorConnectionStatus = [
-                'configured' => true,
-                'available' => false,
-                'reachable' => false,
-                'reason_code' => $exception->reasonCode,
-                'message' => $exception->getMessage(),
-            ];
-            $this->mirrorTables = [];
+            $this->mirrorTables = $this->mapMirrorTables($mirror->localCatalog());
+            $this->mirrorConnectionStatus = ['configured' => true, 'available' => false, 'reachable' => false, 'remote_pending' => true];
+            $this->mirrorRemotePending = true;
         } catch (Throwable $exception) {
             $failure = DataShareMirrorException::unexpected('catalog', $exception);
             $this->mirrorConnectionStatus = [
@@ -103,7 +85,67 @@ trait ManagesDevelopmentTableMirror
                 'message' => $failure->getMessage(),
             ];
             $this->mirrorTables = [];
+            $this->mirrorRemotePending = false;
         }
+    }
+
+    /**
+     * Separate post-render request that fills in remote presence, counts, and
+     * freshness. A remote failure keeps the Local rows and last-known state and
+     * reports the remote columns as unavailable — it never empties Local results.
+     */
+    public function enrichMirrorRemote(DataShareMirrorManager $mirror): void
+    {
+        if (! $this->mirrorRemotePending) {
+            return;
+        }
+
+        $this->mirrorRemotePending = false;
+
+        try {
+            $this->mirrorConnectionStatus = $this->normalizeMirrorStatus($mirror->status()->toArray());
+
+            if (! ($this->mirrorConnectionStatus['available'] ?? false)) {
+                return; // remote unavailable — keep the Local rows already rendered
+            }
+
+            $this->mirrorTables = $this->mapMirrorTables($mirror->catalog());
+            $this->storeMirrorCatalogSnapshot($mirror);
+        } catch (DataShareMirrorException $exception) {
+            $this->mirrorConnectionStatus = [
+                'configured' => true,
+                'available' => false,
+                'reachable' => false,
+                'reason_code' => $exception->reasonCode,
+                'message' => $exception->getMessage(),
+            ];
+        } catch (Throwable $exception) {
+            $failure = DataShareMirrorException::unexpected('catalog', $exception);
+            $this->mirrorConnectionStatus = [
+                'configured' => false,
+                'available' => false,
+                'reachable' => false,
+                'reason_code' => $failure->reasonCode,
+                'message' => $failure->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * @param  list<DataShareMirrorCatalogTable>  $tables
+     * @return list<array<string, mixed>>
+     */
+    private function mapMirrorTables(array $tables): array
+    {
+        return collect($tables)
+            ->reject(fn (DataShareMirrorCatalogTable $table): bool => $this->isPermanentlyProtectedTable($table))
+            ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
+            ->sortBy([
+                ['module_name', 'asc'],
+                ['table', 'asc'],
+            ], SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
     }
 
     public function selectAllVisibleMirrorTables(): void
@@ -253,7 +295,10 @@ trait ManagesDevelopmentTableMirror
 
         try {
             $this->mirrorResult = $this->normalizeMirrorResult(
-                $mirror->forcePush($this->mirrorSelectedTables)->toArray(),
+                $mirror->forcePush(
+                    $this->mirrorSelectedTables,
+                    (string) ($this->mirrorReview['state_token'] ?? ''),
+                )->toArray(),
             );
             $this->mirrorReview = null;
             session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
@@ -278,6 +323,38 @@ trait ManagesDevelopmentTableMirror
             $this->mirrorResult = null;
             $this->mirrorReview = null;
             $this->setStatus(DataShareMirrorException::unexpected('force_push', $exception, outcomeIndeterminate: true)->getMessage(), 'danger');
+        }
+    }
+
+    /**
+     * Record the current Local/remote counts for the exact selection as a
+     * labelled retrospective baseline (e.g. for the completed 43-table push that
+     * predates the ledger). It is an observation, never presented as a push.
+     */
+    public function captureMirrorBaseline(DataShareMirrorManager $mirror): void
+    {
+        $this->requireCapability('admin.system.data-share-mirror.execute');
+        $this->extendMirrorRequestTimeLimit();
+        $this->validateMirrorSelection('push');
+
+        try {
+            $mirror->captureBaseline($this->mirrorSelectedTables);
+            $this->setStatus(
+                __('Captured a retrospective baseline observation for :count table(s). It is labelled an observation, not an original push.', [
+                    'count' => count($this->mirrorSelectedTables),
+                ]),
+                'success',
+            );
+
+            $this->mirrorTables = collect($mirror->catalog())
+                ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
+                ->sortBy([['module_name', 'asc'], ['table', 'asc']], SORT_NATURAL | SORT_FLAG_CASE)
+                ->values()
+                ->all();
+        } catch (DataShareMirrorException $exception) {
+            $this->setStatus($exception->getMessage(), 'danger');
+        } catch (Throwable $exception) {
+            $this->setStatus(DataShareMirrorException::unexpected('capture_baseline', $exception)->getMessage(), 'danger');
         }
     }
 

@@ -4,6 +4,7 @@ namespace App\Base\Database;
 
 use App\Base\Database\Console\Commands\ApplyDataSharePackageCommand;
 use App\Base\Database\Console\Commands\ApproveIncubatingMigrationCommand;
+use App\Base\Database\Console\Commands\AttachFreshnessTrackingCommand;
 use App\Base\Database\Console\Commands\BackupCommand;
 use App\Base\Database\Console\Commands\DataShareScopesCommand;
 use App\Base\Database\Console\Commands\ExportDataSharePackageCommand;
@@ -15,6 +16,7 @@ use App\Base\Database\Console\Commands\MigrateCommand;
 use App\Base\Database\Console\Commands\MirrorTablesCommand;
 use App\Base\Database\Console\Commands\PlanDataSharePackageCommand;
 use App\Base\Database\Console\Commands\PruneDataSharePackagesCommand;
+use App\Base\Database\Console\Commands\ReconcileDataOperationsCommand;
 use App\Base\Database\Console\Commands\RefreshCommand;
 use App\Base\Database\Console\Commands\RekeyCommand;
 use App\Base\Database\Console\Commands\ResetCommand;
@@ -32,6 +34,7 @@ use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
+use App\Base\Database\Services\DataOperation\LedgerDataOperationRecorder;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorEngineRegistry;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorProviderRegistry;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorTableImageEngine;
@@ -43,6 +46,7 @@ use App\Base\Database\Services\DevelopmentInstanceGuard;
 use App\Base\Database\Services\DevelopmentSanitizer;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
+use App\Base\Foundation\Contracts\DataOperationRecorder;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Console\Migrations\FreshCommand as LaravelFreshCommand;
@@ -67,6 +71,9 @@ class ServiceProvider extends BaseServiceProvider
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
         $this->app->bind(DataShareMirrorProcessRunner::class, SymfonyDataShareMirrorProcessRunner::class);
+
+        // Override Foundation's Null recorder with the real ledger recorder.
+        $this->app->bind(DataOperationRecorder::class, LedgerDataOperationRecorder::class);
         $this->app->tag([
             PortableDataShareMirrorEngine::class,
             DataShareMirrorTableImageEngine::class,
@@ -142,6 +149,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->commands([
             ApproveIncubatingMigrationCommand::class,
             ApplyDataSharePackageCommand::class,
+            AttachFreshnessTrackingCommand::class,
+            ReconcileDataOperationsCommand::class,
             BackupCommand::class,
             DataShareScopesCommand::class,
             ExportDataSharePackageCommand::class,

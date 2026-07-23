@@ -4,8 +4,12 @@ namespace App\Base\Database\Services\DataShare\Mirror;
 
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
+use App\Base\Database\Enums\DataFreshnessState;
+use App\Base\Database\Models\DataShareMirrorObservation;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Services\DataShare\Freshness\DataFreshnessTracker;
 use Illuminate\Database\Connection;
+use Illuminate\Support\Facades\Schema;
 
 class DataShareMirrorCatalog
 {
@@ -17,20 +21,55 @@ class DataShareMirrorCatalog
         'base_database_data_share_plan_actions',
         'base_database_data_share_receipts',
         'base_database_data_share_transfer_offers',
+        'base_database_data_operation_runs',
+        'base_database_data_operation_tables',
+        'base_database_data_share_observations',
+        'base_database_data_freshness_events',
     ];
 
     public function __construct(private readonly DataShareMirrorConnectionManager $connections) {}
 
-    /** @return list<DataShareMirrorCatalogTable> */
+    /**
+     * Enriched catalog: Local registry rows plus best-effort remote presence.
+     * If the remote is unreachable the Local rows stay usable and remote columns
+     * report unavailable rather than falsely missing.
+     *
+     * @return list<DataShareMirrorCatalogTable>
+     */
     public function catalog(): array
     {
-        $this->connections->assertAvailable();
         $local = $this->snapshot($this->connections->local());
-        $mirror = $this->snapshot($this->connections->mirror());
-        $names = array_values(array_unique(array_merge(
-            array_keys($local['registry']),
-            array_keys($mirror['registry']),
-        )));
+        [$mirror, $remoteAvailable] = $this->remoteSnapshot();
+
+        return $this->buildRows($local, $mirror, $remoteAvailable);
+    }
+
+    /**
+     * Local-first catalog, built from the Local registry alone with NO remote
+     * call, so it renders immediately. Remote presence, counts, and freshness are
+     * filled in by a separate {@see catalog()} enrichment request after render.
+     *
+     * @return list<DataShareMirrorCatalogTable>
+     */
+    public function localCatalog(): array
+    {
+        $local = $this->snapshot($this->connections->local());
+
+        return $this->buildRows($local, ['registry' => [], 'relations' => []], false);
+    }
+
+    /**
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>}  $local
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>}  $mirror
+     * @return list<DataShareMirrorCatalogTable>
+     */
+    private function buildRows(array $local, array $mirror, bool $remoteAvailable): array
+    {
+        $remoteLabel = $this->safeRemoteLabel();
+        // The picker is Local-registry-driven: application code and Local migration
+        // ownership must exist before a table can be pulled, so remote-only registry
+        // entries never expand the checkout.
+        $names = array_keys($local['registry']);
         sort($names, SORT_STRING);
         $tables = [];
 
@@ -73,7 +112,7 @@ class DataShareMirrorCatalog
                 );
             }
 
-            foreach ([[__('Local'), $localRelation], [$this->connections->provider()->connectionLabel(), $mirrorRelation]] as [$label, $relation]) {
+            foreach ([[__('Local'), $localRelation], [$remoteLabel, $mirrorRelation]] as [$label, $relation]) {
                 if ($relation !== null && $relation['kind'] !== 'table') {
                     $blockers[] = new DataShareMirrorBlocker(
                         'unsupported_relation',
@@ -97,10 +136,74 @@ class DataShareMirrorCatalog
                 mirrorKind: $mirrorRelation['kind'] ?? null,
                 supported: $blockers === [],
                 blockers: $blockers,
+                remoteAvailable: $remoteAvailable,
             );
         }
 
         return $tables;
+    }
+
+    /**
+     * Best-effort remote snapshot. Returns an empty snapshot and false when the
+     * remote endpoint is unreachable, so the Local catalog still renders.
+     *
+     * @return array{0: array{registry: array<string, array{module_name: string|null, module_path: string|null, migration_file: string|null}>, relations: array<string, array{kind: string}>}, 1: bool}
+     */
+    private function remoteSnapshot(): array
+    {
+        try {
+            return [$this->snapshot($this->connections->mirror()), true];
+        } catch (\Throwable) {
+            return [['registry' => [], 'relations' => []], false];
+        }
+    }
+
+    private function safeRemoteLabel(): string
+    {
+        try {
+            return $this->connections->provider()->connectionLabel();
+        } catch (\Throwable) {
+            return __('remote');
+        }
+    }
+
+    /**
+     * Merge the persisted last-observed counts for the given endpoint pair into
+     * catalog rows, so Local/Remote/Observed render on every request. Missing
+     * observations leave a row unchanged; the projection is isolated by endpoint.
+     *
+     * @param  list<DataShareMirrorCatalogTable>  $tables
+     * @return list<DataShareMirrorCatalogTable>
+     */
+    public function mergeObservations(array $tables, string $localInstanceId, string $remoteInstanceId): array
+    {
+        if ($tables === [] || ! Schema::hasTable('base_database_data_share_observations')) {
+            return $tables;
+        }
+
+        $observations = DataShareMirrorObservation::query()
+            ->where('local_instance_id', $localInstanceId)
+            ->where('remote_instance_id', $remoteInstanceId)
+            ->get()
+            ->keyBy('table_name');
+
+        $tracker = app(DataFreshnessTracker::class);
+        $driverTracks = $tracker->driverSupportsTracking();
+
+        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks): DataShareMirrorCatalogTable {
+            $observation = $observations->get($table->table);
+
+            $freshness = $driverTracks
+                ? $tracker->state($table->table, $observation?->acknowledged_generation)->value
+                : DataFreshnessState::Unknown->value;
+
+            return $table->withObservation(
+                $observation?->local_rows,
+                $observation?->remote_rows,
+                $observation?->observed_at?->toIso8601String(),
+                $freshness,
+            );
+        }, $tables);
     }
 
     public function isMigrationAvailable(DataShareMirrorCatalogTable $table): bool

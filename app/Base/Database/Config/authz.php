@@ -30,5 +30,8 @@ return [
         'admin.system.data-share-apply.execute',
         'admin.system.data-share-mirror.execute',
         'admin.system.data-share-settings.manage',
+
+        // Central data operations history (admin/system/data-operations).
+        'admin.system.data-operations.view',
     ],
 ];

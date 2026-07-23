@@ -96,32 +96,42 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 </x-ui.button>
             </div>
         </x-ui.alert>
-    @elseif(! $mirrorAvailable)
-        <x-ui.alert :variant="($mirrorConnectionStatus['configured'] ?? false) ? 'warning' : 'info'">
-            <p class="font-medium">{{ __('Development mirror unavailable') }}</p>
-            <p class="mt-1">{{ $mirrorConnectionStatus['message'] ?? __('Save and test a development PostgreSQL connection before mirroring tables.') }}</p>
-            @if($canManageSettings)
-                <div class="mt-3">
-                    <x-ui.link :href="route('admin.system.data-share.settings').'#data_share_mirror'">
-                        {{ __('Open mirror settings') }}
-                    </x-ui.link>
-                </div>
-            @endif
-        </x-ui.alert>
     @else
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
-            <span class="inline-flex items-center gap-1.5">
-                <span class="h-2 w-2 rounded-full bg-status-success" aria-hidden="true"></span>
-                {{ __(':provider reachable', ['provider' => $mirrorProviderLabel]) }}
-            </span>
-            @if($mirrorConnectionStatus['server_version'] ?? null)
-                <span>{{ __('PostgreSQL :version', ['version' => $mirrorConnectionStatus['server_version']]) }}</span>
-            @endif
-            <span>{{ __('Local and remote roles: development') }}</span>
-            <x-ui.badge variant="info">
-                {{ $mirrorTransferMode === 'portable' ? __('Portable data mode') : __('Native PostgreSQL mode') }}
-            </x-ui.badge>
-        </div>
+        {{-- Local rows are already rendered below. Remote enrichment runs as a
+             separate request fired after this paints (Alpine x-init on DOM insert),
+             so remote presence, counts, and freshness fill in without blocking. --}}
+        @if($mirrorRemotePending)
+            <div wire:key="mirror-remote-enrich" x-init="$wire.enrichMirrorRemote()" class="flex items-center gap-1.5 text-xs text-muted">
+                <span class="h-2 w-2 animate-pulse rounded-full bg-status-info" aria-hidden="true"></span>
+                {{ __('Local tables ready — checking :provider…', ['provider' => $mirrorProviderLabel]) }}
+            </div>
+        @elseif(! $mirrorAvailable)
+            <x-ui.alert :variant="($mirrorConnectionStatus['configured'] ?? false) ? 'warning' : 'info'">
+                <p class="font-medium">{{ __('Remote endpoint unavailable') }}</p>
+                <p class="mt-1">{{ $mirrorConnectionStatus['message'] ?? __('Local tables are shown below; remote columns stay unavailable until the connection is reachable.') }}</p>
+                @if($canManageSettings)
+                    <div class="mt-3">
+                        <x-ui.link :href="route('admin.system.data-share.settings').'#data_share_mirror'">
+                            {{ __('Open mirror settings') }}
+                        </x-ui.link>
+                    </div>
+                @endif
+            </x-ui.alert>
+        @else
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
+                <span class="inline-flex items-center gap-1.5">
+                    <span class="h-2 w-2 rounded-full bg-status-success" aria-hidden="true"></span>
+                    {{ __(':provider reachable', ['provider' => $mirrorProviderLabel]) }}
+                </span>
+                @if($mirrorConnectionStatus['server_version'] ?? null)
+                    <span>{{ __('PostgreSQL :version', ['version' => $mirrorConnectionStatus['server_version']]) }}</span>
+                @endif
+                <span>{{ __('Local and remote roles: development') }}</span>
+                <x-ui.badge variant="info">
+                    {{ $mirrorTransferMode === 'portable' ? __('Portable data mode') : __('Native PostgreSQL mode') }}
+                </x-ui.badge>
+            </div>
+        @endif
 
         @if($mirrorTables === [])
             <div class="py-8 text-center">
@@ -183,7 +193,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 :caption="__('Development mirror table picker')"
                 container="plain"
                 :empty="$visibleMirrorTables->isEmpty()"
-                :empty-colspan="5"
+                :empty-colspan="9"
                 :empty-message="__('No tables match this filter. Your explicit selection is unchanged.')"
                 size="xs"
             >
@@ -194,6 +204,10 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         <x-ui.th>{{ __('Module') }}</x-ui.th>
                         <x-ui.th>{{ __('Local') }}</x-ui.th>
                         <x-ui.th>{{ $mirrorProviderLabel }}</x-ui.th>
+                        <x-ui.th class="text-right">{{ __('Local rows') }}</x-ui.th>
+                        <x-ui.th class="text-right">{{ __('Remote rows') }}</x-ui.th>
+                        <x-ui.th>{{ __('Observed') }}</x-ui.th>
+                        <x-ui.th>{{ __('Freshness') }}</x-ui.th>
                     </tr>
                 </x-slot>
                 <x-slot name="body">
@@ -235,8 +249,27 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                                 </x-ui.badge>
                             </td>
                             <td class="px-table-cell-x py-table-cell-y align-top">
-                                <x-ui.badge :variant="($table['mirror_exists'] ?? false) ? 'success' : 'default'">
-                                    {{ ($table['mirror_exists'] ?? false) ? __('Present') : __('Missing') }}
+                                @if (($table['remote_available'] ?? true) === false)
+                                    <x-ui.badge variant="warning">{{ __('Unavailable') }}</x-ui.badge>
+                                @else
+                                    <x-ui.badge :variant="($table['mirror_exists'] ?? false) ? 'success' : 'default'">
+                                        {{ ($table['mirror_exists'] ?? false) ? __('Present') : __('Missing') }}
+                                    </x-ui.badge>
+                                @endif
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-right tabular-nums text-ink">
+                                {{ isset($table['local_rows']) ? number_format($table['local_rows']) : '—' }}
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-right tabular-nums text-ink">
+                                {{ (($table['remote_available'] ?? true) && isset($table['remote_rows'])) ? number_format($table['remote_rows']) : '—' }}
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top text-xs text-muted">
+                                {{ ($table['observed_at'] ?? null) ? \Illuminate\Support\Carbon::parse($table['observed_at'])->diffForHumans() : '—' }}
+                            </td>
+                            <td class="px-table-cell-x py-table-cell-y align-top">
+                                @php $freshness = $table['freshness'] ?? 'unknown'; @endphp
+                                <x-ui.badge :variant="match($freshness) { 'clean' => 'success', 'changed' => 'warning', default => 'default' }">
+                                    {{ match($freshness) { 'clean' => __('Clean'), 'changed' => __('Changed since push'), default => __('Unknown') } }}
                                 </x-ui.badge>
                             </td>
                         </tr>
@@ -247,6 +280,23 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
             @error('mirrorSelectedTables')
                 <x-ui.alert variant="danger">{{ $message }}</x-ui.alert>
             @enderror
+
+            @if(count($mirrorSelectedTables) > 0)
+                <div class="mt-3 flex flex-wrap items-center gap-3">
+                    <x-ui.button
+                        variant="control"
+                        size="sm"
+                        wire:click="captureMirrorBaseline"
+                        wire:confirm="{{ __('Record the current Local and remote row counts for the selected tables as a labelled retrospective baseline? This changes no data and is not a push.') }}"
+                        wire:loading.attr="disabled"
+                        wire:target="captureMirrorBaseline"
+                    >
+                        <span wire:loading.remove wire:target="captureMirrorBaseline">{{ __('Capture baseline observation') }}</span>
+                        <span wire:loading wire:target="captureMirrorBaseline">{{ __('Observing…') }}</span>
+                    </x-ui.button>
+                    <span class="text-xs text-muted">{{ __('Records current counts as a labelled observation for the selected tables — never presented as an original push.') }}</span>
+                </div>
+            @endif
 
             <div class="flex flex-col gap-3 border-t border-border-default pt-4 lg:flex-row lg:items-center lg:justify-between">
                 <p class="max-w-2xl text-xs leading-5 text-muted">
@@ -396,32 +446,14 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 'replaced' => $replacedCount,
                 'deleted' => $deletedCount,
             ]) }}</p>
+            @if(! empty($mirrorResult['run_id']))
+                <p class="mt-2">
+                    <a href="{{ route('admin.system.data-operations.index', ['run' => $mirrorResult['run_id']]) }}" class="text-sm font-medium text-accent underline">
+                        {{ __('View durable run #:id in Data Operations', ['id' => $mirrorResult['run_id']]) }}
+                    </a>
+                </p>
+            @endif
+            <p class="mt-1 text-xs text-muted">{{ __('The Local and remote counts now persist in the catalog above and survive refresh; the full per-table record lives in its durable run.') }}</p>
         </x-ui.alert>
-        <x-ui.table :caption="__('Mirror row counts after the completed operation')" size="xs" container="plain">
-            <x-slot name="head">
-                <tr>
-                    <x-ui.th>{{ __('Table') }}</x-ui.th>
-                    <x-ui.th>{{ __('Action') }}</x-ui.th>
-                    <x-ui.th class="text-right">{{ __('Local rows') }}</x-ui.th>
-                    <x-ui.th class="text-right">{{ __('Remote rows') }}</x-ui.th>
-                </tr>
-            </x-slot>
-            <x-slot name="body">
-                @foreach((array) ($mirrorResult['items'] ?? []) as $item)
-                    <tr wire:key="mirror-result-{{ $item['table'] }}">
-                        <td class="px-table-cell-x py-table-cell-y font-mono text-xs text-ink">{{ $item['table'] }}</td>
-                        <td class="px-table-cell-x py-table-cell-y">
-                            <x-ui.badge :variant="$mirrorActionVariant($item['action'])">{{ __(ucfirst($item['action'])) }}</x-ui.badge>
-                        </td>
-                        <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">
-                            {{ array_key_exists('local_rows', $item) ? number_format((int) $item['local_rows']) : '—' }}
-                        </td>
-                        <td class="px-table-cell-x py-table-cell-y text-right tabular-nums text-ink">
-                            {{ array_key_exists('remote_rows', $item) ? number_format((int) $item['remote_rows']) : '—' }}
-                        </td>
-                    </tr>
-                @endforeach
-            </x-slot>
-        </x-ui.table>
     @endif
 </div>

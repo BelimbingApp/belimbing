@@ -126,8 +126,8 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
-    $manager->shouldReceive('configurationFingerprint')->times(3)->andReturn('saved-mirror-fingerprint');
-    $manager->shouldReceive('status')->twice()->andReturn(new DataShareMirrorConnectionStatus(
+    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
+    $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
         reachable: true,
@@ -144,27 +144,22 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
         localDriver: 'pgsql',
         transferMode: 'portable',
     ));
-    $manager->shouldReceive('catalog')->twice()->andReturn([
-        new DataShareMirrorCatalogTable(
-            'ham_orders',
-            'Ham',
-            'blb/ham',
-            null,
-            true,
-            true,
-            'table',
-            'table',
-            true,
-        ),
-    ]);
+    $hamRows = [new DataShareMirrorCatalogTable('ham_orders', 'Ham', 'blb/ham', null, true, true, 'table', 'table', true)];
+    // Local-first: localCatalog() renders immediately; catalog() enriches after.
+    $manager->shouldReceive('localCatalog')->zeroOrMoreTimes()->andReturn($hamRows);
+    $manager->shouldReceive('catalog')->zeroOrMoreTimes()->andReturn($hamRows);
     app()->instance(DataShareMirrorManager::class, $manager);
 
     Livewire::test(DataShareIndex::class)
         ->call('dataShareTabSelected', 'mirror')
         ->assertSet('mirrorCatalogLoaded', true)
+        ->assertSet('mirrorTables.0.table', 'ham_orders') // Local rows render before remote enrichment
+        ->assertSet('mirrorRemotePending', true)
+        ->call('enrichMirrorRemote')
+        ->assertSet('mirrorRemotePending', false)
         ->assertSet('mirrorTables.0.table', 'ham_orders');
 
-    Livewire::test(DataShareIndex::class)
+    Livewire::test(DataShareIndex::class) // reload serves the cached enriched snapshot
         ->assertSet('mirrorCatalogLoaded', true)
         ->assertSet('mirrorTables.0.table', 'ham_orders')
         ->call('refreshMirrorCatalog')
@@ -177,7 +172,7 @@ it('excludes permanently protected infrastructure tables from the mirror list', 
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
     $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
-    $manager->shouldReceive('status')->once()->andReturn(new DataShareMirrorConnectionStatus(
+    $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
         reachable: true,
@@ -196,7 +191,7 @@ it('excludes permanently protected infrastructure tables from the mirror list', 
     ));
     // Mirrors what DataShareMirrorCatalog::catalog() actually returns for a
     // protected table: unsupported, with a single protected_table blocker.
-    $manager->shouldReceive('catalog')->once()->andReturn([
+    $manager->shouldReceive('localCatalog')->zeroOrMoreTimes()->andReturn([
         new DataShareMirrorCatalogTable(
             'ham_orders', 'Ham', 'blb/ham', null, true, true, 'table', 'table', true,
         ),
@@ -323,7 +318,7 @@ it('offers destructive force push for schema blockers but never force pull', fun
         'blocked-schema-state',
     );
     $manager->shouldReceive('review')->once()->with('push', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Push));
-    $manager->shouldReceive('forcePush')->once()->with(['ham_orders'])->andReturn(new DataShareMirrorExecutionResult(
+    $manager->shouldReceive('forcePush')->once()->with(['ham_orders'], 'blocked-schema-state')->andReturn(new DataShareMirrorExecutionResult(
         DataShareMirrorDirection::Push,
         ['create' => 0, 'replace' => 1, 'delete' => 0],
         [['table' => 'ham_orders', 'action' => 'replace', 'local_rows' => 1234, 'remote_rows' => 1234]],
@@ -339,9 +334,9 @@ it('offers destructive force push for schema blockers but never force pull', fun
         ->call('forcePushMirror')
         ->assertSet('mirrorResult.counts.replace', 1)
         ->assertSet('statusVariant', 'success')
-        ->assertSee('Local rows')
-        ->assertSee('Remote rows')
-        ->assertSee('1,234');
+        // The transient per-table result table is gone; the counts now persist in
+        // the catalog columns and the durable run. A compact summary remains.
+        ->assertSee('Development table mirror completed');
 
     $component
         ->call('reviewMirror', 'pull')

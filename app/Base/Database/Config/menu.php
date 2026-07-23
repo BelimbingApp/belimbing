@@ -54,6 +54,13 @@ return [
             'admin.system.data-share.view',
         ),
         $databaseMenuItem(
+            'admin.system.data-operations',
+            'Data Operations',
+            'heroicon-o-clock',
+            'admin.system.data-operations.index',
+            'admin.system.data-operations.view',
+        ),
+        $databaseMenuItem(
             'admin.system.database-residue',
             'Database Residue',
             'heroicon-o-trash',

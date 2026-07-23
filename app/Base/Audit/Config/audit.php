@@ -1,5 +1,8 @@
 <?php
 
+use App\Base\Database\Models\DataOperationRun;
+use App\Base\Database\Models\DataOperationTableSummary;
+use App\Base\Database\Models\DataShareMirrorObservation;
 use App\Modules\Core\AI\Models\OperationDispatch;
 
 return [
@@ -71,6 +74,14 @@ return [
     */
     'exclude_models' => [
         OperationDispatch::class,
+        // Data operation ledger bookkeeping. Mass operations record one durable
+        // ledger run + a best-effort semantic action; their own writes must not
+        // flood the mutation audit (a 43-table op would otherwise emit dozens of
+        // irrelevant framework mutation rows). The freshness events table has no
+        // model and is never touched by Eloquent.
+        DataOperationRun::class,
+        DataOperationTableSummary::class,
+        DataShareMirrorObservation::class,
     ],
 
     /*
