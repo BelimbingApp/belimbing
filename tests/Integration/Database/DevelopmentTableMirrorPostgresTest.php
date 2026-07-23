@@ -156,6 +156,10 @@ it('rolls back every selected action and removes transfer material when restore 
 it('verifies selected table postconditions before committing the target transaction', function (): void {
     mirrorSeedAuthoritativeFixture(DB::connection(), DB::connection('data_share_mirror'));
     $target = DB::connection('data_share_mirror');
+    // Local-first seeds register create-targets on both endpoints. Remove EMPTY's
+    // destination registry row so restore must INSERT it — that is what the
+    // suppression trigger intercepts to prove postcondition checking.
+    $target->table('base_database_tables')->where('table_name', MIRROR_PG_EMPTY)->delete();
     $selectedBefore = mirrorSelectedDestinationFingerprint($target);
     $controlBefore = mirrorControlFingerprint($target);
 
@@ -603,12 +607,13 @@ function mirrorSeedAuthoritativeFixture(Connection $authority, Connection $desti
         INSERT INTO public.%3$s (id, marker) VALUES (1, 'destination-control');
         SQL, MIRROR_PG_PARENT, MIRROR_PG_LEGACY, MIRROR_PG_CONTROL));
 
-    foreach ([MIRROR_PG_PARENT, MIRROR_PG_CHILD, MIRROR_PG_EMPTY, MIRROR_PG_CONTROL] as $table) {
-        mirrorRegisterFixtureTable($authority, $table);
-    }
-
-    foreach ([MIRROR_PG_PARENT, MIRROR_PG_LEGACY, MIRROR_PG_CONTROL] as $table) {
-        mirrorRegisterFixtureTable($destination, $table);
+    // Local-first catalog: every selected table must be registered on Local even
+    // when its relation exists only on the remote (delete on push / create on pull).
+    $registered = [...MIRROR_PG_TABLES, MIRROR_PG_CONTROL];
+    foreach ([$authority, $destination] as $connection) {
+        foreach ($registered as $table) {
+            mirrorRegisterFixtureTable($connection, $table);
+        }
     }
 }
 
