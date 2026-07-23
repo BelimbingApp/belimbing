@@ -171,6 +171,52 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
         ->assertSet('mirrorTables.0.table', 'ham_orders');
 });
 
+it('excludes permanently protected infrastructure tables from the mirror list', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
+    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
+    $manager->shouldReceive('status')->once()->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: null,
+        message: 'Ready.',
+        providerKey: 'supabase',
+        providerLabel: 'Supabase',
+        localDriver: 'pgsql',
+        transferMode: 'portable',
+    ));
+    // Mirrors what DataShareMirrorCatalog::catalog() actually returns for a
+    // protected table: unsupported, with a single protected_table blocker.
+    $manager->shouldReceive('catalog')->once()->andReturn([
+        new DataShareMirrorCatalogTable(
+            'ham_orders', 'Ham', 'blb/ham', null, true, true, 'table', 'table', true,
+        ),
+        new DataShareMirrorCatalogTable(
+            'cache', null, null, null, true, true, 'table', 'table', false,
+            blockers: [new DataShareMirrorBlocker(
+                'protected_table',
+                'cache is Base infrastructure or runtime state and cannot be mirrored.',
+            )],
+        ),
+    ]);
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    $component = Livewire::test(DataShareIndex::class)
+        ->call('dataShareTabSelected', 'mirror')
+        ->assertDontSee('cache is Base infrastructure');
+
+    expect(collect($component->get('mirrorTables'))->pluck('table')->all())->toBe(['ham_orders']);
+});
+
 it('reviews an exact push payload before executing the same payload and state token', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());

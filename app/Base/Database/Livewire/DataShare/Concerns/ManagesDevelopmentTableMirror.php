@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Livewire\DataShare\Concerns;
 
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use Throwable;
@@ -73,6 +74,7 @@ trait ManagesDevelopmentTableMirror
             }
 
             $this->mirrorTables = collect($mirror->catalog())
+                ->reject(fn (DataShareMirrorCatalogTable $table): bool => $this->isPermanentlyProtectedTable($table))
                 ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
                 ->sortBy([
                     ['module_name', 'asc'],
@@ -397,6 +399,25 @@ trait ManagesDevelopmentTableMirror
     }
 
     /** @param array<string, mixed> $table @return array<string, mixed> */
+    /**
+     * Base infrastructure/runtime-state tables (cache, sessions, jobs, ...)
+     * always carry a protected_table blocker — DataShareMirrorCatalog treats
+     * them as permanently unmirrorable, never actionable. Excluding them here
+     * only affects this display list; DataShareMirrorReviewer re-derives the
+     * catalog fresh at review/execute time, so this cannot be used to smuggle
+     * a protected table through selection.
+     */
+    private function isPermanentlyProtectedTable(DataShareMirrorCatalogTable $table): bool
+    {
+        foreach ($table->blockers as $blocker) {
+            if ($blocker->code === 'protected_table') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private function normalizeMirrorTable(array $table): array
     {
         return [
