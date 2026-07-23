@@ -186,7 +186,7 @@ download_extension() {
     tmp_dir=$(mktemp -d)
     trap "rm -rf '$tmp_dir'" EXIT
 
-    if ! curl -fsSL "$download_url" -o "$tmp_dir/$archive_name"; then
+    if ! curl -fsSL --proto '=https' --proto-redir '=https' "$download_url" -o "$tmp_dir/$archive_name"; then
         echo -e "${RED}${CROSS_MARK} Failed to download sqlite-vec${NC}" >&2
         echo -e "  Check the URL: ${CYAN}$download_url${NC}" >&2
         return 1

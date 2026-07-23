@@ -140,7 +140,7 @@ install_bun() {
             else
                 # Use official installer
                 echo -e "${CYAN}Installing Bun via official installer...${NC}"
-                curl -fsSL https://bun.sh/install | bash || {
+                curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
                     echo -e "${RED}✗${NC} Failed to install Bun" >&2
                     return 1
                 }
@@ -149,7 +149,7 @@ install_bun() {
         linux|wsl2)
             # Use official installer
             echo -e "${CYAN}Installing Bun via official installer...${NC}"
-            curl -fsSL https://bun.sh/install | bash || {
+            curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
                 echo -e "${RED}✗${NC} Failed to install Bun" >&2
                 return 1
             }
@@ -244,14 +244,14 @@ upgrade_bun() {
                     return 1
                 }
             else
-                curl -fsSL https://bun.sh/install | bash || {
+                curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
                     echo -e "${RED}✗${NC} Failed to upgrade Bun" >&2
                     return 1
                 }
             fi
             ;;
         linux|wsl2)
-            curl -fsSL https://bun.sh/install | bash || {
+            curl -fsSL --proto '=https' --proto-redir '=https' https://bun.sh/install | bash || {
                 echo -e "${RED}✗${NC} Failed to upgrade Bun" >&2
                 return 1
             }
