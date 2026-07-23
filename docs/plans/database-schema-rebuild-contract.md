@@ -1,7 +1,7 @@
 # Database Schema Rebuild Contract
 
 **Status:** Complete
-**Last Updated:** 2026-06-20
+**Last Updated:** 2026-07-23
 **Sources:** `AGENTS.md`, `docs/architecture/database.md`, `app/Base/Database/AGENTS.md`, `app/Base/Database/Console/Commands/FreshCommand.php`, `app/Base/Database/Console/Commands/MigrateCommand.php`, `app/Base/Database/Models/TableRegistry.php`, `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, 2026-05-24 schema workflow discussion
 **Agents:** {codex/gpt-5}, {amp}
 
@@ -202,7 +202,7 @@ Goal: avoid unsafe partial rebuilds.
 - [x] Verify PostgreSQL behavior around dependent ordering and cyclic foreign-key fallback. {amp}
 - [x] Skip MySQL behavior verification after PostgreSQL/SQLite coverage because local MySQL access is unavailable and project owner accepted the residual risk. {amp}
 
-Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` covers direct dependent-table cascade, the multi-table dependent-migration rerun unit, and mutually-referencing table drops on the SQLite-backed test database. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass; the test file now shares the `writeIncubatingTestMigration` helper and cleans all known test tables in `afterEach` so setup failures cannot leak. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL was verified manually against a disposable schema in the local `postgres` database: dependent-first drops succeeded, and one `DROP TABLE IF EXISTS widget, cycle` dropped a mutual FK cycle. MySQL verification was explicitly skipped because the local listener rejected passwordless/root/current-user access, Docker was unavailable, and the project owner accepted completing the plan without it.
+Evidence: `tests/Feature/Database/IncubatingSchemaPreflightTest.php` proves that a stable dependency refuses the whole preflight without dropping tables or clearing migration records, while source-declared incubating dependents still rebuild as coherent multi-table migration units and mutually-referencing incubating tables still use the SQLite cycle fallback. The rebuild-scope fixpoint caches per-table foreign keys once per expansion so the iteration reuses metadata instead of re-querying every live table on each pass. Registry ownership is provenance, not permission to erase stable data or replay only a table's original create migration while omitting later forward migrations. Verified with `vendor/bin/pest tests/Feature/Database`. PostgreSQL was verified manually against a disposable schema in the local `postgres` database: dependent-first drops succeeded, and one `DROP TABLE IF EXISTS widget, cycle` dropped a mutual FK cycle. MySQL verification was explicitly skipped because the local listener rejected passwordless/root/current-user access, Docker was unavailable, and the project owner accepted completing the plan without it.
 
 ### Phase 6 - Pluggable module schema ordering
 

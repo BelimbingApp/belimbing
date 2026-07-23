@@ -229,12 +229,11 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      * Tables that must be dropped and rebuilt alongside the incubating set
      * because they hold foreign keys (directly or transitively) into it.
      *
-     * Rather than refusing to rebuild when a stable sibling depends on an
-     * incubating table, we cascade the rebuild: the dependent table is dropped
-     * and its migration record cleared so the subsequent `migrate` re-creates
-     * it. A dependent can only be rebuilt this way if its owning migration is
-     * known via the registry; if any dependent is not re-creatable, we fall
-     * back to the original hard error so data is never silently lost.
+     * The rebuild may cascade only through migrations that are also explicitly
+     * incubating in source. Stable or undeclared dependents stop the preflight
+     * before any table is dropped. Treating a registry entry as permission to
+     * rebuild would erase stable data and would rerun only the owning create
+     * migration, not later forward migrations that matured the table.
      *
      * @param  list<string>  $tablesToDrop
      * @param  list<string>  $migrationFiles
@@ -299,10 +298,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
         $rebuildable = $this->migrationFilesForTables($dependents);
         $unrebuildable = array_values(array_diff($dependents, array_keys($rebuildable)));
+        $nonIncubating = array_keys(array_filter(
+            $rebuildable,
+            fn (string $file): bool => ! $this->migrationFiles->fileIsIncubating($file),
+        ));
+        $blocked = array_values(array_unique(array_merge($unrebuildable, $nonIncubating)));
 
-        if ($unrebuildable !== []) {
-            throw IncubatingSchemaDependencyException::forStableDependents(
-                $this->dependenciesInto($unrebuildable, array_merge($tablesToDrop, $dependents), $foreignKeysByTable),
+        if ($blocked !== []) {
+            throw IncubatingSchemaDependencyException::forNonIncubatingDependents(
+                $this->dependenciesInto($blocked, array_merge($tablesToDrop, $dependents), $foreignKeysByTable),
             );
         }
 
