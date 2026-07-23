@@ -2,8 +2,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Concerns;
 
-use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Services\CompanyTimezoneResolver;
@@ -50,14 +49,13 @@ trait ManagesCompanyTimezone
             return null;
         }
 
-        $settings = app(SettingsService::class);
-        $scope = Scope::company($this->company->id);
+        $timezoneSettings = app(TimezoneSettings::class);
 
         if ($tz === '') {
-            $settings->forget('ui.timezone.default', $scope);
+            $timezoneSettings->forgetCompanyTimezone((int) $this->company->id);
             $this->dispatch('timezone-saved', timezone: '');
         } else {
-            $settings->set('ui.timezone.default', $tz, $scope);
+            $timezoneSettings->setCompanyTimezone((int) $this->company->id, $tz);
             $this->dispatch('timezone-saved', timezone: $tz);
         }
 

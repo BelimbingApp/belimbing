@@ -1,8 +1,8 @@
 <?php
+
 namespace App\Modules\Core\Company\Services;
 
-use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Geonames\Models\City;
@@ -18,7 +18,7 @@ use App\Modules\Core\Geonames\Models\City;
 final class CompanyTimezoneResolver
 {
     public function __construct(
-        private readonly SettingsService $settings,
+        private readonly TimezoneSettings $timezoneSettings,
     ) {}
 
     /**
@@ -66,10 +66,9 @@ final class CompanyTimezoneResolver
             return null;
         }
 
-        $current = $this->settings
-            ->get('ui.timezone.default', '', Scope::company($company->id)) ?: '';
+        $current = $this->timezoneSettings->explicitCompanyTimezone((int) $company->id);
 
-        if ($current === '') {
+        if ($current === null) {
             return ['action' => 'auto-save', 'timezone' => $suggested];
         }
 
@@ -85,10 +84,6 @@ final class CompanyTimezoneResolver
      */
     public function apply(Company $company, string $timezone): void
     {
-        $this->settings->set(
-            'ui.timezone.default',
-            $timezone,
-            Scope::company($company->id),
-        );
+        $this->timezoneSettings->setCompanyTimezone((int) $company->id, $timezone);
     }
 }

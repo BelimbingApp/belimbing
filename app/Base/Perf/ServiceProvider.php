@@ -10,6 +10,7 @@ use App\Base\Perf\Services\BackgroundWorkRecorder;
 use App\Base\Perf\Services\PerfLog;
 use App\Base\Perf\Services\PerformanceCollector;
 use App\Base\Perf\Services\PerfRegressionStatusDiagnosticProvider;
+use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\CacheMissed;
@@ -34,6 +35,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->app->singleton(PerformanceCollector::class);
         $this->app->singleton(PerfLog::class);
+        $this->app->singleton(PerfRuntimeSettings::class);
         $this->app->singleton(BackgroundWorkRecorder::class);
         $this->app->singleton(PerfRegressionStatusDiagnosticProvider::class);
         $this->app->tag(PerfRegressionStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);

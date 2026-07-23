@@ -1,25 +1,44 @@
 # Performance instrumentation
 
 BLB records every web request, **queue job, and console command** as one JSON
-line in `storage/logs/perf-YYYY-MM-DD.jsonl`: wall time, DB time and query
-count, the top slow SQL statements, cache hits/misses/writes, subprocess
-spawns (anything through the `Process` facade — git, deploys, PDF tooling),
-response size, and whether the request was a `wire:navigate` partial.
+line in `perf-YYYY-MM-DD.jsonl`, under `storage/logs` by default: wall time,
+DB time and query count, the top slow SQL statements,
+cache hits/misses/writes, subprocess spawns (anything through the `Process`
+facade — git, deploys, PDF tooling), response size, and whether the request was
+a `wire:navigate` partial.
 Livewire update requests are attributed to their component (`lw:<name>`), so
-the slowest interactions are visible, not just the slowest pages. It is on by
-default (`PERF_LOG_ENABLED`, `PERF_LOG_MIN_MS`, `PERF_LOG_SLOW_SQL_MIN_MS`,
-`PERF_LOG_RETENTION_DAYS` in `.env`); the test environment disables it in
-phpunit.xml so suites never write into the live log.
+the slowest interactions are visible, not just the slowest pages. Recording is
+on by its declared code default. Its enabled state, minimum duration, slow-SQL
+threshold, log directory, and retention period are global runtime settings in
+`base_settings`; they do not read from `.env` or Laravel config. Automated
+feature tests seed an explicit disabled database override, and Perf-focused
+tests enable it only against isolated test directories.
 
 The log is built to be queried from the command line — agents are its
 first-class consumers. **Start every "why is X slow" investigation here** —
 do not hand-roll curl timing loops or tinker microtime scripts first.
 
-For humans there is a read-only demonstration page at Administration →
-System → Diagnostics → Performance (`admin.system.perf.view` capability):
-stat strip, latency scatter, per-route DB/subprocess/other composition bars,
-and the slowest requests. It renders the same jsonl and never writes; treat
-it as a showcase of the log, not a second source of truth.
+For humans there is a page at Administration → System → Diagnostics →
+Performance. Operators with `admin.system.perf.view` can inspect the stat
+strip, latency scatter, per-route DB/subprocess/other composition bars, the
+slowest requests, and the active recording values. Operators with
+`admin.system.perf.manage` can save or restore those global values. The page
+renders the same jsonl as the commands; it is not a second telemetry store.
+
+The optional log directory is an installation-wide, machine-specific setting.
+Leave it blank to use `storage/logs`. Under the current
+single-compatible-runtime invariant, every runtime host connected to one
+installation database must understand the configured path. Add a node scope
+before operating heterogeneous hosts with incompatible local paths.
+Console recording stays off until `base_settings` exists, and migration/wipe
+commands are excluded, so first-run and database-recovery work does not depend
+on the table it may be creating or replacing.
+
+Upgrade note: deployments that previously set `PERF_LOG_ENABLED`,
+`PERF_LOG_MIN_MS`, `PERF_LOG_SLOW_SQL_MIN_MS`, `PERF_LOG_PATH`, or
+`PERF_LOG_RETENTION_DAYS` must enter the corresponding values in Recording
+settings. Those environment names are no longer read and can then be removed
+from the deployment environment.
 
 ```bash
 # Slowest routes/jobs/commands, aggregated (hits, p50/p95/max, avg DB ms, queries, subprocesses)
@@ -32,6 +51,8 @@ php artisan perf:requests --route=payroll --sql   # print the slowest captured S
 
 # Delete files past the retention window
 php artisan perf:prune
+# One-off override without changing the saved retention setting
+php artisan perf:prune --days=30
 ```
 
 Reading a row:
@@ -51,10 +72,12 @@ Reading a row:
   (auto-navigate.js makes that the default — check for `data-no-navigate`
   or non-anchor navigation if a page keeps doing full loads).
 
-The plumbing lives in `app/Base/Perf`: middleware prepended to the `web`
-group, a per-request collector fed by DB/cache/process listeners, and the
-three artisan commands. Under Octane the `mem_mb` field is the
-worker-lifetime peak, not per-request.
+The plumbing lives in `app/Base/Perf`: definition-backed runtime settings,
+middleware prepended to the `web` group, a per-request collector fed by
+DB/cache/process listeners, and the three artisan commands. The recorder reads
+the five global values as one coherent, batched snapshot and reuses it for the
+request. Under Octane the `mem_mb` field is the worker-lifetime peak, not
+per-request.
 
 ## Shell payload
 

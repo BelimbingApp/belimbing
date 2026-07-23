@@ -3,6 +3,8 @@
 namespace Tests;
 
 use App\Base\Database\Models\SeederRegistry;
+use App\Base\Perf\Services\PerfRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Database\Seeder;
@@ -20,6 +22,12 @@ class TestingBaselineSeeder extends Seeder
      */
     public function run(): void
     {
+        // Feature tests must never write instrumentation into the developer's
+        // live log. Perf-focused tests replace this global database override
+        // with an isolated test path and enable recording deliberately.
+        app(SettingsService::class)->set(PerfRuntimeSettings::ENABLED_KEY, false);
+        app(PerfRuntimeSettings::class)->refresh();
+
         $modules = $this->testingSeedModules();
 
         if ($modules === []) {

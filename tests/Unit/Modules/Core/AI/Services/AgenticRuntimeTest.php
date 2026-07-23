@@ -792,8 +792,6 @@ describe('AgenticRuntime (streaming)', function () {
     });
 
     it('persists and emits a streaming tool-round limit failure', function () {
-        config()->set('ai.llm.agentic.max_tool_rounds', 24);
-
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () {
             yield [

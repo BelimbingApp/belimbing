@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\DateTime;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;

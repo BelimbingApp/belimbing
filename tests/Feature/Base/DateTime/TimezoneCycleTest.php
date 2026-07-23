@@ -1,12 +1,13 @@
 <?php
 
 use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Models\Setting;
 use App\Modules\Core\Employee\Models\Employee;
 use App\Modules\Core\User\Models\User;
 
-const TZ_SET_SETTINGS_KEY = 'ui.timezone.mode';
 const TZ_SET_COMPANY_TIMEZONE_KL = 'Asia/Kuala_Lumpur';
 
 beforeEach(function (): void {
@@ -25,7 +26,7 @@ it('sets timezone mode to each valid value', function (string $mode): void {
 it('returns timezone identifier for company and utc modes', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $settings = app(SettingsService::class);
-    $settings->set('ui.timezone.default', TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
+    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
 
     $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'utc'])
@@ -39,7 +40,7 @@ it('returns timezone identifier for company and utc modes', function (): void {
 it('returns null timezone for local mode', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $settings = app(SettingsService::class);
-    $settings->set('ui.timezone.default', TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
+    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
 
     $response = $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'local'])
@@ -49,7 +50,7 @@ it('returns null timezone for local mode', function (): void {
     expect($response->json('company_timezone'))->toBe(TZ_SET_COMPANY_TIMEZONE_KL);
 });
 
-it('persists mode in settings at company scope', function (): void {
+it('persists mode in settings at user scope', function (): void {
     $user = User::factory()->create(['company_id' => 1]);
     $settings = app(SettingsService::class);
 
@@ -57,12 +58,18 @@ it('persists mode in settings at company scope', function (): void {
         ->postJson(route('timezone.set'), ['mode' => 'local'])
         ->assertOk();
 
-    $stored = $settings->get(TZ_SET_SETTINGS_KEY, null, Scope::company(1));
-
-    expect($stored)->toBe(TimezoneMode::LOCAL->value);
+    expect($settings->get(
+        TimezoneSettings::MODE_KEY,
+        scope: Scope::user($user->id, 1),
+    ))->toBe(TimezoneMode::LOCAL->value)
+        ->and(Setting::query()
+            ->where('key', TimezoneSettings::MODE_KEY)
+            ->where('scope_type', 'company')
+            ->exists())
+        ->toBeFalse();
 });
 
-it('persists mode in settings at employee scope when the user has an employee id', function (): void {
+it('persists mode against the user even when the account has an employee id', function (): void {
     $employee = Employee::factory()->create(['company_id' => 1]);
     $user = User::factory()->create([
         'company_id' => 1,
@@ -74,10 +81,13 @@ it('persists mode in settings at employee scope when the user has an employee id
         ->postJson(route('timezone.set'), ['mode' => 'utc'])
         ->assertOk();
 
-    expect($settings->get(TZ_SET_SETTINGS_KEY, null, Scope::employee($employee->id, 1)))
+    expect($settings->get(TimezoneSettings::MODE_KEY, scope: Scope::user($user->id, 1)))
         ->toBe(TimezoneMode::UTC->value)
-        ->and($settings->get(TZ_SET_SETTINGS_KEY, null, Scope::company(1)))
-        ->toBeNull();
+        ->and(Setting::query()
+            ->where('key', TimezoneSettings::MODE_KEY)
+            ->where('scope_type', 'employee')
+            ->exists())
+        ->toBeFalse();
 });
 
 it('rejects invalid mode values', function (): void {

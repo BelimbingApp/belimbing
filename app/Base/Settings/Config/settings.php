@@ -1,4 +1,7 @@
 <?php
+
+use App\Base\Settings\Services\DatabaseSettingsService;
+
 return [
 
     /*
@@ -9,7 +12,7 @@ return [
     | How long resolved DB setting lookups are cached. Set to 0 to disable.
     |
     */
-    'cache_ttl' => 3600,
+    'cache_ttl' => DatabaseSettingsService::DEFAULT_CACHE_TTL_SECONDS,
 
     /*
     |--------------------------------------------------------------------------
@@ -20,6 +23,18 @@ return [
     |
     */
     'cache_prefix' => 'blb:settings',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Runtime Parameter Definitions
+    |--------------------------------------------------------------------------
+    |
+    | Module-owned definitions are discovered from Config/settings.php files.
+    | Each definition owns its type, allowed scopes, default, validation, and
+    | encryption policy. Runtime consumers resolve these keys through Settings.
+    |
+    */
+    'definitions' => [],
 
     /*
     |--------------------------------------------------------------------------

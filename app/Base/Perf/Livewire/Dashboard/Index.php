@@ -2,20 +2,34 @@
 
 namespace App\Base\Perf\Livewire\Dashboard;
 
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Perf\Services\PerfLog;
+use App\Base\Perf\Services\PerfRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
 /**
- * Read-only window over the request performance log. The log's first-class
- * consumers are coding agents via `perf:slowest` / `perf:requests`; this page
- * demonstrates the same data to humans. It never writes and holds no state of
- * its own — everything derives from storage/logs/perf-*.jsonl per render.
+ * Human window over the request performance log and its installation-wide
+ * recording controls. The log's first-class consumers remain coding agents
+ * via `perf:slowest` / `perf:requests`.
  */
 class Index extends Component
 {
+    use InteractsWithNotifications;
+
     private const WINDOWS = ['1h', '24h', '7d'];
+
+    private const array SETTING_FIELDS = [
+        'recordingEnabled' => PerfRuntimeSettings::ENABLED_KEY,
+        'minimumDurationMs' => PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY,
+        'slowSqlMinimumDurationMs' => PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY,
+        'logPath' => PerfRuntimeSettings::LOG_PATH_KEY,
+        'retentionDays' => PerfRuntimeSettings::RETENTION_DAYS_KEY,
+    ];
 
     /** Timeline dot cap; beyond this the window is sampled evenly. */
     private const MAX_TIMELINE_POINTS = 600;
@@ -28,6 +42,21 @@ class Index extends Component
     #[Url]
     public string $window = '1h';
 
+    public bool $recordingEnabled = false;
+
+    public string $minimumDurationMs = '';
+
+    public string $slowSqlMinimumDurationMs = '';
+
+    public string $logPath = '';
+
+    public string $retentionDays = '';
+
+    public function mount(PerfRuntimeSettings $runtimeSettings): void
+    {
+        $this->loadRuntimeSettings($runtimeSettings);
+    }
+
     public function setWindow(string $window): void
     {
         if (in_array($window, self::WINDOWS, true)) {
@@ -35,7 +64,65 @@ class Index extends Component
         }
     }
 
-    public function render(PerfLog $log): View
+    public function saveRuntimeSettings(
+        SettingsService $settings,
+        PerfRuntimeSettings $runtimeSettings,
+    ): void {
+        $this->authorizeSettingsManagement();
+
+        $validated = $this->validate(
+            $this->validationRules($runtimeSettings),
+            attributes: $this->validationAttributes($runtimeSettings),
+        );
+
+        $settings->set(
+            PerfRuntimeSettings::ENABLED_KEY,
+            (bool) $validated['recordingEnabled'],
+        );
+        $settings->set(
+            PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY,
+            (float) $validated['minimumDurationMs'],
+        );
+        $settings->set(
+            PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY,
+            (float) $validated['slowSqlMinimumDurationMs'],
+        );
+        $settings->set(
+            PerfRuntimeSettings::RETENTION_DAYS_KEY,
+            (int) $validated['retentionDays'],
+        );
+
+        $path = trim((string) ($validated['logPath'] ?? ''));
+
+        if ($path === '') {
+            $settings->forget(PerfRuntimeSettings::LOG_PATH_KEY);
+        } else {
+            $settings->set(PerfRuntimeSettings::LOG_PATH_KEY, $path);
+        }
+
+        $runtimeSettings->refresh();
+        $this->loadRuntimeSettings($runtimeSettings);
+        $this->resetValidation();
+        $this->notify(__('Performance recording settings saved.'));
+    }
+
+    public function restoreRuntimeSettingDefaults(
+        SettingsService $settings,
+        PerfRuntimeSettings $runtimeSettings,
+    ): void {
+        $this->authorizeSettingsManagement();
+
+        foreach (PerfRuntimeSettings::KEYS as $key) {
+            $settings->forget($key);
+        }
+
+        $runtimeSettings->refresh();
+        $this->loadRuntimeSettings($runtimeSettings);
+        $this->resetValidation();
+        $this->notify(__('Performance recording defaults restored.'));
+    }
+
+    public function render(PerfLog $log, PerfRuntimeSettings $runtimeSettings): View
     {
         // The window is URL-bound, so it can arrive as anything.
         if (! in_array($this->window, self::WINDOWS, true)) {
@@ -56,7 +143,75 @@ class Index extends Component
             'timeline' => $this->timeline($entries),
             'routes' => $this->byRoute($entries),
             'slowest' => $this->slowestRequests($entries),
+            'canManagePerformanceSettings' => $this->canManageSettings(),
+            'performanceSettingDefinitions' => $runtimeSettings->definitions(),
         ]);
+    }
+
+    private function loadRuntimeSettings(PerfRuntimeSettings $runtimeSettings): void
+    {
+        $settings = $runtimeSettings->snapshot();
+
+        $this->recordingEnabled = $settings->enabled;
+        $this->minimumDurationMs = $this->formatFloat($settings->minimumDurationMs);
+        $this->slowSqlMinimumDurationMs = $this->formatFloat($settings->slowSqlMinimumDurationMs);
+        $this->logPath = $settings->logPath ?? '';
+        $this->retentionDays = (string) $settings->retentionDays;
+    }
+
+    /**
+     * @return array<string, list<string>>
+     */
+    private function validationRules(PerfRuntimeSettings $runtimeSettings): array
+    {
+        $rules = [];
+
+        foreach (self::SETTING_FIELDS as $field => $key) {
+            $rules[$field] = $runtimeSettings->definition($key)->rules;
+        }
+
+        return $rules;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function validationAttributes(PerfRuntimeSettings $runtimeSettings): array
+    {
+        $attributes = [];
+
+        foreach (self::SETTING_FIELDS as $field => $key) {
+            $definition = $runtimeSettings->definition($key);
+            $attributes[$field] = __($definition->label ?? $key);
+        }
+
+        return $attributes;
+    }
+
+    private function formatFloat(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 3, '.', ''), '0'), '.');
+    }
+
+    private function canManageSettings(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && app(AuthorizationService::class)
+            ->can(Actor::forUser($user), 'admin.system.perf.manage')
+            ->allowed;
+    }
+
+    private function authorizeSettingsManagement(): void
+    {
+        $user = auth()->user();
+
+        abort_if($user === null, 403);
+
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser($user),
+            'admin.system.perf.manage',
+        );
     }
 
     /**

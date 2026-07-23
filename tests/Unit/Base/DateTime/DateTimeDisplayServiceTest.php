@@ -2,9 +2,12 @@
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Exceptions\InvalidSettingScopeException;
+use App\Base\Settings\Models\Setting;
 use App\Modules\Core\User\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -12,8 +15,6 @@ use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
-const DT_TEST_KEY_MODE = 'ui.timezone.mode';
-const DT_TEST_KEY_DEFAULT = 'ui.timezone.default';
 const DT_TEST_KEY_LOCALE = 'ui.locale';
 const DT_TEST_TIMEZONE_KL = 'Asia/Kuala_Lumpur';
 const DT_TEST_TIMESTAMP = '2026-06-15 08:00:00';
@@ -55,17 +56,16 @@ function actingUser(?int $companyId): User
 function setTimezoneMode(SettingsService $settings, TimezoneMode $mode, ?Scope $scope = null): void
 {
     if ($scope === null) {
-        $settings->set(DT_TEST_KEY_MODE, $mode->value);
-
-        return;
+        $user = auth()->user();
+        $scope = Scope::user((int) $user->id, $user->company_id);
     }
 
-    $settings->set(DT_TEST_KEY_MODE, $mode->value, $scope);
+    $settings->set(TimezoneSettings::MODE_KEY, $mode->value, $scope);
 }
 
 function setCompanyTimezoneLocale(SettingsService $settings, int $companyId, string $locale): void
 {
-    $settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company($companyId));
+    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, DT_TEST_TIMEZONE_KL, Scope::company($companyId));
     $settings->set(DT_TEST_KEY_LOCALE, $locale);
 }
 
@@ -195,25 +195,33 @@ it('parses string datetime values', function (): void {
 
 // --- Mode Resolution Cascade ---
 
-it('resolves company-scoped mode override for user without employee', function (): void {
+it('rejects a company-scoped user display mode', function (): void {
     actingUser(1);
-    setTimezoneMode($this->settings, TimezoneMode::UTC, Scope::company(1));
 
-    expect(freshService()->currentMode())->toBe(TimezoneMode::UTC);
+    expect(fn () => setTimezoneMode(
+        $this->settings,
+        TimezoneMode::UTC,
+        Scope::company(1),
+    ))->toThrow(InvalidSettingScopeException::class);
 });
 
 it('falls back to COMPANY for invalid mode value', function (): void {
-    actingUser(null);
+    $user = actingUser(null);
 
-    $this->settings->set(DT_TEST_KEY_MODE, 'invalid_mode');
+    Setting::query()->create([
+        'key' => TimezoneSettings::MODE_KEY,
+        'value' => 'invalid_mode',
+        'scope_type' => 'user',
+        'scope_id' => $user->id,
+    ]);
 
     expect(freshService()->currentMode())->toBe(TimezoneMode::COMPANY);
 });
 
 it('returns configured company timezone even when active mode is utc', function (): void {
     actingUser(1);
-    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
-    setTimezoneMode($this->settings, TimezoneMode::UTC, Scope::company(1));
+    $this->settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, DT_TEST_TIMEZONE_KL, Scope::company(1));
+    setTimezoneMode($this->settings, TimezoneMode::UTC);
 
     expect(freshService()->currentCompanyTimezone())->toBe(DT_TEST_TIMEZONE_KL);
 });
@@ -228,7 +236,7 @@ it('reports company timezone as not explicit when setting is absent', function (
 
 it('reports company timezone as explicit when setting exists', function (): void {
     actingUser(1);
-    $this->settings->set(DT_TEST_KEY_DEFAULT, DT_TEST_TIMEZONE_KL, Scope::company(1));
+    $this->settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, DT_TEST_TIMEZONE_KL, Scope::company(1));
 
     expect(freshService()->isCompanyTimezoneExplicit())->toBeTrue();
 });

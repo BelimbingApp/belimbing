@@ -4,6 +4,7 @@ namespace App\Base\Perf\Http\Middleware;
 
 use App\Base\Perf\Services\PerfLog;
 use App\Base\Perf\Services\PerformanceCollector;
+use App\Base\Perf\Services\PerfRuntimeSettings;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,11 +20,14 @@ final class RecordRequestPerformance
     public function __construct(
         private readonly PerformanceCollector $collector,
         private readonly PerfLog $log,
+        private readonly PerfRuntimeSettings $runtimeSettings,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
-        if (! config('perf.enabled') || ! $this->collector->begin()) {
+        $settings = $this->runtimeSettings->snapshot();
+
+        if (! $settings->enabled || ! $this->collector->begin($settings->slowSqlMinimumDurationMs)) {
             return $next($request);
         }
 
@@ -34,22 +38,39 @@ final class RecordRequestPerformance
         } catch (Throwable $exception) {
             // Requests that die uncaught still show up — a slow request that
             // then crashes is exactly the kind the log exists to explain.
-            $this->record($request, $startedAt, status: 500, response: null);
+            $this->record(
+                $request,
+                $startedAt,
+                status: 500,
+                response: null,
+                minimumDurationMs: $settings->minimumDurationMs,
+            );
 
             throw $exception;
         }
 
-        $this->record($request, $startedAt, $response->getStatusCode(), $response);
+        $this->record(
+            $request,
+            $startedAt,
+            $response->getStatusCode(),
+            $response,
+            $settings->minimumDurationMs,
+        );
 
         return $response;
     }
 
-    private function record(Request $request, int|float $startedAt, int $status, ?Response $response): void
-    {
+    private function record(
+        Request $request,
+        int|float $startedAt,
+        int $status,
+        ?Response $response,
+        float $minimumDurationMs,
+    ): void {
         $totalMs = (hrtime(true) - $startedAt) / 1e6;
         $metrics = $this->collector->end();
 
-        if ($totalMs < (float) config('perf.min_ms')) {
+        if ($totalMs < $minimumDurationMs) {
             return;
         }
 

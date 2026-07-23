@@ -310,14 +310,13 @@ class Workspace extends Component
         }
 
         foreach ($metadata->configFields as $field) {
-            $defaultValue = config($field->key);
-            $value = $settings->get($field->key, $defaultValue);
+            $value = $settings->get($field->key);
 
             // Mask secret fields that have a value
             if ($field->type === 'secret' && $value !== null && $value !== '') {
                 data_set($this->configValues, $field->key, '');
             } else {
-                data_set($this->configValues, $field->key, $value ?? $defaultValue ?? '');
+                data_set($this->configValues, $field->key, $value ?? '');
             }
         }
     }

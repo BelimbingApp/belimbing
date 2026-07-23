@@ -21,12 +21,19 @@ beforeEach(function (): void {
 it('stores and restores the global tool-loop guardrail from the control plane', function (): void {
     $user = createAdminUser();
     $settings = app(SettingsService::class);
+    config([AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY => 24]);
 
     Livewire::actingAs($user)
         ->withQueryParams(['tab' => 'runtime'])
         ->test(ControlPlane::class)
         ->assertSet('activeTab', 'runtime')
         ->assertSet('maxToolRounds', '100')
+        ->assertViewHas(
+            'maxToolRoundsDefinition',
+            fn ($definition): bool => $definition->default === 100
+                && $definition->ruleParameter('min') === '1'
+                && $definition->ruleParameter('max') === '500',
+        )
         ->assertSee('Maximum tool rounds per turn')
         ->set('maxToolRounds', '160')
         ->call('saveRuntimeGuardrails')
@@ -80,6 +87,7 @@ it('rejects invalid or unauthorized runtime guardrail writes', function (): void
 
 it('configures and verifies pdftotext from the document extraction workspace', function (): void {
     $user = createAdminUser();
+    config([AiRuntimeSettings::PDFTOTEXT_PATH_KEY => 'C:\\Environment Fallback\\pdftotext.exe']);
     $locator = Mockery::mock(ExecutableLocator::class);
     $locator->shouldReceive('find')
         ->andReturnUsing(fn (array $candidates): ?string => in_array(
@@ -93,6 +101,7 @@ it('configures and verifies pdftotext from the document extraction workspace', f
         ->test(Workspace::class, ['toolName' => 'document_analysis'])
         ->assertSee('pdftotext executable')
         ->assertDontSee('Use the "Try It" panel')
+        ->assertSet('configValues.ai.tools.document_analysis.pdftotext_path', '')
         ->assertSet('documentExtractorCheck.success', false)
         ->set(
             'configValues.ai.tools.document_analysis.pdftotext_path',

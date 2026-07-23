@@ -2,10 +2,9 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
-use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Address\Livewire\AbstractAddressForm;
 use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Company\Livewire\Concerns\ManagesCompanyTimezone;
@@ -105,8 +104,8 @@ class Show extends AbstractAddressForm
             'externalAccesses.user',
         ]);
 
-        $this->companyTimezone = app(SettingsService::class)
-            ->get('ui.timezone.default', '', Scope::company($company->id)) ?: '';
+        $this->companyTimezone = app(TimezoneSettings::class)
+            ->explicitCompanyTimezone((int) $company->id) ?? '';
     }
 
     public function sortExternalAccesses(string $column): void
@@ -329,8 +328,8 @@ class Show extends AbstractAddressForm
      */
     public function render(): View
     {
-        $this->companyTimezone = app(SettingsService::class)
-            ->get('ui.timezone.default', '', Scope::company($this->company->id)) ?: '';
+        $this->companyTimezone = app(TimezoneSettings::class)
+            ->explicitCompanyTimezone((int) $this->company->id) ?? '';
 
         $addresses = $this->company->addresses()->get();
         $linkedIds = $addresses->pluck('id')->toArray();

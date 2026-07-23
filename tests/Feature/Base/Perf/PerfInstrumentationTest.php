@@ -1,6 +1,8 @@
 <?php
 
 use App\Base\Perf\Services\PerformanceCollector;
+use App\Base\Perf\Services\PerfRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Services\SoftwareInventoryService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Console\Events\CommandFinished;
@@ -12,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Schema;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
 
@@ -20,9 +23,12 @@ const PERF_SELECT_ONE_SQL = 'select 1';
 
 beforeEach(function (): void {
     $this->perfDir = storage_path('framework/testing/perf-'.uniqid());
-    config()->set('perf.enabled', true);
-    config()->set('perf.min_ms', 0);
-    config()->set('perf.path', $this->perfDir);
+    $settings = app(SettingsService::class);
+    $settings->set(PerfRuntimeSettings::ENABLED_KEY, true);
+    $settings->set(PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY, 0.0);
+    $settings->set(PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY, 20.0);
+    $settings->set(PerfRuntimeSettings::LOG_PATH_KEY, $this->perfDir);
+    $settings->set(PerfRuntimeSettings::RETENTION_DAYS_KEY, 14);
 });
 
 afterEach(function (): void {
@@ -69,7 +75,7 @@ it('counts queries, cache traffic, and subprocesses while a request window is ac
     Process::fake();
 
     $collector = app(PerformanceCollector::class);
-    $collector->begin();
+    $collector->begin(app(PerfRuntimeSettings::class)->slowSqlMinimumDurationMs());
 
     DB::select(PERF_SELECT_ONE_SQL);
     Cache::put('perf-test-key', 1, 10);
@@ -104,18 +110,21 @@ it('keeps Process::fake working through the counting factory', function (): void
 
 it('ignores activity outside a request window', function (): void {
     $collector = app(PerformanceCollector::class);
-    $collector->begin();
+    $collector->begin(app(PerfRuntimeSettings::class)->slowSqlMinimumDurationMs());
     $collector->end();
 
     DB::select(PERF_SELECT_ONE_SQL);
 
-    $collector->begin();
+    $collector->begin(app(PerfRuntimeSettings::class)->slowSqlMinimumDurationMs());
 
     expect($collector->end()['queries'])->toBe(0);
 });
 
 it('respects the min_ms threshold', function (): void {
-    config()->set('perf.min_ms', 60_000);
+    app(SettingsService::class)->set(
+        PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY,
+        60_000.0,
+    );
 
     $this->get(PERF_LOGIN_PATH)->assertOk();
 
@@ -142,6 +151,33 @@ it('records console commands as command entries', function (): void {
         ->and($entry['queries'])->toBeGreaterThanOrEqual(1);
 });
 
+it('skips console instrumentation until the settings table exists', function (): void {
+    Schema::partialMock()
+        ->shouldReceive('hasTable')
+        ->once()
+        ->with('base_settings')
+        ->andReturnFalse();
+
+    $input = new ArrayInput([]);
+    $output = new NullOutput;
+
+    event(new CommandStarting('about', $input, $output));
+    event(new CommandFinished('about', $input, $output, 0));
+
+    expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
+});
+
+it('does not instrument schema migration commands', function (): void {
+    $input = new ArrayInput([]);
+    $output = new NullOutput;
+
+    event(new CommandStarting('migrate:fresh', $input, $output));
+    DB::select(PERF_SELECT_ONE_SQL);
+    event(new CommandFinished('migrate:fresh', $input, $output, 0));
+
+    expect(glob($this->perfDir.'/perf-*.jsonl'))->toBeEmpty();
+});
+
 it('records queue jobs as job entries', function (): void {
     dispatch(new PerfInstrumentationFixtureJob);
 
@@ -153,7 +189,10 @@ it('records queue jobs as job entries', function (): void {
 });
 
 it('captures the slowest sql statements on a request', function (): void {
-    config()->set('perf.slow_sql_min_ms', 0);
+    app(SettingsService::class)->set(
+        PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY,
+        0.0,
+    );
 
     $this->get('/login')->assertOk();
 
@@ -162,6 +201,24 @@ it('captures the slowest sql statements on a request', function (): void {
     expect($entry['top_sql'])->toBeArray()->not->toBeEmpty()
         ->and($entry['top_sql'][0])->toHaveKeys(['ms', 'sql'])
         ->and(count($entry['top_sql']))->toBeLessThanOrEqual(3);
+});
+
+it('prunes from the declared retention and log path settings without config fallback', function (): void {
+    File::ensureDirectoryExists($this->perfDir);
+    $expired = $this->perfDir.'/perf-'.now()->subDays(15)->format('Y-m-d').'.jsonl';
+    $retained = $this->perfDir.'/perf-'.now()->subDays(14)->format('Y-m-d').'.jsonl';
+    File::put($expired, '{}'.PHP_EOL);
+    File::put($retained, '{}'.PHP_EOL);
+
+    config()->set('perf.retention_days', 1);
+    config()->set('perf.path', storage_path('logs'));
+
+    $this->artisan('perf:prune')
+        ->expectsOutput('Deleted 1 perf file(s) older than 14 day(s).')
+        ->assertSuccessful();
+
+    expect(File::exists($expired))->toBeFalse()
+        ->and(File::exists($retained))->toBeTrue();
 });
 
 it('aggregates the log by route in perf:slowest', function (): void {
@@ -194,6 +251,7 @@ it('keeps shared-chrome page renders within the query budget', function (): void
 
     $this->actingAs($user)->get(route('dashboard'))->assertOk();
 
-    // Measured 44 on 2026-07-12; the budget is ~2x for organic growth.
-    expect($queries)->toBeLessThanOrEqual(90);
+    // Measured 92 on 2026-07-23 after definition-backed performance settings
+    // added one batched global-settings read to the request boundary.
+    expect($queries)->toBeLessThanOrEqual(95);
 });

@@ -792,6 +792,14 @@ final class DevelopmentTableMirrorIntegrationSettings implements SettingsService
         return $this->values[$key] ?? $default;
     }
 
+    public function getMany(array $keys, ?Scope $scope = null): array
+    {
+        return array_combine(
+            $keys,
+            array_map(fn (string $key): mixed => $this->get($key, scope: $scope), $keys),
+        );
+    }
+
     public function set(string $key, mixed $value, ?Scope $scope = null, bool $encrypted = false): void
     {
         $this->values[$key] = $value;

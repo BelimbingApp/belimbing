@@ -1,9 +1,9 @@
 # dashboard-user-widgets
 
 **Status:** Phases 1–2 implemented and tested; Phase 3 (breadth) open
-**Last Updated:** 2026-07-04
+**Last Updated:** 2026-07-23
 **Sources:** `resources/core/views/dashboard.blade.php`; `app/Modules/Core/User/Routes/web.php`; `app/Base/Foundation/Services/LandingPageResolver.php`; `app/Base/Menu/`; `docs/architecture/settings.md`; `docs/plans/livewire-islands-adoption.md`; user discussion on replacing the placeholder dashboard
-**Agents:** Amp/claude-fable-5
+**Agents:** Amp/claude-fable-5; Codex/GPT-5
 
 ## Problem Essence
 
@@ -36,9 +36,9 @@ Implementation refinement: widgets are contributed via `Config/dashboard.php` fi
 
 - **`users.prefs['dashboard']`** — the layout is small, per-user, self-contained, read whole in one place and written whole in one place. Nothing queries it across users, nothing joins it, and widget ids are code-defined registry strings with nothing to foreign-key against; validity must be enforced at render time by intersecting with the authz-filtered registry regardless of storage. This is the same category of data as `landing_menu_id`, which already lives in prefs with silent fall-through on read.
 - **Dedicated table** — buys cross-user queryability, FKs, and partial updates, none of which apply. Costs a migration, model, and second lifecycle for data with one reader and one writer. The switch trigger is layouts ceasing to be purely personal (shared/team dashboards, admin-audited layouts); migrating prefs blobs to rows at that point is cheap and mechanical.
-- **`Base/Settings`** — wrong fit: its scopes are `COMPANY` and `EMPLOYEE`, but the dashboard belongs to the login *user*, and users without an employee record (operators, fresh installs) still get a dashboard. Settings keys are also config-declared, operator-editable values rendered by the generic settings UI; the layout is app-managed UI state with no config default. Settings becomes relevant later only for company/role *default* layouts (cascade: employee → company → global) with the personal prefs layout as top-priority override — roadmap-triggered, not built now.
+- **`Base/Settings`** — was the wrong fit when this phase shipped because its implemented scopes were `COMPANY` and `EMPLOYEE`, while the dashboard belongs to the login user and users without an employee record still need a dashboard. The approved target in `docs/architecture/settings.md` adds user-scoped settings and treats small durable account preferences as runtime parameters. `users.prefs['dashboard']` remains the implemented storage until that foundational migration lands; the settings-model plan now owns moving the layout to user-scoped `base_settings` without changing the widget contract.
 
-Recommendation: `users.prefs['dashboard']`. One convention per data kind; lowest entropy; precedent already in the codebase.
+Implemented decision: `users.prefs['dashboard']` remains the current storage. Target decision: migrate it to user-scoped `base_settings` with a declared visible-widget-order default during `docs/plans/settings-model-evolution.md`. A dedicated table remains unnecessary unless layouts become shared, relational, or independently queryable.
 
 ### Widget rendering: server-composed Blade partials vs lazy Livewire components
 

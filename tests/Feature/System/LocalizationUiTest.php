@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
@@ -18,8 +19,6 @@ const FEATURE_LOCALE_SETTINGS_KEY = 'ui.locale';
 const FEATURE_LOCALE_SOURCE_SETTINGS_KEY = 'ui.locale_source';
 const FEATURE_LOCALE_CONFIRMED_AT_SETTINGS_KEY = 'ui.locale_confirmed_at';
 const FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country';
-const FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY = 'ui.timezone.default';
-const FEATURE_TIMEZONE_MODE_SETTINGS_KEY = 'ui.timezone.mode';
 const FEATURE_TIMEZONE_KUALA_LUMPUR = 'Asia/Kuala_Lumpur';
 
 beforeEach(function (): void {
@@ -130,7 +129,7 @@ it('renders the preview using the resolved company timezone', function (): void 
     $this->travelTo($sample);
 
     $this->settings->set(
-        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
         FEATURE_TIMEZONE_KUALA_LUMPUR,
         Scope::company($this->user->company_id),
     );
@@ -155,7 +154,11 @@ it('renders browser-side preview hooks when timezone mode is local', function ()
     $sample = CarbonImmutable::parse('2026-04-13 20:15:00', 'UTC');
     $this->travelTo($sample);
 
-    $this->settings->set(FEATURE_TIMEZONE_MODE_SETTINGS_KEY, 'local');
+    $this->settings->set(
+        TimezoneSettings::MODE_KEY,
+        'local',
+        Scope::user($this->user->id, $this->user->company_id),
+    );
 
     $html = Livewire::test(LocalizationIndex::class)
         ->set('selectedLocale', 'en-MY')
@@ -196,15 +199,14 @@ it('persists the company timezone via edit-in-place', function (): void {
         ->assertHasNoErrors();
 
     expect($this->settings->get(
-        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
-        '',
-        Scope::company($this->user->company_id),
+        TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+        scope: Scope::company($this->user->company_id),
     ))->toBe(FEATURE_TIMEZONE_KUALA_LUMPUR);
 });
 
 it('clears the company timezone when set to empty', function (): void {
     $this->settings->set(
-        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
+        TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
         FEATURE_TIMEZONE_KUALA_LUMPUR,
         Scope::company($this->user->company_id),
     );
@@ -213,11 +215,13 @@ it('clears the company timezone when set to empty', function (): void {
         ->set('companyTimezone', '')
         ->assertHasNoErrors();
 
-    expect($this->settings->get(
-        FEATURE_TIMEZONE_DEFAULT_SETTINGS_KEY,
-        '',
-        Scope::company($this->user->company_id),
-    ))->toBe('');
+    $scope = Scope::company($this->user->company_id);
+
+    expect($this->settings->has(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, $scope))->toBeFalse()
+        ->and($this->settings->get(
+            TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+            scope: $scope,
+        ))->toBe('UTC');
 });
 
 it('rejects an invalid timezone via edit-in-place', function (): void {

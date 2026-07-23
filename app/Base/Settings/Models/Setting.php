@@ -11,7 +11,8 @@ use Illuminate\Support\Carbon;
 /**
  * Setting model for the base_settings table.
  *
- * Stores key-value pairs scoped to global, company, or employee level.
+ * Stores key-value pairs scoped to global, company, user, or legacy employee
+ * level.
  *
  * @property int $id
  * @property string $key
@@ -96,7 +97,7 @@ class Setting extends Model
      * Expose a stable audit subject handle for this setting row.
      *
      * The subject id is the setting key, suffixed with the scope when non-global
-     * (e.g. ``ui.timezone.default@company:1``) so company-scoped settings do not
+     * (e.g. ``localization.timezone@company:1``) so company-scoped settings do not
      * leak across tenants in audit history queries.
      *
      * @return array{name: string, id: string}|null

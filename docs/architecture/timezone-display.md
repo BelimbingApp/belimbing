@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Implemented
-**Last Updated:** 2026-04-13
+**Last Updated:** 2026-07-23
 **Related:** `docs/architecture/settings.md`, `docs/architecture/user-employee-company.md`, `docs/modules/geonames/cities-integration-review.md`, `docs/plans/locale-timezone-consolidation.md`
 
 ---
@@ -245,28 +245,28 @@ This matches the broader BLB policy that validation should enforce only true inv
 
 The timezone preference system has two distinct concerns:
 
-### 9.1 Company Default
+### 9.1 Company Timezone
 
-Persist a canonical business timezone in settings, for example through a company-scoped key such as:
+The canonical business timezone is the declared setting:
 
-- `ui.timezone.default`
+- `localization.timezone`
 
-or another equivalent, well-named settings key.
-
-This value represents the shared default display timezone for the licensee.
+It accepts company scope, contains an IANA timezone identifier, and has a
+declared `UTC` code default.
 
 ### 9.2 User Display Preference
 
-Persist the current viewer's preferred display mode separately, for example:
+The current viewer's preferred display mode is the user-scoped setting:
 
 - `ui.timezone.mode = company|local|utc`
 
-This is a display preference, not business data.
+Its declared default is `company`. It belongs to the authenticated user
+account even when that account has no employee record.
 
-The actual key names can be finalized during implementation, but the conceptual separation should remain:
+The two keys remain separate because they hold different types and meanings:
 
-- company setting = shared default
-- user setting = viewer-specific override
+- `localization.timezone` = shared IANA timezone policy
+- `ui.timezone.mode` = viewer-specific display choice
 
 ---
 
@@ -285,7 +285,7 @@ interface DateTimeDisplayService
 
     public function formatTime(\DateTimeInterface|string|null $value): string;
 
-    public function currentMode(): string;
+    public function currentMode(): TimezoneMode;
 
     public function currentTimezone(): string;
 
@@ -322,13 +322,9 @@ Implemented convergence points:
 
 The plan doc remains the source for delivery history and incremental follow-up work, but this architecture document is the durable SSOT for the rendering contract.
 
-Recommended order:
-
-1. define settings keys for company default timezone and user display mode
-2. introduce a shared datetime display service or helper layer
-3. replace ad hoc datetime rendering in tables and reusable components
-4. add the UI toggle for `Company`, `Local`, and `UTC`
-5. use Geonames city data to suggest the initial company timezone during setup or company configuration
+The company timezone and display mode now use declared company- and user-scoped
+settings. Remaining rendering convergence work stays in its owning plan rather
+than as an implementation checklist in this architecture document.
 
 ---
 

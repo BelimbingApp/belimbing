@@ -208,10 +208,12 @@ Shared components promoted out of a module belong under `resources/core/views/co
 
 ## Configuration System
 
-- `config/` holds only Laravel bootstrap configuration (database, cache, session, …).
-- Module configuration lives in each module's `Config/` directory, merged by its provider.
-- Runtime settings are stored in the database through `App\Base\Settings` (`base_settings`), scoped to global, company, or employee level. Secrets, OAuth tokens, and API keys belong there — never in a repository.
-- Environment variables cover bootstrap values only (DB and cache connections, app URL).
+- `config/` and module `Config/` files hold structural definitions plus environment-owned application inputs needed before database-backed settings are available.
+- Environment variables cover application bootstrap/process inputs and values consumed by external development, build, deployment, or CI tooling. They are not fallbacks for Belimbing runtime parameters.
+- Runtime parameters are stored through `App\Base\Settings` (`base_settings`) at allowed global, company, or user scopes, then fall back to the parameter's single declared code default.
+- Durable authenticated-user preferences, including theme and timezone display mode, use user-scoped settings. Employee is not a settings scope.
+- Secrets, OAuth tokens, API keys, executable paths, limits, and other post-boot parameters belong in `base_settings` behind an authorized UI when an operator or user must manage them.
+- The canonical classification, resolution, scope, and migration contract lives in `docs/architecture/settings.md`.
 
 ---
 
@@ -254,5 +256,5 @@ A module declares nothing centrally. Placing a conforming Distribution Bundle in
 ### 3. Single Source of Truth
 
 - Code: versioned Distribution Bundles (the main repo Platform Baseline plus installed domains, slots, and extensions)
-- Runtime settings: database (`base_settings`)
-- Environment: only bootstrap values
+- Runtime parameters and durable account preferences: database (`base_settings`) plus their declared code defaults
+- Environment: bootstrap/process inputs and external tooling values, never a runtime-parameter fallback

@@ -10,16 +10,19 @@ use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Support\Facades\Crypt;
 
 /**
- * Resolves settings through the layered cascade.
+ * Resolves declared runtime parameters and legacy settings.
  *
- * Resolution order (most specific wins):
- *   employee override → company override → global DB → config file → default
+ * Declared parameters resolve through their allowed DB scopes and then their
+ * definition-owned default. Undeclared keys temporarily retain the legacy
+ * DB → config → caller-default path during the settings-model migration.
  *
  * Each DB lookup is independently cached to keep invalidation simple:
  * on set/forget, only the specific (key, scope) cache entry is busted.
  */
 class DatabaseSettingsService implements SettingsService
 {
+    public const int DEFAULT_CACHE_TTL_SECONDS = 6 * 60 * 60;
+
     /**
      * Sentinel value indicating "no DB row exists" in cache.
      *
@@ -31,13 +34,75 @@ class DatabaseSettingsService implements SettingsService
 
     public function __construct(
         private readonly CacheRepository $cache,
+        private readonly SettingDefinitionRegistry $definitions,
     ) {}
+
+    /**
+     * Resolve a group of settings while retaining definition-owned defaults.
+     *
+     * Global declared parameters use one database query so hot-path consumers
+     * do not pay one query per key. Other combinations retain the exact
+     * single-key resolver semantics.
+     *
+     * @param  list<string>  $keys
+     * @return array<string, mixed>
+     */
+    public function getMany(array $keys, ?Scope $scope = null): array
+    {
+        foreach ($keys as $key) {
+            if (! is_string($key) || $key === '') {
+                throw new \InvalidArgumentException('Setting keys must be non-empty strings.');
+            }
+        }
+
+        $keys = array_values(array_unique($keys));
+
+        if ($keys === []) {
+            return [];
+        }
+
+        $definitions = [];
+
+        foreach ($keys as $key) {
+            $definition = $this->definitions->find($key);
+
+            if ($definition === null || $scope !== null || ! $definition->allowsScope(null)) {
+                $values = [];
+
+                foreach ($keys as $settingKey) {
+                    $values[$settingKey] = $this->get($settingKey, scope: $scope);
+                }
+
+                return $values;
+            }
+
+            $definitions[$key] = $definition;
+        }
+
+        $rows = Setting::query()
+            ->whereIn('key', $keys)
+            ->whereNull('scope_type')
+            ->whereNull('scope_id')
+            ->get()
+            ->keyBy('key');
+
+        $values = [];
+
+        foreach ($keys as $key) {
+            $row = $rows->get($key);
+            $values[$key] = $row instanceof Setting
+                ? $this->resolveSettingValue($row)
+                : $definitions[$key]->default;
+        }
+
+        return $values;
+    }
 
     /**
      * Resolve a setting value through the cascade.
      *
-     * Walks the scope chain from most specific to least, returning
-     * the first value found. Falls back to config() then $default.
+     * Declared parameters ignore config and caller defaults. Undeclared keys
+     * retain the legacy fallback path until their definitions are migrated.
      *
      * @param  string  $key  Dot-notation key (e.g., 'ai.tools.web_search.cache_ttl_minutes')
      * @param  mixed  $default  Fallback if no layer provides a value
@@ -45,12 +110,24 @@ class DatabaseSettingsService implements SettingsService
      */
     public function get(string $key, mixed $default = null, ?Scope $scope = null): mixed
     {
-        foreach ($this->buildScopeChain($scope) as $chainScope) {
+        $definition = $this->definitions->find($key);
+        $scopeChain = $definition === null
+            ? $this->buildScopeChain($scope)
+            : array_values(array_filter(
+                $this->buildScopeChain($scope),
+                $definition->allowsScope(...),
+            ));
+
+        foreach ($scopeChain as $chainScope) {
             $value = $this->getFromDb($key, $chainScope);
 
             if ($value !== null) {
                 return $value;
             }
+        }
+
+        if ($definition !== null) {
+            return $definition->default;
         }
 
         return config($key, $default);
@@ -66,6 +143,14 @@ class DatabaseSettingsService implements SettingsService
      */
     public function set(string $key, mixed $value, ?Scope $scope = null, bool $encrypted = false): void
     {
+        $definition = $this->definitions->find($key);
+
+        if ($definition !== null) {
+            $definition->assertScopeAllowed($scope);
+            $definition->assertStorableValue($value);
+            $encrypted = $definition->encrypted;
+        }
+
         $storeValue = $encrypted
             ? Crypt::encryptString(json_encode($value))
             : $value;
@@ -83,6 +168,8 @@ class DatabaseSettingsService implements SettingsService
      */
     public function forget(string $key, ?Scope $scope = null): void
     {
+        $this->definitions->find($key)?->assertScopeAllowed($scope);
+
         Setting::query()
             ->where($this->scopeAttributes($key, $scope))
             ->delete();
@@ -95,12 +182,15 @@ class DatabaseSettingsService implements SettingsService
      */
     public function has(string $key, ?Scope $scope = null): bool
     {
+        $this->definitions->find($key)?->assertScopeAllowed($scope);
+
         return $this->getFromDb($key, $scope) !== null;
     }
 
     /**
      * Build the scope chain for cascade resolution.
      *
+     * User scope cascades: user → company → global.
      * Employee scope cascades: employee → company → global.
      * Company scope cascades: company → global.
      * Null scope: global only.
@@ -113,7 +203,7 @@ class DatabaseSettingsService implements SettingsService
             return [null];
         }
 
-        if ($scope->type === ScopeType::EMPLOYEE) {
+        if (in_array($scope->type, [ScopeType::USER, ScopeType::EMPLOYEE], true)) {
             $chain = [$scope];
 
             if ($scope->companyId !== null) {
@@ -136,7 +226,7 @@ class DatabaseSettingsService implements SettingsService
      */
     private function getFromDb(string $key, ?Scope $scope): mixed
     {
-        $ttl = (int) config('settings.cache_ttl', 3600);
+        $ttl = (int) config('settings.cache_ttl', self::DEFAULT_CACHE_TTL_SECONDS);
         $cacheKey = $this->cacheKey($key, $scope);
 
         if ($ttl <= 0) {

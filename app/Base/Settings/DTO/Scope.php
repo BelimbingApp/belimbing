@@ -1,11 +1,12 @@
 <?php
+
 namespace App\Base\Settings\DTO;
 
 /**
  * Identifies the scope for a settings lookup.
  *
- * When type is EMPLOYEE, companyId enables the cascade:
- * employee → company → global → config.
+ * User and legacy employee contexts may carry a company id so definitions
+ * that allow organizational inheritance can continue through company scope.
  */
 final readonly class Scope
 {
@@ -21,6 +22,14 @@ final readonly class Scope
     public static function company(int $companyId): self
     {
         return new self(ScopeType::COMPANY, $companyId);
+    }
+
+    /**
+     * Create a user scope with optional company fallback context.
+     */
+    public static function user(int $userId, ?int $companyId = null): self
+    {
+        return new self(ScopeType::USER, $userId, $companyId);
     }
 
     /**

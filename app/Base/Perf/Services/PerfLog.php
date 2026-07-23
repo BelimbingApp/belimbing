@@ -13,9 +13,13 @@ use InvalidArgumentException;
  */
 final class PerfLog
 {
+    public function __construct(
+        private readonly PerfRuntimeSettings $runtimeSettings,
+    ) {}
+
     public function directory(): string
     {
-        return config('perf.path') ?: storage_path('logs');
+        return $this->runtimeSettings->logPath() ?? storage_path('logs');
     }
 
     /**

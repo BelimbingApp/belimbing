@@ -1,14 +1,19 @@
 <?php
 
+use App\Base\Perf\Livewire\Widgets\RequestHealth;
 use App\Base\Perf\Services\PerfRegressionStatusDiagnosticProvider;
+use App\Base\Perf\Services\PerfRuntimeSettings;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\User\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function (): void {
     $this->perfDir = storage_path('framework/testing/perf-regr-'.uniqid());
-    config()->set('perf.enabled', false);
-    config()->set('perf.path', $this->perfDir);
+    $settings = app(SettingsService::class);
+    $settings->set(PerfRuntimeSettings::ENABLED_KEY, false);
+    $settings->set(PerfRuntimeSettings::LOG_PATH_KEY, $this->perfDir);
 });
 
 afterEach(function (): void {
@@ -91,7 +96,7 @@ it('summarizes the last day on the dashboard widget', function (): void {
     writeRegressionFixture($this->perfDir, 'dashboard', daysAgo: 0, ms: 400, count: 12);
 
     Livewire\Livewire::actingAs(createAdminUser())
-        ->test(App\Base\Perf\Livewire\Widgets\RequestHealth::class)
+        ->test(RequestHealth::class)
         ->assertSee('12')
         ->assertSee('400 ms')
         ->assertSee('dashboard');
@@ -103,7 +108,7 @@ it('caches a snapshot that survives hardened cache serialization', function (): 
 
     collect(app(PerfRegressionStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
 
-    $cached = Illuminate\Support\Facades\Cache::get('perf.route-regressions.v1');
+    $cached = Cache::get('perf.route-regressions.v1');
     $roundTripped = unserialize(serialize($cached), ['allowed_classes' => false]);
 
     expect($roundTripped)->toEqual($cached)

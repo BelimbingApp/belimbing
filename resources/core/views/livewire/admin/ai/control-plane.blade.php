@@ -9,6 +9,7 @@ use Illuminate\Support\Number;
 /** @var LifecycleAction|null $selectedLifecycleAction */
 /** @var array{label: string, url: string|null}|null $operationsBreadcrumb */
 /** @var bool $canManageRuntimeGuardrails */
+/** @var \App\Base\Settings\DTO\SettingDefinition $maxToolRoundsDefinition */
 $controlPlaneContext = request()->only(['from', 'returnTo']);
 ?>
 <div>
@@ -247,10 +248,10 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
                                 wire:model="maxToolRounds"
                                 type="number"
                                 inputmode="numeric"
-                                min="1"
-                                max="500"
+                                :min="$maxToolRoundsDefinition->ruleParameter('min')"
+                                :max="$maxToolRoundsDefinition->ruleParameter('max')"
                                 :label="__('Maximum tool rounds per turn')"
-                                :help="__('One round may contain several parallel tool calls. At 80% of the limit, the chat warns the user and asks the agent to prioritize completion. The shipped default is 100; higher limits can increase run time and provider cost when a model loops.')"
+                                :help="__('One round may contain several parallel tool calls. At 80% of the limit, the chat warns the user and asks the agent to prioritize completion. The shipped default is :default; higher limits can increase run time and provider cost when a model loops.', ['default' => number_format($maxToolRoundsDefinition->default)])"
                                 :error="$errors->first('maxToolRounds')"
                                 :disabled="! $canManageRuntimeGuardrails"
                             />

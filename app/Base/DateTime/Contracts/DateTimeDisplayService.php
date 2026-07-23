@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\DateTime\Contracts;
 
 use App\Base\DateTime\Enums\TimezoneMode;
@@ -41,26 +42,26 @@ interface DateTimeDisplayService
     /**
      * Resolve the timezone display mode for the current authenticated user.
      *
-     * Uses the settings cascade (employee → company → global) with key
-     * 'ui.timezone.mode'. Falls back to COMPANY when no user is
-     * authenticated or no override exists.
+     * Reads the authenticated account's user-scoped 'ui.timezone.mode'.
+     * Falls back to COMPANY when no user is authenticated or no override
+     * exists.
      */
     public function currentMode(): TimezoneMode;
 
     /**
      * Resolve the IANA timezone string for the current mode.
      *
-     * COMPANY mode reads 'ui.timezone.default' from the company scope,
-     * falling back to 'UTC'. UTC mode always returns 'UTC'. LOCAL mode
-     * returns 'UTC' (the browser handles conversion).
+     * COMPANY mode reads company-scoped 'localization.timezone', falling back
+     * to its declared 'UTC' default. UTC mode always returns 'UTC'. LOCAL mode
+     * returns 'UTC' for browser-side conversion.
      */
     public function currentTimezone(): string;
 
     /**
      * Resolve the configured company timezone independent of the active mode.
      *
-     * Reads 'ui.timezone.default' from the company scope, falling back to
-     * 'UTC' when there is no authenticated company context.
+     * Reads company-scoped 'localization.timezone', falling back to its
+     * declared 'UTC' default.
      */
     public function currentCompanyTimezone(): string;
 
@@ -72,8 +73,8 @@ interface DateTimeDisplayService
     /**
      * Check whether the company timezone has been explicitly configured.
      *
-     * Returns true when 'ui.timezone.default' exists in the company scope,
-     * false when the timezone is an implicit UTC fallback.
+     * Returns true when 'localization.timezone' exists in company scope,
+     * false when the timezone comes from its code default.
      */
     public function isCompanyTimezoneExplicit(): bool;
 }

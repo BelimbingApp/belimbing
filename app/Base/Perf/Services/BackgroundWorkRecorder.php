@@ -6,6 +6,8 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 /**
  * Extends the performance log beyond HTTP: queue jobs and console commands
@@ -32,6 +34,11 @@ final class BackgroundWorkRecorder
         'octane:start',
         'serve',
         'tinker',
+        'db:wipe',
+    ];
+
+    private const SKIPPED_COMMAND_PREFIXES = [
+        'migrate',
     ];
 
     /**
@@ -44,11 +51,16 @@ final class BackgroundWorkRecorder
 
     private float $startedAtNs = 0.0;
 
+    private float $minimumDurationMs = 0.0;
+
     private ?string $skippedCommand = null;
+
+    private ?bool $settingsTableAvailable = null;
 
     public function __construct(
         private readonly PerformanceCollector $collector,
         private readonly PerfLog $log,
+        private readonly PerfRuntimeSettings $runtimeSettings,
     ) {}
 
     public function jobStarting(): void
@@ -68,7 +80,7 @@ final class BackgroundWorkRecorder
 
     public function commandStarting(CommandStarting $event): void
     {
-        if ($event->command === null || in_array($event->command, self::SKIPPED_COMMANDS, true)) {
+        if ($event->command === null || $this->shouldSkipCommand($event->command)) {
             $this->skippedCommand = $event->command;
 
             return;
@@ -90,17 +102,26 @@ final class BackgroundWorkRecorder
 
     private function openWindow(): void
     {
-        if (! config('perf.enabled')) {
+        if (! $this->settingsAreAvailable()) {
             $this->ownershipStack[] = false;
 
             return;
         }
 
-        $owns = $this->collector->begin();
+        $settings = $this->runtimeSettings->snapshot();
+
+        if (! $settings->enabled) {
+            $this->ownershipStack[] = false;
+
+            return;
+        }
+
+        $owns = $this->collector->begin($settings->slowSqlMinimumDurationMs);
         $this->ownershipStack[] = $owns;
 
         if ($owns) {
             $this->startedAtNs = hrtime(true);
+            $this->minimumDurationMs = $settings->minimumDurationMs;
         }
     }
 
@@ -113,7 +134,7 @@ final class BackgroundWorkRecorder
         $totalMs = (hrtime(true) - $this->startedAtNs) / 1e6;
         $metrics = $this->collector->end();
 
-        if ($totalMs < (float) config('perf.min_ms')) {
+        if ($totalMs < $this->minimumDurationMs) {
             return;
         }
 
@@ -136,5 +157,39 @@ final class BackgroundWorkRecorder
             'top_sql' => $metrics['top_sql'] ?: null,
             'mem_mb' => round(memory_get_peak_usage(true) / 1048576, 1),
         ]);
+    }
+
+    /**
+     * Console instrumentation must not make first-run or recovery commands
+     * depend on a settings table they may be about to create.
+     */
+    private function settingsAreAvailable(): bool
+    {
+        if (! app()->runningInConsole()) {
+            return true;
+        }
+
+        if ($this->settingsTableAvailable === true) {
+            return true;
+        }
+
+        try {
+            return $this->settingsTableAvailable = Schema::hasTable('base_settings');
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    private function shouldSkipCommand(string $command): bool
+    {
+        if (in_array($command, self::SKIPPED_COMMANDS, true)) {
+            return true;
+        }
+
+        return array_any(
+            self::SKIPPED_COMMAND_PREFIXES,
+            static fn (string $prefix): bool => $command === $prefix
+                || str_starts_with($command, $prefix.':'),
+        );
     }
 }

@@ -244,7 +244,7 @@ class DomainResidueScanner
 
     /**
      * Setting keys the given Config/settings.php files declare — both
-     * editable form fields and runtime claims.
+     * parameter definitions, editable form fields, and runtime claims.
      *
      * Modules write operational state (sync cursors, OAuth tokens,
      * diagnostics) through SettingsService without an editable field.
@@ -265,10 +265,27 @@ class DomainResidueScanner
                 continue;
             }
 
-            $keys = array_merge($keys, self::editableSettingKeys($config), self::runtimeSettingKeys($config));
+            $keys = array_merge(
+                $keys,
+                self::definitionSettingKeys($config),
+                self::editableSettingKeys($config),
+                self::runtimeSettingKeys($config),
+            );
         }
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return list<string>
+     */
+    private static function definitionSettingKeys(array $config): array
+    {
+        return array_values(array_filter(
+            array_keys((array) ($config['definitions'] ?? [])),
+            fn ($key): bool => is_string($key) && $key !== '',
+        ));
     }
 
     /**

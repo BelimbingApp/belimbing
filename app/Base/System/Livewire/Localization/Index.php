@@ -4,13 +4,13 @@ namespace App\Base\System\Livewire\Localization;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Geonames\Models\Country;
 use Carbon\CarbonInterface;
 use DateTimeZone;
@@ -30,8 +30,6 @@ class Index extends Component
 
     private const SETTINGS_KEY_INFERRED_COUNTRY = 'ui.locale_inferred_country';
 
-    private const SETTINGS_KEY_TIMEZONE = 'ui.timezone.default';
-
     public string $selectedLocale = '';
 
     public ?string $companyTimezone = '';
@@ -41,8 +39,11 @@ class Index extends Component
      */
     public array $localeOptions = [];
 
-    public function mount(LocaleCatalog $catalog, LocaleContext $localeContext, SettingsService $settings): void
-    {
+    public function mount(
+        LocaleCatalog $catalog,
+        LocaleContext $localeContext,
+        TimezoneSettings $timezoneSettings,
+    ): void {
         $this->localeOptions = collect($catalog->options())
             ->map(fn (string $label, string $code) => [
                 'value' => $code,
@@ -54,7 +55,7 @@ class Index extends Component
 
         $companyId = auth()->user()?->company_id;
         $this->companyTimezone = $companyId
-            ? (string) ($settings->get(self::SETTINGS_KEY_TIMEZONE, '', Scope::company($companyId)) ?? '')
+            ? $timezoneSettings->explicitCompanyTimezone((int) $companyId) ?? ''
             : '';
     }
 
@@ -110,13 +111,12 @@ class Index extends Component
             return;
         }
 
-        $settings = app(SettingsService::class);
-        $scope = Scope::company($companyId);
+        $timezoneSettings = app(TimezoneSettings::class);
 
         if ($tz === '') {
-            $settings->forget(self::SETTINGS_KEY_TIMEZONE, $scope);
+            $timezoneSettings->forgetCompanyTimezone((int) $companyId);
         } else {
-            $settings->set(self::SETTINGS_KEY_TIMEZONE, $tz, $scope);
+            $timezoneSettings->setCompanyTimezone((int) $companyId, $tz);
         }
     }
 
@@ -151,7 +151,7 @@ class Index extends Component
         if ($companyId) {
             $auditSubjects[] = [
                 'name' => 'setting',
-                'id' => self::SETTINGS_KEY_TIMEZONE.'@company:'.$companyId,
+                'id' => TimezoneSettings::LOCALIZATION_TIMEZONE_KEY.'@company:'.$companyId,
             ];
         }
 

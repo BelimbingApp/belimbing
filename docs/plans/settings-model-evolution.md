@@ -1,6 +1,6 @@
 # settings-model-evolution
 
-**Status:** In progress; definition registry core and AI pilot implemented
+**Status:** In progress; definition registry plus AI, Performance, and timezone slices implemented
 **Last Updated:** 2026-07-23
 **Sources:** `docs/architecture/settings.md`; `docs/architecture/module-system.md`; `.env.example`; `config/app.php`; `config/mail.php`; `config/session.php`; `app/Base/AI/Config/ai.php`; `app/Base/Settings/`; `app/Base/DateTime/`; `app/Modules/Core/User/Models/User.php`; user discussion on environment ownership, runtime settings, and user preferences
 **Agents:** Codex/GPT-5
@@ -79,7 +79,7 @@ Goal: the approved target, terminology, preference ownership, and current implem
 
 Goal: one module-owned definition controls every runtime parameter and `SettingsService` resolves database rows to that definition’s default without config fallback.
 
-Evidence: focused settings, AI runtime, extraction, and residue suites pass (100 tests, 350 assertions); Pint, UI detector, and diff checks pass.
+Evidence: focused settings, AI runtime, extraction, and residue suites pass (100 tests, 350 assertions); the Performance evidence is recorded with its Phase 4 slice; Pint, UI detector, and diff checks pass.
 
 - [x] Land the first vertical slice: introduce definition discovery and validation, make migrated keys use definition-owned fallback instead of config/caller fallbacks, distinguish definitions from runtime-state claims, and migrate AI tool rounds plus `pdftotext` {Codex/GPT-5}
 - [ ] Extend discovered module settings declarations with exact definitions, types, scopes, defaults, validation, encryption, ownership, and editability
@@ -93,8 +93,12 @@ Evidence: focused settings, AI runtime, extraction, and residue suites pass (100
 Affected pages: profile appearance, application top bar, localization settings, dashboard, profile settings
 Goal: authenticated preferences follow the user account across sessions and devices without depending on an employee record.
 
+Evidence for the timezone slice: focused definition, resolver, migration, display,
+endpoint, company, Localization UI, residue, and migration-discovery tests pass
+(118 tests, 259 assertions); Pint and diff checks pass.
+
 - [ ] Replace employee settings scope with user scope and migrate any employee-scoped setting rows that represent account preferences
-- [ ] Store timezone display mode in user scope while keeping the company IANA timezone in company scope
+- [x] Store `ui.timezone.mode` in user scope and migrate legacy effective preferences; rename the company IANA setting to `localization.timezone` with declared `UTC` default {Codex/GPT-5}
 - [ ] Store authenticated theme preference in user scope with system as the declared default; retain browser storage only for anonymous state or synchronized pre-paint
 - [ ] Classify and migrate appropriate `users.prefs` values, including landing page, dashboard layout, and AI model hints
 - [ ] Replace employee settings authorization with self-owned user preference authorization and explicit support override capability
@@ -104,8 +108,13 @@ Goal: authenticated preferences follow the user account across sessions and devi
 
 Goal: every post-boot parameter is UI-managed and no deployment changes behavior silently when config fallback is removed.
 
+Evidence for the Performance slice: focused resolver, registry, dashboard
+authorization/save/restore, instrumentation, pruning, diagnostics, bootstrap
+degradation, and settings tests pass (79 tests, 214 assertions); adjacent AI
+and residue compatibility suites pass; Pint and the UI detector pass.
+
 - [ ] Inventory `.env.example`, Laravel config, module config, and direct `env()` or `config()` reads by consumer category
-- [ ] Migrate Performance logging controls (`enabled`, minimum request time, slow-SQL threshold, retention, and log path) to global definitions and the authorized Performance UI; remove their environment/config fallbacks
+- [x] Migrate Performance logging controls (`enabled`, minimum request time, slow-SQL threshold, retention, and log path) to global definitions and the authorized Performance UI; remove their environment/config fallbacks {Codex/GPT-5}
 - [ ] Migrate `APP_LOCALE` to the existing `ui.locale` setting contract and Localization UI; put its default in the setting definition, keep the missing-translation fallback in versioned code, and retain `APP_FAKER_LOCALE` only as a development/test input
 - [ ] Migrate mail transport, endpoint, credentials, and sender identity from `MAIL_*` to encrypted global settings with an authorized Email/Integrations UI and a safe code default
 - [ ] Migrate the Lara prompt-extension path and Bash-tool enablement from `AI_LARA_PROMPT_EXTENSION_PATH` and `AI_BASH_TOOL_ENABLED` to global AI definitions and authorized UI; use a safe disabled Bash default

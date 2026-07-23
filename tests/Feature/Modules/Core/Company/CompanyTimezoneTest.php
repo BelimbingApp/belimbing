@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Core\Address\Models\Address;
@@ -10,7 +11,7 @@ use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
 
-const COMPANY_TZ_SETTINGS_KEY = 'ui.timezone.default';
+const COMPANY_TZ_SETTINGS_KEY = TimezoneSettings::LOCALIZATION_TIMEZONE_KEY;
 const COMPANY_TZ_KL = 'Asia/Kuala_Lumpur';
 const COMPANY_TZ_TOKYO = 'Asia/Tokyo';
 const COMPANY_CITY_KUALA_LUMPUR = 'Kuala Lumpur';
@@ -77,13 +78,10 @@ it('rejects an invalid timezone identifier', function (): void {
         ->test(Show::class, ['company' => $this->company])
         ->set('companyTimezone', 'Not/A_Real_Zone');
 
-    $stored = $this->settings->get(
+    expect($this->settings->has(
         COMPANY_TZ_SETTINGS_KEY,
-        null,
         Scope::company($this->company->id),
-    );
-
-    expect($stored)->toBeNull();
+    ))->toBeFalse();
 });
 
 it('clears timezone when empty string is set', function (): void {
@@ -146,13 +144,10 @@ it('does not auto-save timezone when locality has no exact city match', function
         ->set('kind', ['headquarters'])
         ->call('saveAddress');
 
-    $stored = $this->settings->get(
+    expect($this->settings->has(
         COMPANY_TZ_SETTINGS_KEY,
-        null,
         Scope::company($this->company->id),
-    );
-
-    expect($stored)->toBeNull();
+    ))->toBeFalse();
 });
 
 it('returns null suggestion when no address exists', function (): void {

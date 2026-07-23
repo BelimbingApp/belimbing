@@ -1,9 +1,16 @@
 <?php
 
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\DateTime\Enums\TimezoneMode;
+use App\Base\DateTime\Services\TimezoneSettings;
+use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Exceptions\InvalidSettingScopeException;
+use App\Base\Settings\Exceptions\InvalidSettingValueException;
 use App\Base\Settings\Models\Setting;
 use App\Base\Settings\Services\DatabaseSettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -31,6 +38,83 @@ it('returns null when no value found and no default', function (): void {
     expect($this->service->get('nonexistent.key'))->toBeNull();
 });
 
+it('resolves a declared parameter from its definition without config or caller fallback', function (): void {
+    config([
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY => 24,
+    ]);
+
+    expect($this->service->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, 12))->toBe(100);
+});
+
+it('resolves global declared parameters as one definition-backed group', function (): void {
+    $this->service->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, 160);
+    config([AiRuntimeSettings::PDFTOTEXT_PATH_KEY => 'C:\\environment-fallback']);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+
+    $values = $this->service->getMany([
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+        AiRuntimeSettings::PDFTOTEXT_PATH_KEY,
+    ]);
+    $settingQueries = collect(DB::getQueryLog())
+        ->filter(fn (array $query): bool => str_contains($query['query'], 'base_settings'))
+        ->count();
+
+    DB::disableQueryLog();
+
+    expect($values)->toBe([
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY => 160,
+        AiRuntimeSettings::PDFTOTEXT_PATH_KEY => null,
+    ])->and($settingQueries)->toBe(1);
+});
+
+it('validates declared parameter scope and stored value type', function (): void {
+    expect(fn () => $this->service->set(
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+        100,
+        Scope::company(1),
+    ))->toThrow(InvalidSettingScopeException::class)
+        ->and(fn () => $this->service->set(
+            AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+            '100',
+        ))->toThrow(InvalidSettingValueException::class)
+        ->and(fn () => $this->service->set(
+            AiRuntimeSettings::PDFTOTEXT_PATH_KEY,
+            null,
+        ))->toThrow(InvalidSettingValueException::class);
+});
+
+it('enforces each declared parameters validation rules on every write', function (): void {
+    expect(fn () => $this->service->set(
+        AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+        0,
+    ))->toThrow(InvalidSettingValueException::class)
+        ->and(fn () => $this->service->set(
+            AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+            501,
+        ))->toThrow(InvalidSettingValueException::class)
+        ->and(fn () => $this->service->set(
+            PerfRuntimeSettings::RETENTION_DAYS_KEY,
+            0,
+        ))->toThrow(InvalidSettingValueException::class)
+        ->and(fn () => $this->service->set(
+            TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+            'Not/A/Timezone',
+            Scope::company(1),
+        ))->toThrow(InvalidSettingValueException::class);
+});
+
+it('restores a declared parameter to its definition default', function (): void {
+    $this->service->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, 160);
+    expect($this->service->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(160);
+
+    $this->service->forget(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
+
+    expect($this->service->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(100)
+        ->and($this->service->has(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBeFalse();
+});
+
 it('global DB override wins over config', function (): void {
     config(['some.setting' => 'from-config']);
 
@@ -44,6 +128,14 @@ it('company scope wins over global DB', function (): void {
     $this->service->set('some.setting', 'company-value', Scope::company(1));
 
     expect($this->service->get('some.setting', null, Scope::company(1)))->toBe('company-value');
+});
+
+it('user scope wins over company and remains isolated between users', function (): void {
+    $this->service->set('some.setting', 'company-value', Scope::company(1));
+    $this->service->set('some.setting', 'user-value', Scope::user(10, 1));
+
+    expect($this->service->get('some.setting', scope: Scope::user(10, 1)))->toBe('user-value')
+        ->and($this->service->get('some.setting', scope: Scope::user(11, 1)))->toBe('company-value');
 });
 
 it('employee scope wins over company scope', function (): void {
@@ -69,6 +161,41 @@ it('company cascades to global when no company override', function (): void {
     $this->service->set('some.setting', 'global-value');
 
     expect($this->service->get('some.setting', null, Scope::company(1)))->toBe('global-value');
+});
+
+it('resolves declared timezone settings only through their allowed scopes', function (): void {
+    $this->service->set(
+        TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+        'Asia/Kuala_Lumpur',
+        Scope::company(1),
+    );
+    $this->service->set(
+        TimezoneSettings::MODE_KEY,
+        TimezoneMode::LOCAL->value,
+        Scope::user(10, 1),
+    );
+
+    expect($this->service->get(
+        TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+        scope: Scope::company(1),
+    ))->toBe('Asia/Kuala_Lumpur')
+        ->and($this->service->get(
+            TimezoneSettings::LOCALIZATION_TIMEZONE_KEY,
+            scope: Scope::company(2),
+        ))->toBe('UTC')
+        ->and($this->service->get(
+            TimezoneSettings::MODE_KEY,
+            scope: Scope::user(10, 1),
+        ))->toBe(TimezoneMode::LOCAL->value)
+        ->and($this->service->get(
+            TimezoneSettings::MODE_KEY,
+            scope: Scope::user(11, 1),
+        ))->toBe(TimezoneMode::COMPANY->value)
+        ->and(fn () => $this->service->set(
+            TimezoneSettings::MODE_KEY,
+            TimezoneMode::UTC->value,
+            Scope::company(1),
+        ))->toThrow(InvalidSettingScopeException::class);
 });
 
 // --- Full Cascade ---
@@ -214,7 +341,10 @@ it('encrypted values are not stored as plaintext in DB', function (): void {
 it('never writes decrypted settings to a persistent cache store', function (): void {
     config(['settings.cache_ttl' => 3600]);
     $cache = app('cache')->store('database');
-    $service = new DatabaseSettingsService($cache);
+    $service = new DatabaseSettingsService(
+        $cache,
+        app(SettingDefinitionRegistry::class),
+    );
     $secret = 'postgresql://mirror-user:cache-secret@example.test/postgres';
 
     $service->set('data_share.mirror.credentials', $secret, encrypted: true);

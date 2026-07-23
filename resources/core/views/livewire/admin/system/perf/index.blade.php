@@ -7,6 +7,19 @@
 
     // Log-scale y positions matching the component's 10 ms – 30 s bounds.
     $gridline = static fn (float $milliseconds): float => 100 - ((log10($milliseconds) - 1) / (log10(30000) - 1) * 100);
+
+    $defaultLabel = static fn (\App\Base\Settings\DTO\SettingDefinition $definition): string => match (true) {
+        is_bool($definition->default) => $definition->default ? __('On') : __('Off'),
+        is_float($definition->default) => rtrim(rtrim(number_format($definition->default, 3, '.', ''), '0'), '.'),
+        $definition->default === null => __('storage/logs'),
+        default => (string) $definition->default,
+    };
+
+    $settingLabel = static fn (string $key): string => __($performanceSettingDefinitions[$key]->label ?? $key);
+    $settingHelp = static fn (string $key): string => __(
+        $performanceSettingDefinitions[$key]->help ?? '',
+        ['default' => $defaultLabel($performanceSettingDefinitions[$key])],
+    );
 @endphp
 
 <div class="space-y-section-gap">
@@ -24,13 +37,126 @@
         </x-slot>
     </x-ui.page-header>
 
+    <x-ui.card>
+        <x-ui.disclosure
+            :title="__('Recording settings')"
+            variant="card-header"
+            panel-id="performance-recording-settings"
+        >
+            <x-slot name="badge">
+                <x-ui.badge :variant="$recordingEnabled ? 'success' : 'default'">
+                    {{ $recordingEnabled ? __('On') : __('Off') }}
+                </x-ui.badge>
+            </x-slot>
+
+            <form wire:submit="saveRuntimeSettings" class="max-w-4xl space-y-5">
+                <p class="max-w-3xl text-sm leading-6 text-muted">
+                    {{ __('These installation-wide values take effect without editing the server environment. The log directory must be valid for every runtime host using this database.') }}
+                </p>
+
+                <x-ui.checkbox
+                    id="performance-recording-enabled"
+                    wire:model="recordingEnabled"
+                    :label="$settingLabel(\App\Base\Perf\Services\PerfRuntimeSettings::ENABLED_KEY)"
+                    :help="$settingHelp(\App\Base\Perf\Services\PerfRuntimeSettings::ENABLED_KEY)"
+                    :error="$errors->first('recordingEnabled')"
+                    :disabled="! $canManagePerformanceSettings"
+                />
+
+                <div class="grid gap-4 md:grid-cols-2">
+                    <x-ui.input
+                        id="performance-minimum-duration"
+                        wire:model="minimumDurationMs"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.1"
+                        :min="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY]->ruleParameter('min')"
+                        :max="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY]->ruleParameter('max')"
+                        suffix="ms"
+                        :label="$settingLabel(\App\Base\Perf\Services\PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY)"
+                        :help="$settingHelp(\App\Base\Perf\Services\PerfRuntimeSettings::MINIMUM_DURATION_MS_KEY)"
+                        :error="$errors->first('minimumDurationMs')"
+                        :disabled="! $canManagePerformanceSettings"
+                    />
+
+                    <x-ui.input
+                        id="performance-slow-sql-threshold"
+                        wire:model="slowSqlMinimumDurationMs"
+                        type="number"
+                        inputmode="decimal"
+                        step="0.1"
+                        :min="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY]->ruleParameter('min')"
+                        :max="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY]->ruleParameter('max')"
+                        suffix="ms"
+                        :label="$settingLabel(\App\Base\Perf\Services\PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY)"
+                        :help="$settingHelp(\App\Base\Perf\Services\PerfRuntimeSettings::SLOW_SQL_MINIMUM_DURATION_MS_KEY)"
+                        :error="$errors->first('slowSqlMinimumDurationMs')"
+                        :disabled="! $canManagePerformanceSettings"
+                    />
+
+                    <x-ui.input
+                        id="performance-retention-days"
+                        wire:model="retentionDays"
+                        type="number"
+                        inputmode="numeric"
+                        step="1"
+                        :min="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::RETENTION_DAYS_KEY]->ruleParameter('min')"
+                        :max="$performanceSettingDefinitions[\App\Base\Perf\Services\PerfRuntimeSettings::RETENTION_DAYS_KEY]->ruleParameter('max')"
+                        :suffix="__('days')"
+                        :label="$settingLabel(\App\Base\Perf\Services\PerfRuntimeSettings::RETENTION_DAYS_KEY)"
+                        :help="$settingHelp(\App\Base\Perf\Services\PerfRuntimeSettings::RETENTION_DAYS_KEY)"
+                        :error="$errors->first('retentionDays')"
+                        :disabled="! $canManagePerformanceSettings"
+                    />
+
+                    <x-ui.input
+                        id="performance-log-directory"
+                        wire:model="logPath"
+                        :label="$settingLabel(\App\Base\Perf\Services\PerfRuntimeSettings::LOG_PATH_KEY)"
+                        :help="$settingHelp(\App\Base\Perf\Services\PerfRuntimeSettings::LOG_PATH_KEY)"
+                        :placeholder="storage_path('logs')"
+                        :error="$errors->first('logPath')"
+                        :disabled="! $canManagePerformanceSettings"
+                    />
+                </div>
+
+                @if ($canManagePerformanceSettings)
+                    <div class="flex flex-wrap items-center gap-3">
+                        <x-ui.button
+                            type="submit"
+                            variant="primary"
+                            wire:loading.attr="disabled"
+                            wire:target="saveRuntimeSettings"
+                        >
+                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                            {{ __('Save Settings') }}
+                        </x-ui.button>
+                        <x-ui.button
+                            type="button"
+                            variant="secondary"
+                            wire:click="restoreRuntimeSettingDefaults"
+                            wire:loading.attr="disabled"
+                            wire:target="restoreRuntimeSettingDefaults"
+                        >
+                            {{ __('Restore Defaults') }}
+                        </x-ui.button>
+                    </div>
+                @else
+                    <x-ui.alert variant="info">
+                        {{ __('You can review these values, but changing global performance settings requires Performance management access.') }}
+                    </x-ui.alert>
+                @endif
+            </form>
+        </x-ui.disclosure>
+    </x-ui.card>
+
     @if ($summary['requests'] === 0)
         <x-ui.card>
             <div class="flex flex-col items-center gap-2 py-10 text-center">
                 <x-icon name="heroicon-o-bolt" class="h-6 w-6 text-muted" />
                 <p class="text-sm font-medium text-ink">{{ __('No requests recorded in the last :window', ['window' => $window]) }}</p>
                 <p class="max-w-md text-sm text-muted">
-                    {{ __('Browse the app and this page fills itself. Recording is controlled by PERF_LOG_ENABLED; the log lives in storage/logs/perf-*.jsonl.') }}
+                    {{ __('Browse the app and this page fills itself while performance recording is on. Open Recording settings above to review the active log directory and thresholds.') }}
                 </p>
             </div>
         </x-ui.card>
@@ -200,7 +326,7 @@
 
     {{-- The log is the product; this page is a demonstration of it. --}}
     <p class="text-xs text-muted">
-        {{ __('Read-only view over storage/logs/perf-*.jsonl — the same log agents query with') }}
+        {{ __('Read-only view over the configured perf-*.jsonl files — the same log agents query with') }}
         <code class="rounded bg-surface-subtle px-1 py-0.5 font-mono text-[11px] text-ink">php artisan perf:slowest</code>
         {{ __('and') }}
         <code class="rounded bg-surface-subtle px-1 py-0.5 font-mono text-[11px] text-ink">php artisan perf:requests</code>.

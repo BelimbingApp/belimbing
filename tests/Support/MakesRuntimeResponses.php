@@ -11,6 +11,7 @@ use App\Base\AI\Services\LlmClient;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\DTO\Message;
 use App\Modules\Core\AI\Services\AgenticExecutionControlResolver;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
@@ -173,20 +174,21 @@ trait MakesRuntimeResponses
 
     protected function makeAiRuntimeSettings(?int $maxToolRounds = null): AiRuntimeSettings
     {
+        $definitions = app(SettingDefinitionRegistry::class);
         $settings = \Mockery::mock(SettingsService::class);
         $settings->shouldReceive('has')
             ->andReturnUsing(fn (string $key): bool => $maxToolRounds !== null
                 && $key === AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY);
         $settings->shouldReceive('get')
-            ->andReturnUsing(function (string $key, mixed $default = null) use ($maxToolRounds): mixed {
-                if ($key === AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY && $maxToolRounds !== null) {
-                    return $maxToolRounds;
+            ->andReturnUsing(function (string $key, mixed $default = null) use ($definitions, $maxToolRounds): mixed {
+                if ($key === AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY) {
+                    return $maxToolRounds ?? $definitions->get($key)->default;
                 }
 
                 return config($key, $default);
             });
 
-        return new AiRuntimeSettings($settings);
+        return new AiRuntimeSettings($settings, $definitions);
     }
 
     protected function makeToolCallResponse(string $callId, string $toolName, string $arguments): array

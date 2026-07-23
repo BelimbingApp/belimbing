@@ -559,7 +559,7 @@ workspace/{employee_id}/
 - `tasks`: optional Lara-only task-model configuration. Each task entry stores a mode (`primary`, `recommended`, or `manual`) and, for `recommended`/`manual`, a stable saved provider/model pair plus optional UI reason text. A task entry may also include canonical `execution_controls`; those controls overlay the resolved model config even when the task uses `mode: primary`. Recommendation is on-demand and persists a stable choice; it is not recomputed automatically on every run.
 - `provider`: references `ai_providers.name` within the agent's company.
 - `model`: the specific model within that provider.
-- `execution_controls`: canonical BLB runtime controls persisted in provider-agnostic form; omitted fields fall back to global `config('ai.llm.execution_controls')` defaults or, for tasks, the resolved chat model entry.
+- `execution_controls`: canonical BLB runtime controls persisted in provider-agnostic form; omitted fields fall back to the resolved chat model entry and then the applicable declared AI runtime-setting defaults.
 - New provider support should extend Base AI capability and request-mapping seams against this canonical `execution_controls` contract instead of adding provider-branded config keys or request DTO fields.
 
 ### 15.3 Config Resolution Order
@@ -568,13 +568,15 @@ The runtime resolves LLM configuration with a cascade:
 
 1. **agent workspace `config.json`** — per-agent overrides (`llm.models[]` for chat, and for Lara optionally `llm.tasks.*` for specialized task routing)
 2. **Company provider credentials** — `ai_providers` row matching the provider name + company_id (supplies `base_url` and `api_key`)
-3. **Global defaults** — `config('ai.llm.*')` from `app/Base/AI/Config/ai.php` / `.env` (fallback runtime parameters like `max_tokens`, `temperature`, `timeout`)
+3. **Declared AI runtime settings** — applicable `base_settings` values followed by their definition-owned code defaults
 
 **Resolution rules:**
 - If `config.json` specifies a provider → look up `ai_providers` by `(company_id, name)` → use that row's `base_url` and `api_key`, merged with per-agent model/params.
 - If workspace config is missing (or `llm.models[]` is empty) → resolve company default provider+model (`ConfigResolver::resolveDefault()`), then apply runtime defaults for parameters.
 - If a Lara task config is missing, incomplete, or points to an inactive provider/model → fall back to Lara's primary chat model.
 - If a configured provider cannot be resolved (inactive/not found) or has missing credentials → runtime returns `config_error` for that model (non-transient), and fallback stops at that point.
+
+The settings-model migration is tracked in `docs/plans/settings-model-evolution.md`. The tool-round limit and `pdftotext` path are the first definition-backed parameters; other AI controls still contain transitional config-backed defaults. New AI runtime parameters must follow the target `base_settings` → declared default contract in `docs/architecture/settings.md`.
 
 ### 15.4 Authorization for Provider Management
 

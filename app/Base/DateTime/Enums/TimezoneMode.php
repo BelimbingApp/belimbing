@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\DateTime\Enums;
 
 enum TimezoneMode: string

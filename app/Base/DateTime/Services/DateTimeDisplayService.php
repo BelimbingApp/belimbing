@@ -1,11 +1,10 @@
 <?php
+
 namespace App\Base\DateTime\Services;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService as DateTimeDisplayServiceContract;
 use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\Locale\Contracts\LocaleContext;
-use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
 use Carbon\Carbon;
 use IntlDateFormatter;
 
@@ -22,7 +21,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
     private ?string $resolvedTimezone = null;
 
     public function __construct(
-        private readonly SettingsService $settings,
+        private readonly TimezoneSettings $timezoneSettings,
         private readonly LocaleContext $localeContext,
     ) {}
 
@@ -65,17 +64,7 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
             return $this->resolvedMode = TimezoneMode::COMPANY;
         }
 
-        $scope = null;
-
-        if ($user->employee_id) {
-            $scope = Scope::employee($user->employee_id, $user->company_id ?? 0);
-        } elseif ($user->company_id) {
-            $scope = Scope::company($user->company_id);
-        }
-
-        $raw = $this->settings->get('ui.timezone.mode', TimezoneMode::COMPANY->value, $scope);
-
-        return $this->resolvedMode = TimezoneMode::tryFrom($raw) ?? TimezoneMode::COMPANY;
+        return $this->resolvedMode = $this->timezoneSettings->modeForUser((int) $user->id);
     }
 
     /**
@@ -121,30 +110,21 @@ class DateTimeDisplayService implements DateTimeDisplayServiceContract
             return false;
         }
 
-        return $this->settings->has(
-            'ui.timezone.default',
-            Scope::company($user->company_id),
-        );
+        return $this->timezoneSettings->explicitCompanyTimezone((int) $user->company_id) !== null;
     }
 
     /**
      * Resolve the company-level default timezone.
      *
-     * Reads 'ui.timezone.default' from the company scope of the
-     * authenticated user, falling back to 'UTC'.
+     * Reads 'localization.timezone' from the company scope of the
+     * authenticated user, then its declared UTC default.
      */
     private function resolveCompanyTimezone(): string
     {
         $user = auth()->user();
 
-        if (! $user || ! $user->company_id) {
-            return 'UTC';
-        }
-
-        return $this->settings->get(
-            'ui.timezone.default',
-            'UTC',
-            Scope::company($user->company_id),
+        return $this->timezoneSettings->companyTimezone(
+            $user?->company_id !== null ? (int) $user->company_id : null,
         );
     }
 

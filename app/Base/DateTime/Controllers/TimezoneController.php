@@ -1,10 +1,10 @@
 <?php
+
 namespace App\Base\DateTime\Controllers;
 
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
-use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Settings\DTO\Scope;
+use App\Base\DateTime\Services\TimezoneSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -17,17 +17,15 @@ use Illuminate\Validation\Rule;
  */
 class TimezoneController
 {
-    private const SETTINGS_KEY = 'ui.timezone.mode';
-
     public function __construct(
-        private readonly SettingsService $settings,
+        private readonly TimezoneSettings $timezoneSettings,
         private readonly DateTimeDisplayService $dateTimeDisplay,
     ) {}
 
     /**
      * Set the timezone display mode for the authenticated user.
      *
-     * Persists at the most specific available scope (employee or company).
+     * Persists against the authenticated user account.
      * Returns the new mode and resolved IANA timezone identifier.
      */
     public function set(Request $request): JsonResponse
@@ -37,10 +35,14 @@ class TimezoneController
         ]);
 
         $user = $request->user();
-        $scope = $this->resolveScope($user);
         $mode = TimezoneMode::from($validated['mode']);
 
-        $this->settings->set(self::SETTINGS_KEY, $mode->value, $scope);
+        abort_if($user === null, 401);
+
+        $this->timezoneSettings->setModeForUser(
+            (int) $user->getAuthIdentifier(),
+            $mode,
+        );
 
         $companyTimezone = $this->dateTimeDisplay->currentCompanyTimezone();
 
@@ -51,22 +53,6 @@ class TimezoneController
             'company_timezone' => $companyTimezone,
             'company_timezone_explicit' => $this->dateTimeDisplay->isCompanyTimezoneExplicit(),
         ]);
-    }
-
-    /**
-     * Build the scope for the current user's timezone preference.
-     */
-    private function resolveScope(mixed $user): ?Scope
-    {
-        if ($user->employee_id) {
-            return Scope::employee($user->employee_id, $user->company_id ?? 0);
-        }
-
-        if ($user->company_id) {
-            return Scope::company($user->company_id);
-        }
-
-        return null;
     }
 
     /**

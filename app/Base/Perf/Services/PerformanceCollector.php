@@ -34,6 +34,8 @@ final class PerformanceCollector
 
     private float $processMs = 0.0;
 
+    private float $slowSqlMinimumDurationMs = 0.0;
+
     /** @var list<array{ms: float, sql: string}> */
     private array $topSql = [];
 
@@ -41,7 +43,7 @@ final class PerformanceCollector
      * Open a window. Returns false when one is already active — the caller
      * then does not own the window and must not end() or record it.
      */
-    public function begin(): bool
+    public function begin(float $slowSqlMinimumDurationMs): bool
     {
         if ($this->active) {
             return false;
@@ -55,6 +57,7 @@ final class PerformanceCollector
         $this->cacheWrites = 0;
         $this->processes = 0;
         $this->processMs = 0.0;
+        $this->slowSqlMinimumDurationMs = max(0.0, $slowSqlMinimumDurationMs);
         $this->topSql = [];
 
         return true;
@@ -93,7 +96,7 @@ final class PerformanceCollector
         $this->queries++;
         $this->dbMs += $milliseconds;
 
-        if ($sql !== '' && $milliseconds >= (float) config('perf.slow_sql_min_ms')) {
+        if ($sql !== '' && $milliseconds >= $this->slowSqlMinimumDurationMs) {
             $this->rememberSlowSql($milliseconds, $sql);
         }
     }

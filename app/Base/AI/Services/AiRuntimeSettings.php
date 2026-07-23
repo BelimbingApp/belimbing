@@ -3,9 +3,11 @@
 namespace App\Base\AI\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\SettingDefinition;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 
 /**
- * Resolves operator-managed AI runtime settings over shipped config defaults.
+ * Typed access to operator-managed AI runtime settings.
  */
 final readonly class AiRuntimeSettings
 {
@@ -15,10 +17,9 @@ final readonly class AiRuntimeSettings
 
     public const string PDFTOTEXT_PATH_KEY = 'ai.tools.document_analysis.pdftotext_path';
 
-    public const int DEFAULT_MAX_TOOL_ROUNDS = 100;
-
     public function __construct(
         private SettingsService $settings,
+        private SettingDefinitionRegistry $definitions,
     ) {}
 
     public function maxToolRounds(): int
@@ -29,10 +30,27 @@ final readonly class AiRuntimeSettings
             default => self::MAX_TOOL_ROUNDS_KEY,
         };
 
-        return max(0, (int) $this->settings->get(
+        return max(1, (int) $this->settings->get(
             $key,
-            self::DEFAULT_MAX_TOOL_ROUNDS,
         ));
+    }
+
+    public function maxToolRoundsDefinition(): SettingDefinition
+    {
+        return $this->definitions->get(self::MAX_TOOL_ROUNDS_KEY);
+    }
+
+    public function defaultMaxToolRounds(): int
+    {
+        return (int) $this->maxToolRoundsDefinition()->default;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function maxToolRoundsRules(): array
+    {
+        return $this->maxToolRoundsDefinition()->rules;
     }
 
     public function pdfToTextPath(): ?string

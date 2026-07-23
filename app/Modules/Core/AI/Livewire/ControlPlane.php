@@ -33,8 +33,6 @@ class ControlPlane extends Component
     use MapsControlPlaneState;
     use WithPagination;
 
-    private const int MAX_CONFIGURABLE_TOOL_ITERATIONS = 500;
-
     public string $activeTab = 'inspector';
 
     public string $inspectRunId = '';
@@ -72,7 +70,7 @@ class ControlPlane extends Component
 
     public string $lifecycleSessionId = '';
 
-    public string $maxToolRounds = (string) AiRuntimeSettings::DEFAULT_MAX_TOOL_ROUNDS;
+    public string $maxToolRounds = '';
 
     /** @var array<string, mixed>|null */
     public ?array $lifecyclePreview = null;
@@ -278,17 +276,14 @@ class ControlPlane extends Component
         );
     }
 
-    public function saveRuntimeGuardrails(SettingsService $settings): void
-    {
+    public function saveRuntimeGuardrails(
+        SettingsService $settings,
+        AiRuntimeSettings $runtimeSettings,
+    ): void {
         $this->authorizeRuntimeGuardrailManagement();
 
         $validated = $this->validate([
-            'maxToolRounds' => [
-                'required',
-                'integer',
-                'min:1',
-                'max:'.self::MAX_CONFIGURABLE_TOOL_ITERATIONS,
-            ],
+            'maxToolRounds' => $runtimeSettings->maxToolRoundsRules(),
         ]);
 
         $value = (int) $validated['maxToolRounds'];
@@ -310,12 +305,13 @@ class ControlPlane extends Component
         $settings->forget(AiRuntimeSettings::LEGACY_MAX_TOOL_ITERATIONS_KEY);
         $this->maxToolRounds = (string) $runtimeSettings->maxToolRounds();
         $this->resetValidation('maxToolRounds');
-        $this->notify(__('Runtime guardrails restored to their configured defaults.'));
+        $this->notify(__('Runtime guardrail restored to its shipped default.'));
     }
 
     public function render(): View
     {
         $diagnostics = app(RunDiagnosticService::class);
+        $maxToolRoundsDefinition = app(AiRuntimeSettings::class)->maxToolRoundsDefinition();
         $recentRuns = $diagnostics
             ->recentRunsQuery($this->recentRunsSearch)
             ->paginate(25)
@@ -334,6 +330,7 @@ class ControlPlane extends Component
             'canManageRuntimeGuardrails' => $this->canManageRuntimeGuardrails(),
             'recentRuns' => $recentRuns,
             'runView' => $this->mapRunView($runView),
+            'maxToolRoundsDefinition' => $maxToolRoundsDefinition,
             'wireLogDiskUsageBytes' => $diagnostics->wireLogDiskUsageBytes(),
             'selectedLifecycleAction' => $this->resolveLifecycleAction(),
             'operationsBreadcrumb' => $this->operationsBreadcrumb(),
