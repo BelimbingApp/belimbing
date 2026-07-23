@@ -43,6 +43,27 @@ test('ai operators see the full AI admin menu', function (): void {
     expect(flattenMenuTreeIds($tree))->toContain('admin.ai');
 });
 
+test('tenant owners can manage company AI providers without broader AI administration access', function (): void {
+    $user = createAiMenuTestUserWithRole('tenant_owner');
+
+    $snapshot = app(NavigableMenuSnapshot::class)->snapshotForUser($user);
+    $flat = $snapshot['flat'];
+    $tree = app(MenuBuilder::class)->build($snapshot['filtered']);
+
+    expect($flat)->toHaveKey('admin.ai.provider')
+        ->not->toHaveKeys([
+            'admin.ai.lara',
+            'admin.ai.pricing-override',
+            'admin.ai.tool',
+            'admin.ai.control-plane',
+        ]);
+    expect(flattenMenuTreeIds($tree))->toContain('admin.ai');
+
+    $this->actingAs($user)
+        ->get(route('admin.ai.providers'))
+        ->assertOk();
+});
+
 function createAiMenuTestUserWithRole(string $roleCode): User
 {
     setupAuthzRoles();

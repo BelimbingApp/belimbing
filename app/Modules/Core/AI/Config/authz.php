@@ -44,6 +44,7 @@ $agentPowerUserAdditionalCapabilities = [
 ];
 
 $tenantOwnerAiCapabilities = [
+    'admin.ai.provider.manage',
     'admin.ai.chat-attachment.manage',
     'admin.ai.agent.view',
     'admin.ai.agent.execute',
