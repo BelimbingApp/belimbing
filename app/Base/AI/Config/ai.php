@@ -53,12 +53,6 @@ return [
     |
     */
     'llm' => [
-        'agentic' => [
-            'max_tool_rounds' => (int) env(
-                'AI_AGENTIC_MAX_TOOL_ROUNDS',
-                env('AI_AGENTIC_MAX_TOOL_ITERATIONS', 100),
-            ),
-        ],
         'execution_controls' => [
             'limits' => [
                 'max_output_tokens' => 8192,
@@ -121,7 +115,6 @@ return [
         'document_analysis' => [
             'download_timeout_seconds' => 30,
             'pdf_timeout_seconds' => 60,
-            'pdftotext_path' => env('AI_PDFTOTEXT_PATH'),
             'max_response_bytes' => 26214400, // 25 MiB
             'max_output_chars' => 120000,
             'max_pdf_pages' => 200,

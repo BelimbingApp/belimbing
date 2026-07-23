@@ -16,8 +16,6 @@ const AI_RUNTIME_SETTINGS_PDFTOTEXT_PATH = 'C:\\Runtime Settings\\pdftotext.exe'
 beforeEach(function (): void {
     Company::provisionLicensee(AI_RUNTIME_SETTINGS_LICENSEE);
     Employee::provisionLara();
-    config()->set(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY, AiRuntimeSettings::DEFAULT_MAX_TOOL_ROUNDS);
-    config()->set(AiRuntimeSettings::PDFTOTEXT_PATH_KEY, null);
 });
 
 it('stores and restores the global tool-loop guardrail from the control plane', function (): void {
