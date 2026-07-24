@@ -679,14 +679,24 @@ it('discovers Supabase organizations and projects from a transient access token'
         ->assertSet('supabaseDiscoveryComplete', true)
         ->assertSet('supabaseOrganizationSlug', 'acme-dev')
         ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->assertSet('supabaseSetupChoice', 'existing')
+        ->assertSee('Choose a Supabase project')
+        ->assertSeeInOrder([
+            'Existing Development',
+            'Create a new Supabase project',
+        ])
+        ->assertSee('Database password')
+        ->assertSee('Connect and prepare mirror')
+        ->assertDontSee('Create a Supabase project for this mirror')
+        ->assertSee('Change account')
+        ->set('supabaseProjectRef', '')
         ->assertSet('supabaseSetupChoice', 'new')
         ->assertSee('Create a Supabase project for this mirror')
-        ->assertSee('Skip this if a Supabase project already exists for this Belimbing mirror.')
-        ->assertSee('Supabase creates the PostgreSQL database with the project')
-        ->assertSee('Belimbing generates and securely saves its database password')
-        ->assertDontSee('Use a Supabase project I already created')
+        ->assertSee('Create project and set up mirror')
         ->assertDontSee('Database password')
-        ->assertSee('Back')
+        ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
+        ->assertSet('supabaseSetupChoice', 'existing')
+        ->assertSee('Connect and prepare mirror')
         ->assertDontSee('sbp_transient-token-do-not-store');
 
     $settings = app(SettingsService::class);
@@ -699,10 +709,10 @@ it('discovers Supabase organizations and projects from a transient access token'
     Livewire::test(DataShareSettingsPage::class)
         ->assertSet('supabaseAccessToken', '')
         ->assertSet('supabaseDiscoveryComplete', true)
-        ->assertSet('supabaseSetupChoice', 'new')
+        ->assertSet('supabaseSetupChoice', 'existing')
         ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
-        ->assertSee('Create project and set up mirror')
-        ->assertDontSee('Database password')
+        ->assertSee('Connect and prepare mirror')
+        ->assertSee('Database password')
         ->assertDontSee('Check token and find projects')
         ->assertDontSee('sbp_transient-token-do-not-store');
 
@@ -718,24 +728,22 @@ it('discovers Supabase organizations and projects from a transient access token'
         ->call('continueSupabaseWithSavedToken')
         ->assertHasNoErrors()
         ->assertSet('supabaseDiscoveryComplete', true)
-        ->assertSee('Choose the existing mirror project')
-        ->assertSee('no URL is needed')
+        ->assertSet('supabaseSetupChoice', 'existing')
+        ->assertSee('Choose a Supabase project')
+        ->assertSee('Create a new Supabase project')
         ->assertSee('Enter the selected project’s database password')
         ->assertDontSee('Supabase PostgreSQL URL')
-        ->call('returnToSupabaseConnectionChoice')
+        ->call('changeSupabaseAccount')
         ->assertSet('supabaseDiscoveryComplete', false)
         ->set('supabaseConnectionPath', 'setup')
-        ->assertSee('Continue with this account')
-        ->call('continueSupabaseWithSavedToken')
-        ->assertHasNoErrors()
-        ->assertSet('supabaseDiscoveryComplete', true)
-        ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
-        ->call('returnToSupabaseConnectionChoice')
-        ->assertSet('supabaseDiscoveryComplete', false)
         ->assertSet('supabaseSetupChoice', '')
-        ->assertSet('supabaseConnectionPath', 'existing')
+        ->assertSet('supabaseConnectionPath', 'setup')
         ->assertSee('Choose your situation')
-        ->assertSee('Connect this machine to an existing mirror');
+        ->assertSee('Supabase personal access token')
+        ->assertSee('Connect a different Supabase account')
+        ->assertSee('Continue with this account');
+
+    expect(app(SettingsService::class)->has('data_share.mirror.supabase.access_token'))->toBeTrue();
 });
 
 it('forgets an expired saved Supabase token and asks for a replacement', function (): void {
@@ -785,7 +793,6 @@ it('forgets a saved Supabase token that expires while configuring a project', fu
     Livewire::test(DataShareSettingsPage::class)
         ->set('supabaseAccessToken', 'sbp_expires-during-setup')
         ->call('discoverSupabase')
-        ->set('supabaseSetupChoice', 'existing')
         ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
         ->set('supabaseDatabasePassword', 'temporary password')
         ->call('useExistingSupabaseProject')
@@ -838,7 +845,6 @@ it('does not delete a newer Supabase token when an in-flight token expires', fun
     Livewire::test(DataShareSettingsPage::class)
         ->set('supabaseAccessToken', 'sbp_old-token')
         ->call('discoverSupabase')
-        ->set('supabaseSetupChoice', 'existing')
         ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
         ->set('supabaseDatabasePassword', 'temporary password')
         ->call('useExistingSupabaseProject')
@@ -940,7 +946,6 @@ it('configures and initializes an existing Supabase project without asking for i
     Livewire::test(DataShareSettingsPage::class)
         ->set('supabaseAccessToken', $accessToken)
         ->call('discoverSupabase')
-        ->set('supabaseSetupChoice', 'existing')
         ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
         ->set('supabaseDatabasePassword', $databasePassword)
         ->call('useExistingSupabaseProject')

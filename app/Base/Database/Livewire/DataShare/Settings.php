@@ -146,7 +146,7 @@ class Settings extends SettingsForm
         }
 
         $setup->rememberAccessToken($accessToken);
-        $this->completeSupabaseDiscovery($accessToken, $discovery);
+        $this->completeSupabaseDiscovery($discovery);
     }
 
     public function continueSupabaseWithSavedToken(SupabaseMirrorSetupService $setup): void
@@ -173,13 +173,13 @@ class Settings extends SettingsForm
             );
         }
 
-        $this->completeSupabaseDiscovery($accessToken, $discovery);
+        $this->completeSupabaseDiscovery($discovery);
     }
 
     /**
      * @param  array{organizations: list<array{id: string, slug: string, name: string}>, projects: list<array{ref: string, name: string, organization_slug: string, region: string, status: string, database_host: string}>}  $discovery
      */
-    private function completeSupabaseDiscovery(string $accessToken, array $discovery): void
+    private function completeSupabaseDiscovery(array $discovery): void
     {
         $this->supabaseOrganizations = $discovery['organizations'];
         $this->supabaseProjects = array_map(
@@ -196,7 +196,7 @@ class Settings extends SettingsForm
         $this->supabaseAccessToken = '';
         $this->supabaseOrganizationSlug = $this->supabaseOrganizations[0]['slug'] ?? '';
         $this->supabaseProjectRef = $this->supabaseProjects[0]['ref'] ?? '';
-        $this->supabaseSetupChoice = 'new';
+        $this->supabaseSetupChoice = $this->supabaseProjectRef === '' ? 'new' : 'existing';
         $this->resetValidation([
             'supabaseAccessToken',
             'supabaseOrganizationSlug',
@@ -231,17 +231,10 @@ class Settings extends SettingsForm
         ]);
     }
 
-    public function updatedSupabaseSetupChoice(): void
-    {
-        $this->storeSupabaseSetupState();
-    }
-
-    public function returnToSupabaseConnectionChoice(): void
+    public function changeSupabaseAccount(): void
     {
         $this->requireCapability('admin.system.data-share-settings.manage');
-        $this->supabaseConnectionPath = app(SupabaseMirrorSetupService::class)->savedAccessToken() === null
-            ? 'setup'
-            : 'existing';
+        $this->supabaseConnectionPath = 'setup';
         $this->resetSupabaseDiscovery();
     }
 
@@ -252,6 +245,7 @@ class Settings extends SettingsForm
 
     public function updatedSupabaseProjectRef(): void
     {
+        $this->supabaseSetupChoice = $this->supabaseProjectRef === '' ? 'new' : 'existing';
         $this->storeSupabaseSetupState();
     }
 
@@ -811,15 +805,13 @@ class Settings extends SettingsForm
         $projectName = trim((string) ($state['project_name'] ?? ''));
         $regionGroup = (string) ($state['region_group'] ?? '');
 
-        $this->supabaseSetupChoice = in_array($choice, ['new', 'existing'], true)
-            ? $choice
-            : '';
         $this->supabaseOrganizationSlug = in_array($organizationSlug, $organizationSlugs, true)
             ? $organizationSlug
             : ($organizationSlugs[0] ?? '');
-        $this->supabaseProjectRef = in_array($projectRef, $projectRefs, true)
-            ? $projectRef
-            : ($projectRefs[0] ?? '');
+        $this->supabaseProjectRef = $choice === 'new'
+            ? ''
+            : (in_array($projectRef, $projectRefs, true) ? $projectRef : ($projectRefs[0] ?? ''));
+        $this->supabaseSetupChoice = $this->supabaseProjectRef === '' ? 'new' : 'existing';
 
         if ($projectName !== '') {
             $this->supabaseProjectName = Str::limit($projectName, 100, '');

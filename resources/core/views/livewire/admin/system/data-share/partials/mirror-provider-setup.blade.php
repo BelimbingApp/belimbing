@@ -256,65 +256,68 @@ $savedProject = $this->savedSupabaseProject;
                                 <x-icon name="heroicon-o-check-circle" class="h-4 w-4" />
                                 <span>{{ __('Supabase account connected.') }}</span>
                             </div>
-                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="returnToSupabaseConnectionChoice">
-                                <x-icon name="heroicon-o-arrow-left" class="h-4 w-4" />
-                                {{ __('Back') }}
+                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="changeSupabaseAccount">
+                                {{ __('Change account') }}
                             </x-ui.button>
                         </div>
 
-                        @if ($supabaseConnectionPath === 'existing')
-                            <div class="space-y-1">
-                                <h4 class="text-sm font-medium text-ink">{{ __('Choose the existing mirror project') }}</h4>
-                                <p class="text-sm leading-6 text-muted">
-                                    {{ __('Select the Supabase project that was prepared as the Belimbing mirror, then enter that project’s database password. Belimbing obtains the connection details from Supabase; no URL is needed.') }}
-                                </p>
-                            </div>
+                        <div class="space-y-1">
+                            <h4 class="text-sm font-medium text-ink">{{ __('Choose a Supabase project') }}</h4>
+                            <p class="text-sm leading-6 text-muted">
+                                @if ($supabaseProjects === [])
+                                    {{ __('No existing projects were found in this account. Create a project to use as the Belimbing development mirror.') }}
+                                @else
+                                    {{ __('Choose an existing project, or select the final option to create a new one.') }}
+                                @endif
+                            </p>
+                        </div>
 
-                            @if ($supabaseProjects === [])
-                                <x-ui.alert variant="warning">
-                                    {{ __('No Supabase projects were found in this account. Go back and set up a mirror, or connect a different Supabase account.') }}
-                                </x-ui.alert>
-                            @else
-                                <div class="max-w-xl space-y-4">
-                                    <x-ui.select
-                                        id="supabase-existing-project"
-                                        wire:model.live="supabaseProjectRef"
-                                        :label="__('Supabase project')"
-                                        :error="$errors->first('supabaseProjectRef')"
-                                    >
-                                        @foreach ($supabaseProjects as $project)
-                                            <option value="{{ $project['ref'] }}">{{ $project['name'] }}</option>
-                                        @endforeach
-                                    </x-ui.select>
-                                    <x-ui.secret-input
-                                        id="supabase-existing-database-password"
-                                        wire:model="supabaseDatabasePassword"
-                                        value="{{ $supabaseDatabasePassword }}"
-                                        :label="__('Database password')"
-                                        :placeholder="__('Enter the selected project’s database password')"
-                                        :help="__('This is the password created with the Supabase project, not a personal access token or project API key.')"
-                                        :error="$errors->first('supabaseDatabasePassword')"
-                                        :show-reveal-button="true"
-                                        autocomplete="new-password"
-                                    />
-                                    <x-ui.button
-                                        type="button"
-                                        variant="primary"
-                                        wire:click="useExistingSupabaseProject"
-                                        wire:loading.attr="disabled"
-                                        wire:target="useExistingSupabaseProject"
-                                    >
-                                        <x-icon name="heroicon-o-signal" class="h-4 w-4" />
-                                        <span wire:loading.remove wire:target="useExistingSupabaseProject">{{ __('Test and save connection') }}</span>
-                                        <span wire:loading wire:target="useExistingSupabaseProject">{{ __('Testing…') }}</span>
-                                    </x-ui.button>
-                                </div>
-                            @endif
+                        @if ($supabaseProjects !== [])
+                            <div class="max-w-xl">
+                                <x-ui.select
+                                    id="supabase-project-choice"
+                                    wire:model.live="supabaseProjectRef"
+                                    :label="__('Supabase project')"
+                                    :error="$errors->first('supabaseProjectRef')"
+                                >
+                                    @foreach ($supabaseProjects as $project)
+                                        <option value="{{ $project['ref'] }}">{{ $project['name'] }}{{ $project['region'] !== '' ? ' — '.$project['region'] : '' }}</option>
+                                    @endforeach
+                                    <option value="">{{ __('Create a new Supabase project') }}</option>
+                                </x-ui.select>
+                            </div>
+                        @endif
+
+                        @if ($supabaseSetupChoice === 'existing')
+                            <div class="max-w-xl space-y-4">
+                                <x-ui.secret-input
+                                    id="supabase-existing-database-password"
+                                    wire:model="supabaseDatabasePassword"
+                                    value="{{ $supabaseDatabasePassword }}"
+                                    :label="__('Database password')"
+                                    :placeholder="__('Enter the selected project’s database password')"
+                                    :help="__('Belimbing verifies the connection and prepares its mirror schema when needed. This is the project database password, not a personal access token or API key.')"
+                                    :error="$errors->first('supabaseDatabasePassword')"
+                                    :show-reveal-button="true"
+                                    autocomplete="new-password"
+                                />
+                                <x-ui.button
+                                    type="button"
+                                    variant="primary"
+                                    wire:click="useExistingSupabaseProject"
+                                    wire:loading.attr="disabled"
+                                    wire:target="useExistingSupabaseProject"
+                                >
+                                    <x-icon name="heroicon-o-signal" class="h-4 w-4" />
+                                    <span wire:loading.remove wire:target="useExistingSupabaseProject">{{ __('Connect and prepare mirror') }}</span>
+                                    <span wire:loading wire:target="useExistingSupabaseProject">{{ __('Connecting…') }}</span>
+                                </x-ui.button>
+                            </div>
                         @else
                             <div class="space-y-1">
                                 <h4 class="text-sm font-medium text-ink">{{ __('Create a Supabase project for this mirror') }}</h4>
                                 <p class="text-sm leading-6 text-muted">
-                                    {{ __('Skip this if a Supabase project already exists for this Belimbing mirror. Continue to create one. Supabase creates the PostgreSQL database with the project; Belimbing generates and securely saves its database password, then prepares the database as the mirror.') }}
+                                    {{ __('Supabase creates the PostgreSQL database with the project. Belimbing generates and securely saves its database password, then prepares the database as the mirror.') }}
                                 </p>
                             </div>
 
