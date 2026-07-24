@@ -12,6 +12,12 @@ namespace App\Base\Dashboard\DTO;
  */
 final readonly class WidgetDefinition
 {
+    /** The narrow rail: one column of the three-column dashboard grid. */
+    public const SIZE_NARROW = 1;
+
+    /** The wide column: two columns of the three-column dashboard grid. */
+    public const SIZE_WIDE = 2;
+
     public function __construct(
         public string $id,
         public string $label,
@@ -19,7 +25,7 @@ final readonly class WidgetDefinition
         public string $icon = 'heroicon-o-squares-2x2',
         public ?string $description = null,
         public ?string $permission = null,
-        public int $size = 1,
+        public int $size = self::SIZE_NARROW,
     ) {}
 
     /**
@@ -39,7 +45,7 @@ final readonly class WidgetDefinition
             return null;
         }
 
-        $size = $data['size'] ?? 1;
+        $size = $data['size'] ?? self::SIZE_NARROW;
 
         return new self(
             id: $id,
@@ -48,7 +54,7 @@ final readonly class WidgetDefinition
             icon: is_string($data['icon'] ?? null) ? $data['icon'] : 'heroicon-o-squares-2x2',
             description: is_string($data['description'] ?? null) ? $data['description'] : null,
             permission: is_string($data['permission'] ?? null) ? $data['permission'] : null,
-            size: is_int($size) ? max(1, min(3, $size)) : 1,
+            size: is_int($size) ? max(self::SIZE_NARROW, min(self::SIZE_WIDE, $size)) : self::SIZE_NARROW,
         );
     }
 }

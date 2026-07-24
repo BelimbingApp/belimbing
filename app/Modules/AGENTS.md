@@ -27,7 +27,7 @@ The dashboard (`/dashboard`) renders module-contributed widgets filtered per use
 - `icon` — a name registered in `resources/core/views/components/icon.blade.php`; add missing icons there, never rely on the fallback glyph.
 - `permission` — capability gating visibility. Must exist in a `Config/authz.php` vocabulary or the authz service denies it for everyone. Omit only for widgets every authenticated user may see.
 - `component` — the Livewire component name that renders the widget.
-- `size` — column-span hint, 1–3 of a 3-column grid.
+- `size` — which lane the widget lives in: `1` for the narrow trailing rail (one column of three), `2` for the wide column (two of three). The two lanes are independent stacks, so a tall widget only pushes down its own lane. Values outside 1–2 clamp.
 
 Discovery order sets the default dashboard order; duplicate ids follow last-definition-wins (extensions can override a shipped widget).
 

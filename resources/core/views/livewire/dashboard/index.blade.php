@@ -38,72 +38,74 @@
         @endif
 
         @php
-            $firstWidgetBySize = [];
-            $lastWidgetBySize = [];
-
-            foreach ($widgets as $widget) {
-                $firstWidgetBySize[$widget->size] ??= $widget->id;
-                $lastWidgetBySize[$widget->size] = $widget->id;
-            }
+            // Two independent lanes rather than one grid: shared grid rows
+            // would stretch every short widget to the height of whatever
+            // sits beside it, and wide/narrow neighbours are unrelated.
+            $lanes = [
+                ['key' => 'wide', 'widgets' => $wide, 'class' => 'xl:col-span-2'],
+                ['key' => 'narrow', 'widgets' => $narrow, 'class' => 'lg:grid-cols-2 xl:col-start-3 xl:grid-cols-1'],
+            ];
         @endphp
 
-        <div
-            @if($editing)
-                wire:sort="reorder"
-                wire:sort:config="{
-                    animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180,
-                    easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
-                }"
-            @endif
-            class="grid gap-6 lg:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3"
-        >
-            @foreach($widgets as $widget)
-                <div
-                    wire:key="widget-{{ $widget->id }}"
-                    @class([
-                        'lg:col-span-1 xl:col-start-3' => $widget->size === 1,
-                        'lg:col-span-2 xl:col-span-2' => $widget->size === 2,
-                        'lg:col-span-2 xl:col-span-3' => $widget->size === 3,
-                    ])
-                    @if($editing)
-                        wire:sort:item="{{ $widget->id }}"
-                    @endif
-                >
-                    @if($editing)
-                        <div class="mb-2 flex items-center justify-between gap-2">
-                            <span
-                                wire:sort:handle
-                                class="inline-flex min-w-0 cursor-grab touch-none select-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted active:cursor-grabbing"
-                                title="{{ __('Drag to reorder. Use the move buttons for keyboard access.') }}"
-                            >
-                                <x-icon :name="$widget->icon" class="w-3.5 h-3.5 shrink-0" />
-                                <span class="truncate">{{ __($widget->label) }}</span>
-                            </span>
-                            <x-ui.icon-action-group>
-                                @if($firstWidgetBySize[$widget->size] !== $widget->id)
-                                    <x-ui.icon-action
-                                        icon="heroicon-o-arrow-up"
-                                        :label="__('Move :widget earlier', ['widget' => __($widget->label)])"
-                                        wire:click="moveUp('{{ $widget->id }}')"
-                                    />
-                                @endif
-                                @if($lastWidgetBySize[$widget->size] !== $widget->id)
-                                    <x-ui.icon-action
-                                        icon="heroicon-o-arrow-down"
-                                        :label="__('Move :widget later', ['widget' => __($widget->label)])"
-                                        wire:click="moveDown('{{ $widget->id }}')"
-                                    />
-                                @endif
-                                <x-ui.icon-action
-                                    icon="heroicon-o-x-mark"
-                                    :label="__('Remove :widget from dashboard', ['widget' => __($widget->label)])"
-                                    wire:click="remove('{{ $widget->id }}')"
-                                />
-                            </x-ui.icon-action-group>
-                        </div>
-                    @endif
+        <div class="grid gap-6 xl:grid-cols-3">
+            @foreach($lanes as $lane)
+                @continue($lane['widgets'] === [])
 
-                    <livewire:is :component="$widget->component" lazy :key="'w-'.$widget->id" />
+                <div
+                    wire:key="lane-{{ $lane['key'] }}"
+                    @if($editing)
+                        wire:sort="reorder"
+                        wire:sort:config="{
+                            animation: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 180,
+                            easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+                        }"
+                    @endif
+                    class="grid gap-6 content-start {{ $lane['class'] }}"
+                >
+                    @foreach($lane['widgets'] as $widget)
+                        <div
+                            wire:key="widget-{{ $widget->id }}"
+                            @if($editing)
+                                wire:sort:item="{{ $widget->id }}"
+                            @endif
+                        >
+                            @if($editing)
+                                <div class="mb-2 flex items-center justify-between gap-2">
+                                    <span
+                                        wire:sort:handle
+                                        class="inline-flex min-w-0 cursor-grab touch-none select-none items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted active:cursor-grabbing"
+                                        title="{{ __('Drag to reorder. Use the move buttons for keyboard access.') }}"
+                                    >
+                                        <x-icon :name="$widget->icon" class="w-3.5 h-3.5 shrink-0" />
+                                        <span class="truncate">{{ __($widget->label) }}</span>
+                                    </span>
+                                    <x-ui.icon-action-group>
+                                        @unless($loop->first)
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-arrow-up"
+                                                :label="__('Move :widget earlier', ['widget' => __($widget->label)])"
+                                                wire:click="moveUp('{{ $widget->id }}')"
+                                            />
+                                        @endunless
+                                        @unless($loop->last)
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-arrow-down"
+                                                :label="__('Move :widget later', ['widget' => __($widget->label)])"
+                                                wire:click="moveDown('{{ $widget->id }}')"
+                                            />
+                                        @endunless
+                                        <x-ui.icon-action
+                                            icon="heroicon-o-x-mark"
+                                            :label="__('Remove :widget from dashboard', ['widget' => __($widget->label)])"
+                                            wire:click="remove('{{ $widget->id }}')"
+                                        />
+                                    </x-ui.icon-action-group>
+                                </div>
+                            @endif
+
+                            <livewire:is :component="$widget->component" lazy :key="'w-'.$widget->id" />
+                        </div>
+                    @endforeach
                 </div>
             @endforeach
         </div>

@@ -131,12 +131,19 @@ it('shows capability-gated widgets to an admin in registry order', function (): 
         );
 });
 
-it('uses one column by default and keeps narrow widgets in the trailing wide-screen column', function (): void {
+it('splits widgets into independent lanes and keeps the narrow rail trailing', function (): void {
+    $laneOf = fn (int $size): callable => fn (array $widgets): bool => $widgets !== []
+        && collect($widgets)->every(fn (WidgetDefinition $widget): bool => $widget->size === $size);
+
     Livewire::actingAs(createAdminUser())
         ->test(Index::class)
-        ->assertSeeHtml('class="grid gap-6 lg:grid-cols-2 xl:grid-flow-row-dense xl:grid-cols-3"')
-        ->assertSeeHtml('lg:col-span-1 xl:col-start-3')
-        ->assertSeeHtml('lg:col-span-2 xl:col-span-2');
+        ->assertViewHas('wide', $laneOf(WidgetDefinition::SIZE_WIDE))
+        ->assertViewHas('narrow', $laneOf(WidgetDefinition::SIZE_NARROW))
+        // Each lane is its own stack. Merging them back into one grid would
+        // make every short widget inherit the height of whatever sits
+        // beside it, which is the gap this layout exists to remove.
+        ->assertSeeHtml('class="grid gap-6 content-start xl:col-span-2"')
+        ->assertSeeHtml('class="grid gap-6 content-start lg:grid-cols-2 xl:col-start-3 xl:grid-cols-1"');
 });
 
 it('persists remove, reorder, and add as a whole prefs layout', function (): void {
@@ -182,25 +189,26 @@ it('persists remove, reorder, and add as a whole prefs layout', function (): voi
     expect(dashboardSavedLayout($admin))->toBeNull();
 });
 
-it('persists a drag-drop reorder as a whole prefs layout', function (): void {
+it('persists a drag-drop reorder within the dragged widget lane', function (): void {
     $admin = createAdminUser();
-    $initialIds = dashboardWidgetIds(app(DashboardLayout::class)->layoutFor($admin));
 
-    expect(count($initialIds))->toBeGreaterThan(1);
+    // Two wide widgets straddling a narrow one, so a lane-local move and a
+    // whole-layout move would produce different results.
+    storeDashboardLayout($admin, [DASHBOARD_PERF_WIDGET, DASHBOARD_LEAVE_WIDGET, DASHBOARD_AI_WIDGET]);
 
-    $movedId = $initialIds[0];
-    $destination = count($initialIds) - 1;
+    $component = Livewire::actingAs($admin)->test(Index::class);
 
-    $component = Livewire::actingAs($admin)
-        ->test(Index::class)
-        ->call('reorder', $movedId, $destination);
+    // Position 1 is the second widget of the wide lane, not the second
+    // widget of the page: the narrow rail keeps its slot either way.
+    $component->call('reorder', DASHBOARD_PERF_WIDGET, 1);
 
     expect(dashboardSavedLayout($admin))
-        ->toBe([...array_slice($initialIds, 1), $movedId]);
+        ->toBe([DASHBOARD_AI_WIDGET, DASHBOARD_LEAVE_WIDGET, DASHBOARD_PERF_WIDGET]);
 
-    $component->call('reorder', $movedId, 0);
+    $component->call('reorder', DASHBOARD_PERF_WIDGET, 0);
 
-    expect(dashboardSavedLayout($admin))->toBe($initialIds);
+    expect(dashboardSavedLayout($admin))
+        ->toBe([DASHBOARD_PERF_WIDGET, DASHBOARD_LEAVE_WIDGET, DASHBOARD_AI_WIDGET]);
 });
 
 it('ignores invalid drag-drop reorders without creating a custom layout', function (string $id, int $position): void {
