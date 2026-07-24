@@ -67,6 +67,10 @@ set_env SESSION_SAME_SITE none
 # Access) inside the portal iframe.
 set_env TRUSTED_PROXIES '169.254.0.0/16,127.0.0.1,::1'
 set_env AI_BROWSER_HEADLESS true
+# Supabase's session-mode pooler limits to 15 connections per project.
+# With 2 concurrent orbs (6 conn each) + CLI/migrations, keep workers low.
+set_env OCTANE_WORKERS 2
+set_env OCTANE_TASK_WORKERS 1
 
 # Database: orbs use the Supabase primary database for persistent development
 # data. When Supabase credentials are present, configure pgsql with verify-full

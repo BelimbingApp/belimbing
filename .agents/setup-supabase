@@ -73,8 +73,8 @@ fi
 echo "    Project ref: $project_ref"
 
 # --- discover the Supabase Shared Pooler host ---
-# Probe cluster indices (aws-0, aws-1, …) across known regions on port 5432
-# (session mode). Stop on first successful connection.
+# Probe cluster indices (aws-0, aws-1, …) across known regions on port 6543
+# (transaction mode). Stop on first successful connection.
 regions=(
     us-east-1 us-east-2 us-west-1 us-west-2
     eu-west-1 eu-west-2 eu-central-1 eu-central-2
@@ -95,7 +95,7 @@ for cluster in 0 1 2 3 4; do
         if ! getent hosts "$host" >/dev/null 2>&1; then
             continue
         fi
-        if psql -h "$host" -p 5432 -U "postgres.${project_ref}" -d postgres \
+        if psql -h "$host" -p 6543 -U "postgres.${project_ref}" -d postgres \
                -tAc 'SELECT 1;' -w -v connect_timeout=6 >/dev/null 2>&1; then
             pooler_host="$host"
             echo "    Pooler discovered: $pooler_host"
@@ -113,7 +113,10 @@ fi
 # --- write pgsql .env settings ---
 set_env DB_CONNECTION pgsql
 set_env DB_HOST "$pooler_host"
-set_env DB_PORT 5432
+# Transaction-mode pooler (port 6543) pools per-transaction instead of
+# per-session, avoiding the 15-connection session pool limit when multiple
+# Octane workers and concurrent orbs connect to the same Supabase project.
+set_env DB_PORT 6543
 set_env DB_DATABASE postgres
 set_env DB_USERNAME "postgres.${project_ref}"
 set_env DB_PASSWORD "$db_password"
