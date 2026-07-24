@@ -25,6 +25,8 @@ final class SupabaseMirrorSetupService
 
     public const REGION_SETTING = 'data_share.mirror.supabase.region';
 
+    public const NEEDS_INITIALIZATION_SETTING = 'data_share.mirror.supabase.needs_initialization';
+
     public function __construct(
         private readonly SupabaseMirrorManagementClient $supabase,
         private readonly SettingsService $settings,
@@ -61,6 +63,11 @@ final class SupabaseMirrorSetupService
         $accessToken = $this->settings->get(self::ACCESS_TOKEN_SETTING);
 
         return is_string($accessToken) && trim($accessToken) !== '' ? trim($accessToken) : null;
+    }
+
+    public function needsInitialization(): bool
+    {
+        return $this->settings->get(self::NEEDS_INITIALIZATION_SETTING) === true;
     }
 
     public function forgetAccessToken(): void
@@ -122,8 +129,9 @@ final class SupabaseMirrorSetupService
         }
 
         $this->persist($project, $url);
+        $this->setNeedsInitialization(! $status->available && $status->initializable);
 
-        return $this->initializeWhenNeeded($status);
+        return $status;
     }
 
     public function createDedicatedProject(
@@ -147,6 +155,7 @@ final class SupabaseMirrorSetupService
         // preflight can fail, otherwise a successfully created project could be
         // left with an unrecoverable credential.
         $this->persist($project, $urls[0]);
+        $this->setNeedsInitialization(true);
 
         try {
             [$reachableUrl, $status] = $this->firstReachableConnection($urls);
@@ -176,6 +185,8 @@ final class SupabaseMirrorSetupService
         $status = $this->mirror->status();
 
         if ($status->available) {
+            $this->setNeedsInitialization(false);
+
             return $status;
         }
 
@@ -185,7 +196,21 @@ final class SupabaseMirrorSetupService
 
         $this->initializer->initialize();
 
-        return $this->mirror->status();
+        $status = $this->mirror->status();
+        $this->setNeedsInitialization(! $status->available && $status->initializable);
+
+        return $status;
+    }
+
+    public function check(): DataShareMirrorConnectionStatus
+    {
+        $status = $this->mirror->status();
+
+        if ($status->available || $status->initializable) {
+            $this->setNeedsInitialization(! $status->available && $status->initializable);
+        }
+
+        return $status;
     }
 
     public function forgetProjectMetadata(): void
@@ -196,6 +221,7 @@ final class SupabaseMirrorSetupService
             self::PROJECT_NAME_SETTING,
             self::ORGANIZATION_SETTING,
             self::REGION_SETTING,
+            self::NEEDS_INITIALIZATION_SETTING,
         ] as $key) {
             $this->settings->forget($key);
         }
@@ -248,11 +274,25 @@ final class SupabaseMirrorSetupService
     {
         if ($status->initializable) {
             $this->initializer->initialize();
+            $status = $this->mirror->status();
+        }
 
-            return $this->mirror->status();
+        if ($status->available) {
+            $this->setNeedsInitialization(false);
         }
 
         return $status;
+    }
+
+    private function setNeedsInitialization(bool $needsInitialization): void
+    {
+        if ($needsInitialization) {
+            $this->settings->set(self::NEEDS_INITIALIZATION_SETTING, true);
+
+            return;
+        }
+
+        $this->settings->forget(self::NEEDS_INITIALIZATION_SETTING);
     }
 
     private function createdProjectPendingStatus(?string $error = null): DataShareMirrorConnectionStatus

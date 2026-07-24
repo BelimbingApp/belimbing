@@ -407,6 +407,7 @@ return [
 
     'runtime' => [
         'data_share.mirror.supabase.organization_slug',
+        'data_share.mirror.supabase.needs_initialization',
         'data_share.mirror.supabase.project_name',
         'data_share.mirror.supabase.project_ref',
         'data_share.mirror.supabase.region',

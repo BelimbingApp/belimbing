@@ -431,6 +431,24 @@ class Settings extends SettingsForm
         $this->notify($status->message, $status->available ? 'success' : 'warning');
     }
 
+    public function checkSupabaseMirrorConnection(SupabaseMirrorSetupService $setup): void
+    {
+        $this->requireCapability('admin.system.data-share-settings.manage');
+
+        try {
+            $status = $setup->check();
+        } catch (DataShareMirrorException $exception) {
+            $this->fail($this->formKey('data_share.mirror.url'), $exception->getMessage());
+        } catch (Throwable $exception) {
+            $this->fail(
+                $this->formKey('data_share.mirror.url'),
+                DataShareMirrorException::unexpected('supabase_check', $exception)->getMessage(),
+            );
+        }
+
+        $this->notify($status->message, $status->available ? 'success' : 'warning');
+    }
+
     protected function pageTitle(): string
     {
         return __('Data Share Settings');
@@ -511,6 +529,15 @@ class Settings extends SettingsForm
 
             $settings->set('data_share.mirror.provider', $provider);
             $settings->set('data_share.mirror.url', $value);
+
+            if ($provider === 'supabase') {
+                if (($result['initializable'] ?? false) && ! ($result['available'] ?? false)) {
+                    $settings->set(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING, true);
+                } else {
+                    $settings->forget(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING);
+                }
+            }
+
             $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
             $this->originalMirrorProvider = $provider;
             $this->replaceSavedSupabaseConnection = false;
@@ -525,7 +552,9 @@ class Settings extends SettingsForm
             $this->notify(
                 ($result['available'] ?? false)
                     ? __('Connection successful and saved.')
-                    : __('Connection successful and saved. Use Check and prepare mirror when the database is ready.'),
+                    : (($result['initializable'] ?? false)
+                        ? __('Connection successful and saved. Initialize the mirror before transferring data.')
+                        : (string) ($result['message'] ?? __('Connection successful and saved, but the database is not ready to use.'))),
                 ($result['available'] ?? false) ? 'success' : 'warning',
             );
         } catch (ValidationException $e) {
@@ -596,6 +625,11 @@ class Settings extends SettingsForm
     public function getHasSavedSupabaseAccessTokenProperty(): bool
     {
         return app(SupabaseMirrorSetupService::class)->savedAccessToken() !== null;
+    }
+
+    public function getSupabaseMirrorNeedsInitializationProperty(): bool
+    {
+        return app(SupabaseMirrorSetupService::class)->needsInitialization();
     }
 
     private function prepareAndTestMirrorUrl(SettingsService $settings, DataShareMirrorManager $mirror): void
@@ -701,7 +735,7 @@ class Settings extends SettingsForm
             $this->notify(
                 $created
                     ? __('Supabase project created, connected, and initialized. Continue in Mirror to choose the initial tables.')
-                    : __('Supabase connected and initialized. Continue in Mirror to choose the initial tables.'),
+                    : __('Supabase database connected. Continue in Mirror to choose tables.'),
                 'success',
             );
 
@@ -710,8 +744,8 @@ class Settings extends SettingsForm
 
         $this->notify(
             $created
-                ? __('The Supabase project was created and its encrypted connection was saved. Supabase may still be provisioning it; use Check and prepare mirror when it is ready.')
-                : $status->message,
+                ? __('The Supabase project was created and its encrypted connection was saved. Supabase may still be provisioning it; use Initialize mirror when it is ready.')
+                : __('The database connection was saved. Initialize the mirror before transferring data.'),
             'warning',
         );
     }
@@ -726,7 +760,7 @@ class Settings extends SettingsForm
             $this->resetSupabaseDiscovery();
             $this->fail(
                 $this->formKey('data_share.mirror.url'),
-                $message.' '.__('The encrypted project connection was kept; use Check and prepare mirror after resolving the problem.'),
+                $message.' '.__('The encrypted project connection was kept; use Initialize mirror after resolving the problem.'),
             );
         }
 

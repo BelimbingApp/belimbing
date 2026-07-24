@@ -473,7 +473,7 @@ it('keeps the saved mirror URL write-only, preserves it on blank save, and remov
         ->assertSee('Cloud provider')
         ->assertSee('Supabase')
         ->assertSee('PostgreSQL')
-        ->assertSee('Check and prepare mirror')
+        ->assertSee('Check connection')
         ->assertDontSee('Finish setup')
         ->assertSee('Remove connection')
         ->set('values.data_share__mirror__url', '')
@@ -527,9 +527,9 @@ it('renders distinct guided and existing-mirror Supabase setup paths', function 
         ->assertSee('Choose your situation')
         ->assertSee('Set up a mirror')
         ->assertSee('Connect to an existing mirror')
-        ->assertSee('Use a mirror that was already prepared from another Belimbing installation.')
+        ->assertSee('Use a mirror that was already initialized from another Belimbing installation.')
         ->assertSee('Set up a mirror on Supabase')
-        ->assertSee('After that, you choose whether to create a dedicated mirror project or prepare an existing project.')
+        ->assertSee('After that, you choose whether to create a dedicated mirror project or connect an existing project.')
         ->assertSee('Open Supabase Personal Access Tokens.')
         ->assertSee('Sign in or create a Supabase account, then generate a token to grant that permission.')
         ->assertSee('Check token and find projects')
@@ -553,6 +553,23 @@ it('tests and saves an existing Supabase mirror URL with its separate password',
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $password = 'mirror p@ss/word';
+    $readyStatus = new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: null,
+        message: 'Supabase mirror ready.',
+        providerKey: 'supabase',
+        providerLabel: 'Supabase',
+        localDriver: 'sqlite',
+        transferMode: 'portable',
+    );
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
         'supabase' => 'Supabase',
@@ -564,23 +581,7 @@ it('tests and saves an existing Supabase mirror URL with its separate password',
             'postgresql://postgres.project:'.rawurlencode($password).'@example.supabase.com:6543/postgres',
             'supabase',
         )
-        ->andReturn(new DataShareMirrorConnectionStatus(
-            configured: true,
-            available: true,
-            reachable: true,
-            driver: 'pgsql',
-            localRole: 'development',
-            remoteRole: 'development',
-            serverVersion: '17',
-            pgDumpVersion: null,
-            psqlVersion: null,
-            reasonCode: null,
-            message: 'Supabase mirror ready.',
-            providerKey: 'supabase',
-            providerLabel: 'Supabase',
-            localDriver: 'sqlite',
-            transferMode: 'portable',
-        ));
+        ->andReturn($readyStatus);
     app()->instance(DataShareMirrorManager::class, $manager);
 
     Livewire::test(DataShareSettingsPage::class)
@@ -686,7 +687,8 @@ it('discovers Supabase organizations and projects from a transient access token'
             'Create a new Supabase project',
         ])
         ->assertSee('Database password')
-        ->assertSee('Connect and prepare mirror')
+        ->assertSee('Connect database')
+        ->assertSee('It does not change the selected database.')
         ->assertDontSee('Create a Supabase project for this mirror')
         ->assertSee('Change account')
         ->set('supabaseProjectRef', '')
@@ -696,7 +698,7 @@ it('discovers Supabase organizations and projects from a transient access token'
         ->assertDontSee('Database password')
         ->set('supabaseProjectRef', 'abcdefghijklmnopqrst')
         ->assertSet('supabaseSetupChoice', 'existing')
-        ->assertSee('Connect and prepare mirror')
+        ->assertSee('Connect database')
         ->assertDontSee('sbp_transient-token-do-not-store');
 
     $settings = app(SettingsService::class);
@@ -711,7 +713,7 @@ it('discovers Supabase organizations and projects from a transient access token'
         ->assertSet('supabaseDiscoveryComplete', true)
         ->assertSet('supabaseSetupChoice', 'existing')
         ->assertSet('supabaseProjectRef', 'abcdefghijklmnopqrst')
-        ->assertSee('Connect and prepare mirror')
+        ->assertSee('Connect database')
         ->assertSee('Database password')
         ->assertDontSee('Check token and find projects')
         ->assertDontSee('sbp_transient-token-do-not-store');
@@ -879,7 +881,7 @@ it('turns Supabase authentication failures into a safe actionable field error', 
     expect(session()->has('data_share.mirror.supabase.setup_token'))->toBeFalse();
 });
 
-it('configures and initializes an existing Supabase project without asking for its URL', function (): void {
+it('connects an existing Supabase project without reinitializing it or asking for its URL', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $accessToken = 'sbp_existing-project-token';
@@ -912,6 +914,23 @@ it('configures and initializes an existing Supabase project without asking for i
             'connection_string' => 'postgres://postgres.abcdefghijklmnopqrst:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
         ]]),
     ]);
+    $readyStatus = new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: null,
+        message: 'Supabase mirror ready.',
+        providerKey: 'supabase',
+        providerLabel: 'Supabase',
+        localDriver: 'sqlite',
+        transferMode: 'portable',
+    );
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
         'supabase' => 'Supabase',
@@ -923,23 +942,8 @@ it('configures and initializes an existing Supabase project without asking for i
             && str_contains($url, 'postgres.abcdefghijklmnopqrst')
             && str_contains($url, 'aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres')
             && str_contains($url, rawurlencode($databasePassword)))
-        ->andReturn(new DataShareMirrorConnectionStatus(
-            configured: true,
-            available: true,
-            reachable: true,
-            driver: 'pgsql',
-            localRole: 'development',
-            remoteRole: 'development',
-            serverVersion: '17',
-            pgDumpVersion: null,
-            psqlVersion: null,
-            reasonCode: null,
-            message: 'Supabase mirror ready.',
-            providerKey: 'supabase',
-            providerLabel: 'Supabase',
-            localDriver: 'sqlite',
-            transferMode: 'portable',
-        ));
+        ->andReturn($readyStatus);
+    $manager->shouldReceive('status')->once()->andReturn($readyStatus);
     $manager->shouldReceive('disconnect')->once();
     app()->instance(DataShareMirrorManager::class, $manager);
 
@@ -954,6 +958,10 @@ it('configures and initializes an existing Supabase project without asking for i
         ->assertSet('supabaseDatabasePassword', '')
         ->assertSet('values.data_share__mirror__url', '******')
         ->assertSee('Supabase connection saved')
+        ->assertSee('Check connection')
+        ->assertDontSee('Initialize mirror')
+        ->call('checkSupabaseMirrorConnection')
+        ->assertHasNoErrors()
         ->assertDontSee($accessToken)
         ->assertDontSee($databasePassword);
 
@@ -963,9 +971,79 @@ it('configures and initializes an existing Supabase project without asking for i
         ->toContain('aws-0-ap-southeast-1.pooler.supabase.com')
         ->and($stored->is_encrypted)->toBeTrue()
         ->and($stored->getRawOriginal('value'))->not->toContain($databasePassword)
-        ->and($settings->get('data_share.mirror.supabase.project_name'))->toBe('Existing Development');
+        ->and($settings->get('data_share.mirror.supabase.project_name'))->toBe('Existing Development')
+        ->and($settings->has(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING))->toBeFalse();
 
     Http::assertSent(fn (Request $request): bool => ! str_contains($request->body(), $databasePassword));
+});
+
+it('connects an uninitialized existing Supabase database without changing it', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    Http::fake([
+        'api.supabase.com/v1/organizations' => Http::response([
+            ['id' => 'org-id', 'slug' => 'acme-dev', 'name' => 'Acme Development'],
+        ]),
+        'api.supabase.com/v1/projects' => Http::response([[
+            'ref' => 'abcdefghijklmnopqrst',
+            'name' => 'Empty Development',
+            'organization_slug' => 'acme-dev',
+            'region' => 'ap-southeast-1',
+            'status' => 'ACTIVE_HEALTHY',
+            'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
+        ]]),
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst' => Http::response([
+            'ref' => 'abcdefghijklmnopqrst',
+            'name' => 'Empty Development',
+            'organization_slug' => 'acme-dev',
+            'region' => 'ap-southeast-1',
+            'status' => 'ACTIVE_HEALTHY',
+            'database' => ['host' => 'db.abcdefghijklmnopqrst.supabase.co'],
+        ]),
+        'api.supabase.com/v1/projects/abcdefghijklmnopqrst/config/database/pooler' => Http::response([[
+            'database_type' => 'PRIMARY',
+            'pool_mode' => 'transaction',
+            'connection_string' => 'postgres://postgres.abcdefghijklmnopqrst:[YOUR-PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres',
+        ]]),
+    ]);
+    $manager = Mockery::mock(DataShareMirrorManager::class);
+    $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn([
+        'supabase' => 'Supabase',
+        'postgresql' => 'PostgreSQL',
+    ]);
+    $manager->shouldReceive('testConnection')->once()->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: false,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: null,
+        serverVersion: '17',
+        pgDumpVersion: null,
+        psqlVersion: null,
+        reasonCode: 'remote_not_initialized',
+        message: 'The database is connected but is not a mirror yet.',
+        providerKey: 'supabase',
+        providerLabel: 'Supabase',
+        localDriver: 'sqlite',
+        transferMode: 'portable',
+        initializable: true,
+    ));
+    $manager->shouldReceive('disconnect')->once();
+    app()->instance(DataShareMirrorManager::class, $manager);
+
+    Livewire::test(DataShareSettingsPage::class)
+        ->set('supabaseAccessToken', 'sbp_existing-project-token')
+        ->call('discoverSupabase')
+        ->set('supabaseDatabasePassword', 'private database password')
+        ->call('useExistingSupabaseProject')
+        ->assertHasNoErrors()
+        ->assertSee('Supabase connection saved')
+        ->assertSee('has not been initialized as a development mirror')
+        ->assertSee('Initialize mirror')
+        ->assertDontSee('Check connection');
+
+    expect(app(SettingsService::class)->get(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING))->toBeTrue();
 });
 
 function seedSavedSupabaseMirrorConnection(): void
@@ -1144,7 +1222,7 @@ it('creates a dedicated Supabase project with a generated password that never en
         ->assertSet('supabaseAccessToken', '')
         ->assertSet('values.data_share__mirror__url', '******')
         ->assertSee('Supabase connection saved')
-        ->assertSee('Check and prepare mirror')
+        ->assertSee('Initialize mirror')
         ->assertDontSee('Finish setup')
         ->assertDontSee('sbp_create-project-token');
 
@@ -1255,7 +1333,7 @@ it('tests and saves a replacement URL encrypted and write-only', function (): vo
         ->and($stored->getRawOriginal('value'))->not->toContain('new-secret');
 });
 
-it('accepts a reachable empty provider so it can be saved and initialized', function (): void {
+it('saves a reachable empty provider and offers initialization separately', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $candidateUrl = 'postgresql://mirror-user:new-secret@example.test:5432/postgres?sslmode=require';
@@ -1288,10 +1366,13 @@ it('accepts a reachable empty provider so it can be saved and initialized', func
         ->set('values.data_share__mirror__url', $candidateUrl)
         ->call('testMirrorConnection')
         ->assertHasNoErrors()
-        ->assertSet('values.data_share__mirror__url', '******');
+        ->assertSet('values.data_share__mirror__url', '******')
+        ->assertSee('Initialize mirror')
+        ->assertDontSee('Check connection');
 
     expect(app(SettingsService::class)->get('data_share.mirror.provider'))->toBe('supabase')
-        ->and(app(SettingsService::class)->get('data_share.mirror.url'))->toBe($candidateUrl);
+        ->and(app(SettingsService::class)->get('data_share.mirror.url'))->toBe($candidateUrl)
+        ->and(app(SettingsService::class)->get(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING))->toBeTrue();
 });
 
 it('rejects a non-PostgreSQL mirror URL before connection testing', function (): void {

@@ -43,7 +43,11 @@ $savedProject = $this->savedSupabaseProject;
                             </h3>
                             @if ($savedProject)
                                 <p class="mt-1 text-sm text-muted">
-                                    {{ __(':project is the development mirror project.', ['project' => $savedProject['name']]) }}
+                                    @if ($this->supabaseMirrorNeedsInitialization)
+                                        {{ __(':project is connected but has not been initialized as a development mirror.', ['project' => $savedProject['name']]) }}
+                                    @else
+                                        {{ __(':project is the development mirror project.', ['project' => $savedProject['name']]) }}
+                                    @endif
                                 </p>
                                 <div class="mt-2 flex flex-wrap items-center gap-2">
                                     <x-ui.badge>{{ $savedProject['ref'] }}</x-ui.badge>
@@ -68,18 +72,33 @@ $savedProject = $this->savedSupabaseProject;
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                    <x-ui.button
-                        type="button"
-                        variant="control"
-                        size="sm"
-                        wire:click="finishSupabaseMirrorSetup"
-                        wire:loading.attr="disabled"
-                        wire:target="finishSupabaseMirrorSetup"
-                    >
-                        <x-icon name="heroicon-o-signal" class="h-4 w-4" />
-                        <span wire:loading.remove wire:target="finishSupabaseMirrorSetup">{{ __('Check and prepare mirror') }}</span>
-                        <span wire:loading wire:target="finishSupabaseMirrorSetup">{{ __('Checking…') }}</span>
-                    </x-ui.button>
+                    @if ($this->supabaseMirrorNeedsInitialization)
+                        <x-ui.button
+                            type="button"
+                            variant="primary"
+                            size="sm"
+                            wire:click="finishSupabaseMirrorSetup"
+                            wire:loading.attr="disabled"
+                            wire:target="finishSupabaseMirrorSetup"
+                        >
+                            <x-icon name="heroicon-o-circle-stack" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="finishSupabaseMirrorSetup">{{ __('Initialize mirror') }}</span>
+                            <span wire:loading wire:target="finishSupabaseMirrorSetup">{{ __('Initializing…') }}</span>
+                        </x-ui.button>
+                    @else
+                        <x-ui.button
+                            type="button"
+                            variant="control"
+                            size="sm"
+                            wire:click="checkSupabaseMirrorConnection"
+                            wire:loading.attr="disabled"
+                            wire:target="checkSupabaseMirrorConnection"
+                        >
+                            <x-icon name="heroicon-o-signal" class="h-4 w-4" />
+                            <span wire:loading.remove wire:target="checkSupabaseMirrorConnection">{{ __('Check connection') }}</span>
+                            <span wire:loading wire:target="checkSupabaseMirrorConnection">{{ __('Checking…') }}</span>
+                        </x-ui.button>
+                    @endif
                     <x-ui.link :href="route('admin.system.data-share.index').'#mirror'">
                         {{ __('Open Mirror') }}
                     </x-ui.link>
@@ -172,7 +191,7 @@ $savedProject = $this->savedSupabaseProject;
                                     value="setup"
                                     wire:model.live="supabaseConnectionPath"
                                     :label="__('Set up a mirror')"
-                                    :help="__('Create a dedicated Supabase project or prepare a project you already own.')"
+                                    :help="__('Create a dedicated Supabase project or connect a project you already own.')"
                                 />
                                 <x-ui.radio
                                     id="supabase-connection-path-existing"
@@ -180,7 +199,7 @@ $savedProject = $this->savedSupabaseProject;
                                     value="existing"
                                     wire:model.live="supabaseConnectionPath"
                                     :label="__('Connect to an existing mirror')"
-                                    :help="__('Use a mirror that was already prepared from another Belimbing installation.')"
+                                    :help="__('Use a mirror that was already initialized from another Belimbing installation.')"
                                 />
                             </div>
                         </fieldset>
@@ -210,7 +229,7 @@ $savedProject = $this->savedSupabaseProject;
                                     {{ $this->hasSavedSupabaseAccessToken ? __('Connect a different Supabase account') : __('Set up a mirror on Supabase') }}
                                 </p>
                                 <p class="leading-6 text-muted">
-                                    {{ __('Belimbing first needs permission to show your Supabase organizations and projects. After that, you choose whether to create a dedicated mirror project or prepare an existing project.') }}
+                                    {{ __('Belimbing first needs permission to show your Supabase organizations and projects. After that, you choose whether to create a dedicated mirror project or connect an existing project.') }}
                                 </p>
                                 <ol class="list-decimal space-y-1 pl-5 leading-6 text-muted">
                                     <li>
@@ -296,7 +315,7 @@ $savedProject = $this->savedSupabaseProject;
                                     value="{{ $supabaseDatabasePassword }}"
                                     :label="__('Database password')"
                                     :placeholder="__('Enter the selected project’s database password')"
-                                    :help="__('Belimbing verifies the connection and prepares its mirror schema when needed. This is the project database password, not a personal access token or API key.')"
+                                    :help="__('Belimbing tests this password and saves the encrypted connection. It does not change the selected database. This is the project database password, not a personal access token or API key.')"
                                     :error="$errors->first('supabaseDatabasePassword')"
                                     :show-reveal-button="true"
                                     autocomplete="new-password"
@@ -309,7 +328,7 @@ $savedProject = $this->savedSupabaseProject;
                                     wire:target="useExistingSupabaseProject"
                                 >
                                     <x-icon name="heroicon-o-signal" class="h-4 w-4" />
-                                    <span wire:loading.remove wire:target="useExistingSupabaseProject">{{ __('Connect and prepare mirror') }}</span>
+                                    <span wire:loading.remove wire:target="useExistingSupabaseProject">{{ __('Connect database') }}</span>
                                     <span wire:loading wire:target="useExistingSupabaseProject">{{ __('Connecting…') }}</span>
                                 </x-ui.button>
                             </div>
@@ -317,7 +336,7 @@ $savedProject = $this->savedSupabaseProject;
                             <div class="space-y-1">
                                 <h4 class="text-sm font-medium text-ink">{{ __('Create a Supabase project for this mirror') }}</h4>
                                 <p class="text-sm leading-6 text-muted">
-                                    {{ __('Supabase creates the PostgreSQL database with the project. Belimbing generates and securely saves its database password, then prepares the database as the mirror.') }}
+                                    {{ __('Supabase creates the PostgreSQL database with the project. Belimbing generates and securely saves its database password, then initializes the database as the mirror.') }}
                                 </p>
                             </div>
 
