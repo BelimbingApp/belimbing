@@ -54,6 +54,18 @@ set_env APP_URL http://127.0.0.1:8000
 set_env CACHE_STORE file
 set_env QUEUE_CONNECTION sync
 set_env SESSION_DRIVER file
+# The Amp Portal tab embeds the app in a cross-site iframe on ampcode.com.
+# SameSite=Lax (the Laravel default) blocks cookies on cross-site iframe AJAX,
+# which silently breaks Livewire POSTs (CSRF 419 → "nothing happens" on login).
+# SameSite=None requires Secure; the portal is HTTPS and the trusted proxy
+# makes Laravel detect HTTPS, so this works in the orb context.
+set_env SESSION_SECURE_COOKIE true
+set_env SESSION_SAME_SITE none
+# The Amp portal proxy connects from the E2B link-local address (169.254.x.x).
+# Trust it so Laravel reads X-Forwarded-Proto/Host and generates portal URLs
+# instead of internal 127.0.0.1 addresses that browsers block (Private Network
+# Access) inside the portal iframe.
+set_env TRUSTED_PROXIES '169.254.0.0/16,127.0.0.1,::1'
 set_env AI_BROWSER_HEADLESS true
 
 # Database: orbs use the Supabase primary database for persistent development

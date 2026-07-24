@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Menu\Services;
 
 use App\Base\Menu\MenuItem;
@@ -38,7 +39,7 @@ class PagePinResolver
 
         return [
             'label' => $this->buildLabel($title, $menuItem),
-            'url' => request()->url(),
+            'url' => '/'.ltrim(request()->path(), '/'),
             'icon' => $menuItem?->icon,
         ];
     }
