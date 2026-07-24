@@ -53,8 +53,8 @@ const GENERIC_SHARE_NDJSON = 'application/x-ndjson';
 
 beforeEach(function (): void {
     Storage::fake('local');
-    config([
-        'app.env' => 'testing',
+    config(['app.env' => 'testing']);
+    setGenericDataShareSettings([
         'data_share.disk' => 'local',
         'data_share.instance.id' => 'generic-source-dev',
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
@@ -86,6 +86,16 @@ beforeEach(function (): void {
     TableRegistry::register(GENERIC_SHARE_PARENT, 'Data Share Fixture', GENERIC_SHARE_SCOPE, 'test');
     TableRegistry::register(GENERIC_SHARE_CHILD, 'Data Share Fixture', GENERIC_SHARE_SCOPE, 'test');
 });
+
+/** @param array<string, mixed> $values */
+function setGenericDataShareSettings(array $values): void
+{
+    $settings = app(SettingsService::class);
+
+    foreach ($values as $key => $value) {
+        $settings->set($key, $value);
+    }
+}
 
 afterEach(function (): void {
     TableRegistry::unregister(GENERIC_SHARE_CHILD);
@@ -128,7 +138,7 @@ function seedGenericDataShareFixture(): void
 
 function becomeGenericDataShareSource(): DataShareInstanceIdentity
 {
-    config([
+    setGenericDataShareSettings([
         'data_share.instance.id' => 'generic-source-dev',
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
         'data_share.instance.role' => 'development',
@@ -142,7 +152,7 @@ function becomeGenericDataShareDestination(bool $production = false): DataShareI
     $role = $production ? DataShareInstanceRole::Production : DataShareInstanceRole::Staging;
     $id = $production ? 'generic-destination-production' : 'generic-destination-stage';
 
-    config([
+    setGenericDataShareSettings([
         'data_share.instance.id' => $id,
         'data_share.instance.name' => 'Generic destination',
         'data_share.instance.role' => $role->value,
@@ -483,7 +493,7 @@ it('stores Data Share operator configuration in Base Settings and validates sour
 
 it('resolves each Base Setting only once per Data Share service instance', function (): void {
     $service = Mockery::mock(SettingsService::class);
-    $service->shouldReceive('get')->once()->with('data_share.transfer_limits.max_records', 250000)->andReturn('42');
+    $service->shouldReceive('get')->once()->with('data_share.transfer_limits.max_records')->andReturn('42');
     $settings = new DataShareSettings($service);
 
     expect($settings->integer('data_share.transfer_limits.max_records', 250000, 1, 10000000))->toBe(42)
@@ -524,7 +534,7 @@ it('exports deterministic bounded payloads with physical identities and binary f
 
 it('enforces scalar, canonical-line, record, and table bounds before publishing', function (array $limits, string $message): void {
     seedGenericDataShareFixture();
-    config($limits);
+    setGenericDataShareSettings($limits);
 
     expect(fn () => app(DataSharePackageExporter::class)->preview(
         GENERIC_SHARE_SCOPE,
@@ -593,7 +603,7 @@ it('blocks production apply before mutation when recovery cannot be created', fu
     DB::table(GENERIC_SHARE_PARENT)->delete();
     $receipt = receiveGenericDataShare($bundle, $export, production: true);
     $plan = app(DataShareImportPlanner::class)->plan($receipt);
-    config(['backup.enabled' => false]);
+    app(SettingsService::class)->set('backup.enabled', false);
 
     expect(fn () => app(DataSharePackageApplier::class)->apply(
         $plan,
@@ -800,7 +810,7 @@ it('does not prune an available published offer and requires explicit outgoing c
     ['bundle' => $bundle, 'offer' => $offer, 'export' => $export] = publishGenericDataShare();
     $receipt = receiveGenericDataShare($bundle, $export);
     $receipt->forceFill(['status' => 'applied', 'received_at' => now('UTC')->subDays(30)])->save();
-    config(['data_share.transfer_limits.incoming_retention_days' => 14]);
+    app(SettingsService::class)->set('data_share.transfer_limits.incoming_retention_days', 14);
     touch(Storage::disk('local')->path($offer->package_path), now('UTC')->subDays(30)->timestamp);
 
     $default = app(DataSharePackageRetention::class)->prune();

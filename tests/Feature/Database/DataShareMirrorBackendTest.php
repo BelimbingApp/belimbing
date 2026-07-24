@@ -99,13 +99,13 @@ it('scopes endpoint identity by normalized host port and database without creden
     $settings = app(SettingsService::class);
     $connections = app(DataShareMirrorConnectionManager::class);
 
-    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://first:secret@DB.EXAMPLE.test:5432/blb?sslmode=require', encrypted: true);
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://first:secret@DB.EXAMPLE.test:5432/blb?sslmode=require');
     $first = $connections->endpointIdentity();
 
-    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:5432/blb?sslmode=require', encrypted: true);
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:5432/blb?sslmode=require');
     expect($connections->endpointIdentity())->toBe($first);
 
-    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:6432/blb?sslmode=require', encrypted: true);
+    $settings->set(DataShareMirrorConnectionManager::SETTING_KEY, 'postgresql://second:changed@db.example.test:6432/blb?sslmode=require');
     expect($connections->endpointIdentity())->not->toBe($first)
         ->and($first)->toStartWith('remote:v1:')
         ->and($first)->not->toContain('secret', 'DB.EXAMPLE.test', 'blb');

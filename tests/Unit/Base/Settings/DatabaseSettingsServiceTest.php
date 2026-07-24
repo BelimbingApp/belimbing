@@ -69,6 +69,32 @@ it('uses only a definition-owned default when no override exists', function (): 
         ->and($this->settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(100);
 });
 
+it('uses definition defaults before the settings table exists', function (): void {
+    $originalConnection = DB::getDefaultConnection();
+    config(['database.connections.settings_without_schema' => [
+        'driver' => 'sqlite',
+        'database' => ':memory:',
+        'prefix' => '',
+        'foreign_key_constraints' => true,
+    ]]);
+    DB::setDefaultConnection('settings_without_schema');
+
+    try {
+        expect($this->settings->get(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBe(100)
+            ->and($this->settings->getMany([
+                AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY,
+                AiRuntimeSettings::PDFTOTEXT_PATH_KEY,
+            ]))->toBe([
+                AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY => 100,
+                AiRuntimeSettings::PDFTOTEXT_PATH_KEY => null,
+            ])
+            ->and($this->settings->has(AiRuntimeSettings::MAX_TOOL_ROUNDS_KEY))->toBeFalse();
+    } finally {
+        DB::setDefaultConnection($originalConnection);
+        DB::purge('settings_without_schema');
+    }
+});
+
 it('rejects keys without a parameter definition or runtime-state claim', function (): void {
     expect(fn () => $this->settings->get('unknown.setting'))
         ->toThrow(InvalidSettingDefinitionException::class)

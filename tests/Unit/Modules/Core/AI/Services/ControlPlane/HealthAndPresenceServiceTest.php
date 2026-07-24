@@ -13,7 +13,7 @@ use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Foundation\Testing\TestCase;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
@@ -305,7 +305,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn(null);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);
@@ -324,7 +324,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(true);
 
         $service = makeHapsService(settings: $settings);
@@ -342,7 +342,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);
