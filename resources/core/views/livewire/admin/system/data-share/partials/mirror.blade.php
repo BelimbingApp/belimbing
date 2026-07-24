@@ -72,7 +72,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
             wire:target="refreshMirrorCatalog"
         >
             <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-            <span wire:loading.remove wire:target="refreshMirrorCatalog">{{ __('Refresh catalog') }}</span>
+            <span wire:loading.remove wire:target="refreshMirrorCatalog">{{ __('Catalog') }}</span>
             <span wire:loading wire:target="refreshMirrorCatalog">{{ __('Checking…') }}</span>
         </x-ui.button>
     </div>
