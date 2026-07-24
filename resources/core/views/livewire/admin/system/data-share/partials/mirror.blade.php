@@ -402,8 +402,12 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                     @if($mirrorDirection === 'push' && ($mirrorReview['_can_force_push'] ?? false))
                         <x-ui.button
                             variant="danger"
-                            wire:click="forcePushMirror"
-                            wire:confirm="{{ __('Force push this exact selection? Missing or incompatible remote tables will be dropped and recreated, and their remote rows will be replaced by Local. Unselected remote tables are untouched. Local schema and data will not be changed.') }}"
+                            x-on:click.prevent="
+                                if (window.confirm({{ \Illuminate\Support\Js::from(__('Force push this exact selection? Missing or incompatible remote tables will be dropped and recreated, and their remote rows will be replaced by Local. Unselected remote tables are untouched. Local schema and data will not be changed.')) }})) {
+                                    $wire.mirrorRunOpen = true;
+                                    $wire.forcePushMirror();
+                                }
+                            "
                             :disabled="! $canExecuteMirror"
                             wire:loading.attr="disabled"
                             wire:target="forcePushMirror"
@@ -417,7 +421,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                     @endif
                     <x-ui.button
                         :variant="$mirrorDirection === 'push' ? 'primary' : 'secondary'"
-                        wire:click="executeMirror"
+                        x-on:click="$wire.mirrorRunOpen = true; $wire.executeMirror()"
                         :disabled="($mirrorReview['has_blockers'] ?? true) || ! $canExecuteMirror"
                         wire:loading.attr="disabled"
                         wire:target="executeMirror,forcePushMirror"
@@ -457,4 +461,94 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
             <p class="mt-1 text-xs text-muted">{{ __('The catalog refreshes current Local and remote counts; the completed operation and its observed counts remain in the durable run.') }}</p>
         </x-ui.alert>
     @endif
+
+    @php
+        $mirrorRunTitle = match ($mirrorRunKind) {
+            'pull' => $mirrorRunStatus === 'running' ? __('Pulling to Local') : __('Pull to Local'),
+            'force_push' => $mirrorRunStatus === 'running' ? __('Force pushing to :provider', ['provider' => $mirrorProviderLabel]) : __('Force push to :provider', ['provider' => $mirrorProviderLabel]),
+            default => $mirrorRunStatus === 'running' ? __('Pushing to :provider', ['provider' => $mirrorProviderLabel]) : __('Push to :provider', ['provider' => $mirrorProviderLabel]),
+        };
+        $mirrorRunBadge = match ($mirrorRunStatus) {
+            'running' => ['variant' => 'info', 'label' => __('Running')],
+            'success' => ['variant' => 'success', 'label' => __('Complete')],
+            'warning' => ['variant' => 'warning', 'label' => __('Warnings')],
+            'error' => ['variant' => 'danger', 'label' => __('Needs action')],
+            default => ['variant' => 'default', 'label' => __('Not started')],
+        };
+    @endphp
+
+    <x-ui.modal wire:model="mirrorRunOpen" labelledby="mirror-run-log-title" class="max-w-2xl">
+        <div class="p-5">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h2 id="mirror-run-log-title" class="text-base font-medium text-ink">{{ $mirrorRunTitle }}</h2>
+                        <x-ui.badge :variant="$mirrorRunBadge['variant']">
+                            @if($mirrorRunStatus === 'running')
+                                <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 motion-safe:animate-spin" />
+                            @endif
+                            {{ $mirrorRunBadge['label'] }}
+                        </x-ui.badge>
+                    </div>
+                    <p class="mt-1 text-xs text-muted">
+                        {{ $mirrorRunStatus === 'running'
+                            ? __('Streaming live progress. You can close this window; the operation will continue.')
+                            : __('The run log will remain available until you close this window.') }}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    x-on:click="show = false"
+                    class="rounded-md text-muted hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent"
+                    aria-label="{{ __('Dismiss mirror run log') }}"
+                >
+                    <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
+                </button>
+            </div>
+
+            <div
+                x-data="{
+                    scrollToEnd() {
+                        this.$nextTick(() => { this.$el.scrollTop = this.$el.scrollHeight });
+                    },
+                    init() {
+                        this.scrollToEnd();
+                        this.observer = new MutationObserver(() => this.scrollToEnd());
+                        this.observer.observe(this.$el, { childList: true, subtree: true, characterData: true });
+                    },
+                    destroy() {
+                        this.observer?.disconnect();
+                    },
+                }"
+                class="mt-3 h-72 overflow-y-auto rounded-md bg-surface-subtle px-3 py-2 font-mono text-[11px] leading-5 text-ink"
+                aria-live="polite"
+            >
+                <div class="space-y-0" wire:stream="mirrorRunLog">
+                    @foreach($mirrorRunLog as $line)
+                        <div class="{{ $this->mirrorRunLineClass($line) }}">{{ $line }}</div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-xs text-muted">
+                    {{ __('Push and pull history is recorded under Data Operations.') }}
+                </p>
+                <div class="flex items-center gap-2">
+                    @if(! empty($mirrorResult['run_id']))
+                        <x-ui.button
+                            variant="control"
+                            size="sm"
+                            :href="route('admin.system.data-operations.index', ['run' => $mirrorResult['run_id']])"
+                        >
+                            {{ __('View durable run') }}
+                        </x-ui.button>
+                    @endif
+                    <x-ui.button variant="secondary" size="sm" x-on:click="show = false">
+                        {{ $mirrorRunStatus === 'running' ? __('Close window') : __('Close') }}
+                    </x-ui.button>
+                </div>
+            </div>
+        </div>
+    </x-ui.modal>
 </div>

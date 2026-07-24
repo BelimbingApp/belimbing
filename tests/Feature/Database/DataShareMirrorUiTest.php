@@ -236,13 +236,17 @@ it('reviews an exact push payload before executing the same payload and state to
         ->andReturn($review);
     $manager->shouldReceive('execute')
         ->once()
-        ->with('push', ['ham_orders'], 'mirror-review-state')
+        ->with('push', ['ham_orders'], 'mirror-review-state', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturn(new DataShareMirrorExecutionResult(
-            DataShareMirrorDirection::Push,
-            ['create' => 1, 'replace' => 0, 'delete' => 0],
-            [['table' => 'ham_orders', 'action' => 'create']],
-        ));
+        ->andReturnUsing(function (string $direction, array $tables, string $token, callable $progress): DataShareMirrorExecutionResult {
+            $progress('Applying the selected table.');
+
+            return new DataShareMirrorExecutionResult(
+                DataShareMirrorDirection::Push,
+                ['create' => 1, 'replace' => 0, 'delete' => 0],
+                [['table' => 'ham_orders', 'action' => 'create']],
+            );
+        });
     $manager->shouldReceive('catalog')->once()->andReturn([]);
     $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
@@ -261,6 +265,9 @@ it('reviews an exact push payload before executing the same payload and state to
         ->call('executeMirror')
         ->assertSet('mirrorReview', null)
         ->assertSet('mirrorResult.counts.create', 1)
+        ->assertSet('mirrorRunOpen', true)
+        ->assertSet('mirrorRunStatus', 'success')
+        ->assertSet('mirrorRunLog.1', 'Applying the selected table.')
         ->assertSet('statusVariant', 'success');
 });
 
@@ -286,7 +293,7 @@ it('reports a commit-time connection failure as indeterminate', function (): voi
         ));
     $manager->shouldReceive('execute')
         ->once()
-        ->with('push', ['ham_orders'], 'commit-time-review')
+        ->with('push', ['ham_orders'], 'commit-time-review', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->andThrow(DataShareMirrorException::processFailed('psql', 1));
     app()->instance(DataShareMirrorManager::class, $manager);
 
@@ -318,11 +325,17 @@ it('offers destructive force push for schema blockers but never force pull', fun
         'blocked-schema-state',
     );
     $manager->shouldReceive('review')->once()->with('push', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Push));
-    $manager->shouldReceive('forcePush')->once()->with(['ham_orders'], 'blocked-schema-state')->andReturn(new DataShareMirrorExecutionResult(
+    $manager->shouldReceive('forcePush')->once()->with(
+        ['ham_orders'],
+        'blocked-schema-state',
+        Mockery::on(fn (mixed $progress): bool => is_callable($progress)),
+    )->andReturn(new DataShareMirrorExecutionResult(
         DataShareMirrorDirection::Push,
         ['create' => 0, 'replace' => 1, 'delete' => 0],
         [['table' => 'ham_orders', 'action' => 'replace', 'local_rows' => 1234, 'remote_rows' => 1234]],
     ));
+    $manager->shouldReceive('catalog')->once()->andReturn([]);
+    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('review')->once()->with('pull', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Pull));
     app()->instance(DataShareMirrorManager::class, $manager);
 
@@ -357,7 +370,7 @@ it('reports a stale final review as safe to review again rather than indetermina
     ));
     $manager->shouldReceive('execute')
         ->once()
-        ->with('push', ['ham_orders'], 'stale-review-token')
+        ->with('push', ['ham_orders'], 'stale-review-token', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->andThrow(DataShareMirrorException::staleReview());
     app()->instance(DataShareMirrorManager::class, $manager);
 

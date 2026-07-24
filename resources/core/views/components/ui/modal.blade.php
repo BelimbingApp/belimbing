@@ -1,5 +1,7 @@
 @props([
     'show' => false,
+    'labelledby' => null,
+    'label' => null,
 ])
 
 <div
@@ -8,6 +10,12 @@
     x-cloak
     @keydown.escape.window="show = false"
     class="fixed inset-0 z-50 overflow-y-auto"
+    @if($labelledby || $label)
+        role="dialog"
+        aria-modal="true"
+    @endif
+    @if($labelledby) aria-labelledby="{{ $labelledby }}" @endif
+    @if($label) aria-label="{{ $label }}" @endif
     style="display: none;"
 >
     <!-- Backdrop -->

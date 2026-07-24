@@ -4,6 +4,7 @@ namespace App\Base\Database\Services\DataShare\Mirror;
 
 use App\Base\Database\Contracts\DataShareMirrorEngine;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\CanonicalJson;
@@ -32,7 +33,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         return 'portable';
     }
 
-    public function execute(DataShareMirrorReview $review): DataShareMirrorExecutionResult
+    public function execute(DataShareMirrorReview $review, ?DataShareMirrorProgress $progress = null): DataShareMirrorExecutionResult
     {
         if ($review->hasBlockers) {
             throw DataShareMirrorException::blocked();
@@ -49,19 +50,31 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         if ($order === null) {
             throw DataShareMirrorException::blocked();
         }
+        $tableCount = count($tables);
+        $progress?->report((string) trans_choice(
+            'Preparing a portable snapshot for :count selected table.|Preparing a portable snapshot for :count selected tables.',
+            $tableCount,
+            ['count' => $tableCount],
+        ));
 
         $snapshotPath = $this->temporarySnapshotPath();
 
         try {
             try {
-                $snapshot = $this->writeSnapshot($source, $target, $order, $snapshotPath);
+                $snapshot = $this->writeSnapshot($source, $target, $order, $snapshotPath, $progress);
             } catch (DataShareMirrorException $exception) {
                 throw $exception;
             } catch (Throwable $exception) {
                 throw DataShareMirrorException::safeFailure(__('The portable source snapshot could not be completed. No destination rows were changed.'), $exception);
             }
 
-            $this->replaceTargetRows($target, $order, $snapshotPath, $snapshot['counts'], $snapshot['hashes']);
+            $progress?->report((string) __('Source snapshot completed: :records rows, :bytes bytes.', [
+                'records' => $snapshot['records'],
+                'bytes' => $snapshot['bytes'],
+            ]));
+            $progress?->report((string) __('Replacing destination rows in one transaction.'));
+            $this->replaceTargetRows($target, $order, $snapshotPath, $snapshot['counts'], $snapshot['hashes'], $progress);
+            $progress?->report((string) __('Destination transaction committed.'));
 
             return new DataShareMirrorExecutionResult(
                 $review->direction,
@@ -84,8 +97,8 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         }
     }
 
-    /** @param list<string> $tables @return array{counts: array<string, int>, hashes: array<string, string>} */
-    private function writeSnapshot(Connection $source, Connection $target, array $tables, string $path): array
+    /** @param list<string> $tables @return array{counts: array<string, int>, hashes: array<string, string>, records: int, bytes: int} */
+    private function writeSnapshot(Connection $source, Connection $target, array $tables, string $path, ?DataShareMirrorProgress $progress): array
     {
         $handle = fopen($path, 'wb');
         if ($handle === false) {
@@ -106,12 +119,13 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         $maximumSnapshotBytes = $this->settings->integer('data_share.transfer_limits.max_package_bytes', 250 * 1024 * 1024, 1, 2147483647);
 
         try {
-            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumRecords, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes): void {
+            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumRecords, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $progress): void {
                 if ($source->getDriverName() === 'pgsql') {
                     $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
                 }
 
-                foreach ($tables as $table) {
+                $tableCount = count($tables);
+                foreach ($tables as $index => $table) {
                     $targetTypes = $this->columnTypes($target, $table);
                     $query = $source->table($table);
                     foreach ($this->schemas->primaryKey($source, $table) as $column) {
@@ -151,6 +165,12 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
 
                         $counts[$table]++;
                     }
+                    $progress?->report((string) __('Snapshotted :current of :total: :table (:rows rows).', [
+                        'current' => $index + 1,
+                        'total' => $tableCount,
+                        'table' => $table,
+                        'rows' => $counts[$table],
+                    ]));
                 }
             }, 1);
         } finally {
@@ -162,16 +182,17 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
             $hashes[$table] = hash_final($context);
         }
 
-        return ['counts' => $counts, 'hashes' => $hashes];
+        return ['counts' => $counts, 'hashes' => $hashes, 'records' => $totalRecords, 'bytes' => $totalBytes];
     }
 
     /** @param list<string> $tables @param array<string, int> $expectedCounts @param array<string, string> $expectedHashes */
-    private function replaceTargetRows(Connection $target, array $tables, string $path, array $expectedCounts, array $expectedHashes): void
+    private function replaceTargetRows(Connection $target, array $tables, string $path, array $expectedCounts, array $expectedHashes, ?DataShareMirrorProgress $progress): void
     {
-        $target->transaction(function () use ($target, $tables, $path, $expectedCounts, $expectedHashes): void {
+        $target->transaction(function () use ($target, $tables, $path, $expectedCounts, $expectedHashes, $progress): void {
             foreach (array_reverse($tables) as $table) {
                 $target->table($table)->delete();
             }
+            $progress?->report((string) __('Selected destination rows cleared inside the uncommitted transaction.'));
 
             $handle = fopen($path, 'rb');
             if ($handle === false) {
@@ -189,7 +210,16 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     }
 
                     $table = (string) ($record['table'] ?? '');
-                    if ($activeTable !== null && ($activeTable !== $table || count($chunk) >= self::INSERT_CHUNK_SIZE)) {
+                    if ($activeTable !== null && $activeTable !== $table) {
+                        if ($chunk !== []) {
+                            $target->table($activeTable)->insert($chunk);
+                        }
+                        $progress?->report((string) __('Loaded destination table :table (:rows rows).', [
+                            'table' => $activeTable,
+                            'rows' => $expectedCounts[$activeTable],
+                        ]));
+                        $chunk = [];
+                    } elseif ($activeTable !== null && count($chunk) >= self::INSERT_CHUNK_SIZE) {
                         $target->table($activeTable)->insert($chunk);
                         $chunk = [];
                     }
@@ -201,11 +231,18 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                 if ($activeTable !== null && $chunk !== []) {
                     $target->table($activeTable)->insert($chunk);
                 }
+                if ($activeTable !== null) {
+                    $progress?->report((string) __('Loaded destination table :table (:rows rows).', [
+                        'table' => $activeTable,
+                        'rows' => $expectedCounts[$activeTable],
+                    ]));
+                }
             } finally {
                 fclose($handle);
             }
 
-            foreach ($tables as $table) {
+            $tableCount = count($tables);
+            foreach ($tables as $index => $table) {
                 $actual = (int) $target->table($table)->count();
                 if ($actual !== $expectedCounts[$table]) {
                     throw DataShareMirrorException::safeFailure(__('Portable mirror row-count verification failed. The destination transaction was rolled back.'));
@@ -216,6 +253,12 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                 }
 
                 $this->resetSequence($target, $table);
+                $progress?->report((string) __('Verified :current of :total: :table (:rows rows).', [
+                    'current' => $index + 1,
+                    'total' => $tableCount,
+                    'table' => $table,
+                    'rows' => $actual,
+                ]));
             }
         }, 1);
     }

@@ -70,13 +70,25 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
     $review = $manager->review('push', [PORTABLE_MIRROR_CHILD, PORTABLE_MIRROR_PARENT]);
     expect($review->hasBlockers)->toBeFalse()
         ->and($review->counts['replace'])->toBe(2);
-    $manager->execute('push', [PORTABLE_MIRROR_CHILD, PORTABLE_MIRROR_PARENT], $review->stateToken);
+    $pushProgress = [];
+    $manager->execute(
+        'push',
+        [PORTABLE_MIRROR_CHILD, PORTABLE_MIRROR_PARENT],
+        $review->stateToken,
+        function (string $line) use (&$pushProgress): void {
+            $pushProgress[] = $line;
+        },
+    );
 
     $remote = DB::connection('data_share_mirror');
     expect($remote->table(PORTABLE_MIRROR_PARENT)->orderBy('id')->pluck('name')->all())
         ->toBe(['local parent', 'local second'])
         ->and($remote->table(PORTABLE_MIRROR_CHILD)->value('label'))->toBe('local child')
-        ->and($remote->table(PORTABLE_MIRROR_CONTROL)->value('marker'))->toBe('untouched');
+        ->and($remote->table(PORTABLE_MIRROR_CONTROL)->value('marker'))->toBe('untouched')
+        ->and($pushProgress)->toContain(
+            'Destination transaction committed.',
+            'Loaded destination table '.PORTABLE_MIRROR_PARENT.' (2 rows).',
+        );
 
     $remote->table(PORTABLE_MIRROR_CHILD)->delete();
     $remote->table(PORTABLE_MIRROR_PARENT)->delete();

@@ -5,6 +5,7 @@ namespace App\Base\Database\Services\DataShare\Mirror;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorConnectionStatus;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
 use App\Base\Database\Enums\DataOperationRangeKind;
@@ -129,10 +130,14 @@ class DataShareMirrorManager
      *
      * @param  list<string>  $tableNames
      */
-    public function execute(string $direction, array $tableNames, ?string $expectedStateToken = null): DataShareMirrorExecutionResult
+    public function execute(string $direction, array $tableNames, ?string $expectedStateToken = null, ?callable $progress = null): DataShareMirrorExecutionResult
     {
+        $reporter = DataShareMirrorProgress::listen($progress);
+        $reporter->report((string) __('Waiting for the mirror operation lock.'));
+
         try {
-            return $this->operationLock->run(function () use ($direction, $tableNames, $expectedStateToken): DataShareMirrorExecutionResult {
+            return $this->operationLock->run(function () use ($direction, $tableNames, $expectedStateToken, $reporter): DataShareMirrorExecutionResult {
+                $reporter->report((string) __('Operation lock acquired. Revalidating the reviewed selection.'));
                 $review = $this->review($direction, $tableNames);
 
                 // Reviews that stay blocked or stale never create mutation-attempt
@@ -149,8 +154,10 @@ class DataShareMirrorManager
                 $type = $review->direction === DataShareMirrorDirection::Pull
                     ? DataOperationType::MirrorPull
                     : DataOperationType::MirrorPush;
+                $mode = $status->transferMode ?? 'native';
+                $reporter->report((string) __('Review remains valid. Transfer mode: :mode.', ['mode' => $mode]));
 
-                return $this->runRecorded($type, $review, $status->transferMode ?? 'native', $this->remoteInstanceId());
+                return $this->runRecorded($type, $review, $mode, $this->remoteInstanceId(), $reporter);
             });
         } catch (DataShareMirrorException $exception) {
             throw $exception;
@@ -160,10 +167,14 @@ class DataShareMirrorManager
     }
 
     /** @param list<string> $tableNames */
-    public function forcePush(array $tableNames, ?string $expectedStateToken = null): DataShareMirrorExecutionResult
+    public function forcePush(array $tableNames, ?string $expectedStateToken = null, ?callable $progress = null): DataShareMirrorExecutionResult
     {
+        $reporter = DataShareMirrorProgress::listen($progress);
+        $reporter->report((string) __('Waiting for the mirror operation lock.'));
+
         try {
-            return $this->operationLock->run(function () use ($tableNames, $expectedStateToken): DataShareMirrorExecutionResult {
+            return $this->operationLock->run(function () use ($tableNames, $expectedStateToken, $reporter): DataShareMirrorExecutionResult {
+                $reporter->report((string) __('Operation lock acquired. Revalidating the reviewed force push.'));
                 // Re-review the exact push selection inside the lock. The remote
                 // schema can change while waiting for the lock; a stale plan must
                 // never drop and recreate tables. Only after a fresh in-lock review
@@ -179,12 +190,14 @@ class DataShareMirrorManager
                 if ($expectedStateToken !== null && ! hash_equals($review->stateToken, $expectedStateToken)) {
                     throw DataShareMirrorException::staleReview();
                 }
+                $reporter->report((string) __('Review remains valid. Transfer mode: native.'));
 
                 return $this->runRecorded(
                     DataOperationType::MirrorForcePush,
                     $review,
                     'native',
                     $this->remoteInstanceId(),
+                    $reporter,
                 );
             });
         } catch (DataShareMirrorException $exception) {
@@ -205,6 +218,7 @@ class DataShareMirrorManager
         DataShareMirrorReview $review,
         string $mode,
         ?string $remoteInstanceId,
+        DataShareMirrorProgress $progress,
     ): DataShareMirrorExecutionResult {
         $localInstanceId = $this->localInstanceId();
 
@@ -227,9 +241,10 @@ class DataShareMirrorManager
             'local_instance_id' => $localInstanceId,
             'remote_instance_id' => $remoteInstanceId,
         ], fn (mixed $value): bool => $value !== null));
+        $progress->report((string) __('Durable Data Operations run #:id started.', ['id' => $runId]));
 
         try {
-            $result = $this->engines->forMode($mode)->execute($review);
+            $result = $this->engines->forMode($mode)->execute($review, $progress);
         } catch (Throwable $exception) {
             // Determinate, rollback-safe/pre-mutation failures are failed; only
             // genuinely uncertain outcomes (or unexpected errors) are indeterminate.
@@ -244,6 +259,7 @@ class DataShareMirrorManager
                         : 'The mirror engine did not confirm completion; the destination may have committed.',
                 ],
             );
+            $progress->report((string) __('FAILED: The transfer did not confirm completion. The durable run records the known outcome.'));
 
             throw $exception;
         }
@@ -255,6 +271,7 @@ class DataShareMirrorManager
         // external mutation, the run is best-effort marked indeterminate rather
         // than left running with partial "successful" observations.
         try {
+            $progress->report((string) __('Transfer committed. Recording per-table results and observations.'));
             DB::transaction(function () use ($result, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations): void {
                 foreach ($result->items as $item) {
                     $localRows = $item['local_rows'] ?? null;
@@ -285,10 +302,12 @@ class DataShareMirrorManager
 
                 $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
             });
+            $progress->report((string) __('Completed: Durable run #:id recorded successfully.', ['id' => $runId]));
         } catch (Throwable $exception) {
             $this->operations->finalize($runId, DataOperationStatus::Indeterminate->value, [
                 'failure_summary' => 'The destination committed, but Local completion bookkeeping did not finish.',
             ]);
+            $progress->report((string) __('Warning: The destination committed, but Local completion bookkeeping did not finish.'));
 
             throw $exception;
         }

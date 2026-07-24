@@ -30,10 +30,10 @@
         </div>
     </x-ui.card>
 
-    <x-ui.modal wire:model="demoModalOpen" class="max-w-lg">
+    <x-ui.modal wire:model="demoModalOpen" labelledby="ui-reference-standard-modal-title" class="max-w-lg">
         <div class="space-y-4 p-6">
             <div>
-                <h2 class="text-lg font-medium text-ink">{{ __('Standard Modal') }}</h2>
+                <h2 id="ui-reference-standard-modal-title" class="text-lg font-medium text-ink">{{ __('Standard Modal') }}</h2>
                 <p class="mt-1 text-sm text-muted">{{ __('Use a standard modal for secondary work that needs focus but does not deserve a full-page transition.') }}</p>
             </div>
 
@@ -47,10 +47,10 @@
         </div>
     </x-ui.modal>
 
-    <x-ui.modal wire:model="demoConfirmOpen" class="max-w-md">
+    <x-ui.modal wire:model="demoConfirmOpen" labelledby="ui-reference-confirm-modal-title" class="max-w-md">
         <div class="space-y-4 p-6">
             <div>
-                <h2 class="text-lg font-medium text-ink">{{ __('Delete Reference') }}</h2>
+                <h2 id="ui-reference-confirm-modal-title" class="text-lg font-medium text-ink">{{ __('Delete Reference') }}</h2>
                 <p class="mt-1 text-sm text-muted">{{ __('Confirmation dialogs should make the consequence explicit and keep the action pair easy to parse at a glance.') }}</p>
             </div>
 
@@ -65,4 +65,3 @@
         </div>
     </x-ui.modal>
 </div>
-

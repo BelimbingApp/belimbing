@@ -88,10 +88,21 @@ it('pushes an explicit mixed selection as complete PostgreSQL table images', fun
         'replace' => 1,
     ]);
 
-    $manager->execute('push', MIRROR_PG_TABLES);
+    $progress = [];
+    $manager->execute(
+        'push',
+        MIRROR_PG_TABLES,
+        progress: function (string $line) use (&$progress): void {
+            $progress[] = $line;
+        },
+    );
 
     mirrorAssertAuthoritativeImage(DB::connection('data_share_mirror'), $controlBefore);
     mirrorAssertNoTransferArtifacts();
+    expect($progress)->toContain(
+        'Source snapshot completed.',
+        'Destination transaction committed. Verifying live row counts.',
+    );
 });
 
 it('pulls an explicit mixed selection as complete PostgreSQL table images', function (): void {

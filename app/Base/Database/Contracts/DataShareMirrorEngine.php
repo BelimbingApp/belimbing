@@ -3,6 +3,7 @@
 namespace App\Base\Database\Contracts;
 
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 
 interface DataShareMirrorEngine
@@ -11,5 +12,5 @@ interface DataShareMirrorEngine
 
     public function mode(): string;
 
-    public function execute(DataShareMirrorReview $review): DataShareMirrorExecutionResult;
+    public function execute(DataShareMirrorReview $review, ?DataShareMirrorProgress $progress = null): DataShareMirrorExecutionResult;
 }

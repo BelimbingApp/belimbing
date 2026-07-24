@@ -26,6 +26,15 @@ trait ManagesDevelopmentTableMirror
     /** @var array<string, mixed>|null */
     public ?array $mirrorResult = null;
 
+    public bool $mirrorRunOpen = false;
+
+    /** @var list<string> */
+    public array $mirrorRunLog = [];
+
+    public string $mirrorRunStatus = 'idle';
+
+    public string $mirrorRunKind = 'push';
+
     public bool $mirrorCatalogLoaded = false;
 
     /** True after Local rows render, until the separate remote enrichment runs. */
@@ -217,18 +226,25 @@ trait ManagesDevelopmentTableMirror
         $this->requireCapability('admin.system.data-share-mirror.execute');
         $this->extendMirrorRequestTimeLimit();
         $this->validateMirrorSelection($this->mirrorDirection);
+        $this->startMirrorRunLog($this->mirrorDirection);
 
         if (! $this->reviewMatchesCurrentMirrorSelection()) {
+            $this->streamMirrorRunLine((string) __('Warning: The current selection or direction no longer matches the review.'));
+            $this->finishMirrorRunLog('warning');
             $this->setStatus(__('Review this exact table selection and direction before executing the mirror.'), 'warning');
 
             return;
         }
 
         if ($this->mirrorReview['has_blockers'] ?? true) {
+            $this->streamMirrorRunLine((string) __('Warning: The reviewed operation still contains blockers. No data changed.'));
+            $this->finishMirrorRunLog('warning');
             $this->setStatus(__('Resolve every listed blocker and review the selection again before executing.'), 'warning');
 
             return;
         }
+
+        $runOutcome = 'success';
 
         try {
             $this->mirrorResult = $this->normalizeMirrorResult(
@@ -236,6 +252,9 @@ trait ManagesDevelopmentTableMirror
                     $this->mirrorDirection,
                     $this->mirrorSelectedTables,
                     (string) ($this->mirrorReview['state_token'] ?? ''),
+                    function (string $line): void {
+                        $this->streamMirrorRunLine($line);
+                    },
                 )->toArray(),
             );
             $this->mirrorReview = null;
@@ -246,28 +265,25 @@ trait ManagesDevelopmentTableMirror
                 ]),
                 'success',
             );
+            $this->streamMirrorRunLine((string) __('Transfer complete. Refreshing live Local and remote counts.'));
 
-            try {
-                $this->mirrorTables = collect($mirror->catalog())
-                    ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
-                    ->sortBy([
-                        ['module_name', 'asc'],
-                        ['table', 'asc'],
-                    ], SORT_NATURAL | SORT_FLAG_CASE)
-                    ->values()
-                    ->all();
-                $this->storeMirrorCatalogSnapshot($mirror);
-            } catch (Throwable $exception) {
+            $catalogError = $this->refreshMirrorCatalogAfterRun($mirror);
+            if ($catalogError !== null) {
+                $runOutcome = 'warning';
                 $this->setStatus(
                     __('The mirror committed successfully, but the catalog could not be refreshed. :error', [
-                        'error' => DataShareMirrorException::unexpected('catalog', $exception)->getMessage(),
+                        'error' => $catalogError,
                     ]),
                     'warning',
                 );
             }
         } catch (DataShareMirrorException $exception) {
+            $runOutcome = in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'error';
             $this->mirrorResult = null;
             $this->mirrorReview = null;
+            $this->streamMirrorRunLine((string) ($runOutcome === 'warning'
+                ? __('Warning: :message', ['message' => $exception->getMessage()])
+                : __('FAILED: :message', ['message' => $exception->getMessage()])));
             $this->setStatus(
                 $exception->outcomeIndeterminate
                     ? $exception->getMessage().' '.__('The commit outcome could not be confirmed. Refresh the catalog and inspect the selected tables before retrying.')
@@ -275,10 +291,15 @@ trait ManagesDevelopmentTableMirror
                 in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'danger',
             );
         } catch (Throwable $exception) {
+            $runOutcome = 'error';
             $this->mirrorResult = null;
             $this->mirrorReview = null;
-            $this->setStatus(DataShareMirrorException::unexpected('execute', $exception, outcomeIndeterminate: true)->getMessage(), 'danger');
+            $failure = DataShareMirrorException::unexpected('execute', $exception, outcomeIndeterminate: true);
+            $this->streamMirrorRunLine((string) __('FAILED: :message', ['message' => $failure->getMessage()]));
+            $this->setStatus($failure->getMessage(), 'danger');
         }
+
+        $this->finishMirrorRunLog($runOutcome);
     }
 
     public function forcePushMirror(DataShareMirrorManager $mirror): void
@@ -286,22 +307,29 @@ trait ManagesDevelopmentTableMirror
         $this->requireCapability('admin.system.data-share-mirror.execute');
         $this->extendMirrorRequestTimeLimit();
         $this->validateMirrorSelection('push');
+        $this->startMirrorRunLog('force_push');
 
         if (! $this->reviewMatchesCurrentMirrorSelection() || $this->mirrorDirection !== 'push') {
+            $this->streamMirrorRunLine((string) __('Warning: The current selection no longer matches the reviewed force push.'));
+            $this->finishMirrorRunLog('warning');
             $this->setStatus(__('Review this exact push selection before forcing it.'), 'warning');
 
             return;
         }
+
+        $runOutcome = 'success';
 
         try {
             $this->mirrorResult = $this->normalizeMirrorResult(
                 $mirror->forcePush(
                     $this->mirrorSelectedTables,
                     (string) ($this->mirrorReview['state_token'] ?? ''),
+                    function (string $line): void {
+                        $this->streamMirrorRunLine($line);
+                    },
                 )->toArray(),
             );
             $this->mirrorReview = null;
-            session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
             $this->setStatus(
                 trans_choice(
                     'Force push completed. Local replaced :count selected remote table; Local was not changed.|Force push completed. Local replaced :count selected remote tables; Local was not changed.',
@@ -310,9 +338,25 @@ trait ManagesDevelopmentTableMirror
                 ),
                 'success',
             );
+            $this->streamMirrorRunLine((string) __('Force push committed. Refreshing live Local and remote counts.'));
+
+            $catalogError = $this->refreshMirrorCatalogAfterRun($mirror);
+            if ($catalogError !== null) {
+                $runOutcome = 'warning';
+                $this->setStatus(
+                    __('The force push committed successfully, but the catalog could not be refreshed. :error', [
+                        'error' => $catalogError,
+                    ]),
+                    'warning',
+                );
+            }
         } catch (DataShareMirrorException $exception) {
+            $runOutcome = in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'error';
             $this->mirrorResult = null;
             $this->mirrorReview = null;
+            $this->streamMirrorRunLine((string) ($runOutcome === 'warning'
+                ? __('Warning: :message', ['message' => $exception->getMessage()])
+                : __('FAILED: :message', ['message' => $exception->getMessage()])));
             $this->setStatus(
                 $exception->outcomeIndeterminate
                     ? $exception->getMessage().' '.__('The remote outcome could not be confirmed. Local was not changed. Refresh the catalog and inspect the selected remote tables before retrying.')
@@ -320,10 +364,15 @@ trait ManagesDevelopmentTableMirror
                 in_array($exception->reasonCode, ['stale_review', 'lock_unavailable'], true) ? 'warning' : 'danger',
             );
         } catch (Throwable $exception) {
+            $runOutcome = 'error';
             $this->mirrorResult = null;
             $this->mirrorReview = null;
-            $this->setStatus(DataShareMirrorException::unexpected('force_push', $exception, outcomeIndeterminate: true)->getMessage(), 'danger');
+            $failure = DataShareMirrorException::unexpected('force_push', $exception, outcomeIndeterminate: true);
+            $this->streamMirrorRunLine((string) __('FAILED: :message', ['message' => $failure->getMessage()]));
+            $this->setStatus($failure->getMessage(), 'danger');
         }
+
+        $this->finishMirrorRunLog($runOutcome);
     }
 
     /**
@@ -367,6 +416,75 @@ trait ManagesDevelopmentTableMirror
     {
         $this->mirrorReview = null;
         $this->mirrorResult = null;
+    }
+
+    private function startMirrorRunLog(string $direction): void
+    {
+        $this->mirrorRunOpen = true;
+        $this->mirrorRunStatus = 'running';
+        $this->mirrorRunKind = $direction;
+        $this->mirrorRunLog = [];
+        $this->stream('', replace: true, to: 'mirrorRunLog');
+
+        $provider = (string) ($this->mirrorConnectionStatus['provider_label'] ?? __('configured provider'));
+        $count = count($this->mirrorSelectedTables);
+        $message = match ($direction) {
+            'pull' => trans_choice(
+                'Starting pull of :count selected table: :provider → Local.|Starting pull of :count selected tables: :provider → Local.',
+                $count,
+                ['count' => $count, 'provider' => $provider],
+            ),
+            'force_push' => trans_choice(
+                'Starting force push of :count selected table: Local → :provider.|Starting force push of :count selected tables: Local → :provider.',
+                $count,
+                ['count' => $count, 'provider' => $provider],
+            ),
+            default => trans_choice(
+                'Starting push of :count selected table: Local → :provider.|Starting push of :count selected tables: Local → :provider.',
+                $count,
+                ['count' => $count, 'provider' => $provider],
+            ),
+        };
+
+        $this->streamMirrorRunLine((string) $message);
+    }
+
+    private function streamMirrorRunLine(string $line): void
+    {
+        $this->mirrorRunLog[] = $line;
+        $class = $this->mirrorRunLineClass($line);
+        $classAttribute = $class === '' ? '' : ' class="'.$class.'"';
+        $this->stream('<div'.$classAttribute.'>'.e($line).'</div>', to: 'mirrorRunLog');
+    }
+
+    private function finishMirrorRunLog(string $status): void
+    {
+        $this->mirrorRunStatus = $status;
+    }
+
+    private function refreshMirrorCatalogAfterRun(DataShareMirrorManager $mirror): ?string
+    {
+        try {
+            $this->mirrorTables = $this->mapMirrorTables($mirror->catalog());
+            $this->storeMirrorCatalogSnapshot($mirror);
+            $this->streamMirrorRunLine((string) __('Completed: Catalog counts refreshed.'));
+
+            return null;
+        } catch (Throwable $exception) {
+            $this->streamMirrorRunLine((string) __('Warning: The transfer committed, but the catalog count refresh failed.'));
+
+            return DataShareMirrorException::unexpected('catalog', $exception)->getMessage();
+        }
+    }
+
+    public function mirrorRunLineClass(string $line): string
+    {
+        return match (true) {
+            str_starts_with($line, 'FAILED:') => 'text-status-danger',
+            str_starts_with($line, 'Warning:') => 'text-status-warning',
+            str_starts_with($line, 'Completed:') => 'text-status-success',
+            default => '',
+        };
     }
 
     private function extendMirrorRequestTimeLimit(): void

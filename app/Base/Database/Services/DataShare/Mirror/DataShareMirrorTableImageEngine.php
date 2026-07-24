@@ -5,6 +5,7 @@ namespace App\Base\Database\Services\DataShare\Mirror;
 use App\Base\Database\Contracts\DataShareMirrorEngine;
 use App\Base\Database\Contracts\DataShareMirrorProcessRunner;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
 use App\Base\Database\Enums\DataShareMirrorAction;
@@ -30,7 +31,7 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
         return 'native';
     }
 
-    public function execute(DataShareMirrorReview $review): DataShareMirrorExecutionResult
+    public function execute(DataShareMirrorReview $review, ?DataShareMirrorProgress $progress = null): DataShareMirrorExecutionResult
     {
         if ($review->hasBlockers) {
             throw DataShareMirrorException::blocked();
@@ -45,6 +46,12 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
         $targetTables = array_values(array_map(
             fn (DataShareMirrorReviewItem $item): string => $item->table,
             array_filter($review->items, fn (DataShareMirrorReviewItem $item): bool => $item->intendedAction !== DataShareMirrorAction::Create),
+        ));
+        $tableCount = count($review->items);
+        $progress?->report((string) trans_choice(
+            'Preparing a native PostgreSQL snapshot for :count selected table.|Preparing a native PostgreSQL snapshot for :count selected tables.',
+            $tableCount,
+            ['count' => $tableCount],
         ));
         $pgDump = $this->processes->find('pg_dump');
         $psql = $this->processes->find('psql');
@@ -82,13 +89,16 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                 if (! $result->successful()) {
                     throw DataShareMirrorException::preMutationProcessFailed('pg_dump', $result->exitCode);
                 }
+                $progress?->report((string) __('Source snapshot completed.'));
             } else {
                 $this->files->put($dumpPath, '');
             }
 
             @chmod($dumpPath, 0600);
+            $progress?->report((string) __('Preparing the atomic destination transaction.'));
             $this->buildProgram($programPath, $dumpPath, $target->connection, $source->connection, $targetTables, $sourceTables, $review);
 
+            $progress?->report((string) __('Applying the snapshot in one destination transaction.'));
             $result = $this->processes->run([
                 $psql,
                 '--no-psqlrc',
@@ -100,10 +110,11 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
             if (! $result->successful()) {
                 throw DataShareMirrorException::processFailed('psql', $result->exitCode);
             }
+            $progress?->report((string) __('Destination transaction committed. Verifying live row counts.'));
 
             $counts = ['create' => 0, 'replace' => 0, 'delete' => 0];
             $items = [];
-            foreach ($review->items as $item) {
+            foreach ($review->items as $index => $item) {
                 $counts[$item->intendedAction->value]++;
                 $sourceRows = $this->rowCount($source->connection, $item->table);
                 $targetRows = $this->rowCount($target->connection, $item->table);
@@ -113,6 +124,12 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                     'local_rows' => $review->direction === DataShareMirrorDirection::Push ? $sourceRows : $targetRows,
                     'remote_rows' => $review->direction === DataShareMirrorDirection::Push ? $targetRows : $sourceRows,
                 ];
+                $progress?->report((string) __('Verified :current of :total: :table (:rows rows).', [
+                    'current' => $index + 1,
+                    'total' => $tableCount,
+                    'table' => $item->table,
+                    'rows' => $targetRows,
+                ]));
             }
 
             return new DataShareMirrorExecutionResult($review->direction, $counts, $items);

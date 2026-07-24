@@ -6,6 +6,7 @@ use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorConnectionStatus;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
 use App\Base\Database\Enums\DataShareMirrorAction;
@@ -35,6 +36,19 @@ use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+
+it('isolates progress-listener failures from the mirror operation', function (): void {
+    $called = false;
+    $progress = DataShareMirrorProgress::listen(function () use (&$called): void {
+        $called = true;
+
+        throw new RuntimeException('The UI progress channel disconnected.');
+    });
+
+    $progress->report('Transfer continues.');
+
+    expect($called)->toBeTrue();
+});
 
 it('stores the mirror URL encrypted and never includes it in safe connection status', function (): void {
     $url = 'postgresql://mirror_user:private-password@example.test:5432/belimbing?sslmode=require&application_name=private-password';
@@ -300,17 +314,24 @@ it('force pushes only the exact selected local tables through the native engine'
             'force-state',
         ));
     $engine = Mockery::mock(DataShareMirrorEngine::class);
-    $engine->shouldReceive('execute')->once()->with(Mockery::on(
-        fn (DataShareMirrorReview $review): bool => $review->direction === DataShareMirrorDirection::Push
-            && ! $review->hasBlockers
-            && count($review->items) === 1
-            && $review->items[0]->table === 'sbg_records'
-            && $review->items[0]->action === DataShareMirrorAction::Replace,
-    ))->andReturn(new DataShareMirrorExecutionResult(
-        DataShareMirrorDirection::Push,
-        ['create' => 0, 'replace' => 1, 'delete' => 0],
-        [['table' => 'sbg_records', 'action' => 'replace']],
-    ));
+    $engine->shouldReceive('execute')->once()->with(
+        Mockery::on(
+            fn (DataShareMirrorReview $review): bool => $review->direction === DataShareMirrorDirection::Push
+                && ! $review->hasBlockers
+                && count($review->items) === 1
+                && $review->items[0]->table === 'sbg_records'
+                && $review->items[0]->action === DataShareMirrorAction::Replace,
+        ),
+        Mockery::type(DataShareMirrorProgress::class),
+    )->andReturnUsing(function (DataShareMirrorReview $review, DataShareMirrorProgress $progress): DataShareMirrorExecutionResult {
+        $progress->report('Engine progress is visible.');
+
+        return new DataShareMirrorExecutionResult(
+            DataShareMirrorDirection::Push,
+            ['create' => 0, 'replace' => 1, 'delete' => 0],
+            [['table' => 'sbg_records', 'action' => 'replace']],
+        );
+    });
     $engines = Mockery::mock(DataShareMirrorEngineRegistry::class);
     $engines->shouldReceive('forMode')->once()->with('native')->andReturn($engine);
     $lock = Mockery::mock(DataShareMirrorOperationLock::class);
@@ -324,12 +345,23 @@ it('force pushes only the exact selected local tables through the native engine'
         app(DataOperationRecorder::class),
     );
 
-    $result = $manager->forcePush(['sbg_records']);
+    $progress = [];
+    $result = $manager->forcePush(
+        ['sbg_records'],
+        progress: function (string $line) use (&$progress): void {
+            $progress[] = $line;
+        },
+    );
 
     // The force push is recorded end-to-end on the durable ledger and the result
     // links to its run.
     expect($result->counts['replace'])->toBe(1)
-        ->and($result->runId)->toBeGreaterThan(0);
+        ->and($result->runId)->toBeGreaterThan(0)
+        ->and($progress)->toContain(
+            'Waiting for the mirror operation lock.',
+            'Engine progress is visible.',
+            'Completed: Durable run #'.$result->runId.' recorded successfully.',
+        );
 
     $run = DataOperationRun::query()->latest('id')->firstOrFail();
     expect($run->id)->toBe($result->runId)
