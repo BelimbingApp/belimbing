@@ -139,7 +139,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 <p class="mt-1 text-sm text-muted">{{ __('Reconcile the Base table registry on the source and target, then refresh this catalog.') }}</p>
             </div>
         @else
-            <div class="grid gap-4 lg:grid-cols-[minmax(16rem,0.65fr)_minmax(12rem,0.35fr)]">
+            <div class="grid gap-4 sm:grid-cols-[minmax(16rem,0.65fr)_minmax(12rem,0.35fr)]">
                 <x-ui.search-input
                     id="data-share-mirror-search"
                     wire:model.live.debounce.250ms="mirrorSearch"
