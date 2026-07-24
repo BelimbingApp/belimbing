@@ -142,6 +142,16 @@ it('reports unknown when the expected tracking trigger is disabled or missing', 
     $connection->statement('ALTER TABLE '.FRESHNESS_PROBE_TABLE.' DISABLE TRIGGER blb_freshness_touch');
     expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
 
+    $table = FRESHNESS_PROBE_TABLE;
+    $connection->unprepared(<<<SQL
+        DROP TRIGGER blb_freshness_touch ON {$table};
+        CREATE TRIGGER blb_freshness_touch
+            BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON {$table}
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION base_database_data_freshness_touch();
+        SQL);
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+
     $connection->statement('DROP TRIGGER blb_freshness_touch ON '.FRESHNESS_PROBE_TABLE);
     expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
 });

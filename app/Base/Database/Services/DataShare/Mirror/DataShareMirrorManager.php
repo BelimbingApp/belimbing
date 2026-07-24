@@ -377,82 +377,111 @@ class DataShareMirrorManager
     public function captureBaseline(array $tableNames): int
     {
         try {
-            return $this->operationLock->run(function () use ($tableNames): int {
-                $review = $this->review('push', $tableNames);
-
-                if ($review->hasBlockers) {
-                    throw DataShareMirrorException::blocked();
-                }
-
-                $localInstanceId = $this->localInstanceId();
-                $remoteInstanceId = $this->remoteInstanceId();
-
-                $runId = $this->operations->open(DataOperationType::MirrorBaseline->value, array_filter([
-                    'source' => 'data-share.mirror',
-                    'local_instance_id' => $localInstanceId,
-                    'remote_instance_id' => $remoteInstanceId,
-                ], fn (mixed $value): bool => $value !== null));
-
-                if ($runId <= 0) {
-                    throw DataShareMirrorException::safeFailure(
-                        __('The baseline could not create its durable operation history. No observation was recorded.'),
-                    );
-                }
-
-                try {
-                    $counts = [];
-                    foreach ($review->items as $item) {
-                        // Gather every endpoint count first. A partial scan must
-                        // never replace a prior known observation with null.
-                        $counts[$item->table] = [
-                            'local' => $this->countRows($this->connections->local(), $item->table),
-                            'remote' => $this->countRows($this->connections->mirror(), $item->table),
-                        ];
-                    }
-
-                    DB::transaction(function () use ($review, $counts, $runId, $localInstanceId, $remoteInstanceId): void {
-                        foreach ($review->items as $item) {
-                            $localRows = $counts[$item->table]['local'];
-                            $remoteRows = $counts[$item->table]['remote'];
-
-                            $this->operations->recordTable($runId, $item->table, [
-                                'actions' => ['baseline'],
-                                'rows_before' => $localRows,
-                                'rows_after' => $remoteRows,
-                                'range_kind' => DataOperationRangeKind::NotApplicable->value,
-                                'terminal_status' => DataOperationStatus::Succeeded->value,
-                                'observed_at' => now(),
-                            ]);
-
-                            if ($localInstanceId !== null && $remoteInstanceId !== null) {
-                                app(DataShareMirrorObservationProjection::class)->record(
-                                    $localInstanceId,
-                                    $remoteInstanceId,
-                                    $item->table,
-                                    $runId,
-                                    $localRows,
-                                    $remoteRows,
-                                );
-                            }
-                        }
-
-                        $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
-                    });
-                } catch (Throwable $exception) {
-                    $this->operations->finalize($runId, DataOperationStatus::Failed->value, [
-                        'failure_summary' => 'The baseline could not observe every selected table; no current observation was changed.',
-                    ]);
-
-                    throw $exception;
-                }
-
-                return $runId;
-            });
+            return $this->operationLock->run(
+                fn (): int => $this->captureBaselineInLock($tableNames),
+            );
         } catch (DataShareMirrorException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
             throw DataShareMirrorException::unexpected('capture_baseline', $exception);
         }
+    }
+
+    /** @param list<string> $tableNames */
+    private function captureBaselineInLock(array $tableNames): int
+    {
+        $review = $this->review('push', $tableNames);
+
+        if ($review->hasBlockers) {
+            throw DataShareMirrorException::blocked();
+        }
+
+        $localInstanceId = $this->localInstanceId();
+        $remoteInstanceId = $this->remoteInstanceId();
+        $runId = $this->operations->open(DataOperationType::MirrorBaseline->value, array_filter([
+            'source' => 'data-share.mirror',
+            'local_instance_id' => $localInstanceId,
+            'remote_instance_id' => $remoteInstanceId,
+        ], fn (mixed $value): bool => $value !== null));
+
+        if ($runId <= 0) {
+            throw DataShareMirrorException::safeFailure(
+                __('The baseline could not create its durable operation history. No observation was recorded.'),
+            );
+        }
+
+        try {
+            $this->persistBaseline(
+                $review,
+                $this->baselineCounts($review),
+                $runId,
+                $localInstanceId,
+                $remoteInstanceId,
+            );
+        } catch (Throwable $exception) {
+            $this->operations->finalize($runId, DataOperationStatus::Failed->value, [
+                'failure_summary' => 'The baseline could not observe every selected table; no current observation was changed.',
+            ]);
+
+            throw $exception;
+        }
+
+        return $runId;
+    }
+
+    /** @return array<string, array{local: int, remote: int}> */
+    private function baselineCounts(DataShareMirrorReview $review): array
+    {
+        $counts = [];
+
+        foreach ($review->items as $item) {
+            // Gather every endpoint count first. A partial scan must never
+            // replace a prior known observation with null.
+            $counts[$item->table] = [
+                'local' => $this->countRows($this->connections->local(), $item->table),
+                'remote' => $this->countRows($this->connections->mirror(), $item->table),
+            ];
+        }
+
+        return $counts;
+    }
+
+    /** @param array<string, array{local: int, remote: int}> $counts */
+    private function persistBaseline(
+        DataShareMirrorReview $review,
+        array $counts,
+        int $runId,
+        ?string $localInstanceId,
+        ?string $remoteInstanceId,
+    ): void {
+        DB::transaction(function () use ($review, $counts, $runId, $localInstanceId, $remoteInstanceId): void {
+            foreach ($review->items as $item) {
+                $localRows = $counts[$item->table]['local'];
+                $remoteRows = $counts[$item->table]['remote'];
+
+                $this->operations->recordTable($runId, $item->table, [
+                    'actions' => ['baseline'],
+                    'rows_before' => $localRows,
+                    'rows_after' => $remoteRows,
+                    'range_kind' => DataOperationRangeKind::NotApplicable->value,
+                    'terminal_status' => DataOperationStatus::Succeeded->value,
+                    'observed_at' => now(),
+                ]);
+
+                if ($localInstanceId !== null && $remoteInstanceId !== null) {
+                    app(DataShareMirrorObservationProjection::class)->record(
+                        $localInstanceId,
+                        $remoteInstanceId,
+                        $item->table,
+                        $runId,
+                        $localRows,
+                        $remoteRows,
+                    );
+                }
+            }
+
+            $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
+        });
     }
 
     private function countRows(Connection $connection, string $table): int

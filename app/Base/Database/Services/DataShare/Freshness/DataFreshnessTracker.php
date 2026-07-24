@@ -4,6 +4,7 @@ namespace App\Base\Database\Services\DataShare\Freshness;
 
 use App\Base\Database\Enums\DataFreshnessState;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -54,13 +55,15 @@ final class DataFreshnessTracker
         $connection->unprepared($this->triggerSql($table, $connection));
     }
 
-    public function currentGeneration(string $table): ?int
+    public function currentGeneration(string $table, ?Connection $connection = null): ?int
     {
-        if (! Schema::hasTable(self::EVENTS_TABLE)) {
+        $connection ??= DB::connection();
+
+        if (! $connection->getSchemaBuilder()->hasTable(self::EVENTS_TABLE)) {
             return null;
         }
 
-        $max = DB::table(self::EVENTS_TABLE)->where('table_name', $table)->max('id');
+        $max = $connection->table(self::EVENTS_TABLE)->where('table_name', $table)->max('id');
 
         return $max === null ? null : (int) $max;
     }
@@ -78,7 +81,7 @@ final class DataFreshnessTracker
             return DataFreshnessState::Unknown;
         }
 
-        $generation = $this->currentGeneration($table);
+        $generation = $this->currentGeneration($table, $connection);
 
         if ($generation === null) {
             return DataFreshnessState::Unknown;
@@ -122,25 +125,9 @@ final class DataFreshnessTracker
             return false;
         }
 
-        $installed = $connection->selectOne(<<<'SQL'
-            SELECT EXISTS (
-                SELECT 1
-                FROM pg_trigger trigger
-                JOIN pg_class relation ON relation.oid = trigger.tgrelid
-                JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-                JOIN pg_proc procedure ON procedure.oid = trigger.tgfoid
-                WHERE namespace.nspname = 'public'
-                  AND relation.relname = ?
-                  AND trigger.tgname = ?
-                  AND NOT trigger.tgisinternal
-                  AND trigger.tgenabled IN ('O', 'A')
-                  AND procedure.proname = ?
-                  AND (trigger.tgtype & 1) = 0
-                  AND (trigger.tgtype & 60) = 60
-            ) AS installed
-            SQL, [$table, self::TRIGGER_NAME, self::FUNCTION_NAME]);
-
-        return filter_var($installed?->installed ?? false, FILTER_VALIDATE_BOOL);
+        return $this->installedTrackingQuery($connection)
+            ->where('relation.relname', $table)
+            ->exists();
     }
 
     /** @param list<string> $tables @return array<string, bool> */
@@ -153,18 +140,8 @@ final class DataFreshnessTracker
             return $status;
         }
 
-        $installed = $connection->table('pg_catalog.pg_trigger as trigger')
-            ->join('pg_catalog.pg_class as relation', 'relation.oid', '=', 'trigger.tgrelid')
-            ->join('pg_catalog.pg_namespace as namespace', 'namespace.oid', '=', 'relation.relnamespace')
-            ->join('pg_catalog.pg_proc as procedure', 'procedure.oid', '=', 'trigger.tgfoid')
-            ->where('namespace.nspname', 'public')
+        $installed = $this->installedTrackingQuery($connection)
             ->whereIn('relation.relname', $tables)
-            ->where('trigger.tgname', self::TRIGGER_NAME)
-            ->where('trigger.tgisinternal', false)
-            ->whereIn('trigger.tgenabled', ['O', 'A'])
-            ->where('procedure.proname', self::FUNCTION_NAME)
-            ->whereRaw('(trigger.tgtype & 1) = 0')
-            ->whereRaw('(trigger.tgtype & 60) = 60')
             ->pluck('relation.relname');
 
         foreach ($installed as $table) {
@@ -172,6 +149,25 @@ final class DataFreshnessTracker
         }
 
         return $status;
+    }
+
+    private function installedTrackingQuery(Connection $connection): Builder
+    {
+        return $connection->table('pg_catalog.pg_trigger as trigger')
+            ->join('pg_catalog.pg_class as relation', 'relation.oid', '=', 'trigger.tgrelid')
+            ->join('pg_catalog.pg_namespace as namespace', 'namespace.oid', '=', 'relation.relnamespace')
+            ->join('pg_catalog.pg_proc as procedure', 'procedure.oid', '=', 'trigger.tgfoid')
+            ->join('pg_catalog.pg_namespace as procedure_namespace', 'procedure_namespace.oid', '=', 'procedure.pronamespace')
+            ->where('namespace.nspname', 'public')
+            ->where('procedure_namespace.nspname', 'public')
+            ->where('trigger.tgname', self::TRIGGER_NAME)
+            ->where('trigger.tgisinternal', false)
+            ->whereIn('trigger.tgenabled', ['O', 'A'])
+            ->where('procedure.proname', self::FUNCTION_NAME)
+            ->whereRaw('(trigger.tgtype & 1) = 0')
+            ->whereRaw('(trigger.tgtype & 2) = 0')
+            ->whereRaw('(trigger.tgtype & 60) = 60')
+            ->whereRaw('(trigger.tgtype & 64) = 0');
     }
 
     public function functionSql(): string

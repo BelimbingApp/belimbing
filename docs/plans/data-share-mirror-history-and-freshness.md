@@ -1,9 +1,9 @@
 # Data Share Mirror History and Freshness
 
 **Status:** In progress — durable history is operational; shared remote caching, pull freshness reconciliation, and full browser/subprocess proof remain open
-**Last Updated:** 2026-07-23
+**Last Updated:** 2026-07-24
 **Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Foundation/Contracts/SemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `extensions/sb-group/ibp/Models/ImportBatch.php`, `extensions/sb-group/ibp/Services/MarketSpotImportRunner.php`, `extensions/sb-group/ibp/Services/LegacyAxImporter.php`, `docs/plans/base-schedule-observability.md`
-**Agents:** Amp/OpenAI Codex
+**Agents:** Amp/OpenAI Codex; Codex/GPT-5
 
 ## Implementation Status (2026-07-23 review)
 
@@ -21,6 +21,7 @@
 - **Phase 4 code** — push acknowledges exactly the generation captured before mutation; `DataFreshnessAttachmentService` + `blb:db:share:freshness-attach` attach triggers using Local-only eligibility, explicitly (never on migrate), and no-op on non-PostgreSQL. Detaching obsolete triggers and restoring/reconciling triggers after native pull are not implemented, so broad operational attachment remains pending.
 - **Stale-run reconciler** — `DataOperationReconciler` + `blb:db:data-operations:reconcile` sweep runs that stayed `running` past the timeout and mark them `indeterminate` (via the same atomic finalize claim); never guessed as failed. Tested.
 - **Local-first catalog + async enrichment** — `DataShareMirrorCatalog::localCatalog()` builds the picker from the Local registry with **no remote call** and merges durable endpoint observations through a non-connecting endpoint identity (normalized host + effective port + database; no provider-wide fallback). The Livewire component always starts from fresh Local rows with `mirrorRemotePending = true`; a separate `enrichMirrorRemote()` request fills remote presence. The stale session-wide combined snapshot was removed because it could hide Local membership/observation changes. A shared endpoint-scoped stale-while-revalidate remote snapshot remains open.
+- **PR validation repair (2026-07-24)** — the native PostgreSQL mirror harness installs the real incubating operation-history migration and asserts the successful durable run, keeping its fixtures aligned with the fail-closed mutation contract. Freshness health now requires the exact public, origin-enabled, statement-level **AFTER** trigger and reads generations from the caller-supplied connection; unavailable trigger metadata preserves endpoint counts while freshness falls back to **Unknown**.
 
 **Fixes from code review (2026-07-23):** Force Push re-reviews inside the lock and verifies the visible review token (no stale destructive plan); observations are keyed by a stable remote-endpoint id (normalized host + effective port + database), never the provider adapter key, and Force Push no longer passes a null remote; mirror execution fails closed without durable history and persists its reviewed manifest before mutation; incomplete/duplicate engine manifests become indeterminate; baseline scans are all-or-nothing; late ledger writes cannot mutate terminal runs; audit projection follows Local commit; AX imports track commit and report post-commit bookkeeping failures as indeterminate, not "failed before commit"; determinate engine failures are recorded `failed`, only uncertain outcomes `indeterminate`; the ledger models are excluded from global mutation audit (regression-tested: one semantic action, zero bookkeeping mutations); the history UI labels endpoint counts as *Local · remote (observed)*, not before→after.
 
@@ -278,7 +279,7 @@ Affected pages: `/admin/system/data-share#mirror`
 Goal: Evidence proves compact generation tracking is complete and operationally safe before it is attached to production tables.
 
 - [x] Prototype append-only generation infrastructure and statement-level tracking for insert, update, delete, and truncate; retain the recorded manual upsert/copy evidence pending a reproducible checked-in matrix. {Amp/OpenAI Codex}
-- [x] Prove rollback behavior, captured-generation acknowledgement, and missing/disabled-trigger fallback to **Unknown** rather than false **Clean**. {Amp/OpenAI Codex}
+- [x] Prove rollback behavior, captured-generation acknowledgement, and missing, disabled, or wrong-timing trigger fallback to **Unknown** rather than false **Clean**. {Amp/OpenAI Codex; Codex/GPT-5}
 - [ ] Verify selected-table `pg_dump` and restore behavior because table dumps include trigger definitions but not necessarily their shared function or control tables.
 - [ ] Ensure tracking infrastructure is independently migrated on both PostgreSQL endpoints and native table recreation reconciles the expected trigger without copying protected control data.
 - [ ] Prove trusted transaction-local pull suppression without using global trigger disabling or `session_replication_role`.
