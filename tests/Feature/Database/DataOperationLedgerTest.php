@@ -6,6 +6,7 @@ use App\Base\Database\Enums\DataFreshnessState;
 use App\Base\Database\Enums\DataOperationRangeKind;
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
+use App\Base\Database\Exceptions\DataOperationException;
 use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataOperationTableSummary;
 use App\Base\Database\Models\DataShareMirrorObservation;
@@ -112,6 +113,22 @@ it('projects the audit action at most once even when finalize is retried', funct
     $recorder->finalize($runId, DataOperationStatus::Succeeded->value); // reconcile / retry
 
     expect($spy->calls)->toHaveCount(1);
+});
+
+it('rejects summary writes and resume after a run is terminal', function () {
+    $recorder = app(DataOperationRecorder::class);
+    $runId = $recorder->open(DataOperationType::AxImport->value);
+    $recorder->recordTable($runId, 'sbg_products', ['actions' => ['upsert'], 'rows_written' => 5]);
+    $recorder->finalize($runId, DataOperationStatus::Succeeded->value);
+
+    expect(fn () => $recorder->resume($runId))->toThrow(DataOperationException::class)
+        ->and(fn () => $recorder->recordTable($runId, 'sbg_products', [
+            'actions' => ['upsert'],
+            'rows_written' => 99,
+        ]))->toThrow(DataOperationException::class);
+
+    expect(DataOperationTableSummary::query()->where('run_id', $runId)->sole()->rows_written)->toBe(5)
+        ->and(DataOperationRun::query()->findOrFail($runId)->total_rows_affected)->toBe(5);
 });
 
 it('refuses to resume a run that does not exist', function () {

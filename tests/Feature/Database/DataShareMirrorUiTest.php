@@ -121,7 +121,7 @@ it('materializes only visible table names and never auto-selects on module chang
         ->assertSet('mirrorSelectedTables', []);
 });
 
-it('restores a fresh mirror catalog snapshot on page reload and refreshes it only on demand', function (): void {
+it('reads the local mirror catalog afresh on page reload instead of restoring endpoint state', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
@@ -159,7 +159,10 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
         ->assertSet('mirrorRemotePending', false)
         ->assertSet('mirrorTables.0.table', 'ham_orders');
 
-    Livewire::test(DataShareIndex::class) // reload serves the cached enriched snapshot
+    Livewire::test(DataShareIndex::class)
+        ->assertSet('mirrorCatalogLoaded', false)
+        ->assertSet('mirrorTables', [])
+        ->call('dataShareTabSelected', 'mirror')
         ->assertSet('mirrorCatalogLoaded', true)
         ->assertSet('mirrorTables.0.table', 'ham_orders')
         ->call('refreshMirrorCatalog')
@@ -244,7 +247,6 @@ it('reviews an exact push payload before executing the same payload and state to
             [['table' => 'ham_orders', 'action' => 'create']],
         ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)

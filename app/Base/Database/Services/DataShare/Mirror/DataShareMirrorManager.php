@@ -79,7 +79,7 @@ class DataShareMirrorManager
     public function localCatalog(): array
     {
         try {
-            return $this->catalog->localCatalog();
+            return $this->mergeCatalogObservations($this->catalog->localCatalog());
         } catch (DataShareMirrorException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -228,6 +228,33 @@ class DataShareMirrorManager
             'remote_instance_id' => $remoteInstanceId,
         ], fn (mixed $value): bool => $value !== null));
 
+        if ($runId <= 0) {
+            throw DataShareMirrorException::safeFailure(
+                __('The mirror could not create its durable operation history. No table data was changed.'),
+            );
+        }
+
+        // Persist the exact reviewed manifest before mutation. Failed and
+        // indeterminate runs must still answer which tables were attempted.
+        try {
+            foreach ($review->items as $item) {
+                $this->operations->recordTable($runId, $item->table, [
+                    'actions' => [$item->action->value],
+                    'range_kind' => DataOperationRangeKind::NotApplicable->value,
+                    'terminal_status' => DataOperationStatus::Running->value,
+                ]);
+            }
+        } catch (Throwable $exception) {
+            $this->operations->finalize($runId, DataOperationStatus::Failed->value, [
+                'failure_summary' => 'The reviewed table manifest could not be persisted before mutation.',
+            ]);
+
+            throw DataShareMirrorException::safeFailure(
+                __('The mirror could not persist its reviewed table manifest. No table data was changed.'),
+                $exception,
+            );
+        }
+
         try {
             $result = $this->engines->forMode($mode)->execute($review);
         } catch (Throwable $exception) {
@@ -248,6 +275,28 @@ class DataShareMirrorManager
             throw $exception;
         }
 
+        $expectedManifest = collect($review->items)
+            ->mapWithKeys(fn (DataShareMirrorReviewItem $item): array => [$item->table => $item->action->value])
+            ->sortKeys()
+            ->all();
+        $resultTables = collect($result->items)->pluck('table');
+        $resultManifest = collect($result->items)
+            ->mapWithKeys(fn (array $item): array => [(string) ($item['table'] ?? '') => (string) ($item['action'] ?? '')])
+            ->sortKeys()
+            ->all();
+
+        if ($resultManifest !== $expectedManifest || $resultTables->unique()->count() !== $resultTables->count()) {
+            $this->operations->finalize($runId, DataOperationStatus::Indeterminate->value, [
+                'failure_summary' => 'The mirror engine completed with an incomplete, duplicate, or mismatched result manifest.',
+            ]);
+
+            throw new DataShareMirrorException(
+                __('The mirror engine completed, but its result manifest could not be verified. Inspect the selected tables before retrying.'),
+                'invalid_result_manifest',
+                true,
+            );
+        }
+
         $canProject = $localInstanceId !== null && $remoteInstanceId !== null;
 
         // The remote has committed. Record all summaries, observations, and the
@@ -255,13 +304,13 @@ class DataShareMirrorManager
         // external mutation, the run is best-effort marked indeterminate rather
         // than left running with partial "successful" observations.
         try {
-            DB::transaction(function () use ($result, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations): void {
+            DB::transaction(function () use ($result, $expectedManifest, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations): void {
                 foreach ($result->items as $item) {
                     $localRows = $item['local_rows'] ?? null;
                     $remoteRows = $item['remote_rows'] ?? null;
 
                     $this->operations->recordTable($runId, (string) $item['table'], [
-                        'actions' => [$item['action']],
+                        'actions' => [$expectedManifest[$item['table']]],
                         'rows_before' => $localRows,
                         'rows_after' => $remoteRows,
                         'range_kind' => DataOperationRangeKind::NotApplicable->value,
@@ -313,23 +362,7 @@ class DataShareMirrorManager
      */
     private function remoteInstanceId(): ?string
     {
-        try {
-            $config = $this->connections->mirror()->getConfig();
-            $host = (string) ($config['host'] ?? '');
-            $database = (string) ($config['database'] ?? '');
-
-            if ($host !== '' || $database !== '') {
-                return 'remote:'.substr(hash('sha256', $host.'/'.$database), 0, 20);
-            }
-        } catch (Throwable) {
-            // Fall back to the provider key only when the endpoint cannot be read.
-        }
-
-        try {
-            return $this->status()->providerKey;
-        } catch (Throwable) {
-            return null;
-        }
+        return $this->connections->endpointIdentity();
     }
 
     /**
@@ -344,51 +377,9 @@ class DataShareMirrorManager
     public function captureBaseline(array $tableNames): int
     {
         try {
-            return $this->operationLock->run(function () use ($tableNames): int {
-                $review = $this->review('push', $tableNames);
-
-                if ($review->hasBlockers) {
-                    throw DataShareMirrorException::blocked();
-                }
-
-                $localInstanceId = $this->localInstanceId();
-                $remoteInstanceId = $this->remoteInstanceId();
-
-                $runId = $this->operations->open(DataOperationType::MirrorBaseline->value, array_filter([
-                    'source' => 'data-share.mirror',
-                    'local_instance_id' => $localInstanceId,
-                    'remote_instance_id' => $remoteInstanceId,
-                ], fn (mixed $value): bool => $value !== null));
-
-                foreach ($review->items as $item) {
-                    $localRows = $this->countRows($this->connections->local(), $item->table);
-                    $remoteRows = $this->countRows($this->connections->mirror(), $item->table);
-
-                    $this->operations->recordTable($runId, $item->table, [
-                        'actions' => ['baseline'],
-                        'rows_before' => $localRows,
-                        'rows_after' => $remoteRows,
-                        'range_kind' => DataOperationRangeKind::NotApplicable->value,
-                        'terminal_status' => DataOperationStatus::Succeeded->value,
-                        'observed_at' => now(),
-                    ]);
-
-                    if ($localInstanceId !== null && $remoteInstanceId !== null) {
-                        app(DataShareMirrorObservationProjection::class)->record(
-                            $localInstanceId,
-                            $remoteInstanceId,
-                            $item->table,
-                            $runId,
-                            $localRows,
-                            $remoteRows,
-                        );
-                    }
-                }
-
-                $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
-
-                return $runId;
-            });
+            return $this->operationLock->run(
+                fn (): int => $this->captureBaselineInLock($tableNames),
+            );
         } catch (DataShareMirrorException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -396,12 +387,112 @@ class DataShareMirrorManager
         }
     }
 
-    private function countRows(Connection $connection, string $table): ?int
+    /** @param list<string> $tableNames */
+    private function captureBaselineInLock(array $tableNames): int
+    {
+        $review = $this->review('push', $tableNames);
+
+        if ($review->hasBlockers) {
+            throw DataShareMirrorException::blocked();
+        }
+
+        $localInstanceId = $this->localInstanceId();
+        $remoteInstanceId = $this->remoteInstanceId();
+        $runId = $this->operations->open(DataOperationType::MirrorBaseline->value, array_filter([
+            'source' => 'data-share.mirror',
+            'local_instance_id' => $localInstanceId,
+            'remote_instance_id' => $remoteInstanceId,
+        ], fn (mixed $value): bool => $value !== null));
+
+        if ($runId <= 0) {
+            throw DataShareMirrorException::safeFailure(
+                __('The baseline could not create its durable operation history. No observation was recorded.'),
+            );
+        }
+
+        try {
+            $this->persistBaseline(
+                $review,
+                $this->baselineCounts($review),
+                $runId,
+                $localInstanceId,
+                $remoteInstanceId,
+            );
+        } catch (Throwable $exception) {
+            $this->operations->finalize($runId, DataOperationStatus::Failed->value, [
+                'failure_summary' => 'The baseline could not observe every selected table; no current observation was changed.',
+            ]);
+
+            throw $exception;
+        }
+
+        return $runId;
+    }
+
+    /** @return array<string, array{local: int, remote: int}> */
+    private function baselineCounts(DataShareMirrorReview $review): array
+    {
+        $counts = [];
+
+        foreach ($review->items as $item) {
+            // Gather every endpoint count first. A partial scan must never
+            // replace a prior known observation with null.
+            $counts[$item->table] = [
+                'local' => $this->countRows($this->connections->local(), $item->table),
+                'remote' => $this->countRows($this->connections->mirror(), $item->table),
+            ];
+        }
+
+        return $counts;
+    }
+
+    /** @param array<string, array{local: int, remote: int}> $counts */
+    private function persistBaseline(
+        DataShareMirrorReview $review,
+        array $counts,
+        int $runId,
+        ?string $localInstanceId,
+        ?string $remoteInstanceId,
+    ): void {
+        DB::transaction(function () use ($review, $counts, $runId, $localInstanceId, $remoteInstanceId): void {
+            foreach ($review->items as $item) {
+                $localRows = $counts[$item->table]['local'];
+                $remoteRows = $counts[$item->table]['remote'];
+
+                $this->operations->recordTable($runId, $item->table, [
+                    'actions' => ['baseline'],
+                    'rows_before' => $localRows,
+                    'rows_after' => $remoteRows,
+                    'range_kind' => DataOperationRangeKind::NotApplicable->value,
+                    'terminal_status' => DataOperationStatus::Succeeded->value,
+                    'observed_at' => now(),
+                ]);
+
+                if ($localInstanceId !== null && $remoteInstanceId !== null) {
+                    app(DataShareMirrorObservationProjection::class)->record(
+                        $localInstanceId,
+                        $remoteInstanceId,
+                        $item->table,
+                        $runId,
+                        $localRows,
+                        $remoteRows,
+                    );
+                }
+            }
+
+            $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
+        });
+    }
+
+    private function countRows(Connection $connection, string $table): int
     {
         try {
             return (int) $connection->table($table)->count();
-        } catch (Throwable) {
-            return null;
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::safeFailure(
+                __('The baseline could not count :table on one endpoint. No observation was recorded.', ['table' => $table]),
+                $exception,
+            );
         }
     }
 

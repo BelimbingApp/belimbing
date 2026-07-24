@@ -6,6 +6,7 @@ use App\Base\Database\Livewire\DataShare\Index as DataShareIndex;
 use App\Base\Database\Services\DataShare\ColumnRedactor;
 use App\Base\Database\Services\DataShare\DependencyClosureResolver;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Modules\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
@@ -207,7 +208,7 @@ it('refuses to write diagnostic packages to a public disk', function (): void {
     $user = createCaptureTargetUser();
     $capture = app(DiagnosticRowCapture::class);
     $preview = $capture->preview('users', [(string) $user->id]);
-    config(['data_share.disk' => 'public']);
+    app(SettingsService::class)->set('data_share.disk', 'public');
 
     expect(fn () => $capture->capture(
         'users',

@@ -3,11 +3,14 @@
 use App\Base\AI\Contracts\Tool;
 use App\Base\AI\Enums\ToolCategory;
 use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\AI\Tools\ToolResult;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
 use App\Base\Menu\Contracts\NavigableMenuSnapshot;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Modules\Core\AI\DTO\Orchestration\RoutingDecision;
 use App\Modules\Core\AI\Enums\OperationStatus;
 use App\Modules\Core\AI\Enums\OperationType;
@@ -69,6 +72,21 @@ function makeSimpleTool(string $name, ?string $capability = null): Tool
             'executed:'.$name.':'.(string) ($arguments['input'] ?? 'no-input')
         ),
         capability: $capability,
+    );
+}
+
+function makeEnabledBashTool(): BashTool
+{
+    $settings = Mockery::mock(SettingsService::class);
+    $settings->shouldReceive('get')
+        ->with(AiRuntimeSettings::BASH_TOOL_ENABLED_KEY)
+        ->andReturn(true);
+
+    return new BashTool(
+        runtimeSettings: new AiRuntimeSettings(
+            $settings,
+            app(SettingDefinitionRegistry::class),
+        ),
     );
 }
 
@@ -333,14 +351,14 @@ describe('BashTool', function () {
     });
 
     it('returns error for empty command', function () {
-        $tool = new BashTool;
+        $tool = makeEnabledBashTool();
 
         expect((string) $tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
         expect((string) $tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
     });
 
     it('executes a simple command successfully', function () {
-        $tool = new BashTool;
+        $tool = makeEnabledBashTool();
 
         $result = $tool->execute(['command' => 'php -r "echo \'hello-shell-tool\';"']);
 
@@ -348,7 +366,7 @@ describe('BashTool', function () {
     });
 
     it('returns failure message for bad command', function () {
-        $tool = new BashTool;
+        $tool = makeEnabledBashTool();
 
         $result = $tool->execute(['command' => 'php -r "fwrite(STDERR, \'expected shell failure\'); exit(1);"']);
 
@@ -356,7 +374,7 @@ describe('BashTool', function () {
     });
 
     it('returns success message when command produces no output', function () {
-        $tool = new BashTool;
+        $tool = makeEnabledBashTool();
 
         $result = $tool->execute(['command' => 'php -r " "']);
 

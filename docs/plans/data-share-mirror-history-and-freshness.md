@@ -1,31 +1,35 @@
 # Data Share Mirror History and Freshness
 
-**Status:** Proposed
-**Last Updated:** 2026-07-23
+**Status:** In progress — durable history is operational; shared remote caching, pull freshness reconciliation, and full browser/subprocess proof remain open
+**Last Updated:** 2026-07-24
 **Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Foundation/Contracts/SemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `extensions/sb-group/ibp/Models/ImportBatch.php`, `extensions/sb-group/ibp/Services/MarketSpotImportRunner.php`, `extensions/sb-group/ibp/Services/LegacyAxImporter.php`, `docs/plans/base-schedule-observability.md`
-**Agents:** Amp/OpenAI Codex
+**Agents:** Amp/OpenAI Codex; Codex/GPT-5
 
-## Implementation Status (2026-07-23)
+## Implementation Status (2026-07-23 review)
 
 **Built and tested** (`tests/Feature/Database/DataOperationLedgerTest.php`, `DataOperationsPageTest.php`, `DataShareMirrorBackendTest.php`, `extensions/sb-group/ibp/Tests/Feature/ImportMarketSpotCommandTest.php`):
 
 - The shared ledger — `base_database_data_operation_runs`, `base_database_data_operation_tables`, `base_database_data_share_observations` (incubating, `base_`-prefixed, auto-increment id; all three permanently protected from mirroring).
-- Foundation `DataOperationRecorder` contract (`open`/`resume`/`recordTable`/`finalize`) with a `Null` default and the real `LedgerDataOperationRecorder`: actor attribution, best-effort **idempotent** audit projection (guarded, no backlink), and a first-terminal-status-wins guard.
-- Mirror push/force-push/pull recorded in-lock; per-table observations + terminal state written in one short Local transaction (a bookkeeping failure after the remote commit marks the run indeterminate, never leaves it running).
+- Foundation `DataOperationRecorder` contract (`open`/`resume`/`recordTable`/`finalize`) with a `Null` default and the real `LedgerDataOperationRecorder`: current browser/console actor attribution, best-effort **idempotent** audit projection (guarded, no backlink), first-terminal-status-wins, and rejection of late summary writes/resume after terminalization. Queue/scheduler actor kinds, browser role/surface, and exact schedule context still require the deferred execution-context contract.
+- Mirror push/force-push/pull are recorded in-lock. Execution now fails before mutation unless a durable run and exact planned table manifest exist; engine result manifests must match that plan exactly. Per-table observations commit in one short Local transaction, then terminal success/audit projection occurs after commit; confirmed destination mutation plus bookkeeping failure is indeterminate.
 - The execution result carries its durable ledger `run_id`; the mirror completion summary links to it and `/admin/system/data-operations` is deep-linkable to a specific run (`?run=`).
-- AX/IBP import records an `ax_import` run with honest per-action effect counts (delete ≠ reject conflation fixed) and a `quoted_on` `min_max_hint` range; subprocess ownership wired (parent opens, `--operation-run-id` passes to the resuming child).
+- AX/IBP import records an `ax_import` run with honest per-action effect counts (delete ≠ reject conflation fixed) and a `quoted_on` `min_max_hint` range. The private extension wires parent-opened `--operation-run-id` to the resuming child; production-style browser-to-child attribution proof is still open.
 - Central read-only history UI at `/admin/system/data-operations` (route, capability, menu, filters, per-table detail).
-- **Baseline-observation workflow** — `captureBaseline()` records current Local/remote counts for the exact selection as a labelled `mirror_baseline` run + observation, wired to a gated **Capture baseline observation** button; never presented as an original push.
+- **Baseline-observation workflow** — `captureBaseline()` first obtains every selected Local/remote count, then atomically records the labelled `mirror_baseline` summaries and observations. Any count/bookkeeping failure records a failed run and leaves the prior current projection unchanged; the UI never presents a baseline as an original push.
 - **Transient result table removed** — a completed mirror operation now shows a compact summary + durable-run link; per-table counts persist in the catalog columns and the durable run.
-- **Freshness (Phase 3, GO)** — `base_database_data_freshness_events` (protected) + a driver-agnostic append-only `DataFreshnessTracker`; the catalog shows a **Freshness** column (Unknown on SQLite; real on tracked PostgreSQL). Proven on **PostgreSQL 17.9** — the integration matrix passes and benchmarking rejected the naive shared-row design (deadlock) in favour of the append-only design (no deadlock, ~5.7× faster). See the Phase 3 go/no-go decision.
-- **Phase 4 code** — push acknowledges exactly the generation captured before mutation; a `DataFreshnessAttachmentService` + `blb:db:share:freshness-attach` command attach triggers to eligible Local tables, invoked explicitly (never on migrate), a no-op on non-PostgreSQL.
+- **Freshness mechanism (Phase 3 conditional GO)** — `base_database_data_freshness_events` (protected) + an append-only `DataFreshnessTracker`; the catalog shows **Unknown** unless PostgreSQL has an enabled tracking trigger for that exact table. Compaction is one race-safe delete statement. Manual PostgreSQL 17.9 benchmarking rejected the naive shared-row design (deadlock) in favour of append-only events (no observed deadlock, ~5.7× faster); reproducible restore/pull and version-matrix evidence remains open below.
+- **Phase 4 code** — push acknowledges exactly the generation captured before mutation; `DataFreshnessAttachmentService` + `blb:db:share:freshness-attach` attach triggers using Local-only eligibility, explicitly (never on migrate), and no-op on non-PostgreSQL. Detaching obsolete triggers and restoring/reconciling triggers after native pull are not implemented, so broad operational attachment remains pending.
 - **Stale-run reconciler** — `DataOperationReconciler` + `blb:db:data-operations:reconcile` sweep runs that stayed `running` past the timeout and mark them `indeterminate` (via the same atomic finalize claim); never guessed as failed. Tested.
-- **Local-first catalog + async enrichment** — `DataShareMirrorCatalog::localCatalog()` builds the picker from the Local registry with **no remote call** (unit-proven: the remote is never opened); the Livewire component renders Local rows immediately with `mirrorRemotePending = true`, and a separate `enrichMirrorRemote()` request (fired by Alpine `x-init` after first paint) fills in remote presence, counts, and freshness. A remote failure keeps the Local rows and reports remote columns unavailable — it never empties Local results. The component test asserts the ordering (Local rows + pending in the first response, remote enriched by the second).
+- **Local-first catalog + async enrichment** — `DataShareMirrorCatalog::localCatalog()` builds the picker from the Local registry with **no remote call** and merges durable endpoint observations through a non-connecting endpoint identity (normalized host + effective port + database; no provider-wide fallback). The Livewire component always starts from fresh Local rows with `mirrorRemotePending = true`; a separate `enrichMirrorRemote()` request fills remote presence. The stale session-wide combined snapshot was removed because it could hide Local membership/observation changes. A shared endpoint-scoped stale-while-revalidate remote snapshot remains open.
+- **PR validation repair (2026-07-24)** — the native PostgreSQL mirror harness installs the real incubating operation-history migration and asserts the successful durable run, keeping its fixtures aligned with the fail-closed mutation contract. Freshness health now requires the exact public, origin-enabled, statement-level **AFTER** trigger and reads generations from the caller-supplied connection; unavailable trigger metadata preserves endpoint counts while freshness falls back to **Unknown**.
 
-**Fixes from code review (2026-07-23):** Force Push re-reviews inside the lock and verifies the visible review token (no stale destructive plan); observations are keyed by a stable remote-endpoint id (host+database), not the provider adapter key, and Force Push no longer passes a null remote; AX imports track commit and report post-commit bookkeeping failures as indeterminate, not "failed before commit"; determinate engine failures are recorded `failed`, only uncertain outcomes `indeterminate`; ledger summaries upsert on a unique `(run_id, table_name)` and terminalization/audit projection are atomic conditional claims; the ledger models are excluded from global mutation audit (regression-tested: one semantic action, zero bookkeeping mutations); the history UI labels endpoint counts as *Local · remote (observed)*, not before→after.
+**Fixes from code review (2026-07-23):** Force Push re-reviews inside the lock and verifies the visible review token (no stale destructive plan); observations are keyed by a stable remote-endpoint id (normalized host + effective port + database), never the provider adapter key, and Force Push no longer passes a null remote; mirror execution fails closed without durable history and persists its reviewed manifest before mutation; incomplete/duplicate engine manifests become indeterminate; baseline scans are all-or-nothing; late ledger writes cannot mutate terminal runs; audit projection follows Local commit; AX imports track commit and report post-commit bookkeeping failures as indeterminate, not "failed before commit"; determinate engine failures are recorded `failed`, only uncertain outcomes `indeterminate`; the ledger models are excluded from global mutation audit (regression-tested: one semantic action, zero bookkeeping mutations); the history UI labels endpoint counts as *Local · remote (observed)*, not before→after.
 
 **Remaining / open:**
 
+- **Freshness restore and pull semantics.** Enabled-trigger health prevents a false **Clean**, but native pull can remove a Local trigger and portable pull can create a Local change event. Trigger reattachment/suppression/acknowledgement must be proven before broad attachment.
+- **Shared remote snapshot.** Current loading is truthful Local-first plus a separate live enrichment request; it does not yet provide cross-session stale-while-revalidate remote presence.
+- **Attribution completeness.** Browser/console attribution is present. Queue/scheduler kinds, browser role/surface, exact schedule context, and a production subprocess attribution test remain open.
 - **Live browser timing capture.** The Local-first ordering is built and proven deterministically at the component level (Local rows + `mirrorRemotePending` in the first response, remote enrichment in a separate `enrichMirrorRemote` request via `x-init`). A literal browser screenshot/waterfall — showing Local rows painted while a *slow* remote enriches afterward — is meaningful only against a configured (and ideally latent) Supabase endpoint; it can be captured live via `/run` once such an endpoint is connected. The behaviour itself is implemented and tested.
 
 ## Problem Essence
@@ -82,7 +86,7 @@ Ledger, observation, and generation writes are excluded from ordinary mutation a
 
 ### Local table freshness tracker
 
-PostgreSQL mirror-eligible Local tables may gain statement-level tracking for `INSERT`, `UPDATE`, `DELETE`, and `TRUNCATE`. A generic trigger updates one compact generation row for the affected table in the same database transaction as the source change. This covers Eloquent, query-builder upserts, raw SQL, `COPY`, scheduler commands such as `sbg:ibp:import-market-spot`, and Investment processes without creating one history row per business record.
+PostgreSQL mirror-eligible Local tables may gain statement-level tracking for `INSERT`, `UPDATE`, `DELETE`, and `TRUNCATE`. A generic trigger appends one generation event per affected statement in the same database transaction as the source change; race-safe compaction retains only the latest event per table. This covers Eloquent, query-builder upserts, raw SQL, `COPY`, scheduler commands such as `sbg:ibp:import-market-spot`, and Investment processes without creating one history row per business record.
 
 Freshness is an operator aid, not automatic synchronization. It may power **Changed since last push** and **Select changed tables**, but it never starts a push and never weakens explicit review. SQLite reports freshness as unknown until a comparably truthful mechanism exists.
 
@@ -173,7 +177,7 @@ Historical `sbg_ibp_import_batches` may be backfilled into the ledger as labelle
 
 - Every mass data operation—push, force push, pull, and reporting import—that reaches mutation preparation receives a stable auto-increment run id and an `operation_type`.
 - Operation identity is owned by the initiator that holds real attribution. A browser parent opens the run and passes its id to a resumable child; the child never opens its own run; direct CLI/scheduler invocation self-opens with its real actor type. Browser runs retain the authenticated user, company, role, request surface, and trace; console, scheduler, queue, and agent actors retain their actual process actor type rather than being presented as users.
-- Stable Local and remote Data Share instance IDs identify mirror endpoints; imports identify their source (for example `sbg.ibp.market-spot`). The connection fingerprint and full URL are never persisted as endpoint identity or exposed in history.
+- The stable Local Data Share instance ID identifies this installation; a versioned, non-secret hash of normalized remote host, effective port, and database identifies the configured remote endpoint. Imports identify their source (for example `sbg.ibp.market-spot`). Credentials, the full URL, and the broader configuration fingerprint are never persisted as endpoint identity or exposed in history.
 - Schedule correlation is a nullable opaque `schedule_run_ref`, not a foreign key to `base_schedule_runs`, so Base Database is not coupled to Base Schedule internals or migration order. It is recorded only when a Base-owned execution-context contract exposes a run reference; otherwise it stays null. Exact, queryable schedule-run correlation is deferred. Temporal proximity is never presented as causation.
 
 ### Operation lifecycle
@@ -232,19 +236,19 @@ Affected pages: `/admin/system/data-share#mirror`, `/admin/system/data-operation
 
 Goal: Local tables appear immediately on first visit, remote state fills in independently, and a completed or interrupted mirror operation remains understandable after refresh with persistent endpoint observations in the main catalog.
 
-- [x] Split `DataShareMirrorCatalog` into an immediate Local registry catalog and exact remote enrichment so Local rendering has no provider-status or remote-snapshot dependency.
+- [x] Split `DataShareMirrorCatalog` into an immediate Local registry catalog and exact remote enrichment so Local rendering has no provider-status or remote-snapshot dependency. {Amp/OpenAI Codex}
 - [ ] Replace the session-only combined snapshot with a shared endpoint-scoped stale-while-revalidate remote snapshot carrying an observation time and explicit invalidation when the configured endpoint changes.
-- [x] Render Local rows and persisted observations on mount, start remote enrichment as a separate request when needed, and preserve Local rows plus last-known remote state on timeout or failure.
+- [x] Render fresh Local rows and persisted observations first, start remote enrichment as a separate request, and preserve Local rows on timeout or failure. {Amp/OpenAI Codex}
 - [ ] Keep search, filtering, and selection responsive while enrichment runs; disable only actions whose fresh selected-table review is actively running rather than the entire catalog.
-- [x] Add incubating Base Database storage—`base_database_data_operation_runs` (typed by operation, opaque `schedule_run_ref`, `audit_projection_attempted_at`), `base_database_data_operation_tables` (actions set, per-effect counters, ordered `key_columns` + `range_kind` + tuple boundaries, fingerprints), and `base_database_data_share_observations` (current endpoint-scoped counts)—with protected-table registration and indexes for operation type, endpoint, status, actor, trace, and time.
-- [x] Keep operation bookkeeping out of global mutation audit while attempting at most one best-effort semantic action per operation, idempotent by operation run id, referencing the operation as subject rather than storing an action backlink.
-- [x] Consolidate normal push, force push, and pull under one locked execution lifecycle with fresh in-lock review and strict succeeded, failed, indeterminate, and stale-running semantics.
-- [ ] Persist planned table summaries before engine mutation and finalize observations without holding a Local transaction across external transfer work.
-- [x] Record nullable, timestamped effect counters, key ranges, and schema fingerprints without overstating native count equality as transfer verification.
-- [x] Merge current observations into every catalog render independently of the remote catalog session cache and isolate observations by stable endpoint IDs.
-- [x] Build the central `/admin/system/data-operations` history/detail surface and add persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns plus a mirror-scoped history view that links into it.
-- [x] Replace the transient post-operation table with an in-place catalog projection update, compact completion summary, and durable run link.
-- [x] Add an explicit baseline-observation workflow that labels the existing 43-table state as retrospective rather than inventing a historical push.
+- [x] Add incubating Base Database storage—`base_database_data_operation_runs` (typed by operation, opaque `schedule_run_ref`, `audit_projection_attempted_at`), `base_database_data_operation_tables` (actions set, per-effect counters, ordered `key_columns` + `range_kind` + tuple boundaries, fingerprints), and `base_database_data_share_observations` (current endpoint-scoped counts)—with protected-table registration and indexes for operation type, endpoint, status, actor, trace, and time. {Amp/OpenAI Codex}
+- [x] Keep operation bookkeeping out of global mutation audit while attempting at most one best-effort semantic action per operation, idempotent by operation run id, referencing the operation as subject rather than storing an action backlink. {Amp/OpenAI Codex}
+- [x] Consolidate normal push, force push, and pull under one locked execution lifecycle with fresh in-lock review and strict succeeded, failed, indeterminate, and stale-running semantics. {Amp/OpenAI Codex}
+- [x] Require a durable run, persist the exact planned table manifest before engine mutation, reject mismatched engine result manifests, and finalize observations without holding a Local transaction across external transfer work. {Amp/OpenAI Codex}
+- [ ] Persist schema fingerprints from the exact review/execution observations; current mirror summaries persist nullable counters and ranges but do not yet populate fingerprint columns.
+- [x] Merge current observations into fresh Local catalog renders and isolate observations by a versioned host/port/database endpoint identity with no provider-wide fallback. {Amp/OpenAI Codex}
+- [x] Build the central `/admin/system/data-operations` history/detail surface and add persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns with completion deep links into the central surface. {Amp/OpenAI Codex}
+- [x] Replace the transient post-operation table with an in-place catalog projection update, compact completion summary, and durable run link. {Amp/OpenAI Codex}
+- [x] Add an all-or-nothing baseline-observation workflow that labels the existing 43-table state as retrospective rather than inventing a historical push. {Amp/OpenAI Codex}
 - [ ] Cover first uncached visit, shared cached visit, stale refresh, remote timeout/failure, endpoint replacement, browser and CLI attribution, normal and force push, pull, pre-mutation failure, indeterminate `psql`, portable rollback, stale-run reconciliation and idempotent re-projection, Local finalization failure, audit projection failure, and cache refresh behavior.
 
 Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integration; portable integration; browser timing proof that Local rows render before delayed remote enrichment; browser verification of refresh, endpoint switch, baseline, and Audit Action link; idempotent-reprojection assertion; credential redaction assertions; Pint and UI convention scan.
@@ -255,13 +259,14 @@ Affected pages: `/admin/system/data-operations`, `/admin/audit/actions`, `extens
 
 Goal: The AX/IBP import (and later Investment processes) write the same durable provenance as mirror—one run, per-table effect counts and key ranges—reusing the shared ledger and audit bridge, correctly attributed across the subprocess boundary, without triggering any mirror.
 
-- [x] Add a Foundation-owned `DataOperationRecorder` contract (sibling to `SemanticActionRecorder`) with a `Null` binding and `open`/`resume`/`record`/`finalize` methods, so any writer records a run plus per-table summaries without depending on Data Share internals.
+- [x] Add a Foundation-owned `DataOperationRecorder` contract (sibling to `SemanticActionRecorder`) with a `Null` binding and `open`/`resume`/`record`/`finalize` methods, so any writer records a run plus per-table summaries without depending on Data Share internals. {Amp/OpenAI Codex}
 - [ ] Define subprocess ownership: the browser parent opens the run and passes the run id to `MarketSpotImportRunner`; the child Artisan process resumes that id; direct CLI/scheduler invocation self-opens with its real actor. Add a production-style subprocess attribution test proving a browser-initiated import is attributed to the browser user, not the console.
-- [x] Wire `LegacyAxImporter` to record per-table effect counts that model its real behavior—separating upserts from stale-row deletions and from genuine rejections (fixing the current `rejected_count += prunedCount` conflation)—with `first_key`/`last_key` only where the key is ordered.
+- [x] Wire `LegacyAxImporter` to record per-table effect counts that model its real behavior—separating upserts from stale-row deletions and from genuine rejections (fixing the current `rejected_count += prunedCount` conflation)—with `first_key`/`last_key` only where the key is ordered. {Amp/OpenAI Codex}
 - [ ] Converge `sbg_ibp_import_batches`: fold it into the shared ledger or retain it as IBP-specific detail that references `base_database_data_operation_runs.id`, with no duplicate source of truth.
-- [x] Emit at most one best-effort semantic action per import run, idempotent by operation run id, referencing the run; keep per-row import writes out of mutation audit.
-- [x] Record the opaque `schedule_run_ref` only if the execution-context contract exposes one; otherwise leave it null. Exact schedule-run correlation is not a Phase 2 acceptance criterion.
-- [ ] Surface imports in the central `/admin/system/data-operations` history, filterable by operation type, with per-table effect counts and ranges; link them from the IBP workbench.
+- [x] Emit at most one best-effort semantic action per import run, idempotent by operation run id, referencing the run; keep per-row import writes out of mutation audit. {Amp/OpenAI Codex}
+- [x] Record the opaque `schedule_run_ref` only if the execution-context contract exposes one; otherwise leave it null. Exact schedule-run correlation is not a Phase 2 acceptance criterion. {Amp/OpenAI Codex}
+- [x] Surface imports in the central `/admin/system/data-operations` history, filterable by operation type, with per-table effect counts and ranges. {Amp/OpenAI Codex}
+- [ ] Link the central data-operation run from the IBP workbench/import result.
 - [ ] Optionally backfill historical `sbg_ibp_import_batches` as labelled retrospective import runs, preserving an unknown actor where `imported_by` is null and inheriting only what that table truthfully recorded.
 - [ ] Cover import success, partial/rejected rows, deliberate stale-row deletion counted as deletion (not rejection), scheduler vs manual invocation, subprocess attribution, audit projection, and the assertion that no mirror is triggered.
 
@@ -273,15 +278,15 @@ Affected pages: `/admin/system/data-share#mirror`
 
 Goal: Evidence proves compact generation tracking is complete and operationally safe before it is attached to production tables.
 
-- [x] Prototype generic generation infrastructure and statement-level tracking for insert, update, delete, truncate, upsert, and copy on disposable PostgreSQL 17 and 18 databases.
-- [x] Prove rollback behavior, concurrent source writes during a push, captured-generation acknowledgement, and absence of false-clean states.
+- [x] Prototype append-only generation infrastructure and statement-level tracking for insert, update, delete, and truncate; retain the recorded manual upsert/copy evidence pending a reproducible checked-in matrix. {Amp/OpenAI Codex}
+- [x] Prove rollback behavior, captured-generation acknowledgement, and missing, disabled, or wrong-timing trigger fallback to **Unknown** rather than false **Clean**. {Amp/OpenAI Codex; Codex/GPT-5}
 - [ ] Verify selected-table `pg_dump` and restore behavior because table dumps include trigger definitions but not necessarily their shared function or control tables.
 - [ ] Ensure tracking infrastructure is independently migrated on both PostgreSQL endpoints and native table recreation reconciles the expected trigger without copying protected control data.
 - [ ] Prove trusted transaction-local pull suppression without using global trigger disabling or `session_replication_role`.
-- [x] Benchmark representative `sbg:ibp:import-market-spot`, other IBP imports, Investment processes, interactive writes, and multi-table transactions for runtime, WAL, hot-row contention, and deadlocks.
-- [x] Record a go/no-go decision in this plan. Do not attach tracking broadly if restore correctness or workload cost remains uncertain.
+- [ ] Preserve reproducible benchmark evidence for representative `sbg:ibp:import-market-spot`, other IBP imports, Investment processes, interactive writes, and multi-table transactions; the figures below are manual evidence, not a checked-in matrix.
+- [x] Record a conditional go/no-go decision in this plan. Do not attach tracking broadly while restore and pull correctness remain uncertain. {Amp/OpenAI Codex}
 
-#### Go/no-go decision (2026-07-23): **GO — for the append-only design; the naive shared-row design is NO-GO**
+#### Go/no-go decision (2026-07-23): **CONDITIONAL GO for the append-only mechanism; NO-GO for broad attachment; the naive shared-row design is rejected**
 
 Benchmarked on a real, disposable **PostgreSQL 17.9** instance. Two designs were measured.
 
@@ -295,7 +300,7 @@ Benchmarked on a real, disposable **PostgreSQL 17.9** instance. Two designs were
 - **Negligible overhead:** a 20,000-row bulk insert generated **2,611 kB** WAL with the trigger vs **2,610 kB** without (**+1 kB**, one event per statement), with no measurable time cost. 2,000 statement-level fires ran in 75 ms.
 - **Correct:** rolled-back writes leave no event (rollback safety); `TRUNCATE` is covered; a generation captured before a push stays **Changed** after a concurrent commit (never falsely Clean). Verified by `tests/Integration/Database/DataFreshnessPostgresTest.php` passing on PG 17.
 
-**Decision: GO for the append-only design.** `DataFreshnessTracker` and `base_database_data_freshness_events` implement it; growth is bounded by statement-level firing plus `compact()` (latest event per table). Because attachment is still a deliberate operational step, it remains behind the explicit `blb:db:share:freshness-attach` command rather than running on migrate — but the gate is now **passed**. The integration matrix passes on **PostgreSQL 16.14, 17.9, and 18.3**, and the append-only deadlock-avoidance was re-verified on 18; the mechanism (statement-level triggers + `bigserial`) is version-independent.
+**Decision: conditional GO for the append-only mechanism, not broad attachment.** `DataFreshnessTracker` and `base_database_data_freshness_events` implement statement-level events; `compact()` now removes only rows for which a newer same-table event exists, in one statement. The catalog reports **Unknown** when its exact trigger is absent/disabled. Attachment remains behind `blb:db:share:freshness-attach`, never migrate. The recorded PostgreSQL 16.14/17.9/18.3 matrix and contention/WAL figures were manual evidence from the implementation session; checked-in reproducibility, dump/restore behavior, native-pull trigger reconciliation, and trusted pull acknowledgement remain acceptance gates before broad attachment.
 
 Validation: Disposable PostgreSQL integration matrix, concurrent transaction tests, trigger restore inspection, representative schedule/import benchmarks, and query/WAL measurements captured as phase evidence.
 
@@ -306,10 +311,11 @@ Affected pages: `/admin/system/data-share#mirror`, `/admin/system/schedule`
 Goal: Operators can efficiently select Local tables changed since their last successful push without mistaking hints for audit history or enabling automatic synchronization.
 
 - [ ] Attach proven tracking only to ordinary eligible PostgreSQL tables and reconcile trigger presence as registry membership changes.
-- [x] Capture the Local generation used by each push and acknowledge exactly that generation only after success.
-- [ ] Show **Clean**, **Changed since last push**, and **Unknown** in the catalog with the last change and push observation times.
+- [x] Capture the Local generation used by each push and acknowledge exactly that generation only after success; require an enabled exact-table trigger before reporting **Clean**. {Amp/OpenAI Codex}
+- [x] Show **Clean**, **Changed since last push**, and **Unknown** badges in the catalog. {Amp/OpenAI Codex}
+- [ ] Show truthful last-change and last-push observation times beside freshness.
 - [ ] Add filtering and **Select changed tables** while preserving exact explicit review and confirmation.
-- [x] Keep SQLite freshness unknown and retain the full-selection workflow rather than adding expensive row-trigger emulation.
+- [x] Keep SQLite freshness unknown and retain the full-selection workflow rather than adding expensive row-trigger emulation. {Amp/OpenAI Codex}
 - [ ] Cross-link scheduler or process history only where an exact run or trace ID is available; do not infer which job changed a table from timestamps.
 - [ ] Verify scheduled imports and Investment processes mark only their actual written registered tables and that no cron task initiates a mirror push.
 

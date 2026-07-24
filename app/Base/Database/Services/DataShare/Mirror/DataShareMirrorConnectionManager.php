@@ -108,6 +108,34 @@ class DataShareMirrorConnectionManager
         ]));
     }
 
+    /**
+     * Stable, non-secret identity for the configured endpoint without opening a
+     * connection. Unknown/unreadable configuration returns null rather than
+     * sharing observations under a provider-wide fallback key.
+     */
+    public function endpointIdentity(): ?string
+    {
+        try {
+            $url = $this->storedUrl();
+            if ($url === null) {
+                return null;
+            }
+
+            $config = $this->provider()->configuration($url);
+            $host = strtolower(trim((string) ($config['host'] ?? '')));
+            $port = (string) ($config['port'] ?? 5432);
+            $database = trim((string) ($config['database'] ?? ''));
+
+            if ($host === '' || $database === '') {
+                return null;
+            }
+
+            return 'remote:v1:'.substr(hash('sha256', $host.':'.$port.'/'.$database), 0, 20);
+        } catch (Throwable) {
+            return null;
+        }
+    }
+
     public function purge(): void
     {
         $this->database->purge(self::CONNECTION);

@@ -315,7 +315,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
                         <span wire:loading.remove wire:target="reviewMirror">
                             {{ $mirrorSelectedCount > 0
-                                ? trans_choice('Push :count selected table to :provider|Push :count selected tables to :provider', $mirrorSelectedCount, ['count' => $mirrorSelectedCount, 'provider' => $mirrorProviderLabel])
+                                ? trans_choice('{1} Push :count selected table to :provider|[2,*] Push :count selected tables to :provider', $mirrorSelectedCount, ['count' => $mirrorSelectedCount, 'provider' => $mirrorProviderLabel])
                                 : __('Push selected tables to :provider', ['provider' => $mirrorProviderLabel]) }}
                         </span>
                         <span wire:loading wire:target="reviewMirror">{{ __('Reviewing selected tables…') }}</span>
@@ -330,7 +330,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
                         <span wire:loading.remove wire:target="reviewMirror">
                             {{ $mirrorSelectedCount > 0
-                                ? trans_choice('Pull :count selected table from :provider|Pull :count selected tables from :provider', $mirrorSelectedCount, ['count' => $mirrorSelectedCount, 'provider' => $mirrorProviderLabel])
+                                ? trans_choice('{1} Pull :count selected table from :provider|[2,*] Pull :count selected tables from :provider', $mirrorSelectedCount, ['count' => $mirrorSelectedCount, 'provider' => $mirrorProviderLabel])
                                 : __('Pull selected tables from :provider', ['provider' => $mirrorProviderLabel]) }}
                         </span>
                         <span wire:loading wire:target="reviewMirror">{{ __('Reviewing selected tables…') }}</span>
@@ -409,7 +409,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         >
                             <x-icon name="heroicon-o-exclamation-triangle" class="h-4 w-4" />
                             <span wire:loading.remove wire:target="forcePushMirror">
-                                {{ trans_choice('Force push :count selected table|Force push :count selected tables', $mirrorSelectedCount, ['count' => $mirrorSelectedCount]) }}
+                                {{ trans_choice('{1} Force push :count selected table|[2,*] Force push :count selected tables', $mirrorSelectedCount, ['count' => $mirrorSelectedCount]) }}
                             </span>
                             <span wire:loading wire:target="forcePushMirror">{{ __('Replacing selected remote tables…') }}</span>
                         </x-ui.button>

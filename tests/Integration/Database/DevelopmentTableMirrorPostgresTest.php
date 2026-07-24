@@ -2,7 +2,9 @@
 
 use App\Base\Database\Contracts\DataShareMirrorProcessRunner;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProcessResult;
+use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Exceptions\DataShareMirrorException;
+use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use App\Base\Database\Services\DataShare\Mirror\SymfonyDataShareMirrorProcessRunner;
 use App\Base\Settings\Contracts\SettingsService;
@@ -56,6 +58,7 @@ beforeEach(function (): void {
     File::deleteDirectory(mirrorPostgresTemporaryDirectory());
     File::ensureDirectoryExists(mirrorPostgresTemporaryDirectory());
     mirrorResetPostgresFixture();
+    mirrorInstallPostgresOperationHistory();
 
     app()->instance(SettingsService::class, new DevelopmentTableMirrorIntegrationSettings([
         'data_share.instance.id' => MIRROR_PG_LOCAL_INSTANCE_ID,
@@ -92,6 +95,13 @@ it('pushes an explicit mixed selection as complete PostgreSQL table images', fun
 
     mirrorAssertAuthoritativeImage(DB::connection('data_share_mirror'), $controlBefore);
     mirrorAssertNoTransferArtifacts();
+
+    $run = DataOperationRun::query()->latest('id')->firstOrFail();
+    expect($run->status)->toBe(DataOperationStatus::Succeeded)
+        ->and($run->direction)->toBe('push')
+        ->and($run->table_count)->toBe(count(MIRROR_PG_TABLES))
+        ->and($run->tables()->pluck('table_name')->sort()->values()->all())
+        ->toBe(collect(MIRROR_PG_TABLES)->sort()->values()->all());
 });
 
 it('pulls an explicit mixed selection as complete PostgreSQL table images', function (): void {
@@ -430,6 +440,12 @@ function mirrorResetPostgresFixture(): void
     }
 }
 
+function mirrorInstallPostgresOperationHistory(): void
+{
+    $migration = require base_path('app/Base/Database/Database/Migrations/0001_01_01_000004_create_base_database_data_operation_tables.php');
+    $migration->up();
+}
+
 function mirrorDropFixtureRelations(Connection $connection): void
 {
     $connection->statement(sprintf('DROP EVENT TRIGGER IF EXISTS "%s"', MIRROR_PG_FAILURE_TRIGGER));
@@ -444,6 +460,10 @@ function mirrorDropFixtureRelations(Connection $connection): void
         MIRROR_PG_CYCLE_A,
         MIRROR_PG_CYCLE_B,
         MIRROR_PG_CONTROL,
+        'base_database_data_freshness_events',
+        'base_database_data_share_observations',
+        'base_database_data_operation_tables',
+        'base_database_data_operation_runs',
         'base_settings',
         'base_database_tables',
     ] as $table) {

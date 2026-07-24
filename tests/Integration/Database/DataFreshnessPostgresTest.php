@@ -124,3 +124,34 @@ it('captures and acknowledges exactly the generation used by a push', function (
     $connection->table(FRESHNESS_PROBE_TABLE)->insert(['v' => 2]);
     expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Changed);
 });
+
+it('reports unknown when the expected tracking trigger is disabled or missing', function (): void {
+    $tracker = app(DataFreshnessTracker::class);
+    $connection = DB::connection();
+
+    $connection->table(FRESHNESS_PROBE_TABLE)->insert(['v' => 1]);
+    $captured = $tracker->currentGeneration(FRESHNESS_PROBE_TABLE);
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Clean);
+
+    $connection->statement('ALTER TABLE '.FRESHNESS_PROBE_TABLE.' ENABLE REPLICA TRIGGER blb_freshness_touch');
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+
+    $tracker->installTracking(FRESHNESS_PROBE_TABLE);
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Clean);
+
+    $connection->statement('ALTER TABLE '.FRESHNESS_PROBE_TABLE.' DISABLE TRIGGER blb_freshness_touch');
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+
+    $table = FRESHNESS_PROBE_TABLE;
+    $connection->unprepared(<<<SQL
+        DROP TRIGGER blb_freshness_touch ON {$table};
+        CREATE TRIGGER blb_freshness_touch
+            BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON {$table}
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION base_database_data_freshness_touch();
+        SQL);
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+
+    $connection->statement('DROP TRIGGER blb_freshness_touch ON '.FRESHNESS_PROBE_TABLE);
+    expect($tracker->state(FRESHNESS_PROBE_TABLE, $captured))->toBe(DataFreshnessState::Unknown);
+});
