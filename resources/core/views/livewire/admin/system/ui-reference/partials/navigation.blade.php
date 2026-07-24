@@ -42,7 +42,7 @@
             <div class="space-y-4">
                 <x-ui.catalog-section
                     :title="__('Page Header and Filters')"
-                    component="<code>x-ui.page-header</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>"
+                    component="<code>x-ui.page-header</code>, <code>x-ui.filter-bar</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>"
                 >
                     {{ __('The page header should remain the main orientation anchor. Filters and supporting controls sit beneath it without competing for visual priority.') }}
                 </x-ui.catalog-section>
@@ -61,14 +61,16 @@
                         </x-slot>
                     </x-ui.page-header>
 
-                    <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-                        <x-ui.search-input id="ui-reference-nav-search" :placeholder="__('Search audits...')" />
+                    <x-ui.filter-bar class="mt-4">
+                        <x-slot name="search">
+                            <x-ui.search-input id="ui-reference-nav-search" :placeholder="__('Search audits...')" />
+                        </x-slot>
                         <x-ui.select id="ui-reference-nav-filter">
                             <option>{{ __('All statuses') }}</option>
                             <option>{{ __('Open only') }}</option>
                             <option>{{ __('Closed only') }}</option>
                         </x-ui.select>
-                    </div>
+                    </x-ui.filter-bar>
                 </div>
             </div>
         </x-ui.card>

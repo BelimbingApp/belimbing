@@ -16,10 +16,10 @@ final readonly class DataShareMirrorCatalogTable
         public ?string $mirrorKind,
         public bool $supported,
         public array $blockers = [],
-        // Persisted last-observed counts, merged from the observation projection
-        // so the catalog renders them on every request and refresh never loses them.
+        // Exact live counts captured while loading the current endpoint catalog.
         public ?int $localRows = null,
         public ?int $remoteRows = null,
+        // Timestamp/freshness from the last durable transfer or explicit baseline.
         public ?string $observedAt = null,
         // False when the remote endpoint could not be reached: the Local catalog
         // still renders and stays selectable, but remote columns are unavailable
@@ -32,7 +32,7 @@ final readonly class DataShareMirrorCatalogTable
     /**
      * Return a copy carrying the latest persisted observation and freshness.
      */
-    public function withObservation(?int $localRows, ?int $remoteRows, ?string $observedAt, string $freshness = 'unknown'): self
+    public function withObservation(?string $observedAt, string $freshness = 'unknown'): self
     {
         return new self(
             $this->table,
@@ -45,8 +45,8 @@ final readonly class DataShareMirrorCatalogTable
             $this->mirrorKind,
             $this->supported,
             $this->blockers,
-            $localRows,
-            $remoteRows,
+            $this->localRows,
+            $this->remoteRows,
             $observedAt,
             $this->remoteAvailable,
             $freshness,

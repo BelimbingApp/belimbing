@@ -38,7 +38,7 @@ class DataShareMirrorCatalog
      */
     public function catalog(): array
     {
-        $local = $this->snapshot($this->connections->local());
+        $local = $this->snapshot($this->connections->local(), includeCounts: true);
         [$mirror, $remoteAvailable] = $this->remoteSnapshot();
 
         return $this->buildRows($local, $mirror, $remoteAvailable);
@@ -53,14 +53,14 @@ class DataShareMirrorCatalog
      */
     public function localCatalog(): array
     {
-        $local = $this->snapshot($this->connections->local());
+        $local = $this->snapshot($this->connections->local(), includeCounts: false);
 
-        return $this->buildRows($local, ['registry' => [], 'relations' => []], false);
+        return $this->buildRows($local, ['registry' => [], 'relations' => [], 'counts' => []], false);
     }
 
     /**
-     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>}  $local
-     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>}  $mirror
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>, counts: array<string, int>}  $local
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>, counts: array<string, int>}  $mirror
      * @return list<DataShareMirrorCatalogTable>
      */
     private function buildRows(array $local, array $mirror, bool $remoteAvailable): array
@@ -136,6 +136,8 @@ class DataShareMirrorCatalog
                 mirrorKind: $mirrorRelation['kind'] ?? null,
                 supported: $blockers === [],
                 blockers: $blockers,
+                localRows: $local['counts'][$name] ?? null,
+                remoteRows: $mirror['counts'][$name] ?? null,
                 remoteAvailable: $remoteAvailable,
             );
         }
@@ -147,14 +149,14 @@ class DataShareMirrorCatalog
      * Best-effort remote snapshot. Returns an empty snapshot and false when the
      * remote endpoint is unreachable, so the Local catalog still renders.
      *
-     * @return array{0: array{registry: array<string, array{module_name: string|null, module_path: string|null, migration_file: string|null}>, relations: array<string, array{kind: string}>}, 1: bool}
+     * @return array{0: array{registry: array<string, array{module_name: string|null, module_path: string|null, migration_file: string|null}>, relations: array<string, array{kind: string}>, counts: array<string, int>}, 1: bool}
      */
     private function remoteSnapshot(): array
     {
         try {
-            return [$this->snapshot($this->connections->mirror()), true];
+            return [$this->snapshot($this->connections->mirror(), includeCounts: true), true];
         } catch (\Throwable) {
-            return [['registry' => [], 'relations' => []], false];
+            return [['registry' => [], 'relations' => [], 'counts' => []], false];
         }
     }
 
@@ -168,9 +170,9 @@ class DataShareMirrorCatalog
     }
 
     /**
-     * Merge the persisted last-observed counts for the given endpoint pair into
-     * catalog rows, so Local/Remote/Observed render on every request. Missing
-     * observations leave a row unchanged; the projection is isolated by endpoint.
+     * Merge the last durable observation metadata for the given endpoint pair.
+     * Live counts stay authoritative; a prior transfer or baseline contributes
+     * only its timestamp and the Local freshness comparison.
      *
      * @param  list<DataShareMirrorCatalogTable>  $tables
      * @return list<DataShareMirrorCatalogTable>
@@ -197,12 +199,7 @@ class DataShareMirrorCatalog
                 ? $tracker->state($table->table, $observation?->acknowledged_generation)->value
                 : DataFreshnessState::Unknown->value;
 
-            return $table->withObservation(
-                $observation?->local_rows,
-                $observation?->remote_rows,
-                $observation?->observed_at?->toIso8601String(),
-                $freshness,
-            );
+            return $table->withObservation($observation?->observed_at?->toIso8601String(), $freshness);
         }, $tables);
     }
 
@@ -236,10 +233,11 @@ class DataShareMirrorCatalog
     /**
      * @return array{
      *   registry: array<string, array{module_name: string|null, module_path: string|null, migration_file: string|null}>,
-     *   relations: array<string, array{kind: string}>
+     *   relations: array<string, array{kind: string}>,
+     *   counts: array<string, int>
      * }
      */
-    private function snapshot(Connection $connection): array
+    private function snapshot(Connection $connection, bool $includeCounts): array
     {
         $registryRows = $connection->table('base_database_tables')
             ->orderBy('table_name')
@@ -289,7 +287,76 @@ class DataShareMirrorCatalog
             ];
         }
 
-        return ['registry' => $registry, 'relations' => $relations];
+        return [
+            'registry' => $registry,
+            'relations' => $relations,
+            'counts' => $includeCounts ? $this->liveRowCounts($connection, $registry, $relations) : [],
+        ];
+    }
+
+    /**
+     * Count every registered ordinary table exactly. Counts are fetched in
+     * bounded compound queries so a hosted mirror needs only a few round trips
+     * instead of one request per table.
+     *
+     * @param  array<string, array<string, mixed>>  $registry
+     * @param  array<string, array{kind: string}>  $relations
+     * @return array<string, int>
+     */
+    private function liveRowCounts(Connection $connection, array $registry, array $relations): array
+    {
+        $names = array_values(array_filter(
+            array_keys($registry),
+            static fn (string $name): bool => ($relations[$name]['kind'] ?? null) === 'table'
+                && preg_match('/^[A-Za-z_][A-Za-z0-9_$]{0,62}$/', $name) === 1,
+        ));
+        $counts = [];
+
+        foreach (array_chunk($names, 100) as $chunk) {
+            $statements = [];
+            $bindings = [];
+
+            foreach ($chunk as $name) {
+                $statements[] = 'SELECT ? AS table_name, COUNT(*) AS row_count FROM '
+                    .$connection->getQueryGrammar()->wrapTable($name);
+                $bindings[] = $name;
+            }
+
+            try {
+                $rows = $connection->select(implode(' UNION ALL ', $statements), $bindings);
+            } catch (\Throwable) {
+                $rows = $this->countRowsIndividually($connection, $chunk);
+            }
+
+            foreach ($rows as $row) {
+                $name = (string) ($row->table_name ?? '');
+
+                if ($name !== '') {
+                    $counts[$name] = (int) ($row->row_count ?? 0);
+                }
+            }
+        }
+
+        return $counts;
+    }
+
+    /** @param list<string> $names @return list<object> */
+    private function countRowsIndividually(Connection $connection, array $names): array
+    {
+        $rows = [];
+
+        foreach ($names as $name) {
+            try {
+                $rows[] = (object) [
+                    'table_name' => $name,
+                    'row_count' => (int) $connection->table($name)->count(),
+                ];
+            } catch (\Throwable) {
+                // A concurrent schema change leaves only this count unknown.
+            }
+        }
+
+        return $rows;
     }
 
     /** @param array<string, string|null> $left @param array<string, string|null> $right */

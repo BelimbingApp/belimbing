@@ -100,6 +100,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.country-combobox` / `x-ui.currency-combobox` | GeoNames-backed pickers |
 | `x-ui.checkbox` / `x-ui.radio` | Boolean or single-choice options |
 | `x-ui.search-input` | Search fields |
+| `x-ui.filter-bar` | Responsive search plus one or more list filters |
 | `x-ui.time-input` | Time entry |
 
 ### Interaction Patterns

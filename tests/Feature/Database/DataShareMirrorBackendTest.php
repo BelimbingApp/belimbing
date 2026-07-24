@@ -34,6 +34,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 it('stores the mirror URL encrypted and never includes it in safe connection status', function (): void {
     $url = 'postgresql://mirror_user:private-password@example.test:5432/belimbing?sslmode=require&application_name=private-password';
@@ -383,6 +384,35 @@ it('renders the Local catalog even when the remote endpoint is unreachable', fun
         ->and($probe->remoteAvailable)->toBeFalse()
         ->and($probe->supported)->toBeTrue()
         ->and($tables->every(fn ($t): bool => $t->remoteAvailable === false))->toBeTrue();
+});
+
+it('reports exact live row counts for reachable Local and remote tables', function (): void {
+    Schema::create('zzz_live_count_probe', function ($table): void {
+        $table->id();
+    });
+    DB::table('zzz_live_count_probe')->insert(array_map(
+        static fn (int $id): array => ['id' => $id],
+        range(1, 8),
+    ));
+    TableRegistry::query()->create([
+        'table_name' => 'zzz_live_count_probe',
+        'module_name' => 'Probe',
+        'module_path' => 'app/Modules/Probe',
+        'migration_file' => 'probe.php',
+    ]);
+
+    $connection = app('db')->connection();
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('local')->once()->andReturn($connection);
+    $connections->shouldReceive('mirror')->once()->andReturn($connection);
+    $connections->shouldReceive('provider')->andThrow(new RuntimeException('no provider'));
+
+    $probe = collect((new DataShareMirrorCatalog($connections))->catalog())
+        ->firstWhere('table', 'zzz_live_count_probe');
+
+    expect($probe)->not->toBeNull()
+        ->and($probe->localRows)->toBe(8)
+        ->and($probe->remoteRows)->toBe(8);
 });
 
 it('captures a labelled retrospective baseline of current Local and remote counts', function (): void {

@@ -139,14 +139,15 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 <p class="mt-1 text-sm text-muted">{{ __('Reconcile the Base table registry on the source and target, then refresh this catalog.') }}</p>
             </div>
         @else
-            <div class="grid gap-4 sm:grid-cols-[minmax(16rem,0.65fr)_minmax(12rem,0.35fr)]">
-                <x-ui.search-input
-                    id="data-share-mirror-search"
-                    wire:model.live.debounce.250ms="mirrorSearch"
-                    :placeholder="__('Search tables…')"
-                    :aria-label="__('Search tables')"
-                />
-
+            <x-ui.filter-bar>
+                <x-slot name="search">
+                    <x-ui.search-input
+                        id="data-share-mirror-search"
+                        wire:model.live.debounce.250ms="mirrorSearch"
+                        :placeholder="__('Search tables…')"
+                        :aria-label="__('Search tables')"
+                    />
+                </x-slot>
                 <x-ui.select
                     id="data-share-mirror-module"
                     wire:model.live="mirrorModulePath"
@@ -157,7 +158,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                         <option value="{{ $module['path'] }}">{{ $module['name'] }} · {{ $module['path'] }}</option>
                     @endforeach
                 </x-ui.select>
-            </div>
+            </x-ui.filter-bar>
 
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p class="text-sm text-muted">
@@ -453,7 +454,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                     </a>
                 </p>
             @endif
-            <p class="mt-1 text-xs text-muted">{{ __('The Local and remote counts now persist in the catalog above and survive refresh; the full per-table record lives in its durable run.') }}</p>
+            <p class="mt-1 text-xs text-muted">{{ __('The catalog refreshes current Local and remote counts; the completed operation and its observed counts remain in the durable run.') }}</p>
         </x-ui.alert>
     @endif
 </div>

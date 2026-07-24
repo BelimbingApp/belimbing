@@ -155,13 +155,14 @@ it('isolates observations by endpoint so a different mirror never overwrites ano
     expect(DataShareMirrorObservation::query()->where('table_name', 'sbg_products')->count())->toBe(2);
 });
 
-it('merges persisted observations into catalog rows, leaving unobserved rows untouched', function () {
+it('merges observation metadata without replacing current catalog counts', function () {
     app(DataShareMirrorObservationProjection::class)
         ->record('local-1', 'remote-1', 'sbg_products', 5, 84120, 84000);
 
     $observed = new DataShareMirrorCatalogTable(
         table: 'sbg_products', moduleName: null, modulePath: null, migrationFile: null,
         localExists: true, mirrorExists: true, localKind: 'table', mirrorKind: 'table', supported: true,
+        localRows: 8, remoteRows: 12,
     );
     $unobserved = new DataShareMirrorCatalogTable(
         table: 'sbg_orders', moduleName: null, modulePath: null, migrationFile: null,
@@ -171,8 +172,8 @@ it('merges persisted observations into catalog rows, leaving unobserved rows unt
     $merged = app(DataShareMirrorCatalog::class)
         ->mergeObservations([$observed, $unobserved], 'local-1', 'remote-1');
 
-    expect($merged[0]->localRows)->toBe(84120)
-        ->and($merged[0]->remoteRows)->toBe(84000)
+    expect($merged[0]->localRows)->toBe(8)
+        ->and($merged[0]->remoteRows)->toBe(12)
         ->and($merged[0]->observedAt)->not->toBeNull()
         ->and($merged[1]->localRows)->toBeNull()
         ->and($merged[1]->observedAt)->toBeNull();
@@ -234,12 +235,14 @@ it('renders every catalog row with Unknown freshness on SQLite', function () {
     $row = new DataShareMirrorCatalogTable(
         table: 'sbg_products', moduleName: null, modulePath: null, migrationFile: null,
         localExists: true, mirrorExists: true, localKind: 'table', mirrorKind: 'table', supported: true,
+        localRows: 12, remoteRows: 10,
     );
 
     $merged = app(DataShareMirrorCatalog::class)->mergeObservations([$row], 'local-1', 'remote-1');
 
     expect($merged[0]->freshness)->toBe('unknown')
-        ->and($merged[0]->localRows)->toBe(10);
+        ->and($merged[0]->localRows)->toBe(12)
+        ->and($merged[0]->remoteRows)->toBe(10);
 });
 
 it('installs no tracking and stays a safe no-op on an unsupported driver', function () {

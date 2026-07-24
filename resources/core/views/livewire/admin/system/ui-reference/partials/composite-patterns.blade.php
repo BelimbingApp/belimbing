@@ -3,7 +3,7 @@
         <div class="space-y-4">
             <x-ui.catalog-section
                 :title="__('Index Page Assembly')"
-                component="<code>x-ui.page-header</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
+                component="<code>x-ui.page-header</code>, <code>x-ui.filter-bar</code>, <code>x-ui.search-input</code>, <code>x-ui.select</code>, <code>x-ui.badge</code>, <code>x-ui.icon-action</code>"
             >
                 {{ __('Composite pages are where drift usually appears. These patterns show how primitives should come together on real admin screens.') }}
             </x-ui.catalog-section>
@@ -20,14 +20,21 @@
                     </x-slot>
                 </x-ui.page-header>
 
-                <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
-                    <x-ui.search-input id="ui-reference-composite-search" :placeholder="__('Search providers...')" />
+                <x-ui.filter-bar class="mt-4">
+                    <x-slot name="search">
+                        <x-ui.search-input id="ui-reference-composite-search" :placeholder="__('Search providers...')" />
+                    </x-slot>
                     <x-ui.select id="ui-reference-composite-filter">
                         <option>{{ __('All statuses') }}</option>
                         <option>{{ __('Configured') }}</option>
                         <option>{{ __('Needs review') }}</option>
                     </x-ui.select>
-                </div>
+                    <x-ui.select id="ui-reference-composite-region-filter">
+                        <option>{{ __('All regions') }}</option>
+                        <option>{{ __('Local') }}</option>
+                        <option>{{ __('Hosted') }}</option>
+                    </x-ui.select>
+                </x-ui.filter-bar>
 
                 <x-ui.table container="bordered" class="mt-4" :caption="__('Provider status examples')" :row-hover="false">
                     <x-slot name="head">
