@@ -14,7 +14,7 @@ Context: self-hosted, ownable business software. Users chose it to escape vendor
 
 ## Product Purpose
 
-Belimbing is an open-source (AGPLv3), AI-native application platform for building ownable business systems. It removes the SMB digitization bottleneck: businesses ship enterprise-grade operational processes at a fraction of traditional cost, own their infrastructure and data completely, and customize without a large software team.
+Belimbing is an open-source (MIT), AI-native application platform for building ownable business systems. It removes the SMB digitization bottleneck: businesses ship enterprise-grade operational processes at a fraction of traditional cost, own their infrastructure and data completely, and customize without a large software team.
 
 Success means users finish real work faster and leave — not more time in the app. The platform matches or exceeds commercial systems in quality while staying transparent, self-hosted, and free of licensing fees.
 

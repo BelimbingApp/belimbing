@@ -8,6 +8,11 @@
 - Fix nested remotes inside the nested repo, not the parent checkout.
 - Fresh install example: [Private Extension Repositories](../docs/guides/extensions/private-extension-repositories.md).
 
+## Licensing
+
+- Belimbing is [MIT](../LICENSE): extensions may be private and proprietary, licensed however their owner chooses. No licensing reason exists to keep a change out of an extension, or to move one in.
+- Placement is still an architecture decision: platform-wide behavior belongs in `app/Base/`, shared domain logic in a module, licensee-specific logic in an extension. Put it where it belongs, not where the license pushes it.
+
 ## Layout
 
 - Owner/module path segments use kebab-case.

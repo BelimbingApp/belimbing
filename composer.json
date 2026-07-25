@@ -9,7 +9,7 @@
         "tailwindcss",
         "tall-stack"
     ],
-    "license": "AGPL-3.0-only",
+    "license": "MIT",
     "require": {
         "php": "^8.5",
         "ext-ctype": "*",

@@ -60,4 +60,6 @@ For the complete workflow and remote strategy, see [docs/guides/contributing.md]
 
 ## License
 
-[GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE). See [LICENSE](./LICENSE) for license terms and [NOTICE](./NOTICE) for third-party attributions.
+[MIT License](./LICENSE). See [LICENSE](./LICENSE) for license terms and [NOTICE](./NOTICE) for third-party attributions.
+
+Use it commercially, modify it, deploy it, build proprietary modules and extensions on it — the only condition is that you keep the copyright and license notice in copies of the software. Nothing you build on Belimbing has to be published.

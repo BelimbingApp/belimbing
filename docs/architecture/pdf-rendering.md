@@ -147,7 +147,7 @@ Two escape hatches are documented but **not implemented**. Either is a real plan
 
 When BLB needs to overlay employer data onto an **official PDF template** that LHDN (or any agency) distributes — not produce a BLB-authored visual replica — the AcroForm fields in that template must be filled in-place. The renderer cannot do this; it produces PDFs from HTML, not by editing existing PDFs.
 
-`pdf-lib` (MIT, https://pdf-lib.js.org/) is the cheapest open-source option that fits BLB's stack: it runs under the same Node runtime that already hosts `browser-runner.mjs` and Playwright, and its license is permissive against `AGPL-3.0-only`. The integration shape:
+`pdf-lib` (MIT, https://pdf-lib.js.org/) is the cheapest open-source option that fits BLB's stack: it runs under the same Node runtime that already hosts `browser-runner.mjs` and Playwright, and its permissive license bundles cleanly under `MIT`. The integration shape:
 
 - Add an `acroform` action to `resources/core/scripts/browser-runner.mjs` that loads a source PDF, fills named fields from a JSON payload, and writes the result to `output_path`.
 - Add a PHP service `App\Base\Pdf\Services\AcroFormFiller` (working name) that calls `PlaywrightRunner::execute('acroform', [...])` and returns a `PdfArtifact` via the same `PdfArtifactWriter`.
@@ -178,7 +178,7 @@ If either escape hatch is taken, `docs/plans/people/04_pdf-generation-strategy.m
 
 - Update **Public Contract** (renderer return shape may need a streaming variant if Gotenberg's HTTP body is large).
 - Update **Concurrency model** in this document (Gotenberg moves the concurrency budget off the BLB host).
-- Add a row to **Sources** referencing the new dependency and verify its license against `AGPL-3.0-only` per the License Compatibility section of the plan.
+- Add a row to **Sources** referencing the new dependency and verify its license against `MIT` per the License Compatibility section of the plan — bundled libraries must be permissive; copyleft is only acceptable for subprocesses and network services.
 
 The renderer's external contract is built to survive either substitution without forcing callers to change. Phase 3 wiring (Payroll → `RenderPdfJob`) is therefore safe to do without first deciding whether either escape hatch will be needed.
 

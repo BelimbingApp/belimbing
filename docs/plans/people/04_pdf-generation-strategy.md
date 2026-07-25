@@ -1,31 +1,31 @@
 # people/04_pdf-generation-strategy
 
 **Status:** Complete. PDF infrastructure (`app/Base/Pdf/`) is the single source of truth for visual PDFs across BLB. Phase 3 (Payroll wiring) is **delegated to `02_payroll-malaysia-top-level-design.md`** under Phases 5 (operational outputs) and 9 (Self-Service documents); the renderer surface is stable and ready to consume. Only operational item still open: qpdf binary rollout to each deployment target — install instructions at `docs/guides/pdf-rendering.md`.
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-07-25
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — payslip and statutory output requirements (Phases on payslip PDF, report exports, ESS document delivery)
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 parity items including payslip PDF, EA/CP8A/PCB2 forms, password-encrypted PDF distribution, ESS document access
-- `composer.json` — current dependency floor; license is `AGPL-3.0-only`; no PDF library is presently installed
+- `composer.json` — current dependency floor; license is `MIT`; no PDF library is presently installed
 - `app/Modules/Core/AI/Services/Browser/PlaywrightRunner.php` — current Playwright runner; spawns a fresh Chromium per command, with session persistence noted as future work
 - `app/Modules/Core/AI/Services/Browser/BrowserPoolManager.php` — in-memory ledger of per-company browser context IDs and concurrency limits; not a process pool
 - `resources/core/scripts/browser-runner.mjs` — Node runner that already exposes a `handlePdf` action returning `pdf_base64` over JSON; treat as a prototype, not a finished renderer
-- `LICENSE` — GNU AGPL v3 (matches the `AGPL-3.0-only` SPDX expression in `composer.json`)
+- `LICENSE` — MIT (matches the `MIT` SPDX expression in `composer.json`)
 - Setasign FPDI (MIT core) — https://www.setasign.com/products/fpdi/about/ — PDF-Parser add-on required for compressed PDFs is commercial; rejected on that ground
 - pdftk-java (GPL-3.0-or-later) — https://gitlab.com/pdftk-java/pdftk — invoked as a subprocess if ever needed; license does not propagate
 - QPDF (Apache-2.0) — https://qpdf.sourceforge.io/ — invoked as a subprocess; license does not propagate
-- pdf-lib (MIT) — https://pdf-lib.js.org/ — Node library, compatible with AGPL-3.0-only
+- pdf-lib (MIT) — https://pdf-lib.js.org/ — Node library, permissive, compatible with MIT
 - Gotenberg (MIT, server) — https://gotenberg.dev/ — separate HTTP service; license does not propagate
-- mPDF (declared `GPL-2.0-only` on Packagist) — https://mpdf.github.io/ — **incompatible** with AGPL-3.0-only as a bundled PHP library; see License compatibility
-- dompdf (LGPL-2.1-or-later) — https://github.com/dompdf/dompdf — compatible via the "or later" upgrade path, though not adopted by this plan
+- mPDF (declared `GPL-2.0-only` on Packagist) — https://mpdf.github.io/ — **incompatible** with MIT as a bundled PHP library (copyleft); see License compatibility
+- dompdf (LGPL-2.1-or-later) — https://github.com/dompdf/dompdf — copyleft, so no longer permissive-clean as a bundled library under MIT; not adopted by this plan in any case
 **Agents:** claude-code/claude-opus-4-7
 
 ## Problem Essence
 
-Belimbing has no PDF generation library installed yet, but Payroll alone needs payslips, statutory forms (EA, CP8A, PCB2), management reports, and password-encrypted distribution. The repository’s license is `AGPL-3.0-only`, which requires every PDF dependency to be open source under a license that is provably compatible — not merely "open source." Picking a default engine now sets the template authoring style for every BLB module that ever produces a PDF, so the choice must respect both the licensing constraint and the actual state of in-tree infrastructure rather than an idealized version of it.
+Belimbing has no PDF generation library installed yet, but Payroll alone needs payslips, statutory forms (EA, CP8A, PCB2), management reports, and password-encrypted distribution. The repository’s license is `MIT`, which requires every bundled PDF dependency to be permissively licensed — not merely "open source." Picking a default engine now sets the template authoring style for every BLB module that ever produces a PDF, so the choice must respect both the licensing constraint and the actual state of in-tree infrastructure rather than an idealized version of it.
 
 ## Desired Outcome
 
-A single recommended path for producing visual PDFs across BLB modules, plus a narrow, deliberate escape hatch for the rare cases that need direct PDF manipulation. Templates should reuse the same Blade and Tailwind authoring skills the rest of the UI already uses, so a payslip previewed in the browser and the printed PDF come from one template with verified print-preview parity per template — not byte-identity, which Chromium’s paged-media path does not guarantee against on-screen rendering. All licensing must be AGPL-3.0-only compatible without commercial add-ons. The plan should also state clearly when *not* to use a PDF engine at all — statutory text-file submissions (CP39, EPF, SOCSO, EIS, bank GIRO files) are plain text and should never touch a PDF pipeline.
+A single recommended path for producing visual PDFs across BLB modules, plus a narrow, deliberate escape hatch for the rare cases that need direct PDF manipulation. Templates should reuse the same Blade and Tailwind authoring skills the rest of the UI already uses, so a payslip previewed in the browser and the printed PDF come from one template with verified print-preview parity per template — not byte-identity, which Chromium’s paged-media path does not guarantee against on-screen rendering. All licensing must be MIT-compatible without commercial add-ons. The plan should also state clearly when *not* to use a PDF engine at all — statutory text-file submissions (CP39, EPF, SOCSO, EIS, bank GIRO files) are plain text and should never touch a PDF pipeline.
 
 ## Top-Level Components
 
@@ -38,9 +38,9 @@ A single recommended path for producing visual PDFs across BLB modules, plus a n
 
 ## Design Decisions
 
-**Chromium is the default engine, not mPDF.** mPDF’s pure-PHP convenience disappears once Chromium is already in the runtime via Playwright, and its CSS support stops short of flexbox, grid, and modern paged-media features that BLB’s Tailwind-first UI assumes. Forcing payslips and reports into mPDF would create a second template dialect that drifts away from the on-screen rendering, which is exactly the parity HR2000 ESS document access requires. License compatibility was also checked: mPDF declares `GPL-2.0-only` on Packagist, which is incompatible with `AGPL-3.0-only` for a bundled PHP library. The decision still rests on capability and template duplication; license incompatibility independently rules out mPDF and is recorded for completeness.
+**Chromium is the default engine, not mPDF.** mPDF’s pure-PHP convenience disappears once Chromium is already in the runtime via Playwright, and its CSS support stops short of flexbox, grid, and modern paged-media features that BLB’s Tailwind-first UI assumes. Forcing payslips and reports into mPDF would create a second template dialect that drifts away from the on-screen rendering, which is exactly the parity HR2000 ESS document access requires. License compatibility was also checked: mPDF declares `GPL-2.0-only` on Packagist, which is incompatible with `MIT` for a bundled PHP library — bundling copyleft code would impose its terms on the whole distribution. The decision still rests on capability and template duplication; license incompatibility independently rules out mPDF and is recorded for completeness.
 
-**FPDI is rejected.** FPDI itself is MIT, but reading any modern compressed PDF (which includes essentially every LHDN-published template) requires the proprietary **FPDI PDF-Parser** add-on. The AGPL-only constraint forbids that path. If AcroForm filling becomes a real requirement, `pdf-lib` under Node fills the same niche under MIT and reuses Node infrastructure that already exists for Playwright.
+**FPDI is rejected.** FPDI itself is MIT, but reading any modern compressed PDF (which includes essentially every LHDN-published template) requires the proprietary **FPDI PDF-Parser** add-on. A paid proprietary add-on cannot ship inside an open-source distribution, so that path stays closed. If AcroForm filling becomes a real requirement, `pdf-lib` under Node fills the same niche under MIT and reuses Node infrastructure that already exists for Playwright.
 
 **Reuse the existing runner stack rather than introduce a second one.** Adopting `spatie/browsershot` would bring in a second way of driving Chromium alongside the one BLB already has, which is the kind of redundancy this plan should avoid. The design intent is one Playwright path for both AI tooling and PDF rendering. That said, what exists today is per-command Chromium spawning and an in-memory context ledger; concurrency control and process reuse are work to be done, not capabilities to lean on. The plan treats the Playwright runner as the right *home* for PDF rendering, while being explicit that the runner’s session and pooling story has to mature for production payroll workloads.
 
@@ -50,9 +50,13 @@ A single recommended path for producing visual PDFs across BLB modules, plus a n
 
 ## License Compatibility
 
-BLB is `AGPL-3.0-only` (`LICENSE` is GNU AGPL v3). For a dependency to enter BLB as a **bundled PHP or Node library** — the case where copyleft propagates — it must be under a license in the set {AGPL-3.0, GPL-3.0-or-later, LGPL-2.1-or-later, LGPL-3.0-or-later, Apache-2.0, MIT, BSD, ISC, GPL-2.0-or-later (upgradeable to v3)}. `GPL-2.0-only` is explicitly outside that set. **External CLIs invoked as subprocesses** (e.g., `qpdf`, `pdftk-java`) and **separate network services** (e.g., Gotenberg) do not propagate their licenses to BLB regardless of what those licenses are, so they need only operational vetting, not license vetting.
+BLB is `MIT` (`LICENSE` is the MIT License). For a dependency to enter BLB as a **bundled PHP or Node library** — the case where its terms reach the distributed combination — it must be permissive: {MIT, BSD-2-Clause, BSD-3-Clause, ISC, Apache-2.0, Unlicense, CC0}. Every copyleft license is outside that set, **including** GPL (any version), LGPL, and AGPL: bundling copyleft code would govern the terms of the combined work and break the MIT promise.
 
-Applied to the candidates in this plan: **mPDF is incompatible** (Packagist manifest declares `GPL-2.0-only`) and is rejected on this ground independently of the capability argument. **dompdf is compatible** via `LGPL-2.1-or-later` but is not adopted for unrelated capability reasons. **pdf-lib** (MIT, Node) and **Playwright** (Apache-2.0, Node, already in `package.json`) are compatible as bundled libraries. **qpdf**, **pdftk-java**, and **Gotenberg** sit outside the link boundary and need no license analysis beyond confirming they are themselves open-source so the user can install them. **FPDI core** is MIT but requires a proprietary PDF-Parser add-on for any real LHDN template, which the AGPL-only constraint forbids; rejection stands.
+Note the direction of this change. The permissive relicense made inbound vetting **stricter**, not looser: the previous `AGPL-3.0-only` rule could absorb GPL-3.0 and LGPL dependencies, and MIT cannot. A dependency approved under the old rule is not automatically approved under this one.
+
+ **External CLIs invoked as subprocesses** (e.g., `qpdf`, `pdftk-java`) and **separate network services** (e.g., Gotenberg) do not propagate their licenses to BLB regardless of what those licenses are, so they need only operational vetting, not license vetting.
+
+Applied to the candidates in this plan: **mPDF is incompatible** (`GPL-2.0-only`, copyleft) and is rejected on this ground independently of the capability argument. **dompdf is now incompatible too** — `LGPL-2.1-or-later` was acceptable under the old AGPL rule and is not permissive-clean under MIT; it was already not adopted for capability reasons, so nothing in the decision changes, only the reason it stays out. **pdf-lib** (MIT, Node) and **Playwright** (Apache-2.0, Node, already in `package.json`) remain compatible as bundled libraries. **qpdf**, **pdftk-java**, and **Gotenberg** sit outside the link boundary and need no license analysis beyond confirming they are themselves open-source so the user can install them — `pdftk-java` being `GPL-3.0-or-later` is fine precisely because it is a subprocess, never bundled. **FPDI core** is MIT but requires a commercial proprietary PDF-Parser add-on for any real LHDN template, which cannot ship inside an open-source distribution; rejection stands.
 
 ## Public Contract
 
@@ -69,7 +73,7 @@ Applied to the candidates in this plan: **mPDF is incompatible** (Packagist mani
 
 Goal: confirm constraints, settle the security model, and prove the existing prototype can grow into a production renderer before any module commits to it.
 
-- [x] Confirm `AGPL-3.0-only` as the binding licensing rule and accept the in-plan license compatibility audit (or flag exceptions before any wiring begins). claude-code/claude-opus-4-7
+- [x] Confirm the binding licensing rule and accept the in-plan license compatibility audit (or flag exceptions before any wiring begins). claude-code/claude-opus-4-7 — originally confirmed as `AGPL-3.0-only`; the project relicensed to `MIT` on 2026-07-25 and the audit above was re-derived under the permissive rule. Conclusions for every candidate are unchanged.
 - [x] Decide the authenticated-rendering model (signed render URL, cookie/storage-state handoff, or internal-only render endpoint) and record the chosen approach in the Public Contract section before any auth-bearing payslip touches the renderer. claude-code/claude-opus-4-7
 - [x] Decide the artifact handoff shape (storage-disk write + metadata record vs. direct stream) and update `browser-runner.mjs`/`PlaywrightRunner` to support it; base64-over-JSON survives only for the spike. claude-code/claude-opus-4-7
 - [ ] Verify `qpdf` is available on every supported deployment target (FrankenPHP, Octane on Linux, Windows dev hosts) and that the specific operations the plan relies on — password protection, encryption, merging, and any proposed metadata mutation — are supported by the qpdf versions those targets ship. **Install instructions landed** at `docs/guides/pdf-rendering.md` for Debian/Ubuntu, RHEL/Fedora, macOS, Windows (winget, machine-scope/UAC), and the FrankenPHP image. Actual installation and operation verification across the deployment fleet is operational work that runs when Phase 2 begins wiring `PdfPostProcessor` — keeping this row open until that verification is done is honest.

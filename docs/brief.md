@@ -2,7 +2,7 @@
 
 **Document Type:** Project Brief
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
-**Last Updated:** 2026-06-23
+**Last Updated:** 2026-07-25
 
 ---
 
@@ -24,7 +24,7 @@ Belimbing is an **open-source, adaptable application platform** built entirely b
 - **DIY-enabling** — the codebase embeds conventions, module boundaries, and in-repo agent guidance so coding agents produce higher-quality changes
 
 **What Makes Belimbing Different:**
-- **Open Source Forever (AGPLv3)**: Self-hosted, transparent, free from licensing fees and vendor lock-in
+- **Open Source Forever (MIT)**: Self-hosted, transparent, free from licensing fees and vendor lock-in — permissively licensed, so a business owns everything it builds on the platform (see Ownership Boundary below)
 - **AI-Native Architecture**: Built from the ground up to leverage AI in development, customization, and operation
 - **Quality-Obsessed**: Adoption of Ousterhout's software design principles, performance-first architecture, exceptional user experience
 - **Git-Native Workflow**: Development → Staging → Production managed through version control for safety and transparency
@@ -33,6 +33,18 @@ Belimbing is an **open-source, adaptable application platform** built entirely b
 **Core Philosophy:**
 
 Belimbing is a **long-term commitment** to changing how businesses implement operational systems. We reject the "move fast and break things" mentality in favor of building with patience, excellence, and unwavering commitment to our core principles. Quality and architectural integrity take precedence over speed to market. Product ethos shares Basecamp/Rails DNA — calm, opinionated workflow software built for the long haul; detail in `DESIGN.md` and root `AGENTS.md`.
+
+---
+
+## Ownership Boundary
+
+Belimbing is MIT-licensed, so there is no boundary to reason about. Everything a business and its developers build on the platform — modules, extensions, whole custom systems — belongs to them, may stay private, and may be licensed on any terms they choose. Running Belimbing creates no obligation to publish anything.
+
+The licensing questions a business would otherwise have to answer — *is my module a derivative work, does hosting it force me to disclose source, may I keep my own operational logic private* — simply do not arise. Removing that whole category of question is the point: a licensing conversation is a cost SMBs and the agencies serving them should never have to pay.
+
+This is a deliberate trade, stated plainly because the brief is where we keep ourselves honest. A permissive license means nothing legally stops someone from taking Belimbing, closing their fork, and selling it as a service. We make a narrower guarantee instead: the code as published stays permanently available under MIT to anyone who wants to run it themselves, and no future licensing decision of ours can retract what is already released. What keeps Belimbing worth choosing is the quality of the platform, not a clause that penalizes leaving it.
+
+One consequence runs the other way and is easy to get wrong: a permissive outbound license makes *inbound* dependency vetting stricter, not looser. Copyleft libraries that AGPL could absorb — GPL and LGPL PHP or JS packages bundled into the distribution — would now govern the terms of the combined work and break the MIT promise. Bundled dependencies must be permissive (MIT, BSD, ISC, Apache-2.0); copyleft tools remain fine as separately installed CLIs or network services, which do not propagate.
 
 ---
 

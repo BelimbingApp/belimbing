@@ -12,9 +12,9 @@
         </x-ui.page-header>
 
         <x-ui.alert variant="info">
-            {{ __('Belimbing is open-source software (AGPL-3.0). The licensee is the company operating this instance. It will be assigned id=1 and cannot be deleted.') }}
+            {{ __('Belimbing is open-source software (MIT). The licensee is the company operating this instance. It will be assigned id=1 and cannot be deleted.') }}
             <br><br>
-            {{ __('As the licensee, you may use, modify, and distribute Belimbing (including modified versions). If you offer the software to others over a network (e.g. as a hosted service), you must make the corresponding source code available to those users under the same license.') }}
+            {{ __('As the licensee, you may use, modify, distribute, and host Belimbing for any purpose, including commercially. The only condition is that copies you pass on keep the copyright and license notice. Whatever you build on the platform stays yours, and you never have to publish it.') }}
         </x-ui.alert>
 
         @if ($mode === 'select' && $hasCompanies)
