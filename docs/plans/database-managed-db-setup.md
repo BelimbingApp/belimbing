@@ -1,4 +1,4 @@
-Status: Identified — scope expanded to the Windows `setup.ps1` surface
+Status: In progress — POSIX + Windows managed paths implemented; validated by script syntax/parse checks and parser unit tests. Live managed-DB smoke run still pending.
 Last Updated: 2026-07-23
 Sources: scripts/setup-steps/40-database.sh; scripts/setup.ps1; scripts/shared/validation.sh; scripts/shared/config.sh; app/Base/Database/Config/backup.php; app/Base/Database/Services/Backup/BackupRuntimeSettings.php; docs/plans/database-backup-security.md
 Agents: Copilot/claude-sonnet-4-6; Claude Code/claude-opus-4-8
@@ -137,42 +137,43 @@ still defaults to SQLite, whenever no managed credentials/parameter are present.
 
 Goal: operators who already have `.env` credentials skip all local install logic.
 
-- [ ] In `main()`, call `reuse_existing_postgresql_config_if_working()` before the `check_postgresql` / install chain; return early if it succeeds
-- [ ] Print a message distinguishing "reusing existing remote config" from "reusing existing local config" (the function currently prints neither)
-- [ ] Validation: `.env` with valid Neon/Supabase credentials → `setup.sh` exits without touching `apt` or `pg_isready`
+- [x] In `main()`, call `reuse_existing_postgresql_config_if_working()` before the `check_postgresql` / install chain; return early if it succeeds Claude Code/claude-opus-4-8
+- [x] Print a message distinguishing "reusing existing remote config" from "reusing existing local config" via `postgresql_config_is_remote()` Claude Code/claude-opus-4-8
+- [ ] Validation: `.env` with valid Neon/Supabase credentials → `setup.sh` exits without touching `apt` or `pg_isready` (needs a live managed DB; `bash -n` passes)
 
 ### Phase 2 — POSIX: interactive managed-DB branch
 
 Goal: fresh setups can pick "remote/managed" without waiting for local detection to fail.
 
-- [ ] Add `ask_yes_no "Connect to a managed or remote PostgreSQL database?"` before the `check_postgresql` block in `main()`
-- [ ] Answering yes routes directly to `setup_existing_postgresql_connection()`; answering no proceeds with the existing local-install chain
-- [ ] When the managed path is chosen, persist `backup.enabled=false` through the settings service after migrations and print a note explaining why
+- [x] Add `ask_managed_database_branch` (`ask_yes_no "Connect to a managed or remote PostgreSQL database?"`) before the `check_postgresql` block in `main()` Claude Code/claude-opus-4-8
+- [x] Answering yes routes directly to `setup_existing_postgresql_connection()`; answering no proceeds with the existing local-install chain Claude Code/claude-opus-4-8
+- [x] Managed path records `MANAGED_DATABASE` in setup state; `60-migrations.sh` persists `backup.enabled=false` via `SettingsService::set` after migrations and prints a note Claude Code/claude-opus-4-8
 
 ### Phase 3 — POSIX: `DATABASE_URL` credential entry
 
 Goal: operators can paste a single connection string instead of five prompts.
 
-- [ ] In `setup_existing_postgresql_connection()`, offer `DATABASE_URL` as an alternative to individual prompts ("Enter a DATABASE_URL, or press Enter to enter fields individually")
-- [ ] Parse the URL using `test_database_connection`'s parsing in `validation.sh`; fall through to individual prompts if blank or unparseable
-- [ ] Save the parsed fields to `.env` individually (not the raw URL)
+- [x] In `setup_existing_postgresql_connection()`, offer `DATABASE_URL` as an alternative to individual prompts Claude Code/claude-opus-4-8
+- [x] Add `parse_database_url()` to `validation.sh` (right-to-left split, sslmode strip, scheme guard); fall through to individual prompts if blank or unparseable Claude Code/claude-opus-4-8
+- [x] Save the parsed fields to `.env` individually (not the raw URL); unit-tested against Neon/Supabase-style URLs Claude Code/claude-opus-4-8
 
 ### Phase 4 — Windows: managed-DB branch in `setup.ps1`
 
 Goal: `setup.ps1 -DatabaseUrl <url>` (or `-Database managed` with fields) configures a managed Postgres instead of SQLite, and a re-run on a managed host stays managed.
 
-- [ ] Add a `-DatabaseUrl` string parameter and/or a `-Database` `ValidateSet('sqlite','managed')` parameter to the `param()` block
-- [ ] Add `ConvertFrom-DatabaseUrl` (right-to-left split; passwords may contain `:`/`@`) mirroring the bash parser contract
-- [ ] Add `Test-ManagedDatabaseConnection` that runs `SELECT 1` via the bundled `php.exe` + PDO (`pdo_pgsql` is already enabled in the generated `php.ini`) using the exact credentials to be saved
-- [ ] When managed is selected or an existing `.env` `pgsql` connection verifies, write `DB_CONNECTION=pgsql` and the individual `DB_*` keys, and **skip** the SQLite infrastructure batch and `database.sqlite` creation
-- [ ] Reflect the resolved connection (`sqlite` vs `pgsql` + host) in `install-state.json` instead of the hardcoded SQLite line
-- [ ] After the existing `artisan migrate` step, persist global `backup.enabled=false` via `php artisan tinker --execute` (`SettingsService::set`) and print the note
-- [ ] Validation: `setup.ps1 -DatabaseUrl <neon-url>` on a clean checkout → `.env` has `DB_CONNECTION=pgsql`, no `database.sqlite` created, migrations run against the managed DB; a second bare `setup.ps1` run leaves the managed config intact
+- [x] Add a `-DatabaseUrl` string parameter and a `-Database` `ValidateSet('sqlite','managed')` parameter to the `param()` block Claude Code/claude-opus-4-8
+- [x] Add `ConvertFrom-DatabaseUrl` (right-to-left split; passwords may contain `:`/`@`) mirroring the bash parser contract Claude Code/claude-opus-4-8
+- [x] Add `Test-ManagedDatabaseConnection` that runs `SELECT 1` via the bundled `php.exe` + PDO using the exact credentials to be saved Claude Code/claude-opus-4-8
+- [x] When managed is selected (or a prior managed run is recorded), write `DB_CONNECTION=pgsql` and the individual `DB_*` keys, and **skip** the SQLite batch and `database.sqlite` creation Claude Code/claude-opus-4-8
+- [x] Idempotent re-run keys off `install-state.json` `database.connection`, **not** `.env` (`.env.example` ships `DB_CONNECTION=pgsql`, so `.env` alone would misfire on every fresh install) Claude Code/claude-opus-4-8
+- [x] Reflect the resolved connection (`sqlite` vs `pgsql` + host) in `install-state.json`; branch admin-exists detection via `Test-AdminExistsManaged` Claude Code/claude-opus-4-8
+- [x] After the `artisan migrate` step, persist global `backup.enabled=false` via `php artisan tinker --execute` (`SettingsService::set`) and print the note Claude Code/claude-opus-4-8
+- [ ] Validation: `setup.ps1 -DatabaseUrl <neon-url>` on a clean checkout → `.env` has `DB_CONNECTION=pgsql`, no `database.sqlite`, migrations run against the managed DB; a second bare run leaves it intact (needs a live managed DB; `ParseFile` + AST unit test pass)
 
 ### Phase 5 — Windows: parity smoke tests and docs
 
 Goal: the two surfaces are demonstrably equivalent on the managed path.
 
-- [ ] Document the managed-DB invocation for both OSes wherever setup is documented (README/setup docs), including the `backup.enabled=false` behavior
-- [ ] Add `DATABASE_URL` guidance (commented example) so operators know the accepted format; keep `.env` writes decomposed into `DB_*`
-- [ ] Validation: side-by-side run notes (POSIX `setup.sh` vs Windows `setup.ps1 -DatabaseUrl`) confirming identical `.env` `DB_*` output and a persisted `backup.enabled=false` override
+- [x] Document the managed-DB invocation for both OSes (`docs/guides/installation/windows.md`, `docs/guides/installation/quickstart.md`), including the `backup.enabled=false` behavior Claude Code/claude-opus-4-8
+- [x] Add `DATABASE_URL` guidance (commented example) to `.env.example` so operators know the accepted format; `.env` writes stay decomposed into `DB_*` Claude Code/claude-opus-4-8
+- [ ] Validation: side-by-side run notes (POSIX `setup.sh` vs Windows `setup.ps1 -DatabaseUrl`) confirming identical `.env` `DB_*` output and a persisted `backup.enabled=false` override (needs a live managed DB)

@@ -73,6 +73,31 @@ has_existing_postgresql_config() {
     [[ -n "$db_port" ]] && [[ -n "$db_name" ]] && [[ -n "$db_user" ]] && [[ -n "$db_password" ]]
 }
 
+# Classify the configured PostgreSQL host as remote (managed) or local.
+# Returns 0 when the host looks remote, 1 when it is loopback/empty.
+postgresql_config_is_remote() {
+    local db_host
+    db_host=$(get_env_var "$ENV_KEY_DB_HOST" "$LOCAL_DB_HOST")
+    case "$db_host" in
+        127.0.0.1 | localhost | ::1 | "") return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+# Ask whether to connect to a managed/remote database, before any local
+# detection runs. Only prompts interactively; non-interactive keeps the local
+# path (returns 1) so unattended installs behave exactly as before.
+ask_managed_database_branch() {
+    [[ -t 0 ]] || return 1
+    ask_yes_no "Connect to a managed or remote PostgreSQL database?" "n"
+}
+
+# Record that this install targets a managed/remote database so a later step
+# (60-migrations.sh, once base_settings exists) can disable BLB-managed backups.
+mark_managed_database_selected() {
+    save_to_setup_state "MANAGED_DATABASE" "true"
+}
+
 prompt_database_password() {
     local prompt=$1
     local saved_password=${2:-}
@@ -209,7 +234,11 @@ reuse_existing_postgresql_config_if_working() {
 
     echo -e "${CYAN}Checking PostgreSQL configuration from .env...${NC}"
     if verify_postgresql_connection; then
-        echo -e "${GREEN}✓${NC} Reusing existing PostgreSQL configuration"
+        if postgresql_config_is_remote; then
+            echo -e "${GREEN}✓${NC} Reusing existing remote database configuration ($(get_env_var "$ENV_KEY_DB_HOST" ""))"
+        else
+            echo -e "${GREEN}✓${NC} Reusing existing local PostgreSQL configuration"
+        fi
         return 0
     fi
 
@@ -223,18 +252,37 @@ setup_existing_postgresql_connection() {
     default_db_name=$(get_default_database_name "$APP_ENV")
 
     echo ""
-    echo -e "${CYAN}Belimbing could not get local PostgreSQL admin access.${NC}"
-    echo -e "${CYAN}Provide credentials for an existing PostgreSQL database and user.${NC}"
+    echo -e "${CYAN}Provide credentials for an existing or managed PostgreSQL database.${NC}"
     echo -e "${CYAN}Belimbing will verify them, then save them to .env.${NC}"
     echo ""
 
     local db_host db_port db_name db_user existing_password db_password
-    db_host=$(ask_input "$ENV_KEY_DB_HOST" "$(get_env_var "$ENV_KEY_DB_HOST" "$LOCAL_DB_HOST")")
-    db_port=$(ask_input "$ENV_KEY_DB_PORT" "$(get_env_var "$ENV_KEY_DB_PORT" "$DEFAULT_DB_PORT")")
-    db_name=$(ask_input "$ENV_KEY_DB_DATABASE" "$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")")
-    db_user=$(ask_input "$ENV_KEY_DB_USERNAME" "$(get_env_var "$ENV_KEY_DB_USERNAME" "$DEFAULT_DB_USER")")
-    existing_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
-    db_password=$(prompt_database_password "$ENV_KEY_DB_PASSWORD" "$existing_password")
+
+    # Offer a single DATABASE_URL as a shortcut to the five field prompts.
+    # Parses into individual fields (never stores the raw URL) to match every
+    # other credential-write path. Falls through to the fields on blank/bad input.
+    local database_url=""
+    if [[ -t 0 ]]; then
+        database_url=$(ask_input "DATABASE_URL (postgresql://user:pass@host:port/db), or leave blank to enter fields" "")
+    fi
+
+    if [[ -n "$database_url" ]] && parse_database_url "$database_url"; then
+        db_host="$DB_URL_HOST"
+        db_port="$DB_URL_PORT"
+        db_name="$DB_URL_DATABASE"
+        db_user="$DB_URL_USERNAME"
+        db_password="$DB_URL_PASSWORD"
+    else
+        if [[ -n "$database_url" ]]; then
+            echo -e "${YELLOW}⚠${NC} Could not parse DATABASE_URL; falling back to individual fields" >&2
+        fi
+        db_host=$(ask_input "$ENV_KEY_DB_HOST" "$(get_env_var "$ENV_KEY_DB_HOST" "$LOCAL_DB_HOST")")
+        db_port=$(ask_input "$ENV_KEY_DB_PORT" "$(get_env_var "$ENV_KEY_DB_PORT" "$DEFAULT_DB_PORT")")
+        db_name=$(ask_input "$ENV_KEY_DB_DATABASE" "$(get_env_var "$ENV_KEY_DB_DATABASE" "$default_db_name")")
+        db_user=$(ask_input "$ENV_KEY_DB_USERNAME" "$(get_env_var "$ENV_KEY_DB_USERNAME" "$DEFAULT_DB_USER")")
+        existing_password=$(get_env_var "$ENV_KEY_DB_PASSWORD" "")
+        db_password=$(prompt_database_password "$ENV_KEY_DB_PASSWORD" "$existing_password")
+    fi
 
     echo ""
     echo -e "${CYAN}Verifying database connection...${NC}"
@@ -881,7 +929,23 @@ main() {
         setup_sqlite "database/database.sqlite"
     else
         # PostgreSQL Setup
-        if check_postgresql; then
+        #
+        # Existing, verifying credentials short-circuit the local-install chain
+        # entirely — a remote/managed connection in .env must never trigger a
+        # local PostgreSQL install. A fresh setup can opt into a managed database
+        # up front, before local detection runs.
+        if reuse_existing_postgresql_config_if_working; then
+            if postgresql_config_is_remote; then
+                mark_managed_database_selected
+            fi
+        elif ask_managed_database_branch; then
+            if setup_existing_postgresql_connection; then
+                mark_managed_database_selected
+            else
+                echo -e "${RED}✗${NC} Managed database setup failed" >&2
+                exit 1
+            fi
+        elif check_postgresql; then
             ensure_postgresql_database
         elif command_exists psql; then
             start_postgresql_service_then_setup

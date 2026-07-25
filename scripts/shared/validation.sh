@@ -804,3 +804,51 @@ test_database_connection() {
 
     return 1
 }
+
+# Parse a postgresql:// DATABASE_URL into its component parts.
+# On success sets DB_URL_HOST/DB_URL_PORT/DB_URL_DATABASE/DB_URL_USERNAME/DB_URL_PASSWORD
+# and returns 0; returns 1 (and clears them) when the URL is blank or unparseable.
+# Splits right-to-left so passwords may contain ':' and '@'. Strips any ?query
+# suffix (sslmode, ...) and defaults the port to 5432 when omitted.
+parse_database_url() {
+    local database_url=$1
+    DB_URL_HOST="" DB_URL_PORT="" DB_URL_DATABASE="" DB_URL_USERNAME="" DB_URL_PASSWORD=""
+
+    [[ -n "$database_url" ]] || return 1
+
+    # Only PostgreSQL connection strings are supported.
+    [[ "$database_url" =~ ^postgres(ql)?:// ]] || return 1
+
+    # Strip either postgres:// or postgresql:// prefix.
+    local rest="${database_url#postgres://}"
+    rest="${rest#postgresql://}"
+
+    # Separate credentials from host info on the LAST '@'.
+    [[ "$rest" =~ ^(.+)@([^@]+)$ ]] || return 1
+    local credentials="${BASH_REMATCH[1]}"
+    local host_info="${BASH_REMATCH[2]}"
+
+    # Credentials: split on the FIRST ':' (password may itself contain ':').
+    [[ "$credentials" == *:* ]] || return 1
+    DB_URL_USERNAME="${credentials%%:*}"
+    DB_URL_PASSWORD="${credentials#*:}"
+
+    # Drop any query string before parsing host/port/database.
+    host_info="${host_info%%\?*}"
+
+    if [[ "$host_info" =~ ^([^:/]+):([0-9]+)/(.+)$ ]]; then
+        DB_URL_HOST="${BASH_REMATCH[1]}"
+        DB_URL_PORT="${BASH_REMATCH[2]}"
+        DB_URL_DATABASE="${BASH_REMATCH[3]}"
+    elif [[ "$host_info" =~ ^([^:/]+)/(.+)$ ]]; then
+        DB_URL_HOST="${BASH_REMATCH[1]}"
+        DB_URL_PORT="5432"
+        DB_URL_DATABASE="${BASH_REMATCH[2]}"
+    else
+        DB_URL_USERNAME="" DB_URL_PASSWORD=""
+        return 1
+    fi
+
+    [[ -n "$DB_URL_HOST" && -n "$DB_URL_DATABASE" && -n "$DB_URL_USERNAME" ]] || return 1
+    return 0
+}

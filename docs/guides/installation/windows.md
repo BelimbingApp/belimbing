@@ -118,11 +118,13 @@ The setup script will:
 - configure `curl.cainfo` and `openssl.cafile` for HTTPS downloads
 - copy `.env.example` to `.env` when missing
 - set `APP_URL=https://local.blb.lara`
-- set `DB_CONNECTION=sqlite`
+- set `DB_CONNECTION=sqlite` (the default; see
+  [Using a managed PostgreSQL database](#using-a-managed-postgresql-database) to
+  opt into a remote Postgres instead)
 - write durable runtime choices such as `APP_ENV`, ingress mode, pinned ports,
   and instance name to `.env`
 - write setup provenance to `storage/app/.devops/install-state.json`
-- create `database/database.sqlite`
+- create `database/database.sqlite` (SQLite path only)
 - install local Composer when missing
 - install PHP dependencies
 - install frontend dependencies with Bun or npm
@@ -136,6 +138,25 @@ The default local admin account is:
 admin@local.blb.lara
 password
 ```
+
+### Using a managed PostgreSQL database
+
+SQLite is the default for local Windows development. To point setup at a managed
+Postgres provider (Neon, Supabase, RDS, Cloud SQL, ...) instead, pass a full
+connection string:
+
+```powershell
+.\scripts\setup.ps1 -DatabaseUrl "postgresql://user:password@host:5432/database?sslmode=require"
+```
+
+Setup verifies the connection through the bundled `php.exe` (no `psql` needed),
+writes the individual `DB_*` keys to `.env` (never the raw URL), skips creating
+`database/database.sqlite`, runs migrations against the managed database, and
+sets `backup.enabled=false` so Belimbing does not run backups alongside the
+provider's own snapshots. Re-enable them anytime in the Backups settings. A bare
+`.\scripts\setup.ps1` re-run on a host already configured for managed Postgres
+keeps that configuration — it is not reverted to SQLite. If the `DB_*` keys are
+already in `.env`, `-Database managed` selects the managed path without a URL.
 
 Use setup parameters to override bootstrap values:
 

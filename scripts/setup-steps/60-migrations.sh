@@ -160,6 +160,19 @@ rebuild_caches() {
     return 0
 }
 
+# On managed/remote databases, disable Belimbing-managed backups so we do not
+# run a parallel backup system alongside the provider's own snapshots. Persisted
+# here (not in 40-database.sh) because base_settings only exists after migration.
+# The operator can re-enable BLB backups any time in the Backups settings UI.
+disable_managed_database_backups() {
+    echo -e "${CYAN}Managed database — disabling Belimbing-managed backups (backup.enabled=false).${NC}"
+    echo -e "  ${YELLOW}ℹ${NC} Your provider's snapshots are your backup. Re-enable BLB backups in the Backups settings."
+    if ! php artisan tinker --execute='app(App\Base\Settings\Contracts\SettingsService::class)->set("backup.enabled", false);' >/dev/null 2>&1; then
+        echo -e "  ${YELLOW}⚠${NC} Could not persist backup.enabled=false automatically; set it in the Backups settings." >&2
+    fi
+    return 0
+}
+
 # Main setup function
 main() {
     print_section_banner "Database Migrations - Belimbing ($APP_ENV)"
@@ -299,6 +312,12 @@ main() {
     # Rebuild caches
     rebuild_caches
     echo ""
+
+    # Managed/remote database installs opt out of BLB-managed backups.
+    if [[ "$(get_setup_state_var "MANAGED_DATABASE" "false")" = "true" ]]; then
+        disable_managed_database_backups
+        echo ""
+    fi
 
     local persisted
     persisted=$(load_existing_framework_primitives "")

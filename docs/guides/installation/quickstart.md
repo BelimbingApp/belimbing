@@ -52,6 +52,19 @@ When `shared` mode is selected, setup validates or installs system Caddy, genera
 
 For _staging_ and _production_ environments, run `./scripts/setup.sh staging` or `./scripts/setup.sh production`.
 
+### Managed / remote PostgreSQL
+
+To use a managed Postgres provider (Neon, Supabase, RDS, Cloud SQL, ...) instead
+of a locally installed database, answer **yes** to "Connect to a managed or
+remote PostgreSQL database?" when setup asks, or simply leave working `DB_*`
+credentials in `.env` — setup verifies them and skips the local install entirely.
+At the credential prompt you can paste a single `DATABASE_URL`
+(`postgresql://user:password@host:5432/database?sslmode=require`) instead of the
+five fields; setup decomposes it into the individual `DB_*` keys. On the managed
+path setup also sets `backup.enabled=false` so Belimbing does not back up on top
+of the provider's own snapshots — re-enable it in the Backups settings if you
+want a secondary copy.
+
 ### Hosts File Configuration
 
 The setup script will automatically configure the hosts file on the Linux system:

@@ -38,6 +38,12 @@ param(
     [string] $AdminEmail = 'admin@local.blb.lara',
     [string] $AdminPassword = 'password',
 
+    # Managed PostgreSQL is opt-in; SQLite stays the default when both are absent.
+    # Pass a full connection string, or -Database managed with DB_* already in .env.
+    [string] $DatabaseUrl = '',
+    [ValidateSet('sqlite', 'managed')]
+    [string] $Database = 'sqlite',
+
     [switch] $SkipHosts,
     [switch] $SkipComposerInstall,
     [switch] $SkipNodeInstall,
@@ -312,6 +318,107 @@ function Test-AdminExists {
     }
 }
 
+# Parse a postgresql:// connection string into component parts. Splits
+# right-to-left so passwords may contain ':' and '@'; strips any ?query suffix
+# and defaults the port to 5432. Returns $null when the URL is not a parseable
+# PostgreSQL connection string.
+function ConvertFrom-DatabaseUrl {
+    param([string] $Url)
+
+    if (-not $Url) { return $null }
+    if ($Url -notmatch '^(postgres|postgresql)://') { return $null }
+
+    $withoutScheme = $Url -replace '^(postgres|postgresql)://', ''
+    $atIndex = $withoutScheme.LastIndexOf('@')
+    if ($atIndex -lt 1) { return $null }
+
+    $credentials = $withoutScheme.Substring(0, $atIndex)
+    $hostInfo = ($withoutScheme.Substring($atIndex + 1) -split '\?', 2)[0]
+
+    $colonIndex = $credentials.IndexOf(':')
+    if ($colonIndex -lt 1) { return $null }
+    $user = $credentials.Substring(0, $colonIndex)
+    $password = $credentials.Substring($colonIndex + 1)
+
+    if ($hostInfo -notmatch '^([^:/]+)(?::(\d+))?/(.+)$') { return $null }
+    $dbHost = $Matches[1]
+    $port = if ($Matches[2]) { $Matches[2] } else { '5432' }
+    $database = $Matches[3]
+
+    if (-not $dbHost -or -not $database -or -not $user) { return $null }
+
+    return [pscustomobject]@{
+        Host     = $dbHost
+        Port     = $port
+        Database = $database
+        Username = $user
+        Password = $password
+    }
+}
+
+# Build a managed-connection object from the individual DB_* keys in .env.
+# Returns $null when host/database/username are not all present.
+function Get-ManagedConnectionFromEnv {
+    param([string] $Path)
+
+    $dbHost = Get-EnvValue -Path $Path -Key 'DB_HOST'
+    $database = Get-EnvValue -Path $Path -Key 'DB_DATABASE'
+    $user = Get-EnvValue -Path $Path -Key 'DB_USERNAME'
+    if (-not $dbHost -or -not $database -or -not $user) {
+        return $null
+    }
+
+    $port = Get-EnvValue -Path $Path -Key 'DB_PORT'
+    if (-not $port) { $port = '5432' }
+
+    return [pscustomobject]@{
+        Host     = $dbHost
+        Port     = $port
+        Database = $database
+        Username = $user
+        Password = Get-EnvValue -Path $Path -Key 'DB_PASSWORD'
+    }
+}
+
+# Verify a PostgreSQL connection by running SELECT 1 through the bundled PHP
+# with PDO (pdo_pgsql is enabled in the generated php.ini), so Windows setup
+# needs no psql.exe. Returns $true only on a successful round-trip.
+function Test-ManagedDatabaseConnection {
+    param(
+        [string] $DbHost,
+        [string] $Port,
+        [string] $Database,
+        [string] $Username,
+        [string] $Password
+    )
+
+    $probe = 'try{$dsn=sprintf("pgsql:host=%s;port=%s;dbname=%s",$argv[1],$argv[2],$argv[3]);$p=new PDO($dsn,$argv[4],$argv[5],[PDO::ATTR_TIMEOUT=>10,PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);$p->query("SELECT 1");echo "ok";}catch(Throwable $e){fwrite(STDERR,$e->getMessage());exit(1);}'
+
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & $script:PhpExe -r $probe -- $DbHost $Port $Database $Username $Password 2>$null
+        return ($LASTEXITCODE -eq 0 -and (($output | Out-String).Trim() -eq 'ok'))
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
+# Managed-database equivalent of Test-AdminExists: does a company_id=1 user
+# already exist in the Postgres database? Returns $false on any error.
+function Test-AdminExistsManaged {
+    param([object] $Connection)
+
+    if (-not $Connection) { return $false }
+    try {
+        $probe = 'try{$dsn=sprintf("pgsql:host=%s;port=%s;dbname=%s",$argv[1],$argv[2],$argv[3]);$p=new PDO($dsn,$argv[4],$argv[5],[PDO::ATTR_TIMEOUT=>10,PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();echo $n>0?"yes":"no";}catch(Throwable $e){echo "no";}'
+        $result = & $script:PhpExe -r $probe -- $Connection.Host $Connection.Port $Connection.Database $Connection.Username $Connection.Password 2>$null
+        return ($result -eq 'yes')
+    } catch {
+        return $false
+    }
+}
+
 function Resolve-BunPath {
     $bun = Resolve-NativeCommandPath 'bun'
     if ($bun) {
@@ -580,12 +687,6 @@ variables_order=EGPCS
         Write-Ok "Created .env from .env.example"
     }
 
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $DatabasePath) | Out-Null
-    if (-not (Test-Path $DatabasePath)) {
-        New-Item -ItemType File -Path $DatabasePath | Out-Null
-    }
-
-    $databaseForEnv = $DatabasePath.Replace('\', '/')
     $existingHttpsPort = Get-ExistingTcpPort -Path $envPath -Key 'HTTPS_PORT'
     $existingCaddyAdminPort = Get-ExistingTcpPort -Path $envPath -Key 'CADDY_SERVER_ADMIN_PORT'
     $instanceNameSeed = if ($InstanceName) {
@@ -620,17 +721,92 @@ variables_order=EGPCS
     }
     $debugValue = if ($Environment -in @('staging', 'production')) { 'false' } else { 'true' }
 
+    # Resolve the database backend. SQLite is the Windows default; a managed
+    # PostgreSQL is opt-in via -DatabaseUrl or -Database managed. When a prior
+    # run recorded a managed database (install-state.json), keep it so a bare
+    # re-run is never silently reverted to SQLite -- .env.example ships
+    # DB_CONNECTION=pgsql, so "managed" cannot be inferred from .env alone.
+    $priorManaged = $false
+    $installStatePath = Join-Path $DevopsDir 'install-state.json'
+    if (Test-Path $installStatePath) {
+        try {
+            $priorState = Get-Content -Path $installStatePath -Raw | ConvertFrom-Json
+            if (($priorState.PSObject.Properties.Name -contains 'database') -and ($priorState.database.connection -eq 'pgsql')) {
+                $priorManaged = $true
+            }
+        } catch {
+            $priorManaged = $false
+        }
+    }
+
+    $managedRequested = ($Database -eq 'managed') -or [bool] $DatabaseUrl
+    $managedConnection = $null
+    $useManagedDatabase = $false
+    $databaseForEnv = $null
+
+    if ($managedRequested) {
+        if ($DatabaseUrl) {
+            $managedConnection = ConvertFrom-DatabaseUrl -Url $DatabaseUrl
+            if (-not $managedConnection) {
+                throw "Could not parse -DatabaseUrl. Expected postgresql://user:password@host:port/database."
+            }
+        } else {
+            $managedConnection = Get-ManagedConnectionFromEnv -Path $envPath
+            if (-not $managedConnection) {
+                throw "-Database managed requires DB_HOST, DB_DATABASE, DB_USERNAME (and DB_PASSWORD) in .env, or pass -DatabaseUrl."
+            }
+        }
+
+        Write-Step "Verifying managed database connection"
+        if (-not (Test-ManagedDatabaseConnection -DbHost $managedConnection.Host -Port $managedConnection.Port -Database $managedConnection.Database -Username $managedConnection.Username -Password $managedConnection.Password)) {
+            throw "Could not verify the managed database at $($managedConnection.Host):$($managedConnection.Port)/$($managedConnection.Database). Check the credentials and that it accepts connections from this host."
+        }
+        Write-Ok "Managed database connection verified ($($managedConnection.Host))"
+        $useManagedDatabase = $true
+    } elseif ($priorManaged) {
+        $managedConnection = Get-ManagedConnectionFromEnv -Path $envPath
+        $useManagedDatabase = $true
+        if ($managedConnection -and (Test-ManagedDatabaseConnection -DbHost $managedConnection.Host -Port $managedConnection.Port -Database $managedConnection.Database -Username $managedConnection.Username -Password $managedConnection.Password)) {
+            Write-Ok "Reusing existing managed database configuration ($($managedConnection.Host))"
+        } else {
+            Write-Warn "A prior run configured a managed PostgreSQL database, but it could not be verified now. Keeping the managed configuration (not reverting to SQLite); fix the credentials or pass -DatabaseUrl to reconfigure."
+        }
+    }
+
     # Infrastructure values - BLB's architecture decisions, always applied.
     Set-EnvValueBatch -Path $envPath -Entries @(
         [pscustomobject]@{ Key = 'APP_DEBUG';        Value = $debugValue },
         [pscustomobject]@{ Key = 'APP_SCHEME';       Value = 'https' },
         [pscustomobject]@{ Key = 'BLB_INGRESS_MODE'; Value = $IngressMode; OnlyIfAbsent = (-not $explicitIngressMode) },
-        [pscustomobject]@{ Key = 'DB_CONNECTION';    Value = 'sqlite' },
-        [pscustomobject]@{ Key = 'DB_DATABASE';      Value = $databaseForEnv },
         [pscustomobject]@{ Key = 'SESSION_DRIVER';   Value = 'database' },
         [pscustomobject]@{ Key = 'QUEUE_CONNECTION'; Value = 'database' },
         [pscustomobject]@{ Key = 'CACHE_STORE';      Value = 'database' }
     )
+
+    if ($useManagedDatabase) {
+        # Managed path: write the pgsql connection, never touch database.sqlite.
+        if ($managedConnection) {
+            Set-EnvValueBatch -Path $envPath -Entries @(
+                [pscustomobject]@{ Key = 'DB_CONNECTION'; Value = 'pgsql' },
+                [pscustomobject]@{ Key = 'DB_HOST';       Value = $managedConnection.Host },
+                [pscustomobject]@{ Key = 'DB_PORT';       Value = "$($managedConnection.Port)" },
+                [pscustomobject]@{ Key = 'DB_DATABASE';   Value = $managedConnection.Database },
+                [pscustomobject]@{ Key = 'DB_USERNAME';   Value = $managedConnection.Username },
+                [pscustomobject]@{ Key = 'DB_PASSWORD';   Value = $managedConnection.Password }
+            )
+        }
+    } else {
+        # SQLite default: provision the local file and point .env at it.
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $DatabasePath) | Out-Null
+        if (-not (Test-Path $DatabasePath)) {
+            New-Item -ItemType File -Path $DatabasePath | Out-Null
+        }
+        $databaseForEnv = $DatabasePath.Replace('\', '/')
+        Set-EnvValueBatch -Path $envPath -Entries @(
+            [pscustomobject]@{ Key = 'DB_CONNECTION'; Value = 'sqlite' },
+            [pscustomobject]@{ Key = 'DB_DATABASE';   Value = $databaseForEnv }
+        )
+    }
 
     Write-Step "Verifying Git"
     $gitExe = Resolve-NativeCommandPath 'git'
@@ -696,6 +872,11 @@ variables_order=EGPCS
         git = $gitExe
         bun = $bunExe
         composer = $ComposerPath
+        database = [ordered]@{
+            connection = if ($useManagedDatabase) { 'pgsql' } else { 'sqlite' }
+            host = if ($useManagedDatabase -and $managedConnection) { $managedConnection.Host } else { '' }
+            path = if ($useManagedDatabase) { '' } else { $databaseForEnv }
+        }
         skipped = [ordered]@{
             hosts = [bool] $SkipHosts
             composerInstall = [bool] $SkipComposerInstall
@@ -705,7 +886,13 @@ variables_order=EGPCS
     }
     $installState | ConvertTo-Json -Depth 5 | Set-Content -Path (Join-Path $DevopsDir 'install-state.json') -Encoding UTF8
 
-    Write-Ok "SQLite database: $DatabasePath"
+    if ($useManagedDatabase -and $managedConnection) {
+        Write-Ok "Managed PostgreSQL database: $($managedConnection.Host):$($managedConnection.Port)/$($managedConnection.Database)"
+    } elseif ($useManagedDatabase) {
+        Write-Ok "Managed PostgreSQL database (configured from .env)"
+    } else {
+        Write-Ok "SQLite database: $DatabasePath"
+    }
 
     Write-Step "Configuring local domains"
     Add-HostsEntry -Domains @($FrontendDomain, $BackendDomain) -Skip:$SkipHosts
@@ -788,7 +975,11 @@ variables_order=EGPCS
             # Only bootstrap admin credentials on first run or when explicitly requested.
             # Skipping the bootstrap file lets FrameworkPrimitivesProvisioner use the
             # canonical anchor path - re-asserts roles without touching the password.
-            $adminExists = Test-AdminExists -DatabasePath $databaseForEnv
+            $adminExists = if ($useManagedDatabase) {
+                Test-AdminExistsManaged -Connection $managedConnection
+            } else {
+                Test-AdminExists -DatabasePath $databaseForEnv
+            }
             $needsBootstrap = (-not $adminExists) -or $ResetAdmin
 
             if ($adminExists -and $ResetAdmin) {
@@ -841,6 +1032,20 @@ variables_order=EGPCS
 
                 if ($adminBootstrapFile) {
                     Remove-Item $adminBootstrapFile -Force -ErrorAction SilentlyContinue
+                }
+            }
+
+            if ($useManagedDatabase) {
+                # Managed database: disable BLB-managed backups so we do not run a
+                # parallel backup system alongside the provider's own snapshots.
+                # base_settings only exists after migration, so it is written here.
+                Write-Step "Disabling Belimbing-managed backups (managed database)"
+                $disableBackup = 'app(App\Base\Settings\Contracts\SettingsService::class)->set("backup.enabled", false);'
+                try {
+                    Invoke-Php @('artisan', 'tinker', "--execute=$disableBackup")
+                    Write-Ok "backup.enabled=false - provider snapshots are your backup; re-enable in Backups settings"
+                } catch {
+                    Write-Warn "Could not persist backup.enabled=false automatically. Set it in the Backups settings UI."
                 }
             }
         }
