@@ -197,9 +197,9 @@
 
         <x-ui.segmented-control
             :options="[
-                ['value' => 'light', 'label' => __('Light'), 'icon' => 'heroicon-o-sun'],
-                ['value' => 'dark', 'label' => __('Dark'), 'icon' => 'heroicon-o-moon'],
-                ['value' => 'system', 'label' => __('System'), 'icon' => 'heroicon-o-computer-desktop'],
+                ['value' => 'light', 'label' => __('Light'), 'title' => __('Light mode'), 'icon' => 'heroicon-o-sun'],
+                ['value' => 'dark', 'label' => __('Dark'), 'title' => __('Dark mode'), 'icon' => 'heroicon-o-moon'],
+                ['value' => 'system', 'label' => __('System'), 'title' => __('OS/Browser mode'), 'icon' => 'heroicon-o-computer-desktop'],
             ]"
             :value="$theme"
             :label="__('Theme')"

@@ -35,6 +35,7 @@
         ->map(static fn (array $option): array => [
             'value' => (string) ($option['value'] ?? $option['id'] ?? ''),
             'label' => $option['label'] ?? ($option['value'] ?? $option['id'] ?? ''),
+            'title' => $option['title'] ?? null,
             'icon' => $option['icon'] ?? null,
             'disabled' => (bool) ($option['disabled'] ?? false),
         ])
@@ -81,6 +82,7 @@
             ])
             :class="value === @js($item['value']) ? 'bg-surface-card text-ink shadow-sm' : 'text-muted hover:text-ink'"
             @disabled($item['disabled'])
+            @if ($item['title']) title="{{ $item['title'] }}" @endif
         >
             @if ($item['icon'])
                 <x-icon :name="$item['icon']" class="{{ $sizeClasses['icon'] }}" />
