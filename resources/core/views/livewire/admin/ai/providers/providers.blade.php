@@ -50,6 +50,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
              ready for connection. See docs/plans/ai-provider-families.md.
              ═══════════════════════════════════════════════════ --}}
         <x-ui.tabs
+            tabs-id="ai-provider-family-tabs"
             default="llm"
             :tabs="[
                 ['id' => 'llm', 'label' => __('LLM'), 'icon' => 'heroicon-o-chat-bubble-left-right'],
@@ -339,7 +340,7 @@ use App\Modules\Core\AI\Livewire\Providers\Providers;
             @endphp
 
             @if($advancedAvailable)
-                <x-ui.tabs :tabs="[
+                <x-ui.tabs tabs-id="ai-provider-form-tabs" :tabs="[
                     ['id' => 'general', 'label' => __('General')],
                     ['id' => 'advanced', 'label' => __('Advanced')],
                 ]" default="general" persistence="none">

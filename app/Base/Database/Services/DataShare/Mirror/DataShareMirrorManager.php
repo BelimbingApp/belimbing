@@ -112,10 +112,14 @@ class DataShareMirrorManager
     }
 
     /** @param list<string> $tableNames */
-    public function review(string $direction, array $tableNames): DataShareMirrorReview
+    public function review(string $direction, array $tableNames, ?callable $progress = null): DataShareMirrorReview
     {
         try {
-            return $this->reviewer->review(DataShareMirrorDirection::parse($direction), $tableNames);
+            return $this->reviewer->review(
+                DataShareMirrorDirection::parse($direction),
+                $tableNames,
+                DataShareMirrorProgress::listen($progress),
+            );
         } catch (DataShareMirrorException $exception) {
             throw $exception;
         } catch (Throwable $exception) {
@@ -138,7 +142,13 @@ class DataShareMirrorManager
         try {
             return $this->operationLock->run(function () use ($direction, $tableNames, $expectedStateToken, $reporter): DataShareMirrorExecutionResult {
                 $reporter->report((string) __('Operation lock acquired. Revalidating the reviewed selection.'));
-                $review = $this->review($direction, $tableNames);
+                $review = $this->review(
+                    $direction,
+                    $tableNames,
+                    function (string $message) use ($reporter): void {
+                        $reporter->report($message);
+                    },
+                );
 
                 // Reviews that stay blocked or stale never create mutation-attempt
                 // history: the run is opened only after a locked review succeeds.
@@ -180,7 +190,7 @@ class DataShareMirrorManager
                 // never drop and recreate tables. Only after a fresh in-lock review
                 // and token match is the destructive force transformation applied.
                 $review = $this->forceablePushReview(
-                    $this->reviewer->review(DataShareMirrorDirection::Push, $tableNames),
+                    $this->reviewer->review(DataShareMirrorDirection::Push, $tableNames, $reporter),
                 );
 
                 if ($review->hasBlockers) {
@@ -259,7 +269,9 @@ class DataShareMirrorManager
                         : 'The mirror engine did not confirm completion; the destination may have committed.',
                 ],
             );
-            $progress->report((string) __('FAILED: The transfer did not confirm completion. The durable run records the known outcome.'));
+            $progress->report((string) ($determinate
+                ? __('FAILED: The transfer stopped before the destination commit. The durable run records the failure.')
+                : __('FAILED: The transfer did not confirm completion. The durable run records the indeterminate outcome.')));
 
             throw $exception;
         }
@@ -451,6 +463,9 @@ class DataShareMirrorManager
             $counts['blocked'] > 0,
             $counts,
             $review->stateToken,
+            $review->requestedTables,
+            $review->requiredTables,
+            $review->requiredBy,
         );
     }
 }

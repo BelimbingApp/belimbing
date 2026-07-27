@@ -36,12 +36,18 @@
         </div>
     </div>
 
-    @if($canCapture && count($this->selectedRowIds) > 0)
-        <div class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border-default bg-surface-subtle px-3 py-2">
+    @if($canCapture)
+        <div
+            wire:show="selectedRowIds.length > 0"
+            @if(count($this->selectedRowIds) === 0) style="display: none" @endif
+            class="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border-default bg-surface-subtle px-3 py-2"
+        >
             <div class="flex flex-wrap items-center gap-2">
                 <x-ui.badge variant="info">{{ __('Data Share') }}</x-ui.badge>
                 <span class="text-sm text-ink tabular-nums">
-                    {{ trans_choice(':count row selected|:count rows selected', count($this->selectedRowIds), ['count' => count($this->selectedRowIds)]) }}
+                    <span wire:text="selectedRowIds.length">{{ count($this->selectedRowIds) }}</span>
+                    <span wire:show="selectedRowIds.length === 1">{{ __('row selected') }}</span>
+                    <span wire:show="selectedRowIds.length !== 1">{{ __('rows selected') }}</span>
                 </span>
             </div>
             <div class="ml-auto flex items-center gap-2">
@@ -103,7 +109,7 @@
                                 <x-ui.checkbox
                                     id="capture-row-{{ $captureId }}"
                                     value="{{ $captureId }}"
-                                    wire:model.live="selectedRowIds"
+                                    wire:model="selectedRowIds"
                                     aria-label="{{ __('Select row :id', ['id' => $captureId]) }}"
                                 />
                             </td>

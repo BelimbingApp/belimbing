@@ -10,6 +10,7 @@
                 </x-ui.catalog-section>
 
                 <x-ui.tabs
+                    tabs-id="ui-reference-navigation-tabs"
                     :tabs="[
                         ['id' => 'overview', 'label' => __('Overview')],
                         ['id' => 'history', 'label' => __('History')],

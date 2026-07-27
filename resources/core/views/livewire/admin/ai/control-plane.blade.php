@@ -45,6 +45,7 @@ $controlPlaneContext = request()->only(['from', 'returnTo']);
     </x-ui.page-header>
 
     <x-ui.tabs
+        tabs-id="ai-control-plane-tabs"
         :tabs="[
             ['id' => 'inspector', 'label' => __('Run Inspector'), 'icon' => 'heroicon-o-magnifying-glass'],
             ['id' => 'health', 'label' => __('Health & Presence'), 'icon' => 'heroicon-o-heart'],

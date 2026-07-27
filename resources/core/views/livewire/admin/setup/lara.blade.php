@@ -282,6 +282,7 @@
                 @endphp
 
                 <x-ui.tabs
+                    tabs-id="lara-prompt-tabs"
                     :tabs="[
                         ['id' => 'edit', 'label' => __('Edit')],
                         ['id' => 'preview', 'label' => __('Preview Assembled Prompt')],

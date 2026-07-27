@@ -54,6 +54,8 @@ function mirrorUiCatalogFixture(): array
             'module_path' => 'blb/ham',
             'local_exists' => true,
             'mirror_exists' => false,
+            'local_rows' => 12345,
+            'remote_rows' => null,
             'supported' => true,
             'blockers' => [],
         ],
@@ -63,6 +65,8 @@ function mirrorUiCatalogFixture(): array
             'module_path' => 'blb/ham',
             'local_exists' => true,
             'mirror_exists' => true,
+            'local_rows' => 67890,
+            'remote_rows' => 67890,
             'supported' => true,
             'blockers' => [],
         ],
@@ -72,6 +76,8 @@ function mirrorUiCatalogFixture(): array
             'module_path' => 'blb/sbg',
             'local_exists' => false,
             'mirror_exists' => true,
+            'local_rows' => null,
+            'remote_rows' => 2468,
             'supported' => false,
             'blockers' => [
                 ['code' => 'missing_prerequisite', 'message' => 'Required parent table sbg_projects is missing.'],
@@ -84,7 +90,7 @@ it('renders the development-only mirror as an explicit table-first workflow', fu
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
 
-    Livewire::test(DataShareIndex::class)
+    $component = Livewire::test(DataShareIndex::class)
         ->set('mirrorCatalogLoaded', true)
         ->set('mirrorConnectionStatus', [
             'configured' => true,
@@ -96,12 +102,132 @@ it('renders the development-only mirror as an explicit table-first workflow', fu
         ])
         ->set('mirrorTables', mirrorUiCatalogFixture())
         ->assertSee('Mirror complete development tables')
-        ->assertSee('Push selected tables to Supabase')
-        ->assertSee('Pull selected tables from Supabase')
+        ->assertSee('Mirror selected complete tables directly between Local and Supabase.')
+        ->assertSet('mirrorDirection', '')
+        ->assertSeeInOrder([
+            'Direction',
+            'Pull from Supabase',
+            'Push to Supabase',
+            'Catalog',
+            'Search tables',
+        ])
+        ->assertSee('type="radio"', false)
+        ->assertSee("wire:click=\"chooseMirrorDirection('pull')\"", false)
+        ->assertSee("wire:click=\"chooseMirrorDirection('push')\"", false)
+        ->assertDontSee('x-ui.segmented-control', false)
+        ->assertSee('Pull from Supabase')
+        ->assertSee('Push to Supabase')
+        ->assertSee('Read-only Review')
+        ->assertSee('href="#blb-icon-carbon-review"', false)
+        ->assertDontSee('Review push to Supabase')
+        ->assertDontSee('Review pull from Supabase')
         ->set('mirrorSelectedTables', ['ham_orders', 'ham_order_lines'])
-        ->assertSee('Push 2 selected tables to Supabase')
-        ->assertSee('Pull 2 selected tables from Supabase')
-        ->assertSee('Required parent table sbg_projects is missing.');
+        ->assertSee('wire:model="mirrorSelectedTables"', false)
+        ->assertDontSee('wire:model.live="mirrorSelectedTables"', false)
+        ->assertSee('wire:text="mirrorSelectedTables.length"', false)
+        ->assertSee('wire:bind:disabled="mirrorSelectedTables.length === 0', false)
+        ->assertSee('x-on:click="openMirrorReview(', false)
+        ->assertSee('Required parent table sbg_projects is missing.')
+        ->assertSee('12,345')
+        ->assertSee('67,890')
+        ->assertSee('2,468')
+        ->assertDontSee('Capture baseline observation');
+
+    preg_match_all('/<th\b[^>]*>(.*?)<\/th>/s', $component->html(), $matches);
+    $headers = array_map(
+        fn (string $header): string => trim(preg_replace('/\s+/', ' ', strip_tags(html_entity_decode($header))) ?? ''),
+        $matches[1],
+    );
+
+    expect($headers)->toBe([
+        'Select',
+        'Table',
+        'Module',
+        'Local rows',
+        'Remote rows',
+        'Observed',
+        'Freshness',
+    ]);
+});
+
+it('chooses one mirror direction and selects only conservative visible row-count candidates', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $tables = [
+        [
+            'table' => 'sbg_pull_candidate',
+            'module_name' => 'Sbg',
+            'module_path' => 'extensions/sbg',
+            'local_exists' => true,
+            'mirror_exists' => true,
+            'local_rows' => 0,
+            'remote_rows' => 12,
+            'supported' => true,
+        ],
+        [
+            'table' => 'sbg_push_candidate',
+            'module_name' => 'Sbg',
+            'module_path' => 'extensions/sbg',
+            'local_exists' => true,
+            'mirror_exists' => true,
+            'local_rows' => 8,
+            'remote_rows' => 2,
+            'supported' => true,
+        ],
+        [
+            'table' => 'sbg_equal',
+            'module_name' => 'Sbg',
+            'module_path' => 'extensions/sbg',
+            'local_exists' => true,
+            'mirror_exists' => true,
+            'local_rows' => 5,
+            'remote_rows' => 5,
+            'supported' => true,
+        ],
+        [
+            'table' => 'other_pull_candidate',
+            'module_name' => 'Other',
+            'module_path' => 'extensions/other',
+            'local_exists' => true,
+            'mirror_exists' => true,
+            'local_rows' => 0,
+            'remote_rows' => 4,
+            'supported' => true,
+        ],
+        [
+            'table' => 'sbg_blocked_candidate',
+            'module_name' => 'Sbg',
+            'module_path' => 'extensions/sbg',
+            'local_exists' => true,
+            'mirror_exists' => true,
+            'local_rows' => 0,
+            'remote_rows' => 20,
+            'supported' => false,
+        ],
+    ];
+
+    $component = Livewire::test(DataShareIndex::class)
+        ->set('mirrorCatalogLoaded', true)
+        ->set('mirrorTables', $tables)
+        ->set('mirrorModulePath', 'extensions/sbg')
+        ->call('chooseMirrorDirection', 'pull')
+        ->assertSet('mirrorDirection', 'pull')
+        ->assertSee('Select 1 pull candidate')
+        ->call('selectMirrorRowCountCandidates')
+        ->assertSet('mirrorSelectedTables', ['sbg_pull_candidate'])
+        ->assertSet('statusMessage', '1 pull candidate selected.')
+        ->assertDontSee('Select 1 pull candidate')
+        ->call('chooseMirrorDirection', 'push')
+        ->assertSet('mirrorDirection', 'push')
+        ->assertSet('mirrorSelectedTables', [])
+        ->assertSee('Select 1 push candidate')
+        ->call('selectMirrorRowCountCandidates')
+        ->assertSet('mirrorSelectedTables', ['sbg_push_candidate'])
+        ->assertSet('statusMessage', '1 push candidate selected.');
+
+    $component
+        ->call('chooseMirrorDirection', 'sideways')
+        ->assertSet('mirrorDirection', 'push');
 });
 
 it('materializes only visible table names and never auto-selects on module changes', function (): void {
@@ -231,9 +357,14 @@ it('reviews an exact push payload before executing the same payload and state to
     );
     $manager->shouldReceive('review')
         ->once()
-        ->with('push', ['ham_orders'])
+        ->with('push', ['ham_orders'], Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturn($review);
+        ->andReturnUsing(function (string $direction, array $tables, callable $progress) use ($review): DataShareMirrorReview {
+            $progress('Reviewing 1/1: ham_orders.');
+            $progress('Reviewed 1/1: ham_orders — Create.');
+
+            return $review;
+        });
     $manager->shouldReceive('execute')
         ->once()
         ->with('push', ['ham_orders'], 'mirror-review-state', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
@@ -257,7 +388,15 @@ it('reviews an exact push payload before executing the same payload and state to
         ->assertSet('mirrorDirection', 'push')
         ->assertSet('mirrorReview.state_token', 'mirror-review-state')
         ->assertSet('mirrorReview.items.0.action', 'create')
-        ->assertSee('No changes yet');
+        ->assertSet('mirrorRunOpen', true)
+        ->assertSet('mirrorRunKind', 'review_push')
+        ->assertSet('mirrorRunStatus', 'ready')
+        ->assertSet('mirrorRunLog.2', 'Reviewing 1/1: ham_orders.')
+        ->assertSet('mirrorRunLog.3', 'Reviewed 1/1: ham_orders — Create.')
+        ->assertSet('mirrorRunLog.4', 'Review ready: 1 table can be confirmed. No data changed yet.')
+        ->assertSee('text-status-success', false)
+        ->assertSee('Ready to confirm')
+        ->assertSee('Push 1 table to configured provider');
 
     expect($component->get('mirrorResult'))->toBeNull();
 
@@ -277,7 +416,7 @@ it('reports a commit-time connection failure as indeterminate', function (): voi
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('review')
         ->once()
-        ->with('push', ['ham_orders'])
+        ->with('push', ['ham_orders'], Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->andReturn(new DataShareMirrorReview(
             DataShareMirrorDirection::Push,
             [
@@ -324,7 +463,11 @@ it('offers destructive force push for schema blockers but never force pull', fun
         ['create' => 0, 'replace' => 0, 'delete' => 0, 'blocked' => 1],
         'blocked-schema-state',
     );
-    $manager->shouldReceive('review')->once()->with('push', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Push));
+    $manager->shouldReceive('review')->once()->with(
+        'push',
+        ['ham_orders'],
+        Mockery::on(fn (mixed $progress): bool => is_callable($progress)),
+    )->andReturn($blockedReview(DataShareMirrorDirection::Push));
     $manager->shouldReceive('forcePush')->once()->with(
         ['ham_orders'],
         'blocked-schema-state',
@@ -336,14 +479,18 @@ it('offers destructive force push for schema blockers but never force pull', fun
     ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
     $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
-    $manager->shouldReceive('review')->once()->with('pull', ['ham_orders'])->andReturn($blockedReview(DataShareMirrorDirection::Pull));
+    $manager->shouldReceive('review')->once()->with(
+        'pull',
+        ['ham_orders'],
+        Mockery::on(fn (mixed $progress): bool => is_callable($progress)),
+    )->andReturn($blockedReview(DataShareMirrorDirection::Pull));
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)
         ->set('mirrorSelectedTables', ['ham_orders'])
         ->call('reviewMirror', 'push')
         ->assertSet('mirrorReview._can_force_push', true)
-        ->assertSee('Force push 1 selected table')
+        ->assertSee('Force push 1 table')
         ->call('forcePushMirror')
         ->assertSet('mirrorResult.counts.replace', 1)
         ->assertSet('statusVariant', 'success')
@@ -414,42 +561,177 @@ it('reports and references an unexpected review failure without exposing its dia
     );
 });
 
-it('keeps a blocked review visible and never calls execution', function (): void {
+it('adds required tables in one review and goes straight to the pull action', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('review')
         ->once()
-        ->with('pull', ['sbg_runs'])
+        ->with('pull', ['sbg_runs'], Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->andReturn(new DataShareMirrorReview(
             DataShareMirrorDirection::Pull,
             [
                 new DataShareMirrorReviewItem(
-                    'sbg_runs',
-                    DataShareMirrorAction::Blocked,
+                    'sbg_projects',
                     DataShareMirrorAction::Create,
-                    [new DataShareMirrorBlocker(
-                        'missing_prerequisite',
-                        'Required parent table sbg_projects is missing.',
-                    )],
+                    DataShareMirrorAction::Create,
+                ),
+                new DataShareMirrorReviewItem(
+                    'sbg_runs',
+                    DataShareMirrorAction::Replace,
+                    DataShareMirrorAction::Replace,
                 ),
             ],
-            true,
-            ['create' => 0, 'replace' => 0, 'delete' => 0, 'blocked' => 1],
-            'blocked-state',
+            false,
+            ['create' => 1, 'replace' => 1, 'delete' => 0, 'blocked' => 0],
+            'expanded-state',
+            requestedTables: ['sbg_runs'],
+            requiredTables: ['sbg_projects'],
+            requiredBy: ['sbg_projects' => ['sbg_runs']],
         ));
-    $manager->shouldNotReceive('execute');
+    $manager->shouldReceive('execute')
+        ->once()
+        ->with(
+            'pull',
+            ['sbg_projects', 'sbg_runs'],
+            'expanded-state',
+            Mockery::on(fn (mixed $progress): bool => is_callable($progress)),
+        )
+        ->andReturn(new DataShareMirrorExecutionResult(
+            DataShareMirrorDirection::Pull,
+            ['create' => 1, 'replace' => 1, 'delete' => 0],
+            [
+                ['table' => 'sbg_projects', 'action' => 'create'],
+                ['table' => 'sbg_runs', 'action' => 'replace'],
+            ],
+        ));
+    $manager->shouldReceive('catalog')->once()->andReturn([]);
+    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
-    Livewire::test(DataShareIndex::class)
+    $component = Livewire::test(DataShareIndex::class)
         ->set('mirrorSelectedTables', ['sbg_runs'])
         ->call('reviewMirror', 'pull')
         ->assertSet('mirrorDirection', 'pull')
-        ->assertSet('mirrorReview.has_blockers', true)
-        ->assertSee('Required parent table sbg_projects is missing.')
-        ->call('executeMirror')
-        ->assertSet('statusVariant', 'warning')
-        ->assertSet('mirrorReview.has_blockers', true);
+        ->assertSet('mirrorSelectedTables', ['sbg_projects', 'sbg_runs'])
+        ->assertSet('mirrorReview.has_blockers', false)
+        ->assertSet('mirrorReview.requested_tables', ['sbg_runs'])
+        ->assertSet('mirrorReview.required_tables', ['sbg_projects'])
+        ->assertSet('mirrorReview.required_by.sbg_projects', ['sbg_runs'])
+        ->assertSet('mirrorRunOpen', true)
+        ->assertSet('mirrorRunKind', 'review_pull')
+        ->assertSet('mirrorRunStatus', 'ready')
+        ->assertSet('mirrorRunLog.2', 'Added 1 required table automatically.')
+        ->assertSet('mirrorRunLog.3', 'Review ready: 2 tables can be confirmed. No data changed yet.')
+        ->assertSet('statusMessage', 'Mirror review is ready with 1 required table added. Nothing has changed yet.')
+        ->assertSee('Required tables added')
+        ->assertSee('1 chosen + 1 required = 2 tables')
+        ->assertSee('Required by:')
+        ->assertSee('Pull 2 tables from configured provider')
+        ->assertSee('Pulling from configured provider…')
+        ->assertSee('x-bind:disabled="mirrorTransferStarting"', false)
+        ->assertSee('bg-accent', false)
+        ->assertDontSee('Include all')
+        ->assertDontSee('Remove selected table')
+        ->assertSee('Review pull from configured provider');
+
+    $reviewHtml = $component->html();
+
+    $component->call('executeMirror')
+        ->assertSet('mirrorReview', null)
+        ->assertSet('mirrorResult.counts.create', 1)
+        ->assertSet('mirrorResult.counts.replace', 1)
+        ->assertSet('mirrorRunStatus', 'success');
+
+    expect($reviewHtml)
+        ->toMatch('/<code[^>]*>sbg_projects<\/code>/')
+        ->not->toContain('>Close<', '>Close window<');
+});
+
+it('lists blocked review rows before executable rows', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(DataShareIndex::class)
+        ->set('mirrorSelectedTables', ['sbg_ready', 'sbg_blocked'])
+        ->set('mirrorDirection', 'pull')
+        ->set('mirrorRunOpen', true)
+        ->set('mirrorRunKind', 'review_pull')
+        ->set('mirrorRunStatus', 'warning')
+        ->set('mirrorReview', [
+            'has_blockers' => true,
+            '_selected_tables' => ['sbg_ready', 'sbg_blocked'],
+            'items' => [
+                [
+                    'table' => 'sbg_ready',
+                    'action' => 'replace',
+                    'blockers' => [],
+                ],
+                [
+                    'table' => 'sbg_blocked',
+                    'action' => 'blocked',
+                    'blockers' => [[
+                        'code' => 'schema_incompatible',
+                        'message' => 'The blocked row needs attention first.',
+                        'related_table' => null,
+                    ]],
+                ],
+            ],
+        ])
+        ->assertSee('Mirror plan, blockers first')
+        ->assertSeeInOrder([
+            'The blocked row needs attention first.',
+            'sbg_ready',
+        ]);
+});
+
+it('shows selection-wide blockers once and keeps executable rows terse', function (): void {
+    configureDevelopmentMirrorUiIdentity();
+    $this->actingAs(createAdminUser());
+    $cycleMessage = 'The selected tables contain a foreign-key cycle. Portable mirroring requires an acyclic selection.';
+
+    $component = Livewire::test(DataShareIndex::class)
+        ->set('mirrorSelectedTables', ['sbg_cycle_a', 'sbg_cycle_b', 'sbg_ready'])
+        ->set('mirrorDirection', 'pull')
+        ->set('mirrorRunOpen', true)
+        ->set('mirrorRunKind', 'review_pull')
+        ->set('mirrorRunStatus', 'warning')
+        ->set('mirrorReview', [
+            'has_blockers' => true,
+            '_selected_tables' => ['sbg_cycle_a', 'sbg_cycle_b', 'sbg_ready'],
+            'items' => [
+                [
+                    'table' => 'sbg_cycle_a',
+                    'action' => 'blocked',
+                    'blockers' => [[
+                        'code' => 'foreign_key_cycle',
+                        'message' => $cycleMessage,
+                        'related_table' => null,
+                    ]],
+                ],
+                [
+                    'table' => 'sbg_cycle_b',
+                    'action' => 'blocked',
+                    'blockers' => [[
+                        'code' => 'foreign_key_cycle',
+                        'message' => $cycleMessage,
+                        'related_table' => null,
+                    ]],
+                ],
+                [
+                    'table' => 'sbg_ready',
+                    'action' => 'replace',
+                    'blockers' => [],
+                ],
+            ],
+        ])
+        ->assertSee('Selection blocker')
+        ->assertDontSee('Remove selected table')
+        ->assertDontSee('Destination rows will be replaced by the complete source-table data; schema is unchanged.')
+        ->assertDontSee('Source table will be created on the destination with its complete definition and rows.')
+        ->assertDontSee('Destination-only table will be deleted.');
+
+    expect(substr_count($component->html(), $cycleMessage))->toBe(1);
 });
 
 it('refuses an empty mirror selection before calling the reviewer', function (): void {

@@ -462,15 +462,21 @@ it('publishes from Share and reviews an offer from Incoming without fetching or 
     expect(DataShareReceipt::query()->count())->toBe(0);
 });
 
-it('explains the publish and pull workflow and orients Data Share settings', function (): void {
+it('explains the Data Share features and orients Data Share settings', function (): void {
     $this->actingAs(createAdminUser());
 
     $this->get(route('admin.system.data-share.index'))
         ->assertOk()
+        ->assertDontSee('Mirror exact development tables directly, or publish an immutable offer for separately reviewed promotion.')
+        ->assertSee('Publish an immutable offer for separately reviewed promotion. Pick a module, then choose the exact tables to include.')
         ->assertSee('How Data Share works')
-        ->assertSee('Publish on the source.')
-        ->assertSee('Fetch and verify.')
-        ->assertSee('Apply and verify.');
+        ->assertSee('Data Share moves selected database tables between Belimbing instances.')
+        ->assertSee('Share &amp; Published', false)
+        ->assertSee('Development only. Copy complete selected tables directly between Local and a configured PostgreSQL mirror.')
+        ->assertSee('Paste an offer from another instance, verify and fetch it, review conflicts, then apply it.')
+        ->assertSee('Capture a small set of rows to reproduce development problems. This is not a bulk transfer.')
+        ->assertSee('Offer bundles contain a bearer secret. Keep them out of logs and committed files.')
+        ->assertDontSee('Publish on the source.');
     $this->get(route('admin.system.data-share.settings'))
         ->assertOk()
         ->assertSee('About Data Share settings')

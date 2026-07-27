@@ -31,7 +31,7 @@ use App\Base\Settings\Livewire\SettingsForm;
                     <p class="text-sm text-muted">{{ __('No editable settings are registered for this page.') }}</p>
                 </x-ui.card>
             @elseif ($multiGroup)
-                <x-ui.tabs :tabs="collect($groups)->map(fn (array $group): array => [
+                <x-ui.tabs tabs-id="settings-form-tabs" :tabs="collect($groups)->map(fn (array $group): array => [
                     'id' => $group['id'],
                     'label' => __($group['config']['label'] ?? $group['id']),
                 ])->all()">

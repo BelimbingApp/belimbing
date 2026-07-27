@@ -56,7 +56,6 @@ if ($instance->role->value === 'development') {
 
     <x-ui.page-header
         :title="__('Data Share')"
-        :subtitle="__('Mirror exact development tables directly, or publish an immutable offer for separately reviewed promotion.')"
         :help-label="__('How Data Share works')"
     >
         <x-slot name="actions">
@@ -74,34 +73,53 @@ if ($instance->role->value === 'development') {
         </x-slot>
         <x-slot name="help">
             <div class="max-w-3xl text-ink">
-                <p class="leading-6">
-                    {{ __('Transfer offers are one-way and user-approved: the source publishes; only the target can fetch, plan, and apply. Development Mirror is a separate direct handoff for explicitly selected complete tables.') }}
+                <p class="text-sm font-medium">
+                    {{ __('Data Share moves selected database tables between Belimbing instances.') }}
                 </p>
-                <ol class="mt-3 list-decimal space-y-2 pl-5 leading-6 marker:font-medium marker:text-ink">
-                    <li>
-                        <strong class="font-medium">{{ __('Publish on the source.') }}</strong>
-                        {{ __('Open Share, select the entire module or exact tables, preview the snapshot, publish it, and copy the complete offer bundle.') }}
-                    </li>
-                    <li>
-                        <strong class="font-medium">{{ __('Review on the target.') }}</strong>
-                        {{ __('Open Incoming, paste the offer, verify its source, scope, counts, size, hash, and expiry, then choose an advertised LAN or Cloudflare route.') }}
-                    </li>
-                    <li>
-                        <strong class="font-medium">{{ __('Fetch and verify.') }}</strong>
-                        {{ __('The target pulls the exact immutable stream into private staging. A partial or invalid fetch is deleted and can be retried before expiry.') }}
-                    </li>
-                    <li>
-                        <strong class="font-medium">{{ __('Plan on the target.') }}</strong>
-                        {{ __('Open Incoming, compare the source and target SHA-256, and build a plan. Any conflict blocks the entire apply.') }}
-                    </li>
-                    <li>
-                        <strong class="font-medium">{{ __('Apply and verify.') }}</strong>
-                        {{ __('Verify recovery, confirm both reviewed hashes, apply, then fetch the same immutable offer again or publish an equivalent snapshot and expect every row to be unchanged.') }}
-                    </li>
-                </ol>
-                <p class="mt-3 leading-6 text-muted">
-                    {{ __('Keep the offer bundle out of logs and committed files. Its bearer secret is never placed in the URL or package and stops working after expiry or revocation.') }}
-                </p>
+
+                <dl class="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2">
+                    <div class="flex gap-3">
+                        <x-icon name="heroicon-o-share" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <div>
+                            <dt class="text-sm font-medium">{{ __('Share & Published') }}</dt>
+                            <dd class="mt-0.5 text-sm leading-5 text-muted">
+                                {{ __('Create an immutable, expiring offer from selected tables. Copy or revoke active offers in Published.') }}
+                            </dd>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <x-icon name="heroicon-o-arrows-right-left" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <div>
+                            <dt class="text-sm font-medium">{{ __('Mirror') }}</dt>
+                            <dd class="mt-0.5 text-sm leading-5 text-muted">
+                                {{ __('Development only. Copy complete selected tables directly between Local and a configured PostgreSQL mirror.') }}
+                            </dd>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <x-icon name="heroicon-o-inbox-arrow-down" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <div>
+                            <dt class="text-sm font-medium">{{ __('Incoming') }}</dt>
+                            <dd class="mt-0.5 text-sm leading-5 text-muted">
+                                {{ __('Paste an offer from another instance, verify and fetch it, review conflicts, then apply it.') }}
+                            </dd>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <x-icon name="heroicon-o-wrench-screwdriver" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+                        <div>
+                            <dt class="text-sm font-medium">{{ __('Diagnostics') }}</dt>
+                            <dd class="mt-0.5 text-sm leading-5 text-muted">
+                                {{ __('Capture a small set of rows to reproduce development problems. This is not a bulk transfer.') }}
+                            </dd>
+                        </div>
+                    </div>
+                </dl>
+
+                <div class="mt-4 flex gap-2 border-t border-border-default pt-3 text-sm text-muted">
+                    <x-icon name="heroicon-o-key" class="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>{{ __('Offer bundles contain a bearer secret. Keep them out of logs and committed files.') }}</p>
+                </div>
             </div>
         </x-slot>
     </x-ui.page-header>
@@ -125,6 +143,7 @@ if ($instance->role->value === 'development') {
 
         <x-ui.card>
             <x-ui.tabs
+                tabs-id="data-share-tabs"
                 :tabs="$dataShareTabs"
                 default="share"
                 :wire-action="$mirrorCatalogLoaded ? null : 'dataShareTabSelected'"
@@ -134,7 +153,7 @@ if ($instance->role->value === 'development') {
                         <div class="max-w-3xl">
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Choose what to share') }}</h2>
                             <p class="mt-1 text-sm text-muted">
-                                {{ __('Pick a module, then choose the exact tables to include. Selecting the whole module shares everything registered under it; deselect any table you want to leave out.') }}
+                                {{ __('Publish an immutable offer for separately reviewed promotion. Pick a module, then choose the exact tables to include.') }}
                             </p>
                         </div>
 

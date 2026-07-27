@@ -61,7 +61,7 @@ if ($kanbanColumns->isNotEmpty()) {
             </dl>
         </x-ui.card>
 
-        <x-ui.tabs :tabs="$workflowTabs" default="graph">
+        <x-ui.tabs tabs-id="workflow-tabs" :tabs="$workflowTabs" default="graph">
             <x-ui.tab id="graph">
                 <x-ui.card>
                     @include('livewire.admin.workflows.partials.graph')

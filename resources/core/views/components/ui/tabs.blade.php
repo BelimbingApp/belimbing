@@ -2,6 +2,7 @@
     Tabs: accessible page-level tab switcher with URL hash persistence.
 
     Props:
+        tabsId   — Stable, page-unique ID shared by this tab set and its panels
         tabs     — Array of tab definitions: [['id' => 'general', 'label' => 'General'], ...]
                    Each item must have 'id' and 'label'; optional 'icon' for a Heroicon name.
         default  — ID of the initially active tab (falls back to first tab)
@@ -11,7 +12,7 @@
         wireAction — optional Livewire action called with the selected tab ID
 
     Usage:
-        <x-ui.tabs :tabs="[
+        <x-ui.tabs tabs-id="profile-tabs" :tabs="[
             ['id' => 'general', 'label' => __('General')],
             ['id' => 'addresses', 'label' => __('Addresses')],
             ['id' => 'contacts', 'label' => __('Contacts'), 'icon' => 'heroicon-o-user-group'],
@@ -31,6 +32,7 @@
     URL hash: With default persistence, active tab is reflected in the URL hash (#tab-id) and restored on page load.
 --}}
 @props([
+    'tabsId',
     'tabs' => [],
     'default' => null,
     'size' => 'md',
@@ -40,9 +42,10 @@
 ])
 
 @php
-    use Illuminate\Support\Str;
+    $tabsId = trim((string) $tabsId);
 
-    $tabsId = 'tabs-' . Str::random(8);
+    throw_if($tabsId === '', InvalidArgumentException::class, 'The tabsId prop is required.');
+
     $defaultTab = $default ?? ($tabs[0]['id'] ?? null);
 
     $sizeClasses = match($size) {
@@ -67,12 +70,12 @@
 @endphp
 
 <div
+    id="{{ $tabsId }}"
     {{ $attributes->class([]) }}
     x-data="{
         activeTab: null,
         tabs: @js(collect($tabs)->pluck('id')->values()->all()),
         defaultTab: @js($defaultTab),
-        prefix: '{{ $tabsId }}',
         persistence: @js($persistence),
         queryKey: @js($queryKey),
         wireAction: @js($wireAction),
@@ -141,14 +144,6 @@
             return this.activeTab === tabId
         },
 
-        tabId(id) {
-            return this.prefix + '-tab-' + id
-        },
-
-        panelId(id) {
-            return this.prefix + '-panel-' + id
-        },
-
         {{-- Keyboard navigation: Arrow Left/Right to cycle, Home/End for first/last --}}
         onKeydown(event) {
             const idx = this.tabs.indexOf(this.activeTab)
@@ -192,9 +187,9 @@
                 type="button"
                 role="tab"
                 data-tab-id="{{ $tab['id'] }}"
-                :id="tabId('{{ $tab['id'] }}')"
+                id="{{ $tabsId }}-tab-{{ $tab['id'] }}"
                 :aria-selected="isActive('{{ $tab['id'] }}') ? 'true' : 'false'"
-                :aria-controls="panelId('{{ $tab['id'] }}')"
+                aria-controls="{{ $tabsId }}-panel-{{ $tab['id'] }}"
                 :tabindex="isActive('{{ $tab['id'] }}') ? '0' : '-1'"
                 @click="select('{{ $tab['id'] }}')"
                 class="{{ $variantClasses['tab'] }}"

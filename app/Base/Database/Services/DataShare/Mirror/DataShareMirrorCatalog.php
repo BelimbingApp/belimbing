@@ -4,6 +4,7 @@ namespace App\Base\Database\Services\DataShare\Mirror;
 
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\Enums\DataFreshnessState;
 use App\Base\Database\Models\DataShareMirrorObservation;
 use App\Base\Database\Models\TableRegistry;
@@ -40,6 +41,25 @@ class DataShareMirrorCatalog
     {
         $local = $this->snapshot($this->connections->local(), includeCounts: true);
         [$mirror, $remoteAvailable] = $this->remoteSnapshot();
+
+        return $this->buildRows($local, $mirror, $remoteAvailable);
+    }
+
+    /**
+     * Review catalog: current registry and relation presence on both endpoints,
+     * without the full-catalog COUNT(*) scan that the picker needs. Review uses
+     * schema and dependency inspection for only the explicit selection.
+     *
+     * @return list<DataShareMirrorCatalogTable>
+     */
+    public function reviewCatalog(?DataShareMirrorProgress $progress = null): array
+    {
+        $progress ??= DataShareMirrorProgress::listen(null);
+        $progress->report((string) __('Loading Local table structure.'));
+        $local = $this->snapshot($this->connections->local(), includeCounts: false);
+        $progress->report((string) __('Local table structure loaded. Loading remote table structure.'));
+        [$mirror, $remoteAvailable] = $this->remoteSnapshot(includeCounts: false);
+        $progress->report((string) __('Remote table structure loaded.'));
 
         return $this->buildRows($local, $mirror, $remoteAvailable);
     }
@@ -84,29 +104,28 @@ class DataShareMirrorCatalog
             if (preg_match('/^[A-Za-z_][A-Za-z0-9_$]{0,62}$/', $name) !== 1) {
                 $blockers[] = new DataShareMirrorBlocker(
                     'invalid_identifier',
-                    __(':table does not use a mirror-safe table name.', ['table' => $name]),
+                    __('Table name is not mirror-safe.'),
                 );
             }
 
             if ($this->isProtected($name)) {
                 $blockers[] = new DataShareMirrorBlocker(
                     'protected_table',
-                    __(':table is Base infrastructure or runtime state and cannot be mirrored.', ['table' => $name]),
+                    __('Base infrastructure or runtime state cannot be mirrored.'),
                 );
             }
 
             if (($localRelation !== null && $localRegistry === null) || ($mirrorRelation !== null && $mirrorRegistry === null)) {
                 $blockers[] = new DataShareMirrorBlocker(
                     'owner_missing',
-                    __(':table is not registered to a module on every endpoint where it exists.', ['table' => $name]),
+                    __('Module ownership is missing on an endpoint where the table exists.'),
                 );
             }
 
             if ($localRegistry !== null && $mirrorRegistry !== null && ! $this->sameOwner($localRegistry, $mirrorRegistry)) {
                 $blockers[] = new DataShareMirrorBlocker(
                     'owner_mismatch',
-                    __(':table is registered to different module owners on Local and :provider.', [
-                        'table' => $name,
+                    __('Module ownership differs between Local and :provider.', [
                         'provider' => $this->connections->provider()->label(),
                     ]),
                 );
@@ -116,8 +135,7 @@ class DataShareMirrorCatalog
                 if ($relation !== null && $relation['kind'] !== 'table') {
                     $blockers[] = new DataShareMirrorBlocker(
                         'unsupported_relation',
-                        __(':table is a :kind relation on :endpoint; only ordinary tables are supported.', [
-                            'table' => $name,
+                        __(':endpoint exposes this as :kind; only ordinary tables are supported.', [
                             'kind' => $relation['kind'],
                             'endpoint' => $label,
                         ]),
@@ -151,10 +169,10 @@ class DataShareMirrorCatalog
      *
      * @return array{0: array{registry: array<string, array{module_name: string|null, module_path: string|null, migration_file: string|null}>, relations: array<string, array{kind: string}>, counts: array<string, int>}, 1: bool}
      */
-    private function remoteSnapshot(): array
+    private function remoteSnapshot(bool $includeCounts = true): array
     {
         try {
-            return [$this->snapshot($this->connections->mirror(), includeCounts: true), true];
+            return [$this->snapshot($this->connections->mirror(), $includeCounts), true];
         } catch (\Throwable) {
             return [['registry' => [], 'relations' => [], 'counts' => []], false];
         }

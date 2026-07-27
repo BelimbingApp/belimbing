@@ -136,6 +136,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 | `x-ui.tabs` / `x-ui.tab` | Page-level tabs |
 | `x-ui.navigation-menu` | Menu tree rendering |
 
+Every `x-ui.tabs` instance requires a page-unique, render-stable `tabs-id`. The component server-renders trigger and panel IDs from it so Livewire morphs preserve the active panel, focus, and Alpine state.
+
 ### Overlays
 
 | Component | Use |
@@ -163,6 +165,14 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 
 If a primitive is missing, create it under `components/ui/` with `@props`, `$attributes->class(...)`, semantic tokens, and a small API.
 
+## Livewire Interaction Stability
+
+- Livewire can preserve focus, caret position, scroll, and Alpine state only when the same DOM nodes survive a morph. Treat server-rendered element identity as a UX contract.
+- Never generate an `id` or `wire:key` with `Str::random()`, `uniqid()`, or another per-render value inside a Livewire-rendered view. Require a page-unique stable value from the caller, derive one from stable domain data, or omit the ID when no semantic relationship requires it.
+- Do not rely on Alpine-only `:id` bindings for elements that Livewire may use as morph identity. The current DOM and incoming server HTML must carry the same real `id` or `wire:key`.
+- Debounced `wire:model.live` is appropriate when a search or filter genuinely needs a server-rendered result set. If typing loses focus, diagnose which input or ancestor Livewire replaced; do not add focus, caret, or scroll-restoration JavaScript around the symptom.
+- In loops, use stable domain identifiers for `wire:key`; never use the loop index for mutable collections.
+
 ## Tables
 
 - Use `x-ui.table` for application tables.
@@ -170,6 +180,7 @@ If a primitive is missing, create it under `components/ui/` with `@props`, `$att
 - Sort useful indexed or already-query-backed columns by default, especially names, dates, statuses, and numeric totals; skip tiny static tables where order is obvious and sort state adds noise.
 - Caller owns sorting, pagination, row identity, links, inline editing, actions, and domain formatting.
 - Prefer explicit caller-owned `<tr>/<td>` markup.
+- Bind checkbox arrays that only feed a later action with plain `wire:model`; do not pay for a server render on every selection. Use Livewire's client-reactive `wire:text`, `wire:show`, and `wire:bind` directives for counts and action state. Reserve `.live` for changes that genuinely require an immediate server response.
 - Specialized non-application tables can stay local.
 
 ## Select Vs Combobox
@@ -248,6 +259,9 @@ instead.
 
 ## Final UI Scan
 
+- Perform a no-prose scan using only headings, icons, button labels, badges, counts, and table headers. The current state and next action must remain clear.
+- If helper copy merely repeats a control, badge, action, or table column, delete it. Do not use prose to repair an ambiguous label; fix the label or structure.
+- Put decision-changing safety or mode qualifiers in the action label itself (for example, `Read-only Review`). Keep contextual prose only for consequences, exceptions, or recovery.
 - Professional, clean, compact.
 - No one-off colors, spacing, raw controls, or raw SVG icons.
 - No text overflow or incoherent overlap on mobile/desktop.

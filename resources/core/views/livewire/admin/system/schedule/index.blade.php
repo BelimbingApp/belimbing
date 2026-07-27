@@ -57,7 +57,7 @@ $tabs = [
             :subtitle="__('Everything scheduled to fire across the system, and how the last runs went.')"
         />
 
-        <x-ui.tabs :tabs="$tabs" :default="$tab" persistence="query" query-key="tab" wire-action="setTab">
+        <x-ui.tabs tabs-id="system-schedule-tabs" :tabs="$tabs" :default="$tab" persistence="query" query-key="tab" wire-action="setTab">
             <x-ui.tab id="tasks">
                 <x-ui.card>
                     <div class="mb-3 flex flex-col gap-3 sm:flex-row">

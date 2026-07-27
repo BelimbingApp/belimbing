@@ -3,7 +3,6 @@
 use App\Base\Database\Livewire\SchemaIncubation\Index;
 
 /** @var Index $this */
-
 $migrationScopeHelp = __('This screen edits migration files by adding or removing `use IncubatingSchema;`. Actions operate at migration scope, so selecting one table can move sibling tables from the same migration too.');
 $sourceOnlyHelp = __('Only source-local incubation is editable here.');
 $addHelp = __('Moving a selected table edits its owning migration file to add `use IncubatingSchema;`.');
@@ -79,7 +78,13 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
 
                     <x-slot name="head">
                         <tr>
-                            <x-ui.th><x-ui.checkbox wire:model.live="selectIncubatingPage" id="select-visible-incubation-tables" /></x-ui.th>
+                            <x-ui.th>
+                                <x-ui.checkbox
+                                    wire:model="selectIncubatingPage"
+                                    x-on:change="$wire.selectedIncubatingTables = $event.target.checked ? @js($incubatingTables->pluck('table_name')->values()->all()) : []"
+                                    id="select-visible-incubation-tables"
+                                />
+                            </x-ui.th>
                             <x-ui.sortable-th
                                 column="table_name"
                                 :sort-by="$sortBy"
@@ -106,7 +111,7 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
                             <tr wire:key="incubation-table-{{ $table->id }}">
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                     <x-ui.checkbox
-                                        wire:model.live="selectedIncubatingTables"
+                                        wire:model="selectedIncubatingTables"
                                         value="{{ $table->table_name }}"
                                         id="incubation-table-select-{{ $table->id }}"
                                     />
@@ -158,7 +163,13 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
 
                     <x-slot name="head">
                         <tr>
-                            <x-ui.th><x-ui.checkbox wire:model.live="selectSearchPage" id="select-visible-search-tables" /></x-ui.th>
+                            <x-ui.th>
+                                <x-ui.checkbox
+                                    wire:model="selectSearchPage"
+                                    x-on:change="$wire.selectedSearchTables = $event.target.checked ? @js($searchTables->pluck('table_name')->values()->all()) : []"
+                                    id="select-visible-search-tables"
+                                />
+                            </x-ui.th>
                             <x-ui.sortable-th
                                 column="table_name"
                                 :sort-by="$sortBy"
@@ -189,7 +200,7 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
                                 <tr wire:key="search-table-{{ $table->id }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                         <x-ui.checkbox
-                                            wire:model.live="selectedSearchTables"
+                                            wire:model="selectedSearchTables"
                                             value="{{ $table->table_name }}"
                                             id="search-table-select-{{ $table->id }}"
                                         />

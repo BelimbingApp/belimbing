@@ -37,6 +37,18 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+it('serializes a mirror blocker dependency as structured data', function (): void {
+    expect((new DataShareMirrorBlocker(
+        'incoming_foreign_key',
+        'An unselected table references the selected table.',
+        relatedTable: 'sbg_ibp_weekly_plan_snapshots',
+    ))->toArray())->toBe([
+        'code' => 'incoming_foreign_key',
+        'message' => 'An unselected table references the selected table.',
+        'related_table' => 'sbg_ibp_weekly_plan_snapshots',
+    ]);
+});
+
 it('isolates progress-listener failures from the mirror operation', function (): void {
     $called = false;
     $progress = DataShareMirrorProgress::listen(function () use (&$called): void {
@@ -241,7 +253,7 @@ it('refuses empty duplicate and malformed table selections before endpoint disco
     'malformed' => [['module_records; DROP TABLE users']],
 ]);
 
-it('determines transfer mode before acquiring review endpoint connections', function (): void {
+it('streams review phases and per-table status while determining transfer mode first', function (): void {
     $connection = Mockery::mock(Connection::class);
     $schema = Mockery::mock();
     $schema->shouldReceive('hasTable')->andReturnFalse();
@@ -264,30 +276,129 @@ it('determines transfer mode before acquiring review endpoint connections', func
     $connections->shouldReceive('source')->once()->ordered()->andReturn(new DataShareMirrorEndpoint('Local', $connection, [], 'sqlite'));
     $connections->shouldReceive('target')->once()->ordered()->andReturn(new DataShareMirrorEndpoint('Mirror', $connection, [], 'pgsql'));
     $catalog = Mockery::mock(DataShareMirrorCatalog::class);
-    $catalog->shouldReceive('catalog')->once()->andReturn([new DataShareMirrorCatalogTable(
-        'sbg_records',
-        'Sbg',
-        'blb/sbg',
-        null,
-        false,
-        false,
-        null,
-        null,
-        true,
-    )]);
+    $catalog->shouldReceive('reviewCatalog')
+        ->once()
+        ->with(Mockery::type(DataShareMirrorProgress::class))
+        ->andReturn([new DataShareMirrorCatalogTable(
+            'sbg_records',
+            'Sbg',
+            'blb/sbg',
+            null,
+            false,
+            false,
+            null,
+            null,
+            true,
+        )]);
     $dependencies = Mockery::mock(DataShareMirrorDependencyInspector::class)->shouldIgnoreMissing();
     $dependencies->shouldReceive('foreignKeys')->andReturn([]);
     $dependencies->shouldReceive('uniqueKeys')->andReturn([]);
     $dependencies->shouldReceive('insertionOrder')->andReturn(['sbg_records']);
 
+    $messages = [];
     $review = (new DataShareMirrorReviewer(
         $connections,
         $catalog,
         $dependencies,
         Mockery::mock(DataShareMirrorSchemaComparator::class)->shouldIgnoreMissing(),
-    ))->review(DataShareMirrorDirection::Push, ['sbg_records']);
+    ))->review(
+        DataShareMirrorDirection::Push,
+        ['sbg_records'],
+        DataShareMirrorProgress::listen(function (string $message) use (&$messages): void {
+            $messages[] = $message;
+        }),
+    );
 
-    expect($review->items)->toHaveCount(1);
+    expect($review->items)->toHaveCount(1)
+        ->and($messages)->toContain(
+            'Validating 1 selected table.',
+            'Opening source and destination connections.',
+            'Inspecting foreign keys and database prerequisites.',
+            'Reviewing 1/1: sbg_records.',
+            'Reviewed 1/1: sbg_records — blocked (1 issue).',
+            'Finalizing the dependency fingerprint.',
+        );
+});
+
+it('adds transitive foreign key dependencies to one review pass', function (): void {
+    $connection = Mockery::mock(Connection::class);
+    $schemaBuilder = Mockery::mock();
+    $schemaBuilder->shouldReceive('hasTable')->times(6)->andReturnTrue();
+    $connection->shouldReceive('getSchemaBuilder')->times(6)->andReturn($schemaBuilder);
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('status')->once()->andReturn(new DataShareMirrorConnectionStatus(
+        configured: true,
+        available: true,
+        reachable: true,
+        driver: 'pgsql',
+        localRole: 'development',
+        remoteRole: 'development',
+        serverVersion: '18',
+        pgDumpVersion: '18',
+        psqlVersion: '18',
+        reasonCode: null,
+        message: 'Ready.',
+        transferMode: 'native',
+    ));
+    $connections->shouldReceive('source')->once()->andReturn(new DataShareMirrorEndpoint('Mirror', $connection, [], 'pgsql'));
+    $connections->shouldReceive('target')->once()->andReturn(new DataShareMirrorEndpoint('Local', $connection, [], 'pgsql'));
+
+    $catalogTables = array_map(
+        fn (string $table): DataShareMirrorCatalogTable => new DataShareMirrorCatalogTable(
+            $table,
+            'Sbg',
+            'extensions/sbg/ibg',
+            'create_sbg_tables.php',
+            true,
+            true,
+            'table',
+            'table',
+            true,
+        ),
+        ['sbg_parent', 'sbg_child', 'sbg_grandchild'],
+    );
+    $catalog = Mockery::mock(DataShareMirrorCatalog::class);
+    $catalog->shouldReceive('reviewCatalog')->once()->andReturn($catalogTables);
+    $catalog->shouldReceive('isMigrationAvailable')->times(3)->andReturnTrue();
+
+    $targetForeignKeys = [
+        ['constraint' => 'child_parent_fk', 'child' => 'sbg_child', 'parent' => 'sbg_parent', 'parent_columns' => 'id'],
+        ['constraint' => 'grandchild_child_fk', 'child' => 'sbg_grandchild', 'parent' => 'sbg_child', 'parent_columns' => 'id'],
+    ];
+    $dependencies = Mockery::mock(DataShareMirrorDependencyInspector::class);
+    $dependencies->shouldReceive('foreignKeys')->twice()->andReturn([], $targetForeignKeys);
+    $dependencies->shouldReceive('uniqueKeys')->once()->andReturn([]);
+    $dependencies->shouldReceive('customTypes')->once()->andReturn([]);
+    $dependencies->shouldReceive('availableCustomTypes')->once()->andReturn([]);
+    $dependencies->shouldReceive('defaultFunctions')->once()->andReturn([]);
+    $dependencies->shouldReceive('availableFunctions')->once()->andReturn([]);
+    $dependencies->shouldReceive('fingerprint')
+        ->once()
+        ->with($connection, $connection, ['sbg_child', 'sbg_grandchild', 'sbg_parent'])
+        ->andReturn('dependency-fingerprint');
+    $schemas = Mockery::mock(DataShareMirrorSchemaComparator::class);
+    $schemas->shouldReceive('fingerprint')->times(6)->andReturn('schema-fingerprint');
+
+    $messages = [];
+    $review = (new DataShareMirrorReviewer($connections, $catalog, $dependencies, $schemas))->review(
+        DataShareMirrorDirection::Pull,
+        ['sbg_parent'],
+        DataShareMirrorProgress::listen(function (string $message) use (&$messages): void {
+            $messages[] = $message;
+        }),
+    );
+
+    expect(array_map(fn (DataShareMirrorReviewItem $item): string => $item->table, $review->items))
+        ->toBe(['sbg_child', 'sbg_grandchild', 'sbg_parent'])
+        ->and($review->hasBlockers)->toBeFalse()
+        ->and($review->requestedTables)->toBe(['sbg_parent'])
+        ->and($review->requiredTables)->toBe(['sbg_child', 'sbg_grandchild'])
+        ->and($review->requiredBy)->toBe([
+            'sbg_child' => ['sbg_parent'],
+            'sbg_grandchild' => ['sbg_child'],
+        ])
+        ->and($review->toArray()['selected_tables'])->toBe(['sbg_child', 'sbg_grandchild', 'sbg_parent'])
+        ->and($messages)->toContain('Added 2 required tables to this review.');
 });
 
 it('keeps the mirror command read-only and refuses an unspecified selection', function (): void {
@@ -300,7 +411,11 @@ it('force pushes only the exact selected local tables through the native engine'
     $reviewer = Mockery::mock(DataShareMirrorReviewer::class);
     $reviewer->shouldReceive('review')
         ->once()
-        ->with(DataShareMirrorDirection::Push, ['sbg_records'])
+        ->with(
+            DataShareMirrorDirection::Push,
+            ['sbg_records'],
+            Mockery::type(DataShareMirrorProgress::class),
+        )
         ->andReturn(new DataShareMirrorReview(
             DataShareMirrorDirection::Push,
             [new DataShareMirrorReviewItem(
@@ -447,6 +562,46 @@ it('reports exact live row counts for reachable Local and remote tables', functi
         ->and($probe->remoteRows)->toBe(8);
 });
 
+it('builds the review catalog without scanning live row counts', function (): void {
+    Schema::create('zzz_review_catalog_probe', function ($table): void {
+        $table->id();
+    });
+    DB::table('zzz_review_catalog_probe')->insert(['id' => 1]);
+    TableRegistry::query()->create([
+        'table_name' => 'zzz_review_catalog_probe',
+        'module_name' => 'Probe',
+        'module_path' => 'app/Modules/Probe',
+        'migration_file' => 'probe.php',
+    ]);
+
+    $connection = app('db')->connection();
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('local')->once()->andReturn($connection);
+    $connections->shouldReceive('mirror')->once()->andReturn($connection);
+    $connections->shouldReceive('provider')->andThrow(new RuntimeException('no provider'));
+    $queries = [];
+    DB::listen(function ($query) use (&$queries): void {
+        $queries[] = strtolower($query->sql);
+    });
+    $messages = [];
+
+    $probe = collect((new DataShareMirrorCatalog($connections))->reviewCatalog(
+        DataShareMirrorProgress::listen(function (string $message) use (&$messages): void {
+            $messages[] = $message;
+        }),
+    ))->firstWhere('table', 'zzz_review_catalog_probe');
+
+    expect($probe)->not->toBeNull()
+        ->and($probe->localRows)->toBeNull()
+        ->and($probe->remoteRows)->toBeNull()
+        ->and(collect($queries)->contains(fn (string $sql): bool => str_contains($sql, 'count(*)')))->toBeFalse()
+        ->and($messages)->toBe([
+            'Loading Local table structure.',
+            'Local table structure loaded. Loading remote table structure.',
+            'Remote table structure loaded.',
+        ]);
+});
+
 it('captures a labelled retrospective baseline of current Local and remote counts', function (): void {
     $localBuilder = Mockery::mock();
     $localBuilder->shouldReceive('count')->andReturn(10);
@@ -536,14 +691,32 @@ it('records a determinate engine failure as failed and an uncertain one as indet
     };
 
     // A determinate, rollback-safe failure is recorded as failed.
-    expect(fn () => $makeManager(DataShareMirrorException::safeFailure('export failed'))->forcePush(['sbg_records']))
-        ->toThrow(DataShareMirrorException::class);
-    expect(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('failed');
+    $determinateProgress = [];
+    $determinateOperation = function () use ($makeManager, &$determinateProgress): void {
+        $makeManager(DataShareMirrorException::safeFailure('export failed'))->forcePush(
+            ['sbg_records'],
+            progress: function (string $message) use (&$determinateProgress): void {
+                $determinateProgress[] = $message;
+            },
+        );
+    };
+    expect($determinateOperation)->toThrow(DataShareMirrorException::class);
+    expect(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('failed')
+        ->and($determinateProgress)->toContain('FAILED: The transfer stopped before the destination commit. The durable run records the failure.');
 
     // An uncertain outcome (non-zero psql) is recorded as indeterminate.
-    expect(fn () => $makeManager(DataShareMirrorException::processFailed('psql', 1))->forcePush(['sbg_records']))
-        ->toThrow(DataShareMirrorException::class);
-    expect(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('indeterminate');
+    $indeterminateProgress = [];
+    $indeterminateOperation = function () use ($makeManager, &$indeterminateProgress): void {
+        $makeManager(DataShareMirrorException::processFailed('psql', 1))->forcePush(
+            ['sbg_records'],
+            progress: function (string $message) use (&$indeterminateProgress): void {
+                $indeterminateProgress[] = $message;
+            },
+        );
+    };
+    expect($indeterminateOperation)->toThrow(DataShareMirrorException::class);
+    expect(DataOperationRun::query()->latest('id')->firstOrFail()->status->value)->toBe('indeterminate')
+        ->and($indeterminateProgress)->toContain('FAILED: The transfer did not confirm completion. The durable run records the indeterminate outcome.');
 });
 
 it('builds the Local catalog with no remote call at all', function (): void {

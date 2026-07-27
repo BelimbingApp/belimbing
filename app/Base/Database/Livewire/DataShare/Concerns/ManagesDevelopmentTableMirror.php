@@ -44,7 +44,7 @@ trait ManagesDevelopmentTableMirror
 
     public string $mirrorSearch = '';
 
-    public string $mirrorDirection = 'push';
+    public string $mirrorDirection = '';
 
     private function restoreMirrorCatalogSnapshotOnMount(DataShareMirrorManager $mirror): void
     {
@@ -176,6 +176,71 @@ trait ManagesDevelopmentTableMirror
         $this->clearMirrorReview();
     }
 
+    public function chooseMirrorDirection(string $direction): void
+    {
+        $this->requireCapability('admin.system.data-share.view');
+
+        if (! in_array($direction, ['pull', 'push'], true)) {
+            return;
+        }
+
+        if ($this->mirrorDirection === $direction) {
+            return;
+        }
+
+        $this->mirrorDirection = $direction;
+        $this->mirrorSelectedTables = [];
+        $this->resetValidation('mirrorDirection');
+        $this->clearMirrorReview();
+    }
+
+    public function selectMirrorRowCountCandidates(): void
+    {
+        $this->requireCapability('admin.system.data-share.view');
+
+        if (! in_array($this->mirrorDirection, ['pull', 'push'], true)) {
+            $this->addError('mirrorDirection', __('Choose Pull or Push first.'));
+
+            return;
+        }
+
+        $visible = array_fill_keys($this->visibleMirrorTableNames(), true);
+        $sourceRows = $this->mirrorDirection === 'pull' ? 'remote_rows' : 'local_rows';
+        $destinationRows = $this->mirrorDirection === 'pull' ? 'local_rows' : 'remote_rows';
+        $candidates = collect($this->mirrorTables)
+            ->filter(fn (array $table): bool => isset($visible[(string) ($table['table'] ?? '')]))
+            ->filter(fn (array $table): bool => (bool) ($table['supported'] ?? false))
+            ->filter(fn (array $table): bool => (bool) ($table['local_exists'] ?? false)
+                && (bool) ($table['mirror_exists'] ?? false))
+            ->filter(fn (array $table): bool => is_int($table[$sourceRows] ?? null)
+                && is_int($table[$destinationRows] ?? null)
+                && $table[$sourceRows] > $table[$destinationRows])
+            ->pluck('table')
+            ->filter(fn (mixed $table): bool => is_string($table) && $table !== '')
+            ->reject(fn (string $table): bool => in_array($table, $this->mirrorSelectedTables, true))
+            ->values()
+            ->all();
+
+        if ($candidates === []) {
+            $this->setStatus(__('No additional :direction candidates are visible.', [
+                'direction' => $this->mirrorDirection,
+            ]), 'info');
+
+            return;
+        }
+
+        $this->mirrorSelectedTables = array_values(array_unique([
+            ...$this->mirrorSelectedTables,
+            ...$candidates,
+        ]));
+        $this->clearMirrorReview();
+        $this->setStatus(trans_choice(
+            ':count :direction candidate selected.|:count :direction candidates selected.',
+            count($candidates),
+            ['count' => count($candidates), 'direction' => $this->mirrorDirection],
+        ), 'info');
+    }
+
     public function updatedMirrorSelectedTables(): void
     {
         $this->mirrorSelectedTables = array_values(array_unique(array_filter(
@@ -190,12 +255,21 @@ trait ManagesDevelopmentTableMirror
         $this->requireCapability('admin.system.data-share-mirror.execute');
         $this->extendMirrorRequestTimeLimit();
         $this->validateMirrorSelection($direction);
+        $this->startMirrorReviewLog($direction);
 
         try {
-            $review = $mirror->review($direction, $this->mirrorSelectedTables)->toArray();
+            $review = $mirror->review(
+                $direction,
+                $this->mirrorSelectedTables,
+                function (string $message): void {
+                    $this->streamMirrorRunLine($message);
+                },
+            )->toArray();
             $this->mirrorDirection = $direction;
             $this->mirrorReview = $this->normalizeMirrorReview($review);
-            $this->mirrorReview['_selected_tables'] = $this->mirrorSelectedTables;
+            $resolvedTables = $this->mirrorReview['selected_tables'] ?: $this->mirrorSelectedTables;
+            $this->mirrorSelectedTables = $resolvedTables;
+            $this->mirrorReview['_selected_tables'] = $resolvedTables;
             $this->mirrorReview['_can_force_push'] = $direction === 'push'
                 && ($this->mirrorReview['has_blockers'] ?? false)
                 && collect($this->mirrorReview['items'] ?? [])
@@ -206,18 +280,36 @@ trait ManagesDevelopmentTableMirror
                         true,
                     ));
             $this->mirrorResult = null;
+            $blockedCount = (int) ($this->mirrorReview['counts']['blocked'] ?? 0);
+            $requiredCount = count($this->mirrorReview['required_tables']);
+            $this->finishMirrorReviewLog();
             $this->setStatus(
                 ($this->mirrorReview['has_blockers'] ?? false)
-                    ? __('Mirror review contains blockers. Nothing has changed.')
-                    : __('Mirror review is ready. Nothing has changed yet.'),
+                    ? trans_choice(
+                        ':count selected table is blocked. No data changed. Open the review for its exact dependency.|:count selected tables are blocked. No data changed. Open the review for their exact dependencies.',
+                        $blockedCount,
+                        ['count' => $blockedCount],
+                    )
+                    : ($requiredCount > 0
+                        ? trans_choice(
+                            'Mirror review is ready with :count required table added. Nothing has changed yet.|Mirror review is ready with :count required tables added. Nothing has changed yet.',
+                            $requiredCount,
+                            ['count' => $requiredCount],
+                        )
+                        : __('Mirror review is ready. Nothing has changed yet.')),
                 ($this->mirrorReview['has_blockers'] ?? false) ? 'warning' : 'success',
             );
         } catch (DataShareMirrorException $exception) {
             $this->mirrorReview = null;
+            $this->streamMirrorRunLine((string) __('FAILED: :message', ['message' => $exception->getMessage()]));
+            $this->finishMirrorRunLog('error');
             $this->setStatus($exception->getMessage(), 'danger');
         } catch (Throwable $exception) {
             $this->mirrorReview = null;
-            $this->setStatus(DataShareMirrorException::unexpected('review', $exception)->getMessage(), 'danger');
+            $failure = DataShareMirrorException::unexpected('review', $exception);
+            $this->streamMirrorRunLine((string) __('FAILED: :message', ['message' => $failure->getMessage()]));
+            $this->finishMirrorRunLog('error');
+            $this->setStatus($failure->getMessage(), 'danger');
         }
     }
 
@@ -259,7 +351,7 @@ trait ManagesDevelopmentTableMirror
             );
             $this->mirrorReview = null;
             $this->setStatus(
-                __('The :direction mirror completed for :count explicitly selected table(s).', [
+                __('The :direction mirror completed for :count reviewed table(s).', [
                     'direction' => $this->mirrorDirection,
                     'count' => count($this->mirrorSelectedTables),
                 ]),
@@ -375,38 +467,6 @@ trait ManagesDevelopmentTableMirror
         $this->finishMirrorRunLog($runOutcome);
     }
 
-    /**
-     * Record the current Local/remote counts for the exact selection as a
-     * labelled retrospective baseline (e.g. for the completed 43-table push that
-     * predates the ledger). It is an observation, never presented as a push.
-     */
-    public function captureMirrorBaseline(DataShareMirrorManager $mirror): void
-    {
-        $this->requireCapability('admin.system.data-share-mirror.execute');
-        $this->extendMirrorRequestTimeLimit();
-        $this->validateMirrorSelection('push');
-
-        try {
-            $mirror->captureBaseline($this->mirrorSelectedTables);
-            $this->setStatus(
-                __('Captured a retrospective baseline observation for :count table(s). It is labelled an observation, not an original push.', [
-                    'count' => count($this->mirrorSelectedTables),
-                ]),
-                'success',
-            );
-
-            $this->mirrorTables = collect($mirror->catalog())
-                ->map(fn (object $table): array => $this->normalizeMirrorTable($table->toArray()))
-                ->sortBy([['module_name', 'asc'], ['table', 'asc']], SORT_NATURAL | SORT_FLAG_CASE)
-                ->values()
-                ->all();
-        } catch (DataShareMirrorException $exception) {
-            $this->setStatus($exception->getMessage(), 'danger');
-        } catch (Throwable $exception) {
-            $this->setStatus(DataShareMirrorException::unexpected('capture_baseline', $exception)->getMessage(), 'danger');
-        }
-    }
-
     public function cancelMirrorReview(): void
     {
         $this->mirrorReview = null;
@@ -430,23 +490,94 @@ trait ManagesDevelopmentTableMirror
         $count = count($this->mirrorSelectedTables);
         $message = match ($direction) {
             'pull' => trans_choice(
-                'Starting pull of :count selected table: :provider → Local.|Starting pull of :count selected tables: :provider → Local.',
+                'Starting pull of :count reviewed table: :provider → Local.|Starting pull of :count reviewed tables: :provider → Local.',
                 $count,
                 ['count' => $count, 'provider' => $provider],
             ),
             'force_push' => trans_choice(
-                'Starting force push of :count selected table: Local → :provider.|Starting force push of :count selected tables: Local → :provider.',
+                'Starting force push of :count reviewed table: Local → :provider.|Starting force push of :count reviewed tables: Local → :provider.',
                 $count,
                 ['count' => $count, 'provider' => $provider],
             ),
             default => trans_choice(
-                'Starting push of :count selected table: Local → :provider.|Starting push of :count selected tables: Local → :provider.',
+                'Starting push of :count reviewed table: Local → :provider.|Starting push of :count reviewed tables: Local → :provider.',
                 $count,
                 ['count' => $count, 'provider' => $provider],
             ),
         };
 
         $this->streamMirrorRunLine((string) $message);
+    }
+
+    private function startMirrorReviewLog(string $direction): void
+    {
+        $this->mirrorRunOpen = true;
+        $this->mirrorRunStatus = 'running';
+        $this->mirrorRunKind = 'review_'.$direction;
+        $this->mirrorRunLog = [];
+        $this->stream('', replace: true, to: 'mirrorRunLog');
+
+        $provider = (string) ($this->mirrorConnectionStatus['provider_label'] ?? __('configured provider'));
+        $count = count($this->mirrorSelectedTables);
+        $message = $direction === 'pull'
+            ? trans_choice(
+                'Reviewing pull of :count selected table: :provider → Local.|Reviewing pull of :count selected tables: :provider → Local.',
+                $count,
+                ['count' => $count, 'provider' => $provider],
+            )
+            : trans_choice(
+                'Reviewing push of :count selected table: Local → :provider.|Reviewing push of :count selected tables: Local → :provider.',
+                $count,
+                ['count' => $count, 'provider' => $provider],
+            );
+
+        $this->streamMirrorRunLine((string) $message);
+        $this->streamMirrorRunLine((string) __('Comparing table presence, schemas, keys, and dependencies. Review never changes data.'));
+    }
+
+    private function finishMirrorReviewLog(): void
+    {
+        $items = collect($this->mirrorReview['items'] ?? []);
+        $blockedItems = $items->filter(fn (array $item): bool => (array) ($item['blockers'] ?? []) !== []);
+
+        if ($blockedItems->isEmpty()) {
+            $requiredCount = count((array) ($this->mirrorReview['required_tables'] ?? []));
+            if ($requiredCount > 0) {
+                $this->streamMirrorRunLine((string) trans_choice(
+                    'Added :count required table automatically.|Added :count required tables automatically.',
+                    $requiredCount,
+                    ['count' => $requiredCount],
+                ));
+            }
+            $this->streamMirrorRunLine((string) trans_choice(
+                'Review ready: :count table can be confirmed. No data changed yet.|Review ready: :count tables can be confirmed. No data changed yet.',
+                $items->count(),
+                ['count' => $items->count()],
+            ));
+            $this->finishMirrorRunLog('ready');
+
+            return;
+        }
+
+        $this->streamMirrorRunLine((string) trans_choice(
+            'Warning: :count selected table is blocked. No data changed.|Warning: :count selected tables are blocked. No data changed.',
+            $blockedItems->count(),
+            ['count' => $blockedItems->count()],
+        ));
+
+        foreach ($blockedItems as $item) {
+            foreach ((array) ($item['blockers'] ?? []) as $blocker) {
+                $message = is_array($blocker)
+                    ? (string) ($blocker['message'] ?? $blocker['reason'] ?? $blocker['code'] ?? __('Unknown blocker'))
+                    : (string) $blocker;
+                $this->streamMirrorRunLine((string) __('Warning: :table — :message', [
+                    'table' => (string) ($item['table'] ?? __('Unknown table')),
+                    'message' => $message,
+                ]));
+            }
+        }
+
+        $this->finishMirrorRunLog('warning');
     }
 
     private function streamMirrorRunLine(string $line): void
@@ -482,6 +613,8 @@ trait ManagesDevelopmentTableMirror
         return match (true) {
             str_starts_with($line, 'FAILED:') => 'text-status-danger',
             str_starts_with($line, 'Warning:') => 'text-status-warning',
+            str_starts_with($line, 'Reviewed ') && str_contains($line, '— blocked') => 'text-status-warning',
+            str_starts_with($line, 'Reviewed ') => 'text-status-success',
             str_starts_with($line, 'Completed:') => 'text-status-success',
             default => '',
         };
@@ -630,6 +763,19 @@ trait ManagesDevelopmentTableMirror
     /** @param array<string, mixed> $review @return array<string, mixed> */
     private function normalizeMirrorReview(array $review): array
     {
+        $normalizeTables = static fn (mixed $tables): array => array_values(array_unique(array_filter(
+            array_map(static fn (mixed $table): string => trim((string) $table), (array) $tables),
+            static fn (string $table): bool => $table !== '',
+        )));
+        $requiredBy = [];
+        foreach ((array) ($review['required_by'] ?? $review['requiredBy'] ?? []) as $table => $dependencies) {
+            if (! is_string($table) || $table === '') {
+                continue;
+            }
+
+            $requiredBy[$table] = $normalizeTables($dependencies);
+        }
+
         return [
             ...$review,
             'has_blockers' => (bool) ($review['has_blockers'] ?? $review['hasBlockers'] ?? false),
@@ -644,6 +790,10 @@ trait ManagesDevelopmentTableMirror
                 ];
             }, (array) ($review['items'] ?? []))),
             'counts' => (array) ($review['counts'] ?? []),
+            'selected_tables' => $normalizeTables($review['selected_tables'] ?? $review['selectedTables'] ?? []),
+            'requested_tables' => $normalizeTables($review['requested_tables'] ?? $review['requestedTables'] ?? []),
+            'required_tables' => $normalizeTables($review['required_tables'] ?? $review['requiredTables'] ?? []),
+            'required_by' => $requiredBy,
         ];
     }
 

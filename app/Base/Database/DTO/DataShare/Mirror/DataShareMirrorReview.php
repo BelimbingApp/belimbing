@@ -9,6 +9,9 @@ final readonly class DataShareMirrorReview
     /**
      * @param  list<DataShareMirrorReviewItem>  $items
      * @param  array{create: int, replace: int, delete: int, blocked: int}  $counts
+     * @param  list<string>  $requestedTables
+     * @param  list<string>  $requiredTables
+     * @param  array<string, list<string>>  $requiredBy
      */
     public function __construct(
         public DataShareMirrorDirection $direction,
@@ -16,6 +19,9 @@ final readonly class DataShareMirrorReview
         public bool $hasBlockers,
         public array $counts,
         public string $stateToken,
+        public array $requestedTables = [],
+        public array $requiredTables = [],
+        public array $requiredBy = [],
     ) {}
 
     /** @return array<string, mixed> */
@@ -27,6 +33,10 @@ final readonly class DataShareMirrorReview
             'has_blockers' => $this->hasBlockers,
             'counts' => $this->counts,
             'state_token' => $this->stateToken,
+            'selected_tables' => array_map(fn (DataShareMirrorReviewItem $item): string => $item->table, $this->items),
+            'requested_tables' => $this->requestedTables,
+            'required_tables' => $this->requiredTables,
+            'required_by' => $this->requiredBy,
         ];
     }
 }

@@ -50,6 +50,18 @@ Reuse `x-ui.*` and `<x-icon>` before inventing new markup. Inventory:
 
 Users scan before they read. Favor bullets, short paragraphs, and meaningful icons so key facts and actions surface at a glance — dense, not verbose.
 
+- Design the scan layer first: headings, icons, short action labels, badges, counts, and table structure must reveal the workflow without supporting prose.
+- Do not explain what a visible label, icon, badge, column, or state already says. If removing a sentence leaves the interface clear, remove it.
+- Put essential safety or mode information in the control itself when it changes the decision, for example **Read-only Review**, instead of asking the user to find an explanatory paragraph.
+- Reserve sentences for consequences, exceptions, recovery, or genuinely unfamiliar concepts; progressively disclose detail that is not needed for the next action.
+- Before shipping, perform a no-prose scan: read only headings, controls, badges, and table labels. If the next action or current state is unclear, improve that scan layer before adding copy.
+
+## Put information where it acts
+
+- A page title or subtitle describes the whole page and must stay true across every tab.
+- Put workflow-specific purpose, consequences, and guidance inside the tab where they affect the user's decision.
+- If page-level copy joins sibling workflows with “or,” split it at those workflow boundaries.
+
 ## Stay consistent
 
 Same thing, same look, same place — reuse established patterns, placement, and labels across modules; variation needs a user-visible reason.

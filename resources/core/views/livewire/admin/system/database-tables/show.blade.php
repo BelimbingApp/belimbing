@@ -229,6 +229,7 @@ use App\Base\Database\Livewire\DatabaseTables\Show;
                 @endforeach
 
                 <x-ui.tabs
+                    tabs-id="database-table-tabs"
                     :tabs="[
                         ['id' => 'data', 'label' => __('Data'), 'icon' => 'heroicon-o-table-cells'],
                         ['id' => 'schema', 'label' => __('Schema'), 'icon' => 'heroicon-o-circle-stack'],

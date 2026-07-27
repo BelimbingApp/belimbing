@@ -1,11 +1,11 @@
 # Data Share Mirror History and Freshness
 
-**Status:** Proposed
-**Last Updated:** 2026-07-23
+**Status:** In progress
+**Last Updated:** 2026-07-27
 **Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Foundation/Contracts/SemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `extensions/sb-group/ibp/Models/ImportBatch.php`, `extensions/sb-group/ibp/Services/MarketSpotImportRunner.php`, `extensions/sb-group/ibp/Services/LegacyAxImporter.php`, `docs/plans/base-schedule-observability.md`
-**Agents:** Amp/OpenAI Codex
+**Agents:** Amp/OpenAI Codex, Codex/gpt-5.6-sol
 
-## Implementation Status (2026-07-23)
+## Implementation Status (2026-07-24)
 
 **Built and tested** (`tests/Feature/Database/DataOperationLedgerTest.php`, `DataOperationsPageTest.php`, `DataShareMirrorBackendTest.php`, `extensions/sb-group/ibp/Tests/Feature/ImportMarketSpotCommandTest.php`):
 
@@ -15,12 +15,15 @@
 - The execution result carries its durable ledger `run_id`; the mirror completion summary links to it and `/admin/system/data-operations` is deep-linkable to a specific run (`?run=`).
 - AX/IBP import records an `ax_import` run with honest per-action effect counts (delete ≠ reject conflation fixed) and a `quoted_on` `min_max_hint` range; subprocess ownership wired (parent opens, `--operation-run-id` passes to the resuming child).
 - Central read-only history UI at `/admin/system/data-operations` (route, capability, menu, filters, per-table detail).
-- **Baseline-observation workflow** — `captureBaseline()` records current Local/remote counts for the exact selection as a labelled `mirror_baseline` run + observation, wired to a gated **Capture baseline observation** button; never presented as an original push.
+- **Retrospective baseline primitive** — `captureBaseline()` can record current Local/remote counts as a labelled `mirror_baseline` run for exceptional recovery tooling. It is deliberately absent from the everyday Mirror UI: ordinary push/pull operations establish observations, and the product does not ask users to manufacture history.
 - **Transient result table removed** — a completed mirror operation now shows a compact summary + durable-run link; per-table counts persist in the catalog columns and the durable run.
 - **Freshness (Phase 3, GO)** — `base_database_data_freshness_events` (protected) + a driver-agnostic append-only `DataFreshnessTracker`; the catalog shows a **Freshness** column (Unknown on SQLite; real on tracked PostgreSQL). Proven on **PostgreSQL 17.9** — the integration matrix passes and benchmarking rejected the naive shared-row design (deadlock) in favour of the append-only design (no deadlock, ~5.7× faster). See the Phase 3 go/no-go decision.
 - **Phase 4 code** — push acknowledges exactly the generation captured before mutation; a `DataFreshnessAttachmentService` + `blb:db:share:freshness-attach` command attach triggers to eligible Local tables, invoked explicitly (never on migrate), a no-op on non-PostgreSQL.
 - **Stale-run reconciler** — `DataOperationReconciler` + `blb:db:data-operations:reconcile` sweep runs that stayed `running` past the timeout and mark them `indeterminate` (via the same atomic finalize claim); never guessed as failed. Tested.
 - **Local-first catalog + async enrichment** — `DataShareMirrorCatalog::localCatalog()` builds the picker from the Local registry with **no remote call** (unit-proven: the remote is never opened); the Livewire component renders Local rows immediately with `mirrorRemotePending = true`, and a separate `enrichMirrorRemote()` request (fired by Alpine `x-init` after first paint) fills in remote presence, counts, and freshness. A remote failure keeps the Local rows and reports remote columns unavailable — it never empties Local results. The component test asserts the ordering (Local rows + pending in the first response, remote enriched by the second).
+- **Distilled catalog table** — relation presence is folded into **Local rows** and **Remote rows**: a number proves the relation exists, while Missing/Unavailable/Checking appears only when a number cannot. Separate Local/provider presence columns and the user-facing baseline action were removed.
+- **Transparent one-pass review and transfer progress** — The direction-first **Read-only Review** action opens one persistent modal before the read-only request begins. It streams named catalog/connection/dependency phases plus `Reviewing n/total: table` and `Reviewed n/total: table — outcome` for every table in the final plan, then replaces the progress log with that exact review. The reviewer automatically expands safe, registered foreign-key dependencies to a fixed point in the same pass, distinguishes chosen tables from required tables, and presents the Pull/Push action immediately; no manual include-and-review loop remains. Unsupported or otherwise unresolvable dependencies stay honest blockers. The review-specific catalog deliberately skips full-catalog live row counts; those remain on the picker path and are irrelevant to schema/dependency policy. Blockers appear first, selection-wide cycles appear once above the table, and executable rows rely on terse Create/Replace/Delete badges. Starting the confirmed transfer turns the modal into the per-table snapshot/load/verification stream; its accented action disables immediately and reports that the transfer is running. Execution still re-derives and verifies the exact expanded plan under the operation lock. {Codex/gpt-5.6-sol}
+- **Direction-first selection** — The operator must choose **Pull from provider** or **Push to provider** before review. Changing direction clears the selection so candidates chosen for one authority cannot accidentally move in the other direction. One consistently named **Read-only Review** action replaces adjacent push/pull review buttons. The picker can select conservative visible row-count candidates: only tables whose chosen source has more rows than its destination; equal counts, missing endpoints, unsupported tables, and potentially destructive lower-source counts remain manual choices. {Codex/gpt-5.6-sol}
 
 **Fixes from code review (2026-07-23):** Force Push re-reviews inside the lock and verifies the visible review token (no stale destructive plan); observations are keyed by a stable remote-endpoint id (host+database), not the provider adapter key, and Force Push no longer passes a null remote; AX imports track commit and report post-commit bookkeeping failures as indeterminate, not "failed before commit"; determinate engine failures are recorded `failed`, only uncertain outcomes `indeterminate`; ledger summaries upsert on a unique `(run_id, table_name)` and terminalization/audit projection are atomic conditional claims; the ledger models are excluded from global mutation audit (regression-tested: one semantic action, zero bookkeeping mutations); the history UI labels endpoint counts as *Local · remote (observed)*, not before→after.
 
@@ -70,7 +73,7 @@ The page immediately merges two non-blocking sources into those Local rows: pers
 
 The remote snapshot uses shared stale-while-revalidate semantics rather than the current session-only cache because endpoint catalog state is not user-specific. Explicit **Refresh remote data** bypasses freshness, while automatic refresh serves stale data with its observation time until a new successful snapshot arrives. A queued refresh job is deferred unless measurement shows that a separate Livewire request still harms worker availability.
 
-Catalog enrichment never performs live row counts for every table. Row counts come from completed operations or an explicit baseline/observation action and persist in the current observation projection. Live review remains authoritative and inspects only the exact selected tables, so cached presence and counts are display hints rather than mutation permission.
+Catalog enrichment performs live row counts for the registered tables so Local and Remote rows describe the endpoint now. Completed operations still persist durable observations for history and freshness, while live review remains authoritative and inspects the exact selection before mutation. Catalog counts are current display evidence, never mutation permission.
 
 ### Audit bridge
 
@@ -92,7 +95,7 @@ The generalized history lives on one central Base Database surface—**`/admin/s
 
 Scoped views link *into* that surface rather than reimplementing it, so imports are not visually coupled to Mirror:
 
-- The **Mirror** catalog gains persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns and a scoped history filtered to mirror operations.
+- The **Mirror** catalog shows **Local rows**, **Remote rows**, **Observed**, and **Freshness**. Presence is expressed inside the row-count cells only when a relation is missing or unreachable; successful counts need no separate Present badge.
 - The **IBP import workbench** links its runs to the central surface.
 
 Once durable history and catalog observations exist, the current transient post-operation result table is removed. A completed operation updates the catalog projection in place and shows a compact success summary with a link to its durable run; users no longer need to know that a temporary result table exists below the review panel, and refresh no longer destroys the only visible evidence.
@@ -163,7 +166,7 @@ The catalog never treats cached remote state as review evidence. The exact selec
 
 ### Do not fabricate history for completed operations
 
-The existing `sbg_` push predates the ledger. Its 43 schemas and row counts were verified after completion, but the system did not persist an operation identity at mutation time. After Phase 1, an authorized **Capture baseline observation** action may record current fingerprints and counts as a clearly labelled retrospective baseline with the actor and time of observation. It must not be presented as the original push or infer an original user from nearby logs.
+The existing `sbg_` push predates the ledger. Its 43 schemas and row counts were verified after completion, but the system did not persist an operation identity at mutation time. The product leaves that history unknown rather than asking an operator to manufacture it. The backend retains a clearly labelled retrospective `mirror_baseline` primitive for exceptional maintenance tooling, but it is not part of the normal Mirror workflow and must never be presented as the original push or infer an original user from nearby logs.
 
 Historical `sbg_ibp_import_batches` may be backfilled into the ledger as labelled retrospective import runs, but only with what that table truthfully recorded: `imported_by` is nullable and `LegacyAxImporter` writes it as null, so those runs must preserve an **unknown** actor—never inferring console, scheduler, or user attribution—and inherit no per-table key range where none was captured.
 
@@ -206,7 +209,7 @@ Historical `sbg_ibp_import_batches` may be backfilled into the ledger as labelle
 - The picker is Local-registry-driven; remote-only ownership cannot introduce executable tables into this checkout.
 - Persisted observations and shared last-known remote state render immediately with explicit observation times.
 - Automatic remote enrichment runs separately and updates only remote fields. Failure preserves Local rows and last-known observations while showing an honest remote error.
-- Remote enrichment does not count all tables. Explicit baseline/observation and completed operations own durable counts.
+- Remote enrichment supplies live counts for the catalog; completed operations own durable observations. Missing, unavailable, and pending relations are stated in the corresponding row-count cell.
 - Review and execution do not trust cached remote state; they freshly inspect the exact selection.
 
 ### Freshness generations
@@ -242,12 +245,13 @@ Goal: Local tables appear immediately on first visit, remote state fills in inde
 - [ ] Persist planned table summaries before engine mutation and finalize observations without holding a Local transaction across external transfer work.
 - [x] Record nullable, timestamped effect counters, key ranges, and schema fingerprints without overstating native count equality as transfer verification.
 - [x] Merge current observations into every catalog render independently of the remote catalog session cache and isolate observations by stable endpoint IDs.
-- [x] Build the central `/admin/system/data-operations` history/detail surface and add persistent **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns plus a mirror-scoped history view that links into it.
+- [x] Build the central `/admin/system/data-operations` history/detail surface and add **Local rows**, **Remote rows**, **Observed**, and **Freshness** columns plus a mirror-scoped history view that links into it. Fold presence into the two count cells instead of dedicating two redundant columns to Present badges. {OpenAI Codex/GPT-5}
 - [x] Replace the transient post-operation table with an in-place catalog projection update, compact completion summary, and durable run link.
-- [x] Add an explicit baseline-observation workflow that labels the existing 43-table state as retrospective rather than inventing a historical push.
+- [x] Open the persistent progress modal before review and retain exact blocker details or the ready-to-confirm outcome until the operator closes it. {Codex/gpt-5.6-sol}
+- [x] Retain a labelled retrospective-baseline backend primitive for exceptional recovery work, without exposing it as an ordinary user task or inventing a historical push. {OpenAI Codex/GPT-5}
 - [ ] Cover first uncached visit, shared cached visit, stale refresh, remote timeout/failure, endpoint replacement, browser and CLI attribution, normal and force push, pull, pre-mutation failure, indeterminate `psql`, portable rollback, stale-run reconciliation and idempotent re-projection, Local finalization failure, audit projection failure, and cache refresh behavior.
 
-Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integration; portable integration; browser timing proof that Local rows render before delayed remote enrichment; browser verification of refresh, endpoint switch, baseline, and Audit Action link; idempotent-reprojection assertion; credential redaction assertions; Pint and UI convention scan.
+Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integration; portable integration; browser timing proof that Local rows render before delayed remote enrichment; browser verification of refresh, endpoint switch, distilled count cells, and Audit Action link; idempotent-reprojection assertion; credential redaction assertions; Pint and UI convention scan.
 
 ### Phase 2 — Import and mass-update provenance
 

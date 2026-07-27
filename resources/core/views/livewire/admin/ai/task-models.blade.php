@@ -88,6 +88,7 @@
                     @endphp
 
                     <x-ui.tabs
+                        :tabs-id="'ai-task-'.$taskKey.'-tabs'"
                         :tabs="$taskTabs"
                         default="model"
                         size="sm"

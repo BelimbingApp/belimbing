@@ -121,6 +121,7 @@
     @php $availableCount = count($available) + count($availableExtensions) + count($catalogEntries); @endphp
 
     <x-ui.tabs
+        tabs-id="foundation-modules-tabs"
         :tabs="[
             ['id' => 'installed', 'label' => __('Installed')],
             ['id' => 'available', 'label' => __('Available (:n)', ['n' => $availableCount])],
