@@ -12,6 +12,7 @@ use App\Modules\Core\AI\Models\AiRun;
 use App\Modules\Core\AI\Services\ControlPlane\HealthAndPresenceService;
 use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolReadinessService;
+use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 
@@ -51,6 +52,10 @@ function hapsSession(int $minutesAgo = 5): Session
 
 function hapsCreateAiRun(array $overrides = []): AiRun
 {
+    if (! Employee::query()->whereKey(HAPS_EMPLOYEE_ID)->exists()) {
+        Employee::factory()->create(['id' => HAPS_EMPLOYEE_ID]);
+    }
+
     return AiRun::unguarded(fn () => AiRun::query()->create(array_merge([
         'id' => 'run_'.uniqid(),
         'employee_id' => HAPS_EMPLOYEE_ID,
@@ -305,7 +310,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn(null);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);
@@ -324,7 +329,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(true);
 
         $service = makeHapsService(settings: $settings);
@@ -342,7 +347,7 @@ describe('providerSnapshot', function () {
             ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
             ->andReturn($recentTime);
         $settings->shouldReceive('get')
-            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS, false)
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
             ->andReturn(false);
 
         $service = makeHapsService(settings: $settings);

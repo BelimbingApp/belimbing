@@ -1,6 +1,8 @@
 <?php
 
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
+use App\Base\Settings\Contracts\SettingsService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -56,10 +58,22 @@ function rkEncryptDek(string $appKey): array
     ];
 }
 
+function rkCreateSettingsTable(): void
+{
+    DB::statement('DROP TABLE IF EXISTS base_settings');
+    DB::statement(
+        'CREATE TABLE base_settings (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, value TEXT, is_encrypted INTEGER NOT NULL DEFAULT 0, scope_type TEXT, scope_id INTEGER, created_at TEXT, updated_at TEXT)'
+    );
+    DB::statement(
+        'CREATE UNIQUE INDEX base_settings_scope_unique ON base_settings (key, scope_type, scope_id)'
+    );
+}
+
 beforeEach(function (): void {
+    rkCreateSettingsTable();
     Storage::fake('local');
-    config()->set('backup.disk', 'local');
-    config()->set('backup.path_prefix', 'backups');
+    app(SettingsService::class)->set('backup.disk', 'local');
+    app(SettingsService::class)->set('backup.path_prefix', 'backups');
 });
 
 it('re-wraps DEK under the current KEK and updates the fingerprint', function (): void {

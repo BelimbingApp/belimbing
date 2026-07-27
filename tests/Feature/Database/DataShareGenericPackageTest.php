@@ -65,6 +65,16 @@ beforeEach(function (): void {
         'data_share.offers.base_urls' => GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL,
         'data_share.offers.expiry_minutes' => 60,
     ]);
+    $settings = app(SettingsService::class);
+    $settings->set('data_share.disk', 'local');
+    $settings->set('data_share.instance.id', 'generic-source-dev');
+    $settings->set('data_share.instance.name', GENERIC_SHARE_SOURCE_NAME);
+    $settings->set('data_share.instance.role', 'development');
+    $settings->set('data_share.outgoing_path_prefix', 'data-share/outgoing');
+    $settings->set('data_share.incoming_path_prefix', 'data-share/incoming');
+    $settings->set('data_share.receiving_path_prefix', 'data-share/receiving');
+    $settings->set('data_share.offers.base_urls', GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL);
+    $settings->set('data_share.offers.expiry_minutes', 60);
 
     Schema::create(GENERIC_SHARE_PARENT, function (Blueprint $table): void {
         $table->unsignedBigInteger('id')->primary();
@@ -133,6 +143,10 @@ function becomeGenericDataShareSource(): DataShareInstanceIdentity
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
         'data_share.instance.role' => 'development',
     ]);
+    $settings = app(SettingsService::class);
+    $settings->set('data_share.instance.id', 'generic-source-dev');
+    $settings->set('data_share.instance.name', GENERIC_SHARE_SOURCE_NAME);
+    $settings->set('data_share.instance.role', 'development');
 
     return new DataShareInstanceIdentity('generic-source-dev', GENERIC_SHARE_SOURCE_NAME, DataShareInstanceRole::Development);
 }
@@ -147,6 +161,10 @@ function becomeGenericDataShareDestination(bool $production = false): DataShareI
         'data_share.instance.name' => 'Generic destination',
         'data_share.instance.role' => $role->value,
     ]);
+    $settings = app(SettingsService::class);
+    $settings->set('data_share.instance.id', $id);
+    $settings->set('data_share.instance.name', 'Generic destination');
+    $settings->set('data_share.instance.role', $role->value);
 
     return new DataShareInstanceIdentity($id, 'Generic destination', $role);
 }
@@ -483,7 +501,7 @@ it('stores Data Share operator configuration in Base Settings and validates sour
 
 it('resolves each Base Setting only once per Data Share service instance', function (): void {
     $service = Mockery::mock(SettingsService::class);
-    $service->shouldReceive('get')->once()->with('data_share.transfer_limits.max_records', 250000)->andReturn('42');
+    $service->shouldReceive('get')->once()->with('data_share.transfer_limits.max_records')->andReturn('42');
     $settings = new DataShareSettings($service);
 
     expect($settings->integer('data_share.transfer_limits.max_records', 250000, 1, 10000000))->toBe(42)
@@ -525,6 +543,9 @@ it('exports deterministic bounded payloads with physical identities and binary f
 it('enforces scalar, canonical-line, record, and table bounds before publishing', function (array $limits, string $message): void {
     seedGenericDataShareFixture();
     config($limits);
+    foreach ($limits as $key => $value) {
+        app(SettingsService::class)->set($key, $value);
+    }
 
     expect(fn () => app(DataSharePackageExporter::class)->preview(
         GENERIC_SHARE_SCOPE,
@@ -594,6 +615,7 @@ it('blocks production apply before mutation when recovery cannot be created', fu
     $receipt = receiveGenericDataShare($bundle, $export, production: true);
     $plan = app(DataShareImportPlanner::class)->plan($receipt);
     config(['backup.enabled' => false]);
+    app(SettingsService::class)->set('backup.enabled', false);
 
     expect(fn () => app(DataSharePackageApplier::class)->apply(
         $plan,
@@ -801,6 +823,7 @@ it('does not prune an available published offer and requires explicit outgoing c
     $receipt = receiveGenericDataShare($bundle, $export);
     $receipt->forceFill(['status' => 'applied', 'received_at' => now('UTC')->subDays(30)])->save();
     config(['data_share.transfer_limits.incoming_retention_days' => 14]);
+    app(SettingsService::class)->set('data_share.transfer_limits.incoming_retention_days', 14);
     touch(Storage::disk('local')->path($offer->package_path), now('UTC')->subDays(30)->timestamp);
 
     $default = app(DataSharePackageRetention::class)->prune();

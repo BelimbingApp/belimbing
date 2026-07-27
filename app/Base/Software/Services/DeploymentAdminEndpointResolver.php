@@ -22,8 +22,10 @@ final class DeploymentAdminEndpointResolver
      */
     public function candidates(): array
     {
-        $host = config('app.caddy_server_admin_host');
-        $port = config('app.caddy_server_admin_port');
+        $runtimeHost = $this->runtimeEnv('CADDY_SERVER_ADMIN_HOST');
+        $runtimePort = $this->runtimeEnv('CADDY_SERVER_ADMIN_PORT');
+        $host = $runtimeHost ?? $this->configuredValue('app.caddy_server_admin_host');
+        $port = $runtimePort ?? $this->configuredValue('app.caddy_server_admin_port');
         [$stateHost, $statePort] = $this->octaneAdminEndpoint($this->octaneState());
 
         if ($host !== null || $port !== null) {
@@ -57,13 +59,17 @@ final class DeploymentAdminEndpointResolver
         $state = $this->octaneState();
         $stateEndpoint = $this->octaneApplicationEndpoint($state);
         $urls = [];
+        $appUrl = rtrim((string) config('app.url'), '/');
+
+        if (($this->runtimeEnv('CADDY_SERVER_ADMIN_HOST') !== null || $this->runtimeEnv('CADDY_SERVER_ADMIN_PORT') !== null)
+            && $appUrl !== '') {
+            $urls[] = "{$appUrl}/up";
+        }
 
         if ($stateEndpoint !== null) {
             [$host, $port] = $stateEndpoint;
             $urls[] = "http://{$host}:{$port}/up";
         }
-
-        $appUrl = rtrim((string) config('app.url'), '/');
 
         if ($appUrl !== '') {
             $urls[] = "{$appUrl}/up";
@@ -103,6 +109,24 @@ final class DeploymentAdminEndpointResolver
         return [
             [self::LOCAL_ADMIN_HOST, self::DEFAULT_ADMIN_PORT],
         ];
+    }
+
+    private function configuredValue(string $key): ?string
+    {
+        if (app()->environment('testing')) {
+            return null;
+        }
+
+        $value = config($key);
+
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function runtimeEnv(string $key): ?string
+    {
+        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**
