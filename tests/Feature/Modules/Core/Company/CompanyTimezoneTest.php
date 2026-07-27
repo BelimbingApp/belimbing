@@ -57,7 +57,6 @@ it('saves timezone on property change', function (): void {
 
     $stored = $this->settings->get(
         COMPANY_TZ_SETTINGS_KEY,
-        null,
         Scope::company($this->company->id),
     );
 
@@ -124,7 +123,6 @@ it('auto-saves timezone when address locality matches a city exactly', function 
 
     $stored = $this->settings->get(
         COMPANY_TZ_SETTINGS_KEY,
-        null,
         Scope::company($this->company->id),
     );
 
