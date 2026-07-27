@@ -115,7 +115,12 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         $totalBytes = 0;
         $maximumScalarBytes = $this->settings->integer('data_share.transfer_limits.max_scalar_bytes', 10 * 1024 * 1024, 1, 2147483647);
         $maximumLineBytes = $this->settings->integer('data_share.transfer_limits.max_record_line_bytes', 32 * 1024 * 1024, 1, 2147483647);
-        $maximumSnapshotBytes = $this->settings->integer('data_share.mirror.max_snapshot_bytes', 1024 * 1024 * 1024, 1, 2147483647);
+        $maximumSnapshotBytes = $this->settings->integer(
+            'data_share.mirror.max_snapshot_bytes',
+            (int) config('data_share.mirror.max_snapshot_bytes', 1024 * 1024 * 1024),
+            1,
+            2147483647,
+        );
 
         try {
             $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $progress): void {

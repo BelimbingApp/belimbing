@@ -16,6 +16,7 @@ use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataShareMirrorObservation;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\DataShareInstanceIdentityResolver;
+use App\Base\Database\Services\DataShare\DataShareSettings;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorCatalog;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorConnectionManager;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorDependencyInspector;
@@ -27,12 +28,15 @@ use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorProviderInitializ
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorProviderRegistry;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorReviewer;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorSchemaComparator;
+use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorTemporaryFiles;
+use App\Base\Database\Services\DataShare\Mirror\PortableDataShareMirrorEngine;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
 use App\Base\Foundation\Services\NullDataOperationRecorder;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
 use Illuminate\Database\Connection;
 use Illuminate\Database\DatabaseManager;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -60,6 +64,78 @@ it('isolates progress-listener failures from the mirror operation', function ():
     $progress->report('Transfer continues.');
 
     expect($called)->toBeTrue();
+});
+
+it('separates mirror snapshot size from portable package row and byte limits', function (): void {
+    $table = 'zz_mirror_limit_contract';
+    $temporaryPath = storage_path('framework/testing/data-share-mirror-limit-contract');
+    config([
+        'database.connections.mirror_limit_target' => [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => true,
+        ],
+        'data_share.mirror.temp_path' => $temporaryPath,
+    ]);
+    DB::purge('mirror_limit_target');
+
+    $source = DB::connection();
+    $target = DB::connection('mirror_limit_target');
+    foreach ([$source, $target] as $connection) {
+        $connection->getSchemaBuilder()->create($table, function ($blueprint): void {
+            $blueprint->unsignedInteger('id')->primary();
+            $blueprint->string('name');
+        });
+    }
+    $source->table($table)->insert([
+        ['id' => 1, 'name' => 'first row'],
+        ['id' => 2, 'name' => 'second row'],
+    ]);
+    $target->table($table)->insert(['id' => 91, 'name' => 'stale row']);
+
+    $settings = app(SettingsService::class);
+    $settings->set('data_share.transfer_limits.max_records', 1);
+    $settings->set('data_share.transfer_limits.max_package_bytes', 1);
+
+    $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
+    $connections->shouldReceive('source')->twice()->with(DataShareMirrorDirection::Push)
+        ->andReturn(new DataShareMirrorEndpoint('Local', $source, [], 'sqlite'));
+    $connections->shouldReceive('target')->twice()->with(DataShareMirrorDirection::Push)
+        ->andReturn(new DataShareMirrorEndpoint('Mirror', $target, [], 'sqlite'));
+    $dependencies = Mockery::mock(DataShareMirrorDependencyInspector::class);
+    $dependencies->shouldReceive('insertionOrder')->twice()->with($source, [$table])->andReturn([$table]);
+    $files = app(Filesystem::class);
+    $review = new DataShareMirrorReview(
+        DataShareMirrorDirection::Push,
+        [new DataShareMirrorReviewItem($table, DataShareMirrorAction::Replace, DataShareMirrorAction::Replace)],
+        false,
+        ['create' => 0, 'replace' => 1, 'delete' => 0, 'blocked' => 0],
+        'limit-contract',
+    );
+    $engine = fn (): PortableDataShareMirrorEngine => new PortableDataShareMirrorEngine(
+        $connections,
+        $dependencies,
+        app(DataShareMirrorSchemaComparator::class),
+        new DataShareMirrorTemporaryFiles($files),
+        $files,
+        new DataShareSettings($settings),
+    );
+
+    try {
+        $engine()->execute($review);
+        expect($target->table($table)->orderBy('id')->pluck('name')->all())
+            ->toBe(['first row', 'second row']);
+
+        $settings->set('data_share.mirror.max_snapshot_bytes', 1);
+        expect(fn () => $engine()->execute($review))
+            ->toThrow(DataShareMirrorException::class, 'The mirror snapshot exceeds the 1 byte limit.')
+            ->and($target->table($table)->orderBy('id')->pluck('name')->all())
+            ->toBe(['first row', 'second row']);
+    } finally {
+        $files->deleteDirectory($temporaryPath);
+        DB::purge('mirror_limit_target');
+    }
 });
 
 it('stores the mirror URL encrypted and never includes it in safe connection status', function (): void {
