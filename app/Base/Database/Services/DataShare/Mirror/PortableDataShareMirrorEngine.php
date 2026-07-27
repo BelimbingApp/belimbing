@@ -113,13 +113,12 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         }
         $totalRecords = 0;
         $totalBytes = 0;
-        $maximumRecords = $this->settings->integer('data_share.transfer_limits.max_records', 250000, 1, 10000000);
         $maximumScalarBytes = $this->settings->integer('data_share.transfer_limits.max_scalar_bytes', 10 * 1024 * 1024, 1, 2147483647);
         $maximumLineBytes = $this->settings->integer('data_share.transfer_limits.max_record_line_bytes', 32 * 1024 * 1024, 1, 2147483647);
-        $maximumSnapshotBytes = $this->settings->integer('data_share.transfer_limits.max_package_bytes', 250 * 1024 * 1024, 1, 2147483647);
+        $maximumSnapshotBytes = $this->settings->integer('data_share.mirror.max_snapshot_bytes', 1024 * 1024 * 1024, 1, 2147483647);
 
         try {
-            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumRecords, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $progress): void {
+            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $progress): void {
                 if ($source->getDriverName() === 'pgsql') {
                     $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
                 }
@@ -152,9 +151,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                         if ($lineBytes > $maximumLineBytes) {
                             throw DataShareMirrorException::limitExceeded(__('A mirror record exceeds the :max byte line limit.', ['max' => $maximumLineBytes]));
                         }
-                        if (++$totalRecords > $maximumRecords) {
-                            throw DataShareMirrorException::limitExceeded(__('The mirror selection exceeds the :max record limit.', ['max' => $maximumRecords]));
-                        }
+                        $totalRecords++;
                         $totalBytes += $lineBytes;
                         if ($totalBytes > $maximumSnapshotBytes) {
                             throw DataShareMirrorException::limitExceeded(__('The mirror snapshot exceeds the :max byte limit.', ['max' => $maximumSnapshotBytes]));

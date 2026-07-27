@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorConnectionManager;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use App\Base\Settings\Contracts\SettingsService;
@@ -106,6 +107,39 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
     expect(DB::table(PORTABLE_MIRROR_PARENT)->get(['id', 'name'])->map(fn (object $row): array => (array) $row)->all())
         ->toBe([['id' => 7, 'name' => 'remote authority']])
         ->and(DB::table(PORTABLE_MIRROR_CHILD)->value('label'))->toBe('remote child');
+});
+
+it('does not apply portable package row or byte limits to mirror snapshots', function (): void {
+    app(SettingsService::class)->set('data_share.transfer_limits.max_records', 1);
+    app(SettingsService::class)->set('data_share.transfer_limits.max_package_bytes', 1);
+    DB::table(PORTABLE_MIRROR_PARENT)->insert([
+        ['id' => 1, 'name' => 'first row', 'enabled' => true, 'payload' => null, 'amount' => '1.00'],
+        ['id' => 2, 'name' => 'second row', 'enabled' => true, 'payload' => null, 'amount' => '2.00'],
+    ]);
+
+    $manager = app(DataShareMirrorManager::class);
+    $review = $manager->review('push', [PORTABLE_MIRROR_PARENT]);
+    $manager->execute('push', [PORTABLE_MIRROR_PARENT], $review->stateToken);
+
+    expect(DB::connection('data_share_mirror')->table(PORTABLE_MIRROR_PARENT)->count())->toBe(2);
+});
+
+it('enforces the mirror-specific snapshot byte limit before changing the destination', function (): void {
+    app(SettingsService::class)->set('data_share.mirror.max_snapshot_bytes', 1);
+    DB::table(PORTABLE_MIRROR_PARENT)->insert([
+        'id' => 1, 'name' => 'source row', 'enabled' => true, 'payload' => null, 'amount' => '1.00',
+    ]);
+    DB::connection('data_share_mirror')->table(PORTABLE_MIRROR_PARENT)->insert([
+        'id' => 91, 'name' => 'destination row', 'enabled' => false, 'payload' => null, 'amount' => '91.00',
+    ]);
+
+    $manager = app(DataShareMirrorManager::class);
+    $review = $manager->review('push', [PORTABLE_MIRROR_PARENT]);
+
+    expect(fn () => $manager->execute('push', [PORTABLE_MIRROR_PARENT], $review->stateToken))
+        ->toThrow(DataShareMirrorException::class, 'The mirror snapshot exceeds the 1 byte limit.')
+        ->and(DB::connection('data_share_mirror')->table(PORTABLE_MIRROR_PARENT)->value('name'))
+        ->toBe('destination row');
 });
 
 it('blocks portable data transfer when a selected schema is absent at one endpoint', function (): void {

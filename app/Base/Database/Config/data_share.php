@@ -33,6 +33,7 @@ return [
         'timeout_seconds' => 3600,
         'catalog_cache_seconds' => 300,
         'lock_timeout_ms' => 30000,
+        'max_snapshot_bytes' => 1024 * 1024 * 1024,
         'executables' => [
             'pg_dump' => env('DATA_SHARE_MIRROR_PG_DUMP'),
             'psql' => env('DATA_SHARE_MIRROR_PSQL'),

@@ -293,7 +293,7 @@ return [
         'data_share_transfer_limits' => [
             'label' => 'Transfer limits',
             'capability' => 'admin.system.data-share-settings.manage',
-            'description' => 'Hard bounds applied to every bulk Data Export and Data Share package.',
+            'description' => 'Hard bounds for portable packages and development-mirror snapshots.',
             'fields' => [
                 [
                     'key' => 'data_share.transfer_limits.max_tables',
@@ -306,11 +306,11 @@ return [
                 ],
                 [
                     'key' => 'data_share.transfer_limits.max_records',
-                    'label' => 'Maximum records',
+                    'label' => 'Maximum package records',
                     'type' => 'text',
                     'scope' => 'global',
                     'default' => '250000',
-                    'help' => 'Maximum total rows serialized across the selected tables.',
+                    'help' => 'Maximum total rows in a portable package. Development Mirror has no row-count limit.',
                     'rules' => ['required', 'integer', 'min:1', 'max:10000000'],
                 ],
                 [
@@ -338,6 +338,15 @@ return [
                     'scope' => 'global',
                     'default' => '262144000',
                     'help' => 'Maximum streamed response and protected package size. Keep it within every proxy and origin limit.',
+                    'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
+                ],
+                [
+                    'key' => 'data_share.mirror.max_snapshot_bytes',
+                    'label' => 'Maximum mirror snapshot bytes',
+                    'type' => 'text',
+                    'scope' => 'global',
+                    'default' => '1073741824',
+                    'help' => 'Maximum temporary snapshot for one Mirror transfer. The default is 1 GiB.',
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
             ],
