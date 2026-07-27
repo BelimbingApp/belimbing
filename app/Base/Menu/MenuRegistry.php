@@ -64,10 +64,13 @@ class MenuRegistry
             }
         }
 
-        // Warn about missing parents (but don't error - item becomes root)
+        // Warn about missing parents. This is not a hard error, but the item is
+        // dropped from the rendered tree: MenuBuilder matches children on an
+        // exact parent id, so an unresolvable parent makes the item unreachable
+        // rather than promoting it to root.
         foreach ($this->items as $item) {
             if ($item->parent && ! $this->items->has($item->parent)) {
-                Log::warning('Menu item parent not found', [
+                Log::warning('Menu item parent not found; item will not render', [
                     'item_id' => $item->id,
                     'parent_id' => $item->parent,
                 ]);
