@@ -5,7 +5,7 @@ use App\Base\Database\Livewire\SchemaIncubation\Index;
 /** @var Index $this */
 $migrationScopeHelp = __('This screen edits migration files by adding or removing `use IncubatingSchema;`. Actions operate at migration scope, so selecting one table can move sibling tables from the same migration too.');
 $sourceOnlyHelp = __('Only source-local incubation is editable here.');
-$addHelp = __('Moving a selected table edits its owning migration file to add `use IncubatingSchema;`.');
+$addHelp = __('Incubating a selected table edits its owning migration file to add `use IncubatingSchema;`.');
 ?>
 <div>
     <x-slot name="title">{{ __('Schema Incubation') }}</x-slot>
@@ -47,179 +47,248 @@ $addHelp = __('Moving a selected table edits its owning migration file to add `u
             </x-ui.alert>
         @endforeach
 
-        <x-ui.card>
-            <div class="mb-4 space-y-3">
-                <h2 class="text-sm font-semibold text-ink">{{ __('Currently Incubating') }}</h2>
+        <div
+            x-data="{
+                toggleVisibleSelection(header, wire, property) {
+                    const rows = Array.from(header.closest('table').querySelectorAll('[data-selection-row]'))
 
-                <div class="flex flex-col gap-3 xl:flex-row xl:items-end">
-                    <div class="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
-                        <x-ui.search-input
-                            wire:model.live.debounce.300ms="incubatingSearch"
-                            placeholder="{{ __('Filter incubating tables by table name…') }}"
-                        />
+                    header.indeterminate = false
+                    wire.$set(property, header.checked ? rows.map((checkbox) => checkbox.value) : [], false)
+                },
 
-                        <x-ui.select id="incubating-module-filter" wire:model.live="incubatingModule">
-                            <option value="">{{ __('All modules') }}</option>
-                            @foreach($incubatingModules as $module)
-                                <option value="{{ $module }}">{{ $module }}</option>
-                            @endforeach
-                        </x-ui.select>
-                    </div>
+                syncSelectionHeader(row) {
+                    const table = row.closest('table')
+                    const rows = Array.from(table.querySelectorAll('[data-selection-row]'))
+                    const header = table.querySelector('[data-selection-header]')
+                    const allSelected = rows.length > 0 && rows.every((checkbox) => checkbox.checked)
 
-                    <div class="flex flex-wrap gap-2">
-                    <x-ui.button wire:click="removeSelectedFromIncubation" variant="primary" size="md" class="whitespace-nowrap">
-                        {{ __('Un-incubate') }}
-                    </x-ui.button>
-                    </div>
-                </div>
-            </div>
+                    if (header) {
+                        header.checked = allSelected
+                        header.indeterminate = rows.some((checkbox) => checkbox.checked) && ! allSelected
+                    }
+                },
+            }"
+        >
+            <x-ui.tabs
+                tabs-id="database-incubation-tabs"
+                :tabs="[
+                    ['id' => 'un-incubate', 'label' => __('Un-incubate')],
+                    ['id' => 'incubate', 'label' => __('Incubate')],
+                ]"
+                default="un-incubate"
+            >
+                <x-ui.tab id="un-incubate">
+                    <x-ui.card>
+                        <div class="mb-4 space-y-3">
+                            <h2 class="text-sm font-semibold text-ink">{{ __('Currently Incubating') }}</h2>
 
-            <x-ui.table container="flush" :caption="__('Incubating tables')">
-
-                    <x-slot name="head">
-                        <tr>
-                            <x-ui.th>
-                                <x-ui.checkbox
-                                    wire:model="selectIncubatingPage"
-                                    x-on:change="$wire.selectedIncubatingTables = $event.target.checked ? @js($incubatingTables->pluck('table_name')->values()->all()) : []"
-                                    id="select-visible-incubation-tables"
-                                />
-                            </x-ui.th>
-                            <x-ui.sortable-th
-                                column="table_name"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Table')"
-                            />
-                            <x-ui.sortable-th
-                                column="module_name"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Module')"
-                            />
-                            <x-ui.sortable-th
-                                column="migration_file"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Migration')"
-                            />
-                            <x-ui.th>{{ __('Schema') }}</x-ui.th>
-                        </tr>
-                    </x-slot>
-
-                        @forelse($incubatingTables as $table)
-                            <tr wire:key="incubation-table-{{ $table->id }}">
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <x-ui.checkbox
-                                        wire:model="selectedIncubatingTables"
-                                        value="{{ $table->table_name }}"
-                                        id="incubation-table-select-{{ $table->id }}"
+                            <div class="flex flex-col gap-3 xl:flex-row xl:items-end">
+                                <div class="grid flex-1 gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]">
+                                    <x-ui.search-input
+                                        wire:model.live.debounce.300ms="incubatingSearch"
+                                        placeholder="{{ __('Filter incubating tables by table name…') }}"
                                     />
-                                </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $table->module_name ?? '—' }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono text-xs" title="{{ $table->migration_file }}">{{ $table->migration_file ? Str::limit($table->migration_file, 50) : '—' }}</td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
-                                    <x-ui.badge :variant="$this->schemaStateVariant($table->schema_state)">
-                                        {{ Str::headline($table->schema_state) }}
-                                    </x-ui.badge>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables are currently under incubation.') }}</td>
-                            </tr>
-                        @endforelse
 
+                                    <x-ui.select id="incubating-module-filter" wire:model.live="incubatingModule">
+                                        <option value="">{{ __('All modules') }}</option>
+                                        @foreach($incubatingModules as $module)
+                                            <option value="{{ $module }}">{{ $module }}</option>
+                                        @endforeach
+                                    </x-ui.select>
+                                </div>
 
-            </x-ui.table>
+                                <div class="flex flex-wrap gap-2">
+                                    <x-ui.button
+                                        wire:click="removeSelectedFromIncubation"
+                                        wire:bind:disabled="selectedIncubatingTables.length === 0"
+                                        variant="primary"
+                                        size="md"
+                                        class="whitespace-nowrap"
+                                    >
+                                        {{ __('Un-incubate') }}
+                                    </x-ui.button>
+                                </div>
+                            </div>
+                        </div>
 
-            <div class="mt-2">
-                {{ $incubatingTables->links() }}
-            </div>
-        </x-ui.card>
+                        <p class="mb-2 text-sm text-muted tabular-nums" aria-live="polite">
+                            <span wire:text="selectedIncubatingTables.length">{{ count($selectedIncubatingTables) }}</span>
+                            <span wire:show="selectedIncubatingTables.length === 1">{{ __('row selected') }}</span>
+                            <span wire:show="selectedIncubatingTables.length !== 1">{{ __('rows selected') }}</span>
+                        </p>
 
-        <x-ui.card>
-            <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div class="flex-1">
-                    <x-ui.search-input
-                        wire:model.live.debounce.300ms="search"
-                        placeholder="{{ __('Search stable tables by table name, module, or migration… Wildcards like people_* and ai_?rowser_* work here.') }}"
-                    />
-                </div>
+                        <x-ui.table container="flush" :caption="__('Incubating tables')">
 
-                <div class="flex flex-wrap gap-2">
-                    <x-ui.button wire:click="moveSelectedToIncubation" variant="secondary" size="sm">
-                        {{ __('Move Selected To Incubation') }}
-                    </x-ui.button>
-                </div>
-            </div>
+                            <x-slot name="head">
+                                <tr>
+                                    <x-ui.th>
+                                        <x-ui.checkbox
+                                            x-on:change="toggleVisibleSelection($el, $wire, 'selectedIncubatingTables')"
+                                            data-selection-header
+                                            id="select-visible-incubation-tables"
+                                            aria-label="{{ __('Select all visible incubating tables') }}"
+                                        />
+                                    </x-ui.th>
+                                    <x-ui.sortable-th
+                                        column="table_name"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Table')"
+                                    />
+                                    <x-ui.sortable-th
+                                        column="module_name"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Module')"
+                                    />
+                                    <x-ui.sortable-th
+                                        column="migration_file"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Migration')"
+                                    />
+                                    <x-ui.th>{{ __('Schema') }}</x-ui.th>
+                                </tr>
+                            </x-slot>
 
-            <div class="mb-4 rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3 text-sm text-muted">
-                {{ __('Search results only show tables that are not currently under source-local incubation. :addHelp', ['addHelp' => $addHelp]) }}
-            </div>
-
-            <x-ui.table container="flush" :caption="__('Incubating migrations')">
-
-                    <x-slot name="head">
-                        <tr>
-                            <x-ui.th>
-                                <x-ui.checkbox
-                                    wire:model="selectSearchPage"
-                                    x-on:change="$wire.selectedSearchTables = $event.target.checked ? @js($searchTables->pluck('table_name')->values()->all()) : []"
-                                    id="select-visible-search-tables"
-                                />
-                            </x-ui.th>
-                            <x-ui.sortable-th
-                                column="table_name"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Table')"
-                            />
-                            <x-ui.sortable-th
-                                column="module_name"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Module')"
-                            />
-                            <x-ui.sortable-th
-                                column="migration_file"
-                                :sort-by="$sortBy"
-                                :sort-dir="$sortDir"
-                                :label="__('Migration')"
-                            />
-                        </tr>
-                    </x-slot>
-
-                        @if(trim($search) === '')
-                            <tr>
-                                <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('Search for tables to move into incubation.') }}</td>
-                            </tr>
-                        @else
-                            @forelse($searchTables as $table)
-                                <tr wire:key="search-table-{{ $table->id }}">
+                            @forelse($incubatingTables as $table)
+                                <tr wire:key="incubation-table-{{ $table->id }}">
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
                                         <x-ui.checkbox
-                                            wire:model="selectedSearchTables"
+                                            wire:model="selectedIncubatingTables"
+                                            wire:bind:checked="selectedIncubatingTables.includes($el.value)"
+                                            x-on:change="$nextTick(() => syncSelectionHeader($el))"
                                             value="{{ $table->table_name }}"
-                                            id="search-table-select-{{ $table->id }}"
+                                            data-selection-row
+                                            id="incubation-table-select-{{ $table->id }}"
+                                            aria-label="{{ __('Select :table', ['table' => $table->table_name]) }}"
                                         />
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $table->module_name ?? '—' }}</td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono text-xs" title="{{ $table->migration_file }}">{{ $table->migration_file ? Str::limit($table->migration_file, 50) : '—' }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                        <x-ui.badge :variant="$this->schemaStateVariant($table->schema_state)">
+                                            {{ Str::headline($table->schema_state) }}
+                                        </x-ui.badge>
+                                    </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No stable tables match this search.') }}</td>
+                                    <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No tables are currently under incubation.') }}</td>
                                 </tr>
                             @endforelse
-                        @endif
-                                </x-ui.table>
 
-            <div class="mt-2">
-                {{ $searchTables->links() }}
-            </div>
-        </x-ui.card>
+
+                        </x-ui.table>
+
+                        <div class="mt-2">
+                            {{ $incubatingTables->links() }}
+                        </div>
+                    </x-ui.card>
+                </x-ui.tab>
+
+                <x-ui.tab id="incubate">
+                    <x-ui.card>
+                        <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                            <div class="flex-1">
+                                <x-ui.search-input
+                                    wire:model.live.debounce.300ms="search"
+                                    placeholder="{{ __('Search stable tables by table name, module, or migration… Wildcards like people_* and ai_?rowser_* work here.') }}"
+                                />
+                            </div>
+
+                            <div class="flex flex-wrap gap-2">
+                                <x-ui.button
+                                    wire:click="moveSelectedToIncubation"
+                                    wire:bind:disabled="selectedSearchTables.length === 0"
+                                    variant="primary"
+                                    size="md"
+                                >
+                                    {{ __('Incubate') }}
+                                </x-ui.button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4 rounded-lg border border-border-default bg-surface-subtle/60 px-4 py-3 text-sm text-muted">
+                            {{ __('Search results only show tables that are not currently under source-local incubation. :addHelp', ['addHelp' => $addHelp]) }}
+                        </div>
+
+                        <p class="mb-2 text-sm text-muted tabular-nums" aria-live="polite">
+                            <span wire:text="selectedSearchTables.length">{{ count($selectedSearchTables) }}</span>
+                            <span wire:show="selectedSearchTables.length === 1">{{ __('row selected') }}</span>
+                            <span wire:show="selectedSearchTables.length !== 1">{{ __('rows selected') }}</span>
+                        </p>
+
+                        <x-ui.table container="flush" :caption="__('Stable tables')">
+
+                            <x-slot name="head">
+                                <tr>
+                                    <x-ui.th>
+                                        <x-ui.checkbox
+                                            x-on:change="toggleVisibleSelection($el, $wire, 'selectedSearchTables')"
+                                            data-selection-header
+                                            id="select-visible-search-tables"
+                                            aria-label="{{ __('Select all visible stable tables') }}"
+                                        />
+                                    </x-ui.th>
+                                    <x-ui.sortable-th
+                                        column="table_name"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Table')"
+                                    />
+                                    <x-ui.sortable-th
+                                        column="module_name"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Module')"
+                                    />
+                                    <x-ui.sortable-th
+                                        column="migration_file"
+                                        :sort-by="$sortBy"
+                                        :sort-dir="$sortDir"
+                                        :label="__('Migration')"
+                                    />
+                                </tr>
+                            </x-slot>
+
+                            @if(trim($search) === '')
+                                <tr>
+                                    <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('Search for stable tables to incubate.') }}</td>
+                                </tr>
+                            @else
+                                @forelse($searchTables as $table)
+                                    <tr wire:key="search-table-{{ $table->id }}">
+                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
+                                            <x-ui.checkbox
+                                                wire:model="selectedSearchTables"
+                                                wire:bind:checked="selectedSearchTables.includes($el.value)"
+                                                x-on:change="$nextTick(() => syncSelectionHeader($el))"
+                                                value="{{ $table->table_name }}"
+                                                data-selection-row
+                                                id="search-table-select-{{ $table->id }}"
+                                                aria-label="{{ __('Select :table', ['table' => $table->table_name]) }}"
+                                            />
+                                        </td>
+                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink font-mono">{{ $table->table_name }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $table->module_name ?? '—' }}</td>
+                                        <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted font-mono text-xs" title="{{ $table->migration_file }}">{{ $table->migration_file ? Str::limit($table->migration_file, 50) : '—' }}</td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No stable tables match this search.') }}</td>
+                                    </tr>
+                                @endforelse
+                            @endif
+                        </x-ui.table>
+
+                        <div class="mt-2">
+                            {{ $searchTables->links() }}
+                        </div>
+                    </x-ui.card>
+                </x-ui.tab>
+            </x-ui.tabs>
+        </div>
     </div>
 </div>

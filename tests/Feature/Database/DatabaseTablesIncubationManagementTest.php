@@ -82,14 +82,18 @@ test('schema incubation index can filter currently incubating tables by module',
         ->assertDontSee('people_claim_types');
 });
 
-test('schema incubation page select checkbox only selects filtered incubating tables', function (): void {
+test('schema incubation table pickers render client-reactive selection controls and feedback', function (): void {
     $this->actingAs(createAdminUser());
 
     Livewire::test(SchemaIncubationIndex::class)
-        ->set('incubatingModule', 'Leave')
-        ->set('incubatingSearch', 'leave_type')
-        ->set('selectIncubatingPage', true)
-        ->assertSet('selectedIncubatingTables', ['people_leave_types']);
+        ->assertSeeHtml('id="database-incubation-tabs"')
+        ->assertSeeHtml('data-selection-header')
+        ->assertSeeHtml('data-selection-row')
+        ->assertSeeHtml('wire:text="selectedIncubatingTables.length"')
+        ->assertSeeHtml('wire:text="selectedSearchTables.length"')
+        ->assertSeeHtml('wire:bind:disabled="selectedIncubatingTables.length === 0"')
+        ->assertSeeHtml('wire:bind:disabled="selectedSearchTables.length === 0"')
+        ->assertDontSee('Move Selected To Incubation');
 });
 
 test('schema incubation index hides non-incubating stable tables from the main incubation list', function (): void {

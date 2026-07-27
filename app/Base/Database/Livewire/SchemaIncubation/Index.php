@@ -36,14 +36,10 @@ class Index extends Component
      */
     public array $selectedIncubatingTables = [];
 
-    public bool $selectIncubatingPage = false;
-
     /**
      * @var list<string>
      */
     public array $selectedSearchTables = [];
-
-    public bool $selectSearchPage = false;
 
     /**
      * @var list<string>
@@ -91,16 +87,6 @@ class Index extends Component
             'stable' => 'success',
             default => 'default',
         };
-    }
-
-    public function updatedSelectIncubatingPage(bool $value): void
-    {
-        $this->selectedIncubatingTables = $value ? $this->visibleIncubatingTableNames() : [];
-    }
-
-    public function updatedSelectSearchPage(bool $value): void
-    {
-        $this->selectedSearchTables = $value ? $this->visibleSearchTableNames() : [];
     }
 
     public function sort(string $column): void
@@ -264,32 +250,6 @@ class Index extends Component
                     ->orWhere('module_name', 'like', '%'.$search.'%')
                     ->orWhere('migration_file', 'like', '%'.$search.'%');
             });
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function visibleIncubatingTableNames(): array
-    {
-        return $this->incubatingTableQuery()
-            ->orderBy($this->sortBy, $this->sortDir)
-            ->paginate(25, pageName: 'incubatingPage')
-            ->getCollection()
-            ->pluck('table_name')
-            ->all();
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function visibleSearchTableNames(): array
-    {
-        return $this->searchResultsQuery()
-            ->orderBy($this->sortBy, $this->sortDir)
-            ->paginate(25, pageName: 'searchPage')
-            ->getCollection()
-            ->pluck('table_name')
-            ->all();
     }
 
     /**
