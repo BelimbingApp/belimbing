@@ -487,7 +487,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                             {{ __('Comparing schemas and dependencies. Nothing changes during review; you can close this window and the review will continue.') }}
                         </span>
                         <span x-show="mirrorTransferStarting">
-                            {{ __('Streaming each table as it is snapshotted, loaded, and verified. You can close this window; the operation will continue.') }}
+                            {{ __('Each table is staged, written to its destination, and verified. You can close this window; the operation will continue.') }}
                         </span>
                         <span x-show="! mirrorReviewStarting && ! mirrorTransferStarting">
                             {{ $mirrorReview !== null
@@ -497,7 +497,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                                         ? __('Resolve the blockers below. No data has changed.')
                                         : __('Inspect the exact actions below, then start the transfer. No data has changed yet.')))
                                 : ($mirrorRunStatus === 'running'
-                                    ? __('Streaming each table as it is snapshotted, loaded, and verified. You can close this window; the operation will continue.')
+                                    ? __('Each table is staged, written to its destination, and verified. You can close this window; the operation will continue.')
                                     : __('The run log will remain available until you close this window.')) }}
                         </span>
                     </p>
@@ -536,7 +536,7 @@ $mirrorBlockerMessage = static function (mixed $blocker): string {
                 </div>
                 <div x-show="mirrorTransferStarting" class="space-y-0">
                     <div>{{ $mirrorDirection === 'pull' ? __('Starting pull from :provider.', ['provider' => $mirrorProviderLabel]) : __('Starting push to :provider.', ['provider' => $mirrorProviderLabel]) }}</div>
-                    <div>{{ __('Per-table snapshot, load, and verification progress will appear below.') }}</div>
+                    <div>{{ __('Table-by-table staging, write, and verification progress will appear below.') }}</div>
                 </div>
                 <div class="space-y-0" wire:stream="mirrorRunLog">
                     @foreach($mirrorRunLog as $line)

@@ -66,7 +66,7 @@ it('isolates progress-listener failures from the mirror operation', function ():
     expect($called)->toBeTrue();
 });
 
-it('separates mirror snapshot size from portable package row and byte limits', function (): void {
+it('separates mirror staging size from portable package row and byte limits', function (): void {
     $table = 'zz_mirror_limit_contract';
     $temporaryPath = storage_path('framework/testing/data-share-mirror-limit-contract');
     config([
@@ -129,7 +129,7 @@ it('separates mirror snapshot size from portable package row and byte limits', f
 
         $settings->set('data_share.mirror.max_snapshot_bytes', 1);
         expect(fn () => $engine()->execute($review))
-            ->toThrow(DataShareMirrorException::class, 'The mirror snapshot exceeds the 1 byte limit.')
+            ->toThrow(DataShareMirrorException::class, 'Mirror staging exceeds the 1 byte limit.')
             ->and($target->table($table)->orderBy('id')->pluck('name')->all())
             ->toBe(['first row', 'second row']);
     } finally {

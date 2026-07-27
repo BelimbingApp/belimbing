@@ -87,8 +87,8 @@ it('mirrors complete selected data in both directions between SQLite and Postgre
         ->and($remote->table(PORTABLE_MIRROR_CHILD)->value('label'))->toBe('local child')
         ->and($remote->table(PORTABLE_MIRROR_CONTROL)->value('marker'))->toBe('untouched')
         ->and($pushProgress)->toContain(
-            'Destination transaction committed.',
-            'Loaded destination table '.PORTABLE_MIRROR_PARENT.' (2 rows).',
+            'Changes committed to Supabase.',
+            'Written to Supabase: '.PORTABLE_MIRROR_PARENT.' (2 rows).',
         );
 
     $remote->table(PORTABLE_MIRROR_CHILD)->delete();
@@ -137,7 +137,7 @@ it('enforces the mirror-specific snapshot byte limit before changing the destina
     $review = $manager->review('push', [PORTABLE_MIRROR_PARENT]);
 
     expect(fn () => $manager->execute('push', [PORTABLE_MIRROR_PARENT], $review->stateToken))
-        ->toThrow(DataShareMirrorException::class, 'The mirror snapshot exceeds the 1 byte limit.')
+        ->toThrow(DataShareMirrorException::class, 'Mirror staging exceeds the 1 byte limit.')
         ->and(DB::connection('data_share_mirror')->table(PORTABLE_MIRROR_PARENT)->value('name'))
         ->toBe('destination row');
 });

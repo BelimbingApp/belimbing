@@ -49,9 +49,9 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
         ));
         $tableCount = count($review->items);
         $progress?->report((string) trans_choice(
-            'Preparing a native PostgreSQL snapshot for :count selected table.|Preparing a native PostgreSQL snapshot for :count selected tables.',
+            'Staging :count selected table from :source.|Staging :count selected tables from :source.',
             $tableCount,
-            ['count' => $tableCount],
+            ['count' => $tableCount, 'source' => $source->label],
         ));
         $pgDump = $this->processes->find('pg_dump');
         $psql = $this->processes->find('psql');
@@ -89,16 +89,16 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                 if (! $result->successful()) {
                     throw DataShareMirrorException::preMutationProcessFailed('pg_dump', $result->exitCode);
                 }
-                $progress?->report((string) __('Source snapshot completed.'));
+                $progress?->report((string) __('Staging from :source complete.', ['source' => $source->label]));
             } else {
                 $this->files->put($dumpPath, '');
             }
 
             @chmod($dumpPath, 0600);
-            $progress?->report((string) __('Preparing the atomic destination transaction.'));
+            $progress?->report((string) __('Preparing one transaction for :target.', ['target' => $target->label]));
             $this->buildProgram($programPath, $dumpPath, $target->connection, $source->connection, $targetTables, $sourceTables, $review);
 
-            $progress?->report((string) __('Applying the snapshot in one destination transaction.'));
+            $progress?->report((string) __('Writing staged data to :target in one transaction.', ['target' => $target->label]));
             $result = $this->processes->run([
                 $psql,
                 '--no-psqlrc',
@@ -110,7 +110,7 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
             if (! $result->successful()) {
                 throw DataShareMirrorException::processFailed('psql', $result->exitCode);
             }
-            $progress?->report((string) __('Destination transaction committed. Verifying live row counts.'));
+            $progress?->report((string) __('Changes committed to :target. Verifying row counts.', ['target' => $target->label]));
 
             $counts = ['create' => 0, 'replace' => 0, 'delete' => 0];
             $items = [];
@@ -124,9 +124,10 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                     'local_rows' => $review->direction === DataShareMirrorDirection::Push ? $sourceRows : $targetRows,
                     'remote_rows' => $review->direction === DataShareMirrorDirection::Push ? $targetRows : $sourceRows,
                 ];
-                $progress?->report((string) __('Verified :current of :total: :table (:rows rows).', [
+                $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', [
                     'current' => $index + 1,
                     'total' => $tableCount,
+                    'target' => $target->label,
                     'table' => $item->table,
                     'rows' => $targetRows,
                 ]));

@@ -100,8 +100,8 @@ it('pushes an explicit mixed selection as complete PostgreSQL table images', fun
     mirrorAssertAuthoritativeImage(DB::connection('data_share_mirror'), $controlBefore);
     mirrorAssertNoTransferArtifacts();
     expect($progress)->toContain(
-        'Source snapshot completed.',
-        'Destination transaction committed. Verifying live row counts.',
+        'Staging from Local complete.',
+        'Changes committed to Supabase. Verifying row counts.',
     );
 });
 

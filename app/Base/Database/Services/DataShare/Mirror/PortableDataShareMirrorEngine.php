@@ -39,8 +39,10 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
             throw DataShareMirrorException::blocked();
         }
 
-        $source = $this->connections->source($review->direction)->connection;
-        $target = $this->connections->target($review->direction)->connection;
+        $sourceEndpoint = $this->connections->source($review->direction);
+        $targetEndpoint = $this->connections->target($review->direction);
+        $source = $sourceEndpoint->connection;
+        $target = $targetEndpoint->connection;
         $tables = array_values(array_map(fn ($item): string => $item->table, $review->items));
         $maximumTables = $this->settings->integer('data_share.transfer_limits.max_tables', 250, 1, 10000);
         if (count($tables) > $maximumTables) {
@@ -52,29 +54,30 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         }
         $tableCount = count($tables);
         $progress?->report((string) trans_choice(
-            'Preparing a portable snapshot for :count selected table.|Preparing a portable snapshot for :count selected tables.',
+            'Staging :count selected table from :source.|Staging :count selected tables from :source.',
             $tableCount,
-            ['count' => $tableCount],
+            ['count' => $tableCount, 'source' => $sourceEndpoint->label],
         ));
 
         $snapshotPath = $this->temporarySnapshotPath();
 
         try {
             try {
-                $snapshot = $this->writeSnapshot($source, $target, $order, $snapshotPath, $progress);
+                $snapshot = $this->writeSnapshot($source, $target, $order, $snapshotPath, $sourceEndpoint->label, $progress);
             } catch (DataShareMirrorException $exception) {
                 throw $exception;
             } catch (Throwable $exception) {
-                throw DataShareMirrorException::safeFailure(__('The portable source snapshot could not be completed. No destination rows were changed.'), $exception);
+                throw DataShareMirrorException::safeFailure(__('Source data could not be staged. No rows in :target were changed.', ['target' => $targetEndpoint->label]), $exception);
             }
 
-            $progress?->report((string) __('Source snapshot completed: :records rows, :bytes bytes.', [
+            $progress?->report((string) __('Staging from :source complete: :records rows, :bytes bytes.', [
+                'source' => $sourceEndpoint->label,
                 'records' => $snapshot['records'],
                 'bytes' => $snapshot['bytes'],
             ]));
-            $progress?->report((string) __('Replacing destination rows in one transaction.'));
-            $this->replaceTargetRows($target, $order, $snapshotPath, $snapshot['counts'], $snapshot['hashes'], $progress);
-            $progress?->report((string) __('Destination transaction committed.'));
+            $progress?->report((string) __('Writing staged data to :target in one transaction.', ['target' => $targetEndpoint->label]));
+            $this->replaceTargetRows($target, $order, $snapshotPath, $snapshot['counts'], $snapshot['hashes'], $targetEndpoint->label, $progress);
+            $progress?->report((string) __('Changes committed to :target.', ['target' => $targetEndpoint->label]));
 
             return new DataShareMirrorExecutionResult(
                 $review->direction,
@@ -98,11 +101,11 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
     }
 
     /** @param list<string> $tables @return array{counts: array<string, int>, hashes: array<string, string>, records: int, bytes: int} */
-    private function writeSnapshot(Connection $source, Connection $target, array $tables, string $path, ?DataShareMirrorProgress $progress): array
+    private function writeSnapshot(Connection $source, Connection $target, array $tables, string $path, string $sourceLabel, ?DataShareMirrorProgress $progress): array
     {
         $handle = fopen($path, 'wb');
         if ($handle === false) {
-            throw DataShareMirrorException::safeFailure(__('The portable snapshot could not be opened.'));
+            throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be opened.'));
         }
 
         @chmod($path, 0600);
@@ -123,7 +126,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         );
 
         try {
-            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $progress): void {
+            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $sourceLabel, $progress): void {
                 if ($source->getDriverName() === 'pgsql') {
                     $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
                 }
@@ -159,17 +162,18 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                         $totalRecords++;
                         $totalBytes += $lineBytes;
                         if ($totalBytes > $maximumSnapshotBytes) {
-                            throw DataShareMirrorException::limitExceeded(__('The mirror snapshot exceeds the :max byte limit.', ['max' => $maximumSnapshotBytes]));
+                            throw DataShareMirrorException::limitExceeded(__('Mirror staging exceeds the :max byte limit.', ['max' => $maximumSnapshotBytes]));
                         }
                         if (fwrite($handle, $line) !== strlen($line)) {
-                            throw DataShareMirrorException::safeFailure(__('The portable snapshot could not be written.'));
+                            throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be written.'));
                         }
 
                         $counts[$table]++;
                     }
-                    $progress?->report((string) __('Snapshotted :current of :total: :table (:rows rows).', [
+                    $progress?->report((string) __('Staged table :current of :total from :source: :table (:rows rows).', [
                         'current' => $index + 1,
                         'total' => $tableCount,
+                        'source' => $sourceLabel,
                         'table' => $table,
                         'rows' => $counts[$table],
                     ]));
@@ -188,9 +192,9 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
     }
 
     /** @param list<string> $tables @param array<string, int> $expectedCounts @param array<string, string> $expectedHashes */
-    private function replaceTargetRows(Connection $target, array $tables, string $path, array $expectedCounts, array $expectedHashes, ?DataShareMirrorProgress $progress): void
+    private function replaceTargetRows(Connection $target, array $tables, string $path, array $expectedCounts, array $expectedHashes, string $targetLabel, ?DataShareMirrorProgress $progress): void
     {
-        $target->transaction(function () use ($target, $tables, $path, $expectedCounts, $expectedHashes, $progress): void {
+        $target->transaction(function () use ($target, $tables, $path, $expectedCounts, $expectedHashes, $targetLabel, $progress): void {
             foreach (array_reverse($tables) as $table) {
                 $target->table($table)->delete();
             }
@@ -198,7 +202,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
 
             $handle = fopen($path, 'rb');
             if ($handle === false) {
-                throw DataShareMirrorException::safeFailure(__('The portable snapshot could not be read.'));
+                throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be read.'));
             }
 
             try {
@@ -208,7 +212,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     try {
                         $record = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
                     } catch (JsonException $exception) {
-                        throw DataShareMirrorException::safeFailure(__('The portable snapshot is invalid.'), $exception);
+                        throw DataShareMirrorException::safeFailure(__('The temporary staging file is invalid.'), $exception);
                     }
 
                     $table = (string) ($record['table'] ?? '');
@@ -216,7 +220,8 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                         if ($chunk !== []) {
                             $target->table($activeTable)->insert($chunk);
                         }
-                        $progress?->report((string) __('Loaded destination table :table (:rows rows).', [
+                        $progress?->report((string) __('Written to :target: :table (:rows rows).', [
+                            'target' => $targetLabel,
                             'table' => $activeTable,
                             'rows' => $expectedCounts[$activeTable],
                         ]));
@@ -234,7 +239,8 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     $target->table($activeTable)->insert($chunk);
                 }
                 if ($activeTable !== null) {
-                    $progress?->report((string) __('Loaded destination table :table (:rows rows).', [
+                    $progress?->report((string) __('Written to :target: :table (:rows rows).', [
+                        'target' => $targetLabel,
                         'table' => $activeTable,
                         'rows' => $expectedCounts[$activeTable],
                     ]));
@@ -255,9 +261,10 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                 }
 
                 $this->resetSequence($target, $table);
-                $progress?->report((string) __('Verified :current of :total: :table (:rows rows).', [
+                $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', [
                     'current' => $index + 1,
                     'total' => $tableCount,
+                    'target' => $targetLabel,
                     'table' => $table,
                     'rows' => $actual,
                 ]));
@@ -359,7 +366,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
             if (is_array($value) && array_keys($value) === ['__data_share_binary_base64']) {
                 $decoded = base64_decode((string) $value['__data_share_binary_base64'], true);
                 if ($decoded === false) {
-                    throw DataShareMirrorException::safeFailure(__('The portable snapshot contains invalid binary data.'));
+                    throw DataShareMirrorException::safeFailure(__('The temporary staging file contains invalid binary data.'));
                 }
 
                 $row[$column] = $decoded;

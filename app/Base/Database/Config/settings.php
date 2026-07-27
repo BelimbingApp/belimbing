@@ -293,7 +293,7 @@ return [
         'data_share_transfer_limits' => [
             'label' => 'Transfer limits',
             'capability' => 'admin.system.data-share-settings.manage',
-            'description' => 'Hard bounds for portable packages and development-mirror snapshots.',
+            'description' => 'Hard bounds for portable packages and development-mirror staging files.',
             'fields' => [
                 [
                     'key' => 'data_share.transfer_limits.max_tables',
@@ -342,11 +342,11 @@ return [
                 ],
                 [
                     'key' => 'data_share.mirror.max_snapshot_bytes',
-                    'label' => 'Maximum mirror snapshot bytes',
+                    'label' => 'Maximum mirror staging size',
                     'type' => 'text',
                     'scope' => 'global',
                     'default' => '1073741824',
-                    'help' => 'Maximum temporary snapshot for one Mirror transfer. The default is 1 GiB.',
+                    'help' => 'Maximum temporary staging file for one Mirror transfer, in bytes. The default is 1 GiB.',
                     'rules' => ['required', 'integer', 'min:1', 'max:2147483647'],
                 ],
             ],
