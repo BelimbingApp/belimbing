@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Authz\DTO\Actor;
+use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Workflow\Contracts\ContextualTransitionGuard;
 use App\Base\Workflow\DTO\GuardResult;
 use App\Base\Workflow\DTO\TransitionContext;
@@ -26,6 +27,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+
+it('treats durable process coordination as stable schema', function (): void {
+    $preflight = app(IncubatingSchemaPreflight::class);
+
+    expect($preflight->tableIsIncubating('base_workflow_process_runs'))->toBeFalse()
+        ->and($preflight->tableIsIncubating('base_workflow_process_work_items'))->toBeFalse();
+});
 
 it('serializes competing transitions against the persisted status', function (): void {
     Event::fake([TransitionCompleted::class]);
