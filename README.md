@@ -1,14 +1,36 @@
 # Belimbing
 
-An open-source, adaptable application platform built entirely by AI for creating ownable business systems.
+Belimbing is an MIT-licensed, adaptable platform for building business applications. The idea is to provide a set of base modules every business would need, so that builders can focus on the applications and build in less time.
 
-## The Business Platform for Builders
+## Build Your Applications with AI
 
-Belimbing helps builders and AI agents create the software a business needs without surrendering ownership or quality.
+Belimbing provides a solid foundation for any builders, regardless of experience or technical knowledge, to create enterprise grade software with AI easily.
 
-- **Build your own business application.** Belimbing ships as a platform baseline today, not a full domain catalog. `AGENTS.md` files across the repo guide AI agents on principles and conventions so new modules integrate cleanly and stay consistent with the platform.
-- **Automate with AI pipelines and workflows.** Connect providers, register tools, and define task models so agents can automate business work under the same permission model as human users.
-- **Spend less time on UI.** Reusable components and design tokens give every module a polished shell without custom CSS or one-off controls.
+ `AGENTS.md` and  `DESIGN.md` files guide AI agents on coding principles and conventions so new modules integrate cleanly and stay consistent with the platform.
+
+ At the core of Belimbing is a ready-made control plane that a business needs:
+
+ - Companies, users, employees, addresses, localization
+ - User roles, capabilities and decision logs
+ - Workflows and audit logs
+ - Email, secrets and outbound exchanges
+ - Logs, performance, jobs, schedules, sessions and cache
+ - Backups and data operations
+
+## Modern by Default
+
+- **Build end to end.** Laravel and Livewire keep data, validation, permissions, and UI in one codebase.
+- **Ship responsive UI.** Tailwind components and focused Alpine behavior work across desktop and narrow screens without a separate SPA.
+- **Stay fast.** FrankenPHP keeps Laravel warm between requests, while page-weight tests catch heavy screens.
+- **Extend cleanly.** Each module keeps its routes, views, data, tests, and assets together.
+- **AI native.** AI providers, tools, task models and control plane.
+
+## Benefits
+
+1. Deliver complete products sooner. Concentrate on the business requirements instead of rebuilding users, permissions, audit trails, settings, deployment, backups, diagnostics, and administration.
+2. Make custom software maintainable. A Belimbing installation is not an undocumented collection of bespoke screens. Every project shares an understandable operational structure.
+3. Reduce support costs. Logs, failed jobs, schedules, performance, software versions, dependency health and backups are visible in one interface. First-line support requires less terminal access and less guesswork.
+
 
 ## Status
 
