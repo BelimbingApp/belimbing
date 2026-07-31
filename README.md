@@ -1,36 +1,36 @@
 # Belimbing
 
-Belimbing is an MIT-licensed, adaptable platform for building business applications. The idea is to provide a set of base modules every business would need, so that builders can focus on the applications and build in less time.
+Belimbing is an MIT-licensed platform for building business applications. It provides the shared foundation, so builders can focus on what each application needs.
 
-## Build Your Applications with AI
+## Built for Builders
 
-Belimbing provides a solid foundation for any builders, regardless of experience or technical knowledge, to create enterprise grade software with AI easily.
+* **Start beyond the boilerplate.** Companies, users, employees, permissions, settings, audit history, integrations, and operations are ready-made.
+* **Build with coding agents.** `AGENTS.md` and `DESIGN.md` tell agents how code and UI fit together.
+* **Keep modules self-contained.** Each module owns its routes, views, data, tests, and assets.
+* **Deliver consistent UI.** Reusable components and design tokens keep modules responsive and cohesive.
 
- `AGENTS.md` and  `DESIGN.md` files guide AI agents on coding principles and conventions so new modules integrate cleanly and stay consistent with the platform.
+## The Control Plane
 
- At the core of Belimbing is a ready-made control plane that a business needs:
+The Administration menu gives authorized users one place to configure, govern, extend, and run the system.
 
- - Companies, users, employees, addresses, localization
- - User roles, capabilities and decision logs
- - Workflows and audit logs
- - Email, secrets and outbound exchanges
- - Logs, performance, jobs, schedules, sessions and cache
- - Backups and data operations
+- **Configure and govern.** Manage companies, users, roles, capabilities, workflows, localization, settings, and audit history.
+- **Integrate and automate.** Configure email, secrets, outbound exchanges, AI providers, tools, and task models under the same authorization system.
+- **Operate and recover.** Inspect logs, performance, failed jobs, schedules, sessions, cache, data operations, and backups.
+- **Extend and update.** Inspect modules and dependencies, manage private source access, and run controlled updates.
 
 ## Modern by Default
 
 - **Build end to end.** Laravel and Livewire keep data, validation, permissions, and UI in one codebase.
 - **Ship responsive UI.** Tailwind components and focused Alpine behavior work across desktop and narrow screens without a separate SPA.
 - **Stay fast.** FrankenPHP keeps Laravel warm between requests, while page-weight tests catch heavy screens.
-- **Extend cleanly.** Each module keeps its routes, views, data, tests, and assets together.
-- **AI native.** AI providers, tools, task models and control plane.
+- **Run as one system.** One command starts the web server, queues, scheduler, and frontend build.
 
-## Benefits
+## Why Belimbing
 
-1. Deliver complete products sooner. Concentrate on the business requirements instead of rebuilding users, permissions, audit trails, settings, deployment, backups, diagnostics, and administration.
-2. Make custom software maintainable. A Belimbing installation is not an undocumented collection of bespoke screens. Every project shares an understandable operational structure.
-3. Reduce support costs. Logs, failed jobs, schedules, performance, software versions, dependency health and backups are visible in one interface. First-line support requires less terminal access and less guesswork.
-
+- Spend development time on the business-specific requirements instead of rebuilding its foundation.
+- Keep custom software maintainable through shared conventions and module boundaries.
+- Reduce support effort by giving users useful visibility and control.
+- Retain ordinary, version-controlled source code that can evolve with the business.
 
 ## Status
 
