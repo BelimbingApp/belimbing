@@ -1,7 +1,9 @@
 <?php
 
+use App\Base\Database\Exceptions\IncubatingSchemaConflictException;
 use App\Base\Database\Exceptions\IncubatingSchemaDependencyException;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Database\Services\IncubatingMigrationFiles;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,37 @@ const INCUBATING_SCHEMA_TEST_MULTI_TABLE_DEPENDENT_NAME = '2099_01_01_000001_cre
 const INCUBATING_SCHEMA_TEST_MULTI_TABLE_DEPENDENT_FILE = INCUBATING_SCHEMA_TEST_MULTI_TABLE_DEPENDENT_NAME.'.php';
 const INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_NAME = '2099_01_01_000002_create_test_incubating_widget_cycles_table';
 const INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_FILE = INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_NAME.'.php';
+const INCUBATING_SCHEMA_TEST_FORWARD_NAME = '2099_01_01_000003_add_mature_value_to_test_incubating_widgets_table';
+const INCUBATING_SCHEMA_TEST_FORWARD_FILE = INCUBATING_SCHEMA_TEST_FORWARD_NAME.'.php';
+
+function writeIncubatingSchemaForwardTestMigration(bool $incubating): void
+{
+    $directory = base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR);
+
+    if (! is_dir($directory)) {
+        mkdir($directory, 0755, true);
+    }
+
+    $import = $incubating ? "use App\\Base\\Database\\Concerns\\IncubatingSchema;\n" : '';
+    $trait = $incubating ? "        use IncubatingSchema;\n\n" : '';
+
+    file_put_contents($directory.'/'.INCUBATING_SCHEMA_TEST_FORWARD_FILE, <<<PHP
+    <?php
+    {$import}use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration
+    {
+    {$trait}    public function up(): void
+        {
+            Schema::table('test_incubating_widgets', function (Blueprint \$table): void {
+                \$table->string('mature_value');
+            });
+        }
+    };
+    PHP);
+}
 
 afterEach(function (): void {
     $connection = Schema::getConnection();
@@ -55,12 +88,18 @@ afterEach(function (): void {
             INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_FILE,
             INCUBATING_SCHEMA_TEST_CYCLE_TABLE,
         );
+        cleanupIncubatingTestMigration(
+            INCUBATING_SCHEMA_DEPENDENT_TEST_DIR,
+            INCUBATING_SCHEMA_TEST_FORWARD_FILE,
+            INCUBATING_SCHEMA_TEST_TABLE,
+        );
         TableRegistry::query()->where('table_name', INCUBATING_SCHEMA_TEST_TABLE)->delete();
 
         DB::table('migrations')->whereIn('migration', [
             INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME,
             INCUBATING_SCHEMA_TEST_MULTI_TABLE_DEPENDENT_NAME,
             INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_NAME,
+            INCUBATING_SCHEMA_TEST_FORWARD_NAME,
         ])->delete();
     } finally {
         Schema::enableForeignKeyConstraints();
@@ -92,6 +131,81 @@ test('preflight can resolve incubating state for a registered table from trait m
     ]);
 
     expect(app(IncubatingSchemaPreflight::class)->tableIsIncubating(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue();
+});
+
+test('incubating metadata detection ignores imports comments strings and closure captures', function (): void {
+    $migrationFiles = app(IncubatingMigrationFiles::class);
+
+    $nonDeclarations = [
+        '<?php use App\\Base\\Database\\Concerns\\IncubatingSchema;',
+        '<?php // use IncubatingSchema;',
+        '<?php $example = "use IncubatingSchema;";',
+        '<?php return new class { public function run() { return function () use ($value) {}; } };',
+    ];
+
+    foreach ($nonDeclarations as $contents) {
+        expect($migrationFiles->contentsAreIncubating($contents))->toBeFalse();
+    }
+
+    expect($migrationFiles->contentsAreIncubating(
+        '<?php return new class extends Migration { use IncubatingSchema; };'
+    ))->toBeTrue();
+});
+
+test('created table detection ignores comments and strings', function (): void {
+    $contents = <<<'PHP'
+    <?php
+    // Schema::create('commented_table', fn () => null);
+    $example = "Schema::create('string_table', fn () => null);";
+    Schema::create('declared_table', fn () => null);
+    PHP;
+
+    $migrationFiles = app(IncubatingMigrationFiles::class);
+
+    expect($migrationFiles->createdTables($contents))
+        ->toBe(['declared_table'])
+        ->and($migrationFiles->referencedTables(
+            <<<'PHP'
+            <?php
+            // DB::statement('ALTER TABLE ignored_table ADD COLUMN value TEXT');
+            DB::statement('ALTER TABLE declared_table ADD COLUMN value TEXT');
+            PHP,
+            ['declared_table', 'ignored_table'],
+        ))->toBe(['declared_table']);
+});
+
+test('preflight refuses a live table claimed by a different migration before dropping it', function (): void {
+    writeIncubatingTestMigration(
+        INCUBATING_SCHEMA_TEST_DIR,
+        INCUBATING_SCHEMA_TEST_FILE,
+        INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE,
+    );
+
+    Schema::create(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE, function (Blueprint $table): void {
+        $table->id();
+        $table->string('mature_value');
+    });
+
+    DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->insert(['mature_value' => 'preserve me']);
+
+    TableRegistry::query()->create([
+        'table_name' => INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE,
+        'module_name' => 'test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
+        'migration_file' => INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME.'.php',
+    ]);
+
+    DB::table('migrations')->insert([
+        'migration' => INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME,
+        'batch' => 1,
+    ]);
+
+    expect(fn () => app(IncubatingSchemaPreflight::class)->run([base_path(INCUBATING_SCHEMA_TEST_DIR)]))
+        ->toThrow(IncubatingSchemaConflictException::class, 'conflicts with live schema');
+
+    expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE))->toBeTrue()
+        ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe('preserve me')
+        ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME)->exists())->toBeTrue();
 });
 
 test('preflight refuses stable dependents before dropping any table', function (): void {
@@ -140,6 +254,71 @@ test('preflight refuses stable dependents before dropping any table', function (
         ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe('preserve me')
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FILE_NAME)->exists())->toBeTrue()
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME)->exists())->toBeTrue();
+});
+
+test('preflight refuses to replay a table past an applied stable forward migration', function (): void {
+    writeIncubatingTestMigration(INCUBATING_SCHEMA_TEST_DIR, INCUBATING_SCHEMA_TEST_FILE, INCUBATING_SCHEMA_TEST_TABLE);
+    writeIncubatingSchemaForwardTestMigration(incubating: false);
+
+    Schema::create(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
+        $table->id();
+        $table->string('mature_value');
+    });
+
+    DB::table(INCUBATING_SCHEMA_TEST_TABLE)->insert(['mature_value' => 'preserve me']);
+
+    TableRegistry::query()->create([
+        'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
+        'module_name' => 'test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
+        'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
+    ]);
+
+    DB::table('migrations')->insert([
+        ['migration' => INCUBATING_SCHEMA_TEST_FILE_NAME, 'batch' => 1],
+        ['migration' => INCUBATING_SCHEMA_TEST_FORWARD_NAME, 'batch' => 2],
+    ]);
+
+    expect(fn () => app(IncubatingSchemaPreflight::class)->run([
+        base_path(INCUBATING_SCHEMA_TEST_DIR),
+        base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR),
+    ]))->toThrow(IncubatingSchemaConflictException::class, 'applied stable migration');
+
+    expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue()
+        ->and(DB::table(INCUBATING_SCHEMA_TEST_TABLE)->value('mature_value'))->toBe('preserve me')
+        ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FORWARD_NAME)->exists())->toBeTrue();
+});
+
+test('preflight replays the complete chain when later migrations are incubating too', function (): void {
+    writeIncubatingTestMigration(INCUBATING_SCHEMA_TEST_DIR, INCUBATING_SCHEMA_TEST_FILE, INCUBATING_SCHEMA_TEST_TABLE);
+    writeIncubatingSchemaForwardTestMigration(incubating: true);
+
+    Schema::create(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
+        $table->id();
+        $table->string('mature_value');
+    });
+
+    TableRegistry::query()->create([
+        'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
+        'module_name' => 'test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
+        'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
+    ]);
+
+    DB::table('migrations')->insert([
+        ['migration' => INCUBATING_SCHEMA_TEST_FILE_NAME, 'batch' => 1],
+        ['migration' => INCUBATING_SCHEMA_TEST_FORWARD_NAME, 'batch' => 2],
+    ]);
+
+    $result = app(IncubatingSchemaPreflight::class)->run([
+        base_path(INCUBATING_SCHEMA_TEST_DIR),
+        base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR),
+    ]);
+
+    expect($result['migrations'])->toContain(
+        INCUBATING_SCHEMA_TEST_FILE_NAME,
+        INCUBATING_SCHEMA_TEST_FORWARD_NAME,
+    )->and(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeFalse();
 });
 
 test('preflight rebuilds every live table owned by a cascaded incubating migration', function (): void {

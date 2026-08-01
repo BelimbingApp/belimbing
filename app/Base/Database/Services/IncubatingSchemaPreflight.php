@@ -3,6 +3,7 @@
 namespace App\Base\Database\Services;
 
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
+use App\Base\Database\Exceptions\IncubatingSchemaConflictException;
 use App\Base\Database\Exceptions\IncubatingSchemaDependencyException;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
@@ -76,6 +77,8 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             return ['files' => [], 'tables' => [], 'cascaded' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
+        $this->assertLiveTableOwnership($incubating);
+
         $tables = $this->liveTablesDeclaredBy($incubating);
         $incubatingTables = $tables;
         $migrationFiles = array_values(array_unique(array_map(
@@ -91,7 +94,12 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
         if ($tables !== []) {
             $foreignKeysByTable = $this->tableDropper->foreignKeysByTable($this->liveTableNames());
-            $scope = $this->expandedRebuildScope($tables, $migrationFiles, $foreignKeysByTable);
+            $scope = $this->expandedRebuildScope(
+                $tables,
+                $migrationFiles,
+                $foreignKeysByTable,
+                $this->appliedMigrationSources($migrationPaths),
+            );
             $tables = $scope['tables'];
             $cascaded = array_values(array_diff($tables, $incubatingTables));
             $migrationFiles = $scope['migration_files'];
@@ -190,11 +198,62 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      */
     private function parsedCreatedTables(string $contents): array
     {
-        if (preg_match_all('/Schema::create\(\s*[\'"]([\w]+)[\'"]/', $contents, $matches) === false) {
-            return [];
+        return $this->migrationFiles->createdTables($contents);
+    }
+
+    /**
+     * Refuse before the first drop when an incubating migration merely names
+     * an existing table owned by different stable source. Unregistered live
+     * tables are accepted only when this migration is already applied, which
+     * preserves older migrations whose registry provenance predates BLB's
+     * table registry.
+     *
+     * @param  list<array{file: string, migration_name: string, tables: list<string>}>  $migrations
+     */
+    private function assertLiveTableOwnership(array $migrations): void
+    {
+        $live = array_fill_keys($this->liveTableNames(), true);
+        $declaredTables = array_values(array_unique(array_merge(...array_map(
+            fn (array $migration): array => $migration['tables'],
+            $migrations,
+        ))));
+        $owners = Schema::hasTable('base_database_tables')
+            ? TableRegistry::query()
+                ->whereIn('table_name', $declaredTables)
+                ->pluck('migration_file', 'table_name')
+                ->all()
+            : [];
+        $applied = DB::table('migrations')
+            ->whereIn('migration', array_column($migrations, 'migration_name'))
+            ->pluck('migration')
+            ->flip()
+            ->all();
+        $conflicts = [];
+
+        foreach ($migrations as $migration) {
+            foreach ($migration['tables'] as $table) {
+                if (! isset($live[$table])) {
+                    continue;
+                }
+
+                $owner = $owners[$table] ?? null;
+
+                if ($owner === $migration['file']
+                    || ($owner === null && isset($applied[$migration['migration_name']]))) {
+                    continue;
+                }
+
+                $conflicts[] = [
+                    'table' => $table,
+                    'declared_by' => $migration['file'],
+                    'owned_by' => is_string($owner) && $owner !== '' ? $owner : null,
+                ];
+            }
         }
 
-        return array_values(array_unique($matches[1] ?? []));
+        if ($conflicts !== []) {
+            throw IncubatingSchemaConflictException::forLiveTableOwnership($conflicts);
+        }
     }
 
     /**
@@ -238,10 +297,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
      * @param  list<string>  $tablesToDrop
      * @param  list<string>  $migrationFiles
      * @param  array<string, list<array<string, mixed>>>  $foreignKeysByTable
+     * @param  list<array{file: string, migration_name: string, contents: string}>  $appliedMigrationSources
      * @return array{tables: list<string>, migration_files: list<string>}
      */
-    private function expandedRebuildScope(array $tablesToDrop, array $migrationFiles, array $foreignKeysByTable): array
-    {
+    private function expandedRebuildScope(
+        array $tablesToDrop,
+        array $migrationFiles,
+        array $foreignKeysByTable,
+        array $appliedMigrationSources,
+    ): array {
         $tables = array_values(array_unique($tablesToDrop));
         $migrationFiles = array_values(array_unique($migrationFiles));
         $tableSet = array_fill_keys($tables, true);
@@ -274,6 +338,20 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                     $fileSet[$file] = true;
                     $changed = true;
                 }
+            }
+
+            foreach ($this->resolveAppliedForwardMigrations(
+                array_keys($tableSet),
+                array_keys($fileSet),
+                $appliedMigrationSources,
+            ) as $file) {
+                if (isset($fileSet[$file])) {
+                    continue;
+                }
+
+                $migrationFiles[] = $file;
+                $fileSet[$file] = true;
+                $changed = true;
             }
         } while ($changed);
 
@@ -311,6 +389,100 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         }
 
         return $rebuildable;
+    }
+
+    /**
+     * Include later applied migration files only when they are explicitly
+     * incubating. A stable forward migration may have added columns, indexes,
+     * constraints, or transformed data; leaving its ledger row applied while
+     * replaying the original create migration produces an obsolete schema.
+     *
+     * @param  list<string>  $tablesToDrop
+     * @param  list<string>  $migrationFiles
+     * @param  list<array{file: string, migration_name: string, contents: string}>  $appliedMigrationSources
+     * @return list<string>
+     */
+    private function resolveAppliedForwardMigrations(
+        array $tablesToDrop,
+        array $migrationFiles,
+        array $appliedMigrationSources,
+    ): array {
+        $migrationNames = array_map(
+            fn (string $file): string => (string) preg_replace('/\.php$/', '', $file),
+            $migrationFiles,
+        );
+        $earliestRebuild = min($migrationNames);
+        $fileSet = array_fill_keys($migrationFiles, true);
+        $incubating = [];
+        $conflicts = [];
+
+        foreach ($appliedMigrationSources as $source) {
+            if (isset($fileSet[$source['file']]) || $source['migration_name'] <= $earliestRebuild) {
+                continue;
+            }
+
+            $referencedTables = $this->migrationFiles->referencedTables($source['contents'], $tablesToDrop);
+
+            if ($referencedTables === []) {
+                continue;
+            }
+
+            if ($this->migrationFiles->contentsAreIncubating($source['contents'])) {
+                $incubating[$source['file']] = true;
+
+                continue;
+            }
+
+            foreach ($referencedTables as $table) {
+                $conflicts[] = [
+                    'table' => $table,
+                    'migration' => $source['file'],
+                ];
+            }
+        }
+
+        if ($conflicts !== []) {
+            throw IncubatingSchemaConflictException::forAppliedForwardMigrations($conflicts);
+        }
+
+        return array_keys($incubating);
+    }
+
+    /**
+     * @param  list<string>  $migrationPaths
+     * @return list<array{file: string, migration_name: string, contents: string}>
+     */
+    private function appliedMigrationSources(array $migrationPaths): array
+    {
+        $applied = DB::table('migrations')->pluck('migration')->flip()->all();
+        $sources = [];
+        $paths = array_values(array_unique(array_merge(
+            $this->migrationFiles->discoveredPaths(),
+            $this->migrationFiles->paths($migrationPaths),
+        )));
+        sort($paths);
+
+        foreach ($paths as $path) {
+            $migrationName = pathinfo($path, PATHINFO_FILENAME);
+
+            if (! isset($applied[$migrationName])) {
+                continue;
+            }
+
+            $contents = file_get_contents($path);
+
+            if ($contents === false) {
+                throw IncubatingSchemaConflictException::forUnreadableAppliedMigration($path);
+            }
+
+            $sources[] = [
+                'file' => basename($path),
+                'migration_name' => $migrationName,
+                'contents' => $contents,
+            ];
+        }
+
+        return $sources;
     }
 
     /**
