@@ -6,6 +6,7 @@ use App\Base\Database\Enums\DataFreshnessState;
 use App\Base\Database\Enums\DataOperationRangeKind;
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
+use App\Base\Database\Exceptions\DataOperationRunNotFoundException;
 use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataOperationTableSummary;
 use App\Base\Database\Models\DataShareMirrorObservation;
@@ -117,10 +118,10 @@ it('projects the audit action at most once even when finalize is retried', funct
 it('refuses to resume a run that does not exist', function () {
     $recorder = app(DataOperationRecorder::class);
 
-    expect(fn () => $recorder->resume(999999))->toThrow(RuntimeException::class);
+    expect(fn () => $recorder->resume(999999))->toThrow(DataOperationRunNotFoundException::class);
 
     $runId = $recorder->open(DataOperationType::AxImport->value);
-    expect(fn () => $recorder->resume($runId))->not->toThrow(RuntimeException::class);
+    expect(fn () => $recorder->resume($runId))->not->toThrow(DataOperationRunNotFoundException::class);
 });
 
 it('permanently protects the ledger tables from mirroring', function () {

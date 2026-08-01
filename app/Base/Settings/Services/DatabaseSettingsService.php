@@ -5,6 +5,7 @@ namespace App\Base\Settings\Services;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\DTO\ScopeType;
+use App\Base\Settings\DTO\SettingDefinition;
 use App\Base\Settings\Exceptions\InvalidSettingDefinitionException;
 use App\Base\Settings\Models\Setting;
 use Illuminate\Cache\Repository as CacheRepository;
@@ -63,34 +64,16 @@ class DatabaseSettingsService implements SettingsService
      */
     public function getMany(array $keys, ?Scope $scope = null): array
     {
-        foreach ($keys as $key) {
-            if (! is_string($key) || $key === '') {
-                throw new \InvalidArgumentException('Setting keys must be non-empty strings.');
-            }
-        }
-
+        $this->assertValidKeys($keys);
         $keys = array_values(array_unique($keys));
 
         if ($keys === []) {
             return [];
         }
 
-        $definitions = [];
-
-        foreach ($keys as $key) {
-            $definition = $this->definitions->find($key);
-
-            if ($definition === null || $scope !== null || ! $definition->allowsScope(null)) {
-                $values = [];
-
-                foreach ($keys as $settingKey) {
-                    $values[$settingKey] = $this->get($settingKey, scope: $scope);
-                }
-
-                return $values;
-            }
-
-            $definitions[$key] = $definition;
+        $definitions = $this->globalDefinitions($keys, $scope);
+        if ($definitions === null) {
+            return $this->resolveIndividually($keys, $scope);
         }
 
         $unresolvedKeys = array_values(array_filter(
@@ -126,6 +109,52 @@ class DatabaseSettingsService implements SettingsService
                 ? null
                 : $this->resolvedValues[$cacheKey];
             $values[$key] = $databaseValue ?? $definitions[$key]->default;
+        }
+
+        return $values;
+    }
+
+    /** @param list<mixed> $keys */
+    private function assertValidKeys(array $keys): void
+    {
+        foreach ($keys as $key) {
+            if (! is_string($key) || $key === '') {
+                throw new \InvalidArgumentException('Setting keys must be non-empty strings.');
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return array<string, SettingDefinition>|null
+     */
+    private function globalDefinitions(array $keys, ?Scope $scope): ?array
+    {
+        $definitions = [];
+
+        foreach ($keys as $key) {
+            $definition = $this->definitions->find($key);
+
+            if ($definition === null || $scope !== null || ! $definition->allowsScope(null)) {
+                return null;
+            }
+
+            $definitions[$key] = $definition;
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return array<string, mixed>
+     */
+    private function resolveIndividually(array $keys, ?Scope $scope): array
+    {
+        $values = [];
+
+        foreach ($keys as $key) {
+            $values[$key] = $this->get($key, scope: $scope);
         }
 
         return $values;

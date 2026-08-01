@@ -41,6 +41,10 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+const MIRROR_BACKEND_FIRST_ROW = 'first row';
+const MIRROR_BACKEND_SECOND_ROW = 'second row';
+const MIRROR_BACKEND_NO_PROVIDER = 'no provider';
+
 it('serializes a mirror blocker dependency as structured data', function (): void {
     expect((new DataShareMirrorBlocker(
         'incoming_foreign_key',
@@ -89,8 +93,8 @@ it('separates mirror staging size from portable package row and byte limits', fu
         });
     }
     $source->table($table)->insert([
-        ['id' => 1, 'name' => 'first row'],
-        ['id' => 2, 'name' => 'second row'],
+        ['id' => 1, 'name' => MIRROR_BACKEND_FIRST_ROW],
+        ['id' => 2, 'name' => MIRROR_BACKEND_SECOND_ROW],
     ]);
     $target->table($table)->insert(['id' => 91, 'name' => 'stale row']);
 
@@ -125,13 +129,13 @@ it('separates mirror staging size from portable package row and byte limits', fu
     try {
         $engine()->execute($review);
         expect($target->table($table)->orderBy('id')->pluck('name')->all())
-            ->toBe(['first row', 'second row']);
+            ->toBe([MIRROR_BACKEND_FIRST_ROW, MIRROR_BACKEND_SECOND_ROW]);
 
         $settings->set('data_share.mirror.max_snapshot_bytes', 1);
         expect(fn () => $engine()->execute($review))
             ->toThrow(DataShareMirrorException::class, 'Mirror staging exceeds the 1 byte limit.')
             ->and($target->table($table)->orderBy('id')->pluck('name')->all())
-            ->toBe(['first row', 'second row']);
+            ->toBe([MIRROR_BACKEND_FIRST_ROW, MIRROR_BACKEND_SECOND_ROW]);
     } finally {
         $files->deleteDirectory($temporaryPath);
         DB::purge('mirror_limit_target');
@@ -514,7 +518,8 @@ it('force pushes only the exact selected local tables through the native engine'
                 && $review->items[0]->action === DataShareMirrorAction::Replace,
         ),
         Mockery::type(DataShareMirrorProgress::class),
-    )->andReturnUsing(function (DataShareMirrorReview $review, DataShareMirrorProgress $progress): DataShareMirrorExecutionResult {
+    )->andReturnUsing(function (...$arguments): DataShareMirrorExecutionResult {
+        $progress = $arguments[1];
         $progress->report('Engine progress is visible.');
 
         return new DataShareMirrorExecutionResult(
@@ -596,7 +601,7 @@ it('renders the Local catalog even when the remote endpoint is unreachable', fun
     $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
     $connections->shouldReceive('local')->andReturn(app('db')->connection());
     $connections->shouldReceive('mirror')->andThrow(DataShareMirrorException::unavailable('remote down'));
-    $connections->shouldReceive('provider')->andThrow(new RuntimeException('no provider'));
+    $connections->shouldReceive('provider')->andThrow(new RuntimeException(MIRROR_BACKEND_NO_PROVIDER));
 
     $tables = collect((new DataShareMirrorCatalog($connections))->catalog());
     $probe = $tables->firstWhere('table', 'zzz_local_first_probe');
@@ -628,7 +633,7 @@ it('reports exact live row counts for reachable Local and remote tables', functi
     $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
     $connections->shouldReceive('local')->once()->andReturn($connection);
     $connections->shouldReceive('mirror')->once()->andReturn($connection);
-    $connections->shouldReceive('provider')->andThrow(new RuntimeException('no provider'));
+    $connections->shouldReceive('provider')->andThrow(new RuntimeException(MIRROR_BACKEND_NO_PROVIDER));
 
     $probe = collect((new DataShareMirrorCatalog($connections))->catalog())
         ->firstWhere('table', 'zzz_live_count_probe');
@@ -654,7 +659,7 @@ it('builds the review catalog without scanning live row counts', function (): vo
     $connections = Mockery::mock(DataShareMirrorConnectionManager::class);
     $connections->shouldReceive('local')->once()->andReturn($connection);
     $connections->shouldReceive('mirror')->once()->andReturn($connection);
-    $connections->shouldReceive('provider')->andThrow(new RuntimeException('no provider'));
+    $connections->shouldReceive('provider')->andThrow(new RuntimeException(MIRROR_BACKEND_NO_PROVIDER));
     $queries = [];
     DB::listen(function ($query) use (&$queries): void {
         $queries[] = strtolower($query->sql);

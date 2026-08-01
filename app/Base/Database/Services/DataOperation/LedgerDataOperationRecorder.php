@@ -5,6 +5,7 @@ namespace App\Base\Database\Services\DataOperation;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Database\Enums\DataOperationStatus;
 use App\Base\Database\Enums\DataOperationType;
+use App\Base\Database\Exceptions\DataOperationRunNotFoundException;
 use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataOperationTableSummary;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
@@ -13,7 +14,6 @@ use App\Base\Support\TraceId;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -70,7 +70,7 @@ final class LedgerDataOperationRecorder implements DataOperationRecorder
         }
 
         if (! DataOperationRun::query()->whereKey($runId)->exists()) {
-            throw new RuntimeException("Cannot resume data operation run #{$runId}: it does not exist.");
+            throw DataOperationRunNotFoundException::forRun($runId);
         }
     }
 

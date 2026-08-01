@@ -235,13 +235,7 @@ class DataShareMirrorManager
         // Push acknowledges only the generation captured for its snapshot: read it
         // before mutation so concurrent commits during the push stay "changed".
         $isPush = $type === DataOperationType::MirrorPush || $type === DataOperationType::MirrorForcePush;
-        $capturedGenerations = [];
-        if ($isPush) {
-            $tracker = app(DataFreshnessTracker::class);
-            foreach ($review->items as $item) {
-                $capturedGenerations[$item->table] = $tracker->currentGeneration($item->table);
-            }
-        }
+        $capturedGenerations = $this->captureGenerations($review, $isPush);
 
         $runId = $this->operations->open($type->value, array_filter([
             'source' => 'data-share.mirror',
@@ -256,23 +250,7 @@ class DataShareMirrorManager
         try {
             $result = $this->engines->forMode($mode)->execute($review, $progress);
         } catch (Throwable $exception) {
-            // Determinate, rollback-safe/pre-mutation failures are failed; only
-            // genuinely uncertain outcomes (or unexpected errors) are indeterminate.
-            $determinate = $exception instanceof DataShareMirrorException && ! $exception->outcomeIndeterminate;
-
-            $this->operations->finalize(
-                $runId,
-                $determinate ? DataOperationStatus::Failed->value : DataOperationStatus::Indeterminate->value,
-                [
-                    'failure_summary' => $determinate
-                        ? 'No destination mutation is known to have committed.'
-                        : 'The mirror engine did not confirm completion; the destination may have committed.',
-                ],
-            );
-            $progress->report((string) ($determinate
-                ? __('FAILED: The transfer stopped before the destination commit. The durable run records the failure.')
-                : __('FAILED: The transfer did not confirm completion. The durable run records the indeterminate outcome.')));
-
+            $this->recordEngineFailure($runId, $exception, $progress);
             throw $exception;
         }
 
@@ -284,36 +262,7 @@ class DataShareMirrorManager
         // than left running with partial "successful" observations.
         try {
             $progress->report((string) __('Transfer committed. Recording per-table results and observations.'));
-            DB::transaction(function () use ($result, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations): void {
-                foreach ($result->items as $item) {
-                    $localRows = $item['local_rows'] ?? null;
-                    $remoteRows = $item['remote_rows'] ?? null;
-
-                    $this->operations->recordTable($runId, (string) $item['table'], [
-                        'actions' => [$item['action']],
-                        'rows_before' => $localRows,
-                        'rows_after' => $remoteRows,
-                        'range_kind' => DataOperationRangeKind::NotApplicable->value,
-                        'terminal_status' => DataOperationStatus::Succeeded->value,
-                        'observed_at' => now(),
-                    ]);
-
-                    if ($canProject) {
-                        app(DataShareMirrorObservationProjection::class)->record(
-                            $localInstanceId,
-                            $remoteInstanceId,
-                            (string) $item['table'],
-                            $runId,
-                            $localRows,
-                            $remoteRows,
-                            // Acknowledge exactly the generation captured before the push.
-                            $isPush ? ($capturedGenerations[$item['table']] ?? null) : null,
-                        );
-                    }
-                }
-
-                $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
-            });
+            $this->recordSuccessfulRun($result, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations);
             $progress->report((string) __('Completed: Durable run #:id recorded successfully.', ['id' => $runId]));
         } catch (Throwable $exception) {
             $this->operations->finalize($runId, DataOperationStatus::Indeterminate->value, [
@@ -325,6 +274,55 @@ class DataShareMirrorManager
         }
 
         return $result->withRunId($runId > 0 ? $runId : null);
+    }
+
+    /** @return array<string, int> */
+    private function captureGenerations(DataShareMirrorReview $review, bool $isPush): array
+    {
+        if (! $isPush) {
+            return [];
+        }
+
+        $tracker = app(DataFreshnessTracker::class);
+        $generations = [];
+        foreach ($review->items as $item) {
+            $generations[$item->table] = $tracker->currentGeneration($item->table);
+        }
+
+        return $generations;
+    }
+
+    private function recordEngineFailure(int $runId, Throwable $exception, DataShareMirrorProgress $progress): void
+    {
+        $determinate = $exception instanceof DataShareMirrorException && ! $exception->outcomeIndeterminate;
+        $this->operations->finalize($runId, $determinate ? DataOperationStatus::Failed->value : DataOperationStatus::Indeterminate->value, [
+            'failure_summary' => $determinate ? 'No destination mutation is known to have committed.' : 'The mirror engine did not confirm completion; the destination may have committed.',
+        ]);
+        $progress->report((string) ($determinate
+            ? __('FAILED: The transfer stopped before the destination commit. The durable run records the failure.')
+            : __('FAILED: The transfer did not confirm completion. The durable run records the indeterminate outcome.')));
+    }
+
+    /** @param array<string, int> $capturedGenerations */
+    private function recordSuccessfulRun(DataShareMirrorExecutionResult $result, int $runId, bool $canProject, ?string $localInstanceId, ?string $remoteInstanceId, bool $isPush, array $capturedGenerations): void
+    {
+        DB::transaction(function () use ($result, $runId, $canProject, $localInstanceId, $remoteInstanceId, $isPush, $capturedGenerations): void {
+            foreach ($result->items as $item) {
+                $localRows = $item['local_rows'] ?? null;
+                $remoteRows = $item['remote_rows'] ?? null;
+                $this->operations->recordTable($runId, (string) $item['table'], [
+                    'actions' => [$item['action']], 'rows_before' => $localRows, 'rows_after' => $remoteRows,
+                    'range_kind' => DataOperationRangeKind::NotApplicable->value, 'terminal_status' => DataOperationStatus::Succeeded->value, 'observed_at' => now(),
+                ]);
+                if ($canProject) {
+                    app(DataShareMirrorObservationProjection::class)->record(
+                        $localInstanceId, $remoteInstanceId, (string) $item['table'], $runId, $localRows, $remoteRows,
+                        $isPush ? ($capturedGenerations[$item['table']] ?? null) : null,
+                    );
+                }
+            }
+            $this->operations->finalize($runId, DataOperationStatus::Succeeded->value);
+        });
     }
 
     private function localInstanceId(): ?string

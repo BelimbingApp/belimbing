@@ -44,14 +44,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         $source = $sourceEndpoint->connection;
         $target = $targetEndpoint->connection;
         $tables = array_values(array_map(fn ($item): string => $item->table, $review->items));
-        $maximumTables = $this->settings->integer('data_share.transfer_limits.max_tables', 250, 1, 10000);
-        if (count($tables) > $maximumTables) {
-            throw DataShareMirrorException::limitExceeded(__('The mirror selection exceeds the :max table limit.', ['max' => $maximumTables]));
-        }
-        $order = $this->dependencies->insertionOrder($source, $tables);
-        if ($order === null) {
-            throw DataShareMirrorException::blocked();
-        }
+        $order = $this->validatedInsertionOrder($source, $tables);
         $tableCount = count($tables);
         $progress?->report((string) trans_choice(
             'Staging :count selected table from :source.|Staging :count selected tables from :source.',
@@ -62,13 +55,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         $snapshotPath = $this->temporarySnapshotPath();
 
         try {
-            try {
-                $snapshot = $this->writeSnapshot($source, $target, $order, $snapshotPath, $sourceEndpoint->label, $progress);
-            } catch (DataShareMirrorException $exception) {
-                throw $exception;
-            } catch (Throwable $exception) {
-                throw DataShareMirrorException::safeFailure(__('Source data could not be staged. No rows in :target were changed.', ['target' => $targetEndpoint->label]), $exception);
-            }
+            $snapshot = $this->stageSnapshot($source, $target, $order, $snapshotPath, $sourceEndpoint->label, $targetEndpoint->label, $progress);
 
             $progress?->report((string) __('Staging from :source complete: :records rows, :bytes bytes.', [
                 'source' => $sourceEndpoint->label,
@@ -97,6 +84,34 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     @unlink($snapshotPath);
                 }
             }
+        }
+    }
+
+    /** @param list<string> $tables @return list<string> */
+    private function validatedInsertionOrder(Connection $source, array $tables): array
+    {
+        $maximumTables = $this->settings->integer('data_share.transfer_limits.max_tables', 250, 1, 10000);
+        if (count($tables) > $maximumTables) {
+            throw DataShareMirrorException::limitExceeded(__('The mirror selection exceeds the :max table limit.', ['max' => $maximumTables]));
+        }
+
+        $order = $this->dependencies->insertionOrder($source, $tables);
+        if ($order === null) {
+            throw DataShareMirrorException::blocked();
+        }
+
+        return $order;
+    }
+
+    /** @param list<string> $tables @return array{counts: array<string, int>, hashes: array<string, string>, records: int, bytes: int} */
+    private function stageSnapshot(Connection $source, Connection $target, array $tables, string $path, string $sourceLabel, string $targetLabel, ?DataShareMirrorProgress $progress): array
+    {
+        try {
+            return $this->writeSnapshot($source, $target, $tables, $path, $sourceLabel, $progress);
+        } catch (DataShareMirrorException $exception) {
+            throw $exception;
+        } catch (Throwable $exception) {
+            throw DataShareMirrorException::safeFailure(__('Source data could not be staged. No rows in :target were changed.', ['target' => $targetLabel]), $exception);
         }
     }
 
@@ -199,77 +214,78 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                 $target->table($table)->delete();
             }
             $progress?->report((string) __('Selected destination rows cleared inside the uncommitted transaction.'));
-
-            $handle = fopen($path, 'rb');
-            if ($handle === false) {
-                throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be read.'));
-            }
-
-            try {
-                $activeTable = null;
-                $chunk = [];
-                while (($line = fgets($handle)) !== false) {
-                    try {
-                        $record = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
-                    } catch (JsonException $exception) {
-                        throw DataShareMirrorException::safeFailure(__('The temporary staging file is invalid.'), $exception);
-                    }
-
-                    $table = (string) ($record['table'] ?? '');
-                    if ($activeTable !== null && $activeTable !== $table) {
-                        if ($chunk !== []) {
-                            $target->table($activeTable)->insert($chunk);
-                        }
-                        $progress?->report((string) __('Written to :target: :table (:rows rows).', [
-                            'target' => $targetLabel,
-                            'table' => $activeTable,
-                            'rows' => $expectedCounts[$activeTable],
-                        ]));
-                        $chunk = [];
-                    } elseif ($activeTable !== null && count($chunk) >= self::INSERT_CHUNK_SIZE) {
-                        $target->table($activeTable)->insert($chunk);
-                        $chunk = [];
-                    }
-
-                    $activeTable = $table;
-                    $chunk[] = $this->decodeRow((array) ($record['row'] ?? []));
-                }
-
-                if ($activeTable !== null && $chunk !== []) {
-                    $target->table($activeTable)->insert($chunk);
-                }
-                if ($activeTable !== null) {
-                    $progress?->report((string) __('Written to :target: :table (:rows rows).', [
-                        'target' => $targetLabel,
-                        'table' => $activeTable,
-                        'rows' => $expectedCounts[$activeTable],
-                    ]));
-                }
-            } finally {
-                fclose($handle);
-            }
-
-            $tableCount = count($tables);
-            foreach ($tables as $index => $table) {
-                $actual = (int) $target->table($table)->count();
-                if ($actual !== $expectedCounts[$table]) {
-                    throw DataShareMirrorException::safeFailure(__('Portable mirror row-count verification failed. The destination transaction was rolled back.'));
-                }
-
-                if (! hash_equals($expectedHashes[$table], $this->tableHash($target, $table))) {
-                    throw DataShareMirrorException::safeFailure(__('Portable mirror content verification failed. The destination transaction was rolled back.'));
-                }
-
-                $this->resetSequence($target, $table);
-                $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', [
-                    'current' => $index + 1,
-                    'total' => $tableCount,
-                    'target' => $targetLabel,
-                    'table' => $table,
-                    'rows' => $actual,
-                ]));
-            }
+            $this->loadSnapshot($target, $path, $expectedCounts, $targetLabel, $progress);
+            $this->verifyTarget($target, $tables, $expectedCounts, $expectedHashes, $targetLabel, $progress);
         }, 1);
+    }
+
+    /** @param array<string, int> $expectedCounts */
+    private function loadSnapshot(Connection $target, string $path, array $expectedCounts, string $targetLabel, ?DataShareMirrorProgress $progress): void
+    {
+        $handle = fopen($path, 'rb');
+        if ($handle === false) {
+            throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be read.'));
+        }
+
+        try {
+            $activeTable = null;
+            $chunk = [];
+            while (($line = fgets($handle)) !== false) {
+                $record = $this->decodeSnapshotRecord($line);
+                $table = (string) ($record['table'] ?? '');
+                if ($activeTable !== null && $activeTable !== $table) {
+                    $this->flushChunk($target, $activeTable, $chunk);
+                    $progress?->report((string) __('Written to :target: :table (:rows rows).', ['target' => $targetLabel, 'table' => $activeTable, 'rows' => $expectedCounts[$activeTable]]));
+                    $chunk = [];
+                } elseif ($activeTable !== null && count($chunk) >= self::INSERT_CHUNK_SIZE) {
+                    $this->flushChunk($target, $activeTable, $chunk);
+                    $chunk = [];
+                }
+                $activeTable = $table;
+                $chunk[] = $this->decodeRow((array) ($record['row'] ?? []));
+            }
+            if ($activeTable !== null) {
+                $this->flushChunk($target, $activeTable, $chunk);
+                $progress?->report((string) __('Written to :target: :table (:rows rows).', ['target' => $targetLabel, 'table' => $activeTable, 'rows' => $expectedCounts[$activeTable]]));
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function decodeSnapshotRecord(string $line): array
+    {
+        try {
+            return (array) json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+        } catch (JsonException $exception) {
+            throw DataShareMirrorException::safeFailure(__('The temporary staging file is invalid.'), $exception);
+        }
+    }
+
+    /** @param list<array<string, mixed>> $chunk */
+    private function flushChunk(Connection $target, string $table, array $chunk): void
+    {
+        if ($chunk !== []) {
+            $target->table($table)->insert($chunk);
+        }
+    }
+
+    /** @param list<string> $tables @param array<string, int> $expectedCounts @param array<string, string> $expectedHashes */
+    private function verifyTarget(Connection $target, array $tables, array $expectedCounts, array $expectedHashes, string $targetLabel, ?DataShareMirrorProgress $progress): void
+    {
+        $tableCount = count($tables);
+        foreach ($tables as $index => $table) {
+            $actual = (int) $target->table($table)->count();
+            if ($actual !== $expectedCounts[$table]) {
+                throw DataShareMirrorException::safeFailure(__('Portable mirror row-count verification failed. The destination transaction was rolled back.'));
+            }
+            if (! hash_equals($expectedHashes[$table], $this->tableHash($target, $table))) {
+                throw DataShareMirrorException::safeFailure(__('Portable mirror content verification failed. The destination transaction was rolled back.'));
+            }
+            $this->resetSequence($target, $table);
+            $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', ['current' => $index + 1, 'total' => $tableCount, 'target' => $targetLabel, 'table' => $table, 'rows' => $actual]));
+        }
     }
 
     /** @return array<string, string> */

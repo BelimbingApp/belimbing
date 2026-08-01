@@ -283,20 +283,25 @@ trait ManagesDevelopmentTableMirror
             $blockedCount = (int) ($this->mirrorReview['counts']['blocked'] ?? 0);
             $requiredCount = count($this->mirrorReview['required_tables']);
             $this->finishMirrorReviewLog();
+
+            if ($this->mirrorReview['has_blockers'] ?? false) {
+                $status = trans_choice(
+                    ':count selected table is blocked. No data changed. Open the review for its exact dependency.|:count selected tables are blocked. No data changed. Open the review for their exact dependencies.',
+                    $blockedCount,
+                    ['count' => $blockedCount],
+                );
+            } elseif ($requiredCount > 0) {
+                $status = trans_choice(
+                    'Mirror review is ready with :count required table added. Nothing has changed yet.|Mirror review is ready with :count required tables added. Nothing has changed yet.',
+                    $requiredCount,
+                    ['count' => $requiredCount],
+                );
+            } else {
+                $status = __('Mirror review is ready. Nothing has changed yet.');
+            }
+
             $this->setStatus(
-                ($this->mirrorReview['has_blockers'] ?? false)
-                    ? trans_choice(
-                        ':count selected table is blocked. No data changed. Open the review for its exact dependency.|:count selected tables are blocked. No data changed. Open the review for their exact dependencies.',
-                        $blockedCount,
-                        ['count' => $blockedCount],
-                    )
-                    : ($requiredCount > 0
-                        ? trans_choice(
-                            'Mirror review is ready with :count required table added. Nothing has changed yet.|Mirror review is ready with :count required tables added. Nothing has changed yet.',
-                            $requiredCount,
-                            ['count' => $requiredCount],
-                        )
-                        : __('Mirror review is ready. Nothing has changed yet.')),
+                $status,
                 ($this->mirrorReview['has_blockers'] ?? false) ? 'warning' : 'success',
             );
         } catch (DataShareMirrorException $exception) {

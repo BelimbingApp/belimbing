@@ -39,14 +39,7 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
 
         $source = $this->connections->source($review->direction);
         $target = $this->connections->target($review->direction);
-        $sourceTables = array_values(array_map(
-            fn (DataShareMirrorReviewItem $item): string => $item->table,
-            array_filter($review->items, fn (DataShareMirrorReviewItem $item): bool => $item->intendedAction !== DataShareMirrorAction::Delete),
-        ));
-        $targetTables = array_values(array_map(
-            fn (DataShareMirrorReviewItem $item): string => $item->table,
-            array_filter($review->items, fn (DataShareMirrorReviewItem $item): bool => $item->intendedAction !== DataShareMirrorAction::Create),
-        ));
+        [$sourceTables, $targetTables] = $this->transferTables($review);
         $tableCount = count($review->items);
         $progress?->report((string) trans_choice(
             'Staging :count selected table from :source.|Staging :count selected tables from :source.',
@@ -66,33 +59,7 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
             $dumpPath = $this->temporaryFiles->create('blb-mirror-', '.dump.sql');
             $programPath = $this->temporaryFiles->create('blb-mirror-', '.program.sql');
 
-            if ($sourceTables !== []) {
-                $command = [
-                    $pgDump,
-                    '--format=plain',
-                    '--no-owner',
-                    '--no-privileges',
-                    '--strict-names',
-                    '--schema=public',
-                    '--file='.$dumpPath,
-                ];
-
-                foreach ($sourceTables as $table) {
-                    $command[] = '--table=public.'.$this->quotedIdentifier($table);
-                }
-
-                $result = $this->processes->run(
-                    $command,
-                    $this->processEnvironment($source->configuration),
-                    $this->timeout(),
-                );
-                if (! $result->successful()) {
-                    throw DataShareMirrorException::preMutationProcessFailed('pg_dump', $result->exitCode);
-                }
-                $progress?->report((string) __('Staging from :source complete.', ['source' => $source->label]));
-            } else {
-                $this->files->put($dumpPath, '');
-            }
+            $this->stageSourceTables($source, $sourceTables, $pgDump, $dumpPath, $progress);
 
             @chmod($dumpPath, 0600);
             $progress?->report((string) __('Preparing one transaction for :target.', ['target' => $target->label]));
@@ -112,26 +79,7 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
             }
             $progress?->report((string) __('Changes committed to :target. Verifying row counts.', ['target' => $target->label]));
 
-            $counts = ['create' => 0, 'replace' => 0, 'delete' => 0];
-            $items = [];
-            foreach ($review->items as $index => $item) {
-                $counts[$item->intendedAction->value]++;
-                $sourceRows = $this->rowCount($source->connection, $item->table);
-                $targetRows = $this->rowCount($target->connection, $item->table);
-                $items[] = [
-                    'table' => $item->table,
-                    'action' => $item->intendedAction->value,
-                    'local_rows' => $review->direction === DataShareMirrorDirection::Push ? $sourceRows : $targetRows,
-                    'remote_rows' => $review->direction === DataShareMirrorDirection::Push ? $targetRows : $sourceRows,
-                ];
-                $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', [
-                    'current' => $index + 1,
-                    'total' => $tableCount,
-                    'target' => $target->label,
-                    'table' => $item->table,
-                    'rows' => $targetRows,
-                ]));
-            }
+            [$counts, $items] = $this->verifyResults($review, $source->connection, $target->connection, $target->label, $tableCount, $progress);
 
             return new DataShareMirrorExecutionResult($review->direction, $counts, $items);
         } finally {
@@ -145,6 +93,51 @@ class DataShareMirrorTableImageEngine implements DataShareMirrorEngine
                 }
             }
         }
+    }
+
+    /** @return array{0: list<string>, 1: list<string>} */
+    private function transferTables(DataShareMirrorReview $review): array
+    {
+        $source = array_values(array_map(fn (DataShareMirrorReviewItem $item): string => $item->table, array_filter($review->items, fn (DataShareMirrorReviewItem $item): bool => $item->intendedAction !== DataShareMirrorAction::Delete)));
+        $target = array_values(array_map(fn (DataShareMirrorReviewItem $item): string => $item->table, array_filter($review->items, fn (DataShareMirrorReviewItem $item): bool => $item->intendedAction !== DataShareMirrorAction::Create)));
+
+        return [$source, $target];
+    }
+
+    /** @param list<string> $tables */
+    private function stageSourceTables(DataShareMirrorEndpoint $source, array $tables, string $pgDump, string $dumpPath, ?DataShareMirrorProgress $progress): void
+    {
+        if ($tables === []) {
+            $this->files->put($dumpPath, '');
+
+            return;
+        }
+
+        $command = [$pgDump, '--format=plain', '--no-owner', '--no-privileges', '--strict-names', '--schema=public', '--file='.$dumpPath];
+        foreach ($tables as $table) {
+            $command[] = '--table=public.'.$this->quotedIdentifier($table);
+        }
+        $result = $this->processes->run($command, $this->processEnvironment($source->configuration), $this->timeout());
+        if (! $result->successful()) {
+            throw DataShareMirrorException::preMutationProcessFailed('pg_dump', $result->exitCode);
+        }
+        $progress?->report((string) __('Staging from :source complete.', ['source' => $source->label]));
+    }
+
+    /** @return array{0: array<string, int>, 1: list<array<string, int|string>>} */
+    private function verifyResults(DataShareMirrorReview $review, Connection $source, Connection $target, string $targetLabel, int $tableCount, ?DataShareMirrorProgress $progress): array
+    {
+        $counts = ['create' => 0, 'replace' => 0, 'delete' => 0];
+        $items = [];
+        foreach ($review->items as $index => $item) {
+            $counts[$item->intendedAction->value]++;
+            $sourceRows = $this->rowCount($source, $item->table);
+            $targetRows = $this->rowCount($target, $item->table);
+            $items[] = ['table' => $item->table, 'action' => $item->intendedAction->value, 'local_rows' => $review->direction === DataShareMirrorDirection::Push ? $sourceRows : $targetRows, 'remote_rows' => $review->direction === DataShareMirrorDirection::Push ? $targetRows : $sourceRows];
+            $progress?->report((string) __('Verified table :current of :total in :target: :table (:rows rows).', ['current' => $index + 1, 'total' => $tableCount, 'target' => $targetLabel, 'table' => $item->table, 'rows' => $targetRows]));
+        }
+
+        return [$counts, $items];
     }
 
     private function rowCount(Connection $connection, string $table): int

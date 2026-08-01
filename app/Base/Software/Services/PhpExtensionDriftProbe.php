@@ -84,7 +84,7 @@ final class PhpExtensionDriftProbe
         $names = [];
 
         foreach ($lines as $line) {
-            if (preg_match('/^\s*extension\s*=\s*"?(?:php_)?([A-Za-z0-9_]+)/', $line, $matches) === 1) {
+            if (preg_match('/^\s*extension\s*=\s*"?(?:php_)?(\w+)/', $line, $matches) === 1) {
                 $names[] = strtolower($matches[1]);
             }
         }

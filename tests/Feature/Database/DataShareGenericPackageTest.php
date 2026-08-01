@@ -50,6 +50,8 @@ const GENERIC_SHARE_PRIMARY_URL = 'https://source.lan:8443';
 const GENERIC_SHARE_FALLBACK_URL = 'https://share.example.test';
 const GENERIC_SHARE_OFFER_PATH = '/data-share/offers/';
 const GENERIC_SHARE_NDJSON = 'application/x-ndjson';
+const GENERIC_SHARE_RECEIVING_PATH = 'data-share/receiving';
+const GENERIC_SHARE_DESTINATION_NAME = 'Generic destination';
 
 beforeEach(function (): void {
     Storage::fake('local');
@@ -61,7 +63,7 @@ beforeEach(function (): void {
         'data_share.instance.role' => 'development',
         'data_share.outgoing_path_prefix' => 'data-share/outgoing',
         'data_share.incoming_path_prefix' => 'data-share/incoming',
-        'data_share.receiving_path_prefix' => 'data-share/receiving',
+        'data_share.receiving_path_prefix' => GENERIC_SHARE_RECEIVING_PATH,
         'data_share.offers.base_urls' => GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL,
         'data_share.offers.expiry_minutes' => 60,
     ]);
@@ -72,7 +74,7 @@ beforeEach(function (): void {
     $settings->set('data_share.instance.role', 'development');
     $settings->set('data_share.outgoing_path_prefix', 'data-share/outgoing');
     $settings->set('data_share.incoming_path_prefix', 'data-share/incoming');
-    $settings->set('data_share.receiving_path_prefix', 'data-share/receiving');
+    $settings->set('data_share.receiving_path_prefix', GENERIC_SHARE_RECEIVING_PATH);
     $settings->set('data_share.offers.base_urls', GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL);
     $settings->set('data_share.offers.expiry_minutes', 60);
 
@@ -158,15 +160,15 @@ function becomeGenericDataShareDestination(bool $production = false): DataShareI
 
     config([
         'data_share.instance.id' => $id,
-        'data_share.instance.name' => 'Generic destination',
+        'data_share.instance.name' => GENERIC_SHARE_DESTINATION_NAME,
         'data_share.instance.role' => $role->value,
     ]);
     $settings = app(SettingsService::class);
     $settings->set('data_share.instance.id', $id);
-    $settings->set('data_share.instance.name', 'Generic destination');
+    $settings->set('data_share.instance.name', GENERIC_SHARE_DESTINATION_NAME);
     $settings->set('data_share.instance.role', $role->value);
 
-    return new DataShareInstanceIdentity($id, 'Generic destination', $role);
+    return new DataShareInstanceIdentity($id, GENERIC_SHARE_DESTINATION_NAME, $role);
 }
 
 /** @return array{bundle: DataShareTransferOfferBundle, offer: DataShareTransferOffer, export: DataShareExportResult} */
@@ -820,7 +822,7 @@ it('deletes a fetched temporary stream when response metadata is wrong', functio
     expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
         ->toThrow(DataShareTransportException::class, 'metadata');
     expect(DataShareReceipt::query()->count())->toBe(0)
-        ->and(Storage::disk('local')->allFiles('data-share/receiving'))->toBe([]);
+        ->and(Storage::disk('local')->allFiles(GENERIC_SHARE_RECEIVING_PATH))->toBe([]);
 });
 
 it('does not prune an available published offer and requires explicit outgoing cleanup', function (): void {
