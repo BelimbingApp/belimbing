@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Pdf\Services;
 
 use App\Base\Pdf\Exceptions\PdfPostProcessException;
@@ -37,8 +38,14 @@ class PdfPostProcessor
             throw new PdfPostProcessException("Source artifact missing: {$artifact->disk}:{$artifact->path}");
         }
 
-        $sourceTemp = tempnam(sys_get_temp_dir(), 'blb_qpdf_in_').'.pdf';
-        $outputTemp = tempnam(sys_get_temp_dir(), 'blb_qpdf_out_').'.pdf';
+        $sourceTemp = tempnam(sys_get_temp_dir(), 'blb_qpdf_in_');
+        $outputTemp = tempnam(sys_get_temp_dir(), 'blb_qpdf_out_');
+        if ($sourceTemp === false || $outputTemp === false) {
+            is_string($sourceTemp) && @unlink($sourceTemp);
+            is_string($outputTemp) && @unlink($outputTemp);
+
+            throw PdfPostProcessException::qpdfFailed('Could not create temporary files', -1);
+        }
         file_put_contents($sourceTemp, $contents);
 
         try {
@@ -61,7 +68,7 @@ class PdfPostProcessor
         }
 
         $sha256 = hash('sha256', $encrypted);
-        $now = new DateTimeImmutable();
+        $now = new DateTimeImmutable;
         $directory = (string) $this->config->get('pdf.artifact_directory', 'pdf-artifacts');
         $protectedPath = trim($directory, '/').'/protected/'.$now->format('Y/m/d').'/'.$sha256.'.pdf';
 

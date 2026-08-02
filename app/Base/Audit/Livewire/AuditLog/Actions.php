@@ -6,6 +6,7 @@ use App\Base\Audit\Livewire\AuditLog\Concerns\InteractsWithTraceTimeline;
 use App\Base\Audit\Models\AuditAction;
 use App\Base\Audit\Services\AuditLogPresenter;
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -16,6 +17,7 @@ use Livewire\WithPagination;
 
 class Actions extends Component
 {
+    use ChecksCapabilityAuthorization;
     use InteractsWithTraceTimeline;
     use ResetsPaginationOnSearch;
     use TogglesSort;
@@ -83,6 +85,10 @@ class Actions extends Component
 
     public function toggleRetain(int $id): void
     {
+        if (! $this->checkCapability('admin.audit.log.manage')) {
+            return;
+        }
+
         $action = AuditAction::query()->findOrFail($id);
         $action->is_retained = ! $action->is_retained;
         $action->save();

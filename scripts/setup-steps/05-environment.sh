@@ -81,7 +81,7 @@ create_env_file() {
     # APP_DEBUG is auto-derived for local; only prompt for staging/production.
     if [[ "$APP_ENV" != "local" ]]; then
         local app_debug app_debug_default
-        app_debug_default=$(get_env_var "APP_DEBUG" "$(detect_app_debug)")
+        app_debug_default=$(detect_app_debug)
         if [[ -t 0 ]]; then
             app_debug=$(ask_input "APP_DEBUG" "$app_debug_default")
         else

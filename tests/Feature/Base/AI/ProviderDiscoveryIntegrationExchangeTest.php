@@ -3,6 +3,7 @@
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
 use App\Base\AI\Services\ModelCatalogService;
 use App\Base\AI\Services\ProviderDiscoveryService;
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\Integration\Models\OutboundExchange;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ModelDiscoveryService;
@@ -11,6 +12,14 @@ use App\Modules\Core\Company\Models\Company;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+
+// Bind a UrlSafetyGuard with a fake DNS resolver so test domains
+// pass SSRF validation without real DNS lookups.
+beforeEach(function (): void {
+    app()->instance(UrlSafetyGuard::class, new UrlSafetyGuard(
+        fn (string $host) => ['1.2.3.4'],
+    ));
+});
 
 it('records provider model discovery through the integration gateway', function (): void {
     Http::fake([

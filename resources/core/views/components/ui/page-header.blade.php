@@ -6,7 +6,7 @@
     $alpineData = [];
     if ($help) $alpineData[] = 'helpOpen: false';
     if ($resolvedPinnable) {
-        $alpineData[] = 'pinData: ' . json_encode($resolvedPinnable, JSON_UNESCAPED_SLASHES);
+        $alpineData[] = 'pinData: ' . json_encode($resolvedPinnable, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES);
         $normalizer = app(\App\Base\Menu\Services\PinMetadataNormalizer::class);
         $normalizedPageUrl = $normalizer->normalizeUrl($resolvedPinnable['url']);
         $isCurrentlyPinned = auth()->check()
@@ -51,7 +51,7 @@
                 @endif
             </div>
             @if($subtitle)
-                <p class="text-sm text-muted">{!! $subtitle !!}</p>
+                <p class="text-sm text-muted">{{ $subtitle }}</p>
             @endif
         </div>
         @if($actions)

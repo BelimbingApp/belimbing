@@ -11,6 +11,20 @@ use Illuminate\Support\Facades\Schema;
 
 class IntegrationGateway
 {
+    private const SENSITIVE_BODY_FIELDS = [
+        'code',
+        'code_verifier',
+        'access_token',
+        'refresh_token',
+        'id_token',
+        'client_secret',
+        'token',
+        'secret',
+        'password',
+        'api_key',
+        'apiKey',
+    ];
+
     private const OUTCOME_SUCCESS = 'success';
 
     private const OUTCOME_HTTP_ERROR = 'http_error';
@@ -134,7 +148,9 @@ class IntegrationGateway
             return null;
         }
 
-        $requestPreview = $this->payloadPreview($request->body);
+        $requestPreview = $this->hasSensitiveRequestBody($request)
+            ? null
+            : $this->payloadPreview($request->body);
         $responsePreview = $response instanceof Response ? $this->payloadPreview($response->body()) : null;
         $metadata = $this->metadata($request);
         $exchangeMetadata = $this->exchangeMetadata($metadata);
@@ -221,6 +237,15 @@ class IntegrationGateway
         return ['Authorization' => 'Basic'] + $request->headers;
     }
 
+    private function hasSensitiveRequestBody(IntegrationRequest $request): bool
+    {
+        $operation = strtolower($request->operation);
+
+        return $request->protocol === 'oauth2'
+            || str_contains($operation, 'oauth')
+            || str_contains($operation, 'token');
+    }
+
     /**
      * @param  array<string, mixed>  $headers
      * @return array<string, mixed>
@@ -282,7 +307,7 @@ class IntegrationGateway
         if (is_array($payload)) {
             return [
                 'kind' => 'json',
-                'value' => $payload,
+                'value' => $this->redactSensitiveBodyFields($payload),
             ];
         }
 
@@ -290,7 +315,7 @@ class IntegrationGateway
         if (is_array($decoded)) {
             return [
                 'kind' => 'json',
-                'value' => $decoded,
+                'value' => $this->redactSensitiveBodyFields($decoded),
             ];
         }
 
@@ -298,6 +323,25 @@ class IntegrationGateway
             'kind' => 'text',
             'value' => $payload,
         ];
+    }
+
+    /**
+     * Redact sensitive fields from a payload array recursively.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function redactSensitiveBodyFields(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if (in_array($key, self::SENSITIVE_BODY_FIELDS, true)) {
+                $payload[$key] = '[redacted]';
+            } elseif (is_array($value)) {
+                $payload[$key] = $this->redactSensitiveBodyFields($value);
+            }
+        }
+
+        return $payload;
     }
 
     private function outcome(?Response $response, ?ConnectionException $error): string

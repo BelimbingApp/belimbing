@@ -2,10 +2,19 @@
 
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
 use App\Base\AI\Services\ProviderDiscoveryService;
+use App\Base\AI\Services\UrlSafetyGuard;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 uses(TestCase::class);
+
+// Bind a UrlSafetyGuard with a fake DNS resolver so test domains
+// pass SSRF validation without real DNS lookups.
+beforeEach(function (): void {
+    app()->instance(UrlSafetyGuard::class, new UrlSafetyGuard(
+        fn (string $host) => ['1.2.3.4'],
+    ));
+});
 
 it('discovers models without sending bearer auth for not-required keys and sorts them by display name', function (): void {
     Http::fake([

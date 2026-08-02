@@ -39,7 +39,6 @@
         <x-ui.secret-input
             id="provider-api-key-{{ $isEditingProvider ? 'edit-'.$editingProviderId : 'create' }}"
             wire:model="providerApiKey"
-            value="{{ $providerApiKey }}"
             label="{{ __('API Key') }}"
             :required="!$isEditingProvider"
             :placeholder="($isEditingProvider && ! $providerHasStoredApiKey) ? __('Enter API key') : ''"

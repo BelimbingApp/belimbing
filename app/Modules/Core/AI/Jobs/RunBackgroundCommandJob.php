@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Modules\Core\AI\Jobs;
 
 use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Modules\Core\AI\Services\BackgroundCommandService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -78,11 +80,11 @@ class RunBackgroundCommandJob implements ShouldQueue
         $dispatch->markRunning();
 
         try {
-            $fullCommand = 'php artisan '.$command;
+            $tokens = app(BackgroundCommandService::class)->parseCommandTokens($command);
 
             $result = Process::timeout($this->timeout - 10)
                 ->path(base_path())
-                ->run($fullCommand);
+                ->run(array_merge(['php', 'artisan'], $tokens));
 
             $this->recordResult($dispatch, $result, $command);
         } catch (\Throwable $e) {

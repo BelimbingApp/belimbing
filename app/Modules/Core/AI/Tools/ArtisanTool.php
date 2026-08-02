@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Tools\AbstractHighImpactProcessTool;
@@ -22,9 +23,9 @@ use Illuminate\Support\Facades\Process;
  *
  * Gated by `admin.ai.tool.artisan.execute` authz capability.
  *
- * Safety: Only `php artisan` commands are allowed. Laravel's Process
- * class uses proc_open without shell invocation, so metacharacters
- * have no shell-level effect. Timeout enforced per execution.
+ * Safety: Only `php artisan` commands are allowed. Commands are parsed into
+ * tokens and passed as an array to Process, avoiding shell interpretation of
+ * metacharacters. Timeout enforced per execution.
  */
 class ArtisanTool extends AbstractHighImpactProcessTool
 {
@@ -162,11 +163,11 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             self::MAX_TIMEOUT_SECONDS
         );
 
-        $fullCommand = 'php artisan '.$command;
+        $tokens = $this->parseCommandTokens($command);
 
         $result = Process::timeout($timeout)
             ->path(base_path())
-            ->run($fullCommand);
+            ->run(array_merge(['php', 'artisan'], $tokens));
 
         return $this->formatProcessResult($result);
     }
@@ -194,5 +195,55 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             'message' => 'Command dispatched for background execution. '
                 .'Use the delegation_status tool with dispatch_id "'.$dispatch->id.'" to check progress.',
         ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+    }
+
+    /**
+     * Parse a command string into tokens, respecting single and double quotes.
+     *
+     * Tokenization avoids shell interpretation: the resulting array is passed
+     * directly to Process::run(array), which uses proc_open without a shell.
+     */
+    private function parseCommandTokens(string $command): array
+    {
+        $tokens = [];
+        $length = strlen($command);
+        $i = 0;
+
+        while ($i < $length) {
+            while ($i < $length && ctype_space($command[$i])) {
+                $i++;
+            }
+
+            if ($i >= $length) {
+                break;
+            }
+
+            $char = $command[$i];
+
+            if ($char === '"' || $char === "'") {
+                $i++;
+                $start = $i;
+
+                while ($i < $length && $command[$i] !== $char) {
+                    $i++;
+                }
+
+                $tokens[] = substr($command, $start, $i - $start);
+
+                if ($i < $length) {
+                    $i++;
+                }
+            } else {
+                $start = $i;
+
+                while ($i < $length && ! ctype_space($command[$i])) {
+                    $i++;
+                }
+
+                $tokens[] = substr($command, $start, $i - $start);
+            }
+        }
+
+        return $tokens;
     }
 }

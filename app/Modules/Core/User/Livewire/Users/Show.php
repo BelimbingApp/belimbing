@@ -136,6 +136,10 @@ class Show extends Component
      */
     public function saveField(string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.user.update')) {
+            return;
+        }
+
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'email' => [
@@ -182,6 +186,10 @@ class Show extends Component
      */
     public function saveCompany(?int $companyId): void
     {
+        if (! $this->checkCapability('admin.user.update')) {
+            return;
+        }
+
         $oldCompanyId = $this->user->company_id;
         $this->user->company_id = $companyId ?: null;
         $this->user->save();
@@ -208,6 +216,10 @@ class Show extends Component
      */
     public function updatePassword(): void
     {
+        if (! $this->checkCapability('admin.user.update')) {
+            return;
+        }
+
         $validated = $this->validate($this->passwordValidationRules());
 
         $this->user->password = Hash::make($validated['password']);

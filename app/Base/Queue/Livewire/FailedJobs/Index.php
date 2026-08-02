@@ -2,6 +2,7 @@
 
 namespace App\Base\Queue\Livewire\FailedJobs;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\TableSearchablePaginatedList;
 use App\Base\Queue\Services\ActionableFailedJobRepository;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
@@ -11,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class Index extends TableSearchablePaginatedList
 {
+    use ChecksCapabilityAuthorization;
+
     protected const string TABLE = 'failed_jobs';
 
     protected const string VIEW_NAME = 'livewire.admin.system.failed-jobs.index';
@@ -48,6 +51,10 @@ class Index extends TableSearchablePaginatedList
 
     public function retryJob(string $uuid): void
     {
+        if (! $this->checkCapability('admin.system.failed-job.manage')) {
+            return;
+        }
+
         if (! $this->failedJobs()->isRetryableUuid($uuid)) {
             return;
         }
@@ -57,6 +64,10 @@ class Index extends TableSearchablePaginatedList
 
     public function retryAll(): void
     {
+        if (! $this->checkCapability('admin.system.failed-job.manage')) {
+            return;
+        }
+
         $uuids = $this->failedJobs()->retryableUuids();
 
         if ($uuids === []) {
@@ -68,6 +79,10 @@ class Index extends TableSearchablePaginatedList
 
     public function deleteJob(int $id): void
     {
+        if (! $this->checkCapability('admin.system.failed-job.manage')) {
+            return;
+        }
+
         DB::table('failed_jobs')->where('id', $id)->delete();
     }
 

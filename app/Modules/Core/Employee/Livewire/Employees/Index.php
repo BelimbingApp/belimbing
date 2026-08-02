@@ -2,7 +2,7 @@
 
 namespace App\Modules\Core\Employee\Livewire\Employees;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\AI\Contracts\ProvidesLaraPageContext;
@@ -16,7 +16,7 @@ use Livewire\WithPagination;
 
 class Index extends Component implements ProvidesLaraPageContext
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -73,6 +73,10 @@ class Index extends Component implements ProvidesLaraPageContext
 
     public function delete(int $employeeId): void
     {
+        if (! $this->checkCapability('admin.employee.delete')) {
+            return;
+        }
+
         $employee = Employee::query()->findOrFail($employeeId);
 
         $employee->delete();

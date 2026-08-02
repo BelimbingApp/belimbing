@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Base\AI\Tools\ToolArgumentException;
@@ -77,8 +78,28 @@ class RepositorySurfaceResolver
     {
         $surface = $this->resolve($targetSurface);
         $relativePath = $this->resolvePath($filePath, $targetSurface);
+        $rawPath = $surface->rootPath.'/'.$relativePath;
 
-        return $surface->rootPath.'/'.$relativePath;
+        $realRoot = realpath($surface->rootPath);
+        if ($realRoot === false) {
+            return $rawPath;
+        }
+
+        $resolved = realpath($rawPath);
+        if ($resolved !== false) {
+            if (! str_starts_with($resolved, $realRoot.DIRECTORY_SEPARATOR) && $resolved !== $realRoot) {
+                throw new ToolArgumentException('Resolved path escapes the target surface.');
+            }
+
+            return $resolved;
+        }
+
+        $realParent = realpath(dirname($rawPath));
+        if ($realParent !== false && ! str_starts_with($realParent, $realRoot.DIRECTORY_SEPARATOR) && $realParent !== $realRoot) {
+            throw new ToolArgumentException('Target directory escapes the target surface.');
+        }
+
+        return $rawPath;
     }
 
     public function displayPath(string $filePath, ?string $targetSurface = null): string

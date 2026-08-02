@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Livewire\Providers;
 
+use App\Base\AI\Services\UrlSafetyGuard;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
@@ -43,6 +45,15 @@ class CopilotProxySetup extends ProviderSetup
 
         $this->baseUrlStatus = 'checking';
         $this->baseUrlStatusMessage = __('Checking connection...');
+
+        $urlError = app(UrlSafetyGuard::class)->validate($this->baseUrl);
+
+        if ($urlError !== true) {
+            $this->baseUrlStatus = 'offline';
+            $this->baseUrlStatusMessage = __('Unsafe base URL: :message', ['message' => $urlError]);
+
+            return;
+        }
 
         try {
             $response = Http::timeout(5)

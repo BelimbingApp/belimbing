@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Messaging\Adapters;
 
 use App\Modules\Core\AI\Contracts\Messaging\ChannelAdapter;
 use App\Modules\Core\AI\DTO\Messaging\ChannelAccount;
 use App\Modules\Core\AI\DTO\Messaging\InboundMessage;
 use App\Modules\Core\AI\DTO\Messaging\SendResult;
+use App\Modules\Core\AI\Enums\SignalAuthenticityStatus;
 use Illuminate\Http\Request;
 
 /**
@@ -44,6 +46,19 @@ abstract class BaseChannelAdapter implements ChannelAdapter
     public function parseInbound(Request $request): ?InboundMessage
     {
         return null;
+    }
+
+    /**
+     * Fail-closed authenticity verification.
+     *
+     * Concrete adapters must override this with platform-specific signature
+     * verification once real credentials and signing secrets are configured.
+     * Until then, inbound webhook processing is intentionally disabled so
+     * forged events cannot be accepted.
+     */
+    public function verifyAuthenticity(Request $request): SignalAuthenticityStatus
+    {
+        return SignalAuthenticityStatus::Failed;
     }
 
     /**

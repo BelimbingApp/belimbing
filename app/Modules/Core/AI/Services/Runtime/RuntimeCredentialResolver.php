@@ -5,6 +5,8 @@ namespace App\Modules\Core\AI\Services\Runtime;
 use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
+use App\Base\AI\Services\UrlSafetyGuard;
+use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Models\AiProvider;
 use App\Modules\Core\AI\Services\ProviderDefinitionRegistry;
 
@@ -18,6 +20,7 @@ class RuntimeCredentialResolver
 {
     public function __construct(
         private readonly ProviderDefinitionRegistry $registry,
+        private readonly ?UrlSafetyGuard $urlSafetyGuard = null,
     ) {}
 
     /**
@@ -34,7 +37,47 @@ class RuntimeCredentialResolver
             return $configurationError;
         }
 
-        return $this->resolveCredentials($config);
+        // SSRF guard: validate the base URL BEFORE credential resolution,
+        // because some definitions (e.g., CopilotProxyDefinition) make HTTP
+        // requests during resolveRuntime(). Validating after would allow
+        // SSRF attacks to slip through the connectivity probe.
+        // Local providers (e.g., Ollama on localhost) are allowed to target
+        // private networks; all other auth types must use public URLs.
+        $providerName = (string) ($config['provider_name'] ?? 'default');
+        $definition = $this->registry->for($providerName);
+        $allowPrivate = $definition->authType() === AuthType::Local;
+        $urlError = ($this->urlSafetyGuard ?? app(UrlSafetyGuard::class))
+            ->validate((string) ($config['base_url'] ?? ''), allowPrivateNetwork: $allowPrivate);
+
+        if ($urlError !== true) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    'Provider base URL failed safety check: '.$urlError,
+                ),
+            ];
+        }
+
+        $credentials = $this->resolveCredentials($config);
+
+        if (isset($credentials['runtime_error'])) {
+            return $credentials;
+        }
+
+        // Re-validate the resolved base URL in case the definition changed it.
+        $resolvedUrlError = ($this->urlSafetyGuard ?? app(UrlSafetyGuard::class))
+            ->validate($credentials['base_url'], allowPrivateNetwork: $allowPrivate);
+
+        if ($resolvedUrlError !== true) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    'Provider base URL failed safety check: '.$resolvedUrlError,
+                ),
+            ];
+        }
+
+        return $credentials;
     }
 
     /**

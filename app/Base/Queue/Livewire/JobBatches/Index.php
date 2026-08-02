@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Queue\Livewire\JobBatches;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\TableSearchablePaginatedList;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -8,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class Index extends TableSearchablePaginatedList
 {
+    use ChecksCapabilityAuthorization;
+
     protected const string TABLE = 'job_batches';
 
     protected const string VIEW_NAME = 'livewire.admin.system.job-batches.index';
@@ -66,6 +70,10 @@ class Index extends TableSearchablePaginatedList
 
     public function cancelBatch(string $id): void
     {
+        if (! $this->checkCapability('admin.system.job-batch.manage')) {
+            return;
+        }
+
         DB::table('job_batches')
             ->where('id', $id)
             ->whereNull('cancelled_at')
@@ -75,6 +83,10 @@ class Index extends TableSearchablePaginatedList
 
     public function pruneCompleted(): void
     {
+        if (! $this->checkCapability('admin.system.job-batch.manage')) {
+            return;
+        }
+
         DB::table('job_batches')
             ->whereNotNull('finished_at')
             ->delete();

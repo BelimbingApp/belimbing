@@ -1,7 +1,9 @@
 <?php
+
 return [
     'capabilities' => [
         'admin.audit.log.list',
+        'admin.audit.log.manage',
         'admin.audit.log.view',
     ],
 ];

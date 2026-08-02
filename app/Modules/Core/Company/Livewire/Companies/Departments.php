@@ -2,7 +2,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\Department;
@@ -13,7 +13,7 @@ use Livewire\WithPagination;
 
 class Departments extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use TogglesSort;
     use WithPagination;
 
@@ -55,6 +55,10 @@ class Departments extends Component
 
     public function createDepartment(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if ($this->createDepartmentTypeId === 0) {
             return;
         }
@@ -72,11 +76,17 @@ class Departments extends Component
 
     public function saveStatus(int $departmentId, string $status): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if (! in_array($status, ['active', 'inactive', 'suspended'])) {
             return;
         }
 
-        $dept = Department::query()->findOrFail($departmentId);
+        $dept = Department::query()
+            ->where('company_id', $this->company->id)
+            ->findOrFail($departmentId);
         $dept->status = $status;
         $dept->save();
 
@@ -85,7 +95,14 @@ class Departments extends Component
 
     public function deleteDepartment(int $departmentId): void
     {
-        Department::query()->findOrFail($departmentId)->delete();
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        $dept = Department::query()
+            ->where('company_id', $this->company->id)
+            ->findOrFail($departmentId);
+        $dept->delete();
         $this->notify(__('Department deleted.'));
     }
 

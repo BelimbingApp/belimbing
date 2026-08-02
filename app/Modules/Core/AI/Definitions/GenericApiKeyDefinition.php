@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Definitions;
 
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Modules\Core\AI\Concerns\HasDefaultProviderCapabilities;
 use App\Modules\Core\AI\Contracts\ProviderDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
@@ -67,6 +69,13 @@ final readonly class GenericApiKeyDefinition implements ProviderDefinition
         ];
 
         $validated = Validator::make($input, $rules)->validate();
+        $urlError = app(UrlSafetyGuard::class)->validate($validated['base_url']);
+
+        if ($urlError !== true) {
+            throw ValidationException::withMessages([
+                'base_url' => "The base URL is not safe: {$urlError}",
+            ]);
+        }
 
         $result = [
             'base_url' => $validated['base_url'],
