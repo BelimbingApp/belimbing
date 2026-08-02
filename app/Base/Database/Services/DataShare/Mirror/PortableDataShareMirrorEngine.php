@@ -6,6 +6,7 @@ use App\Base\Database\Contracts\DataShareMirrorEngine;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorExecutionResult;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
+use App\Base\Database\DTO\DataShare\Mirror\PortableDataShareMirrorSnapshotState;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\CanonicalJson;
 use App\Base\Database\Services\DataShare\DataShareSettings;
@@ -124,86 +125,95 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         }
 
         @chmod($path, 0600);
-        $counts = array_fill_keys($tables, 0);
-        $hashContexts = [];
-        foreach ($tables as $table) {
-            $hashContexts[$table] = hash_init('sha256');
-        }
-        $totalRecords = 0;
-        $totalBytes = 0;
-        $maximumScalarBytes = $this->settings->integer('data_share.transfer_limits.max_scalar_bytes', 10 * 1024 * 1024, 1, 2147483647);
-        $maximumLineBytes = $this->settings->integer('data_share.transfer_limits.max_record_line_bytes', 32 * 1024 * 1024, 1, 2147483647);
-        $maximumSnapshotBytes = $this->settings->integer(
-            'data_share.mirror.max_snapshot_bytes',
-            (int) config('data_share.mirror.max_snapshot_bytes', 1024 * 1024 * 1024),
-            1,
-            2147483647,
-        );
+        $state = $this->newSnapshotState($tables, $sourceLabel, $progress);
 
         try {
-            $source->transaction(function () use ($source, $target, $tables, $handle, &$counts, $hashContexts, &$totalRecords, &$totalBytes, $maximumScalarBytes, $maximumLineBytes, $maximumSnapshotBytes, $sourceLabel, $progress): void {
-                if ($source->getDriverName() === 'pgsql') {
-                    $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
-                }
-
-                $tableCount = count($tables);
-                foreach ($tables as $index => $table) {
-                    $targetTypes = $this->columnTypes($target, $table);
-                    $query = $source->table($table);
-                    foreach ($this->schemas->primaryKey($source, $table) as $column) {
-                        $query->orderBy($column);
-                    }
-
-                    foreach ($query->cursor() as $record) {
-                        $row = [];
-                        foreach ((array) $record as $column => $value) {
-                            if (is_string($value) && strlen($value) > $maximumScalarBytes) {
-                                throw DataShareMirrorException::limitExceeded(__('Table :table column :column exceeds the :max byte mirror scalar limit.', [
-                                    'table' => $table,
-                                    'column' => $column,
-                                    'max' => $maximumScalarBytes,
-                                ]));
-                            }
-                            $row[$column] = $this->encodeValue($value, $targetTypes[$column] ?? '');
-                        }
-                        ksort($row, SORT_STRING);
-                        hash_update($hashContexts[$table], CanonicalJson::encode($row)."\n");
-
-                        $line = json_encode(['table' => $table, 'row' => $row], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
-                        $lineBytes = strlen($line);
-                        if ($lineBytes > $maximumLineBytes) {
-                            throw DataShareMirrorException::limitExceeded(__('A mirror record exceeds the :max byte line limit.', ['max' => $maximumLineBytes]));
-                        }
-                        $totalRecords++;
-                        $totalBytes += $lineBytes;
-                        if ($totalBytes > $maximumSnapshotBytes) {
-                            throw DataShareMirrorException::limitExceeded(__('Mirror staging exceeds the :max byte limit.', ['max' => $maximumSnapshotBytes]));
-                        }
-                        if (fwrite($handle, $line) !== strlen($line)) {
-                            throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be written.'));
-                        }
-
-                        $counts[$table]++;
-                    }
-                    $progress?->report((string) __('Staged table :current of :total from :source: :table (:rows rows).', [
-                        'current' => $index + 1,
-                        'total' => $tableCount,
-                        'source' => $sourceLabel,
-                        'table' => $table,
-                        'rows' => $counts[$table],
-                    ]));
-                }
-            }, 1);
+            $source->transaction(fn () => $this->snapshotTables($source, $target, $tables, $handle, $state), 1);
         } finally {
             fclose($handle);
         }
 
-        $hashes = [];
-        foreach ($hashContexts as $table => $context) {
-            $hashes[$table] = hash_final($context);
+        return $state->result();
+    }
+
+    /** @param list<string> $tables */
+    private function newSnapshotState(array $tables, string $sourceLabel, ?DataShareMirrorProgress $progress): PortableDataShareMirrorSnapshotState
+    {
+        return new PortableDataShareMirrorSnapshotState(
+            $tables,
+            $this->settings->integer('data_share.transfer_limits.max_scalar_bytes', 10 * 1024 * 1024, 1, 2147483647),
+            $this->settings->integer('data_share.transfer_limits.max_record_line_bytes', 32 * 1024 * 1024, 1, 2147483647),
+            $this->settings->integer('data_share.mirror.max_snapshot_bytes', (int) config('data_share.mirror.max_snapshot_bytes', 1024 * 1024 * 1024), 1, 2147483647),
+            $sourceLabel,
+            $progress,
+        );
+    }
+
+    /** @param list<string> $tables @param resource $handle */
+    private function snapshotTables(Connection $source, Connection $target, array $tables, $handle, PortableDataShareMirrorSnapshotState $state): void
+    {
+        if ($source->getDriverName() === 'pgsql') {
+            $source->statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
         }
 
-        return ['counts' => $counts, 'hashes' => $hashes, 'records' => $totalRecords, 'bytes' => $totalBytes];
+        foreach ($tables as $index => $table) {
+            $this->snapshotTable($source, $target, $table, $handle, $state);
+            $state->progress?->report((string) __('Staged table :current of :total from :source: :table (:rows rows).', [
+                'current' => $index + 1,
+                'total' => count($tables),
+                'source' => $state->sourceLabel,
+                'table' => $table,
+                'rows' => $state->counts[$table],
+            ]));
+        }
+    }
+
+    /** @param resource $handle */
+    private function snapshotTable(Connection $source, Connection $target, string $table, $handle, PortableDataShareMirrorSnapshotState $state): void
+    {
+        $targetTypes = $this->columnTypes($target, $table);
+        $query = $source->table($table);
+        foreach ($this->schemas->primaryKey($source, $table) as $column) {
+            $query->orderBy($column);
+        }
+
+        foreach ($query->cursor() as $record) {
+            $this->writeSnapshotRecord($table, (array) $record, $targetTypes, $handle, $state);
+        }
+    }
+
+    /** @param array<string, mixed> $record @param array<string, string> $targetTypes @param resource $handle */
+    private function writeSnapshotRecord(string $table, array $record, array $targetTypes, $handle, PortableDataShareMirrorSnapshotState $state): void
+    {
+        $row = [];
+        foreach ($record as $column => $value) {
+            if (is_string($value) && strlen($value) > $state->maximumScalarBytes) {
+                throw DataShareMirrorException::limitExceeded(__('Table :table column :column exceeds the :max byte mirror scalar limit.', [
+                    'table' => $table,
+                    'column' => $column,
+                    'max' => $state->maximumScalarBytes,
+                ]));
+            }
+            $row[$column] = $this->encodeValue($value, $targetTypes[$column] ?? '');
+        }
+        ksort($row, SORT_STRING);
+        hash_update($state->hashContexts[$table], CanonicalJson::encode($row)."\n");
+
+        $line = json_encode(['table' => $table, 'row' => $row], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES)."\n";
+        $lineBytes = strlen($line);
+        if ($lineBytes > $state->maximumLineBytes) {
+            throw DataShareMirrorException::limitExceeded(__('A mirror record exceeds the :max byte line limit.', ['max' => $state->maximumLineBytes]));
+        }
+        $state->records++;
+        $state->bytes += $lineBytes;
+        if ($state->bytes > $state->maximumSnapshotBytes) {
+            throw DataShareMirrorException::limitExceeded(__('Mirror staging exceeds the :max byte limit.', ['max' => $state->maximumSnapshotBytes]));
+        }
+        if (fwrite($handle, $line) !== strlen($line)) {
+            throw DataShareMirrorException::safeFailure(__('The temporary staging file could not be written.'));
+        }
+
+        $state->counts[$table]++;
     }
 
     /** @param list<string> $tables @param array<string, int> $expectedCounts @param array<string, string> $expectedHashes */

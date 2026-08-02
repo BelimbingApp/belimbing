@@ -141,26 +141,7 @@ class Settings extends SettingsForm
 
         try {
             $value = $this->applySupabaseManualPassword($value, $provider, $settings, clearPassword: false);
-
-            if ($this->isSavedMirrorMask($value)) {
-                $savedUrl = $settings->get('data_share.mirror.url');
-                if (! is_string($savedUrl) || trim($savedUrl) === '') {
-                    $this->fail($key, __('Enter a PostgreSQL URL before testing the mirror connection.'));
-                }
-
-                $value = $savedUrl;
-            } elseif ($value === '') {
-                if (! $settings->has('data_share.mirror.url')) {
-                    $this->fail($key, __('Enter a PostgreSQL URL before testing the mirror connection.'));
-                }
-
-                $savedUrl = $settings->get('data_share.mirror.url');
-                if (! is_string($savedUrl) || trim($savedUrl) === '') {
-                    $this->fail($key, __('The saved mirror credential could not be read. Replace it and try again.'));
-                }
-
-                $value = $savedUrl;
-            }
+            $value = $this->mirrorUrlForConnectionTest($value, $settings, $key);
 
             $this->validateMirrorUrl($key, $value);
             $status = $mirror->testConnection($value, $provider);
@@ -174,13 +155,7 @@ class Settings extends SettingsForm
             $settings->set('data_share.mirror.provider', $provider);
             $settings->set('data_share.mirror.url', $value);
 
-            if ($provider === 'supabase') {
-                if (($result['initializable'] ?? false) && ! ($result['available'] ?? false)) {
-                    $settings->set(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING, true);
-                } else {
-                    $settings->forget(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING);
-                }
-            }
+            $this->recordSupabaseInitializationNeed($provider, $result, $settings);
 
             $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
             $this->originalMirrorProvider = $provider;
@@ -188,20 +163,7 @@ class Settings extends SettingsForm
             $this->resetValidation('values.'.$key);
             $this->resetValidation('supabaseManualDatabasePassword');
 
-            if ($passwordWasEntered) {
-                $this->supabaseManualDatabasePassword = '';
-                $this->dispatch('clear-secret-input', id: 'supabase-manual-database-password');
-            }
-
-            if ($result['available'] ?? false) {
-                $message = __('Connection successful and saved.');
-            } elseif ($result['initializable'] ?? false) {
-                $message = __('Connection successful and saved. Initialize the mirror before transferring data.');
-            } else {
-                $message = (string) ($result['message'] ?? __('Connection successful and saved, but the database is not ready to use.'));
-            }
-
-            $this->notify($message, ($result['available'] ?? false) ? 'success' : 'warning');
+            $this->finishSuccessfulConnectionTest($result, $passwordWasEntered);
         } catch (ValidationException $e) {
             throw $e;
         } catch (Throwable $exception) {
@@ -261,19 +223,7 @@ class Settings extends SettingsForm
             $this->values[$key] = BlbStr::DEFAULT_SAVED_SECRET_MASK;
 
             if ($provider !== $this->originalMirrorProvider) {
-                $savedUrl = $settings->get('data_share.mirror.url');
-                if (! is_string($savedUrl)) {
-                    $this->fail($key, __('The saved mirror credential could not be read. Replace it before changing provider.'));
-                }
-
-                try {
-                    $status = $mirror->testConnection($savedUrl, $provider)->toArray();
-                } catch (Throwable $exception) {
-                    $this->fail($key, DataShareMirrorException::unexpected('connection', $exception)->getMessage());
-                }
-                if (! ($status['reachable'] ?? false)) {
-                    $this->fail($key, (string) ($status['message'] ?? __('The mirror connection is unavailable.')));
-                }
+                $this->testSavedUrlWithChangedProvider($settings, $mirror, $provider, $key);
             }
 
             return;
@@ -285,8 +235,77 @@ class Settings extends SettingsForm
 
         $this->validateMirrorUrl($key, $value);
 
+        $this->requireReachableMirror($mirror, $value, $provider, $key);
+    }
+
+    private function mirrorUrlForConnectionTest(string $value, SettingsService $settings, string $key): string
+    {
+        if (! $this->isSavedMirrorMask($value) && $value !== '') {
+            return $value;
+        }
+
+        if ($value === '' && ! $settings->has('data_share.mirror.url')) {
+            $this->fail($key, __('Enter a PostgreSQL URL before testing the mirror connection.'));
+        }
+
+        $savedUrl = $settings->get('data_share.mirror.url');
+        if (! is_string($savedUrl) || trim($savedUrl) === '') {
+            $message = $this->isSavedMirrorMask($value)
+                ? __('Enter a PostgreSQL URL before testing the mirror connection.')
+                : __('The saved mirror credential could not be read. Replace it and try again.');
+            $this->fail($key, $message);
+        }
+
+        return $savedUrl;
+    }
+
+    /** @param array<string, mixed> $result */
+    private function recordSupabaseInitializationNeed(string $provider, array $result, SettingsService $settings): void
+    {
+        if ($provider !== 'supabase') {
+            return;
+        }
+
+        if (($result['initializable'] ?? false) && ! ($result['available'] ?? false)) {
+            $settings->set(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING, true);
+
+            return;
+        }
+
+        $settings->forget(SupabaseMirrorSetupService::NEEDS_INITIALIZATION_SETTING);
+    }
+
+    /** @param array<string, mixed> $result */
+    private function finishSuccessfulConnectionTest(array $result, bool $passwordWasEntered): void
+    {
+        if ($passwordWasEntered) {
+            $this->supabaseManualDatabasePassword = '';
+            $this->dispatch('clear-secret-input', id: 'supabase-manual-database-password');
+        }
+
+        $message = match (true) {
+            (bool) ($result['available'] ?? false) => __('Connection successful and saved.'),
+            (bool) ($result['initializable'] ?? false) => __('Connection successful and saved. Initialize the mirror before transferring data.'),
+            default => (string) ($result['message'] ?? __('Connection successful and saved, but the database is not ready to use.')),
+        };
+
+        $this->notify($message, ($result['available'] ?? false) ? 'success' : 'warning');
+    }
+
+    private function testSavedUrlWithChangedProvider(SettingsService $settings, DataShareMirrorManager $mirror, string $provider, string $key): void
+    {
+        $savedUrl = $settings->get('data_share.mirror.url');
+        if (! is_string($savedUrl)) {
+            $this->fail($key, __('The saved mirror credential could not be read. Replace it before changing provider.'));
+        }
+
+        $this->requireReachableMirror($mirror, $savedUrl, $provider, $key);
+    }
+
+    private function requireReachableMirror(DataShareMirrorManager $mirror, string $url, string $provider, string $key): void
+    {
         try {
-            $status = $mirror->testConnection($value, $provider)->toArray();
+            $status = $mirror->testConnection($url, $provider)->toArray();
         } catch (Throwable $exception) {
             $this->fail($key, DataShareMirrorException::unexpected('connection', $exception)->getMessage());
         }
