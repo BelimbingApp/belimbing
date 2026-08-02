@@ -14,7 +14,7 @@ use App\Modules\Core\AI\Services\SessionManager;
 use App\Modules\Core\AI\Services\ToolReadinessService;
 use App\Modules\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Foundation\Testing\TestCase;
+use Tests\TestCase;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 

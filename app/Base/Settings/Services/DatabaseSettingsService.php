@@ -5,10 +5,13 @@ namespace App\Base\Settings\Services;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\DTO\ScopeType;
+use App\Base\Settings\DTO\SettingDefinition;
 use App\Base\Settings\Exceptions\InvalidSettingDefinitionException;
 use App\Base\Settings\Models\Setting;
 use Illuminate\Cache\Repository as CacheRepository;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Resolves declared runtime parameters and claimed operational state.
@@ -100,14 +103,20 @@ class DatabaseSettingsService implements SettingsService
                 $this->resolvedValues,
             ),
         ));
-        $rows = $unresolvedKeys === []
-            ? collect()
-            : Setting::query()
-                ->whereIn('key', $unresolvedKeys)
-                ->whereNull('scope_type')
-                ->whereNull('scope_id')
-                ->get()
-                ->keyBy('key');
+        try {
+            $rows = $unresolvedKeys === []
+                ? collect()
+                : Setting::query()
+                    ->whereIn('key', $unresolvedKeys)
+                    ->whereNull('scope_type')
+                    ->whereNull('scope_id')
+                    ->get()
+                    ->keyBy('key');
+        } catch (QueryException $exception) {
+            $this->assertSettingsTableIsMissing($exception);
+
+            return $this->definitionDefaults($definitions);
+        }
 
         $values = [];
 
@@ -135,25 +144,32 @@ class DatabaseSettingsService implements SettingsService
     {
         $definition = $this->definitions->find($key);
         $this->assertKeyIsClaimed($key, $definition !== null);
-        $scopeChain = $definition === null
-            ? $this->buildScopeChain($scope)
-            : array_values(array_filter(
-                $this->buildScopeChain($scope),
-                $definition->allowsScope(...),
-            ));
 
-        foreach ($scopeChain as $chainScope) {
-            if ($definition !== null
-                && $definition->key === $key
-                && ! $definition->encrypted) {
-                $this->preloadDeclaredScope($chainScope);
+        try {
+            $scopeChain = $definition === null
+                ? $this->buildScopeChain($scope)
+                : array_values(array_filter(
+                    $this->buildScopeChain($scope),
+                    $definition->allowsScope(...),
+                ));
+
+            foreach ($scopeChain as $chainScope) {
+                if ($definition !== null
+                    && $definition->key === $key
+                    && ! $definition->encrypted) {
+                    $this->preloadDeclaredScope($chainScope);
+                }
+
+                $value = $this->getFromDb($key, $chainScope);
+
+                if ($value !== null) {
+                    return $value;
+                }
             }
+        } catch (QueryException $exception) {
+            $this->assertSettingsTableIsMissing($exception);
 
-            $value = $this->getFromDb($key, $chainScope);
-
-            if ($value !== null) {
-                return $value;
-            }
+            return $definition?->default;
         }
 
         if ($definition !== null) {
@@ -219,13 +235,19 @@ class DatabaseSettingsService implements SettingsService
         $this->assertKeyIsClaimed($key, $definition !== null);
         $definition?->assertScopeAllowed($scope);
 
-        if ($definition !== null
-            && $definition->key === $key
-            && ! $definition->encrypted) {
-            $this->preloadDeclaredScope($scope);
-        }
+        try {
+            if ($definition !== null
+                && $definition->key === $key
+                && ! $definition->encrypted) {
+                $this->preloadDeclaredScope($scope);
+            }
 
-        return $this->getFromDb($key, $scope) !== null;
+            return $this->getFromDb($key, $scope) !== null;
+        } catch (QueryException $exception) {
+            $this->assertSettingsTableIsMissing($exception);
+
+            return false;
+        }
     }
 
     /**
@@ -379,6 +401,28 @@ class DatabaseSettingsService implements SettingsService
     private function rememberResolvedValue(string $cacheKey, mixed $value): void
     {
         $this->resolvedValues[$cacheKey] = $value ?? self::CACHE_MISS_SENTINEL;
+    }
+
+    /**
+     * @param  array<string, SettingDefinition>  $definitions
+     * @return array<string, mixed>
+     */
+    private function definitionDefaults(array $definitions): array
+    {
+        $values = [];
+
+        foreach ($definitions as $key => $definition) {
+            $values[$key] = $definition->default;
+        }
+
+        return $values;
+    }
+
+    private function assertSettingsTableIsMissing(QueryException $exception): void
+    {
+        if (Schema::hasTable((new Setting)->getTable())) {
+            throw $exception;
+        }
     }
 
     private function preloadDeclaredScope(?Scope $scope): void

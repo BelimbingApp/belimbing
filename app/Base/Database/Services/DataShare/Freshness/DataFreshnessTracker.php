@@ -4,6 +4,7 @@ namespace App\Base\Database\Services\DataShare\Freshness;
 
 use App\Base\Database\Enums\DataFreshnessState;
 use Illuminate\Database\Connection;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -54,13 +55,15 @@ final class DataFreshnessTracker
         $connection->unprepared($this->triggerSql($table, $connection));
     }
 
-    public function currentGeneration(string $table): ?int
+    public function currentGeneration(string $table, ?Connection $connection = null): ?int
     {
-        if (! Schema::hasTable(self::EVENTS_TABLE)) {
+        $connection ??= DB::connection();
+
+        if (! $connection->getSchemaBuilder()->hasTable(self::EVENTS_TABLE)) {
             return null;
         }
 
-        $max = DB::table(self::EVENTS_TABLE)->where('table_name', $table)->max('id');
+        $max = $connection->table(self::EVENTS_TABLE)->where('table_name', $table)->max('id');
 
         return $max === null ? null : (int) $max;
     }
@@ -69,12 +72,16 @@ final class DataFreshnessTracker
         string $table,
         ?int $acknowledgedGeneration,
         ?Connection $connection = null,
+        ?bool $trackingInstalled = null,
     ): DataFreshnessState {
-        if (! $this->driverSupportsTracking($connection)) {
+        $connection ??= DB::connection();
+
+        if (! $this->driverSupportsTracking($connection)
+            || ! ($trackingInstalled ?? $this->isTrackingInstalled($table, $connection))) {
             return DataFreshnessState::Unknown;
         }
 
-        $generation = $this->currentGeneration($table);
+        $generation = $this->currentGeneration($table, $connection);
 
         if ($generation === null) {
             return DataFreshnessState::Unknown;
@@ -97,17 +104,70 @@ final class DataFreshnessTracker
             return;
         }
 
-        $latest = DB::table(self::EVENTS_TABLE)
-            ->selectRaw('MAX(id) as max_id')
-            ->groupBy('table_name')
-            ->pluck('max_id')
-            ->all();
+        // One statement makes compaction safe against concurrent trigger inserts:
+        // only a row for which a newer same-table row exists is removed.
+        DB::delete(<<<'SQL'
+            DELETE FROM base_database_data_freshness_events AS older
+            WHERE EXISTS (
+                SELECT 1
+                FROM base_database_data_freshness_events AS newer
+                WHERE newer.table_name = older.table_name
+                  AND newer.id > older.id
+            )
+            SQL);
+    }
 
-        if ($latest === []) {
-            return;
+    public function isTrackingInstalled(string $table, ?Connection $connection = null): bool
+    {
+        $connection ??= DB::connection();
+
+        if (! $this->driverSupportsTracking($connection)) {
+            return false;
         }
 
-        DB::table(self::EVENTS_TABLE)->whereNotIn('id', $latest)->delete();
+        return $this->installedTrackingQuery($connection)
+            ->where('relation.relname', $table)
+            ->exists();
+    }
+
+    /** @param list<string> $tables @return array<string, bool> */
+    public function trackingStatus(array $tables, ?Connection $connection = null): array
+    {
+        $connection ??= DB::connection();
+        $status = array_fill_keys($tables, false);
+
+        if ($tables === [] || ! $this->driverSupportsTracking($connection)) {
+            return $status;
+        }
+
+        $installed = $this->installedTrackingQuery($connection)
+            ->whereIn('relation.relname', $tables)
+            ->pluck('relation.relname');
+
+        foreach ($installed as $table) {
+            $status[(string) $table] = true;
+        }
+
+        return $status;
+    }
+
+    private function installedTrackingQuery(Connection $connection): Builder
+    {
+        return $connection->table('pg_catalog.pg_trigger as trigger')
+            ->join('pg_catalog.pg_class as relation', 'relation.oid', '=', 'trigger.tgrelid')
+            ->join('pg_catalog.pg_namespace as namespace', 'namespace.oid', '=', 'relation.relnamespace')
+            ->join('pg_catalog.pg_proc as procedure', 'procedure.oid', '=', 'trigger.tgfoid')
+            ->join('pg_catalog.pg_namespace as procedure_namespace', 'procedure_namespace.oid', '=', 'procedure.pronamespace')
+            ->where('namespace.nspname', 'public')
+            ->where('procedure_namespace.nspname', 'public')
+            ->where('trigger.tgname', self::TRIGGER_NAME)
+            ->where('trigger.tgisinternal', false)
+            ->whereIn('trigger.tgenabled', ['O', 'A'])
+            ->where('procedure.proname', self::FUNCTION_NAME)
+            ->whereRaw('(trigger.tgtype & 1) = 0')
+            ->whereRaw('(trigger.tgtype & 2) = 0')
+            ->whereRaw('(trigger.tgtype & 60) = 60')
+            ->whereRaw('(trigger.tgtype & 64) = 0');
     }
 
     public function functionSql(): string

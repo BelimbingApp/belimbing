@@ -1,7 +1,7 @@
 # settings-model-evolution
 
 **Status:** Complete
-**Last Updated:** 2026-07-23
+**Last Updated:** 2026-07-24
 **Sources:** `docs/architecture/settings.md`; `docs/architecture/module-system.md`; `.env.example`; `config/app.php`; `config/mail.php`; `config/session.php`; `app/Base/AI/Config/ai.php`; `app/Base/Settings/`; `app/Base/DateTime/`; `app/Modules/Core/User/Models/User.php`; user discussion on environment ownership, runtime settings, and user preferences
 **Agents:** Codex/GPT-5
 
@@ -87,6 +87,7 @@ Evidence: the canonical registry/resolver, architecture, settings UI, AI, Perfor
 - [x] Change the settings read contract so callers cannot supply or duplicate parameter defaults {Codex/GPT-5}
 - [x] Separate runtime-state namespace claims from runtime parameter definitions {Codex/GPT-5}
 - [x] Add contract tests for missing definitions, invalid scopes, nullable defaults, encryption, caching, global uniqueness, and restore-default behavior {Codex/GPT-5}
+- [x] Keep fresh-install and pre-migration reads boot-safe by returning definition defaults (or `null` for claimed runtime state) until `base_settings` exists {Codex/GPT-5}
 
 ### Phase 3 — User scope and durable preferences
 

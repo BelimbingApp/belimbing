@@ -11,6 +11,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\Freshness\DataFreshnessTracker;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class DataShareMirrorCatalog
 {
@@ -173,7 +174,7 @@ class DataShareMirrorCatalog
     {
         try {
             return [$this->snapshot($this->connections->mirror(), $includeCounts), true];
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return [['registry' => [], 'relations' => [], 'counts' => []], false];
         }
     }
@@ -182,7 +183,7 @@ class DataShareMirrorCatalog
     {
         try {
             return $this->connections->provider()->connectionLabel();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return __('remote');
         }
     }
@@ -209,12 +210,29 @@ class DataShareMirrorCatalog
 
         $tracker = app(DataFreshnessTracker::class);
         $driverTracks = $tracker->driverSupportsTracking();
+        $trackingStatus = [];
 
-        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks): DataShareMirrorCatalogTable {
+        if ($driverTracks) {
+            try {
+                $trackingStatus = $tracker->trackingStatus(
+                    array_map(fn (DataShareMirrorCatalogTable $table): string => $table->table, $tables),
+                );
+            } catch (Throwable) {
+                // Counts remain useful when trigger-health metadata cannot be
+                // inspected; freshness falls back to Unknown.
+                $driverTracks = false;
+            }
+        }
+
+        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks, $trackingStatus): DataShareMirrorCatalogTable {
             $observation = $observations->get($table->table);
 
             $freshness = $driverTracks
-                ? $tracker->state($table->table, $observation?->acknowledged_generation)->value
+                ? $tracker->state(
+                    $table->table,
+                    $observation?->acknowledged_generation,
+                    trackingInstalled: $trackingStatus[$table->table] ?? false,
+                )->value
                 : DataFreshnessState::Unknown->value;
 
             return $table->withObservation($observation?->observed_at?->toIso8601String(), $freshness);
@@ -342,7 +360,7 @@ class DataShareMirrorCatalog
 
             try {
                 $rows = $connection->select(implode(' UNION ALL ', $statements), $bindings);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $rows = $this->countRowsIndividually($connection, $chunk);
             }
 
@@ -369,7 +387,7 @@ class DataShareMirrorCatalog
                     'table_name' => $name,
                     'row_count' => (int) $connection->table($name)->count(),
                 ];
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // A concurrent schema change leaves only this count unknown.
             }
         }

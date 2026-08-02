@@ -247,12 +247,11 @@ it('materializes only visible table names and never auto-selects on module chang
         ->assertSet('mirrorSelectedTables', []);
 });
 
-it('restores a fresh mirror catalog snapshot on page reload and refreshes it only on demand', function (): void {
+it('reads the local mirror catalog afresh on page reload instead of restoring endpoint state', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
-    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
@@ -285,7 +284,10 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
         ->assertSet('mirrorRemotePending', false)
         ->assertSet('mirrorTables.0.table', 'ham_orders');
 
-    Livewire::test(DataShareIndex::class) // reload serves the cached enriched snapshot
+    Livewire::test(DataShareIndex::class)
+        ->assertSet('mirrorCatalogLoaded', false)
+        ->assertSet('mirrorTables', [])
+        ->call('dataShareTabSelected', 'mirror')
         ->assertSet('mirrorCatalogLoaded', true)
         ->assertSet('mirrorTables.0.table', 'ham_orders')
         ->call('refreshMirrorCatalog')
@@ -297,7 +299,6 @@ it('excludes permanently protected infrastructure tables from the mirror list', 
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
-    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
@@ -379,7 +380,6 @@ it('reviews an exact push payload before executing the same payload and state to
             );
         });
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)
@@ -478,7 +478,6 @@ it('offers destructive force push for schema blockers but never force pull', fun
         [['table' => 'ham_orders', 'action' => 'replace', 'local_rows' => 1234, 'remote_rows' => 1234]],
     ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('review')->once()->with(
         'pull',
         ['ham_orders'],
@@ -606,7 +605,6 @@ it('adds required tables in one review and goes straight to the pull action', fu
             ],
         ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)

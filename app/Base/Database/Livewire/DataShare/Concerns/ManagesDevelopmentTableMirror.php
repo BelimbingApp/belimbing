@@ -9,8 +9,6 @@ use Throwable;
 
 trait ManagesDevelopmentTableMirror
 {
-    private const MIRROR_CATALOG_SESSION_KEY = 'data_share.mirror.catalog_snapshot';
-
     /** @var array<string, mixed> */
     public array $mirrorConnectionStatus = [];
 
@@ -35,6 +33,11 @@ trait ManagesDevelopmentTableMirror
 
     public string $mirrorRunKind = 'push';
 
+    /**
+     * Always false on mount: no session or endpoint state may replace a fresh
+     * Local registry read. The catalog loads Local-first when the tab is opened;
+     * shared endpoint cache enrichment remains a separate planned concern.
+     */
     public bool $mirrorCatalogLoaded = false;
 
     /** True after Local rows render, until the separate remote enrichment runs. */
@@ -46,11 +49,6 @@ trait ManagesDevelopmentTableMirror
 
     public string $mirrorDirection = '';
 
-    private function restoreMirrorCatalogSnapshotOnMount(DataShareMirrorManager $mirror): void
-    {
-        $this->mirrorCatalogLoaded = $this->restoreMirrorCatalogSnapshot($mirror);
-    }
-
     public function dataShareTabSelected(string $tab, DataShareMirrorManager $mirror): void
     {
         if ($tab === 'mirror' && ! $this->mirrorCatalogLoaded) {
@@ -60,22 +58,14 @@ trait ManagesDevelopmentTableMirror
 
     public function refreshMirrorCatalog(DataShareMirrorManager $mirror): void
     {
-        $this->loadMirrorCatalog($mirror, force: true);
+        $this->loadMirrorCatalog($mirror);
     }
 
-    private function loadMirrorCatalog(DataShareMirrorManager $mirror, bool $force = false): void
+    private function loadMirrorCatalog(DataShareMirrorManager $mirror): void
     {
         $this->requireCapability('admin.system.data-share.view');
         $this->mirrorCatalogLoaded = true;
         $this->mirrorReview = null;
-
-        if (! $force && $this->restoreMirrorCatalogSnapshot($mirror)) {
-            $this->mirrorRemotePending = false;
-
-            return;
-        }
-
-        session()->forget(self::MIRROR_CATALOG_SESSION_KEY);
 
         // Local-first: render the Local registry immediately with no remote call.
         // Remote presence, counts, and freshness arrive from enrichMirrorRemote(),
@@ -119,7 +109,6 @@ trait ManagesDevelopmentTableMirror
             }
 
             $this->mirrorTables = $this->mapMirrorTables($mirror->catalog());
-            $this->storeMirrorCatalogSnapshot($mirror);
         } catch (DataShareMirrorException $exception) {
             $this->mirrorConnectionStatus = [
                 'configured' => true,
@@ -597,7 +586,6 @@ trait ManagesDevelopmentTableMirror
     {
         try {
             $this->mirrorTables = $this->mapMirrorTables($mirror->catalog());
-            $this->storeMirrorCatalogSnapshot($mirror);
             $this->streamMirrorRunLine((string) __('Completed: Catalog counts refreshed.'));
 
             return null;
@@ -625,33 +613,6 @@ trait ManagesDevelopmentTableMirror
         if (function_exists('set_time_limit')) {
             set_time_limit(max(60, min(7200, (int) config('data_share.mirror.timeout_seconds', 3600))));
         }
-    }
-
-    private function restoreMirrorCatalogSnapshot(DataShareMirrorManager $mirror): bool
-    {
-        $snapshot = session()->get(self::MIRROR_CATALOG_SESSION_KEY);
-        if (! is_array($snapshot)
-            || (int) ($snapshot['expires_at'] ?? 0) < now()->timestamp
-            || ! hash_equals((string) ($snapshot['fingerprint'] ?? ''), $mirror->configurationFingerprint())
-            || ! is_array($snapshot['status'] ?? null)
-            || ! is_array($snapshot['tables'] ?? null)) {
-            return false;
-        }
-
-        $this->mirrorConnectionStatus = $snapshot['status'];
-        $this->mirrorTables = $snapshot['tables'];
-
-        return true;
-    }
-
-    private function storeMirrorCatalogSnapshot(DataShareMirrorManager $mirror): void
-    {
-        session()->put(self::MIRROR_CATALOG_SESSION_KEY, [
-            'fingerprint' => $mirror->configurationFingerprint(),
-            'expires_at' => now()->addSeconds(max(1, (int) config('data_share.mirror.catalog_cache_seconds', 300)))->timestamp,
-            'status' => $this->mirrorConnectionStatus,
-            'tables' => $this->mirrorTables,
-        ]);
     }
 
     /** @return list<string> */
