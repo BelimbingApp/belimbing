@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-06-20
+**Last Updated:** 2026-08-01
 
 ## Overview
 
@@ -101,7 +101,7 @@ For registry implementation details, code examples, execution flow, dev vs produ
 
 Migration files can declare in-progress schema with `IncubatingSchema`. The source marker has different operational meaning by environment:
 
-- **Local/testing:** `migrate --dev` may drop and rebuild the migration's declared tables, clear the affected migration ledger rows, then run Laravel's normal migrator. A foreign-key dependency may join that rebuild only when its owning migration is also source-declared incubating. Any stable or undeclared dependent table refuses the whole preflight before the first drop. This is the schema-noise reduction path for development without treating registry ownership as permission to erase stable data.
+- **Local/testing:** `migrate --dev` may drop and rebuild the migration's declared tables, clear the affected migration ledger rows, then run Laravel's normal migrator. A foreign-key dependency may join that rebuild only when its owning migration is also source-declared incubating. Any stable or undeclared dependent table refuses the whole preflight before the first drop. The preflight also scans later applied migration source that references a planned table: an incubating migration joins the replay chain, while a stable migration refuses before any drop so its mature columns, indexes, constraints, and data transformations cannot be silently omitted. This is the schema-noise reduction path for development without treating registry ownership or an old create migration as permission to erase stable data.
 - **Production/staging:** plain `migrate` never performs incubating rebuilds. It classifies source-declared incubating files before native migration. Applied incubating migrations are allowed, warned, and fingerprinted. Pending incubating migrations are blocked unless the deployment has an instance-local approval.
 
 The production/staging guard uses the Laravel `migrations` table as the applied/pending source of truth. A live table without a matching migration ledger row is not considered applied. Applied incubating migrations with no previous fingerprint are baselined on the first successful guarded migrate. If the file hash later changes while the migration is still applied, the guard blocks because Laravel will not rerun that source file on the live database; restore the recorded source or carry the change in a new forward migration.
