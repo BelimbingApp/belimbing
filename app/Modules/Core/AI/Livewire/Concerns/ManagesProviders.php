@@ -83,9 +83,8 @@ trait ManagesProviders
         $this->providerName = $provider->name;
         $this->providerDisplayName = $provider->display_name ?? '';
         $this->providerBaseUrl = $provider->base_url;
-        $apiKey = (string) ($provider->credentials['api_key'] ?? '');
-        $this->providerHasStoredApiKey = $apiKey !== '';
-        $this->providerApiKey = $apiKey;
+        $this->providerHasStoredApiKey = ! empty($provider->credentials['api_key']);
+        $this->providerApiKey = '';
         $this->providerIsActive = $provider->is_active;
         $this->showProviderForm = true;
 

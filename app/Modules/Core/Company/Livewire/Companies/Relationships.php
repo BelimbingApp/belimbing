@@ -2,7 +2,7 @@
 
 namespace App\Modules\Core\Company\Livewire\Companies;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Company\Models\Company;
 use App\Modules\Core\Company\Models\CompanyRelationship;
@@ -13,7 +13,7 @@ use Livewire\Component;
 
 class Relationships extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use TogglesSort;
 
     public Company $company;
@@ -73,6 +73,10 @@ class Relationships extends Component
 
     public function createRelationship(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if ($this->createRelatedCompanyId === 0 || $this->createRelationshipTypeId === 0) {
             return;
         }
@@ -92,7 +96,16 @@ class Relationships extends Component
 
     public function editRelationship(int $relationshipId): void
     {
-        $rel = CompanyRelationship::query()->findOrFail($relationshipId);
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        $rel = CompanyRelationship::query()
+            ->where(function ($q): void {
+                $q->where('company_id', $this->company->id)
+                    ->orWhere('related_company_id', $this->company->id);
+            })
+            ->findOrFail($relationshipId);
         $this->editRelationshipId = $rel->id;
         $this->editEffectiveFrom = $rel->effective_from?->format('Y-m-d');
         $this->editEffectiveTo = $rel->effective_to?->format('Y-m-d');
@@ -101,11 +114,20 @@ class Relationships extends Component
 
     public function updateRelationship(): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         if (! $this->editRelationshipId) {
             return;
         }
 
-        $rel = CompanyRelationship::query()->findOrFail($this->editRelationshipId);
+        $rel = CompanyRelationship::query()
+            ->where(function ($q): void {
+                $q->where('company_id', $this->company->id)
+                    ->orWhere('related_company_id', $this->company->id);
+            })
+            ->findOrFail($this->editRelationshipId);
         $rel->effective_from = $this->editEffectiveFrom;
         $rel->effective_to = $this->editEffectiveTo;
         $rel->save();
@@ -117,7 +139,17 @@ class Relationships extends Component
 
     public function deleteRelationship(int $relationshipId): void
     {
-        CompanyRelationship::query()->findOrFail($relationshipId)->delete();
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
+        CompanyRelationship::query()
+            ->where(function ($q): void {
+                $q->where('company_id', $this->company->id)
+                    ->orWhere('related_company_id', $this->company->id);
+            })
+            ->findOrFail($relationshipId)
+            ->delete();
         $this->notify(__('Relationship deleted.'));
     }
 

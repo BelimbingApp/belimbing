@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Modules\Core\AI\Exceptions\PricingSnapshotRefreshException;
 use App\Modules\Core\AI\Models\AiPricingSnapshot;
 use App\Modules\Core\AI\Services\Pricing\RefreshPricingSnapshot;
@@ -7,8 +8,15 @@ use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Foundation\Testing\TestCase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\PermissiveUrlSafetyGuard;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
+
+beforeEach(function (): void {
+    // These cover snapshot/fallback behaviour once a URL is accepted; the
+    // guard's own rules live in UrlSafetyGuardTest.
+    app()->instance(UrlSafetyGuard::class, new PermissiveUrlSafetyGuard);
+});
 
 it('imports LiteLLM token pricing snapshots idempotently', function (): void {
     Http::fake([
@@ -130,4 +138,26 @@ it('refreshes pricing snapshots through the artisan command', function (): void 
         ->where('model', 'gpt-command')
         ->where('source', 'litellm')
         ->exists())->toBeTrue();
+});
+
+it('falls back without requesting when the snapshot URL fails the safety check', function (): void {
+    app()->forgetInstance(UrlSafetyGuard::class);
+    Http::fake();
+    AiPricingSnapshot::query()->create([
+        'provider' => 'openai',
+        'model' => 'gpt-5.4',
+        'input_usd_per_million_tokens' => '1.000000000000',
+        'cached_input_usd_per_million_tokens' => '0.100000000000',
+        'output_usd_per_million_tokens' => '2.000000000000',
+        'source' => 'litellm',
+        'source_version' => '2026-04-29',
+        'snapshot_date' => '2026-04-29',
+    ]);
+
+    $result = app(RefreshPricingSnapshot::class)->refresh('http://169.254.169.254/latest/meta-data');
+
+    expect($result['refreshed'])->toBeFalse()
+        ->and($result['used_fallback'])->toBeTrue()
+        ->and($result['error'])->toContain('URL validation failed');
+    Http::assertNothingSent();
 });

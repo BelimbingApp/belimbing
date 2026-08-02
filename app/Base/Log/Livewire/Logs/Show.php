@@ -2,7 +2,7 @@
 
 namespace App\Base\Log\Livewire\Logs;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\File;
 use Livewire\Attributes\Url;
@@ -11,7 +11,7 @@ use SplFileObject;
 
 class Show extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
 
     private const DEFAULT_CHUNK_SIZE = 100;
 
@@ -87,6 +87,10 @@ class Show extends Component
      */
     public function deleteLinesFromTop(): void
     {
+        if (! $this->checkCapability('admin.system.log.manage')) {
+            return;
+        }
+
         $count = $this->normalizedDeleteLines();
 
         $path = $this->resolvedPath();
@@ -129,6 +133,10 @@ class Show extends Component
      */
     public function deleteFile(): void
     {
+        if (! $this->checkCapability('admin.system.log.manage')) {
+            return;
+        }
+
         $path = $this->resolvedPath();
         if ($path !== null) {
             File::delete($path);

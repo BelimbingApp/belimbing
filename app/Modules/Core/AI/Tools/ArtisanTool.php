@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Modules\Core\AI\Tools;
 
 use App\Base\AI\Tools\AbstractHighImpactProcessTool;
 use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
 use App\Base\AI\Tools\ToolArgumentException;
 use App\Base\AI\Tools\ToolResult;
+use App\Modules\Core\AI\Services\ArtisanCommandLine;
 use App\Modules\Core\AI\Services\BackgroundCommandService;
 use Illuminate\Support\Facades\Process;
 
@@ -22,9 +24,9 @@ use Illuminate\Support\Facades\Process;
  *
  * Gated by `admin.ai.tool.artisan.execute` authz capability.
  *
- * Safety: Only `php artisan` commands are allowed. Laravel's Process
- * class uses proc_open without shell invocation, so metacharacters
- * have no shell-level effect. Timeout enforced per execution.
+ * Safety: Only `php artisan` commands are allowed. Commands are parsed into
+ * tokens and passed as an array to Process, avoiding shell interpretation of
+ * metacharacters. Timeout enforced per execution.
  */
 class ArtisanTool extends AbstractHighImpactProcessTool
 {
@@ -162,11 +164,11 @@ class ArtisanTool extends AbstractHighImpactProcessTool
             self::MAX_TIMEOUT_SECONDS
         );
 
-        $fullCommand = 'php artisan '.$command;
+        $tokens = ArtisanCommandLine::tokenize($command);
 
         $result = Process::timeout($timeout)
             ->path(base_path())
-            ->run($fullCommand);
+            ->run(array_merge(['php', 'artisan'], $tokens));
 
         return $this->formatProcessResult($result);
     }

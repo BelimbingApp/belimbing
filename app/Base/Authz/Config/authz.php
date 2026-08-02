@@ -82,6 +82,8 @@ return [
                 'admin.employee.update',
                 'admin.employee.delete',
                 'admin.employee-type.list',
+                'admin.address.view',
+                'admin.address.list',
                 'admin.address.create',
                 'admin.address.update',
                 'admin.address.delete',

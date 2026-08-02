@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\AI\Services;
 
 use App\Base\AI\Exceptions\ProviderDiscoveryException;
@@ -16,6 +17,7 @@ class ProviderDiscoveryService
 {
     public function __construct(
         private readonly ?IntegrationGateway $gateway = null,
+        private readonly ?UrlSafetyGuard $urlSafetyGuard = null,
     ) {}
 
     /**
@@ -35,6 +37,12 @@ class ProviderDiscoveryService
         array $additionalHeaders = [],
         array $query = [],
     ): array {
+        $urlError = ($this->urlSafetyGuard ?? app(UrlSafetyGuard::class))->validate($baseUrl);
+
+        if ($urlError !== true) {
+            throw new ProviderDiscoveryException('Model discovery blocked: unsafe base URL. '.$urlError);
+        }
+
         $base = rtrim($baseUrl, '/');
         $headers = $this->normalizeHeaders($additionalHeaders, $apiKey);
         $normalizedQuery = $this->normalizeQuery($query);

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Pdf\Services;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
@@ -34,14 +35,8 @@ class SignedRenderTokenStore
     public function consume(string $tokenId): ?array
     {
         $key = self::CACHE_PREFIX.$tokenId;
-        $claims = $this->cache->get($key);
+        $claims = $this->cache->pull($key);
 
-        if ($claims === null) {
-            return null;
-        }
-
-        $this->cache->forget($key);
-
-        return $claims;
+        return is_array($claims) ? $claims : null;
     }
 }

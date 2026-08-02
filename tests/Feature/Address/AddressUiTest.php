@@ -4,7 +4,6 @@ use App\Modules\Core\Address\Models\Address;
 use App\Modules\Core\Geonames\Models\Admin1;
 use App\Modules\Core\Geonames\Models\Country;
 use App\Modules\Core\Geonames\Models\Postcode;
-use App\Modules\Core\User\Models\User;
 use Livewire\Livewire;
 
 const ADDRESS_UI_WAREHOUSE_LINE = '88 River Road';
@@ -18,7 +17,7 @@ test('guests are redirected to login from addresses pages', function (): void {
 });
 
 test('authenticated users can view address pages', function (): void {
-    $user = User::factory()->create();
+    $user = createAdminUser();
     $address = Address::query()->create([
         'label' => 'HQ',
         'line1' => '123 Main Street',
@@ -44,7 +43,7 @@ test('address can be created from create page component', function (): void {
         ]
     );
 
-    $user = User::factory()->create();
+    $user = createAdminUser();
     $this->actingAs($user);
 
     Livewire::test('admin.addresses.create')
@@ -103,7 +102,7 @@ test('address detail saves location as a grouped edit', function (): void {
         'admin_name1' => ADDRESS_UI_KUALA_LUMPUR,
     ]);
 
-    $user = User::factory()->create();
+    $user = createAdminUser();
     $address = Address::query()->create([
         'label' => 'HQ',
         'line1' => '1 Old Road',

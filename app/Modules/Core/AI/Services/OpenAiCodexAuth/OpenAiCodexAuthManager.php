@@ -7,6 +7,7 @@ use App\Base\Integration\Services\IntegrationRequest;
 use App\Modules\Core\AI\Models\AiProvider;
 use Illuminate\Cache\Repository as CacheRepository;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * OpenAI Codex OAuth (ChatGPT subscription) auth manager.
@@ -48,9 +49,10 @@ final class OpenAiCodexAuthManager
     /**
      * Start a browser PKCE login and return the authorize URL.
      *
+     * @param  ?int  $userId  Authenticated user ID initiating the flow, for CSRF binding
      * @return array{authorize_url: string, state: string}
      */
-    public function startLogin(AiProvider $provider): array
+    public function startLogin(AiProvider $provider, ?int $userId = null): array
     {
         $state = bin2hex(random_bytes(16));
         $verifier = $this->base64UrlEncode(random_bytes(32));
@@ -59,6 +61,7 @@ final class OpenAiCodexAuthManager
         $this->cache->put($this->cacheKey($state), [
             'provider_id' => $provider->id,
             'company_id' => $provider->company_id,
+            'user_id' => $userId,
             'verifier' => $verifier,
             'redirect_uri' => self::REDIRECT_URI,
             'created_at' => now()->toIso8601String(),
@@ -100,10 +103,10 @@ final class OpenAiCodexAuthManager
         $state = (string) $request->query('state', '');
         $code = (string) $request->query('code', '');
 
-        return $this->completeAuthorization($code, $state);
+        return $this->completeAuthorization($code, $state, Auth::id());
     }
 
-    public function completeManualInput(string $input): AiProvider
+    public function completeManualInput(string $input, ?int $userId = null): AiProvider
     {
         $parsed = $this->parseAuthorizationInput($input);
         $state = $parsed['state'] ?? '';
@@ -116,13 +119,14 @@ final class OpenAiCodexAuthManager
             );
         }
 
-        return $this->completeAuthorization($code, $state);
+        return $this->completeAuthorization($code, $state, $userId);
     }
 
     /**
+     * @param  ?int  $userId  Authenticated user ID completing the callback, for CSRF binding
      * @return AiProvider The updated provider record
      */
-    private function completeAuthorization(string $code, string $state): AiProvider
+    private function completeAuthorization(string $code, string $state, ?int $userId = null): AiProvider
     {
         if ($state === '' || $code === '') {
             throw new OpenAiCodexOAuthException('callback_validation_failed', 'Missing authorization code or state.');
@@ -131,6 +135,19 @@ final class OpenAiCodexAuthManager
         $pending = $this->cache->get($this->cacheKey($state));
         if (! is_array($pending)) {
             throw new OpenAiCodexOAuthException('callback_validation_failed', 'OAuth state expired. Please try again.');
+        }
+
+        // Verify user binding: if the flow was initiated by a specific user
+        // and the callback is also from an authenticated user, they must match.
+        // This prevents CSRF where an attacker's state token is completed by a
+        // different admin's browser. CLI callbacks (null userId) are allowed
+        // since the local listener is a trusted path.
+        $initiatorUserId = $pending['user_id'] ?? null;
+        if ($initiatorUserId !== null && $userId !== null && (int) $initiatorUserId !== $userId) {
+            throw new OpenAiCodexOAuthException(
+                'callback_validation_failed',
+                'OAuth state does not match the authenticated user.',
+            );
         }
 
         $providerId = (int) ($pending['provider_id'] ?? 0);

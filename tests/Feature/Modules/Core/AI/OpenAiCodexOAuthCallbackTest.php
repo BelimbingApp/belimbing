@@ -71,8 +71,13 @@ test('openai codex oauth callback persists credentials and marks provider connec
     $exchange = OutboundExchange::query()->firstOrFail();
     expect($exchange->operation)->toBe('ai.openai_codex.oauth.authorization_code.exchange')
         ->and($exchange->protocol)->toBe('oauth2')
-        ->and($exchange->request_body['value']['code'])->toBe('code-1')
-        ->and($exchange->response_body['value']['access_token'])->toBe($accessToken);
+        // OAuth request bodies are suppressed in telemetry to protect
+        // authorization codes, code verifiers, and client secrets.
+        ->and($exchange->request_body)->toBeNull()
+        // Response bodies have sensitive fields redacted (access_token, refresh_token).
+        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['refresh_token'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['expires_in'])->toBe(3600);
 
     $auth = $provider->connection_config[OpenAiCodexDefinition::AUTH_STATE_KEY] ?? [];
     expect($auth['status'] ?? null)->toBe('connected');

@@ -5,6 +5,7 @@ use App\Base\AI\Contracts\Tracing\LlmTraceContextFactory;
 use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\Tracing\LlmTraceContext;
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Livewire\Queries\Index;
 use App\Base\Database\Livewire\Queries\Show;
@@ -14,6 +15,7 @@ use App\Modules\Core\AI\Models\AiProviderModel;
 use App\Modules\Core\User\Models\Query;
 use App\Modules\Core\User\Models\User;
 use App\Modules\Core\User\Models\UserPin;
+use Tests\Support\PermissiveUrlSafetyGuard;
 
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';
 const QUERY_TEST_ACTIVE_USERS = 'Active Users';
@@ -163,6 +165,7 @@ test('executor returns structured result for valid query', function (): void {
 });
 
 test('database query SQL generation attaches trace tap from the trace context factory', function (): void {
+    app()->instance(UrlSafetyGuard::class, new PermissiveUrlSafetyGuard);
     $user = createAdminUser();
     $this->actingAs($user);
 

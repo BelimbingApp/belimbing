@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Pricing;
 
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Modules\Core\AI\Exceptions\PricingSnapshotRefreshException;
 use App\Modules\Core\AI\Models\AiPricingSnapshot;
 use Illuminate\Support\Carbon;
@@ -22,6 +24,11 @@ class RefreshPricingSnapshot
     {
         $url ??= $this->snapshotUrl();
         $snapshotDate ??= now();
+
+        $urlError = app(UrlSafetyGuard::class)->validate($url);
+        if ($urlError !== true) {
+            return $this->fallbackResult("URL validation failed: {$urlError}");
+        }
 
         try {
             $response = Http::timeout($this->timeoutSeconds())

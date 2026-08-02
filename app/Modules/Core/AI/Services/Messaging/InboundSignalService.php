@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Modules\Core\AI\Services\Messaging;
 
 use App\Modules\Core\AI\DTO\Messaging\InboundMessage;
 use App\Modules\Core\AI\Enums\SignalAuthenticityStatus;
+use App\Modules\Core\AI\Exceptions\WebhookAuthenticityException;
 use App\Modules\Core\AI\Models\ChannelAccount;
 use App\Modules\Core\AI\Models\InboundSignal;
 use Illuminate\Http\Request;
@@ -39,14 +41,15 @@ class InboundSignalService
         $adapter = $this->adapterRegistry->resolve($channel);
 
         if ($adapter === null) {
-            return $this->persistUnroutableSignal($channel, $request, 'No adapter registered for channel.');
+            throw WebhookAuthenticityException::noAdapter($channel);
         }
 
-        // Verify authenticity (adapters that don't support verification return 'skipped')
-        $authenticity = $this->verifyAuthenticity();
+        // Fail-closed: only Verified requests may proceed. Adapters that
+        // don't support verification return Failed from BaseChannelAdapter.
+        $authenticity = $adapter->verifyAuthenticity($request);
 
-        if ($authenticity === SignalAuthenticityStatus::Failed) {
-            return $this->persistRejectedSignal($channel, $channelAccountId, $request, $authenticity);
+        if ($authenticity !== SignalAuthenticityStatus::Verified) {
+            throw WebhookAuthenticityException::notVerified($channel, $authenticity);
         }
 
         // Normalize through adapter
@@ -73,18 +76,6 @@ class InboundSignalService
             'raw_payload' => $this->captureRawPayload($request),
             'received_at' => $message->timestamp ?? now(),
         ]);
-    }
-
-    /**
-     * Verify request authenticity through the channel adapter.
-     *
-     * Currently returns 'skipped' for all adapters since none implement
-     * verification yet. Real adapters will check signatures, tokens, etc.
-     */
-    private function verifyAuthenticity(): SignalAuthenticityStatus
-    {
-        // Authenticity stays skipped until channel adapters expose verification hooks.
-        return SignalAuthenticityStatus::Skipped;
     }
 
     /**
@@ -158,39 +149,6 @@ class InboundSignalService
         }
 
         return $headers;
-    }
-
-    /**
-     * Persist a signal that could not be routed due to missing adapter.
-     */
-    private function persistUnroutableSignal(string $channel, Request $request, string $reason): InboundSignal
-    {
-        return InboundSignal::query()->create([
-            'channel' => $channel,
-            'authenticity_status' => SignalAuthenticityStatus::Skipped,
-            'normalized_content' => '[unroutable] '.$reason,
-            'raw_payload' => $this->captureRawPayload($request),
-            'received_at' => now(),
-        ]);
-    }
-
-    /**
-     * Persist a signal that failed authenticity verification.
-     */
-    private function persistRejectedSignal(
-        string $channel,
-        ?int $channelAccountId,
-        Request $request,
-        SignalAuthenticityStatus $authenticity,
-    ): InboundSignal {
-        return InboundSignal::query()->create([
-            'channel' => $channel,
-            'channel_account_id' => $channelAccountId,
-            'authenticity_status' => $authenticity,
-            'normalized_content' => '[rejected] Authenticity verification failed.',
-            'raw_payload' => $this->captureRawPayload($request),
-            'received_at' => now(),
-        ]);
     }
 
     /**

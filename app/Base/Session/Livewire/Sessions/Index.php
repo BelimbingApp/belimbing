@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Base\Session\Livewire\Sessions;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use Illuminate\Contracts\View\View;
@@ -11,6 +13,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -44,6 +47,10 @@ class Index extends Component
 
     public function terminate(string $sessionId): void
     {
+        if (! $this->checkCapability('admin.system.session.manage')) {
+            return;
+        }
+
         if ($sessionId === session()->getId()) {
             return;
         }

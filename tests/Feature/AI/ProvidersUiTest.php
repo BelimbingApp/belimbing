@@ -20,30 +20,52 @@ const AI_GITHUB_DEVICE_FLOW_USER_CODE = 'ABCD-1234';
 const AI_GITHUB_DEVICE_FLOW_VERIFICATION_URI = 'https://github.com/login/device';
 const AI_PROVIDERS_VISIBLE_TEST_KEY = 'visible-provider-key-123';
 
-test('edit provider modal hydrates the api key when one exists', function (): void {
+test('edit provider modal reports a stored key without exposing it', function (): void {
     $user = createAiProvidersTestUser();
     $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_SAVED_KEY);
 
     $this->actingAs($user);
 
+    // The key must never reach public Livewire state, which is serialized to
+    // the browser; only the fact that one is stored may be published.
     Livewire::test(Providers::class)
         ->call('openEditProvider', $provider->id)
         ->assertSee('Focus to replace')
-        ->assertSet('providerApiKey', AI_PROVIDERS_SAVED_KEY);
+        ->assertSet('providerApiKey', '')
+        ->assertSet('providerHasStoredApiKey', true)
+        ->assertDontSee(AI_PROVIDERS_SAVED_KEY);
 });
 
-test('edit provider api key field remounts with the stored key available for reveal', function (): void {
+test('saving an edited provider without retyping the key keeps the stored key', function (): void {
+    $user = createAiProvidersTestUser();
+    $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_SAVED_KEY);
+
+    $this->actingAs($user);
+
+    // Withholding the key from state must not blank it on save.
+    Livewire::test(Providers::class)
+        ->call('openEditProvider', $provider->id)
+        ->set('providerDisplayName', 'Renamed Provider')
+        ->call('saveProvider');
+
+    expect($provider->fresh()->credentials['api_key'])->toBe(AI_PROVIDERS_SAVED_KEY)
+        ->and($provider->fresh()->display_name)->toBe('Renamed Provider');
+});
+
+test('edit provider api key field remounts without embedding the stored key', function (): void {
     $user = createAiProvidersTestUser();
     $provider = createAiProvidersTestProvider($user, AI_PROVIDERS_VISIBLE_TEST_KEY);
 
     $this->actingAs($user);
 
+    // The field still remounts per provider, but the key is no longer rendered
+    // into the payload for a client-side reveal.
     Livewire::test(Providers::class)
         ->call('openCreateProvider')
         ->call('openEditProvider', $provider->id)
         ->assertSee('wire:key="provider-api-key-edit-'.$provider->id.'-stored"', false)
         ->assertSee('id="provider-api-key-edit-'.$provider->id.'"', false)
-        ->assertSee("pendingSecret: '".AI_PROVIDERS_VISIBLE_TEST_KEY."'", false);
+        ->assertDontSee(AI_PROVIDERS_VISIBLE_TEST_KEY);
 });
 
 test('edit provider modal stays empty when no api key is saved', function (): void {

@@ -64,7 +64,7 @@ final class OpenAiCodexSetup extends ProviderSetup
             return;
         }
 
-        $result = app(OpenAiCodexAuthManager::class)->startLogin($provider);
+        $result = app(OpenAiCodexAuthManager::class)->startLogin($provider, Auth::id());
         $this->manualCompletionError = null;
         $this->verificationResult = null;
         $this->syncStateFromProvider($provider->fresh() ?? $provider);
@@ -77,7 +77,7 @@ final class OpenAiCodexSetup extends ProviderSetup
     public function completeOauthLogin(): void
     {
         try {
-            $provider = app(OpenAiCodexAuthManager::class)->completeManualInput($this->manualRedirectInput);
+            $provider = app(OpenAiCodexAuthManager::class)->completeManualInput($this->manualRedirectInput, Auth::id());
             $provider = $this->syncModels($provider);
             $this->manualRedirectInput = '';
             $this->manualCompletionError = null;

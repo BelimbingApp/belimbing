@@ -81,12 +81,14 @@ it('records successful external exchanges', function (): void {
         ->and($exchange->response_status)->toBe(200)
         ->and($exchange->request_headers['Authorization'])->toBe('[redacted]')
         ->and($exchange->request_headers['X-Trace'])->toBe('trace-1')
-        ->and($exchange->request_body['value']['api_key'])->toBe('sk-test')
-        ->and($exchange->request_body['value']['APIKey'])->toBe('sk-test-caps')
-        ->and($exchange->request_body['value']['XAuthToken'])->toBe('token-test')
+        // Secrets are redacted regardless of case or separators, on both sides.
+        ->and($exchange->request_body['value']['api_key'])->toBe('[redacted]')
+        ->and($exchange->request_body['value']['APIKey'])->toBe('[redacted]')
+        ->and($exchange->request_body['value']['XAuthToken'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]')
+        ->and($exchange->response_body['value']['APIKey'])->toBe('[redacted]')
+        // Non-secret payload stays readable, or the log loses its purpose.
         ->and($exchange->request_body['value']['prompt'])->toBe('hello')
-        ->and($exchange->response_body['value']['access_token'])->toBe('provider-secret')
-        ->and($exchange->response_body['value']['APIKey'])->toBe('response-secret')
         ->and($exchange->response_body['value']['data'][0]['id'])->toBe('alpha');
 });
 

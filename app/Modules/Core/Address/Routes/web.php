@@ -1,4 +1,5 @@
 <?php
+
 use App\Modules\Core\Address\Http\Controllers\CitySearchController;
 use App\Modules\Core\Address\Http\Controllers\CountrySearchController;
 use App\Modules\Core\Address\Http\Controllers\PostcodeSearchController;
@@ -14,7 +15,13 @@ Route::middleware(['auth'])->group(function () {
         ->name('admin.addresses.postcodes.search');
     Route::get('admin/addresses/cities/search', CitySearchController::class)
         ->name('admin.addresses.cities.search');
-    Route::get('admin/addresses', Index::class)->name('admin.addresses.index');
-    Route::get('admin/addresses/create', Create::class)->name('admin.addresses.create');
-    Route::get('admin/addresses/{address}', Show::class)->name('admin.addresses.show');
+    Route::get('admin/addresses', Index::class)
+        ->middleware('authz:admin.address.list')
+        ->name('admin.addresses.index');
+    Route::get('admin/addresses/create', Create::class)
+        ->middleware('authz:admin.address.create')
+        ->name('admin.addresses.create');
+    Route::get('admin/addresses/{address}', Show::class)
+        ->middleware('authz:admin.address.view')
+        ->name('admin.addresses.show');
 });

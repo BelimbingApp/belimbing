@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\System\Console\Commands;
 
 use Illuminate\Console\Command;
@@ -17,10 +18,10 @@ use Symfony\Component\Console\Attribute\AsCommand;
  *   4. Calls `blb:db:backup:rekey --old-key=<oldKey> --commit` to
  *      re-wrap all app-key manifest DEKs under the new KEK.
  *
- * On rekey failure the old key is printed to stderr so the operator can
- * restore .env manually. Always store the old key in a safe location
- * before rotation — if you lose both old and new keys, backups are
- * irrecoverable.
+ * On rekey failure the old key is stored in a permission-restricted recovery
+ * file so the operator can complete the rekey manually. Always store the old
+ * key in a safe location before rotation — if you lose both old and new keys,
+ * backups are irrecoverable.
  */
 #[AsCommand(name: 'blb:key:rotate')]
 final class KeyRotateCommand extends Command
@@ -88,8 +89,16 @@ final class KeyRotateCommand extends Command
         if ($exitCode !== self::SUCCESS) {
             $this->newLine();
             $this->components->error('Rekey step failed. Your .env has already been updated to the new APP_KEY.');
-            $this->components->error('Old APP_KEY (keep safe!): '.$oldKey);
-            $this->components->error('Run: php artisan blb:db:backup:rekey --old-key="<old>" --commit');
+
+            $recoveryPath = storage_path('app/.key-rotation-recovery');
+            file_put_contents($recoveryPath, $oldKey);
+            chmod($recoveryPath, 0600);
+
+            $fingerprint = substr($oldKey, 0, 8).'...';
+            $this->components->error('The old APP_KEY has been saved to: '.$recoveryPath);
+            $this->components->error('Key fingerprint: '.$fingerprint);
+            $this->components->error('Run: php artisan blb:db:backup:rekey --old-key="$(cat '.$recoveryPath.')" --commit');
+            $this->components->error('Delete the recovery file after successful rekey.');
 
             return self::FAILURE;
         }

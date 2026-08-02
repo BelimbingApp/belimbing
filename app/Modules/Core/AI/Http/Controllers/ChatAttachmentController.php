@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Http\Controllers;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -38,12 +39,14 @@ class ChatAttachmentController
             abort(404);
         }
 
-        $mimeType = (string) ($request->query('mime', ''));
-        $isImage = str_starts_with($mimeType, 'image/');
+        $mimeType = mime_content_type($path) ?: 'application/octet-stream';
+        $isImage = in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true);
         $disposition = $isImage ? 'inline' : 'attachment';
 
         return response()->file($path, [
             'Content-Disposition' => $disposition,
+            'X-Content-Type-Options' => 'nosniff',
+            'Content-Security-Policy' => "default-src 'none'; sandbox",
         ]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Json as BlbJson;
@@ -16,6 +17,7 @@ use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
 {
+    use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
     use TogglesSort;
 
@@ -85,11 +87,19 @@ class Show extends AbstractAddressForm
 
     public function saveField(string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.address.update')) {
+            return;
+        }
+
         $this->saveValidatedField($this->address, $field, $value, Address::fieldRules());
     }
 
     public function saveCountry(string $iso): void
     {
+        if (! $this->checkCapability('admin.address.update')) {
+            return;
+        }
+
         if ($iso === '') {
             $this->address->country_iso = null;
         } else {
@@ -120,6 +130,10 @@ class Show extends AbstractAddressForm
 
     public function saveLocation(): void
     {
+        if (! $this->checkCapability('admin.address.update')) {
+            return;
+        }
+
         $validated = $this->validate([
             'countryIso' => ['nullable', 'string', 'size:2'],
             'admin1Code' => ['nullable', 'string', 'max:20'],
@@ -144,6 +158,10 @@ class Show extends AbstractAddressForm
 
     public function saveVerificationStatus(string $status): void
     {
+        if (! $this->checkCapability('admin.address.update')) {
+            return;
+        }
+
         if (! in_array($status, ['unverified', 'suggested', 'verified'])) {
             $this->notifyError(__('The selected verification status is not valid.'));
 
@@ -160,6 +178,10 @@ class Show extends AbstractAddressForm
      */
     public function acceptSuggestedTimezone(): void
     {
+        if (! $this->checkCapability('admin.address.update')) {
+            return;
+        }
+
         if (! $this->suggestedTimezone || ! $this->companyContextId) {
             $this->notifyError(__('No timezone suggestion is available.'));
 

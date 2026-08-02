@@ -4,6 +4,7 @@ use App\Base\AI\DTO\AiRuntimeError;
 use App\Base\AI\Enums\AiErrorType;
 use App\Base\AI\Exceptions\GithubCopilotAuthException;
 use App\Base\AI\Services\GithubCopilotAuthService;
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Modules\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Modules\Core\AI\Enums\AuthType;
 use App\Modules\Core\AI\Models\AiProvider;
@@ -22,6 +23,12 @@ const RCR_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 
 function makeResolver(): RuntimeCredentialResolver
 {
+    // Bind a UrlSafetyGuard with a fake DNS resolver so test domains
+    // pass SSRF validation without real DNS lookups.
+    app()->instance(UrlSafetyGuard::class, new UrlSafetyGuard(
+        fn (string $host) => ['1.2.3.4'],
+    ));
+
     return app(RuntimeCredentialResolver::class);
 }
 
@@ -281,4 +288,70 @@ test('expiring codex credentials that fail refresh mark the provider expired', f
     expect($auth['status'] ?? null)->toBe('expired')
         ->and($auth['last_error_code'] ?? null)->toBe('refresh_failed')
         ->and($auth['last_error_message'] ?? null)->toBe('Token refresh failed (401).');
+});
+
+test('local provider can target loopback but not cloud metadata endpoints', function (): void {
+    createRcrProvider(RCR_PROXY_PROVIDER, 'http://127.0.0.1:11434', authType: AuthType::Local);
+
+    Http::fake([
+        '127.0.0.1:11434/models' => Http::response(['data' => []], 200),
+    ]);
+
+    // Loopback URL — allowed for local providers.
+    $result = makeResolver()->resolve([
+        'api_key' => 'not-required',
+        'base_url' => 'http://127.0.0.1:11434',
+        'provider_name' => RCR_PROXY_PROVIDER,
+    ]);
+
+    expect($result)
+        ->toHaveKey('base_url', 'http://127.0.0.1:11434')
+        ->not()->toHaveKey('runtime_error');
+});
+
+test('local provider is blocked from cloud metadata endpoints', function (): void {
+    createRcrProvider(RCR_PROXY_PROVIDER, 'http://169.254.169.254', authType: AuthType::Local);
+
+    $result = makeResolver()->resolve([
+        'api_key' => 'not-required',
+        'base_url' => 'http://169.254.169.254/latest/meta-data',
+        'provider_name' => RCR_PROXY_PROVIDER,
+    ]);
+
+    expect($result)
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConfigError)
+        ->and($result['runtime_error']->diagnostic)->toContain('safety check');
+});
+
+test('non-local provider is blocked from private network targets', function (): void {
+    $result = makeResolver()->resolve([
+        'api_key' => 'sk-test',
+        'base_url' => 'http://10.0.0.5/v1',
+        'provider_name' => 'openai',
+    ]);
+
+    expect($result)
+        ->toHaveKey('runtime_error')
+        ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
+        ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConfigError)
+        ->and($result['runtime_error']->diagnostic)->toContain('safety check');
+});
+
+test('non-local provider accepts safe public URL', function (): void {
+    Http::fake();
+
+    $result = makeResolver()->resolve([
+        'api_key' => 'sk-test',
+        'base_url' => 'https://api.openai.com/v1',
+        'provider_name' => 'openai',
+    ]);
+
+    expect($result)
+        ->toHaveKey('api_key', 'sk-test')
+        ->toHaveKey('base_url', 'https://api.openai.com/v1')
+        ->not()->toHaveKey('runtime_error');
+
+    Http::assertNothingSent();
 });

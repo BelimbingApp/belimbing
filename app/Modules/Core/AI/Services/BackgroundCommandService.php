@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Core\AI\Services;
 
 use App\Modules\Core\AI\Enums\OperationStatus;
@@ -16,15 +17,17 @@ use Illuminate\Support\Str;
  * instead of returning synthetic stub IDs.
  *
  * Key invariant: only allowlisted commands can be dispatched. The
- * allowlist uses prefix matching so "migrate" permits "migrate:status",
- * "migrate:fresh", etc.
+ * allowlist uses prefix matching on the parsed command name (first
+ * token) so "migrate" permits "migrate:status", "migrate:fresh", etc.
+ * Commands are parsed into tokens and stored so the queue worker can
+ * execute them as an array, avoiding shell interpretation entirely.
  */
 class BackgroundCommandService
 {
     /**
-     * Default allowlist of artisan command prefixes.
+     * Default allowlist of artisan command name prefixes.
      *
-     * Commands matching any prefix are permitted for background dispatch.
+     * Command names matching any prefix are permitted for background dispatch.
      * Configurable via config('ai.tools.artisan.background_allowlist').
      *
      * @var list<string>
@@ -74,19 +77,58 @@ class BackgroundCommandService
     /**
      * Check whether a command is permitted for background execution.
      *
+     * The command name (first parsed token) is checked against the allowlist
+     * using prefix matching. Shell metacharacters in the raw string are
+     * rejected outright since they indicate an attempt to escape the artisan
+     * command boundary.
+     *
      * @param  string  $command  Artisan command string
      */
     public function isAllowed(string $command): bool
     {
-        $baseCommand = $this->extractBaseCommand($command);
+        if ($this->containsShellMetacharacters($command)) {
+            return false;
+        }
+
+        $tokens = ArtisanCommandLine::tokenize($command);
+        $baseCommand = $tokens[0] ?? '';
+
+        if ($baseCommand === '') {
+            return false;
+        }
 
         foreach ($this->allowlist() as $prefix) {
-            if (str_starts_with($baseCommand, $prefix)) {
+            if ($this->matchesPrefix($baseCommand, $prefix)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Match an allowlist entry at a command-namespace boundary.
+     *
+     * A bare `str_starts_with` would let `migrateevil` through on a `migrate`
+     * entry and `route:listevil` through on `route:list`. The entry must match
+     * the whole command name, or be a namespace it sits under — so `migrate`
+     * still permits `migrate:status`, and `queue:` still permits `queue:work`.
+     */
+    private function matchesPrefix(string $baseCommand, string $prefix): bool
+    {
+        if ($prefix === '') {
+            return false;
+        }
+
+        if ($baseCommand === $prefix) {
+            return true;
+        }
+
+        if (! str_starts_with($baseCommand, $prefix)) {
+            return false;
+        }
+
+        return str_ends_with($prefix, ':') || substr($baseCommand, strlen($prefix), 1) === ':';
     }
 
     /**
@@ -114,19 +156,17 @@ class BackgroundCommandService
     {
         if (! $this->isAllowed($command)) {
             throw new \InvalidArgumentException(
-                'Command "'.$this->extractBaseCommand($command).'" is not permitted for background execution. '
+                'Command is not permitted for background execution. '
                 .'Allowed command prefixes: '.implode(', ', $this->allowlist()).'.',
             );
         }
     }
 
     /**
-     * Extract the base command name (before arguments/options).
+     * Detect shell metacharacters that could escape the artisan command boundary.
      */
-    private function extractBaseCommand(string $command): string
+    private function containsShellMetacharacters(string $command): bool
     {
-        $parts = preg_split('/\s+/', trim($command), 2);
-
-        return $parts[0] ?? '';
+        return preg_match('/[;&|`$(){}<>\n]/', $command) === 1;
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
@@ -32,6 +33,12 @@ const CHAT_VIEW_TEST_MODEL = 'stream-model';
 beforeEach(function (): void {
     config()->set('ai.workspace_path', storage_path('framework/testing/ai-chat-view-'.Str::random(16)));
     $this->wireLogPath = storage_path('framework/testing/ai-chat-view-wire-logs-'.Str::random(16));
+
+    // Bind a UrlSafetyGuard with a fake DNS resolver so test domains
+    // pass SSRF validation without real DNS lookups.
+    app()->instance(UrlSafetyGuard::class, new UrlSafetyGuard(
+        fn (string $host) => ['1.2.3.4'],
+    ));
 });
 
 afterEach(function (): void {

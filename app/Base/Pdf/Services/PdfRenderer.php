@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Pdf\Services;
 
 use App\Base\Pdf\Exceptions\PdfRenderException;
@@ -50,7 +51,10 @@ class PdfRenderer
             ['token' => $tokenId],
         );
 
-        $tempPath = tempnam(sys_get_temp_dir(), 'blb_pdf_').'.pdf';
+        $tempPath = tempnam(sys_get_temp_dir(), 'blb_pdf_');
+        if ($tempPath === false) {
+            throw PdfRenderException::renderFailed('Could not create temporary file.');
+        }
 
         $result = $this->runner->execute('pdf', [
             'url' => $signedUrl,
@@ -91,7 +95,10 @@ class PdfRenderer
         ?int $producedBy = null,
     ): PdfArtifact {
         $html = $this->views->make($view, $data)->render();
-        $tempPath = tempnam(sys_get_temp_dir(), 'blb_pdf_').'.pdf';
+        $tempPath = tempnam(sys_get_temp_dir(), 'blb_pdf_');
+        if ($tempPath === false) {
+            throw PdfRenderException::renderFailed('Could not create temporary file.');
+        }
 
         $result = $this->runner->execute('pdf', [
             'html' => $html,

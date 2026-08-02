@@ -39,7 +39,7 @@ class Bell extends Component
 
         $url = $notification->data['url'] ?? null;
 
-        if (is_string($url) && $url !== '') {
+        if (is_string($url) && $url !== '' && str_starts_with($url, '/') && ! str_starts_with($url, '//')) {
             $this->redirect($url, navigate: true);
         }
     }

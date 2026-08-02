@@ -43,15 +43,24 @@ class UrlSafetyGuard
         /** @var array{host: string} $parsed */
         $host = strtolower($parsed['host']);
 
-        $blockedHostnameError = $this->checkBlockedHostname($host);
-        if ($blockedHostnameError !== null) {
-            return $blockedHostnameError;
+        // Blocked hostnames (localhost, 0.0.0.0, ::1, .local) are only
+        // blocked when private networks are not explicitly allowed — local
+        // LLM providers (e.g., Ollama on localhost) need these targets.
+        if (! $allowPrivateNetwork) {
+            $blockedHostnameError = $this->checkBlockedHostname($host);
+            if ($blockedHostnameError !== null) {
+                return $blockedHostnameError;
+            }
         }
 
+        // Always run IP range checks, even when allowPrivateNetwork is true.
+        // The allowPrivateNetwork flag narrows the policy to permit loopback
+        // and private ranges but still blocks link-local (cloud metadata),
+        // multicast, and other dangerous reserved ranges.
         $ipRangeError = null;
 
-        if (! $this->matchesAllowlist($host, $hostnameAllowlist) && ! $allowPrivateNetwork) {
-            $ipRangeError = $this->checkIpRange($host);
+        if (! $this->matchesAllowlist($host, $hostnameAllowlist)) {
+            $ipRangeError = $this->checkIpRange($host, $allowPrivateNetwork);
         }
 
         return $ipRangeError ?? true;
@@ -81,7 +90,7 @@ class UrlSafetyGuard
 
         if ($this->pinningRequiredFor($host, $allowPrivateNetwork, $hostnameAllowlist)) {
             foreach ($this->resolveHostIps($host) as $ip) {
-                if ($this->validateResolvedIp($ip, $host) === null) {
+                if ($this->validateResolvedIp($ip, $host, $allowPrivateNetwork) === null) {
                     $pinnedIp = $ip;
                     break;
                 }
@@ -135,12 +144,12 @@ class UrlSafetyGuard
             : null;
     }
 
-    private function checkIpRange(string $host): ?string
+    private function checkIpRange(string $host, bool $allowPrivateNetwork = false): ?string
     {
         $ipRangeError = null;
 
         if (filter_var($host, FILTER_VALIDATE_IP)) {
-            $ipRangeError = $this->validateResolvedIp($host, $host);
+            $ipRangeError = $this->validateResolvedIp($host, $host, $allowPrivateNetwork);
         } else {
             $ips = $this->resolveHostIps($host);
 
@@ -148,7 +157,7 @@ class UrlSafetyGuard
                 $ipRangeError = "Blocked: unable to resolve hostname {$host}.";
             } else {
                 foreach ($ips as $ip) {
-                    $ipRangeError = $this->validateResolvedIp($ip, $host);
+                    $ipRangeError = $this->validateResolvedIp($ip, $host, $allowPrivateNetwork);
 
                     if ($ipRangeError !== null) {
                         break;
@@ -190,12 +199,77 @@ class UrlSafetyGuard
         return $ips;
     }
 
-    private function validateResolvedIp(string $ip, string $host): ?string
+    /**
+     * Validate a resolved IP against the safety policy.
+     *
+     * When allowPrivateNetwork is false: blocks both private and reserved
+     * ranges (default SSRF protection).
+     *
+     * When allowPrivateNetwork is true: permits loopback (127.0.0.0/8, ::1)
+     * and private ranges (10.x, 172.16-31.x, 192.168.x, fc00::/7) for local
+     * LLM providers, but always blocks link-local (169.254.0.0/16 — includes
+     * cloud metadata endpoints), multicast, and other dangerous reserved
+     * ranges.
+     */
+    private function validateResolvedIp(string $ip, string $host, bool $allowPrivateNetwork = false): ?string
     {
+        // PHP's FILTER_FLAG_NO_RES_RANGE misses IPv4 multicast (224.0.0.0/4)
+        // and IPv6 multicast (ff00::/8). Block these explicitly — they are
+        // always dangerous regardless of the allowPrivateNetwork flag.
+        if ($this->isMulticast($ip)) {
+            return $this->ipBlockedError($ip, $host);
+        }
+
+        // Public IP — always allowed.
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false) {
             return null;
         }
 
+        if ($allowPrivateNetwork) {
+            // Loopback (127.0.0.0/8, ::1) — allowed for local providers.
+            if (str_starts_with($ip, '127.') || $ip === '::1') {
+                return null;
+            }
+
+            // Private ranges (10.x, 172.16-31.x, 192.168.x, fc00::/7) —
+            // allowed but not reserved. We confirm the IP is private
+            // (blocked by NO_PRIV_RANGE) but NOT reserved (passes
+            // NO_RES_RANGE), excluding it from link-local/metadata ranges.
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE) === false
+                && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_RES_RANGE) !== false
+            ) {
+                return null;
+            }
+        }
+
+        // Everything else — blocked (includes link-local, cloud metadata,
+        // 0.0.0.0/8, 240.0.0.0/4, etc.).
+        return $this->ipBlockedError($ip, $host);
+    }
+
+    /**
+     * Check if an IP is in a multicast range (IPv4 224.0.0.0/4 or
+     * IPv6 ff00::/8). PHP's FILTER_FLAG_NO_RES_RANGE does not cover these.
+     */
+    private function isMulticast(string $ip): bool
+    {
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            // 224.0.0.0/4: first octet 224–239.
+            $firstOctet = (int) explode('.', $ip)[0];
+
+            return $firstOctet >= 224 && $firstOctet <= 239;
+        }
+
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            // ff00::/8: first hex group starts with "ff".
+            return str_starts_with(strtolower($ip), 'ff');
+        }
+
+        return false;
+    }
+
+    private function ipBlockedError(string $ip, string $host): string
+    {
         if ($ip === $host) {
             return "Blocked: {$host} is a private or reserved IP address.";
         }

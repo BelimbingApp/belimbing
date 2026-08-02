@@ -2,7 +2,7 @@
 
 namespace App\Modules\Core\Address\Livewire\Addresses;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Core\Address\Models\Address;
@@ -13,7 +13,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -69,6 +69,10 @@ class Index extends Component
 
     public function delete(int $addressId): void
     {
+        if (! $this->checkCapability('admin.address.delete')) {
+            return;
+        }
+
         $address = Address::query()->findOrFail($addressId);
 
         $linkedCount = DB::table('addressables')

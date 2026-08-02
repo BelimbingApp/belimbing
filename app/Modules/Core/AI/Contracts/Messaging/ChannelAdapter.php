@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Modules\Core\AI\Contracts\Messaging;
 
 use App\Modules\Core\AI\DTO\Messaging\ChannelAccount;
 use App\Modules\Core\AI\DTO\Messaging\ChannelCapabilities;
 use App\Modules\Core\AI\DTO\Messaging\InboundMessage;
 use App\Modules\Core\AI\DTO\Messaging\SendResult;
+use App\Modules\Core\AI\Enums\SignalAuthenticityStatus;
 use Illuminate\Http\Request;
 
 /**
@@ -61,6 +63,19 @@ interface ChannelAdapter
      * @param  Request  $request  The incoming webhook request
      */
     public function parseInbound(Request $request): ?InboundMessage;
+
+    /**
+     * Verify the authenticity of an inbound webhook request.
+     *
+     * Adapters MUST validate the platform's signature, token, or other
+     * authentication mechanism. Return {@see SignalAuthenticityStatus::Verified}
+     * when the request is authentic, or {@see SignalAuthenticityStatus::Failed}
+     * when verification fails. This is a fail-closed contract: unverified
+     * requests must not be processed.
+     *
+     * @param  Request  $request  The incoming webhook request
+     */
+    public function verifyAuthenticity(Request $request): SignalAuthenticityStatus;
 
     /**
      * Supported capabilities for this channel.
