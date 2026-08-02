@@ -45,7 +45,9 @@ final class DataFreshnessAttachmentService
      */
     public function eligibleTables(): array
     {
-        return collect($this->catalog->catalog())
+        // Trigger attachment is a Local concern. It must not open the remote or
+        // make eligibility depend on remote availability/ownership drift.
+        return collect($this->catalog->localCatalog())
             ->filter(fn (DataShareMirrorCatalogTable $table): bool => $table->supported
                 && $table->localExists
                 && $table->localKind === 'table')

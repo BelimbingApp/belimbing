@@ -31,7 +31,6 @@ return [
     'mirror' => [
         'temp_path' => storage_path('app/private/data-share/mirror'),
         'timeout_seconds' => 3600,
-        'catalog_cache_seconds' => 300,
         'lock_timeout_ms' => 30000,
         'max_snapshot_bytes' => 1024 * 1024 * 1024,
         'executables' => [

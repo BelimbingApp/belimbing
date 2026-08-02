@@ -11,6 +11,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\Freshness\DataFreshnessTracker;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class DataShareMirrorCatalog
 {
@@ -94,73 +95,66 @@ class DataShareMirrorCatalog
         $tables = [];
 
         foreach ($names as $name) {
-            $localRegistry = $local['registry'][$name] ?? null;
-            $mirrorRegistry = $mirror['registry'][$name] ?? null;
-            $localRelation = $local['relations'][$name] ?? null;
-            $mirrorRelation = $mirror['relations'][$name] ?? null;
-            $owner = $localRegistry ?? $mirrorRegistry;
-            $blockers = [];
-
-            if (preg_match('/^[A-Za-z_][A-Za-z0-9_$]{0,62}$/', $name) !== 1) {
-                $blockers[] = new DataShareMirrorBlocker(
-                    'invalid_identifier',
-                    __('Table name is not mirror-safe.'),
-                );
-            }
-
-            if ($this->isProtected($name)) {
-                $blockers[] = new DataShareMirrorBlocker(
-                    'protected_table',
-                    __('Base infrastructure or runtime state cannot be mirrored.'),
-                );
-            }
-
-            if (($localRelation !== null && $localRegistry === null) || ($mirrorRelation !== null && $mirrorRegistry === null)) {
-                $blockers[] = new DataShareMirrorBlocker(
-                    'owner_missing',
-                    __('Module ownership is missing on an endpoint where the table exists.'),
-                );
-            }
-
-            if ($localRegistry !== null && $mirrorRegistry !== null && ! $this->sameOwner($localRegistry, $mirrorRegistry)) {
-                $blockers[] = new DataShareMirrorBlocker(
-                    'owner_mismatch',
-                    __('Module ownership differs between Local and :provider.', [
-                        'provider' => $this->connections->provider()->label(),
-                    ]),
-                );
-            }
-
-            foreach ([[__('Local'), $localRelation], [$remoteLabel, $mirrorRelation]] as [$label, $relation]) {
-                if ($relation !== null && $relation['kind'] !== 'table') {
-                    $blockers[] = new DataShareMirrorBlocker(
-                        'unsupported_relation',
-                        __(':endpoint exposes this as :kind; only ordinary tables are supported.', [
-                            'kind' => $relation['kind'],
-                            'endpoint' => $label,
-                        ]),
-                    );
-                }
-            }
-
-            $tables[] = new DataShareMirrorCatalogTable(
-                table: $name,
-                moduleName: $owner['module_name'] ?? null,
-                modulePath: $owner['module_path'] ?? null,
-                migrationFile: $owner['migration_file'] ?? null,
-                localExists: $localRelation !== null,
-                mirrorExists: $mirrorRelation !== null,
-                localKind: $localRelation['kind'] ?? null,
-                mirrorKind: $mirrorRelation['kind'] ?? null,
-                supported: $blockers === [],
-                blockers: $blockers,
-                localRows: $local['counts'][$name] ?? null,
-                remoteRows: $mirror['counts'][$name] ?? null,
-                remoteAvailable: $remoteAvailable,
-            );
+            $tables[] = $this->buildRow($name, $local, $mirror, $remoteLabel, $remoteAvailable);
         }
 
         return $tables;
+    }
+
+    /**
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>, counts: array<string, int>}  $local
+     * @param  array{registry: array<string, array<string, mixed>>, relations: array<string, array{kind: string}>, counts: array<string, int>}  $mirror
+     */
+    private function buildRow(string $name, array $local, array $mirror, string $remoteLabel, bool $remoteAvailable): DataShareMirrorCatalogTable
+    {
+        $localRegistry = $local['registry'][$name] ?? null;
+        $mirrorRegistry = $mirror['registry'][$name] ?? null;
+        $localRelation = $local['relations'][$name] ?? null;
+        $mirrorRelation = $mirror['relations'][$name] ?? null;
+        $owner = $localRegistry ?? $mirrorRegistry;
+        $blockers = $this->catalogBlockers($name, $localRegistry, $mirrorRegistry, $localRelation, $mirrorRelation, $remoteLabel);
+
+        return new DataShareMirrorCatalogTable(
+            table: $name,
+            moduleName: $owner['module_name'] ?? null,
+            modulePath: $owner['module_path'] ?? null,
+            migrationFile: $owner['migration_file'] ?? null,
+            localExists: $localRelation !== null,
+            mirrorExists: $mirrorRelation !== null,
+            localKind: $localRelation['kind'] ?? null,
+            mirrorKind: $mirrorRelation['kind'] ?? null,
+            supported: $blockers === [],
+            blockers: $blockers,
+            localRows: $local['counts'][$name] ?? null,
+            remoteRows: $mirror['counts'][$name] ?? null,
+            remoteAvailable: $remoteAvailable,
+        );
+    }
+
+    /** @return list<DataShareMirrorBlocker> */
+    private function catalogBlockers(string $name, ?array $localRegistry, ?array $mirrorRegistry, ?array $localRelation, ?array $mirrorRelation, string $remoteLabel): array
+    {
+        $blockers = [];
+        if (preg_match('/^[A-Za-z_][A-Za-z0-9_$]{0,62}$/', $name) !== 1) {
+            $blockers[] = new DataShareMirrorBlocker('invalid_identifier', __('Table name is not mirror-safe.'));
+        }
+        if ($this->isProtected($name)) {
+            $blockers[] = new DataShareMirrorBlocker('protected_table', __('Base infrastructure or runtime state cannot be mirrored.'));
+        }
+        if (($localRelation !== null && $localRegistry === null) || ($mirrorRelation !== null && $mirrorRegistry === null)) {
+            $blockers[] = new DataShareMirrorBlocker('owner_missing', __('Module ownership is missing on an endpoint where the table exists.'));
+        }
+        if ($localRegistry !== null && $mirrorRegistry !== null && ! $this->sameOwner($localRegistry, $mirrorRegistry)) {
+            $blockers[] = new DataShareMirrorBlocker('owner_mismatch', __('Module ownership differs between Local and :provider.', ['provider' => $this->connections->provider()->label()]));
+        }
+
+        foreach ([[__('Local'), $localRelation], [$remoteLabel, $mirrorRelation]] as [$label, $relation]) {
+            if ($relation !== null && $relation['kind'] !== 'table') {
+                $blockers[] = new DataShareMirrorBlocker('unsupported_relation', __(':endpoint exposes this as :kind; only ordinary tables are supported.', ['kind' => $relation['kind'], 'endpoint' => $label]));
+            }
+        }
+
+        return $blockers;
     }
 
     /**
@@ -173,7 +167,7 @@ class DataShareMirrorCatalog
     {
         try {
             return [$this->snapshot($this->connections->mirror(), $includeCounts), true];
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return [['registry' => [], 'relations' => [], 'counts' => []], false];
         }
     }
@@ -182,7 +176,7 @@ class DataShareMirrorCatalog
     {
         try {
             return $this->connections->provider()->connectionLabel();
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return __('remote');
         }
     }
@@ -209,12 +203,29 @@ class DataShareMirrorCatalog
 
         $tracker = app(DataFreshnessTracker::class);
         $driverTracks = $tracker->driverSupportsTracking();
+        $trackingStatus = [];
 
-        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks): DataShareMirrorCatalogTable {
+        if ($driverTracks) {
+            try {
+                $trackingStatus = $tracker->trackingStatus(
+                    array_map(fn (DataShareMirrorCatalogTable $table): string => $table->table, $tables),
+                );
+            } catch (Throwable) {
+                // Counts remain useful when trigger-health metadata cannot be
+                // inspected; freshness falls back to Unknown.
+                $driverTracks = false;
+            }
+        }
+
+        return array_map(function (DataShareMirrorCatalogTable $table) use ($observations, $tracker, $driverTracks, $trackingStatus): DataShareMirrorCatalogTable {
             $observation = $observations->get($table->table);
 
             $freshness = $driverTracks
-                ? $tracker->state($table->table, $observation?->acknowledged_generation)->value
+                ? $tracker->state(
+                    $table->table,
+                    $observation?->acknowledged_generation,
+                    trackingInstalled: $trackingStatus[$table->table] ?? false,
+                )->value
                 : DataFreshnessState::Unknown->value;
 
             return $table->withObservation($observation?->observed_at?->toIso8601String(), $freshness);
@@ -342,7 +353,7 @@ class DataShareMirrorCatalog
 
             try {
                 $rows = $connection->select(implode(' UNION ALL ', $statements), $bindings);
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $rows = $this->countRowsIndividually($connection, $chunk);
             }
 
@@ -369,7 +380,7 @@ class DataShareMirrorCatalog
                     'table_name' => $name,
                     'row_count' => (int) $connection->table($name)->count(),
                 ];
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 // A concurrent schema change leaves only this count unknown.
             }
         }

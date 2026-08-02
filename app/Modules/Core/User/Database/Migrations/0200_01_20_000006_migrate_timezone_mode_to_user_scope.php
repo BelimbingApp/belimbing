@@ -148,7 +148,13 @@ return new class extends Migration
     private function modeFrom(mixed $value): ?string
     {
         $decoded = is_string($value) ? json_decode($value, true) : $value;
-        $mode = is_string($decoded) ? $decoded : (is_string($value) ? $value : null);
+        if (is_string($decoded)) {
+            $mode = $decoded;
+        } elseif (is_string($value)) {
+            $mode = $value;
+        } else {
+            $mode = null;
+        }
 
         return in_array($mode, self::VALID_MODES, true) ? $mode : null;
     }

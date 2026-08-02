@@ -8,6 +8,8 @@ enum DatabaseErrorCode: string implements BlbErrorCode
 {
     case DEV_SEEDER_NON_LOCAL_ENV = 'dev_seeder_non_local_env';
     case CIRCULAR_SEEDER_DEPENDENCY = 'circular_seeder_dependency';
+    case DATA_OPERATION_RUN_NOT_FOUND = 'data_operation_run_not_found';
+    case DATA_OPERATION_RUN_TERMINAL = 'data_operation_run_terminal';
     case DATABASE_QUERY_INVALID = 'database_query_invalid';
     case DATABASE_QUERY_EXECUTION_FAILED = 'database_query_execution_failed';
     case DATABASE_DRIVER_UNSUPPORTED = 'database_driver_unsupported';

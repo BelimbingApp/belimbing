@@ -98,10 +98,17 @@ function deploymentUniqueRemoteCheckCount(array $status): int
 
 function withDeploymentAdminEnv(string $host, string $port, Closure $callback): void
 {
-    // env() consults $_ENV/$_SERVER before getenv(), and phpunit.xml pins the
-    // admin endpoint there (away from the live dev server). Tests that need a
-    // specific endpoint must set all three sources, then restore the pin.
+    // The application reads its bootstrapped config, while subprocess-adjacent
+    // paths may still inspect the process environment. Keep both views aligned.
     $savedEnv = [];
+    $savedConfig = [
+        'app.caddy_server_admin_host' => config('app.caddy_server_admin_host'),
+        'app.caddy_server_admin_port' => config('app.caddy_server_admin_port'),
+    ];
+    config([
+        'app.caddy_server_admin_host' => $host,
+        'app.caddy_server_admin_port' => $port,
+    ]);
 
     foreach (['CADDY_SERVER_ADMIN_HOST' => $host, 'CADDY_SERVER_ADMIN_PORT' => $port] as $key => $value) {
         $savedEnv[$key] = [$_ENV[$key] ?? null, $_SERVER[$key] ?? null, getenv($key) === false ? null : getenv($key)];
@@ -113,6 +120,8 @@ function withDeploymentAdminEnv(string $host, string $port, Closure $callback): 
     try {
         $callback();
     } finally {
+        config($savedConfig);
+
         foreach ($savedEnv as $key => [$env, $server, $getenv]) {
             if ($env === null) {
                 unset($_ENV[$key]);
@@ -133,12 +142,17 @@ function withDeploymentAdminEnv(string $host, string $port, Closure $callback): 
 
 function withDeploymentOctaneState(?array $state, Closure $callback): void
 {
-    // These tests exercise the state-file resolution chain, so no configured
-    // endpoint may be visible. phpunit.xml pins the admin port away from the
-    // live dev server via <env>, which populates $_ENV/$_SERVER — env() reads
-    // those, not just getenv(), so all three sources must be cleared here
-    // (and restored, so the pin keeps protecting every other test).
+    // These tests exercise the state-file resolution chain, so neither
+    // bootstrapped config nor process environment may expose a pinned endpoint.
     $savedEnv = [];
+    $savedConfig = [
+        'app.caddy_server_admin_host' => config('app.caddy_server_admin_host'),
+        'app.caddy_server_admin_port' => config('app.caddy_server_admin_port'),
+    ];
+    config([
+        'app.caddy_server_admin_host' => null,
+        'app.caddy_server_admin_port' => null,
+    ]);
 
     foreach (['CADDY_SERVER_ADMIN_HOST', 'CADDY_SERVER_ADMIN_PORT'] as $key) {
         $savedEnv[$key] = [$_ENV[$key] ?? null, $_SERVER[$key] ?? null, getenv($key) === false ? null : getenv($key)];
@@ -157,6 +171,7 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
         $callback();
     } finally {
         $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
+        config($savedConfig);
 
         foreach ($savedEnv as $key => [$env, $server, $getenv]) {
             if ($env !== null) {

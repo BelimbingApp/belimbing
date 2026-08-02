@@ -141,7 +141,9 @@ return new class extends Migration
         Schema::create('base_database_data_freshness_events', function (Blueprint $table): void {
             $table->bigIncrements('id');
             $table->string('table_name');
-            $table->timestamp('occurred_at')->useCurrent();
+            // Writers supply app/transaction time explicitly. A database-session
+            // default can use a non-UTC timezone and make observations ambiguous.
+            $table->timestamp('occurred_at');
             $table->index(['table_name', 'id'], 'data_freshness_events_table_id_idx');
         });
     }

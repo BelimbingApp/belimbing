@@ -50,31 +50,23 @@ const GENERIC_SHARE_PRIMARY_URL = 'https://source.lan:8443';
 const GENERIC_SHARE_FALLBACK_URL = 'https://share.example.test';
 const GENERIC_SHARE_OFFER_PATH = '/data-share/offers/';
 const GENERIC_SHARE_NDJSON = 'application/x-ndjson';
+const GENERIC_SHARE_RECEIVING_PATH = 'data-share/receiving';
+const GENERIC_SHARE_DESTINATION_NAME = 'Generic destination';
 
 beforeEach(function (): void {
     Storage::fake('local');
-    config([
-        'app.env' => 'testing',
+    config(['app.env' => 'testing']);
+    setGenericDataShareSettings([
         'data_share.disk' => 'local',
         'data_share.instance.id' => 'generic-source-dev',
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
         'data_share.instance.role' => 'development',
         'data_share.outgoing_path_prefix' => 'data-share/outgoing',
         'data_share.incoming_path_prefix' => 'data-share/incoming',
-        'data_share.receiving_path_prefix' => 'data-share/receiving',
+        'data_share.receiving_path_prefix' => GENERIC_SHARE_RECEIVING_PATH,
         'data_share.offers.base_urls' => GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL,
         'data_share.offers.expiry_minutes' => 60,
     ]);
-    $settings = app(SettingsService::class);
-    $settings->set('data_share.disk', 'local');
-    $settings->set('data_share.instance.id', 'generic-source-dev');
-    $settings->set('data_share.instance.name', GENERIC_SHARE_SOURCE_NAME);
-    $settings->set('data_share.instance.role', 'development');
-    $settings->set('data_share.outgoing_path_prefix', 'data-share/outgoing');
-    $settings->set('data_share.incoming_path_prefix', 'data-share/incoming');
-    $settings->set('data_share.receiving_path_prefix', 'data-share/receiving');
-    $settings->set('data_share.offers.base_urls', GENERIC_SHARE_PRIMARY_URL."\n".GENERIC_SHARE_FALLBACK_URL);
-    $settings->set('data_share.offers.expiry_minutes', 60);
 
     Schema::create(GENERIC_SHARE_PARENT, function (Blueprint $table): void {
         $table->unsignedBigInteger('id')->primary();
@@ -96,6 +88,16 @@ beforeEach(function (): void {
     TableRegistry::register(GENERIC_SHARE_PARENT, 'Data Share Fixture', GENERIC_SHARE_SCOPE, 'test');
     TableRegistry::register(GENERIC_SHARE_CHILD, 'Data Share Fixture', GENERIC_SHARE_SCOPE, 'test');
 });
+
+/** @param array<string, mixed> $values */
+function setGenericDataShareSettings(array $values): void
+{
+    $settings = app(SettingsService::class);
+
+    foreach ($values as $key => $value) {
+        $settings->set($key, $value);
+    }
+}
 
 afterEach(function (): void {
     TableRegistry::unregister(GENERIC_SHARE_CHILD);
@@ -138,15 +140,11 @@ function seedGenericDataShareFixture(): void
 
 function becomeGenericDataShareSource(): DataShareInstanceIdentity
 {
-    config([
+    setGenericDataShareSettings([
         'data_share.instance.id' => 'generic-source-dev',
         'data_share.instance.name' => GENERIC_SHARE_SOURCE_NAME,
         'data_share.instance.role' => 'development',
     ]);
-    $settings = app(SettingsService::class);
-    $settings->set('data_share.instance.id', 'generic-source-dev');
-    $settings->set('data_share.instance.name', GENERIC_SHARE_SOURCE_NAME);
-    $settings->set('data_share.instance.role', 'development');
 
     return new DataShareInstanceIdentity('generic-source-dev', GENERIC_SHARE_SOURCE_NAME, DataShareInstanceRole::Development);
 }
@@ -156,17 +154,13 @@ function becomeGenericDataShareDestination(bool $production = false): DataShareI
     $role = $production ? DataShareInstanceRole::Production : DataShareInstanceRole::Staging;
     $id = $production ? 'generic-destination-production' : 'generic-destination-stage';
 
-    config([
+    setGenericDataShareSettings([
         'data_share.instance.id' => $id,
-        'data_share.instance.name' => 'Generic destination',
+        'data_share.instance.name' => GENERIC_SHARE_DESTINATION_NAME,
         'data_share.instance.role' => $role->value,
     ]);
-    $settings = app(SettingsService::class);
-    $settings->set('data_share.instance.id', $id);
-    $settings->set('data_share.instance.name', 'Generic destination');
-    $settings->set('data_share.instance.role', $role->value);
 
-    return new DataShareInstanceIdentity($id, 'Generic destination', $role);
+    return new DataShareInstanceIdentity($id, GENERIC_SHARE_DESTINATION_NAME, $role);
 }
 
 /** @return array{bundle: DataShareTransferOfferBundle, offer: DataShareTransferOffer, export: DataShareExportResult} */
@@ -548,10 +542,7 @@ it('exports deterministic bounded payloads with physical identities and binary f
 
 it('enforces scalar, canonical-line, record, and table bounds before publishing', function (array $limits, string $message): void {
     seedGenericDataShareFixture();
-    config($limits);
-    foreach ($limits as $key => $value) {
-        app(SettingsService::class)->set($key, $value);
-    }
+    setGenericDataShareSettings($limits);
 
     expect(fn () => app(DataSharePackageExporter::class)->preview(
         GENERIC_SHARE_SCOPE,
@@ -620,7 +611,6 @@ it('blocks production apply before mutation when recovery cannot be created', fu
     DB::table(GENERIC_SHARE_PARENT)->delete();
     $receipt = receiveGenericDataShare($bundle, $export, production: true);
     $plan = app(DataShareImportPlanner::class)->plan($receipt);
-    config(['backup.enabled' => false]);
     app(SettingsService::class)->set('backup.enabled', false);
 
     expect(fn () => app(DataSharePackageApplier::class)->apply(
@@ -820,7 +810,7 @@ it('deletes a fetched temporary stream when response metadata is wrong', functio
     expect(fn () => app(DataShareOfferFetcher::class)->fetch($bundle))
         ->toThrow(DataShareTransportException::class, 'metadata');
     expect(DataShareReceipt::query()->count())->toBe(0)
-        ->and(Storage::disk('local')->allFiles('data-share/receiving'))->toBe([]);
+        ->and(Storage::disk('local')->allFiles(GENERIC_SHARE_RECEIVING_PATH))->toBe([]);
 });
 
 it('does not prune an available published offer and requires explicit outgoing cleanup', function (): void {
@@ -828,7 +818,6 @@ it('does not prune an available published offer and requires explicit outgoing c
     ['bundle' => $bundle, 'offer' => $offer, 'export' => $export] = publishGenericDataShare();
     $receipt = receiveGenericDataShare($bundle, $export);
     $receipt->forceFill(['status' => 'applied', 'received_at' => now('UTC')->subDays(30)])->save();
-    config(['data_share.transfer_limits.incoming_retention_days' => 14]);
     app(SettingsService::class)->set('data_share.transfer_limits.incoming_retention_days', 14);
     touch(Storage::disk('local')->path($offer->package_path), now('UTC')->subDays(30)->timestamp);
 

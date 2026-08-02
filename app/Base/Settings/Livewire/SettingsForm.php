@@ -203,29 +203,42 @@ abstract class SettingsForm extends Component
 
             $key = $field['key'];
             $formKey = SettingsFieldValue::formKey($key);
-
-            if ($field['encrypted'] ?? false) {
-                $fieldScope = $this->scopeForField($field, $scope);
-
-                if ($this->shouldHydrateEncryptedValue($field)) {
-                    $value = $settings->get($key, $fieldScope);
-                } elseif ($settings->has($key, $fieldScope)) {
-                    $value = $this->savedSecretMask($field);
-                } else {
-                    $value = '';
-                }
-
-                $this->values[$formKey] = is_scalar($value) ? (string) $value : '';
-
-                continue;
-            }
-
-            $value = $settings->get($key, $this->scopeForField($field, $scope));
-
-            $this->values[$formKey] = ($field['type'] ?? 'text') === 'checkbox-list'
-                ? SettingsFieldValue::checkboxList($value, $field)
-                : $value;
+            $this->values[$formKey] = $this->settingFieldValue($settings, $field, $scope);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function settingFieldValue(SettingsService $settings, array $field, mixed $scope): mixed
+    {
+        $fieldScope = $this->scopeForField($field, $scope);
+
+        if ($field['encrypted'] ?? false) {
+            return $this->encryptedFieldValue($settings, $field, $fieldScope);
+        }
+
+        $value = $settings->get($field['key'], $fieldScope);
+
+        return ($field['type'] ?? 'text') === 'checkbox-list'
+            ? SettingsFieldValue::checkboxList($value, $field)
+            : $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $field
+     */
+    private function encryptedFieldValue(SettingsService $settings, array $field, mixed $scope): string
+    {
+        if ($this->shouldHydrateEncryptedValue($field)) {
+            $value = $settings->get($field['key'], $scope);
+        } elseif ($settings->has($field['key'], $scope)) {
+            $value = $this->savedSecretMask($field);
+        } else {
+            $value = '';
+        }
+
+        return is_scalar($value) ? (string) $value : '';
     }
 
     private function authorizeManage(): void

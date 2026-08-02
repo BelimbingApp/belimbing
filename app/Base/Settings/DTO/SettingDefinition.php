@@ -58,86 +58,10 @@ final readonly class SettingDefinition
         $editable = $attributes['editable'] ?? null;
         $capability = $attributes['capability'] ?? null;
 
-        if ($key === '') {
-            throw new InvalidSettingDefinitionException('Setting definition keys cannot be empty.');
-        }
-
-        if (! is_string($type) || ! in_array($type, self::SUPPORTED_TYPES, true)) {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] must declare a supported type.",
-            );
-        }
-
-        if (! is_array($scopes) || ! array_is_list($scopes) || $scopes === []) {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] must declare at least one scope.",
-            );
-        }
-
-        foreach ($scopes as $scope) {
-            if (! is_string($scope) || ! in_array($scope, self::SUPPORTED_SCOPES, true)) {
-                $scopeName = is_scalar($scope) ? (string) $scope : get_debug_type($scope);
-
-                throw new InvalidSettingDefinitionException(
-                    "Setting [{$key}] declares unsupported scope [{$scopeName}].",
-                );
-            }
-        }
-
-        if (count($scopes) !== count(array_unique($scopes))) {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] cannot declare the same scope more than once.",
-            );
-        }
-
-        if (! array_key_exists('default', $attributes)) {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] must declare a code default.",
-            );
-        }
-
-        foreach (['nullable', 'encrypted'] as $booleanAttribute) {
-            if (array_key_exists($booleanAttribute, $attributes)
-                && ! is_bool($attributes[$booleanAttribute])) {
-                throw new InvalidSettingDefinitionException(
-                    "Setting [{$key}] {$booleanAttribute} must be boolean when declared.",
-                );
-            }
-        }
-
-        if (! is_array($rules) || ! array_is_list($rules) || array_filter($rules, 'is_string') !== $rules) {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] validation rules must be a list of strings.",
-            );
-        }
-
-        foreach (['label' => $label, 'help' => $help] as $field => $value) {
-            if ($value !== null && (! is_string($value) || trim($value) === '')) {
-                throw new InvalidSettingDefinitionException(
-                    "Setting [{$key}] {$field} must be a non-empty string when declared.",
-                );
-            }
-        }
-
-        if (! is_string($owner) || trim($owner) === '') {
-            throw new InvalidSettingDefinitionException(
-                "Setting [{$key}] must declare its module owner.",
-            );
-        }
-
-        foreach (['editable' => $editable, 'capability' => $capability] as $field => $value) {
-            if ($value !== null && (! is_string($value) || trim($value) === '')) {
-                throw new InvalidSettingDefinitionException(
-                    "Setting [{$key}] {$field} must be a non-empty string when declared.",
-                );
-            }
-        }
-
-        if ($editable !== null && ($label === null || $help === null)) {
-            throw new InvalidSettingDefinitionException(
-                "Editable setting [{$key}] must declare label and help metadata.",
-            );
-        }
+        self::assertIdentityAndType($key, $type);
+        self::assertScopes($key, $scopes);
+        self::assertRequiredAttributes($key, $attributes, $rules);
+        self::assertMetadata($key, $label, $help, $owner, $editable, $capability);
 
         $definition = new self(
             key: $key,
@@ -167,6 +91,87 @@ final readonly class SettingDefinition
         }
 
         return $definition;
+    }
+
+    private static function assertIdentityAndType(string $key, mixed $type): void
+    {
+        if ($key === '') {
+            throw new InvalidSettingDefinitionException('Setting definition keys cannot be empty.');
+        }
+
+        if (! is_string($type) || ! in_array($type, self::SUPPORTED_TYPES, true)) {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] must declare a supported type.");
+        }
+    }
+
+    private static function assertScopes(string $key, mixed $scopes): void
+    {
+        if (! is_array($scopes) || ! array_is_list($scopes) || $scopes === []) {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] must declare at least one scope.");
+        }
+
+        foreach ($scopes as $scope) {
+            if (! is_string($scope) || ! in_array($scope, self::SUPPORTED_SCOPES, true)) {
+                $scopeName = is_scalar($scope) ? (string) $scope : get_debug_type($scope);
+                throw new InvalidSettingDefinitionException("Setting [{$key}] declares unsupported scope [{$scopeName}].");
+            }
+        }
+
+        if (count($scopes) !== count(array_unique($scopes))) {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] cannot declare the same scope more than once.");
+        }
+    }
+
+    /** @param array<string, mixed> $attributes */
+    private static function assertRequiredAttributes(string $key, array $attributes, mixed $rules): void
+    {
+        if (! array_key_exists('default', $attributes)) {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] must declare a code default.");
+        }
+
+        foreach (['nullable', 'encrypted'] as $booleanAttribute) {
+            if (array_key_exists($booleanAttribute, $attributes) && ! is_bool($attributes[$booleanAttribute])) {
+                throw new InvalidSettingDefinitionException("Setting [{$key}] {$booleanAttribute} must be boolean when declared.");
+            }
+        }
+
+        if (! is_array($rules) || ! array_is_list($rules) || array_filter($rules, 'is_string') !== $rules) {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] validation rules must be a list of strings.");
+        }
+    }
+
+    private static function assertMetadata(
+        string $key,
+        mixed $label,
+        mixed $help,
+        mixed $owner,
+        mixed $editable,
+        mixed $capability,
+    ): void {
+        foreach (['label' => $label, 'help' => $help] as $field => $value) {
+            self::assertOptionalString($key, $field, $value);
+        }
+
+        if (! is_string($owner) || trim($owner) === '') {
+            throw new InvalidSettingDefinitionException("Setting [{$key}] must declare its module owner.");
+        }
+
+        foreach (['editable' => $editable, 'capability' => $capability] as $field => $value) {
+            self::assertOptionalString($key, $field, $value);
+        }
+
+        if ($editable !== null && ($label === null || $help === null)) {
+            throw new InvalidSettingDefinitionException("Editable setting [{$key}] must declare label and help metadata.");
+        }
+    }
+
+    private static function assertOptionalString(string $key, string $field, mixed $value): void
+    {
+        if ($value !== null && (! is_string($value) || trim($value) === '')) {
+            throw new InvalidSettingDefinitionException(
+                "Setting [{$key}] {$field} must be a non-empty string when declared.",
+            );
+        }
     }
 
     public function allowsScope(?Scope $scope): bool

@@ -86,26 +86,17 @@ final class ImportEnvironmentSettingsCommand extends Command
                 continue;
             }
 
-            $definition = $definitions->get($settingKey);
-            try {
-                $value = $this->coerce($environment[$environmentKey], $definition->type);
-                if ($value !== null) {
-                    $definition->assertStorableValue($value);
-                }
-            } catch (\InvalidArgumentException) {
-                $rows[] = [$environmentKey, $settingKey, $definition->encrypted ? 'secret' : $definition->type, 'skip invalid'];
+            [$row, $value, $shouldImport] = $this->prepareImport(
+                $environmentKey,
+                $settingKey,
+                $environment[$environmentKey],
+                $settings,
+                $definitions,
+                $force,
+            );
+            $rows[] = $row;
 
-                continue;
-            }
-
-            $existing = $settings->has($settingKey);
-            $action = $value === null
-                ? 'skip empty'
-                : ($existing && ! $force ? 'keep existing' : ((bool) $this->option('apply') ? 'import' : 'would import'));
-
-            $rows[] = [$environmentKey, $settingKey, $definition->encrypted ? 'secret' : $definition->type, $action];
-
-            if ($value !== null && (! $existing || $force)) {
+            if ($shouldImport) {
                 $imports[$settingKey] = $value;
             }
         }
@@ -131,6 +122,50 @@ final class ImportEnvironmentSettingsCommand extends Command
         $this->components->info(count($imports).' setting(s) imported. Remove the corresponding legacy keys from .env after verification.');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @return array{array{string, string, string, string}, mixed, bool}
+     */
+    private function prepareImport(
+        string $environmentKey,
+        string $settingKey,
+        ?string $environmentValue,
+        SettingsService $settings,
+        SettingDefinitionRegistry $definitions,
+        bool $force,
+    ): array {
+        $definition = $definitions->get($settingKey);
+
+        try {
+            $value = $this->coerce($environmentValue, $definition->type);
+            if ($value !== null) {
+                $definition->assertStorableValue($value);
+            }
+        } catch (\InvalidArgumentException) {
+            return [
+                [$environmentKey, $settingKey, $definition->encrypted ? 'secret' : $definition->type, 'skip invalid'],
+                null,
+                false,
+            ];
+        }
+
+        $existing = $settings->has($settingKey);
+        if ($value === null) {
+            $action = 'skip empty';
+        } elseif ($existing && ! $force) {
+            $action = 'keep existing';
+        } elseif ((bool) $this->option('apply')) {
+            $action = 'import';
+        } else {
+            $action = 'would import';
+        }
+
+        return [
+            [$environmentKey, $settingKey, $definition->encrypted ? 'secret' : $definition->type, $action],
+            $value,
+            $value !== null && (! $existing || $force),
+        ];
     }
 
     private function coerce(?string $value, string $type): mixed

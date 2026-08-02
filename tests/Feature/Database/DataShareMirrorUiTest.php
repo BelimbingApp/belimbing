@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 
+const MIRROR_UI_SBG_EXTENSION_PATH = 'extensions/sbg';
+
 beforeEach(function (): void {
     $catalog = Mockery::mock(DataShareScopeCatalog::class);
     $catalog->shouldReceive('scopes')->zeroOrMoreTimes()->andReturn([]);
@@ -157,7 +159,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_pull_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 0,
@@ -167,7 +169,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_push_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 8,
@@ -177,7 +179,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_equal',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 5,
@@ -197,7 +199,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_blocked_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 0,
@@ -209,7 +211,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
     $component = Livewire::test(DataShareIndex::class)
         ->set('mirrorCatalogLoaded', true)
         ->set('mirrorTables', $tables)
-        ->set('mirrorModulePath', 'extensions/sbg')
+        ->set('mirrorModulePath', MIRROR_UI_SBG_EXTENSION_PATH)
         ->call('chooseMirrorDirection', 'pull')
         ->assertSet('mirrorDirection', 'pull')
         ->assertSee('Select 1 pull candidate')
@@ -247,12 +249,11 @@ it('materializes only visible table names and never auto-selects on module chang
         ->assertSet('mirrorSelectedTables', []);
 });
 
-it('restores a fresh mirror catalog snapshot on page reload and refreshes it only on demand', function (): void {
+it('reads the local mirror catalog afresh on page reload instead of restoring endpoint state', function (): void {
     configureDevelopmentMirrorUiIdentity();
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
-    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
@@ -285,7 +286,10 @@ it('restores a fresh mirror catalog snapshot on page reload and refreshes it onl
         ->assertSet('mirrorRemotePending', false)
         ->assertSet('mirrorTables.0.table', 'ham_orders');
 
-    Livewire::test(DataShareIndex::class) // reload serves the cached enriched snapshot
+    Livewire::test(DataShareIndex::class)
+        ->assertSet('mirrorCatalogLoaded', false)
+        ->assertSet('mirrorTables', [])
+        ->call('dataShareTabSelected', 'mirror')
         ->assertSet('mirrorCatalogLoaded', true)
         ->assertSet('mirrorTables.0.table', 'ham_orders')
         ->call('refreshMirrorCatalog')
@@ -297,7 +301,6 @@ it('excludes permanently protected infrastructure tables from the mirror list', 
     $this->actingAs(createAdminUser());
     $manager = Mockery::mock(DataShareMirrorManager::class);
     $manager->shouldReceive('providerOptions')->zeroOrMoreTimes()->andReturn(['supabase' => 'Supabase']);
-    $manager->shouldReceive('configurationFingerprint')->zeroOrMoreTimes()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('status')->zeroOrMoreTimes()->andReturn(new DataShareMirrorConnectionStatus(
         configured: true,
         available: true,
@@ -359,7 +362,8 @@ it('reviews an exact push payload before executing the same payload and state to
         ->once()
         ->with('push', ['ham_orders'], Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturnUsing(function (string $direction, array $tables, callable $progress) use ($review): DataShareMirrorReview {
+        ->andReturnUsing(function (...$arguments) use ($review): DataShareMirrorReview {
+            $progress = $arguments[2];
             $progress('Reviewing 1/1: ham_orders.');
             $progress('Reviewed 1/1: ham_orders — Create.');
 
@@ -369,7 +373,8 @@ it('reviews an exact push payload before executing the same payload and state to
         ->once()
         ->with('push', ['ham_orders'], 'mirror-review-state', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturnUsing(function (string $direction, array $tables, string $token, callable $progress): DataShareMirrorExecutionResult {
+        ->andReturnUsing(function (...$arguments): DataShareMirrorExecutionResult {
+            $progress = $arguments[3];
             $progress('Applying the selected table.');
 
             return new DataShareMirrorExecutionResult(
@@ -379,7 +384,6 @@ it('reviews an exact push payload before executing the same payload and state to
             );
         });
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)
@@ -478,7 +482,6 @@ it('offers destructive force push for schema blockers but never force pull', fun
         [['table' => 'ham_orders', 'action' => 'replace', 'local_rows' => 1234, 'remote_rows' => 1234]],
     ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     $manager->shouldReceive('review')->once()->with(
         'pull',
         ['ham_orders'],
@@ -606,7 +609,6 @@ it('adds required tables in one review and goes straight to the pull action', fu
             ],
         ));
     $manager->shouldReceive('catalog')->once()->andReturn([]);
-    $manager->shouldReceive('configurationFingerprint')->once()->andReturn('saved-mirror-fingerprint');
     app()->instance(DataShareMirrorManager::class, $manager);
 
     $component = Livewire::test(DataShareIndex::class)
@@ -1615,7 +1617,7 @@ it('tests and saves a replacement URL encrypted and write-only', function (): vo
     app()->instance(DataShareMirrorManager::class, $manager);
     $settings = app(SettingsService::class);
 
-    $component = Livewire::test(DataShareSettingsPage::class)
+    Livewire::test(DataShareSettingsPage::class)
         ->set('values.data_share__mirror__url', $candidateUrl)
         ->call('testMirrorConnection')
         ->assertHasNoErrors()
