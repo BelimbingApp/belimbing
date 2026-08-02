@@ -20,6 +20,8 @@ uses(TestCase::class, RefreshDatabase::class);
 const RCR_PROXY_BASE_URL = 'http://localhost:1337/v1';
 const RCR_PROXY_PROVIDER = 'copilot-proxy';
 const RCR_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+const RCR_OPENAI_BASE_URL = 'https://api.openai.com/v1';
+const RCR_OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
 
 function makeResolver(): RuntimeCredentialResolver
 {
@@ -96,13 +98,13 @@ test('non-proxy providers skip connectivity check', function (): void {
 
     $result = makeResolver()->resolve([
         'api_key' => 'sk-test',
-        'base_url' => 'https://api.openai.com/v1',
+        'base_url' => RCR_OPENAI_BASE_URL,
         'provider_name' => 'openai',
     ]);
 
     expect($result)
         ->toHaveKey('api_key', 'sk-test')
-        ->toHaveKey('base_url', 'https://api.openai.com/v1')
+        ->toHaveKey('base_url', RCR_OPENAI_BASE_URL)
         ->toHaveKey('headers', [])
         ->not->toHaveKey('runtime_error');
 
@@ -291,7 +293,7 @@ test('expiring codex credentials that fail refresh mark the provider expired', f
 });
 
 test('local provider can target loopback but not cloud metadata endpoints', function (): void {
-    createRcrProvider(RCR_PROXY_PROVIDER, 'http://127.0.0.1:11434', authType: AuthType::Local);
+    createRcrProvider(RCR_PROXY_PROVIDER, RCR_OLLAMA_BASE_URL, authType: AuthType::Local);
 
     Http::fake([
         '127.0.0.1:11434/models' => Http::response(['data' => []], 200),
@@ -300,12 +302,12 @@ test('local provider can target loopback but not cloud metadata endpoints', func
     // Loopback URL — allowed for local providers.
     $result = makeResolver()->resolve([
         'api_key' => 'not-required',
-        'base_url' => 'http://127.0.0.1:11434',
+        'base_url' => RCR_OLLAMA_BASE_URL,
         'provider_name' => RCR_PROXY_PROVIDER,
     ]);
 
     expect($result)
-        ->toHaveKey('base_url', 'http://127.0.0.1:11434')
+        ->toHaveKey('base_url', RCR_OLLAMA_BASE_URL)
         ->not()->toHaveKey('runtime_error');
 });
 
@@ -344,13 +346,13 @@ test('non-local provider accepts safe public URL', function (): void {
 
     $result = makeResolver()->resolve([
         'api_key' => 'sk-test',
-        'base_url' => 'https://api.openai.com/v1',
+        'base_url' => RCR_OPENAI_BASE_URL,
         'provider_name' => 'openai',
     ]);
 
     expect($result)
         ->toHaveKey('api_key', 'sk-test')
-        ->toHaveKey('base_url', 'https://api.openai.com/v1')
+        ->toHaveKey('base_url', RCR_OPENAI_BASE_URL)
         ->not()->toHaveKey('runtime_error');
 
     Http::assertNothingSent();

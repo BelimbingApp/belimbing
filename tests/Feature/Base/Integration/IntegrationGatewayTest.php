@@ -11,6 +11,8 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\RequestInterface;
 
+const INTEGRATION_REDACTED_VALUE = '[redacted]';
+
 it('uses a portable CA bundle for verified outbound TLS', function (): void {
     $optionsSeen = [];
     Http::globalOptions([
@@ -79,14 +81,14 @@ it('records successful external exchanges', function (): void {
         ->and($exchange->metadata['http_method'])->toBe('POST')
         ->and($exchange->outcome)->toBe('success')
         ->and($exchange->response_status)->toBe(200)
-        ->and($exchange->request_headers['Authorization'])->toBe('[redacted]')
+        ->and($exchange->request_headers['Authorization'])->toBe(INTEGRATION_REDACTED_VALUE)
         ->and($exchange->request_headers['X-Trace'])->toBe('trace-1')
         // Secrets are redacted regardless of case or separators, on both sides.
-        ->and($exchange->request_body['value']['api_key'])->toBe('[redacted]')
-        ->and($exchange->request_body['value']['APIKey'])->toBe('[redacted]')
-        ->and($exchange->request_body['value']['XAuthToken'])->toBe('[redacted]')
-        ->and($exchange->response_body['value']['access_token'])->toBe('[redacted]')
-        ->and($exchange->response_body['value']['APIKey'])->toBe('[redacted]')
+        ->and($exchange->request_body['value']['api_key'])->toBe(INTEGRATION_REDACTED_VALUE)
+        ->and($exchange->request_body['value']['APIKey'])->toBe(INTEGRATION_REDACTED_VALUE)
+        ->and($exchange->request_body['value']['XAuthToken'])->toBe(INTEGRATION_REDACTED_VALUE)
+        ->and($exchange->response_body['value']['access_token'])->toBe(INTEGRATION_REDACTED_VALUE)
+        ->and($exchange->response_body['value']['APIKey'])->toBe(INTEGRATION_REDACTED_VALUE)
         // Non-secret payload stays readable, or the log loses its purpose.
         ->and($exchange->request_body['value']['prompt'])->toBe('hello')
         ->and($exchange->response_body['value']['data'][0]['id'])->toBe('alpha');

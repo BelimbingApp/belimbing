@@ -42,7 +42,7 @@ final class ArtisanCommandLine
                 continue;
             }
 
-            if ($char === '"' || $char === "'") {
+            if (in_array($char, ['"', "'"], true)) {
                 $quote = $char;
                 $started = true;
 

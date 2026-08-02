@@ -6,11 +6,12 @@ use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorBlocker;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorCatalogTable;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorProgress;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReview;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewContext;
 use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewItem;
+use App\Base\Database\DTO\DataShare\Mirror\DataShareMirrorReviewPrerequisites;
 use App\Base\Database\Enums\DataShareMirrorAction;
 use App\Base\Database\Enums\DataShareMirrorDirection;
 use App\Base\Database\Exceptions\DataShareMirrorException;
-use Illuminate\Database\Connection;
 
 class DataShareMirrorReviewer
 {
@@ -69,6 +70,23 @@ class DataShareMirrorReviewer
         }
         $selected = array_fill_keys($selectedTables, true);
         $portableOrder = $portable ? $this->dependencies->insertionOrder($source, $selectedTables) : $selectedTables;
+        $context = new DataShareMirrorReviewContext(
+            $direction,
+            $source,
+            $target,
+            $portable,
+            $portableOrder,
+            $selected,
+            new DataShareMirrorReviewPrerequisites(
+                $sourceForeignKeys,
+                $targetForeignKeys,
+                $targetUniqueKeys,
+                $sourceTypes,
+                $targetTypes,
+                $sourceFunctions,
+                $targetFunctions,
+            ),
+        );
         $items = [];
         $schemaFingerprints = [];
         $total = count($selectedTables);
@@ -80,7 +98,7 @@ class DataShareMirrorReviewer
                 'total' => $total,
                 'table' => $tableName,
             ]));
-            [$item, $fingerprint] = $this->reviewTable($direction, $tableName, $catalog, $source, $target, $portable, $portableOrder, $selected, $sourceForeignKeys, $targetForeignKeys, $targetUniqueKeys, $sourceTypes, $targetTypes, $sourceFunctions, $targetFunctions);
+            [$item, $fingerprint] = $this->reviewTable($tableName, $catalog, $context);
             $items[] = $item;
             $schemaFingerprints[] = $fingerprint;
             $progress->report((string) ($item->blockers === []
@@ -130,46 +148,46 @@ class DataShareMirrorReviewer
     }
 
     /** @return array{0: DataShareMirrorReviewItem, 1: array{source: ?string, target: ?string}} */
-    private function reviewTable(DataShareMirrorDirection $direction, string $tableName, array $catalog, Connection $source, Connection $target, bool $portable, ?array $portableOrder, array $selected, array $sourceForeignKeys, array $targetForeignKeys, array $targetUniqueKeys, array $sourceTypes, array $targetTypes, array $sourceFunctions, array $targetFunctions): array
+    private function reviewTable(string $tableName, array $catalog, DataShareMirrorReviewContext $context): array
     {
         /** @var DataShareMirrorCatalogTable $table */
         $table = $catalog[$tableName];
-        [$sourceExists, $targetExists] = $direction === DataShareMirrorDirection::Push ? [$table->localExists, $table->mirrorExists] : [$table->mirrorExists, $table->localExists];
+        [$sourceExists, $targetExists] = $context->direction === DataShareMirrorDirection::Push ? [$table->localExists, $table->mirrorExists] : [$table->mirrorExists, $table->localExists];
         $action = match (true) {
             $sourceExists && $targetExists => DataShareMirrorAction::Replace, $sourceExists => DataShareMirrorAction::Create, $targetExists => DataShareMirrorAction::Delete, default => DataShareMirrorAction::Blocked
         };
         $blockers = array_merge(
             $table->blockers,
-            $this->tableBlockers($table, $tableName, $source, $target, $portable, $portableOrder, $sourceExists, $targetExists),
-            $targetExists ? $this->incomingDependencyBlockers($tableName, $selected, $targetForeignKeys) : [],
-            $sourceExists ? $this->sourcePrerequisiteBlockers($direction, $tableName, $catalog, $selected, $sourceForeignKeys, $targetUniqueKeys) : [],
-            $sourceExists ? $this->databaseObjectBlockers($tableName, $sourceTypes, $targetTypes, $sourceFunctions, $targetFunctions) : [],
+            $this->tableBlockers($table, $tableName, $context, $sourceExists, $targetExists),
+            $targetExists ? $this->incomingDependencyBlockers($tableName, $context->selected, $context->prerequisites->targetForeignKeys) : [],
+            $sourceExists ? $this->sourcePrerequisiteBlockers($tableName, $catalog, $context) : [],
+            $sourceExists ? $this->databaseObjectBlockers($tableName, $context) : [],
         );
         $blockers = $this->uniqueBlockers($blockers);
 
         return [
             new DataShareMirrorReviewItem($tableName, $blockers === [] ? $action : DataShareMirrorAction::Blocked, $action, $blockers),
-            ['source' => $source->getSchemaBuilder()->hasTable($tableName) ? $this->schemas->fingerprint($source, $tableName) : null, 'target' => $target->getSchemaBuilder()->hasTable($tableName) ? $this->schemas->fingerprint($target, $tableName) : null],
+            ['source' => $context->source->getSchemaBuilder()->hasTable($tableName) ? $this->schemas->fingerprint($context->source, $tableName) : null, 'target' => $context->target->getSchemaBuilder()->hasTable($tableName) ? $this->schemas->fingerprint($context->target, $tableName) : null],
         ];
     }
 
     /** @return list<DataShareMirrorBlocker> */
-    private function tableBlockers(DataShareMirrorCatalogTable $table, string $name, Connection $source, Connection $target, bool $portable, ?array $portableOrder, bool $sourceExists, bool $targetExists): array
+    private function tableBlockers(DataShareMirrorCatalogTable $table, string $name, DataShareMirrorReviewContext $context, bool $sourceExists, bool $targetExists): array
     {
         $blockers = [];
         if (! $sourceExists && ! $targetExists) {
             $blockers[] = new DataShareMirrorBlocker('table_missing', __('Registered table is missing on both endpoints.'));
         }
-        if ($portable && $sourceExists !== $targetExists) {
+        if ($context->portable && $sourceExists !== $targetExists) {
             $blockers[] = new DataShareMirrorBlocker('schema_missing_at_endpoint', __('Table must exist on both endpoints. Run matching application migrations first.'));
         }
-        if ($portable && $sourceExists && $targetExists && ! $this->schemas->compatible($source, $target, $name)) {
+        if ($context->portable && $sourceExists && $targetExists && ! $this->schemas->compatible($context->source, $context->target, $name)) {
             $blockers[] = new DataShareMirrorBlocker('schema_incompatible', __('Columns, keys, or foreign keys differ between endpoints. Align migrations first.'));
         }
-        if ($portable && $sourceExists && $this->schemas->primaryKey($source, $name) === []) {
+        if ($context->portable && $sourceExists && $this->schemas->primaryKey($context->source, $name) === []) {
             $blockers[] = new DataShareMirrorBlocker('primary_key_required', __('A declared primary key is required for deterministic portable verification.'));
         }
-        if ($portable && $portableOrder === null) {
+        if ($context->portable && $context->portableOrder === null) {
             $blockers[] = new DataShareMirrorBlocker('foreign_key_cycle', __('The selected tables contain a foreign-key cycle. Portable mirroring requires an acyclic selection.'));
         }
         if ($sourceExists && ! $this->catalog->isMigrationAvailable($table)) {
@@ -193,25 +211,23 @@ class DataShareMirrorReviewer
     }
 
     /** @return list<DataShareMirrorBlocker> */
-    private function sourcePrerequisiteBlockers(DataShareMirrorDirection $direction, string $name, array $catalog, array $selected, array $foreignKeys, array $uniqueKeys): array
+    private function sourcePrerequisiteBlockers(string $name, array $catalog, DataShareMirrorReviewContext $context): array
     {
         $blockers = [];
-        foreach ($foreignKeys as $key) {
+        foreach ($context->prerequisites->sourceForeignKeys as $key) {
             if ($key['child'] !== $name) {
                 continue;
             }
             $parent = $key['parent'];
             $parentTable = $catalog[$parent] ?? null;
-            if (isset($selected[$parent])) {
-                $exists = $parentTable instanceof DataShareMirrorCatalogTable && ($direction === DataShareMirrorDirection::Push ? $parentTable->localExists : $parentTable->mirrorExists);
-                if (! $exists) {
+            if (isset($context->selected[$parent])) {
+                if (! $this->sourceTableExists($parentTable, $context->direction)) {
                     $blockers[] = new DataShareMirrorBlocker('selected_parent_missing', __('Selected parent :parent is missing at the source.', ['parent' => $parent]), relatedTable: $parent);
                 }
 
                 continue;
             }
-            $exists = $parentTable instanceof DataShareMirrorCatalogTable && ($direction === DataShareMirrorDirection::Push ? $parentTable->mirrorExists : $parentTable->localExists);
-            if (! $exists || ! isset($uniqueKeys[$parent][$key['parent_columns']])) {
+            if (! $this->destinationPrerequisiteExists($parentTable, $parent, $key['parent_columns'], $context->direction, $context->prerequisites->targetUniqueKeys)) {
                 $blockers[] = new DataShareMirrorBlocker('missing_parent_prerequisite', __('Destination prerequisite :parent (:columns) is missing or incompatible.', ['parent' => $parent, 'columns' => $key['parent_columns']]), relatedTable: $parent);
             }
         }
@@ -220,16 +236,16 @@ class DataShareMirrorReviewer
     }
 
     /** @return list<DataShareMirrorBlocker> */
-    private function databaseObjectBlockers(string $name, array $sourceTypes, array $targetTypes, array $sourceFunctions, array $targetFunctions): array
+    private function databaseObjectBlockers(string $name, DataShareMirrorReviewContext $context): array
     {
         $blockers = [];
-        foreach ($sourceTypes[$name] ?? [] as $type) {
-            if (! isset($targetTypes[$type])) {
+        foreach ($context->prerequisites->sourceTypes[$name] ?? [] as $type) {
+            if (! isset($context->prerequisites->targetTypes[$type])) {
                 $blockers[] = new DataShareMirrorBlocker('missing_custom_type', __('Destination type :type is missing.', ['type' => $type]));
             }
         }
-        foreach ($sourceFunctions[$name] ?? [] as $function) {
-            if (! isset($targetFunctions[$function])) {
+        foreach ($context->prerequisites->sourceFunctions[$name] ?? [] as $function) {
+            if (! isset($context->prerequisites->targetFunctions[$function])) {
                 $blockers[] = new DataShareMirrorBlocker('missing_function', __('Destination function :function is missing.', ['function' => $function]));
             }
         }
@@ -315,23 +331,16 @@ class DataShareMirrorReviewer
         foreach ($foreignKeys as $key) {
             $child = $key['child'];
             $parent = $key['parent'];
-            if (! isset($selected[$child])) {
-                continue;
-            }
             $childTable = $catalog[$child] ?? null;
-            $childExists = $childTable instanceof DataShareMirrorCatalogTable && ($direction === DataShareMirrorDirection::Push ? $childTable->localExists : $childTable->mirrorExists);
-            if (! $childExists) {
+            if (! isset($selected[$child]) || ! $this->sourceTableExists($childTable, $direction)) {
                 continue;
             }
             $parentTable = $catalog[$parent] ?? null;
-            $parentExists = $parentTable instanceof DataShareMirrorCatalogTable && ($direction === DataShareMirrorDirection::Push ? $parentTable->mirrorExists : $parentTable->localExists);
-            if ($parentExists && isset($uniqueKeys[$parent][$key['parent_columns']])) {
+            if ($this->destinationPrerequisiteExists($parentTable, $parent, $key['parent_columns'], $direction, $uniqueKeys)) {
                 continue;
             }
             if (isset($selected[$parent])) {
-                if (! isset($requested[$parent])) {
-                    $requiredBy[$parent][$child] = true;
-                }
+                $this->recordRequiredBy($parent, $child, $requested, $requiredBy);
 
                 continue;
             }
@@ -344,6 +353,27 @@ class DataShareMirrorReviewer
         }
 
         return $changed;
+    }
+
+    private function sourceTableExists(mixed $table, DataShareMirrorDirection $direction): bool
+    {
+        return $table instanceof DataShareMirrorCatalogTable
+            && ($direction === DataShareMirrorDirection::Push ? $table->localExists : $table->mirrorExists);
+    }
+
+    private function destinationPrerequisiteExists(mixed $table, string $name, string $columns, DataShareMirrorDirection $direction, array $uniqueKeys): bool
+    {
+        $exists = $table instanceof DataShareMirrorCatalogTable
+            && ($direction === DataShareMirrorDirection::Push ? $table->mirrorExists : $table->localExists);
+
+        return $exists && isset($uniqueKeys[$name][$columns]);
+    }
+
+    private function recordRequiredBy(string $table, string $dependency, array $requested, array &$requiredBy): void
+    {
+        if (! isset($requested[$table])) {
+            $requiredBy[$table][$dependency] = true;
+        }
     }
 
     private function isSelectableRequiredTable(mixed $table): bool
