@@ -78,41 +78,41 @@ if ($instance->role->value === 'development') {
                 </p>
 
                 <dl class="mt-4 grid gap-x-8 gap-y-4 sm:grid-cols-2">
-                    <div class="flex gap-3">
-                        <x-icon name="heroicon-o-share" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                        <div>
-                            <dt class="text-sm font-medium">{{ __('Share & Published') }}</dt>
-                            <dd class="mt-0.5 text-sm leading-5 text-muted">
-                                {{ __('Create an immutable, expiring offer from selected tables. Copy or revoke active offers in Published.') }}
-                            </dd>
-                        </div>
+                    <div>
+                        <dt class="flex items-center gap-3 text-sm font-medium">
+                            <x-icon name="heroicon-o-share" class="h-4 w-4 shrink-0 text-accent" />
+                            {{ __('Share & Published') }}
+                        </dt>
+                        <dd class="mt-0.5 pl-7 text-sm leading-5 text-muted">
+                            {{ __('Create an immutable, expiring offer from selected tables. Copy or revoke active offers in Published.') }}
+                        </dd>
                     </div>
-                    <div class="flex gap-3">
-                        <x-icon name="heroicon-o-arrows-right-left" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                        <div>
-                            <dt class="text-sm font-medium">{{ __('Mirror') }}</dt>
-                            <dd class="mt-0.5 text-sm leading-5 text-muted">
-                                {{ __('Development only. Copy complete selected tables directly between Local and a configured PostgreSQL mirror.') }}
-                            </dd>
-                        </div>
+                    <div>
+                        <dt class="flex items-center gap-3 text-sm font-medium">
+                            <x-icon name="heroicon-o-arrows-right-left" class="h-4 w-4 shrink-0 text-accent" />
+                            {{ __('Mirror') }}
+                        </dt>
+                        <dd class="mt-0.5 pl-7 text-sm leading-5 text-muted">
+                            {{ __('Development only. Copy complete selected tables directly between Local and a configured PostgreSQL mirror.') }}
+                        </dd>
                     </div>
-                    <div class="flex gap-3">
-                        <x-icon name="heroicon-o-inbox-arrow-down" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                        <div>
-                            <dt class="text-sm font-medium">{{ __('Incoming') }}</dt>
-                            <dd class="mt-0.5 text-sm leading-5 text-muted">
-                                {{ __('Paste an offer from another instance, verify and fetch it, review conflicts, then apply it.') }}
-                            </dd>
-                        </div>
+                    <div>
+                        <dt class="flex items-center gap-3 text-sm font-medium">
+                            <x-icon name="heroicon-o-inbox-arrow-down" class="h-4 w-4 shrink-0 text-accent" />
+                            {{ __('Incoming') }}
+                        </dt>
+                        <dd class="mt-0.5 pl-7 text-sm leading-5 text-muted">
+                            {{ __('Paste an offer from another instance, verify and fetch it, review conflicts, then apply it.') }}
+                        </dd>
                     </div>
-                    <div class="flex gap-3">
-                        <x-icon name="heroicon-o-wrench-screwdriver" class="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                        <div>
-                            <dt class="text-sm font-medium">{{ __('Diagnostics') }}</dt>
-                            <dd class="mt-0.5 text-sm leading-5 text-muted">
-                                {{ __('Capture a small set of rows to reproduce development problems. This is not a bulk transfer.') }}
-                            </dd>
-                        </div>
+                    <div>
+                        <dt class="flex items-center gap-3 text-sm font-medium">
+                            <x-icon name="heroicon-o-wrench-screwdriver" class="h-4 w-4 shrink-0 text-accent" />
+                            {{ __('Diagnostics') }}
+                        </dt>
+                        <dd class="mt-0.5 pl-7 text-sm leading-5 text-muted">
+                            {{ __('Capture a small set of rows to reproduce development problems. This is not a bulk transfer.') }}
+                        </dd>
                     </div>
                 </dl>
 

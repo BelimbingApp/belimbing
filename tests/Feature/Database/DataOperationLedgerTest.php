@@ -134,10 +134,10 @@ it('rejects summary writes and resume after a run is terminal', function () {
 it('refuses to resume a run that does not exist', function () {
     $recorder = app(DataOperationRecorder::class);
 
-    expect(fn () => $recorder->resume(999999))->toThrow(RuntimeException::class);
+    expect(fn () => $recorder->resume(999999))->toThrow(DataOperationException::class);
 
     $runId = $recorder->open(DataOperationType::AxImport->value);
-    expect(fn () => $recorder->resume($runId))->not->toThrow(RuntimeException::class);
+    expect(fn () => $recorder->resume($runId))->not->toThrow(DataOperationException::class);
 });
 
 it('permanently protects the ledger tables from mirroring', function () {

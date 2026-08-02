@@ -83,35 +83,20 @@ final class IncubatingMigrationFiles
                     continue;
                 }
 
-                if ($token[0] === T_USE
-                    && $classDepths !== []
-                    && $this->traitUseIncludesIncubatingSchema($tokens, $index)) {
+                if ($this->tokenUsesIncubatingSchema($token, $classDepths, $tokens, $index)) {
                     return true;
                 }
 
                 continue;
             }
 
-            if ($token === '{') {
-                $braceDepth++;
-
-                if ($awaitingClassBody) {
-                    $classDepths[] = $braceDepth;
-                    $awaitingClassBody = false;
-                }
-
-                continue;
-            }
-
             if ($token !== '}') {
+                $this->trackOpeningBrace($token, $braceDepth, $classDepths, $awaitingClassBody);
+
                 continue;
             }
 
-            if ($classDepths !== [] && end($classDepths) === $braceDepth) {
-                array_pop($classDepths);
-            }
-
-            $braceDepth--;
+            $this->trackClosingBrace($braceDepth, $classDepths);
         }
 
         return false;
@@ -156,7 +141,7 @@ final class IncubatingMigrationFiles
 
             $literal = $this->literalString($tokens[$tableName][1]);
 
-            if ($literal !== null && preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/D', $literal) === 1) {
+            if ($literal !== null && preg_match('/^[A-Za-z_]\w*$/D', $literal) === 1) {
                 $tables[] = $literal;
             }
         }
@@ -203,6 +188,47 @@ final class IncubatingMigrationFiles
         }
 
         return array_keys($references);
+    }
+
+    /**
+     * @param  array{0: int, 1: string, 2?: int}  $token
+     * @param  list<int>  $classDepths
+     * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
+     */
+    private function tokenUsesIncubatingSchema(array $token, array $classDepths, array $tokens, int $index): bool
+    {
+        return $token[0] === T_USE
+            && $classDepths !== []
+            && $this->traitUseIncludesIncubatingSchema($tokens, $index);
+    }
+
+    /**
+     * @param  list<int>  $classDepths
+     */
+    private function trackOpeningBrace(string $token, int &$braceDepth, array &$classDepths, bool &$awaitingClassBody): void
+    {
+        if ($token !== '{') {
+            return;
+        }
+
+        $braceDepth++;
+
+        if ($awaitingClassBody) {
+            $classDepths[] = $braceDepth;
+            $awaitingClassBody = false;
+        }
+    }
+
+    /**
+     * @param  list<int>  $classDepths
+     */
+    private function trackClosingBrace(int &$braceDepth, array &$classDepths): void
+    {
+        if ($classDepths !== [] && end($classDepths) === $braceDepth) {
+            array_pop($classDepths);
+        }
+
+        $braceDepth--;
     }
 
     /**

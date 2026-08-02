@@ -38,12 +38,15 @@ class LandingPageResolver
 
         $userId = method_exists($user, 'getKey') ? $user->getKey() : null;
         $companyId = method_exists($user, 'getCompanyId') ? $user->getCompanyId() : null;
-        $preference = is_numeric($userId)
-            ? $this->settings->get(
+        $companyScopeId = is_numeric($companyId) ? (int) $companyId : null;
+        if (is_numeric($userId)) {
+            $preference = $this->settings->get(
                 self::SETTING_KEY,
-                Scope::user((int) $userId, is_numeric($companyId) ? (int) $companyId : null),
-            )
-            : null;
+                Scope::user((int) $userId, $companyScopeId),
+            );
+        } else {
+            $preference = null;
+        }
 
         if (is_string($preference) && isset($options[$preference]['href'])) {
             return $options[$preference]['href'];

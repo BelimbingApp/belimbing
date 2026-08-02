@@ -5,7 +5,6 @@ namespace App\Base\Database\Services;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Exceptions\IncubatingSchemaConflictException;
 use App\Base\Database\Exceptions\IncubatingSchemaDependencyException;
-use App\Base\Database\Models\SeederRegistry;
 use App\Base\Database\Models\TableRegistry;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -14,6 +13,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 {
     public function __construct(
         private readonly IncubatingMigrationFiles $migrationFiles,
+        private readonly IncubatingSchemaRegistry $registry,
         private readonly IncubatingSchemaTableClassifier $tableClassifier,
         private readonly IncubatingSchemaTableDropper $tableDropper,
     ) {}
@@ -77,7 +77,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             return ['files' => [], 'tables' => [], 'cascaded' => [], 'migrations' => [], 'seeders_reset' => 0];
         }
 
-        $this->assertLiveTableOwnership($incubating);
+        $this->registry->assertLiveTableOwnership($incubating);
 
         $tables = $this->liveTablesDeclaredBy($incubating);
         $incubatingTables = $tables;
@@ -93,7 +93,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $cascaded = [];
 
         if ($tables !== []) {
-            $foreignKeysByTable = $this->tableDropper->foreignKeysByTable($this->liveTableNames());
+            $foreignKeysByTable = $this->tableDropper->foreignKeysByTable($this->registry->liveTableNames());
             $scope = $this->expandedRebuildScope(
                 $tables,
                 $migrationFiles,
@@ -120,7 +120,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             DB::table('migrations')->whereIn('migration', $deletedMigrations)->delete();
         }
 
-        $seedersReset = $this->resetSeedersForFiles($migrationFiles);
+        $seedersReset = $this->registry->resetSeedersForFiles($migrationFiles);
 
         return [
             'files' => array_map(fn (array $migration): string => $migration['relative_path'], $incubating),
@@ -173,24 +173,9 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     private function declaredTables(string $migrationFile, string $contents): array
     {
         return array_values(array_unique(array_merge(
-            $this->registeredTablesForMigrationFile($migrationFile),
+            $this->registry->tablesForMigrationFile($migrationFile),
             $this->parsedCreatedTables($contents),
         )));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function registeredTablesForMigrationFile(string $migrationFile): array
-    {
-        if (! Schema::hasTable('base_database_tables')) {
-            return [];
-        }
-
-        return TableRegistry::query()
-            ->where('migration_file', $migrationFile)
-            ->pluck('table_name')
-            ->all();
     }
 
     /**
@@ -199,61 +184,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     private function parsedCreatedTables(string $contents): array
     {
         return $this->migrationFiles->createdTables($contents);
-    }
-
-    /**
-     * Refuse before the first drop when an incubating migration merely names
-     * an existing table owned by different stable source. Unregistered live
-     * tables are accepted only when this migration is already applied, which
-     * preserves older migrations whose registry provenance predates BLB's
-     * table registry.
-     *
-     * @param  list<array{file: string, migration_name: string, tables: list<string>}>  $migrations
-     */
-    private function assertLiveTableOwnership(array $migrations): void
-    {
-        $live = array_fill_keys($this->liveTableNames(), true);
-        $declaredTables = array_values(array_unique(array_merge(...array_map(
-            fn (array $migration): array => $migration['tables'],
-            $migrations,
-        ))));
-        $owners = Schema::hasTable('base_database_tables')
-            ? TableRegistry::query()
-                ->whereIn('table_name', $declaredTables)
-                ->pluck('migration_file', 'table_name')
-                ->all()
-            : [];
-        $applied = DB::table('migrations')
-            ->whereIn('migration', array_column($migrations, 'migration_name'))
-            ->pluck('migration')
-            ->flip()
-            ->all();
-        $conflicts = [];
-
-        foreach ($migrations as $migration) {
-            foreach ($migration['tables'] as $table) {
-                if (! isset($live[$table])) {
-                    continue;
-                }
-
-                $owner = $owners[$table] ?? null;
-
-                if ($owner === $migration['file']
-                    || ($owner === null && isset($applied[$migration['migration_name']]))) {
-                    continue;
-                }
-
-                $conflicts[] = [
-                    'table' => $table,
-                    'declared_by' => $migration['file'],
-                    'owned_by' => is_string($owner) && $owner !== '' ? $owner : null,
-                ];
-            }
-        }
-
-        if ($conflicts !== []) {
-            throw IncubatingSchemaConflictException::forLiveTableOwnership($conflicts);
-        }
     }
 
     /**
@@ -270,18 +200,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
 
         $declared = array_values(array_unique($declared));
 
-        return array_values(array_intersect($declared, $this->liveTableNames()));
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function liveTableNames(): array
-    {
-        return array_map(
-            fn (array $table): string => $table['name'],
-            Schema::getTables(),
-        );
+        return array_values(array_intersect($declared, $this->registry->liveTableNames()));
     }
 
     /**
@@ -312,53 +231,91 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $fileSet = array_fill_keys($migrationFiles, true);
 
         do {
-            $changed = false;
-
-            foreach ($this->liveTablesForMigrationFiles(array_keys($fileSet)) as $table) {
-                if (isset($tableSet[$table])) {
-                    continue;
-                }
-
-                $tables[] = $table;
-                $tableSet[$table] = true;
-                $changed = true;
-            }
+            $changed = $this->addSiblingTables($tables, $tableSet, $fileSet);
 
             $dependents = $this->resolveDependentRebuilds(array_keys($tableSet), $foreignKeysByTable);
+            $changed = $this->addDependentTables($dependents, $tables, $tableSet, $migrationFiles, $fileSet) || $changed;
 
-            foreach ($dependents as $table => $file) {
-                if (! isset($tableSet[$table])) {
-                    $tables[] = $table;
-                    $tableSet[$table] = true;
-                    $changed = true;
-                }
-
-                if (! isset($fileSet[$file])) {
-                    $migrationFiles[] = $file;
-                    $fileSet[$file] = true;
-                    $changed = true;
-                }
-            }
-
-            foreach ($this->resolveAppliedForwardMigrations(
+            $forwardFiles = $this->resolveAppliedForwardMigrations(
                 array_keys($tableSet),
                 array_keys($fileSet),
                 $appliedMigrationSources,
-            ) as $file) {
-                if (isset($fileSet[$file])) {
-                    continue;
-                }
-
-                $migrationFiles[] = $file;
-                $fileSet[$file] = true;
-                $changed = true;
-            }
+            );
+            $changed = $this->addMigrationFiles($forwardFiles, $migrationFiles, $fileSet) || $changed;
         } while ($changed);
 
         return [
             'tables' => $tables,
             'migration_files' => $migrationFiles,
         ];
+    }
+
+    /**
+     * @param  list<string>  $tables
+     * @param  array<string, true>  $tableSet
+     * @param  array<string, true>  $fileSet
+     */
+    private function addSiblingTables(array &$tables, array &$tableSet, array $fileSet): bool
+    {
+        $changed = false;
+
+        foreach ($this->registry->liveTablesForMigrationFiles(array_keys($fileSet)) as $table) {
+            if (! isset($tableSet[$table])) {
+                $tables[] = $table;
+                $tableSet[$table] = true;
+                $changed = true;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param  array<string, string>  $dependents
+     * @param  list<string>  $tables
+     * @param  array<string, true>  $tableSet
+     * @param  list<string>  $migrationFiles
+     * @param  array<string, true>  $fileSet
+     */
+    private function addDependentTables(array $dependents, array &$tables, array &$tableSet, array &$migrationFiles, array &$fileSet): bool
+    {
+        $changed = false;
+
+        foreach ($dependents as $table => $file) {
+            if (! isset($tableSet[$table])) {
+                $tables[] = $table;
+                $tableSet[$table] = true;
+                $changed = true;
+            }
+
+            if (! isset($fileSet[$file])) {
+                $migrationFiles[] = $file;
+                $fileSet[$file] = true;
+                $changed = true;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param  list<string>  $files
+     * @param  list<string>  $migrationFiles
+     * @param  array<string, true>  $fileSet
+     */
+    private function addMigrationFiles(array $files, array &$migrationFiles, array &$fileSet): bool
+    {
+        $changed = false;
+
+        foreach ($files as $file) {
+            if (! isset($fileSet[$file])) {
+                $migrationFiles[] = $file;
+                $fileSet[$file] = true;
+                $changed = true;
+            }
+        }
+
+        return $changed;
     }
 
     /**
@@ -374,7 +331,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             return [];
         }
 
-        $rebuildable = $this->migrationFilesForTables($dependents);
+        $rebuildable = $this->registry->migrationFilesForTables($dependents);
         $unrebuildable = array_values(array_diff($dependents, array_keys($rebuildable)));
         $nonIncubating = array_keys(array_filter(
             $rebuildable,
@@ -553,76 +510,6 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         }
 
         return $dependencies;
-    }
-
-    /**
-     * Map live tables to their owning migration file via the registry, keeping
-     * only those with a known, non-empty migration file.
-     *
-     * @param  list<string>  $tables
-     * @return array<string, string>
-     */
-    private function migrationFilesForTables(array $tables): array
-    {
-        if ($tables === [] || ! Schema::hasTable('base_database_tables')) {
-            return [];
-        }
-
-        return TableRegistry::query()
-            ->whereIn('table_name', $tables)
-            ->whereNotNull('migration_file')
-            ->where('migration_file', '!=', '')
-            ->pluck('migration_file', 'table_name')
-            ->all();
-    }
-
-    /**
-     * A migration record is the coherent rerun unit. If one table from a
-     * multi-table migration must be rebuilt, every live table owned by that
-     * migration must be dropped too, otherwise the rerun would collide with
-     * sibling tables left behind.
-     *
-     * @param  list<string>  $migrationFiles
-     * @return list<string>
-     */
-    private function liveTablesForMigrationFiles(array $migrationFiles): array
-    {
-        if ($migrationFiles === [] || ! Schema::hasTable('base_database_tables')) {
-            return [];
-        }
-
-        $live = array_fill_keys($this->liveTableNames(), true);
-
-        return TableRegistry::query()
-            ->whereIn('migration_file', array_values(array_unique($migrationFiles)))
-            ->pluck('table_name')
-            ->filter(fn (string $table): bool => isset($live[$table]))
-            ->values()
-            ->all();
-    }
-
-    /**
-     * @param  list<string>  $migrationFiles
-     */
-    private function resetSeedersForFiles(array $migrationFiles): int
-    {
-        if (! Schema::hasTable('base_database_seeders')) {
-            return 0;
-        }
-
-        $migrationFiles = array_values(array_unique($migrationFiles));
-
-        if ($migrationFiles === []) {
-            return 0;
-        }
-
-        return SeederRegistry::query()
-            ->whereIn('migration_file', $migrationFiles)
-            ->update([
-                'status' => SeederRegistry::STATUS_PENDING,
-                'ran_at' => null,
-                'error_message' => null,
-            ]);
     }
 
     private function relativeBasePath(string $absolutePath): string

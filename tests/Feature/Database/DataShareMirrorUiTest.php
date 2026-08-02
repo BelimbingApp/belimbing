@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 
+const MIRROR_UI_SBG_EXTENSION_PATH = 'extensions/sbg';
+
 beforeEach(function (): void {
     $catalog = Mockery::mock(DataShareScopeCatalog::class);
     $catalog->shouldReceive('scopes')->zeroOrMoreTimes()->andReturn([]);
@@ -157,7 +159,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_pull_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 0,
@@ -167,7 +169,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_push_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 8,
@@ -177,7 +179,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_equal',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 5,
@@ -197,7 +199,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'sbg_blocked_candidate',
             'module_name' => 'Sbg',
-            'module_path' => 'extensions/sbg',
+            'module_path' => MIRROR_UI_SBG_EXTENSION_PATH,
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 0,
@@ -209,7 +211,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
     $component = Livewire::test(DataShareIndex::class)
         ->set('mirrorCatalogLoaded', true)
         ->set('mirrorTables', $tables)
-        ->set('mirrorModulePath', 'extensions/sbg')
+        ->set('mirrorModulePath', MIRROR_UI_SBG_EXTENSION_PATH)
         ->call('chooseMirrorDirection', 'pull')
         ->assertSet('mirrorDirection', 'pull')
         ->assertSee('Select 1 pull candidate')
@@ -360,7 +362,8 @@ it('reviews an exact push payload before executing the same payload and state to
         ->once()
         ->with('push', ['ham_orders'], Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturnUsing(function (string $direction, array $tables, callable $progress) use ($review): DataShareMirrorReview {
+        ->andReturnUsing(function (...$arguments) use ($review): DataShareMirrorReview {
+            $progress = $arguments[2];
             $progress('Reviewing 1/1: ham_orders.');
             $progress('Reviewed 1/1: ham_orders — Create.');
 
@@ -370,7 +373,8 @@ it('reviews an exact push payload before executing the same payload and state to
         ->once()
         ->with('push', ['ham_orders'], 'mirror-review-state', Mockery::on(fn (mixed $progress): bool => is_callable($progress)))
         ->ordered()
-        ->andReturnUsing(function (string $direction, array $tables, string $token, callable $progress): DataShareMirrorExecutionResult {
+        ->andReturnUsing(function (...$arguments): DataShareMirrorExecutionResult {
+            $progress = $arguments[3];
             $progress('Applying the selected table.');
 
             return new DataShareMirrorExecutionResult(
@@ -1613,7 +1617,7 @@ it('tests and saves a replacement URL encrypted and write-only', function (): vo
     app()->instance(DataShareMirrorManager::class, $manager);
     $settings = app(SettingsService::class);
 
-    $component = Livewire::test(DataShareSettingsPage::class)
+    Livewire::test(DataShareSettingsPage::class)
         ->set('values.data_share__mirror__url', $candidateUrl)
         ->call('testMirrorConnection')
         ->assertHasNoErrors()

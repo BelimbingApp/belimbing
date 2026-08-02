@@ -37,6 +37,21 @@ final class SettingManifestCompiler
         $definitions = $this->explicitDefinitions($owner, $manifest);
         $editable = (array) ($manifest['editable'] ?? []);
 
+        $this->compileEditableGroups($owner, $editable, $definitions);
+
+        return [
+            'definitions' => $definitions,
+            'editable' => $editable,
+            'runtime' => $this->runtimeClaims($owner, $manifest),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $editable
+     * @param  array<string, array<string, mixed>>  $definitions
+     */
+    private function compileEditableGroups(string $owner, array &$editable, array &$definitions): void
+    {
         foreach ($editable as $groupId => &$group) {
             if (! is_string($groupId) || ! is_array($group)) {
                 throw new InvalidSettingDefinitionException(
@@ -47,56 +62,67 @@ final class SettingManifestCompiler
             $fields = (array) ($group['fields'] ?? []);
 
             foreach ($fields as $index => $field) {
-                if (! is_array($field) || ! is_string($field['key'] ?? null)) {
-                    throw new InvalidSettingDefinitionException(
-                        "Editable settings group [{$groupId}] contains an invalid field.",
-                    );
-                }
-
-                if (($field['type'] ?? 'text') === 'readonly') {
-                    continue;
-                }
-
-                $key = $field['key'];
-
-                if (array_key_exists($key, $definitions)) {
-                    $definition = $definitions[$key];
-
-                    foreach (self::DEFINITION_FIELD_KEYS as $definitionField) {
-                        if (array_key_exists($definitionField, $field)) {
-                            throw new InvalidSettingDefinitionException(
-                                "Editable field [{$key}] must reference its definition instead of repeating [{$definitionField}].",
-                            );
-                        }
-                    }
-
-                    $definition['editable'] ??= $groupId;
-                    $definition['capability'] ??= $this->optionalString($group['capability'] ?? null);
-                    $definitions[$key] = $definition;
-                    $fields[$index] = $this->presentationField($field, $definition);
-
-                    continue;
-                }
-
-                $definition = $this->definitionFromField(
-                    owner: $owner,
-                    groupId: $groupId,
-                    capability: $this->optionalString($group['capability'] ?? null),
-                    field: $field,
-                );
-                $definitions[$key] = $definition;
-                $fields[$index] = $this->presentationField($field, $definition);
+                $this->compileEditableField($owner, $groupId, $group, $fields, $index, $field, $definitions);
             }
 
             $group['fields'] = $fields;
         }
         unset($group);
+    }
 
-        return [
-            'definitions' => $definitions,
-            'editable' => $editable,
-            'runtime' => $this->runtimeClaims($owner, $manifest),
-        ];
+    /**
+     * @param  array<string, mixed>  $group
+     * @param  array<int|string, mixed>  $fields
+     * @param  array<string, array<string, mixed>>  $definitions
+     */
+    private function compileEditableField(
+        string $owner,
+        string $groupId,
+        array $group,
+        array &$fields,
+        int|string $index,
+        mixed $field,
+        array &$definitions,
+    ): void {
+        if (! is_array($field) || ! is_string($field['key'] ?? null)) {
+            throw new InvalidSettingDefinitionException(
+                "Editable settings group [{$groupId}] contains an invalid field.",
+            );
+        }
+
+        if (($field['type'] ?? 'text') === 'readonly') {
+            return;
+        }
+
+        $key = $field['key'];
+        if (array_key_exists($key, $definitions)) {
+            $definition = $definitions[$key];
+            $this->assertDefinitionIsNotRepeated($key, $field);
+            $definition['editable'] ??= $groupId;
+            $definition['capability'] ??= $this->optionalString($group['capability'] ?? null);
+        } else {
+            $definition = $this->definitionFromField(
+                owner: $owner,
+                groupId: $groupId,
+                capability: $this->optionalString($group['capability'] ?? null),
+                field: $field,
+            );
+        }
+
+        $definitions[$key] = $definition;
+        $fields[$index] = $this->presentationField($field, $definition);
+    }
+
+    /** @param array<string, mixed> $field */
+    private function assertDefinitionIsNotRepeated(string $key, array $field): void
+    {
+        foreach (self::DEFINITION_FIELD_KEYS as $definitionField) {
+            if (array_key_exists($definitionField, $field)) {
+                throw new InvalidSettingDefinitionException(
+                    "Editable field [{$key}] must reference its definition instead of repeating [{$definitionField}].",
+                );
+            }
+        }
     }
 
     /**

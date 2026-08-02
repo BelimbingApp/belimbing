@@ -765,7 +765,7 @@ describe('AgenticRuntime (sync fallback)', function () {
 
 });
 
-describe('AgenticRuntime (streaming)', function () {
+describe('AgenticRuntime (streaming failures and tool-round policy)', function () {
     it('surfaces a streaming runtime error directly (no cross-provider fallback)', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
@@ -907,7 +907,9 @@ describe('AgenticRuntime (streaming)', function () {
                     && str_contains($content, 'Prioritize completing'),
             ))->toBeTrue();
     });
+});
 
+describe('AgenticRuntime (streaming execution and event delivery)', function () {
     it('enforces the execution deadline before opening a stream', function () {
         $llmClient = Mockery::mock(LlmClient::class);
         $llmClient->shouldNotReceive('chatStream');

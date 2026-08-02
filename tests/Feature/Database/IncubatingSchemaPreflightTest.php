@@ -25,6 +25,7 @@ const INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_NAME = '2099_01_01_000002_create_te
 const INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_FILE = INCUBATING_SCHEMA_TEST_CYCLE_DEPENDENT_NAME.'.php';
 const INCUBATING_SCHEMA_TEST_FORWARD_NAME = '2099_01_01_000003_add_mature_value_to_test_incubating_widgets_table';
 const INCUBATING_SCHEMA_TEST_FORWARD_FILE = INCUBATING_SCHEMA_TEST_FORWARD_NAME.'.php';
+const INCUBATING_SCHEMA_TEST_PRESERVED_VALUE = 'preserve me';
 
 function writeIncubatingSchemaForwardTestMigration(bool $incubating): void
 {
@@ -186,7 +187,7 @@ test('preflight refuses a live table claimed by a different migration before dro
         $table->string('mature_value');
     });
 
-    DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->insert(['mature_value' => 'preserve me']);
+    DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->insert(['mature_value' => INCUBATING_SCHEMA_TEST_PRESERVED_VALUE]);
 
     TableRegistry::query()->create([
         'table_name' => INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE,
@@ -204,7 +205,7 @@ test('preflight refuses a live table claimed by a different migration before dro
         ->toThrow(IncubatingSchemaConflictException::class, 'conflicts with live schema');
 
     expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE))->toBeTrue()
-        ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe('preserve me')
+        ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe(INCUBATING_SCHEMA_TEST_PRESERVED_VALUE)
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME)->exists())->toBeTrue();
 });
 
@@ -224,7 +225,7 @@ test('preflight refuses stable dependents before dropping any table', function (
     $widgetId = DB::table(INCUBATING_SCHEMA_TEST_TABLE)->insertGetId([]);
     DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->insert([
         'widget_id' => $widgetId,
-        'mature_value' => 'preserve me',
+        'mature_value' => INCUBATING_SCHEMA_TEST_PRESERVED_VALUE,
     ]);
 
     TableRegistry::query()->create([
@@ -251,7 +252,7 @@ test('preflight refuses stable dependents before dropping any table', function (
 
     expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue()
         ->and(Schema::hasTable(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE))->toBeTrue()
-        ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe('preserve me')
+        ->and(DB::table(INCUBATING_SCHEMA_TEST_DEPENDENT_TABLE)->value('mature_value'))->toBe(INCUBATING_SCHEMA_TEST_PRESERVED_VALUE)
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FILE_NAME)->exists())->toBeTrue()
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_SINGLE_TABLE_DEPENDENT_NAME)->exists())->toBeTrue();
 });
@@ -265,7 +266,7 @@ test('preflight refuses to replay a table past an applied stable forward migrati
         $table->string('mature_value');
     });
 
-    DB::table(INCUBATING_SCHEMA_TEST_TABLE)->insert(['mature_value' => 'preserve me']);
+    DB::table(INCUBATING_SCHEMA_TEST_TABLE)->insert(['mature_value' => INCUBATING_SCHEMA_TEST_PRESERVED_VALUE]);
 
     TableRegistry::query()->create([
         'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
@@ -285,7 +286,7 @@ test('preflight refuses to replay a table past an applied stable forward migrati
     ]))->toThrow(IncubatingSchemaConflictException::class, 'applied stable migration');
 
     expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue()
-        ->and(DB::table(INCUBATING_SCHEMA_TEST_TABLE)->value('mature_value'))->toBe('preserve me')
+        ->and(DB::table(INCUBATING_SCHEMA_TEST_TABLE)->value('mature_value'))->toBe(INCUBATING_SCHEMA_TEST_PRESERVED_VALUE)
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FORWARD_NAME)->exists())->toBeTrue();
 });
 
