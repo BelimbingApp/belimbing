@@ -11,6 +11,8 @@ use App\Modules\Core\AI\Services\Messaging\InboundSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
 
+const MESSAGING_AUTHENTICITY_WEBHOOK_PATH = '/webhook';
+
 function registerAuthenticityTestAdapter(SignalAuthenticityStatus $status): ChannelAdapter
 {
     $adapter = Mockery::mock(ChannelAdapter::class);
@@ -81,7 +83,7 @@ test('inbound signal service rejects failed authenticity before persistence', fu
 
     expect(fn () => (new InboundSignalService($registry))->ingest(
         'testchannel',
-        Request::create('/webhook', 'POST', ['event' => 'message']),
+        Request::create(MESSAGING_AUTHENTICITY_WEBHOOK_PATH, 'POST', ['event' => 'message']),
     ))->toThrow(WebhookAuthenticityException::class);
 
     expect(InboundSignal::query()->count())->toBe(0);
@@ -92,7 +94,7 @@ test('inbound signal service rejects a channel without an adapter', function ():
 
     expect(fn () => $service->ingest(
         'unknownchannel',
-        Request::create('/webhook', 'POST', ['event' => 'message']),
+        Request::create(MESSAGING_AUTHENTICITY_WEBHOOK_PATH, 'POST', ['event' => 'message']),
     ))->toThrow(WebhookAuthenticityException::class);
 
     expect(InboundSignal::query()->count())->toBe(0);
@@ -100,7 +102,7 @@ test('inbound signal service rejects a channel without an adapter', function ():
 
 test('inbound signal service persists verified requests with verified authenticity', function (): void {
     $registry = new ChannelAdapterRegistry;
-    $request = Request::create('/webhook', 'POST', ['event' => 'message']);
+    $request = Request::create(MESSAGING_AUTHENTICITY_WEBHOOK_PATH, 'POST', ['event' => 'message']);
     $message = new InboundMessage(
         channelId: 'external-channel-id',
         sender: 'sender-123',

@@ -61,13 +61,25 @@ class DataShareValueNormalizer
             return $value;
         }
 
-        return match ($this->type($table, $column)) {
+        $type = $this->type($table, $column);
+
+        return $type === 'json'
+            ? $this->json($table, $column, $value)
+            : $this->normalizeValue($value, $type);
+    }
+
+    public function normalizeValue(mixed $value, string $type): mixed
+    {
+        if ($value === null || is_array($value)) {
+            return $value;
+        }
+
+        return match ($type) {
             'boolean' => (bool) $value,
             'integer' => (int) $value,
             'decimal' => $this->decimal($value),
             'date' => CarbonImmutable::parse((string) $value, 'UTC')->format('Y-m-d'),
             'datetime' => $this->datetime($value),
-            'json' => $this->json($table, $column, $value),
             default => $value,
         };
     }
