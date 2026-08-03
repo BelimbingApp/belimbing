@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
+const OPENAI_CODEX_USER_BINDING_CALLBACK_PATH = '/callback';
+
 beforeEach(function (): void {
     $this->user = createAdminUser();
     $this->provider = AiProvider::query()->create([
@@ -47,7 +49,7 @@ test('cross-user callback is rejected without updating provider credentials', fu
     $otherUser = User::factory()->create(['company_id' => $this->user->company_id]);
     $this->actingAs($otherUser);
 
-    $callback = Request::create('/callback', 'GET', [
+    $callback = Request::create(OPENAI_CODEX_USER_BINDING_CALLBACK_PATH, 'GET', [
         'code' => 'authorization-code',
         'state' => $login['state'],
     ]);
@@ -65,7 +67,7 @@ test('same-user callback succeeds', function (): void {
     $login = $this->manager->startLogin($this->provider, $this->user->id);
     $this->actingAs($this->user);
 
-    $result = $this->manager->completeCallback(Request::create('/callback', 'GET', [
+    $result = $this->manager->completeCallback(Request::create(OPENAI_CODEX_USER_BINDING_CALLBACK_PATH, 'GET', [
         'code' => 'authorization-code',
         'state' => $login['state'],
     ]));
@@ -90,7 +92,7 @@ test('cli-initiated flow can be completed by an authenticated user', function ()
     $otherUser = User::factory()->create(['company_id' => $this->user->company_id]);
     $this->actingAs($otherUser);
 
-    $result = $this->manager->completeCallback(Request::create('/callback', 'GET', [
+    $result = $this->manager->completeCallback(Request::create(OPENAI_CODEX_USER_BINDING_CALLBACK_PATH, 'GET', [
         'code' => 'authorization-code',
         'state' => $login['state'],
     ]));

@@ -10,7 +10,6 @@ use App\Base\Database\DTO\DataShare\Mirror\PortableDataShareMirrorSnapshotState;
 use App\Base\Database\Exceptions\DataShareMirrorException;
 use App\Base\Database\Services\DataShare\CanonicalJson;
 use App\Base\Database\Services\DataShare\DataShareSettings;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Connection;
 use Illuminate\Filesystem\Filesystem;
 use JsonException;
@@ -27,6 +26,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         private readonly DataShareMirrorTemporaryFiles $temporaryFiles,
         private readonly Filesystem $files,
         private readonly DataShareSettings $settings,
+        private readonly PortableDataShareMirrorValueCodec $codec,
     ) {}
 
     public function mode(): string
@@ -171,7 +171,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
     /** @param resource $handle */
     private function snapshotTable(Connection $source, Connection $target, string $table, $handle, PortableDataShareMirrorSnapshotState $state): void
     {
-        $targetTypes = $this->columnTypes($target, $table);
+        $targetTypes = $this->codec->columnTypes($target, $table);
         $query = $source->table($table);
         foreach ($this->schemas->primaryKey($source, $table) as $column) {
             $query->orderBy($column);
@@ -194,7 +194,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     'max' => $state->maximumScalarBytes,
                 ]));
             }
-            $row[$column] = $this->encodeValue($value, $targetTypes[$column] ?? '');
+            $row[$column] = $this->codec->encode($value, $targetTypes[$column] ?? '');
         }
         ksort($row, SORT_STRING);
         hash_update($state->hashContexts[$table], CanonicalJson::encode($row)."\n");
@@ -252,7 +252,7 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
                     $chunk = [];
                 }
                 $activeTable = $table;
-                $chunk[] = $this->decodeRow((array) ($record['row'] ?? []));
+                $chunk[] = $this->codec->decodeRow((array) ($record['row'] ?? []));
             }
             if ($activeTable !== null) {
                 $this->flushChunk($target, $activeTable, $chunk);
@@ -298,75 +298,9 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         }
     }
 
-    /** @return array<string, string> */
-    private function columnTypes(Connection $connection, string $table): array
-    {
-        $types = [];
-        foreach ($connection->getSchemaBuilder()->getColumns($table) as $column) {
-            $types[(string) $column['name']] = mb_strtolower((string) ($column['type'] ?? $column['type_name'] ?? ''));
-        }
-
-        return $types;
-    }
-
-    private function encodeValue(mixed $value, string $targetType): mixed
-    {
-        if ($value === null) {
-            return null;
-        }
-
-        if (is_string($value) && (! mb_check_encoding($value, 'UTF-8') || $this->schemas->portableType($targetType) === 'binary')) {
-            return ['__data_share_binary_base64' => base64_encode($value)];
-        }
-
-        return match ($this->schemas->portableType($targetType)) {
-            'boolean' => (bool) $value,
-            'integer' => (int) $value,
-            'decimal' => $this->decimal($value),
-            'date' => CarbonImmutable::parse((string) $value, 'UTC')->format('Y-m-d'),
-            'datetime' => $this->datetime($value),
-            'textual' => str_contains($targetType, 'json') ? $this->json($value) : $value,
-            default => $value,
-        };
-    }
-
-    private function decimal(mixed $value): string
-    {
-        $decimal = strtolower(trim((string) $value));
-        if (str_contains($decimal, 'e')) {
-            $decimal = rtrim(rtrim(sprintf('%.15F', (float) $decimal), '0'), '.');
-        }
-
-        $negative = str_starts_with($decimal, '-');
-        $decimal = ltrim($decimal, '+-');
-        [$integer, $fraction] = array_pad(explode('.', $decimal, 2), 2, '');
-        $integer = ltrim($integer, '0');
-        $integer = $integer === '' ? '0' : $integer;
-        $fraction = rtrim($fraction, '0');
-        $normalized = $integer.($fraction === '' ? '' : '.'.$fraction);
-
-        return $negative && $normalized !== '0' ? '-'.$normalized : $normalized;
-    }
-
-    private function datetime(mixed $value): string
-    {
-        $formatted = CarbonImmutable::parse((string) $value, 'UTC')->format('Y-m-d H:i:s.u');
-
-        return str_ends_with($formatted, '.000000') ? substr($formatted, 0, -7) : $formatted;
-    }
-
-    private function json(mixed $value): string
-    {
-        try {
-            return CanonicalJson::encode(is_string($value) ? json_decode($value, true, flags: JSON_THROW_ON_ERROR) : $value);
-        } catch (JsonException) {
-            throw DataShareMirrorException::invalidSelection(__('A selected table contains invalid JSON data.'));
-        }
-    }
-
     private function tableHash(Connection $connection, string $table): string
     {
-        $types = $this->columnTypes($connection, $table);
+        $types = $this->codec->columnTypes($connection, $table);
         $query = $connection->table($table);
         foreach ($this->schemas->primaryKey($connection, $table) as $column) {
             $query->orderBy($column);
@@ -376,30 +310,13 @@ class PortableDataShareMirrorEngine implements DataShareMirrorEngine
         foreach ($query->cursor() as $record) {
             $row = [];
             foreach ((array) $record as $column => $value) {
-                $row[$column] = $this->encodeValue($value, $types[$column] ?? '');
+                $row[$column] = $this->codec->encode($value, $types[$column] ?? '');
             }
             ksort($row, SORT_STRING);
             hash_update($context, CanonicalJson::encode($row)."\n");
         }
 
         return hash_final($context);
-    }
-
-    /** @param array<string, mixed> $row @return array<string, mixed> */
-    private function decodeRow(array $row): array
-    {
-        foreach ($row as $column => $value) {
-            if (is_array($value) && array_keys($value) === ['__data_share_binary_base64']) {
-                $decoded = base64_decode((string) $value['__data_share_binary_base64'], true);
-                if ($decoded === false) {
-                    throw DataShareMirrorException::safeFailure(__('The temporary staging file contains invalid binary data.'));
-                }
-
-                $row[$column] = $decoded;
-            }
-        }
-
-        return $row;
     }
 
     private function resetSequence(Connection $connection, string $table): void

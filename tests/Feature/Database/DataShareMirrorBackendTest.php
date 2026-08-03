@@ -30,6 +30,7 @@ use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorReviewer;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorSchemaComparator;
 use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorTemporaryFiles;
 use App\Base\Database\Services\DataShare\Mirror\PortableDataShareMirrorEngine;
+use App\Base\Database\Services\DataShare\Mirror\PortableDataShareMirrorValueCodec;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
 use App\Base\Foundation\Services\NullDataOperationRecorder;
 use App\Base\Settings\Contracts\SettingsService;
@@ -170,6 +171,7 @@ it('separates mirror staging size from portable package row and byte limits', fu
         new DataShareMirrorTemporaryFiles($files),
         $files,
         new DataShareSettings($settings),
+        app(PortableDataShareMirrorValueCodec::class),
     );
 
     try {

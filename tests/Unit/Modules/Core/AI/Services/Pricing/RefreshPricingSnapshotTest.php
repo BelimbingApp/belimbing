@@ -12,6 +12,9 @@ use Tests\Support\PermissiveUrlSafetyGuard;
 
 uses(TestCase::class, LazilyRefreshDatabase::class);
 
+const PRICING_SNAPSHOT_ONE_DOLLAR = '1.000000000000';
+const PRICING_SNAPSHOT_TEN_CENTS = '0.100000000000';
+
 beforeEach(function (): void {
     // These cover snapshot/fallback behaviour once a URL is accepted; the
     // guard's own rules live in UrlSafetyGuardTest.
@@ -73,8 +76,8 @@ it('imports LiteLLM token pricing snapshots idempotently', function (): void {
         ->and($first['skipped_count'])->toBe(2)
         ->and($second['imported_count'])->toBe(2)
         ->and(AiPricingSnapshot::query()->count())->toBe(2)
-        ->and($gpt->input_usd_per_million_tokens)->toBe('1.000000000000')
-        ->and($gpt->cached_input_usd_per_million_tokens)->toBe('0.100000000000')
+        ->and($gpt->input_usd_per_million_tokens)->toBe(PRICING_SNAPSHOT_ONE_DOLLAR)
+        ->and($gpt->cached_input_usd_per_million_tokens)->toBe(PRICING_SNAPSHOT_TEN_CENTS)
         ->and($gpt->output_usd_per_million_tokens)->toBe('4.000000000000')
         ->and($gpt->source)->toBe('litellm')
         ->and($gpt->source_version)->toBe('2026-04-30');
@@ -84,8 +87,8 @@ it('falls back to the previous snapshot when the source cannot refresh', functio
     AiPricingSnapshot::query()->create([
         'provider' => 'openai',
         'model' => 'gpt-5.4',
-        'input_usd_per_million_tokens' => '1.000000000000',
-        'cached_input_usd_per_million_tokens' => '0.100000000000',
+        'input_usd_per_million_tokens' => PRICING_SNAPSHOT_ONE_DOLLAR,
+        'cached_input_usd_per_million_tokens' => PRICING_SNAPSHOT_TEN_CENTS,
         'output_usd_per_million_tokens' => '2.000000000000',
         'source' => 'litellm',
         'source_version' => '2026-04-29',
@@ -146,8 +149,8 @@ it('falls back without requesting when the snapshot URL fails the safety check',
     AiPricingSnapshot::query()->create([
         'provider' => 'openai',
         'model' => 'gpt-5.4',
-        'input_usd_per_million_tokens' => '1.000000000000',
-        'cached_input_usd_per_million_tokens' => '0.100000000000',
+        'input_usd_per_million_tokens' => PRICING_SNAPSHOT_ONE_DOLLAR,
+        'cached_input_usd_per_million_tokens' => PRICING_SNAPSHOT_TEN_CENTS,
         'output_usd_per_million_tokens' => '2.000000000000',
         'source' => 'litellm',
         'source_version' => '2026-04-29',
