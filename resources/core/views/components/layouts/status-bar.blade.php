@@ -1,24 +1,13 @@
 @php
-    $localeContext = app(\App\Base\Locale\Contracts\LocaleContext::class);
     $isImpersonating = session('impersonation.original_user_id') !== null;
 
     $licenseeExists = \App\Modules\Core\Company\Models\Company::query()->where('id', \App\Modules\Core\Company\Models\Company::LICENSEE_ID)->exists();
 
     $laraActivated = \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
 
-    $user = null;
-    $canManageLocalization = false;
-    $statusDiagnostics = collect();
-
-    if (auth()->check()) {
-        $user = auth()->user();
-        $actor = \App\Base\Authz\DTO\Actor::forUser($user);
-        $canManageLocalization = app(\App\Base\Authz\Contracts\AuthorizationService::class)
-            ->can($actor, 'admin.system.localization.manage')
-            ->allowed;
-        $statusDiagnostics = app(\App\Base\System\Services\StatusBarDiagnostics::class)
-            ->forUser($user);
-    }
+    $statusDiagnostics = auth()->check()
+        ? app(\App\Base\System\Services\StatusBarDiagnostics::class)->forUser(auth()->user())
+        : collect();
 
     $statusDiagnosticCount = $statusDiagnostics->count();
     $statusDiagnosticTop = $statusDiagnostics->first();
@@ -50,16 +39,6 @@
                 <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-status-danger hover:underline flex items-center gap-1">
                     <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5" />
                     {{ __('Licensee not set') }}
-                </a>
-            @endif
-            @if ($canManageLocalization && $localeContext->requiresConfirmation())
-                <a href="{{ route('admin.system.localization.index') }}" wire:navigate class="text-status-warning hover:underline flex items-center gap-1">
-                    <x-icon name="heroicon-o-language" class="w-3.5 h-3.5" />
-                    @if ($localeContext->source() === 'licensee_address')
-                        {{ __('Locale inferred: :locale', ['locale' => $localeContext->currentLocale()]) }}
-                    @else
-                        {{ __('Locale not confirmed') }}
-                    @endif
                 </a>
             @endif
             @if ($statusDiagnosticCount > 0)

@@ -15,16 +15,6 @@
             </x-slot>
         </x-ui.page-header>
 
-        @if (! $current['confirmed'])
-            <x-ui.alert variant="warning">
-                @if ($current['source_code'] === 'licensee_address')
-                    {{ __('The current locale :locale was inferred from the licensee address and still needs confirmation.', ['locale' => $current['locale']]) }}
-                @else
-                    {{ __('The application is using a default locale because no confirmed locale has been set yet.') }}
-                @endif
-            </x-ui.alert>
-        @endif
-
         <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
             <x-ui.card>
                 <h3 class="mb-3 text-sm font-medium text-ink">{{ __('Configuration') }}</h3>
@@ -65,14 +55,6 @@
                         <div class="flex items-center justify-between gap-4">
                             <dt class="text-muted">{{ __('Source') }}</dt>
                             <dd class="text-right text-ink">{{ $current['source'] }}</dd>
-                        </div>
-                        <div class="flex items-center justify-between gap-4">
-                            <dt class="text-muted">{{ __('Confirmation') }}</dt>
-                            <dd>
-                                <x-ui.badge :variant="$current['confirmed'] ? 'success' : 'warning'">
-                                    {{ $current['confirmed'] ? __('Confirmed') : __('Pending confirmation') }}
-                                </x-ui.badge>
-                            </dd>
                         </div>
                     </dl>
                 </div>

@@ -19,7 +19,6 @@ uses(RefreshDatabase::class);
 
 const FEATURE_LOCALE_SETTINGS_KEY = 'ui.locale';
 const FEATURE_LOCALE_SOURCE_SETTINGS_KEY = 'ui.locale_source';
-const FEATURE_LOCALE_CONFIRMED_AT_SETTINGS_KEY = 'ui.locale_confirmed_at';
 const FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country';
 const FEATURE_TIMEZONE_KUALA_LUMPUR = 'Asia/Kuala_Lumpur';
 
@@ -78,7 +77,7 @@ it('renders the localization page for admins', function (): void {
         ->assertSee('Localization');
 });
 
-it('saves and confirms the selected locale from the localization page', function (): void {
+it('saves the selected locale from the localization page', function (): void {
     seedFeatureLicenseeLocale();
     app()->forgetInstance(LocaleContext::class);
     app(LocaleContext::class)->state();
@@ -89,7 +88,6 @@ it('saves and confirms the selected locale from the localization page', function
 
     expect($this->settings->get(FEATURE_LOCALE_SETTINGS_KEY))->toBe('ms-MY')
         ->and($this->settings->get(FEATURE_LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::MANUAL->value)
-        ->and($this->settings->get(FEATURE_LOCALE_CONFIRMED_AT_SETTINGS_KEY))->not->toBeNull()
         ->and($this->settings->get(FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBeNull();
 });
 
@@ -102,33 +100,6 @@ it('binds the locale combobox to the selectedLocale property', function (): void
     expect($html)
         ->toContain("entangle('selectedLocale')")
         ->not->toContain('$selectedLocale');
-});
-
-it('shows a status-bar warning while the inferred locale is unconfirmed', function (): void {
-    seedFeatureLicenseeLocale();
-    app()->forgetInstance(LocaleContext::class);
-
-    $response = $this->blade('<x-layouts.status-bar />');
-
-    $response->assertSee('Locale inferred: en-MY');
-});
-
-it('clears the status-bar warning after the locale is confirmed', function (): void {
-    seedFeatureLicenseeLocale();
-    app()->forgetInstance(LocaleContext::class);
-    app(LocaleContext::class)->state();
-
-    $this->settings->set(FEATURE_LOCALE_SETTINGS_KEY, 'en-MY');
-    $this->settings->set(FEATURE_LOCALE_SOURCE_SETTINGS_KEY, LocaleSource::MANUAL->value);
-    $this->settings->set(FEATURE_LOCALE_CONFIRMED_AT_SETTINGS_KEY, now()->toIso8601String());
-    $this->settings->forget(FEATURE_LOCALE_INFERRED_COUNTRY_SETTINGS_KEY);
-
-    app()->forgetInstance(LocaleContext::class);
-
-    $response = $this->blade('<x-layouts.status-bar />');
-
-    $response->assertDontSee('Locale inferred: en-MY')
-        ->assertDontSee('Locale not confirmed');
 });
 
 it('renders the preview using the resolved company timezone', function (): void {
