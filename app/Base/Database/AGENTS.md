@@ -79,6 +79,7 @@ Dev seeders extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (no
 | Situation | Command |
 |-----------|---------|
 | New migration or schema change | `migrate --dev` |
+| Compare migration source with the default database | `blb:schema:drift` |
 | Apply pending migrations in the full local dev flow | `migrate --dev` |
 | Run a specific dev seeder | `migrate --seed --seeder=Company/Dev/DevCompanyAddressSeeder` |
 | Disposable local or test database full reset | `migrate:fresh` |
@@ -111,6 +112,20 @@ Plain `migrate` **guards incubating schema outside `local`/`testing`.** Incubati
 - **Break-glass pending incubating migrations** require an instance-local approval created with `php artisan blb:schema:approve-incubating <migration> --backup=<backup-id-or-reference> --reason="<why>"` (add `--database=<connection>` when migrating a non-default connection). Approvals live under `storage/app/.devops/`, match the exact path/hash/environment/connection/driver/database, expire, and are consumed after a successful migrate. They are for rare production-only validation, not routine schema work.
 
 A failed migration guard also halts the Update flow before workers reload.
+
+## Schema Drift Inspection
+
+Run `php artisan blb:schema:drift` to compare migration-declared table, column, and index presence with the default database connection. The command intentionally has no custom options so coding agents and humans share one blessed invocation. It reads migration source without executing it, replays supported `up()` operations in Laravel filename order, and prints deterministic records with the inspected connection, driver, and database identity.
+
+Exit codes are part of the agent contract:
+
+- `0`: the supported scope was fully checked and is clean.
+- `1`: confirmed drift was found.
+- `2`: inspection was incomplete, including unsupported or runtime-dependent schema source; do not infer a repair from a partial report.
+
+The supported scope is table presence, column presence, and ordinary/unique/primary Laravel index presence (kind plus ordered columns). Raw SQL indexes are checked only for presence by their explicit name. It does not compare raw index definitions, specialized indexes, column types, defaults, foreign keys, check constraints, or extra tables. Extra tables belong to the Database Residue workflow because a table not claimed by current source is not proof that deletion is safe.
+
+Use the `blb-schema-drift-repair` skill for a non-clean report. It preserves the schema maturity split: repair an incubating local schema through `migrate --dev`; repair stable history through a forward migration; never patch live DDL or migration ledger rows directly.
 
 ## Schema Editing
 

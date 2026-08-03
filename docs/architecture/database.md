@@ -15,6 +15,7 @@ To manage this complexity, the framework enforces:
 4.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
 5.  **Source-Declared Schema Incubation**: To let local/test databases rebuild in-progress schema while production/staging only run explicit, forward-safe changes.
 6.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
+7.  **Fail-Closed Schema Drift Inspection**: To compare the source-declared table, column, and index contract with a database without executing migration code.
 
 ---
 
@@ -107,6 +108,12 @@ Migration files can declare in-progress schema with `IncubatingSchema`. The sour
 The production/staging guard uses the Laravel `migrations` table as the applied/pending source of truth. A live table without a matching migration ledger row is not considered applied. Applied incubating migrations with no previous fingerprint are baselined on the first successful guarded migrate. If the file hash later changes while the migration is still applied, the guard blocks because Laravel will not rerun that source file on the live database; restore the recorded source or carry the change in a new forward migration.
 
 Instance-local approvals are a break-glass mechanism for rare production-only validation. They are stored under `storage/app/.devops/`, are not committed, and match the exact migration name, relative path, source SHA-256, environment, connection, driver, and database identifier. The approval command requires a backup ID/reference and reason, writes an expiring one-time approval, and the migration command consumes it after a successful run. Approvals are exact records, not glob patterns or owner-wide exception lists. When `migrate --database=<connection>` targets a non-default connection, the approval must be created with the same `--database` option so PostgreSQL, SQLite, and future drivers remain isolated from each other.
+
+### Schema Drift Inspection
+
+`php artisan blb:schema:drift` statically replays supported migration `up()` source in Laravel's global filename order, then compares declared table, column, and ordinary/unique/primary Laravel index presence with the default database. Raw SQL indexes are checked only for presence by explicit name, not definition. The command has no custom options: the stable interface for coding agents is one command, deterministic line-oriented output, and exit codes `0` for fully checked and clean, `1` for confirmed drift, and `2` for incomplete analysis.
+
+The inspector fails closed when schema mutations depend on runtime values or unsupported constructs. It deliberately excludes column types/defaults, foreign keys, check constraints, and extra tables until those contracts can be proved safely. Extra live tables are owned by the Database Residue workflow, where provenance and deletion safety can be considered separately. Drift repair follows schema maturity: local incubating source uses `migrate --dev`, while stable schema uses forward migrations.
 
 ---
 

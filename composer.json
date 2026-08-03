@@ -29,7 +29,8 @@
         "laravel/framework": "^13.14.0",
         "laravel/octane": "^2.17.4",
         "laravel/tinker": "^3.0.2",
-        "livewire/livewire": "^4.3.1"
+        "livewire/livewire": "^4.3.1",
+        "nikic/php-parser": "^5.8.0"
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.7.0",
