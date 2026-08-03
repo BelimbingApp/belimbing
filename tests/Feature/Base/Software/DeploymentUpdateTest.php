@@ -798,6 +798,48 @@ test('the recorded-run marker is rendered only for terminal runs, not pending', 
         ->assertSee('data-run-outcome="success"', false);
 });
 
+test('a post-run refresh that never gets confirmed is reported instead of spinning forever', function (): void {
+    // Regression: the "Refreshing table" badge is bound to `refreshing`, which
+    // only a full page reload clears. reloadWhenHealthy() was meant to guarantee
+    // that reload within ~15s, but its budget was a retry counter that only
+    // advanced when a fetch settled. Caddy stays up and holds the connection open
+    // while FrankenPHP respawns the workers the run just signalled, so the probe
+    // could sit on a promise that never resolved: the counter never advanced, no
+    // further timer was scheduled, and a completed update was left spinning.
+    //
+    // Every attempt now aborts, the budget is wall-clock, an independent watchdog
+    // answers to the clock alone, and exhausting it reports the failure rather
+    // than firing a blind reload into a server that may not be answering.
+    $this->actingAs(createAdminUser());
+
+    $html = Livewire::test(Index::class)->html();
+
+    expect($html)
+        // Each attempt is forced to settle, and the budget cannot be outrun by a
+        // pending promise.
+        ->toContain('signal: this.abortAfter(')
+        ->toContain('this.refreshDeadline = Date.now() + this.refreshTimeoutMs')
+        ->toContain('this.refreshWatchdog = window.setTimeout(')
+        // The old retry-counter budget and its blind fallback reload are gone.
+        ->not->toContain('_reloadRetries')
+        ->not->toContain('_pollFailures')
+        // Exhausting either budget reports the failure.
+        ->toContain('reportContactLost(this.refreshTimeoutBadge')
+        ->toContain('reportContactLost(this.progressStallBadge')
+        ->toContain('console.error(');
+
+    // The operator is told what did not happen, and handed the reload the page
+    // gave up on doing by itself.
+    Livewire::test(Index::class)
+        ->assertSee('Page not refreshed')
+        ->assertSee('Lost contact')
+        ->assertSee('Reload the page')
+        ->assertSee('did not answer within 15 seconds')
+        ->assertSee('stopped answering for 90 seconds')
+        ->assertSee('x-text="contactLostMessage"', false)
+        ->assertSee('x-on:click="reloadNow()"', false);
+});
+
 test('manual frontend rebuild installs with the lockfile package manager and builds assets', function (): void {
     Process::fake();
 

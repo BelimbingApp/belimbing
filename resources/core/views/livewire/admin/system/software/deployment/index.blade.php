@@ -1,6 +1,15 @@
 <div>
     <x-slot name="title">{{ __('Updates') }}</x-slot>
 
+    @php
+        // Wall-clock budgets for the two async feeds below. Rendered into the
+        // Alpine component so the timers and the operator-facing copy can never
+        // drift apart. Both budgets are deadlines, not retry counts: a request
+        // that hangs instead of failing must still exhaust them.
+        $statusRefreshTimeoutSeconds = 15;
+        $progressStallSeconds = 90;
+    @endphp
+
     <div
         class="space-y-section-gap"
         @if (! $maintenanceActive && ! $updateInProgress) wire:init="loadLatestStatus" @endif
@@ -10,6 +19,22 @@
             dismissed: false,
             refreshing: false,
             refreshTimer: null,
+            refreshWatchdog: null,
+            refreshDeadline: null,
+            refreshLastFailure: '',
+            refreshTimeoutMs: @js($statusRefreshTimeoutSeconds * 1000),
+            progressStallMs: @js($progressStallSeconds * 1000),
+            {{-- A run that finishes but never gets confirmed is a failure, not a
+                 quiet no-op: both feeds below surface it here instead of firing a
+                 blind reload into a server that may not be answering. --}}
+            contactLost: false,
+            contactLostBadge: '',
+            contactLostMessage: '',
+            contactLostDetail: '',
+            refreshTimeoutBadge: @js(__('Page not refreshed')),
+            refreshTimeoutMessage: @js(__('The run itself finished and its log is recorded, but the site did not answer within :seconds seconds afterwards, so this page was never refreshed. Web workers may still be restarting, or the runtime failed to boot. Everything shown outside this window is stale until the page reloads.', ['seconds' => $statusRefreshTimeoutSeconds])),
+            progressStallBadge: @js(__('Lost contact')),
+            progressStallMessage: @js(__('The server stopped answering for :seconds seconds while the run was still going. The detached process may well have carried on without us — reload to read the recorded result.', ['seconds' => $progressStallSeconds])),
             finishedStatus: @js(($runStatus ?? 'idle') !== 'idle' ? $runStatus : null),
             justRefreshed: false,
             reloadInProgress: @js($reloadInProgress),
@@ -17,8 +42,7 @@
             maintenanceActive: @js($maintenanceActive),
             progressUrl: @js(route('admin.system.software.updates.progress')),
             _pollTimer: null,
-            _pollFailures: 0,
-            _reloadRetries: 0,
+            _pollFailingSince: null,
             _destroyed: false,
             _livewire503Guard: null,
             reloadRequiresConfirmation: @js(app()->environment('production')),
@@ -55,6 +79,7 @@
                 this._destroyed = true;
                 window.clearTimeout(this._pollTimer);
                 window.clearTimeout(this.refreshTimer);
+                window.clearTimeout(this.refreshWatchdog);
                 if (this._livewire503Guard) {
                     this._livewire503Guard();
                 }
@@ -85,7 +110,10 @@
                 }
 
                 try {
-                    const response = await fetch(this.progressUrl, { headers: { 'Accept': 'application/json' } });
+                    const response = await fetch(this.progressUrl, {
+                        headers: { 'Accept': 'application/json' },
+                        signal: this.abortAfter(10000),
+                    });
 
                     if (! response.ok) {
                         throw new Error(`progress poll failed with status ${response.status}`);
@@ -95,7 +123,7 @@
                     if (this._destroyed) {
                         return;
                     }
-                    this._pollFailures = 0;
+                    this._pollFailingSince = null;
                     this.renderRunProgress(run);
 
                     if (['success', 'warning', 'error'].includes(run.status)) {
@@ -106,13 +134,20 @@
                 } catch (error) {
                     {{-- Transient failures are by design: the final phase reloads
                          the web workers, which briefly drops requests. Keep
-                         polling, and only fall back to a full reload if the feed
-                         stays unreachable for ~90s. --}}
+                         polling, and report a stall only once the feed has stayed
+                         unreachable for the whole budget. The budget is measured
+                         in wall-clock rather than consecutive failures because a
+                         request that hangs never comes back to be counted — the
+                         abort signal above is what forces it to settle. --}}
                     if (this._destroyed) {
                         return;
                     }
-                    if (++this._pollFailures >= 45) {
-                        window.location.reload();
+
+                    this._pollFailingSince ??= Date.now();
+
+                    if (Date.now() - this._pollFailingSince >= this.progressStallMs) {
+                        this._pollTimer = null;
+                        this.reportContactLost(this.progressStallBadge, this.progressStallMessage, this.describeFetchFailure(error));
 
                         return;
                     }
@@ -161,12 +196,11 @@
                 return this.finishedStatus === status;
             },
             openRunLog() {
-                if (this.refreshTimer) {
-                    window.clearTimeout(this.refreshTimer);
-                    this.refreshTimer = null;
-                }
+                this.clearRefreshTimers();
                 this.running = true;
                 this.refreshing = false;
+                this.clearContactLost();
+                this._pollFailingSince = null;
                 this.finishedStatus = null;
                 this.justRefreshed = false;
                 this.runLogOpen = true;
@@ -187,47 +221,139 @@
                 }
 
                 this.refreshing = true;
+                this.clearContactLost();
                 this.rememberAfterRefresh();
-                this._reloadRetries = 0;
+                this.refreshDeadline = Date.now() + this.refreshTimeoutMs;
+
+                {{-- Held on the component, not in reloadWhenHealthy: whichever path
+                     ends up reporting the stall must be able to name the last real
+                     reason, and a probe that hangs never settles to supply one. --}}
+                this.refreshLastFailure = 'the site never answered a health probe';
                 this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 500);
+
+                {{-- Independent of the probe chain on purpose. The deadline check
+                     inside reloadWhenHealthy only runs between attempts, so it
+                     cannot fire while an attempt is parked on a pending promise —
+                     which is exactly the case that used to leave this page
+                     spinning forever. This timer answers to nothing but the clock. --}}
+                this.refreshWatchdog = window.setTimeout(
+                    () => this.reportContactLost(this.refreshTimeoutBadge, this.refreshTimeoutMessage, this.refreshLastFailure),
+                    this.refreshTimeoutMs + 1000,
+                );
             },
             {{-- The post-run reload refreshes the status table to match the code on
                  disk. But the run's final phase just restarted the FrankenPHP workers,
                  and they may still be settling — a blind window.location.reload() would
                  hit a 500 and show the browser's error page. Probe the exempt progress
                  route first; only reload once a worker is actually serving responses.
-                 Fall back to a direct reload after ~15s so the operator is never stuck
-                 in a JS loop if the server is truly down. --}}
+                 Give up after the deadline and say so: a run that finishes but never
+                 gets confirmed is a failure the operator needs to see, not something
+                 to paper over with a blind reload into a server that may be down. --}}
             async reloadWhenHealthy() {
-                if (this._destroyed) {
+                if (this._destroyed || this.contactLost) {
+                    return;
+                }
+
+                const remaining = this.refreshDeadline - Date.now();
+
+                if (remaining <= 0) {
+                    this.reportContactLost(this.refreshTimeoutBadge, this.refreshTimeoutMessage, this.refreshLastFailure);
+
                     return;
                 }
 
                 try {
                     const response = await fetch(this.progressUrl, {
                         headers: { 'Accept': 'application/json' },
+                        signal: this.abortAfter(Math.min(3000, remaining)),
                     });
 
+                    if (this._destroyed || this.contactLost) {
+                        return;
+                    }
+
                     if (response.ok) {
+                        this.clearRefreshTimers();
                         window.location.reload();
 
                         return;
                     }
+
+                    this.refreshLastFailure = `the server answered with HTTP ${response.status}`;
                 } catch (error) {
                     {{-- Workers still restarting — keep waiting. --}}
+                    this.refreshLastFailure = this.describeFetchFailure(error);
                 }
 
-                if (this._destroyed) {
+                if (this._destroyed || this.contactLost) {
                     return;
                 }
 
-                if (++this._reloadRetries >= 10) {
-                    window.location.reload();
+                if (Date.now() >= this.refreshDeadline) {
+                    this.reportContactLost(this.refreshTimeoutBadge, this.refreshTimeoutMessage, this.refreshLastFailure);
 
                     return;
                 }
 
                 this.refreshTimer = window.setTimeout(() => this.reloadWhenHealthy(), 1500);
+            },
+            {{-- Without an abort the probe can sit on a pending promise forever:
+                 Caddy stays up and holds the connection open while FrankenPHP
+                 respawns its workers, so the request neither fails nor completes. --}}
+            abortAfter(ms) {
+                if (typeof AbortSignal === 'undefined' || typeof AbortSignal.timeout !== 'function') {
+                    return undefined;
+                }
+
+                return AbortSignal.timeout(ms);
+            },
+            describeFetchFailure(error) {
+                if (error?.name === 'TimeoutError' || error?.name === 'AbortError') {
+                    return 'the request timed out with no response';
+                }
+
+                return error?.message || 'the request failed';
+            },
+            reportContactLost(badge, message, detail) {
+                if (this._destroyed || this.contactLost) {
+                    return;
+                }
+
+                this.clearRefreshTimers();
+                window.clearTimeout(this._pollTimer);
+                this._pollTimer = null;
+                this.running = false;
+                this.refreshing = false;
+                this.contactLost = true;
+                this.contactLostBadge = badge;
+                this.contactLostMessage = message;
+                this.contactLostDetail = detail;
+
+                {{-- The stashed payload only makes sense for a reload we actually
+                     perform; leaving it behind would make some later navigation
+                     pop a stale "Run complete" banner. --}}
+                this.forgetAfterRefresh();
+
+                console.error(`[deployment] ${message} (${detail})`);
+            },
+            clearContactLost() {
+                this.contactLost = false;
+                this.contactLostBadge = '';
+                this.contactLostMessage = '';
+                this.contactLostDetail = '';
+            },
+            clearRefreshTimers() {
+                window.clearTimeout(this.refreshTimer);
+                window.clearTimeout(this.refreshWatchdog);
+                this.refreshTimer = null;
+                this.refreshWatchdog = null;
+            },
+            {{-- The operator's explicit call after a stall: re-stash the run outcome
+                 so the reloaded page still reports how the run ended. --}}
+            reloadNow() {
+                this.clearRefreshTimers();
+                this.rememberAfterRefresh();
+                window.location.reload();
             },
             closeRunLog() {
                 this.dismissed = true;
@@ -607,46 +733,65 @@
                                     <h2 id="deployment-run-log-title" class="text-base font-medium text-ink">
                                         <span x-show="running">{{ __('Run in progress') }}</span>
                                         <span x-show="! running && refreshing">{{ __('Run finished') }}</span>
-                                        <span x-show="! running && ! refreshing && statusIs('pending')">{{ __('Run in progress') }}</span>
-                                        <span x-show="! running && ! refreshing && justRefreshed">{{ __('Run complete') }}</span>
-                                        <span x-show="! running && ! refreshing && ! justRefreshed && ! statusIs('pending')">{{ __('Last run') }}</span>
+                                        <span x-show="! running && contactLost">{{ __('Run finished, page not confirmed') }}</span>
+                                        <span x-show="! running && ! refreshing && ! contactLost && statusIs('pending')">{{ __('Run in progress') }}</span>
+                                        <span x-show="! running && ! refreshing && ! contactLost && justRefreshed">{{ __('Run complete') }}</span>
+                                        <span x-show="! running && ! refreshing && ! contactLost && ! justRefreshed && ! statusIs('pending')">{{ __('Last run') }}</span>
                                     </h2>
 
                                     <x-ui.badge variant="info" x-show="running" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
                                         {{ __('Running') }}
                                     </x-ui.badge>
-                                    <x-ui.badge variant="success" x-show="! running && refreshing && statusIs('success')" x-cloak>
+                                    {{-- The run's own outcome survives a failed refresh: the run
+                                         succeeded even when confirming it did not. --}}
+                                    <x-ui.badge variant="success" x-show="! running && (refreshing || contactLost) && statusIs('success')" x-cloak>
                                         {{ __('Complete') }}
                                     </x-ui.badge>
-                                    <x-ui.badge variant="warning" x-show="! running && refreshing && statusIs('warning')" x-cloak>
+                                    <x-ui.badge variant="warning" x-show="! running && (refreshing || contactLost) && statusIs('warning')" x-cloak>
                                         {{ __('Warnings') }}
                                     </x-ui.badge>
-                                    <x-ui.badge variant="danger" x-show="! running && refreshing && statusIs('error')" x-cloak>
+                                    <x-ui.badge variant="danger" x-show="! running && (refreshing || contactLost) && statusIs('error')" x-cloak>
                                         {{ __('Needs action') }}
                                     </x-ui.badge>
-                                    <x-ui.badge variant="warning" x-show="! running && statusIs('pending')" x-cloak>
+                                    <x-ui.badge variant="warning" x-show="! running && ! contactLost && statusIs('pending')" x-cloak>
                                         {{ __('In progress') }}
                                     </x-ui.badge>
                                     <x-ui.badge variant="info" x-show="refreshing && ! running" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
                                         {{ __('Refreshing table') }}
                                     </x-ui.badge>
+                                    <x-ui.badge variant="danger" x-show="contactLost && ! running" x-cloak>
+                                        <x-icon name="heroicon-o-exclamation-triangle" class="mr-1 h-3.5 w-3.5" />
+                                        <span x-text="contactLostBadge"></span>
+                                    </x-ui.badge>
                                     @if ($runStatus !== 'idle' && $runStatus !== 'pending')
-                                        <x-ui.badge :variant="$runVariant" x-show="! running && ! refreshing">{{ $runLabel }}</x-ui.badge>
+                                        <x-ui.badge :variant="$runVariant" x-show="! running && ! refreshing && ! contactLost">{{ $runLabel }}</x-ui.badge>
                                     @endif
                                 </div>
 
                                 <p class="mt-1 text-xs text-muted" x-show="running" x-cloak>{{ __('Streaming live output. You can dismiss this window; the run continues.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="refreshing && ! running" x-cloak>{{ __('Run log saved. Reloading this page so commits and actions match the code on disk.') }}</p>
-                                <p class="mt-1 text-xs text-muted" x-show="statusIs('pending') && ! running && ! refreshing" x-cloak>{{ __('Background work is still running. BLB will refresh this page and record the final result when it finishes.') }}</p>
+                                <p class="mt-1 text-xs text-muted" x-show="statusIs('pending') && ! running && ! refreshing && ! contactLost" x-cloak>{{ __('Background work is still running. BLB will refresh this page and record the final result when it finishes.') }}</p>
                                 <p class="mt-1 text-xs text-muted" x-show="justRefreshed && ! running && ! refreshing" x-cloak>{{ __('Status refreshed. Current commits and actions now reflect the code on disk.') }}</p>
+
+                                {{-- A stalled feed is reported, never swallowed: the operator is
+                                     told what did not happen, what is stale because of it, and is
+                                     handed the reload the page gave up on doing by itself. --}}
+                                <div x-show="contactLost && ! running" x-cloak>
+                                    <p class="mt-1 text-xs text-status-danger" x-text="contactLostMessage"></p>
+                                    <p class="mt-1 font-mono text-[11px] text-muted" x-text="contactLostDetail"></p>
+                                    <x-ui.button type="button" size="sm" variant="outline" class="mt-2" x-on:click="reloadNow()">
+                                        {{ __('Reload the page') }}
+                                    </x-ui.button>
+                                </div>
+
                                 @if ($runAt)
-                                    <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing">
+                                    <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing && ! contactLost">
                                         {{ __('Last run') }} <x-ui.datetime :value="$runAt" />@if ($runSummary !== '') · {{ $runSummary }}@endif
                                     </p>
                                 @else
-                                    <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing">{{ __('No update has run yet.') }}</p>
+                                    <p class="mt-1 text-xs text-muted" x-show="! running && ! refreshing && ! contactLost">{{ __('No update has run yet.') }}</p>
                                 @endif
                             </div>
 
