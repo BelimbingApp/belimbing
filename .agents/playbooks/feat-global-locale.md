@@ -17,23 +17,22 @@ Intent: implement or modify BLB's application-wide locale policy, bootstrap, and
 
 ## Minimal File Pack
 
-- `docs/todo/locale-support-plan.md`
 - `app/Base/Locale/Contracts/LocaleContext.php`
+- `app/Base/Locale/Services/ApplicationLocaleContext.php`
 - `app/Base/DateTime/Services/DateTimeDisplayService.php`
-- `resources/core/views/components/layouts/status-bar.blade.php`
+- `app/Base/System/Livewire/Localization/Index.php`
 - `app/Base/System/Routes/web.php`
 
 ## Reference Shape
 
 - Base owns locale policy and formatting contracts
 - Core Company supplies licensee-country bootstrap data through a contract adapter
-- System owns the admin page, route, menu item, and status-bar confirmation entry point
+- System owns the admin page, route, and menu item
 
 ## Required Invariants
 
 - Base must not depend directly on Core company or address models
 - locale bootstrap from the licensee address is one-time initialization, not a per-request live fallback
-- inferred locales must be persisted as unconfirmed until an administrator confirms them
 - request-time formatting must use shared services or shared UI primitives, not ad hoc `number_format()` / browser-default locale guesses
 - canonical raw datetime surfaces must remain explicit and distinct from localized display surfaces
 
@@ -43,14 +42,11 @@ Intent: implement or modify BLB's application-wide locale policy, bootstrap, and
 2. provide a Core adapter for licensee-country bootstrap through a Base-owned contract
 3. wire locale into shared display services such as datetime / numbers / currency
 4. add or update the `Administration -> System -> Localization` page, route, menu item, and capability
-5. add or update the status-bar warning for unconfirmed locale state
-6. update the locale rollout doc with build status and alignment review
 
 ## Test Checklist
 
 - unit test locale resolution from persisted setting, inferred bootstrap, and config fallback
 - feature test the localization admin flow and persistence
-- feature test the status-bar warning visibility and clearing behavior
 - regression test datetime formatting that depends on locale
 
 ## Common Pitfalls

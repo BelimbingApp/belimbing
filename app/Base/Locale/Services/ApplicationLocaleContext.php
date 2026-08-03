@@ -14,8 +14,6 @@ class ApplicationLocaleContext implements LocaleContext
 
     private const SETTINGS_KEY_SOURCE = 'ui.locale_source';
 
-    private const SETTINGS_KEY_CONFIRMED_AT = 'ui.locale_confirmed_at';
-
     private const SETTINGS_KEY_INFERRED_COUNTRY = 'ui.locale_inferred_country';
 
     private ?ResolvedLocale $resolved = null;
@@ -62,16 +60,6 @@ class ApplicationLocaleContext implements LocaleContext
         return $this->state()->source->value;
     }
 
-    public function isConfirmed(): bool
-    {
-        return $this->state()->confirmed;
-    }
-
-    public function requiresConfirmation(): bool
-    {
-        return $this->state()->requiresConfirmation();
-    }
-
     public function inferredCountry(): ?string
     {
         return $this->state()->inferredCountry;
@@ -89,7 +77,6 @@ class ApplicationLocaleContext implements LocaleContext
             return $this->resolved = $this->buildResolvedLocale(
                 locale: $this->localeSettings->forUser($user),
                 source: LocaleSource::MANUAL,
-                confirmed: true,
             );
         }
 
@@ -99,9 +86,6 @@ class ApplicationLocaleContext implements LocaleContext
             : null;
         $storedSource = $hasStoredLocale
             ? $this->safeGet(self::SETTINGS_KEY_SOURCE)
-            : null;
-        $confirmedAt = $hasStoredLocale
-            ? $this->safeGet(self::SETTINGS_KEY_CONFIRMED_AT)
             : null;
         $storedCountry = $hasStoredLocale
             ? $this->safeGet(self::SETTINGS_KEY_INFERRED_COUNTRY)
@@ -113,7 +97,6 @@ class ApplicationLocaleContext implements LocaleContext
             return $this->resolved = $this->buildResolvedLocale(
                 locale: $normalizedStoredLocale,
                 source: $this->resolveStoredSource($storedSource, $normalizedStoredLocale),
-                confirmed: $this->isStoredLocaleConfirmed($storedSource, $confirmedAt, $normalizedStoredLocale),
                 inferredCountry: is_string($storedCountry) && $storedCountry !== '' ? strtoupper($storedCountry) : null,
             );
         }
@@ -129,7 +112,6 @@ class ApplicationLocaleContext implements LocaleContext
                 return $this->resolved = $this->buildResolvedLocale(
                     locale: $inferredLocale,
                     source: LocaleSource::LICENSEE_ADDRESS,
-                    confirmed: false,
                     inferredCountry: strtoupper($bootstrap->countryIso),
                 );
             }
@@ -138,14 +120,12 @@ class ApplicationLocaleContext implements LocaleContext
         return $this->resolved = $this->buildResolvedLocale(
             locale: $this->localeSettings->global(),
             source: LocaleSource::DECLARED_DEFAULT,
-            confirmed: false,
         );
     }
 
     private function buildResolvedLocale(
         string $locale,
         LocaleSource $source,
-        bool $confirmed,
         ?string $inferredCountry = null,
     ): ResolvedLocale {
         return new ResolvedLocale(
@@ -155,7 +135,6 @@ class ApplicationLocaleContext implements LocaleContext
             intlLocale: $locale,
             numberLocale: str_replace('-', '_', $locale),
             source: $source,
-            confirmed: $confirmed,
             inferredCountry: $inferredCountry,
         );
     }
@@ -166,7 +145,6 @@ class ApplicationLocaleContext implements LocaleContext
             $this->settings->set(self::SETTINGS_KEY_LOCALE, $locale);
             $this->settings->set(self::SETTINGS_KEY_SOURCE, LocaleSource::LICENSEE_ADDRESS->value);
             $this->settings->set(self::SETTINGS_KEY_INFERRED_COUNTRY, strtoupper($countryIso));
-            $this->settings->forget(self::SETTINGS_KEY_CONFIRMED_AT);
         } catch (\Throwable) {
             // During early setup the settings table may not be ready yet.
         }
@@ -179,19 +157,6 @@ class ApplicationLocaleContext implements LocaleContext
         }
 
         return LocaleSource::tryFrom($source) ?? LocaleSource::MANUAL;
-    }
-
-    private function isStoredLocaleConfirmed(mixed $source, mixed $confirmedAt, string $storedLocale): bool
-    {
-        if ($storedLocale === '') {
-            return false;
-        }
-
-        if (! is_string($source) || $source === '' || $source === LocaleSource::MANUAL->value) {
-            return true;
-        }
-
-        return is_string($confirmedAt) && trim($confirmedAt) !== '';
     }
 
     private function safeGet(string $key): mixed

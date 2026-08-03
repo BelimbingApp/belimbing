@@ -13,7 +13,6 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 
 const LOCALE_SETTINGS_KEY = 'ui.locale';
 const LOCALE_SOURCE_SETTINGS_KEY = 'ui.locale_source';
-const LOCALE_CONFIRMED_AT_SETTINGS_KEY = 'ui.locale_confirmed_at';
 const LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country';
 const LOCALE_TEST_LICENSEE_NAME = 'Licensee Company';
 
@@ -72,24 +71,19 @@ it('uses a stored manual locale when present', function (): void {
 
     expect($context->currentLocale())->toBe('fr-FR')
         ->and($context->currentLanguage())->toBe('fr')
-        ->and($context->source())->toBe(LocaleSource::MANUAL->value)
-        ->and($context->isConfirmed())->toBeTrue();
+        ->and($context->source())->toBe(LocaleSource::MANUAL->value);
 });
 
-it('infers and persists an unconfirmed locale from the licensee address country', function (): void {
-    $this->settings->set(LOCALE_CONFIRMED_AT_SETTINGS_KEY, '2026-04-01T10:00:00Z');
-
+it('infers and persists a locale from the licensee address country', function (): void {
     seedLicenseeAddressCountry('MY', 'ms-MY,en-MY', 'MYR');
 
     $context = freshLocaleContext();
 
     expect($context->currentLocale())->toBe('en-MY')
         ->and($context->source())->toBe(LocaleSource::LICENSEE_ADDRESS->value)
-        ->and($context->requiresConfirmation())->toBeTrue()
         ->and($this->settings->get(LOCALE_SETTINGS_KEY))->toBe('en-MY')
         ->and($this->settings->get(LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::LICENSEE_ADDRESS->value)
-        ->and($this->settings->get(LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBe('MY')
-        ->and($this->settings->get(LOCALE_CONFIRMED_AT_SETTINGS_KEY))->toBeNull();
+        ->and($this->settings->get(LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBe('MY');
 });
 
 it('uses the declared locale default when no licensee locale can be inferred', function (): void {
@@ -98,6 +92,5 @@ it('uses the declared locale default when no licensee locale can be inferred', f
     $context = freshLocaleContext();
 
     expect($context->currentLocale())->toBe('en-MY')
-        ->and($context->source())->toBe(LocaleSource::DECLARED_DEFAULT->value)
-        ->and($context->requiresConfirmation())->toBeTrue();
+        ->and($context->source())->toBe(LocaleSource::DECLARED_DEFAULT->value);
 });

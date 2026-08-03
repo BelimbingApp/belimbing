@@ -21,7 +21,6 @@ return [
     // Inference provenance written by ApplicationLocaleContext.
     'runtime' => [
         'ui.locale_source',
-        'ui.locale_confirmed_at',
         'ui.locale_inferred_country',
     ],
 ];

@@ -26,8 +26,6 @@ class Index extends Component
 
     private const SETTINGS_KEY_SOURCE = 'ui.locale_source';
 
-    private const SETTINGS_KEY_CONFIRMED_AT = 'ui.locale_confirmed_at';
-
     private const SETTINGS_KEY_INFERRED_COUNTRY = 'ui.locale_inferred_country';
 
     public string $selectedLocale = '';
@@ -60,7 +58,7 @@ class Index extends Component
     }
 
     /**
-     * Persist the selected locale as the confirmed application locale.
+     * Persist the selected locale as the application locale.
      *
      * Fired by the edit-in-place combobox when the admin commits a selection.
      * Currency is no longer persisted here — it is derived from the locale's
@@ -85,7 +83,6 @@ class Index extends Component
 
         $settings->set(self::SETTINGS_KEY_LOCALE, $locale);
         $settings->set(self::SETTINGS_KEY_SOURCE, LocaleSource::MANUAL->value);
-        $settings->set(self::SETTINGS_KEY_CONFIRMED_AT, now()->toIso8601String());
         $settings->forget(self::SETTINGS_KEY_INFERRED_COUNTRY);
     }
 
@@ -145,7 +142,6 @@ class Index extends Component
         $auditSubjects = [
             ['name' => 'setting', 'id' => self::SETTINGS_KEY_LOCALE],
             ['name' => 'setting', 'id' => self::SETTINGS_KEY_SOURCE],
-            ['name' => 'setting', 'id' => self::SETTINGS_KEY_CONFIRMED_AT],
         ];
 
         if ($companyId) {
@@ -161,8 +157,6 @@ class Index extends Component
                 'label' => $catalog->label($state->locale),
                 'language' => $state->language,
                 'source' => $this->sourceLabel($state->source),
-                'source_code' => $state->source->value,
-                'confirmed' => $state->confirmed,
             ],
             'preview' => [
                 'locale' => $previewLocale,
@@ -245,7 +239,7 @@ class Index extends Component
             $countryName = $bootstrap->countryName ?: $bootstrap->countryIso;
 
             if ($suggested) {
-                return __('Locale :locale was inferred from the licensee address (:country). Confirm it if it is correct, or choose another locale.', [
+                return __('Locale :locale was inferred from the licensee address (:country). Choose another locale to override it.', [
                     'locale' => $suggested,
                     'country' => $countryName,
                 ]);
@@ -278,7 +272,7 @@ class Index extends Component
     private function sourceLabel(LocaleSource $source): string
     {
         return match ($source) {
-            LocaleSource::MANUAL => __('Confirmed manually'),
+            LocaleSource::MANUAL => __('Selected manually'),
             LocaleSource::LICENSEE_ADDRESS => __('Inferred from licensee address'),
             LocaleSource::DECLARED_DEFAULT => __('Using declared default'),
         };

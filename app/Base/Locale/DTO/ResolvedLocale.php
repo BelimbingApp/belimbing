@@ -12,12 +12,6 @@ final readonly class ResolvedLocale
         public string $intlLocale,
         public string $numberLocale,
         public LocaleSource $source,
-        public bool $confirmed,
         public ?string $inferredCountry = null,
     ) {}
-
-    public function requiresConfirmation(): bool
-    {
-        return ! $this->confirmed;
-    }
 }

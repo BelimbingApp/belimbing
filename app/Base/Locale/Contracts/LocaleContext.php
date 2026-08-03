@@ -19,10 +19,6 @@ interface LocaleContext
 
     public function source(): string;
 
-    public function isConfirmed(): bool;
-
-    public function requiresConfirmation(): bool;
-
     public function inferredCountry(): ?string;
 
     public function state(): ResolvedLocale;
