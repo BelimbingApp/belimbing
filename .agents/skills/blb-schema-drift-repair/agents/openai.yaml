@@ -1,0 +1,4 @@
+interface:
+  display_name: "Repair BLB Schema Drift"
+  short_description: "Safely reconcile reported schema drift"
+  default_prompt: "Use $blb-schema-drift-repair to safely repair this local schema drift report."
