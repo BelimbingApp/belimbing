@@ -160,17 +160,9 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
         unset($_ENV[$key], $_SERVER[$key]);
     }
 
-    $statePath = storage_path('logs/octane-server-state.json');
-    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
-
-    $state === null
-        ? @unlink($statePath)
-        : file_put_contents($statePath, json_encode($state));
-
     try {
-        $callback();
+        withDeploymentOctaneStateFile($state, $callback);
     } finally {
-        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
         config($savedConfig);
 
         foreach ($savedEnv as $key => [$env, $server, $getenv]) {
@@ -184,6 +176,31 @@ function withDeploymentOctaneState(?array $state, Closure $callback): void
                 putenv("$key=$getenv");
             }
         }
+    }
+}
+
+/**
+ * Swap the Octane server-state file for the duration of the callback.
+ *
+ * Pass null to run as if no Octane server were listening. A developer machine
+ * running `composer run dev` leaves a live state file in storage/logs, and
+ * DeploymentAdminEndpointResolver prefers that listener over APP_URL — so any
+ * test asserting on a specific health-check URL must control this file or it
+ * passes on CI and fails locally.
+ */
+function withDeploymentOctaneStateFile(?array $state, Closure $callback): void
+{
+    $statePath = storage_path('logs/octane-server-state.json');
+    $backup = is_file($statePath) ? file_get_contents($statePath) : null;
+
+    $state === null
+        ? @unlink($statePath)
+        : file_put_contents($statePath, json_encode($state));
+
+    try {
+        $callback();
+    } finally {
+        $backup === null ? @unlink($statePath) : file_put_contents($statePath, $backup);
     }
 }
 
@@ -1233,26 +1250,32 @@ test('the worker reload retries once when the FrankenPHP admin API times out', f
 
 test('the worker reload records a warning when application health does not recover', function (): void {
     withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2643', function (): void {
-        fakeDeploymentUpdateProcesses();
+        // waitForApplicationHealth() keeps only the *last* failure it saw, so
+        // this assertion is only stable when APP_URL is the sole health
+        // candidate. Without this, a local Octane server's state file adds a
+        // second candidate that overwrites the 503 with the '*' catch-all.
+        withDeploymentOctaneStateFile(null, function (): void {
+            fakeDeploymentUpdateProcesses();
 
-        $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
-        $healthUrl = rtrim((string) config('app.url'), '/').'/up';
+            $baseUrl = DEPLOYMENT_UPDATE_ADMIN_BASE_URL;
+            $healthUrl = rtrim((string) config('app.url'), '/').'/up';
 
-        Http::fake([
-            deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
-            deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
-            $healthUrl => Http::response('', 503),
-            '*' => Http::response('', 500),
-        ]);
-
-        $log = app(DeploymentService::class)->reload();
-        $stored = app(DeploymentRunHistory::class)->lastReload();
-
-        expect($log)->toContain("Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503")
-            ->and($stored)->toMatchArray([
-                'ok' => false,
-                'message' => "Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503",
+            Http::fake([
+                deploymentAdminConfigUrl($baseUrl) => deploymentWorkerConfigResponse(),
+                deploymentAdminRestartUrl($baseUrl) => Http::response('', 200),
+                $healthUrl => Http::response('', 503),
+                '*' => Http::response('', 500),
             ]);
+
+            $log = app(DeploymentService::class)->reload();
+            $stored = app(DeploymentRunHistory::class)->lastReload();
+
+            expect($log)->toContain("Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503")
+                ->and($stored)->toMatchArray([
+                    'ok' => false,
+                    'message' => "Warning: web workers restart was accepted, but the application health check did not recover: {$healthUrl} returned HTTP 503",
+                ]);
+        });
     });
 });
 
