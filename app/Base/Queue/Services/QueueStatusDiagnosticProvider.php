@@ -8,16 +8,14 @@ use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 
 final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
 {
-    private const HIGH_FAILURE_RATE_THRESHOLD = 10;
-
     public function __construct(
         private readonly AuthorizationService $authorizationService,
         private readonly ActionableFailedJobRepository $failedJobs,
+        private readonly QueueFailureRateMonitor $failureRate,
     ) {}
 
     /**
@@ -29,10 +27,10 @@ final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
             return [];
         }
 
-        $recentFailures = $this->recentFailureCount();
+        $recentFailures = $this->failureRate->recentFailures();
         $failedJobs = $this->failedJobCount();
 
-        if ($recentFailures > self::HIGH_FAILURE_RATE_THRESHOLD) {
+        if ($this->failureRate->exceedsThreshold($recentFailures)) {
             return [$this->highFailureRateDiagnostic($recentFailures, $failedJobs)];
         }
 
@@ -57,7 +55,7 @@ final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
             metadata: [
                 'recent_failures' => $recentFailures,
                 'failed_jobs' => $failedJobs,
-                'threshold' => self::HIGH_FAILURE_RATE_THRESHOLD,
+                'threshold' => QueueFailureRateMonitor::HIGH_FAILURE_RATE_THRESHOLD,
             ],
         );
     }
@@ -77,15 +75,6 @@ final class QueueStatusDiagnosticProvider implements StatusBarDiagnosticProvider
                 'failed_jobs' => $failedJobs,
             ],
         );
-    }
-
-    private function recentFailureCount(): int
-    {
-        try {
-            return max(0, (int) Cache::get('queue_failures', 0));
-        } catch (\Throwable) {
-            return 0;
-        }
     }
 
     private function failedJobCount(): ?int

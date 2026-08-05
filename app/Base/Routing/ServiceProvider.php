@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Routing;
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -22,6 +24,8 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function boot(): void
     {
+        $this->forceConfiguredRootUrl();
+
         $discovered = $this->app->make(RouteDiscoveryService::class)->discover();
 
         foreach ($discovered['web'] ?? [] as $file) {
@@ -30,6 +34,26 @@ class ServiceProvider extends BaseServiceProvider
 
         foreach ($discovered['api'] ?? [] as $file) {
             Route::middleware('api')->prefix('api')->group($file);
+        }
+    }
+
+    /**
+     * Pin URL generation to APP_URL when running behind a reverse proxy
+     * (e.g. Caddy terminating TLS), which otherwise emits the wrong host and
+     * bogus ports like `:0` in generated links.
+     */
+    private function forceConfiguredRootUrl(): void
+    {
+        $appUrl = config('app.url');
+
+        if (! is_string($appUrl) || $appUrl === '') {
+            return;
+        }
+
+        URL::forceRootUrl($appUrl);
+
+        if (str_starts_with($appUrl, 'https://')) {
+            URL::forceScheme('https');
         }
     }
 }
