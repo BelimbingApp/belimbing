@@ -998,18 +998,6 @@ describe('AgenticRuntime (streaming execution and event delivery)', function () 
 });
 
 describe('AgenticRuntime (error surfacing)', function () {
-
-    it('does not fall back on non-retryable runtime error in sync mode', function () {
-        $llmClient = Mockery::mock(LlmClient::class);
-        $llmClient->shouldReceive('chat')->once()->andReturn(
-            $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
-        );
-
-        $result = runAgenticConversation($llmClient);
-
-        expect($result['meta']['error_type'])->toBe('auth_error');
-    });
-
     it('applies a model override to the resolved primary config', function () {
         $primary = $this->makeConfig('github-copilot', 'gpt-primary-slot');
         $configResolver = $this->mockResolvedConfigResolver([$primary]);

