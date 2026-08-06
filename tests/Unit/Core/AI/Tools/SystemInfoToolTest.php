@@ -83,11 +83,24 @@ describe('section selection', function () {
     it('returns active non-Base module identities across the four-root topology', function () {
         $data = $this->decodeToolExecution(['section' => 'modules']);
 
+        // core/ai is a Core module that ships with the platform repo and is
+        // always present. Domain and Extension modules live in private nested
+        // repos that are not checked out in CI or a fresh platform-only clone,
+        // so they are asserted conditionally.
         expect($data['modules'])
             ->toContain('core/ai')
-            ->toContain('people/payroll')
-            ->toContain('ham/auto-parts')
             ->not->toContain('base/foundation');
+
+        $conditionalModules = [
+            'people/payroll' => app_path('Domains/People/Payroll'),
+            'ham/auto-parts' => app_path('Extensions/Ham/AutoParts'),
+        ];
+
+        foreach ($conditionalModules as $moduleId => $root) {
+            if (is_dir($root)) {
+                expect($data['modules'])->toContain($moduleId);
+            }
+        }
     });
 
     it('reports an invalid module manifest inventory as unavailable', function () {
