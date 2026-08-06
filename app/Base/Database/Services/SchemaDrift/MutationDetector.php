@@ -196,12 +196,14 @@ final class MutationDetector
     public function schemaTableCallChangesComparedPresence(Node\Expr\StaticCall $call): bool
     {
         $closure = $call->args[1]->value ?? null;
-        if (! $closure instanceof Node\Expr\Closure || $closure->stmts === null) {
-            return true;
-        }
+        $parameter = ($closure instanceof Node\Expr\Closure && $closure->stmts !== null)
+            ? ($closure->params[0]->var ?? null)
+            : null;
 
-        $parameter = $closure->params[0]->var ?? null;
-        if (! $parameter instanceof Node\Expr\Variable || ! is_string($parameter->name)) {
+        if (! $closure instanceof Node\Expr\Closure
+            || $closure->stmts === null
+            || ! $parameter instanceof Node\Expr\Variable
+            || ! is_string($parameter->name)) {
             return true;
         }
 

@@ -185,13 +185,7 @@ final class BlueprintProcessor
                 continue;
             }
 
-            if (! in_array($modifierName, array_map(strtolower(...), self::COLUMN_MODIFIERS), true)
-                && ! in_array($modifierName, array_map(strtolower(...), self::OUT_OF_SCOPE_BLUEPRINT_METHODS), true)) {
-                $this->context->reportUnreadable(
-                    $modifier,
-                    sprintf('Unsupported Blueprint chain method [%s] on table [%s].', $modifierName, $table),
-                );
-            }
+            $this->reportUnsupportedModifierIfAny($table, $modifier, $modifierName);
         }
 
         // Laravel materializes at most one fluent index command per column and
@@ -210,6 +204,19 @@ final class BlueprintProcessor
             ));
 
             break;
+        }
+    }
+
+    private function reportUnsupportedModifierIfAny(string $table, Node\Expr\MethodCall $modifier, string $modifierName): void
+    {
+        $known = in_array($modifierName, array_map(strtolower(...), self::COLUMN_MODIFIERS), true)
+            || in_array($modifierName, array_map(strtolower(...), self::OUT_OF_SCOPE_BLUEPRINT_METHODS), true);
+
+        if (! $known) {
+            $this->context->reportUnreadable(
+                $modifier,
+                sprintf('Unsupported Blueprint chain method [%s] on table [%s].', $modifierName, $table),
+            );
         }
     }
 
@@ -443,13 +450,12 @@ final class BlueprintProcessor
         }
 
         $column = isset($call->args[0]) ? $this->context->evaluator->evaluate($call->args[0]->value, $environment) : null;
-        if (! is_string($column) || $column === '') {
+        $valid = is_string($column) && $column !== '';
+        if (! $valid) {
             $this->context->reportUnreadable($call, sprintf('Blueprint::%s column on table [%s] is runtime-dependent.', $method, $table));
-
-            return [];
         }
 
-        return [$column];
+        return $valid ? [$column] : [];
     }
 
     /** @param  array<string, mixed>  $environment @return list<string> */

@@ -98,14 +98,7 @@ final class SchemaDriftComparator
         $findings = [];
 
         $actualIndexes = $this->actualIndexes($schema, $table['name']);
-        $actualBySignature = [];
-        $actualByName = [];
-        foreach ($actualIndexes as $actualIndex) {
-            $actualBySignature[$actualIndex->signature()] = true;
-            if ($actualIndex->name !== null) {
-                $actualByName[strtolower($actualIndex->name)] = true;
-            }
-        }
+        [$actualBySignature, $actualByName] = $this->indexLookups($actualIndexes);
 
         $declaredSignatures = [];
         $declaredNames = [];
@@ -132,6 +125,42 @@ final class SchemaDriftComparator
             }
         }
 
+        $findings = [
+            ...$findings,
+            ...$this->unexpectedUniqueIndexes($actualIndexes, $declaredSignatures, $declaredNames, $table),
+        ];
+
+        return $findings;
+    }
+
+    /**
+     * @param  list<DeclaredIndex>  $actualIndexes
+     * @return array{0: array<string, true>, 1: array<string, true>}
+     */
+    private function indexLookups(array $actualIndexes): array
+    {
+        $bySignature = [];
+        $byName = [];
+        foreach ($actualIndexes as $actualIndex) {
+            $bySignature[$actualIndex->signature()] = true;
+            if ($actualIndex->name !== null) {
+                $byName[strtolower($actualIndex->name)] = true;
+            }
+        }
+
+        return [$bySignature, $byName];
+    }
+
+    /**
+     * @param  list<DeclaredIndex>  $actualIndexes
+     * @param  array<string, true>  $declaredSignatures
+     * @param  array<string, true>  $declaredNames
+     * @param  array{name: string, migration: string, line: int, columns: array<string, mixed>, indexes: array<string, mixed>}  $table
+     * @return list<SchemaDriftFinding>
+     */
+    private function unexpectedUniqueIndexes(array $actualIndexes, array $declaredSignatures, array $declaredNames, array $table): array
+    {
+        $findings = [];
         foreach ($actualIndexes as $index) {
             if (($index->type === DeclaredIndexType::UNIQUE || $index->type === DeclaredIndexType::PRIMARY)
                 && ! isset($declaredSignatures[$index->signature()])

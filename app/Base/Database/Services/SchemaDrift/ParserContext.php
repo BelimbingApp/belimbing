@@ -30,8 +30,6 @@ final class ParserContext
     /** @var callable(list<Node\Stmt>, array<string, mixed>): void */
     public $processStatements;
 
-    public function __construct() {}
-
     public function addOperation(TableOperation $operation): void
     {
         $this->operations[] = $operation;
