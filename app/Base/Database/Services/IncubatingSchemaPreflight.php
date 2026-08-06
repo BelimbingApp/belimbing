@@ -403,12 +403,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 continue;
             }
 
-            foreach ($referencedTables as $table) {
-                $conflicts[] = [
-                    'table' => $table,
-                    'migration' => $source['file'],
-                ];
-            }
+            $conflicts = $this->accumulateConflicts($conflicts, $referencedTables, $source['file']);
         }
 
         if ($unsafeReplayMigrations !== []) {
@@ -441,6 +436,23 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         }
 
         return $this->migrationFiles->replayAfterIncubatingSchemaViolations($contents);
+    }
+
+    /**
+     * @param  list<array{table: string, migration: string}>  $conflicts
+     * @param  list<string>  $referencedTables
+     * @return list<array{table: string, migration: string}>
+     */
+    private function accumulateConflicts(array $conflicts, array $referencedTables, string $file): array
+    {
+        foreach ($referencedTables as $table) {
+            $conflicts[] = [
+                'table' => $table,
+                'migration' => $file,
+            ];
+        }
+
+        return $conflicts;
     }
 
     /**

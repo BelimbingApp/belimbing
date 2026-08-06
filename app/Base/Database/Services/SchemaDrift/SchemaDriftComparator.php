@@ -27,79 +27,11 @@ final class SchemaDriftComparator
                 continue;
             }
 
-            $actualColumns = array_fill_keys(array_map(
-                strtolower(...),
-                $schema->getColumnListing($table['name']),
-            ), true);
-
-            foreach ($table['columns'] as $key => $column) {
-                if (! isset($actualColumns[$key])) {
-                    $findings[] = new SchemaDriftFinding(
-                        SchemaDriftFindingKind::MISSING_COLUMN,
-                        $table['name'],
-                        $column['name'],
-                        $column['migration'],
-                        $column['line'],
-                    );
-                }
-            }
-
-            foreach (array_keys($actualColumns) as $column) {
-                if (! isset($table['columns'][$column])) {
-                    $findings[] = $this->finding(
-                        SchemaDriftFindingKind::UNEXPECTED_COLUMN,
-                        $table,
-                        $column,
-                    );
-                }
-            }
-
-            $actualIndexes = $this->actualIndexes($schema, $table['name']);
-            $actualBySignature = [];
-            $actualByName = [];
-            foreach ($actualIndexes as $actualIndex) {
-                $actualBySignature[$actualIndex->signature()] = true;
-                if ($actualIndex->name !== null) {
-                    $actualByName[strtolower($actualIndex->name)] = true;
-                }
-            }
-
-            $declaredSignatures = [];
-            $declaredNames = [];
-            foreach ($table['indexes'] as $index) {
-                $declared = $index['index'];
-                $present = $declared->compareByName
-                    ? $declared->name !== null && isset($actualByName[strtolower($declared->name)])
-                    : isset($actualBySignature[$declared->signature()]);
-
-                if ($declared->compareByName && $declared->name !== null) {
-                    $declaredNames[strtolower($declared->name)] = true;
-                } else {
-                    $declaredSignatures[$declared->signature()] = true;
-                }
-
-                if (! $present) {
-                    $findings[] = new SchemaDriftFinding(
-                        SchemaDriftFindingKind::MISSING_INDEX,
-                        $table['name'],
-                        $this->describeIndex($declared),
-                        $index['migration'],
-                        $index['line'],
-                    );
-                }
-            }
-
-            foreach ($actualIndexes as $index) {
-                if (($index->type === DeclaredIndexType::UNIQUE || $index->type === DeclaredIndexType::PRIMARY)
-                    && ! isset($declaredSignatures[$index->signature()])
-                    && ($index->name === null || ! isset($declaredNames[strtolower($index->name)]))) {
-                    $findings[] = $this->finding(
-                        SchemaDriftFindingKind::UNEXPECTED_UNIQUE_INDEX,
-                        $table,
-                        $this->describeIndex($index),
-                    );
-                }
-            }
+            $findings = [
+                ...$findings,
+                ...$this->compareColumns($table, $schema),
+                ...$this->compareIndexes($table, $schema),
+            ];
         }
 
         usort($findings, fn (SchemaDriftFinding $left, SchemaDriftFinding $right): int => [
@@ -115,6 +47,131 @@ final class SchemaDriftComparator
             $right->migration,
             $right->line,
         ]);
+
+        return $findings;
+    }
+
+    /**
+     * @param  array{name: string, migration: string, line: int, columns: array<string, array{name: string, migration: string, line: int}>, indexes: array<string, mixed>}  $table
+     * @return list<SchemaDriftFinding>
+     */
+    private function compareColumns(array $table, Builder $schema): array
+    {
+        $findings = [];
+
+        $actualColumns = array_fill_keys(array_map(
+            strtolower(...),
+            $schema->getColumnListing($table['name']),
+        ), true);
+
+        foreach ($table['columns'] as $key => $column) {
+            if (! isset($actualColumns[$key])) {
+                $findings[] = new SchemaDriftFinding(
+                    SchemaDriftFindingKind::MISSING_COLUMN,
+                    $table['name'],
+                    $column['name'],
+                    $column['migration'],
+                    $column['line'],
+                );
+            }
+        }
+
+        foreach (array_keys($actualColumns) as $column) {
+            if (! isset($table['columns'][$column])) {
+                $findings[] = $this->finding(
+                    SchemaDriftFindingKind::UNEXPECTED_COLUMN,
+                    $table,
+                    $column,
+                );
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * @param  array{name: string, migration: string, line: int, columns: array<string, mixed>, indexes: array<string, array{index: DeclaredIndex, migration: string, line: int}>}  $table
+     * @return list<SchemaDriftFinding>
+     */
+    private function compareIndexes(array $table, Builder $schema): array
+    {
+        $findings = [];
+
+        $actualIndexes = $this->actualIndexes($schema, $table['name']);
+        [$actualBySignature, $actualByName] = $this->indexLookups($actualIndexes);
+
+        $declaredSignatures = [];
+        $declaredNames = [];
+        foreach ($table['indexes'] as $index) {
+            $declared = $index['index'];
+            $present = $declared->compareByName
+                ? $declared->name !== null && isset($actualByName[strtolower($declared->name)])
+                : isset($actualBySignature[$declared->signature()]);
+
+            if ($declared->compareByName && $declared->name !== null) {
+                $declaredNames[strtolower($declared->name)] = true;
+            } else {
+                $declaredSignatures[$declared->signature()] = true;
+            }
+
+            if (! $present) {
+                $findings[] = new SchemaDriftFinding(
+                    SchemaDriftFindingKind::MISSING_INDEX,
+                    $table['name'],
+                    $this->describeIndex($declared),
+                    $index['migration'],
+                    $index['line'],
+                );
+            }
+        }
+
+        $findings = [
+            ...$findings,
+            ...$this->unexpectedUniqueIndexes($actualIndexes, $declaredSignatures, $declaredNames, $table),
+        ];
+
+        return $findings;
+    }
+
+    /**
+     * @param  list<DeclaredIndex>  $actualIndexes
+     * @return array{0: array<string, true>, 1: array<string, true>}
+     */
+    private function indexLookups(array $actualIndexes): array
+    {
+        $bySignature = [];
+        $byName = [];
+        foreach ($actualIndexes as $actualIndex) {
+            $bySignature[$actualIndex->signature()] = true;
+            if ($actualIndex->name !== null) {
+                $byName[strtolower($actualIndex->name)] = true;
+            }
+        }
+
+        return [$bySignature, $byName];
+    }
+
+    /**
+     * @param  list<DeclaredIndex>  $actualIndexes
+     * @param  array<string, true>  $declaredSignatures
+     * @param  array<string, true>  $declaredNames
+     * @param  array{name: string, migration: string, line: int, columns: array<string, mixed>, indexes: array<string, mixed>}  $table
+     * @return list<SchemaDriftFinding>
+     */
+    private function unexpectedUniqueIndexes(array $actualIndexes, array $declaredSignatures, array $declaredNames, array $table): array
+    {
+        $findings = [];
+        foreach ($actualIndexes as $index) {
+            if (($index->type === DeclaredIndexType::UNIQUE || $index->type === DeclaredIndexType::PRIMARY)
+                && ! isset($declaredSignatures[$index->signature()])
+                && ($index->name === null || ! isset($declaredNames[strtolower($index->name)]))) {
+                $findings[] = $this->finding(
+                    SchemaDriftFindingKind::UNEXPECTED_UNIQUE_INDEX,
+                    $table,
+                    $this->describeIndex($index),
+                );
+            }
+        }
 
         return $findings;
     }

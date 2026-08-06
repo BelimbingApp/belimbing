@@ -105,6 +105,8 @@ final readonly class DeclaredSchema
             case TableOperationKind::RENAME_INDEX:
                 self::renameIndex($tables, $operation);
                 break;
+            default:
+                break;
         }
     }
 
