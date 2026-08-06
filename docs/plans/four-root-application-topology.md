@@ -1,6 +1,6 @@
 # Four-root application topology
 
-**Status:** Landing authorized — coordinated push in progress
+**Status:** Complete
 **Last Updated:** 2026-08-06
 **Sources:** `docs/architecture/decisions/0001-four-root-application-topology.md`, `docs/architecture/module-system.md`, `docs/architecture/database.md`, root `AGENTS.md`
 **Agents:** codex/gpt-5.6-sol
@@ -118,7 +118,7 @@ The forward topology normalizer declares `ReplaysAfterIncubatingSchema` because 
 
 - [x] Record the bounded compatibility removal condition and pre-review validation evidence. {codex/gpt-5.6-sol}
 - [x] Replace provisional validation figures with final post-review evidence. {codex/gpt-5.6-sol}
-- [ ] After explicit commit/push authorization, commit each nested repository and the platform with the required co-author, then push in the documented compatibility-safe order.
+- [x] After explicit commit/push authorization, commit each nested repository and the platform with the required co-author, then push in the documented compatibility-safe order. {codex/gpt-5.6-sol}
 
 ## Validation Evidence
 
@@ -130,3 +130,4 @@ The forward topology normalizer declares `ReplaysAfterIncubatingSchema` because 
 - Stable historical migrations were not edited. The topology guard explicitly allowlists 27 audited pre-cutover stable migrations that retain retired provenance. Ten source-declared incubating migrations were intentionally canonicalized in place: People Payroll migrations `000007` through `000012`, and SB Group IBP migrations `000021`, `000025`, `000027`, and `000030`; the earlier blanket R100/no-internal-Domain-edit claim is superseded.
 - `git diff --check` passes in the platform and all six nested repositories. All seven remain on `main`; nested repositories contain no untracked residue, and the platform tracks only the Domain and Extension root guides across nested Git boundaries.
 - Focused Pint checks pass for review-touched PHP. The broad baseline check exposed 616 pre-existing findings among 2,839 files, including hash-immutable historical migrations; remediation and a trustworthy authorable-file CI scope are recorded in `docs/plans/authorable-php-formatting-baseline.md`.
+- The coordinated `main` landing completed in platform → Domains → Extensions order: platform `ff44f92a`, Commerce `deac42b`, Operation `8a21b59`, People `c2195fa`, Ham `f94ddbc`, Kiat `e226e2a`, and SB Group `82c830b`.
