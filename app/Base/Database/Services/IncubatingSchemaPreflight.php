@@ -376,7 +376,7 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         $conflicts = [];
 
         foreach ($appliedMigrationSources as $source) {
-            if (isset($fileSet[$source['file']]) || $source['migration_name'] <= $earliestRebuild) {
+            if ($this->sourceIsInRebuildScope($source, $fileSet, $earliestRebuild)) {
                 continue;
             }
 
@@ -392,13 +392,12 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
                 continue;
             }
 
-            if ($this->migrationFiles->contentsReplayAfterIncubatingSchema($source['contents'])) {
-                $violations = $this->migrationFiles->replayAfterIncubatingSchemaViolations($source['contents']);
-
-                if ($violations === []) {
+            $replayViolations = $this->replayAfterIncubatingViolations($source['contents']);
+            if ($replayViolations !== null) {
+                if ($replayViolations === []) {
                     $replayable[$source['file']] = true;
                 } else {
-                    $unsafeReplayMigrations[$source['file']] = $violations;
+                    $unsafeReplayMigrations[$source['file']] = $replayViolations;
                 }
 
                 continue;
@@ -421,6 +420,27 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         }
 
         return array_keys($replayable);
+    }
+
+    /**
+     * @param  array{file: string, migration_name: string, contents: string}  $source
+     * @param  array<string, bool>  $fileSet
+     */
+    private function sourceIsInRebuildScope(array $source, array $fileSet, string $earliestRebuild): bool
+    {
+        return isset($fileSet[$source['file']]) || $source['migration_name'] <= $earliestRebuild;
+    }
+
+    /**
+     * @return list<string>|null Null when the source is not a replay-after-incubating migration; empty list when safe to replay; non-empty list of violations when unsafe.
+     */
+    private function replayAfterIncubatingViolations(string $contents): ?array
+    {
+        if (! $this->migrationFiles->contentsReplayAfterIncubatingSchema($contents)) {
+            return null;
+        }
+
+        return $this->migrationFiles->replayAfterIncubatingSchemaViolations($contents);
     }
 
     /**

@@ -176,12 +176,14 @@ final class MigrationIncubationManager
 
     private function migrationPathByFileName(string $migrationFile): ?string
     {
+        $migrationGlob = 'Database/Migrations/*.php';
+
         $patterns = [
-            ApplicationTopology::baseComponentPattern('Database/Migrations/*.php'),
-            ApplicationTopology::coreModulePattern('Database/Migrations/*.php'),
-            ApplicationTopology::domainModulePattern('Database/Migrations/*.php'),
+            ApplicationTopology::baseComponentPattern($migrationGlob),
+            ApplicationTopology::coreModulePattern($migrationGlob),
+            ApplicationTopology::domainModulePattern($migrationGlob),
             database_path('migrations/*.php'),
-            ApplicationTopology::extensionModulePattern('Database/Migrations/*.php'),
+            ApplicationTopology::extensionModulePattern($migrationGlob),
         ];
 
         foreach ($patterns as $pattern) {

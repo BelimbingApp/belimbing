@@ -108,13 +108,14 @@ class ServiceProvider extends BaseServiceProvider
     {
         $config = $this->app->make('config');
         $basePath = realpath(__DIR__.'/Config/authz.php');
+        $configFile = 'Config/authz.php';
 
         $patterns = [
-            ApplicationTopology::baseComponentPattern('Config/authz.php'),
-            ApplicationTopology::coreModulePattern('Config/authz.php'),
-            ApplicationTopology::domainModulePattern('Config/authz.php'),
-            ApplicationTopology::extensionSourcePattern('Config/authz.php'),
-            ApplicationTopology::extensionModulePattern('Config/authz.php'),
+            ApplicationTopology::baseComponentPattern($configFile),
+            ApplicationTopology::coreModulePattern($configFile),
+            ApplicationTopology::domainModulePattern($configFile),
+            ApplicationTopology::extensionSourcePattern($configFile),
+            ApplicationTopology::extensionModulePattern($configFile),
         ];
 
         foreach ($patterns as $pattern) {

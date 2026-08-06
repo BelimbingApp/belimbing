@@ -23,7 +23,7 @@ function retiredApplicationTopologyContracts(string $contents): array
         'App\\Modules namespace' => str_contains($normalizedNamespaceContents, 'App\\Modules\\'),
         'app/Modules path' => str_contains($normalizedPathContents, 'app/Modules'),
         'Extensions namespace' => preg_match('/(?<![A-Za-z0-9_\\\\])Extensions\\\\/', $normalizedNamespaceContents) === 1,
-        'repository-root extensions path' => preg_match('#(?<!/)extensions/(?:[a-z0-9_{-])#', $normalizedPathContents) === 1,
+        'repository-root extensions path' => preg_match('#(?<!/)extensions/[a-z0-9_{-]#', $normalizedPathContents) === 1,
     ]));
 }
 
@@ -37,6 +37,86 @@ it('keeps application code beneath exactly the four accepted roots', function ()
     expect($roots)->toBe(['Base', 'Core', 'Domains', 'Extensions'])
         ->and(base_path('extensions'))->not->toBeDirectory();
 });
+
+/**
+ * @param  list<string>  $immutableMigrationProvenance
+ * @return list<string>
+ */
+function immutableMigrationViolations(array $immutableMigrationProvenance): array
+{
+    $violations = [];
+
+    foreach ($immutableMigrationProvenance as $relative) {
+        $migration = base_path($relative);
+
+        if (! File::exists($migration)) {
+            continue;
+        }
+
+        $contents = File::get($migration);
+
+        if (str_contains($contents, 'IncubatingSchema')) {
+            $violations[] = $relative.' (incubating migration cannot retain retired topology references)';
+        }
+
+        if (retiredApplicationTopologyContracts($contents) === []) {
+            $violations[] = $relative.' (stale immutable-migration exemption)';
+        }
+    }
+
+    return $violations;
+}
+
+/**
+ * @param  array<string, bool>  $allowed
+ * @return list<string>
+ */
+function finderViolations(Finder $finder, array $allowed): array
+{
+    $violations = [];
+    $basePath = str_replace('\\', '/', base_path()).'/';
+
+    foreach ($finder as $file) {
+        $path = str_replace('\\', '/', $file->getRealPath());
+        $relative = str_replace($basePath, '', $path);
+
+        if (isset($allowed[$relative])) {
+            continue;
+        }
+
+        $contents = $file->getContents();
+
+        foreach (retiredApplicationTopologyContracts($contents) as $contract) {
+            $violations[] = $relative.' ('.$contract.')';
+        }
+    }
+
+    return $violations;
+}
+
+/**
+ * @return list<string>
+ */
+function configFileViolations(): array
+{
+    $violations = [];
+
+    foreach ([
+        'composer.json',
+        'phpunit.xml',
+        'vite.config.js',
+        'AGENTS.md',
+        'README.md',
+    ] as $relative) {
+        $contents = File::get(base_path($relative));
+
+        if (str_contains($contents, 'App\\Modules\\') || str_contains($contents, 'app/Modules')) {
+            $violations[] = $relative.' (retired namespace or path)';
+        }
+    }
+
+    return $violations;
+}
 
 it('rejects retired topology references from active code tests and tooling', function (): void {
     $scanRoots = array_values(array_filter([
@@ -108,54 +188,12 @@ it('rejects retired topology references from active code tests and tooling', fun
         ...$compatibilityBoundaries,
         ...$immutableMigrationProvenance,
     ], true);
-    $violations = [];
 
-    foreach ($immutableMigrationProvenance as $relative) {
-        $migration = base_path($relative);
-
-        if (! File::exists($migration)) {
-            continue;
-        }
-
-        $contents = File::get($migration);
-
-        if (str_contains($contents, 'IncubatingSchema')) {
-            $violations[] = $relative.' (incubating migration cannot retain retired topology references)';
-        }
-
-        if (retiredApplicationTopologyContracts($contents) === []) {
-            $violations[] = $relative.' (stale immutable-migration exemption)';
-        }
-    }
-
-    foreach ($finder as $file) {
-        $path = str_replace('\\', '/', $file->getRealPath());
-        $relative = str_replace(str_replace('\\', '/', base_path()).'/', '', $path);
-
-        if (isset($allowed[$relative])) {
-            continue;
-        }
-
-        $contents = $file->getContents();
-
-        foreach (retiredApplicationTopologyContracts($contents) as $contract) {
-            $violations[] = $relative.' ('.$contract.')';
-        }
-    }
-
-    foreach ([
-        'composer.json',
-        'phpunit.xml',
-        'vite.config.js',
-        'AGENTS.md',
-        'README.md',
-    ] as $relative) {
-        $contents = File::get(base_path($relative));
-
-        if (str_contains($contents, 'App\\Modules\\') || str_contains($contents, 'app/Modules')) {
-            $violations[] = $relative.' (retired namespace or path)';
-        }
-    }
+    $violations = [
+        ...immutableMigrationViolations($immutableMigrationProvenance),
+        ...finderViolations($finder, $allowed),
+        ...configFileViolations(),
+    ];
 
     expect($violations)->toBe([]);
 });

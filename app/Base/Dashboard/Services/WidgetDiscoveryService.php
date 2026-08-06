@@ -25,13 +25,15 @@ class WidgetDiscoveryService
      */
     protected function scanPatterns(): array
     {
+        $configFile = 'Config/dashboard.php';
+
         return [
-            ApplicationTopology::baseComponentPattern('Config/dashboard.php'),
-            ApplicationTopology::coreModulePattern('Config/dashboard.php'),
-            ApplicationTopology::domainPattern('Config/dashboard.php'),
-            ApplicationTopology::domainModulePattern('Config/dashboard.php'),
-            ApplicationTopology::extensionSourcePattern('Config/dashboard.php'),
-            ApplicationTopology::extensionModulePattern('Config/dashboard.php'),
+            ApplicationTopology::baseComponentPattern($configFile),
+            ApplicationTopology::coreModulePattern($configFile),
+            ApplicationTopology::domainPattern($configFile),
+            ApplicationTopology::domainModulePattern($configFile),
+            ApplicationTopology::extensionSourcePattern($configFile),
+            ApplicationTopology::extensionModulePattern($configFile),
         ];
     }
 

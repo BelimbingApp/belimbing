@@ -46,31 +46,19 @@
         :subtitle="__('Manage Domains and operator-chosen Extensions. Expand either to inspect its contained Modules. Base and the required Core Domain ship with the platform and stay active.')"
     >
         <x-slot:help>
-            <dl class="space-y-3">
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Platform Baseline') }}</dt>
-                    <dd>{{ __('The built-in BLB platform: Base infrastructure plus the required Core Domain and its Modules. It ships with the main repository and cannot be installed, disabled, or removed here.') }}</dd>
-                </div>
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Domain') }}</dt>
-                    <dd>{{ __('An enterprise capability such as People or Commerce. A Domain contains one or more Modules and is installed, enabled, disabled, updated, or removed as one unit. Core follows the same model but is required.') }}</dd>
-                </div>
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Module') }}</dt>
-                    <dd>{{ __('A full-stack ownership boundary inside a Domain or Extension, such as People → Payroll. Modules are not installed or removed on their own.') }}</dd>
-                </div>
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Extension') }}</dt>
-                    <dd>{{ __('Operator-chosen software that may adapt, combine, or add behavior across Domains. Extensions are intentionally flexible and may contain one or more Modules.') }}</dd>
-                </div>
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Contribution') }}</dt>
-                    <dd>{{ __('Runtime behavior a Domain or Extension adds through another Module’s explicit seam — for example, a Malaysia payroll pack contributing to Payroll.') }}</dd>
-                </div>
-                <div>
-                    <dt class="font-medium text-ink">{{ __('Slot') }}</dt>
-                    <dd>{{ __('A whole-module implementation chosen once per deployment. Switching a slot is a data migration, never a toggle on this page.') }}</dd>
-                </div>
+            <dl>
+                <dt class="mt-3 first:mt-0 font-medium text-ink">{{ __('Platform Baseline') }}</dt>
+                <dd>{{ __('The built-in BLB platform: Base infrastructure plus the required Core Domain and its Modules. It ships with the main repository and cannot be installed, disabled, or removed here.') }}</dd>
+                <dt class="mt-3 font-medium text-ink">{{ __('Domain') }}</dt>
+                <dd>{{ __('An enterprise capability such as People or Commerce. A Domain contains one or more Modules and is installed, enabled, disabled, updated, or removed as one unit. Core follows the same model but is required.') }}</dd>
+                <dt class="mt-3 font-medium text-ink">{{ __('Module') }}</dt>
+                <dd>{{ __('A full-stack ownership boundary inside a Domain or Extension, such as People → Payroll. Modules are not installed or removed on their own.') }}</dd>
+                <dt class="mt-3 font-medium text-ink">{{ __('Extension') }}</dt>
+                <dd>{{ __('Operator-chosen software that may adapt, combine, or add behavior across Domains. Extensions are intentionally flexible and may contain one or more Modules.') }}</dd>
+                <dt class="mt-3 font-medium text-ink">{{ __('Contribution') }}</dt>
+                <dd>{{ __('Runtime behavior a Domain or Extension adds through another Module’s explicit seam — for example, a Malaysia payroll pack contributing to Payroll.') }}</dd>
+                <dt class="mt-3 font-medium text-ink">{{ __('Slot') }}</dt>
+                <dd>{{ __('A whole-module implementation chosen once per deployment. Switching a slot is a data migration, never a toggle on this page.') }}</dd>
             </dl>
         </x-slot:help>
     </x-ui.page-header>

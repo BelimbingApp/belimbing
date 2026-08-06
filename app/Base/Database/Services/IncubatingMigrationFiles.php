@@ -97,67 +97,113 @@ final class IncubatingMigrationFiles
         $violations = [];
 
         foreach ($tokens as $index => $token) {
-            if (is_array($token) && $this->tokenNames($token, 'Schema')) {
-                $doubleColon = $this->nextSignificantTokenIndex($tokens, $index + 1);
-                $method = $doubleColon === null
-                    ? null
-                    : $this->nextSignificantTokenIndex($tokens, $doubleColon + 1);
-
-                if ($doubleColon !== null
-                    && is_array($tokens[$doubleColon])
-                    && $tokens[$doubleColon][0] === T_DOUBLE_COLON
-                    && $method !== null) {
-                    $methodToken = $tokens[$method];
-
-                    if (is_array($methodToken) && $methodToken[0] === T_STRING) {
-                        $openingParenthesis = $this->nextSignificantTokenIndex($tokens, $method + 1);
-
-                        if ($openingParenthesis !== null
-                            && $tokens[$openingParenthesis] === '('
-                            && ! in_array(strtolower($methodToken[1]), self::REPLAY_SAFE_SCHEMA_METHODS, true)) {
-                            $violations[] = 'Schema::'.$methodToken[1].'()';
-                        }
-                    } elseif (! is_array($methodToken) || $methodToken[0] !== T_CLASS) {
-                        $violations[] = 'dynamic Schema call';
-                    }
+            foreach ([
+                $this->schemaStaticCallViolation($tokens, $index, $token),
+                $this->rawStatementViolation($tokens, $index, $token),
+                $this->rawDdlViolation($token),
+            ] as $violation) {
+                if ($violation !== null) {
+                    $violations[] = $violation;
                 }
-            }
-
-            if (is_array($token)
-                && $token[0] === T_STRING
-                && in_array(strtolower($token[1]), [
-                    'statement',
-                    'unprepared',
-                    'affectingstatement',
-                    'getschemabuilder',
-                    'getdoctrineschemamanager',
-                    'createschemamanager',
-                ], true)) {
-                $operator = $this->previousSignificantTokenIndex($tokens, $index - 1);
-
-                if ($operator !== null
-                    && is_array($tokens[$operator])
-                    && in_array($tokens[$operator][0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)) {
-                    $violations[] = $token[1].'()';
-                }
-            }
-
-            if (! is_array($token)
-                || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
-                continue;
-            }
-
-            $literal = $token[0] === T_CONSTANT_ENCAPSED_STRING
-                ? $this->literalString($token[1])
-                : $token[1];
-
-            if ($literal !== null
-                && preg_match('/\b(?:ALTER|CREATE(?:\s+OR\s+REPLACE)?|DROP|TRUNCATE|RENAME)\s+(?:TABLE|INDEX|DATABASE|SCHEMA|VIEW|TYPE|CONSTRAINT|SEQUENCE)\b/i', $literal) === 1) {
-                $violations[] = 'raw DDL';
             }
         }
 
         return array_values(array_unique($violations));
+    }
+
+    /**
+     * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
+     * @param  array{0: int, 1: string, 2?: int}|string  $token
+     */
+    private function schemaStaticCallViolation(array $tokens, int $index, array|string $token): ?string
+    {
+        if (! is_array($token) || ! $this->tokenNames($token, 'Schema')) {
+            return null;
+        }
+
+        $doubleColon = $this->nextSignificantTokenIndex($tokens, $index + 1);
+        $method = $doubleColon === null
+            ? null
+            : $this->nextSignificantTokenIndex($tokens, $doubleColon + 1);
+
+        if ($doubleColon === null
+            || ! is_array($tokens[$doubleColon])
+            || $tokens[$doubleColon][0] !== T_DOUBLE_COLON
+            || $method === null) {
+            return null;
+        }
+
+        $methodToken = $tokens[$method];
+
+        if (is_array($methodToken) && $methodToken[0] === T_STRING) {
+            $openingParenthesis = $this->nextSignificantTokenIndex($tokens, $method + 1);
+
+            if ($openingParenthesis !== null
+                && $tokens[$openingParenthesis] === '('
+                && ! in_array(strtolower($methodToken[1]), self::REPLAY_SAFE_SCHEMA_METHODS, true)) {
+                return 'Schema::'.$methodToken[1].'()';
+            }
+
+            return null;
+        }
+
+        if (! is_array($methodToken) || $methodToken[0] !== T_CLASS) {
+            return 'dynamic Schema call';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
+     * @param  array{0: int, 1: string, 2?: int}|string  $token
+     */
+    private function rawStatementViolation(array $tokens, int $index, array|string $token): ?string
+    {
+        if (! is_array($token)
+            || $token[0] !== T_STRING
+            || ! in_array(strtolower($token[1]), [
+                'statement',
+                'unprepared',
+                'affectingstatement',
+                'getschemabuilder',
+                'getdoctrineschemamanager',
+                'createschemamanager',
+            ], true)) {
+            return null;
+        }
+
+        $operator = $this->previousSignificantTokenIndex($tokens, $index - 1);
+
+        if ($operator !== null
+            && is_array($tokens[$operator])
+            && in_array($tokens[$operator][0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)) {
+            return $token[1].'()';
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{0: int, 1: string, 2?: int}|string  $token
+     */
+    private function rawDdlViolation(array|string $token): ?string
+    {
+        if (! is_array($token)
+            || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+            return null;
+        }
+
+        $literal = $token[0] === T_CONSTANT_ENCAPSED_STRING
+            ? $this->literalString($token[1])
+            : $token[1];
+
+        if ($literal !== null
+            && preg_match('/\b(?:ALTER|CREATE(?:\s+OR\s+REPLACE)?|DROP|TRUNCATE|RENAME)\s+(?:TABLE|INDEX|DATABASE|SCHEMA|VIEW|TYPE|CONSTRAINT|SEQUENCE)\b/i', $literal) === 1) {
+            return 'raw DDL';
+        }
+
+        return null;
     }
 
     private function contentsUseMarkerTrait(string $contents, string $trait): bool
@@ -420,12 +466,14 @@ final class IncubatingMigrationFiles
      */
     private function defaultDiscoveryPathPatterns(): array
     {
+        $migrationDir = 'Database/Migrations';
+
         return [
-            ApplicationTopology::baseComponentPattern('Database/Migrations'),
-            ApplicationTopology::coreModulePattern('Database/Migrations'),
-            ApplicationTopology::domainModulePattern('Database/Migrations'),
+            ApplicationTopology::baseComponentPattern($migrationDir),
+            ApplicationTopology::coreModulePattern($migrationDir),
+            ApplicationTopology::domainModulePattern($migrationDir),
             database_path('migrations'),
-            ApplicationTopology::extensionModulePattern('Database/Migrations'),
+            ApplicationTopology::extensionModulePattern($migrationDir),
         ];
     }
 }
