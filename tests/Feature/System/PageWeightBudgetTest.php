@@ -33,6 +33,16 @@ test('full-page Livewire components stay within the HTML budget', function (): v
         // ~353 KB: UI Reference foundations renders the full icon registry catalog.
         // Admin-only design reference; tracked for section/lazy split in plan Phase 6.
         'admin/system/ui-reference',
+        // ~160 KB: shared-tabs structural overhead — x-ui.tabs renders all three
+        // panels (tasks/history/settings) eagerly for client-side switching, and the
+        // task list comes from the code-registered scheduler, so an empty DB does not
+        // shrink it. Same shape as the accepted admin/ai/control-plane residual;
+        // tracked for lazy inactive panels in plan Phase 6.
+        'admin/system/schedule',
+        // ~171 KB: full-horizon IBP weekly grid, already cut from ~2 MB in Phase 4.
+        // Same shape as the accepted sbg/ibp/planning residual (179 KB); the remaining
+        // weight is the horizon itself, not a hotspot. Tracked in plan Phase 6.
+        'sbg/ibp/pricing/margin-review',
     ];
 
     $exit = Artisan::call('blb:perf:page-weights', [

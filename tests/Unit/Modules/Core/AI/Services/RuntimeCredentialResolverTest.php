@@ -93,7 +93,7 @@ test('copilot-proxy passes when server is reachable', function (): void {
         ->not->toHaveKey('runtime_error');
 });
 
-test('non-proxy providers skip connectivity check', function (): void {
+test('non-local providers accept safe public URLs without connectivity probes', function (): void {
     Http::fake();
 
     $result = makeResolver()->resolve([
@@ -292,7 +292,7 @@ test('expiring codex credentials that fail refresh mark the provider expired', f
         ->and($auth['last_error_message'] ?? null)->toBe('Token refresh failed (401).');
 });
 
-test('local provider can target loopback but not cloud metadata endpoints', function (): void {
+test('local provider can target loopback', function (): void {
     createRcrProvider(RCR_PROXY_PROVIDER, RCR_OLLAMA_BASE_URL, authType: AuthType::Local);
 
     Http::fake([
@@ -339,21 +339,4 @@ test('non-local provider is blocked from private network targets', function (): 
         ->and($result['runtime_error'])->toBeInstanceOf(AiRuntimeError::class)
         ->and($result['runtime_error']->errorType)->toBe(AiErrorType::ConfigError)
         ->and($result['runtime_error']->diagnostic)->toContain('safety check');
-});
-
-test('non-local provider accepts safe public URL', function (): void {
-    Http::fake();
-
-    $result = makeResolver()->resolve([
-        'api_key' => 'sk-test',
-        'base_url' => RCR_OPENAI_BASE_URL,
-        'provider_name' => 'openai',
-    ]);
-
-    expect($result)
-        ->toHaveKey('api_key', 'sk-test')
-        ->toHaveKey('base_url', RCR_OPENAI_BASE_URL)
-        ->not()->toHaveKey('runtime_error');
-
-    Http::assertNothingSent();
 });

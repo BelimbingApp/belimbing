@@ -25,11 +25,14 @@ We needed to add a `--module` option to Laravel's `migrate` command. The option 
 
 ```php
 // bootstrap/providers.php
-return [
-    App\Base\Database\ServiceProvider::class,  // Our provider (runs first)
-    App\Providers\AppServiceProvider::class,
-    App\Providers\VoltServiceProvider::class,
-];
+return ProviderRegistry::resolve();
+
+// Resolves to, in order: Base infrastructure -> business modules -> extensions.
+// [
+//     ...
+//     App\Base\Database\ServiceProvider::class,  // Our provider (runs first)
+//     ...
+// ]
 ```
 
 **Key Point:** Our `DatabaseServiceProvider` runs before Laravel's `MigrationServiceProvider`.

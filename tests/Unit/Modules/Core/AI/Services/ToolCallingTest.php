@@ -17,13 +17,11 @@ use App\Modules\Core\AI\Enums\OperationType;
 use App\Modules\Core\AI\Models\OperationDispatch;
 use App\Modules\Core\AI\Services\AgentExecutionContext;
 use App\Modules\Core\AI\Services\AgentToolRegistry;
-use App\Modules\Core\AI\Services\BackgroundCommandService;
 use App\Modules\Core\AI\Services\ChatTurnRunner;
 use App\Modules\Core\AI\Services\LaraTaskDispatcher;
 use App\Modules\Core\AI\Services\LaraTaskProfileSelector;
 use App\Modules\Core\AI\Services\Orchestration\TaskRoutingService;
 use App\Modules\Core\AI\Services\Runtime\RuntimeSessionContext;
-use App\Modules\Core\AI\Tools\ArtisanTool;
 use App\Modules\Core\AI\Tools\BashTool;
 use App\Modules\Core\AI\Tools\DelegateTaskTool;
 use App\Modules\Core\AI\Tools\ImageAnalysisTool;
@@ -274,31 +272,6 @@ describe('AgentToolRegistry', function () {
 
         expect((string) $result)->toContain('Error executing "fails"');
         expect((string) $result)->toContain('Boom!');
-    });
-});
-
-describe('ArtisanTool', function () {
-    it(TOOL_METADATA_DESCRIPTION, function () {
-        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
-
-        expect($tool->name())->toBe('artisan');
-        expect($tool->requiredCapability())->toBe('admin.ai.tool.artisan.execute');
-    });
-
-    it('returns error for empty command', function () {
-        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
-
-        expect((string) $tool->execute([]))->toContain(NO_COMMAND_PROVIDED);
-        expect((string) $tool->execute(['command' => '']))->toContain(NO_COMMAND_PROVIDED);
-    });
-
-    it('strips php artisan prefix if LLM included it', function () {
-        $tool = new ArtisanTool(Mockery::mock(BackgroundCommandService::class));
-
-        // This will run 'php artisan list' — should work without error
-        $result = $tool->execute(['command' => 'php artisan list --raw']);
-
-        expect((string) $result)->not->toContain('Error');
     });
 });
 

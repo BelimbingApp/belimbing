@@ -152,17 +152,4 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Cache Warm on Boot
-    |--------------------------------------------------------------------------
-    |
-    | When enabled, the application will warm commonly used caches during
-    | application boot. This can improve response times for the first request
-    | after deployment but may slow down boot time.
-    |
-    */
-
-    'cache_warm_on_boot' => env('APP_CACHE_WARM_ON_BOOT', false),
-
 ];

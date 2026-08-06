@@ -59,6 +59,7 @@ use Illuminate\Database\Console\Migrations\ResetCommand as LaravelResetCommand;
 use Illuminate\Database\Console\Migrations\RollbackCommand as LaravelRollbackCommand;
 use Illuminate\Database\Console\Migrations\StatusCommand as LaravelStatusCommand;
 use Illuminate\Database\Console\WipeCommand as LaravelWipeCommand;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -69,6 +70,8 @@ class ServiceProvider extends BaseServiceProvider
      */
     public function register(): void
     {
+        $this->configureModelStrictness();
+
         $this->mergeConfigFrom(__DIR__.'/Config/backup.php', 'backup');
         $this->mergeConfigFrom(__DIR__.'/Config/data_share.php', 'data_share');
 
@@ -169,5 +172,22 @@ class ServiceProvider extends BaseServiceProvider
             SanitizeDevelopmentDatabaseCommand::class,
             SchemaDriftCommand::class,
         ]);
+    }
+
+    /**
+     * Tighten Eloquent so latent bugs fail loudly in development instead of
+     * degrading silently in production: N+1 lazy loads, accessing attributes
+     * that were never retrieved, and silently discarding non-fillable
+     * mass-assignment. Adopted in stages (see
+     * docs/plans/framework-modernization.md, Phase 1); now fully enabled.
+     *
+     * Disabled in production so a stray violation cannot take the app down.
+     *
+     * Applied during register() rather than boot() so strict mode is already
+     * active for every provider's boot(), not just for request handling.
+     */
+    private function configureModelStrictness(): void
+    {
+        Model::shouldBeStrict(! $this->app->isProduction());
     }
 }

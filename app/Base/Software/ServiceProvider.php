@@ -2,10 +2,12 @@
 
 namespace App\Base\Software;
 
+use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Software\Console\Commands\DomainRuntimeReloadCommand;
 use App\Base\Software\Console\Commands\SoftwareUpdateCommand;
 use App\Base\Software\Console\Commands\SoftwareUpdateWatchdogCommand;
 use App\Base\Software\Console\Commands\WarmInventorySnapshotCommand;
+use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
 use App\Base\Software\Services\FrontendBuildStatusDiagnosticProvider;
 use App\Base\Software\Services\InventoryContributionDiscoveryService;
@@ -26,6 +28,8 @@ class ServiceProvider extends BaseServiceProvider
             SoftwareUpdateWatchdogCommand::class,
             WarmInventorySnapshotCommand::class,
         ]);
+
+        $this->app->bind(DomainRuntimeReloader::class, FrankenPhpDomainRuntimeReloader::class);
 
         $this->app->singleton(InventoryContributionRegistry::class);
         $this->app->singleton(InventoryContributionDiscoveryService::class);

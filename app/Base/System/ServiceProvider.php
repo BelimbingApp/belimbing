@@ -15,6 +15,7 @@ use App\Base\System\Services\StatusBarDiagnostics;
 use App\Base\System\Services\SystemHealthProbe;
 use App\Base\System\Services\SystemHealthStatusDiagnosticProvider;
 use Illuminate\Foundation\Console\KeyGenerateCommand as LaravelKeyGenerateCommand;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 use NunoMaduro\Collision\Adapters\Laravel\Commands\TestCommand as CollisionTestCommand;
 
@@ -45,5 +46,12 @@ class ServiceProvider extends BaseServiceProvider
     public function boot(RuntimeConfigurationApplier $configuration): void
     {
         $configuration->apply();
+
+        // Debug exception page (laravel-exceptions-renderer): use the BLB
+        // favicon instead of Laravel's inline default.
+        View::prependNamespace(
+            'laravel-exceptions-renderer',
+            resource_path('core/views/vendor/laravel-exceptions-renderer'),
+        );
     }
 }

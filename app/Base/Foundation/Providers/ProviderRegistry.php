@@ -13,24 +13,22 @@ class ProviderRegistry
     /**
      * Resolve the application service provider list.
      *
-     * @param  array<int, class-string<ServiceProvider>>  $appProviders  Application-level providers loaded last
-     * @param  array<int, class-string<ServiceProvider>>  $priorityProviders  Explicit framework providers loaded before discovered providers
+     * Every provider is discovered from its owning component — there is no
+     * app-level escape hatch, because a provider that does not belong to a
+     * Base component, a module, or an extension does not belong anywhere.
+     *
      * @return array<int, class-string<ServiceProvider>>
      */
-    public static function resolve(array $appProviders = [], array $priorityProviders = []): array
+    public static function resolve(): array
     {
-        $providers = array_merge(
-            self::validateProviders($priorityProviders),
-            // Ordering is part of the framework contract:
-            // explicit priorities -> Base infrastructure -> business modules -> extensions -> app providers.
-            // This keeps bootstrapping deterministic and prevents subtle dependency breakage.
+        // Ordering is part of the framework contract:
+        // Base infrastructure -> business modules -> extensions.
+        // This keeps bootstrapping deterministic and prevents subtle dependency breakage.
+        return array_merge(
             self::discoverBaseProviders(),
             self::discoverModuleProviders(),
             self::discoverExtensionProviders(),
-            self::validateProviders($appProviders)
         );
-
-        return array_values(array_unique($providers));
     }
 
     /**
