@@ -144,6 +144,21 @@ final class MigrationSourceParser
             return;
         }
 
+        $nodes = $this->parseTraitSource($trait);
+
+        $traitNode = (new NodeFinder)->findFirstInstanceOf($nodes ?? [], Node\Stmt\Trait_::class);
+        if (! $traitNode instanceof Node\Stmt\Trait_) {
+            return;
+        }
+
+        foreach ($traitNode->getMethods() as $method) {
+            $this->context->methods[strtolower($method->name->toString())] ??= $method;
+        }
+    }
+
+    /** @return list<Node\Stmt>|null */
+    private function parseTraitSource(string $trait): ?array
+    {
         $path = (new ReflectionClass($trait))->getFileName();
         if (! is_string($path) || ($contents = file_get_contents($path)) === false) {
             $this->context->unreadable[] = [
@@ -151,27 +166,18 @@ final class MigrationSourceParser
                 'reason' => sprintf('Migration trait [%s] source could not be read.', $trait),
             ];
 
-            return;
+            return null;
         }
 
         try {
-            $nodes = $this->resolvedNodes($contents);
+            return $this->resolvedNodes($contents);
         } catch (Error $e) {
             $this->context->unreadable[] = [
                 'line' => max(1, $e->getStartLine()),
                 'reason' => sprintf('Migration trait [%s] could not be parsed: %s', $trait, $e->getRawMessage()),
             ];
 
-            return;
-        }
-
-        $traitNode = (new NodeFinder)->findFirstInstanceOf($nodes, Node\Stmt\Trait_::class);
-        if (! $traitNode instanceof Node\Stmt\Trait_) {
-            return;
-        }
-
-        foreach ($traitNode->getMethods() as $method) {
-            $this->context->methods[strtolower($method->name->toString())] ??= $method;
+            return null;
         }
     }
 
