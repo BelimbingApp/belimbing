@@ -12,7 +12,7 @@ use App\Base\Media\PhotoCleanup\PoofConfiguration;
 use App\Base\Media\PhotoCleanup\ResolvingPhotoCleanupProvider;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\Company\Models\Company;
+use App\Core\Company\Models\Company;
 use Illuminate\Support\Facades\Http;
 
 const PHOTO_CLEANUP_TEST_JPEG = 'image/jpeg';

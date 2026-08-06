@@ -1,0 +1,172 @@
+<?php
+
+namespace App\Core\AI\Services\Messaging;
+
+use App\Core\AI\DTO\Messaging\InboundMessage;
+use App\Core\AI\Enums\SignalAuthenticityStatus;
+use App\Core\AI\Exceptions\WebhookAuthenticityException;
+use App\Core\AI\Models\ChannelAccount;
+use App\Core\AI\Models\InboundSignal;
+use Illuminate\Http\Request;
+
+/**
+ * Ingests inbound webhook/channel events into durable signal records.
+ *
+ * Accepts a raw HTTP request, resolves the channel adapter, verifies
+ * authenticity, normalizes the payload through the adapter, and persists
+ * the result as an InboundSignal record for downstream routing.
+ *
+ * This service handles normalization only — routing decisions are made
+ * by InboundRoutingService after the signal is persisted.
+ */
+class InboundSignalService
+{
+    public function __construct(
+        private readonly ChannelAdapterRegistry $adapterRegistry,
+    ) {}
+
+    /**
+     * Ingest an inbound webhook request for the given channel.
+     *
+     * Normalizes the raw request through the channel adapter and persists
+     * the result as a durable InboundSignal record.
+     *
+     * @param  string  $channel  Channel identifier (e.g., 'email', 'whatsapp')
+     * @param  Request  $request  Raw inbound HTTP request
+     * @param  int|null  $channelAccountId  Optional specific account ID (from URL)
+     * @return InboundSignal|null Persisted signal record, or null if parsing produced no message
+     */
+    public function ingest(string $channel, Request $request, ?int $channelAccountId = null): ?InboundSignal
+    {
+        $adapter = $this->adapterRegistry->resolve($channel);
+
+        if ($adapter === null) {
+            throw WebhookAuthenticityException::noAdapter($channel);
+        }
+
+        // Fail-closed: only Verified requests may proceed. Adapters that
+        // don't support verification return Failed from BaseChannelAdapter.
+        $authenticity = $adapter->verifyAuthenticity($request);
+
+        if ($authenticity !== SignalAuthenticityStatus::Verified) {
+            throw WebhookAuthenticityException::notVerified($channel, $authenticity);
+        }
+
+        // Normalize through adapter
+        $message = $adapter->parseInbound($request);
+
+        if ($message === null) {
+            // Adapter could not parse (might be a verification ping, status callback, etc.)
+            return $this->persistEmptySignal($channel, $channelAccountId, $request, $authenticity);
+        }
+
+        // Resolve channel account if not provided
+        if ($channelAccountId === null) {
+            $channelAccountId = $this->resolveAccountId($channel);
+        }
+
+        return InboundSignal::query()->create([
+            'channel' => $channel,
+            'channel_account_id' => $channelAccountId,
+            'authenticity_status' => $authenticity,
+            'sender_identifier' => $message->sender,
+            'conversation_identifier' => $message->conversationId,
+            'normalized_content' => $message->content,
+            'normalized_payload' => $this->buildNormalizedPayload($message),
+            'raw_payload' => $this->captureRawPayload($request),
+            'received_at' => $message->timestamp ?? now(),
+        ]);
+    }
+
+    /**
+     * Resolve the enabled channel account for the given channel.
+     *
+     * Current behavior is intentionally simple: return the first enabled
+     * account for the channel until richer inbound-account matching is added.
+     *
+     * @param  string  $channel  Channel identifier
+     */
+    private function resolveAccountId(string $channel): ?int
+    {
+        // Use the first enabled account for the channel until adapters expose
+        // enough metadata to support more specific account resolution.
+        $account = ChannelAccount::query()
+            ->where('channel', $channel)
+            ->where('is_enabled', true)
+            ->first();
+
+        return $account?->id;
+    }
+
+    /**
+     * Build a structured normalized payload from the parsed message.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildNormalizedPayload(InboundMessage $message): array
+    {
+        return array_filter([
+            'channel_id' => $message->channelId,
+            'sender' => $message->sender,
+            'content' => $message->content,
+            'message_id' => $message->messageId,
+            'conversation_id' => $message->conversationId,
+            'media' => $message->media !== [] ? $message->media : null,
+            'meta' => $message->meta !== [] ? $message->meta : null,
+            'timestamp' => $message->timestamp?->format('c'),
+        ]);
+    }
+
+    /**
+     * Capture raw payload from the request for audit purposes.
+     *
+     * @return array<string, mixed>
+     */
+    private function captureRawPayload(Request $request): array
+    {
+        return [
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'headers' => $this->safeHeaders($request),
+            'body' => $request->all(),
+        ];
+    }
+
+    /**
+     * Extract audit-safe headers (exclude authorization tokens).
+     *
+     * @return array<string, mixed>
+     */
+    private function safeHeaders(Request $request): array
+    {
+        $headers = $request->headers->all();
+        $sensitive = ['authorization', 'cookie', 'x-api-key'];
+
+        foreach ($sensitive as $key) {
+            if (isset($headers[$key])) {
+                $headers[$key] = ['[REDACTED]'];
+            }
+        }
+
+        return $headers;
+    }
+
+    /**
+     * Persist a signal where the adapter could not parse a message.
+     */
+    private function persistEmptySignal(
+        string $channel,
+        ?int $channelAccountId,
+        Request $request,
+        SignalAuthenticityStatus $authenticity,
+    ): InboundSignal {
+        return InboundSignal::query()->create([
+            'channel' => $channel,
+            'channel_account_id' => $channelAccountId,
+            'authenticity_status' => $authenticity,
+            'normalized_content' => null,
+            'raw_payload' => $this->captureRawPayload($request),
+            'received_at' => now(),
+        ]);
+    }
+}

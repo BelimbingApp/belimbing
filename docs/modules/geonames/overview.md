@@ -17,7 +17,7 @@ Related documents:
 ## 1. Module Structure
 
 ```text
-app/Modules/Core/Geonames/
+app/Core/Geonames/
 ├── Config/
 │   ├── authz.php
 │   └── menu.php

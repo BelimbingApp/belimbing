@@ -11,7 +11,7 @@ use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\Geonames\Models\Country;
+use App\Core\Geonames\Models\Country;
 use Carbon\CarbonInterface;
 use DateTimeZone;
 use Illuminate\Contracts\View\View;

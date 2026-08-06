@@ -67,7 +67,7 @@ it('keeps runtime parameter environment names out of application config and the 
     ));
     $sources = [base_path('.env.example')];
 
-    foreach ([base_path('config'), app_path(), base_path('extensions')] as $root) {
+    foreach ([base_path('config'), app_path(), app_path('Extensions')] as $root) {
         foreach (File::allFiles($root) as $file) {
             if ($file->getExtension() !== 'php'
                 || str_ends_with($file->getPathname(), 'ImportEnvironmentSettingsCommand.php')) {
@@ -87,7 +87,7 @@ it('keeps runtime parameter environment names out of application config and the 
 });
 
 it('allows env reads only in configuration files', function (): void {
-    foreach ([app_path(), base_path('extensions')] as $root) {
+    foreach ([app_path(), app_path('Extensions')] as $root) {
         foreach (File::allFiles($root) as $file) {
             if ($file->getExtension() !== 'php') {
                 continue;
@@ -105,7 +105,7 @@ it('allows env reads only in configuration files', function (): void {
 });
 
 it('does not expose caller-owned defaults or encryption through SettingsService calls', function (): void {
-    foreach ([app_path(), base_path('extensions'), base_path('tests')] as $root) {
+    foreach ([app_path(), app_path('Extensions'), base_path('tests')] as $root) {
         foreach (File::allFiles($root) as $file) {
             if ($file->getExtension() !== 'php') {
                 continue;

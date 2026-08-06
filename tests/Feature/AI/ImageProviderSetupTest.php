@@ -1,8 +1,8 @@
 <?php
 
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
-use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
-use App\Modules\Core\AI\Models\AiProvider;
+use App\Core\AI\Livewire\Providers\ImageProviderSetup;
+use App\Core\AI\Models\AiProvider;
 use Livewire\Livewire;
 
 function savedImageProvider(

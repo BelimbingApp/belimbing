@@ -4,6 +4,7 @@ namespace App\Base\Database\Console\Commands;
 
 use App\Base\Database\Services\IncubatingSchemaApprovalRepository;
 use App\Base\Database\Services\IncubatingSchemaProductionPolicy;
+use App\Base\Foundation\ApplicationTopology;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -112,9 +113,10 @@ final class ApproveIncubatingMigrationCommand extends Command
     private function migrationPaths(): array
     {
         return array_values(array_filter(array_merge(
-            glob(app_path('Base/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(app_path('Modules/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(base_path('extensions/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::baseComponentPattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::coreModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::domainModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::extensionModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
             [database_path('migrations')],
         ), 'is_dir'));
     }

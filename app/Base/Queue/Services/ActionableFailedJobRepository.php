@@ -11,7 +11,7 @@ final class ActionableFailedJobRepository
 {
     private const AI_CHAT_TURN_QUEUE = 'ai-chat-turns';
 
-    private const RUN_CHAT_TURN_JOB = 'App\\Modules\\Core\\AI\\Jobs\\RunChatTurnJob';
+    private const RUN_CHAT_TURN_JOB = 'App\\Core\\AI\\Jobs\\RunChatTurnJob';
 
     private const CHAT_TURN_OWNER_STALE_MINUTES = 10;
 

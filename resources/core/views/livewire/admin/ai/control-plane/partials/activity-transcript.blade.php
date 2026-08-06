@@ -1,11 +1,11 @@
 <?php
-/** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
+/** @var list<\App\Core\AI\DTO\Message> $transcript */
 ?>
 <div class="space-y-4">
     @if ($transcript !== [])
         <div class="space-y-2">
             @php
-                $markdown = app(\App\Modules\Core\AI\Services\ChatMarkdownRenderer::class);
+                $markdown = app(\App\Core\AI\Services\ChatMarkdownRenderer::class);
             @endphp
 
             @foreach ($transcript as $message)

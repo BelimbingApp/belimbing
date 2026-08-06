@@ -2,7 +2,7 @@
 
 namespace App\Base\Media\PhotoCleanup\Contracts;
 
-use App\Modules\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProvider;
 
 /**
  * Company-scoped credential access for Vision (image) providers stored in

@@ -1,8 +1,8 @@
 # ui-day-type-calendar-primitive.md
 
 Status: In Progress
-Last Updated: 2026-05-17
-Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `app/Modules/People/Attendance/Services/AttendanceCalendarResolver.php`, `resources/core/css/tokens.css`, `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`, `resources/core/views/AGENTS.md`
+Last Updated: 2026-08-05
+Sources: `docs/plans/people/15_attendance-roster-builder-ux.md`, `app/Domains/People/Attendance/Services/AttendanceCalendarResolver.php`, `resources/core/css/tokens.css`, `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`, `resources/core/views/AGENTS.md`
 Agents: {claude/opus-4.7}
 
 ## Problem Essence
@@ -49,7 +49,7 @@ A PHP consumer should be able to resolve day-type metadata as a single object wi
 
 ### Phase 1 — Vocabulary helper
 
-- [x] Add a single source of truth for day-type label + surface class + ink class as a final static helper class `App\Modules\People\Attendance\Support\DayTypeVocabulary` so existing `AttendanceDay::DAY_TYPE_*` string constants stay the canonical values. {claude/opus-4.7}
+- [x] Add a single source of truth for day-type label + surface class + ink class as a final static helper class `App\Domains\People\Attendance\Support\DayTypeVocabulary` so existing `AttendanceDay::DAY_TYPE_*` string constants stay the canonical values. {claude/opus-4.7}
 - [x] Refactor `rosters-grid.blade.php` and `Rosters::dayTypeLabel()` to consume the helper instead of their inline match() ladders. {claude/opus-4.7}
 - [x] Cover the helper with a focused test asserting label + classes for each day type. Dark-mode tokens flow through CSS variables so the helper stays the same. {claude/opus-4.7}
 

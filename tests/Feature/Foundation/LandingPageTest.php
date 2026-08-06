@@ -4,21 +4,21 @@ use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\LandingPageResolver;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\User\Livewire\Settings\Profile;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Livewire\Settings\Profile;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 it('lands on the user-preferred menu item when it is still visible', function (): void {
     $user = createAdminUser();
     app(SettingsService::class)->set(
         LandingPageResolver::SETTING_KEY,
-        'admin.system.software.modules',
+        'admin.system.software.domains',
         Scope::user((int) $user->getKey(), $user->getCompanyId()),
     );
 
     $this->actingAs($user)
         ->get('/')
-        ->assertRedirect(route('admin.system.software.modules.index'));
+        ->assertRedirect(route('admin.system.software.domains.index'));
 });
 
 it('falls back to the dashboard when the preference is unknown or inaccessible', function (): void {
@@ -34,14 +34,14 @@ it('falls back to the dashboard when the preference is unknown or inaccessible',
         ->assertRedirect(route('dashboard'));
 });
 
-it('lands domain-capable admins on the Business Domains screen when no domains are installed', function (): void {
+it('lands domain-capable admins on the Domains screen when no domains are installed', function (): void {
     $installer = Mockery::mock(DomainInstaller::class);
     $installer->shouldReceive('hasAnyInstalled')->andReturnFalse();
     app()->instance(DomainInstaller::class, $installer);
 
     $this->actingAs(createAdminUser())
         ->get('/')
-        ->assertRedirect(route('admin.system.software.modules.index'));
+        ->assertRedirect(route('admin.system.software.domains.index'));
 });
 
 it('lands ordinary users on the dashboard even when no domains are installed', function (): void {
@@ -60,14 +60,14 @@ it('saves the landing preference from the profile page', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Profile::class)
-        ->set('landingMenuId', 'admin.system.software.modules')
+        ->set('landingMenuId', 'admin.system.software.domains')
         ->call('updateProfileInformation')
         ->assertHasNoErrors();
 
     $scope = Scope::user((int) $user->getKey(), $user->getCompanyId());
 
     expect(app(SettingsService::class)->get(LandingPageResolver::SETTING_KEY, $scope))
-        ->toBe('admin.system.software.modules');
+        ->toBe('admin.system.software.domains');
 
     Livewire::test(Profile::class)
         ->set('landingMenuId', '')

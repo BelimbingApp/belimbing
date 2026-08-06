@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Implemented
-**Last Updated:** 2026-02-26
+**Last Updated:** 2026-08-05
 **Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/ai/agent-model.md`, `docs/architecture/database.md`
 
 ---
@@ -246,7 +246,7 @@ Validated by `CapabilityKey` value object (`app/Base/Authz/Capability/Capability
 Each module declares its own domains and capabilities in `Config/authz.php`:
 
 ```php
-// app/Modules/Core/User/Config/authz.php
+// app/Core/User/Config/authz.php
 return [
     'domains' => [
         'core' => 'Core platform modules',
@@ -262,9 +262,13 @@ return [
 ];
 ```
 
-**Auto-discovery:** The `AuthzServiceProvider` scans these paths at boot and merges domains, capabilities, and roles into the aggregated config:
+**Auto-discovery:** The Authz service provider scans the four application roots at boot and merges domains, capabilities, and roles into the aggregated config in Base → Core → enabled Domains → Extensions order:
+
 - `app/Base/*/Config/authz.php`
-- `app/Modules/*/*/Config/authz.php`
+- `app/Core/*/Config/authz.php`
+- `app/Domains/*/*/Config/authz.php`
+- `app/Extensions/*/Config/authz.php` for an explicit Extension-level anchor
+- `app/Extensions/*/*/Config/authz.php`
 
 The base `Config/authz.php` holds only:
 - Global grammar verbs
@@ -577,9 +581,9 @@ app/Base/Authz/
 
 Module capability configs:
 ```
-app/Modules/Core/User/Config/authz.php      # core domain, core.user.*, user roles
-app/Modules/Core/AI/Config/authz.php        # ai/messaging domains, ai.*, messaging.*, AI roles
-app/Modules/Core/Company/Config/authz.php   # core domain, core.company.*
+app/Core/User/Config/authz.php      # Core Domain, core.user.*, user roles
+app/Core/AI/Config/authz.php        # AI/messaging domains, ai.*, messaging.*, AI roles
+app/Core/Company/Config/authz.php   # Core Domain, core.company.*
 ```
 
 ---

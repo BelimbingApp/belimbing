@@ -5,9 +5,9 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Seeders\DevSeeder;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Database\Seeders\Dev\DevUserSeeder;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Database\Seeders\Dev\DevUserSeeder;
+use App\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 
 class DevAuthzCompanyAssignmentSeeder extends DevSeeder

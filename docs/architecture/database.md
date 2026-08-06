@@ -2,14 +2,14 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-08-01
+**Last Updated:** 2026-08-06
 
 ## Overview
 
-Belimbing (BLB) uses a **module-first database architecture**. Unlike standard Laravel applications where all migrations live in a single directory, BLB keeps database assets with the module that owns them.
+Belimbing (BLB) uses a **Domain-and-Module database architecture**. Unlike standard Laravel applications where all migrations live in a single directory, BLB keeps database assets with the Base component or Module that owns them.
 
 To manage this complexity, the framework enforces:
-1.  **Layered Naming Conventions**: To ensure correct execution order (Base → Core → Operation/Commerce).
+1.  **Layered Naming Conventions**: To preserve Base → Core → enabled Domains → Extensions order while satisfying schema dependencies.
 2.  **Auto-Discovery**: To load migrations dynamically without manual registration.
 3.  **Manifest Dependency Preflight**: To fail missing, disabled, incompatible, or misordered module dependencies before migrations run.
 4.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
@@ -20,13 +20,13 @@ To manage this complexity, the framework enforces:
 
 ## 1. Migration Architecture
 
-Migrations are **auto-discovered** from Base, enabled application module, and extension module directories when migration commands run. Laravel core tables in `database/migrations/` are always included.
+Migrations are **auto-discovered** from Base components, Core Modules, enabled optional Domain Modules, and Extension Modules when migration commands run. Laravel-owned bootstrap tables in `database/migrations/` are always included.
 
 This document keeps only the high-level design, naming spec, registry table, and directory layout. For operational details — including discovery paths, command behavior, `migrate --dev` for development, and the RegistersSeeders trait — see [app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md).
 
 At a high level, `php artisan migrate --dev` means: incubating rebuild -> migrate -> prod seed -> framework primitives -> dev seed.
 
-Before module migration paths are registered, BLB scans installed module manifests from `composer.json` `extra.blb` blocks and validates `requires-modules`. Required modules must be installed and enabled. `extra.blb.module` is canonical when present; otherwise a conventional filesystem identity such as `core/company`, `people/payroll`, `base/database`, or `vendor/module` satisfies availability. Version constraints require the required module to publish `extra.blb.version`. Because Laravel sorts migration files by filename after path discovery, BLB also verifies that every requiring module's earliest migration filename sorts after the latest migration filename in each required module that ships migrations. Duplicate migration names across module paths are blocked because Laravel would otherwise keep only one file for that migration name. The manifest graph is therefore the dependency contract, and filename prefixes remain the deterministic ordering mechanism Laravel can execute. Explicit `--path` scopes choose what Laravel runs, but they do not bypass the global module dependency preflight.
+Before Module migration paths are registered, BLB scans installed Module manifests from `composer.json` `extra.blb` blocks and validates `requires-modules`. Required Modules must be installed and enabled. `extra.blb.module` is canonical when present; otherwise a conventional identity such as `base/database`, `core/company`, `people/payroll`, or `sb-group/qac` satisfies availability. Version constraints require the required Module to publish `extra.blb.version`. Because Laravel sorts migration files by filename after path discovery, BLB also verifies that every requiring Module's earliest migration filename sorts after the latest migration filename in each required Module that ships migrations. Duplicate migration names across Module paths are blocked because Laravel would otherwise keep only one file for that migration name. The manifest graph is therefore the dependency contract, and filename prefixes remain the deterministic ordering mechanism Laravel can execute. Explicit `--path` scopes choose what Laravel runs, but they do not bypass the global Module dependency preflight.
 
 ---
 
@@ -42,15 +42,15 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | :--- | :--- | :--- |
 | `0001` | Laravel | Native Laravel tables such as jobs, cache, and sessions. |
 | `0100` | Base | Framework infrastructure modules. |
-| `0200` | Modules/Core domain | Required business foundations loaded before operational and commerce workflows. |
-| `0300` | Modules/Operation domain | Operational modules. |
-| `0310` | Modules/Commerce domain | Commerce modules. |
-| `0320` | Modules/People domain | People workflows that depend on Core employee/company foundations. |
-| `2026+` | Extensions | Licensee or vendor extensions using real calendar years. |
+| `0200` | Core Domain | Required business foundations loaded before optional Domain workflows. |
+| `0300` | Operation Domain | Operation Modules. |
+| `0310` | Commerce Domain | Commerce Modules. |
+| `0320` | People Domain | People Modules that depend on Core employee/company foundations. |
+| `2026+` | Extensions | Deployment-owned Extension Modules using real calendar years. |
 
 ### Manifest Dependency Ordering
 
-`extra.blb.requires-modules` declares module availability and migration-order dependencies. Use canonical module identifiers such as `core/company`, `people/settings`, or `vendor/module`. A required module must be present and not disabled before any module-aware migration command starts. If the requirement uses anything other than `*`, the required module must also publish a compatible `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
+`extra.blb.requires-modules` declares Module availability and migration-order dependencies. Use stable Module IDs such as `core/company`, `people/settings`, or `sb-group/qac`. A required Module must be present and enabled before any Module-aware migration command starts. If the requirement uses anything other than `*`, the required Module must also publish a compatible `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
 
 Migration filenames must still make the dependency executable. For any two modules with migrations, the requiring module's earliest migration filename must sort after the required module's latest migration filename. If that is not true, BLB fails before running Laravel's migrator and the fix is to rename migrations or change the manifest so the required module sorts first. New cross-module foreign-key dependencies should be represented both in the manifest graph and in filename prefixes/timestamps. Files under `Database/Migrations` that do not match Laravel's `*_*.php` migration pattern are ignored by this ordering check, just as Laravel ignores them.
 
@@ -76,8 +76,8 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 | :--- | :--- | :--- |
 | Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
 | Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `employees`, `geonames_countries` |
-| Application domain modules | `{domain}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
-| Extensions | `{vendor}_{module}_{entity}` | `sbg_quality_ncr_ext` |
+| Optional Domain Modules | `{domain}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
+| Extension Modules | `{extension}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
 `entity` is the table-row noun represented by the table. It is not a filesystem layer. Existing tables that predate the finalized domain convention should be renamed during initialization rather than documented as exceptions.
 
@@ -101,12 +101,20 @@ For registry implementation details, code examples, execution flow, dev vs produ
 
 Migration files can declare in-progress schema with `IncubatingSchema`. The source marker has different operational meaning by environment:
 
-- **Local/testing:** `migrate --dev` may drop and rebuild the migration's declared tables, clear the affected migration ledger rows, then run Laravel's normal migrator. A foreign-key dependency may join that rebuild only when its owning migration is also source-declared incubating. Any stable or undeclared dependent table refuses the whole preflight before the first drop. The preflight also scans later applied migration source that references a planned table: an incubating migration joins the replay chain, while a stable migration refuses before any drop so its mature columns, indexes, constraints, and data transformations cannot be silently omitted. This is the schema-noise reduction path for development without treating registry ownership or an old create migration as permission to erase stable data.
+- **Local/testing:** `migrate --dev` may drop and rebuild the migration's declared tables, clear the affected migration ledger rows, then run Laravel's normal migrator. A foreign-key dependency may join that rebuild only when its owning migration is also source-declared incubating. Any stable or undeclared dependent table refuses the whole preflight before the first drop. The preflight also scans later applied migration source that references a planned table: an incubating migration joins the replay chain, while a stable migration refuses before any drop so its mature columns, indexes, constraints, and data transformations cannot be silently omitted. An idempotent data-only migration may explicitly use `ReplaysAfterIncubatingSchema` so its ledger row and `up()` join the replay without granting permission to mutate schema. This is the schema-noise reduction path for development without treating registry ownership or an old create migration as permission to erase stable data.
 - **Production/staging:** plain `migrate` never performs incubating rebuilds. It classifies source-declared incubating files before native migration. Applied incubating migrations are allowed, warned, and fingerprinted. Pending incubating migrations are blocked unless the deployment has an instance-local approval.
 
 The production/staging guard uses the Laravel `migrations` table as the applied/pending source of truth. A live table without a matching migration ledger row is not considered applied. Applied incubating migrations with no previous fingerprint are baselined on the first successful guarded migrate. If the file hash later changes while the migration is still applied, the guard blocks because Laravel will not rerun that source file on the live database; restore the recorded source or carry the change in a new forward migration.
 
 Instance-local approvals are a break-glass mechanism for rare production-only validation. They are stored under `storage/app/.devops/`, are not committed, and match the exact migration name, relative path, source SHA-256, environment, connection, driver, and database identifier. The approval command requires a backup ID/reference and reason, writes an expiring one-time approval, and the migration command consumes it after a successful run. Approvals are exact records, not glob patterns or owner-wide exception lists. When `migrate --database=<connection>` targets a non-default connection, the approval must be created with the same `--database` option so PostgreSQL, SQLite, and future drivers remain isolated from each other.
+
+### Stable data replay after an incubating rebuild
+
+`ReplaysAfterIncubatingSchema` is a replay declaration, not a schema-maturity declaration. It applies only to a stable migration whose `up()` is idempotent and data-only, and whose result must be recomputed after an incubating table that it reads or updates is rebuilt. The declaration is a `use ReplaysAfterIncubatingSchema;` trait use inside the migration class; importing the trait alone has no effect. When the preflight finds a literal reference to a rebuilt table in such a later applied migration, it clears that migration's ledger row with the incubating chain so Laravel reruns `up()` in normal filename order.
+
+The marker never authorizes schema-mutating `Schema` operations or raw DDL, never makes a migration editable in place, and does not change production/staging `migrate` semantics. Preflight permits only explicit read-only schema introspection (`hasTable`, `hasColumn`, `hasColumns`, and `getColumnListing`). The migration must name the tables it depends on through source-visible literal references rather than dynamically constructed names, its `up()` must tolerate repeated execution, and its `down()` must either remove only derived state or be an intentional no-op. A topology or identity repair must never restore retired values from `down()`.
+
+Declare the marker when the migration is created. Do not retrofit it into an already-applied stable migration merely to silence preflight. A retrofit is allowed only through an explicit recovery procedure or accepted ADR that records why the existing `up()` is already data-only and idempotent, what databases have applied it, and how replay safety was verified. Any actual behavior change still requires a new forward migration.
 
 ---
 
@@ -125,7 +133,7 @@ The guarded path covers Laravel schema builder SQL and raw DDL executed with `DB
 All database assets live within their module to support portability.
 
 ```text
-app/Modules/Core/Geonames/
+app/Core/Geonames/
 ├── Database/
 │   ├── Migrations/
 │   │   ├── 0200_01_03_000000_create_countries.php
@@ -226,7 +234,7 @@ The registry table is the dependency graph. Do not duplicate module dependencies
 
 Extensions use real calendar years. The MM_DD can be the actual date or a module identifier.
 
-**Location:** `extensions/{vendor}/{module}/Database/Migrations/`
+**Location:** `app/Extensions/{Extension}/{Module}/Database/Migrations/`
 
 **Discovery:** Loaded by BLB's Base database migration commands using the same `Database/Migrations/` path contract as Base and application-domain modules.
 

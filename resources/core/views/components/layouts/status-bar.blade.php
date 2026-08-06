@@ -1,9 +1,9 @@
 @php
     $isImpersonating = session('impersonation.original_user_id') !== null;
 
-    $licenseeExists = \App\Modules\Core\Company\Models\Company::query()->where('id', \App\Modules\Core\Company\Models\Company::LICENSEE_ID)->exists();
+    $licenseeExists = \App\Core\Company\Models\Company::query()->where('id', \App\Core\Company\Models\Company::LICENSEE_ID)->exists();
 
-    $laraActivated = \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
+    $laraActivated = \App\Core\Employee\Models\Employee::laraActivationState() === true;
 
     $statusDiagnostics = auth()->check()
         ? app(\App\Base\System\Services\StatusBarDiagnostics::class)->forUser(auth()->user())

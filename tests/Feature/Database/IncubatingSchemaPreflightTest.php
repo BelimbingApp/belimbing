@@ -9,9 +9,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-const INCUBATING_SCHEMA_TEST_MODULE_PATH = 'extensions/test-vendor/test-mod';
+const INCUBATING_SCHEMA_TEST_MODULE_PATH = 'app/Extensions/TestVendor/TestMod';
 const INCUBATING_SCHEMA_TEST_DIR = INCUBATING_SCHEMA_TEST_MODULE_PATH.'/Database/Migrations';
-const INCUBATING_SCHEMA_DEPENDENT_TEST_DIR = 'extensions/test-vendor/test-dependent/Database/Migrations';
+const INCUBATING_SCHEMA_DEPENDENT_TEST_DIR = 'app/Extensions/TestVendor/TestDependent/Database/Migrations';
 const INCUBATING_SCHEMA_TEST_FILE = '2099_01_01_000000_create_test_incubating_widgets_table.php';
 const INCUBATING_SCHEMA_TEST_FILE_NAME = '2099_01_01_000000_create_test_incubating_widgets_table';
 const INCUBATING_SCHEMA_TEST_TABLE = 'test_incubating_widgets';
@@ -27,30 +27,47 @@ const INCUBATING_SCHEMA_TEST_FORWARD_NAME = '2099_01_01_000003_add_mature_value_
 const INCUBATING_SCHEMA_TEST_FORWARD_FILE = INCUBATING_SCHEMA_TEST_FORWARD_NAME.'.php';
 const INCUBATING_SCHEMA_TEST_PRESERVED_VALUE = 'preserve me';
 
-function writeIncubatingSchemaForwardTestMigration(bool $incubating): void
-{
+function writeIncubatingSchemaForwardTestMigration(
+    bool $incubating,
+    bool $replayable = false,
+    bool $schemaChange = true,
+): void {
     $directory = base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR);
 
     if (! is_dir($directory)) {
         mkdir($directory, 0755, true);
     }
 
-    $import = $incubating ? "use App\\Base\\Database\\Concerns\\IncubatingSchema;\n" : '';
-    $trait = $incubating ? "        use IncubatingSchema;\n\n" : '';
+    $marker = match (true) {
+        $incubating => 'IncubatingSchema',
+        $replayable => 'ReplaysAfterIncubatingSchema',
+        default => null,
+    };
+    $import = $marker !== null ? "use App\\Base\\Database\\Concerns\\{$marker};\n" : '';
+    $trait = $marker !== null ? "        use {$marker};\n\n" : '';
+    $operationImports = $schemaChange
+        ? "use Illuminate\\Database\\Schema\\Blueprint;\nuse Illuminate\\Support\\Facades\\Schema;"
+        : 'use Illuminate\Support\Facades\DB;';
+    $operation = $schemaChange
+        ? <<<'PHP'
+            Schema::table('test_incubating_widgets', function (Blueprint $table): void {
+                $table->string('mature_value');
+            });
+        PHP
+        : <<<'PHP'
+            DB::table('test_incubating_widgets')->updateOrInsert(['id' => 1], ['id' => 1]);
+        PHP;
 
     file_put_contents($directory.'/'.INCUBATING_SCHEMA_TEST_FORWARD_FILE, <<<PHP
     <?php
     {$import}use Illuminate\Database\Migrations\Migration;
-    use Illuminate\Database\Schema\Blueprint;
-    use Illuminate\Support\Facades\Schema;
+    {$operationImports}
 
     return new class extends Migration
     {
     {$trait}    public function up(): void
         {
-            Schema::table('test_incubating_widgets', function (Blueprint \$table): void {
-                \$table->string('mature_value');
-            });
+    {$operation}
         }
     };
     PHP);
@@ -150,7 +167,13 @@ test('incubating metadata detection ignores imports comments strings and closure
 
     expect($migrationFiles->contentsAreIncubating(
         '<?php return new class extends Migration { use IncubatingSchema; };'
-    ))->toBeTrue();
+    ))->toBeTrue()
+        ->and($migrationFiles->contentsReplayAfterIncubatingSchema(
+            '<?php return new class extends Migration { use ReplaysAfterIncubatingSchema; };'
+        ))->toBeTrue()
+        ->and($migrationFiles->contentsReplayAfterIncubatingSchema(
+            '<?php use App\\Base\\Database\\Concerns\\ReplaysAfterIncubatingSchema;'
+        ))->toBeFalse();
 });
 
 test('created table detection ignores comments and strings', function (): void {
@@ -173,6 +196,74 @@ test('created table detection ignores comments and strings', function (): void {
             PHP,
             ['declared_table', 'ignored_table'],
         ))->toBe(['declared_table']);
+});
+
+test('replayable data-only detection rejects schema builders and raw DDL', function (): void {
+    $migrationFiles = app(IncubatingMigrationFiles::class);
+    $dataOnly = <<<'PHP'
+    <?php
+    return new class extends Migration {
+        use ReplaysAfterIncubatingSchema;
+
+        public function up(): void
+        {
+            DB::table('widgets')->updateOrInsert(['id' => 1], ['state' => 'ready']);
+        }
+    };
+    PHP;
+    $schemaBuilder = <<<'PHP'
+    <?php
+    return new class extends Migration {
+        use ReplaysAfterIncubatingSchema;
+
+        public function up(): void
+        {
+            Schema::table('widgets', fn (Blueprint $table) => $table->string('state'));
+        }
+    };
+    PHP;
+    $schemaIntrospection = <<<'PHP'
+    <?php
+    return new class extends Migration {
+        use ReplaysAfterIncubatingSchema;
+
+        public function up(): void
+        {
+            if (Schema::hasTable('widgets') && Schema::hasColumn('widgets', 'state')) {
+                DB::table('widgets')->update(['state' => 'ready']);
+            }
+        }
+    };
+    PHP;
+    $dynamicSchemaBuilder = <<<'PHP'
+    <?php
+    return new class extends Migration {
+        use ReplaysAfterIncubatingSchema;
+
+        public function up(): void
+        {
+            $operation = 'table';
+            Schema::{$operation}('widgets', fn (Blueprint $table) => $table->string('state'));
+        }
+    };
+    PHP;
+    $rawDdl = <<<'PHP'
+    <?php
+    return new class extends Migration {
+        use ReplaysAfterIncubatingSchema;
+
+        public function up(): void
+        {
+            DB::unprepared('ALTER TABLE widgets ADD COLUMN state TEXT');
+        }
+    };
+    PHP;
+
+    expect($migrationFiles->replayAfterIncubatingSchemaViolations($dataOnly))->toBe([])
+        ->and($migrationFiles->replayAfterIncubatingSchemaViolations($schemaBuilder))->toBe(['Schema::table()'])
+        ->and($migrationFiles->replayAfterIncubatingSchemaViolations($schemaIntrospection))->toBe([])
+        ->and($migrationFiles->replayAfterIncubatingSchemaViolations($dynamicSchemaBuilder))->toBe(['dynamic Schema call'])
+        ->and($migrationFiles->replayAfterIncubatingSchemaViolations($rawDdl))->toBe(['unprepared()', 'raw DDL']);
 });
 
 test('preflight refuses a live table claimed by a different migration before dropping it', function (): void {
@@ -287,6 +378,68 @@ test('preflight refuses to replay a table past an applied stable forward migrati
 
     expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue()
         ->and(DB::table(INCUBATING_SCHEMA_TEST_TABLE)->value('mature_value'))->toBe(INCUBATING_SCHEMA_TEST_PRESERVED_VALUE)
+        ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FORWARD_NAME)->exists())->toBeTrue();
+});
+
+test('preflight replays an explicitly idempotent data migration after rebuilding a referenced table', function (): void {
+    writeIncubatingTestMigration(INCUBATING_SCHEMA_TEST_DIR, INCUBATING_SCHEMA_TEST_FILE, INCUBATING_SCHEMA_TEST_TABLE);
+    writeIncubatingSchemaForwardTestMigration(incubating: false, replayable: true, schemaChange: false);
+
+    Schema::create(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
+        $table->id();
+    });
+
+    TableRegistry::query()->create([
+        'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
+        'module_name' => 'test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
+        'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
+    ]);
+
+    DB::table('migrations')->insert([
+        ['migration' => INCUBATING_SCHEMA_TEST_FILE_NAME, 'batch' => 1],
+        ['migration' => INCUBATING_SCHEMA_TEST_FORWARD_NAME, 'batch' => 2],
+    ]);
+
+    $result = app(IncubatingSchemaPreflight::class)->run([
+        base_path(INCUBATING_SCHEMA_TEST_DIR),
+        base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR),
+    ]);
+
+    expect($result['migrations'])->toContain(
+        INCUBATING_SCHEMA_TEST_FILE_NAME,
+        INCUBATING_SCHEMA_TEST_FORWARD_NAME,
+    )
+        ->and(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeFalse()
+        ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FORWARD_NAME)->exists())->toBeFalse();
+});
+
+test('preflight refuses a replay marker on a schema-changing migration before dropping any table', function (): void {
+    writeIncubatingTestMigration(INCUBATING_SCHEMA_TEST_DIR, INCUBATING_SCHEMA_TEST_FILE, INCUBATING_SCHEMA_TEST_TABLE);
+    writeIncubatingSchemaForwardTestMigration(incubating: false, replayable: true);
+
+    Schema::create(INCUBATING_SCHEMA_TEST_TABLE, function (Blueprint $table): void {
+        $table->id();
+    });
+
+    TableRegistry::query()->create([
+        'table_name' => INCUBATING_SCHEMA_TEST_TABLE,
+        'module_name' => 'test-mod',
+        'module_path' => INCUBATING_SCHEMA_TEST_MODULE_PATH,
+        'migration_file' => INCUBATING_SCHEMA_TEST_FILE,
+    ]);
+
+    DB::table('migrations')->insert([
+        ['migration' => INCUBATING_SCHEMA_TEST_FILE_NAME, 'batch' => 1],
+        ['migration' => INCUBATING_SCHEMA_TEST_FORWARD_NAME, 'batch' => 2],
+    ]);
+
+    expect(fn () => app(IncubatingSchemaPreflight::class)->run([
+        base_path(INCUBATING_SCHEMA_TEST_DIR),
+        base_path(INCUBATING_SCHEMA_DEPENDENT_TEST_DIR),
+    ]))->toThrow(IncubatingSchemaConflictException::class, 'is not data-only');
+
+    expect(Schema::hasTable(INCUBATING_SCHEMA_TEST_TABLE))->toBeTrue()
         ->and(DB::table('migrations')->where('migration', INCUBATING_SCHEMA_TEST_FORWARD_NAME)->exists())->toBeTrue();
 });
 

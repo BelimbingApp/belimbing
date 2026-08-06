@@ -1,16 +1,16 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\AI\Livewire\Providers\CatalogBrowser;
-use App\Modules\Core\AI\Livewire\Providers\GithubCopilotSetup;
-use App\Modules\Core\AI\Livewire\Providers\Providers;
-use App\Modules\Core\AI\Livewire\Providers\ProviderSetup;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\ProviderAuthFlowService;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\AI\Livewire\Providers\CatalogBrowser;
+use App\Core\AI\Livewire\Providers\GithubCopilotSetup;
+use App\Core\AI\Livewire\Providers\Providers;
+use App\Core\AI\Livewire\Providers\ProviderSetup;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\AI\Services\ProviderAuthFlowService;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 const PROVIDER_CATALOG_SEARCH_PLACEHOLDER = 'Search providers...';

@@ -14,12 +14,15 @@
         <testsuite name="PostgreSQL Integration">
             <directory>tests/Integration</directory>
         </testsuite>
-        <testsuite name="Modules">
-            <directory>app/Modules/*/Tests</directory>
-            <directory>app/Modules/*/*/Tests</directory>
+        <testsuite name="Core">
+            <directory>app/Core/*/Tests</directory>
+        </testsuite>
+        <testsuite name="Domains">
+            <directory>app/Domains/*/Tests</directory>
+            <directory>app/Domains/*/*/Tests</directory>
         </testsuite>
         <testsuite name="Extensions">
-            <directory>extensions/*/*/Tests</directory>
+            <directory>app/Extensions/*/*/Tests</directory>
         </testsuite>
     </testsuites>
     <source>

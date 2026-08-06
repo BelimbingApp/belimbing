@@ -1,7 +1,7 @@
 # ai/lara-coding-agent-harness.md
 
 **Status:** In Progress
-**Last Updated:** 2026-06-11
+**Last Updated:** 2026-08-05
 **Sources:** `docs/architecture/ai/lara.md`, `docs/plans/ai-lara-resident-coding-agent-gap.md`, `docs/plans/lara-concurrent-runs.md`, recent Lara runs `01ktgea1bvcrgc8bw1e0zbmjmv` and `01ktgefwcs7qmc7828bwxfekv6`, Pi coding-agent architecture review from GitHub `earendil-works/pi` (`packages/agent/src/agent-loop.ts`, `packages/agent/src/agent.ts`, `packages/agent/src/harness/agent-harness.ts`, `packages/agent/src/harness/messages.ts`, `packages/agent/src/harness/compaction/compaction.ts`, `packages/agent/src/harness/skills.ts`, `packages/coding-agent/src/core/system-prompt.ts`, `packages/coding-agent/src/core/tools/{read,bash,edit,write}.ts`)
 **Agents:** Amp/GPT-5
 
@@ -140,7 +140,7 @@ Goal: Lara chooses the smallest sufficient edit surface and treats shared framew
 Evidence: A module-specific browser prompt prefers local/config/module files when sufficient, and shared/core edits appear only with explicit justification in the run trace.
 
 - [ ] Define file-scope classes: local config, module view, module class, shared renderer, shared component, framework infrastructure, generated/vendor.
-- [ ] Add a classifier service for repo paths based on module roots, resources/core, app/Base, app/Modules/Core, extension roots, vendor/generated paths, and config ownership.
+- [ ] Add a classifier service for repo paths based on the four application roots (`app/Base`, `app/Core`, `app/Domains`, `app/Extensions`), `resources/core`, vendor/generated paths, and config ownership.
 - [ ] Inject classifier results into source-map candidates and edit-plan validation.
 - [ ] Require explicit justification before editing shared components or framework infrastructure for a module-specific task.
 - [ ] Add regression tasks proving local/config edits are preferred over shared-component edits when both are plausible.

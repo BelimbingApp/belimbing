@@ -2,7 +2,7 @@
 
 @php
     $laraActivated = auth()->check()
-        && \App\Modules\Core\Employee\Models\Employee::laraActivationState() === true;
+        && \App\Core\Employee\Models\Employee::laraActivationState() === true;
 
     // On wire:navigate the persisted chrome is kept client-side and the freshly
     // rendered copy is discarded — so re-rendering the sidebar + bars is wasted

@@ -7,7 +7,7 @@ use App\Base\Database\Exceptions\BackupException;
 /**
  * Registry for {@see EncryptionMode} implementations keyed by `backup.encryption.mode`.
  *
- * Core registers `none` and `app-key`. Extensions (under `extensions/`) may call
+ * Core registers `none` and `app-key`. Extensions under `app/Extensions` may call
  * {@see register()} from a service provider `boot()` method to add modes such as
  * cloud KMS wrappers. The last registration for a given mode name wins.
  */

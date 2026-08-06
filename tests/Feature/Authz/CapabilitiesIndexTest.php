@@ -28,3 +28,13 @@ test('capabilities index resets to the first page when the search changes', func
         ->set('search', 'view')
         ->assertSet('paginators.page', 1);
 });
+
+test('capabilities index includes Core module capabilities after the topology move', function (): void {
+    visitCapabilitiesIndex()
+        ->set('search', 'admin.user.create')
+        ->assertViewHas('capabilities', function (LengthAwarePaginator $rows): bool {
+            $capability = collect($rows->items())->firstWhere('key', 'admin.user.create');
+
+            return $capability?->module === 'Core / User';
+        });
+});

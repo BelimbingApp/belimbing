@@ -4,7 +4,7 @@ use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Database\Livewire\Residue\Index as ResidueIndex;
 use App\Base\Foundation\Services\DomainResidueScanner;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -77,7 +77,7 @@ it('does not flag tables created through create*Table migration helpers', functi
     expect($orphanTables)->not->toContain('people_payroll_attendance_rule_pay_items')
         ->and($orphanTables)->not->toContain('people_payroll_leave_type_pay_items')
         ->and($orphanTables)->not->toContain('people_payroll_claim_type_pay_items');
-})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
+})->skip(fn (): bool => ! is_dir(app_path('Domains/People')), 'People domain not installed');
 
 it('does not flag runtime-claimed settings as residue', function (): void {
     // commerce.marketplace.ebay.* is claimed via the runtime wildcard in
@@ -93,7 +93,7 @@ it('does not flag runtime-claimed settings as residue', function (): void {
     $orphanKeys = array_column(app(DomainResidueScanner::class)->scan()['orphanSettings'], 'key');
 
     expect($orphanKeys)->not->toContain('commerce.marketplace.ebay.orders_synced_through');
-})->skip(fn (): bool => ! is_dir(app_path('Modules/Commerce')), 'Commerce domain not installed');
+})->skip(fn (): bool => ! is_dir(app_path('Domains/Commerce')), 'Commerce domain not installed');
 
 it('does not flag AI runtime and tool settings as residue', function (): void {
     foreach ([

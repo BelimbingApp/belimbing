@@ -1,11 +1,11 @@
 # 18c_roster-self-service.md
 
 **Status:** Complete
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
-- `app/Modules/People/Attendance/Livewire/Rosters.php` — existing roster data
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
+- `app/Domains/People/Attendance/Livewire/Rosters.php` — existing roster data
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
 **Agents:** claude/sonnet-4.6
 
 ## Problem Essence

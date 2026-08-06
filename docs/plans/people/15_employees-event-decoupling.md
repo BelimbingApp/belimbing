@@ -1,7 +1,7 @@
 # people/15_employees-event-decoupling
 
 **Status:** Phase 1 complete (2026-05-16). Verified by plug-out experiment. {claud/opus-4.7}
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-05
 **Owners:** claud/opus-4.7
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` — canonical pattern.
@@ -21,7 +21,7 @@ Distinct from Attendance/Leave/Claim because Employees is not a payroll **produc
 
 ## Desired Outcome
 
-1. No file under `app/Modules/People/Employees/` imports anything from `App\Modules\People\Payroll\`.
+1. No file under `app/Domains/People/Employees/` imports anything from `App\Domains\People\Payroll\`.
 2. The readiness summary still works when Payroll is installed: same blocker codes, same UI behaviour.
 3. When Payroll is uninstalled (table absent), the readiness service degrades gracefully: every employee shows as "blocked — missing statutory profile" rather than crashing.
 4. The architectural test (`EmployeesDoesNotImportPayrollTest`) gates the boundary on every CI run.
@@ -61,7 +61,7 @@ Renamed `app/Modules/People/Payroll/ServiceProvider.php` → `.disabled` and ran
 - The Core/Employee `statutoryProfiles()` relation (line 154 of `Employee.php`) is left untouched. After this plan, no Employees code path calls it — the import is latent. Removing the relation belongs in a Core-decoupling plan.
 
 **Exit criterion:**
-- [x] Employees imports nothing from `App\Modules\People\Payroll\`.
+- [x] Employees imports nothing from `App\Domains\People\Payroll\`.
 - [x] Plug-out experiment with Payroll's ServiceProvider disabled: zero source-module crashes; only the expected cross-module integration assertions fail.
 
 ## Notes

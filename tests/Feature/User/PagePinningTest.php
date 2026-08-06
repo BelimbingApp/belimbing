@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Core\User\Models\User;
-use App\Modules\Core\User\Models\UserPin;
+use App\Core\User\Models\User;
+use App\Core\User\Models\UserPin;
 
 const PAGE_PINNING_FIRST_LABEL = 'First Pin';
 const PAGE_PINNING_SECOND_LABEL = 'Second Pin';

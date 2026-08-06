@@ -106,9 +106,9 @@ load_existing_framework_primitives() {
     local preferred_user_id="${1:-}"
 
     BLB_PREFERRED_ADMIN_USER_ID="$preferred_user_id" php artisan tinker --execute='
-        $company = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+        $company = App\Core\Company\Models\Company::query()->find(App\Core\Company\Models\Company::LICENSEE_ID);
         $preferredAdminUserId = getenv("BLB_PREFERRED_ADMIN_USER_ID") ?: null;
-        $adminQuery = $company ? App\Modules\Core\User\Models\User::query()->where("company_id", $company->id) : null;
+        $adminQuery = $company ? App\Core\User\Models\User::query()->where("company_id", $company->id) : null;
         $admin = $company ? $company->resolveAdminUser() : null;
 
         if ($admin === null && $adminQuery !== null && is_string($preferredAdminUserId) && $preferredAdminUserId !== "") {
@@ -328,7 +328,7 @@ main() {
     persisted_admin_name=$(json_extract "$persisted" "admin_name")
     persisted_admin_email=$(json_extract "$persisted" "admin_email")
     persisted_admin_user_id=$(php artisan tinker --execute='
-        $company = App\Modules\Core\Company\Models\Company::query()->find(App\Modules\Core\Company\Models\Company::LICENSEE_ID);
+        $company = App\Core\Company\Models\Company::query()->find(App\Core\Company\Models\Company::LICENSEE_ID);
         echo $company?->adminUserId() ?? "";
     ' 2>/dev/null || echo "")
 

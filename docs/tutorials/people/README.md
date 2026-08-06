@@ -12,4 +12,4 @@ BLB is a country-neutral HR/payroll framework. The core modules (Attendance, Lea
 6. [Worked example](06-worked-example.md) — a conditional allowance traced end-to-end.
 7. [Glossary](glossary.md) — acronyms, statutory terms, BLB code shorthand.
 
-Audience: developer with no HR background who needs to navigate `app/Modules/People/*` quickly. Skim chapters 1–3 for the shape; keep 5 open as a lookup.
+Audience: developer with no HR background who needs to navigate the People Domain at `app/Domains/People/*` quickly. Skim chapters 1–3 for the shape; keep 5 open as a lookup.

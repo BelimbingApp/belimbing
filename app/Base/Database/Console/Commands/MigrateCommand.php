@@ -11,6 +11,7 @@ use App\Base\Database\Seeders\DevSeeder;
 use App\Base\Database\Services\IncubatingSchemaApprovalRepository;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\IncubatingSchemaProductionPolicy;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
@@ -428,10 +429,7 @@ class MigrateCommand extends IlluminateMigrateCommand
     private function discoverDevSeeders(): array
     {
         $classes = [];
-        $patterns = [
-            app_path('Modules/*/*/Database/Seeders/Dev/*.php'),
-            app_path('Base/*/Database/Seeders/Dev/*.php'),
-        ];
+        $patterns = ApplicationTopology::contributionPatterns('Database/Seeders/Dev/*.php');
 
         foreach ($patterns as $pattern) {
             foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
@@ -514,8 +512,8 @@ class MigrateCommand extends IlluminateMigrateCommand
      * Normalize seeder class so FQCN reaches db:seed (avoids shell stripping backslashes).
      *
      * Supports shorthand formats:
-     * - Module/SeederClass → App\Modules\Core\Module\Database\Seeders\SeederClass
-     * - Module/Sub/SeederClass → App\Modules\Core\Module\Database\Seeders\Sub\SeederClass
+     * - Module/SeederClass → App\Core\Module\Database\Seeders\SeederClass
+     * - Module/Sub/SeederClass → App\Core\Module\Database\Seeders\Sub\SeederClass
      */
     private function normalizeSeederClass(string $value): string
     {
@@ -529,7 +527,7 @@ class MigrateCommand extends IlluminateMigrateCommand
             $module = array_shift($parts);
             $remaining = implode('\\', $parts);
 
-            return 'App\\Modules\\Core\\'.$module.'\\Database\\Seeders\\'.$remaining;
+            return 'App\\Core\\'.$module.'\\Database\\Seeders\\'.$remaining;
         }
 
         return $value;

@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Auth\ConfirmPassword;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Livewire\Auth\ConfirmPassword;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 test('password can be confirmed', function () {

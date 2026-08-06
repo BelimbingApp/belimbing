@@ -2,7 +2,7 @@
 
 **Document Type:** Project Brief
 **Purpose:** High-level overview of Belimbing's vision, principles, and approach
-**Last Updated:** 2026-07-25
+**Last Updated:** 2026-08-05
 
 ---
 
@@ -28,7 +28,7 @@ Belimbing is an **open-source, adaptable application platform** built entirely b
 - **AI-Native Architecture**: Built from the ground up to leverage AI in development, customization, and operation
 - **Quality-Obsessed**: Adoption of Ousterhout's software design principles, performance-first architecture, exceptional user experience
 - **Git-Native Workflow**: Development → Staging → Production managed through version control for safety and transparency
-- **Customizable Platform**: Build your own plugins and extensions
+- **Customizable Platform**: Install enterprise Domains, build new Modules, and keep deployment-specific work in flexible Extensions
 
 **Core Philosophy:**
 
@@ -93,8 +93,9 @@ One consequence runs the other way and is easy to get wrong: a permissive outbou
 
 **Current Implementation (Laravel-Based)**
 - PHP 8.5+ on Laravel 13 (Livewire + Tailwind CSS + Alpine.js)
-- Deep modular structure under `app/Modules/*/*` (domain modules with models, migrations, seeders)
-- Base framework extensions under `app/Base/*` (e.g., module-aware migrations and seeding)
+- Exactly four application-code roots: `app/Base`, `app/Core`, `app/Domains`, and `app/Extensions`
+- Domains contain full-stack Modules with their models, migrations, seeders, routes, views, contracts, and tests
+- Base supplies framework infrastructure; Core is the required enterprise Domain; optional Domains and flexible Extensions compose additional capability
 
 **1. Git-Native Architecture**
 - All code management through git (development → staging → production → main for upstream)
@@ -105,10 +106,12 @@ One consequence runs the other way and is easy to get wrong: a permissive outbou
 - **FrankenPHP** (required) — BLB's PHP worker model
 - Cross-OS support
 
-**3. Distribution Bundles**
-- Modules are full-stack ownership boundaries
-- Business domains can be installed, disabled, or uninstalled in Admin Panel
-- Convention-based discovery integrates providers, migrations, routes, and menus automatically; adapters and slots handle deployment-specific variation
+**3. Domains, Modules, and Extensions**
+- Core is a required Domain and updates with the platform
+- Optional Domains can be installed, enabled, disabled, updated, or uninstalled in the Admin Panel
+- Modules are the full-stack ownership boundaries contained by Core, Domains, and Extensions
+- Extensions remain a deployment-owned mixed bag for adapters, overlays, cross-Domain composition, and private capabilities
+- Convention-based discovery integrates providers, migrations, routes, views, config, and menus in Base → Core → enabled Domains → Extensions order; adapters and slots handle deployment-specific variation
 
 ### Performance & Quality
 

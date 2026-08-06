@@ -17,7 +17,7 @@
     'disabled' => false,
 ])
 
-@php($currencyOptions = app(\App\Modules\Core\Geonames\Services\CurrencyOptions::class)->options())
+@php($currencyOptions = app(\App\Core\Geonames\Services\CurrencyOptions::class)->options())
 
 <x-ui.combobox
     {{ $attributes->whereStartsWith('wire:model') }}

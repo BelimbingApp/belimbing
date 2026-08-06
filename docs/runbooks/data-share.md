@@ -71,8 +71,8 @@ Choose **Publish**, copy the complete JSON bundle, and convey it directly to the
 CLI:
 
 ```text
-php artisan blb:db:share:export extensions/kiat/investment --table={table} --json
-php artisan blb:db:share:export extensions/kiat/investment --table={table} --publish --preview-hash={preview-sha256} --json
+php artisan blb:db:share:export app/Extensions/Kiat/Investment --table={table} --json
+php artisan blb:db:share:export app/Extensions/Kiat/Investment --table={table} --publish --preview-hash={preview-sha256} --json
 ```
 
 Use repeated `--table` options for an exact subset. Redirect offer JSON only to an access-restricted temporary file and delete it after the fetch is resolved.

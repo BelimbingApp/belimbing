@@ -4,7 +4,7 @@
 **Status:** Active
 **Purpose:** Source of truth for BLB AI features implemented in code
 **Coverage:** OpenClaw parity Phases 1-6, Claw Code runtime parity, AI Run Ledger Phases 0-3, Lara direct-stream transport, and Lara resident coding-agent baseline
-**Last Updated:** 2026-05-06
+**Last Updated:** 2026-08-05
 **Related:** [agent-model.md](agent-model.md), [lara.md](lara.md), [capability-map.md](capability-map.md), `docs/Base/AI/tool-framework.md`
 
 ---
@@ -20,9 +20,9 @@ BLB's AI documentation needs one implementation-first reference that describes w
 This document describes the AI system that is implemented in code under:
 
 - `app/Base/AI/`
-- `app/Modules/Core/AI/`
+- `app/Core/AI/`
 - `resources/core/views/livewire/admin/ai/`
-- `tests/Unit/Modules/Core/AI/`
+- `tests/Unit/Core/AI/`
 
 It covers the completed OpenClaw parity work through Phase 6, the delivered Claw Code runtime parity work, and the delivered AI Run Ledger work:
 
@@ -322,8 +322,8 @@ Implemented outcome:
 - the default interactive allowlist keeps the `bash` tool and `browser`, still filtered by the logged-in user's capabilities
 - repository work has an explicit target surface: `core` or `extension:<slug>`
 - core repository tools reject extension paths unless the caller selects the matching extension surface
-- extension surfaces are discovered under `extensions/`, `extensions/custom/`, and `extensions/vendor/`
-- filesystem skills are loaded from BLB core, domain-module, and extension-owned `.agents/skills/*/SKILL.md` roots (bundle root and nested `extensions/{owner}/{module}`)
+- Extension repository surfaces resolve from installed `app/Extensions/{Extension}` sources
+- filesystem skills are loaded from project, Core Module, Domain Module, Extension source, and Extension Module `.agents/skills/*/SKILL.md` roots
 - Lara runtime context includes a compact `skills.catalog` (id/name/description/owner/path) plus extension module identities
 - relevant skill bodies are injected via `SkillSelectionService` + `SkillContextInjectionHook` (page suggestions and skill-intent message matches, capped) and on demand through the `load_skill` tool
 - broad `read`, `search`, and `edit` tools remain registered for explicit profiles and future agents, but are not Lara's default coding/chat path
@@ -417,7 +417,7 @@ The implemented runtime is layered like this:
    - model catalog and provider discovery
    - OpenAI-compatible LLM transport
 
-2. **Core AI (`app/Modules/Core/AI/`)**
+2. **Core AI (`app/Core/AI/`)**
    - company-scoped provider and model management
    - agent sessions, messages, and runtime execution
    - orchestration, browser, memory, messaging, and control-plane subsystems

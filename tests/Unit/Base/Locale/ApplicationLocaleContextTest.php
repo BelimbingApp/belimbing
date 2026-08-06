@@ -3,9 +3,9 @@
 use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\Address\Models\Address;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Geonames\Models\Country;
+use App\Core\Address\Models\Address;
+use App\Core\Company\Models\Company;
+use App\Core\Geonames\Models\Country;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
 

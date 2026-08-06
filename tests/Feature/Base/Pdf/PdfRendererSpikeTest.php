@@ -3,7 +3,7 @@
 use App\Base\Pdf\Exceptions\PdfRenderException;
 use App\Base\Pdf\Services\PdfRenderer;
 use App\Base\Pdf\Services\SignedRenderTokenStore;
-use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
+use App\Core\AI\Services\Browser\PlaywrightRunner;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;

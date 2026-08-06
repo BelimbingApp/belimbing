@@ -2,7 +2,7 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -26,7 +26,7 @@ it('moves supported preference values to user settings without replacing existin
     $scope = Scope::user((int) $user->getKey(), $user->getCompanyId());
     app(SettingsService::class)->set('ui.theme', 'light', $scope);
 
-    $migration = require app_path('Modules/Core/User/Database/Migrations/0200_01_20_000007_migrate_user_preferences_to_settings.php');
+    $migration = require app_path('Core/User/Database/Migrations/0200_01_20_000007_migrate_user_preferences_to_settings.php');
     $migration->up();
 
     expect(Schema::hasColumn('users', 'prefs'))->toBeFalse()

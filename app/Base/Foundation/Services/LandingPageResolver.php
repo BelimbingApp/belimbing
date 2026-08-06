@@ -17,7 +17,7 @@ use App\Base\Settings\DTO\Scope;
  *     lost access to (revoked capability, uninstalled domain) falls through
  *     silently instead of 403ing every login.
  *  2. On an installation with no business domains yet, operators who can
- *     see the Business Domains screen land there — that screen is how a fresh
+ *     see the Domains screen land there — that screen is how a fresh
  *     install gets its domains.
  *  3. The dashboard.
  */
@@ -52,8 +52,8 @@ class LandingPageResolver
             return $options[$preference]['href'];
         }
 
-        if (! $this->installer->hasAnyInstalled() && $this->canViewBusinessDomains($user)) {
-            return route('admin.system.software.modules.index', absolute: false);
+        if (! $this->installer->hasAnyInstalled() && $this->canViewDomains($user)) {
+            return route('admin.system.software.domains.index', absolute: false);
         }
 
         return route('dashboard', absolute: false);
@@ -69,10 +69,10 @@ class LandingPageResolver
         return $this->menu->snapshotForUser($user)['flat'];
     }
 
-    private function canViewBusinessDomains(mixed $user): bool
+    private function canViewDomains(mixed $user): bool
     {
         return $this->authz
-            ->can(Actor::forUser($user), 'admin.system.software.modules.view')
+            ->can(Actor::forUser($user), 'admin.system.software.domains.view')
             ->allowed;
     }
 }

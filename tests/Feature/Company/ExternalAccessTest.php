@@ -1,10 +1,10 @@
 <?php
 
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\CompanyRelationship;
-use App\Modules\Core\Company\Models\ExternalAccess;
-use App\Modules\Core\Company\Models\RelationshipType;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Company\Models\CompanyRelationship;
+use App\Core\Company\Models\ExternalAccess;
+use App\Core\Company\Models\RelationshipType;
+use App\Core\User\Models\User;
 
 test('external access is valid when active and within date range', function (): void {
     $company = Company::factory()->create();

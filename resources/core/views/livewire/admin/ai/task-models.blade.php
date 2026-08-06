@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\TaskModels $this */
+/** @var \App\Core\AI\Livewire\TaskModels $this */
 ?>
 <div>
     <x-slot name="title">{{ __('Task Models') }}</x-slot>
@@ -61,7 +61,7 @@
                                 label="{{ __('Mode') }}"
                                 wire:model.live="taskModes.{{ $taskKey }}"
                             >
-                                @foreach (\App\Modules\Core\AI\Enums\TaskModelSelectionMode::cases() as $mode)
+                                @foreach (\App\Core\AI\Enums\TaskModelSelectionMode::cases() as $mode)
                                     <option value="{{ $mode->value }}">{{ __($mode->label()) }}</option>
                                 @endforeach
                             </x-ui.select>

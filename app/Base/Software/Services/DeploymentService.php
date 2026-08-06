@@ -4,18 +4,18 @@ namespace App\Base\Software\Services;
 
 /**
  * Reads the deployment's git state and compares it to GitHub so the operator can
- * see, per Distribution Bundle, the current vs latest commit, its age, and whether it
+ * see, per software source, the current vs latest commit, its age, and whether it
  * is up to date — and manage the GitHub tokens needed to reach private repos.
  *
- * Per the module-system Distribution Bundle model, a deployment is the **platform root
- * plus each nested module/extension bundle** (domain modules under `app/Modules/*`,
- * licensee extensions under `extensions/*`). Those are *discovered*, never
+ * Per the module-system software source model, a deployment is the **platform root
+ * plus each nested Domain/Extension source** (`app/Domains/*` and
+ * `app/Extensions/*`). Those are *discovered*, never
  * hardcoded, so adding/removing a module or extension just works.
  *
  * GitHub access is **per owner**: a fine-grained token is scoped to one owner,
  * and a deployment may span several (open-source modules under `BelimbingApp`,
  * private licensee extensions under their own accounts/orgs). The owner is read
- * live from each bundle's remote, so an ownership transfer (e.g. a repo
+ * live from each source's remote, so an ownership transfer (e.g. a repo
  * moving to a new org) is picked up automatically. Public owners need no token;
  * private owners each store one at `integrations.github.token.{owner}`.
  */
@@ -24,7 +24,7 @@ class DeploymentService
     private readonly DeploymentWorkerReloader $workerReloader;
 
     public function __construct(
-        private readonly DistributionBundleRepository $bundles,
+        private readonly SoftwareSourceRepository $sources,
         private readonly DeploymentBuildRunner $buildRunner,
         private readonly DeploymentAdminEndpointResolver $adminEndpoints,
         private readonly DeploymentRunHistory $history,
@@ -34,13 +34,13 @@ class DeploymentService
     }
 
     /**
-     * Per-Distribution Bundle version status for the Deployment page.
+     * Per-software source version status for the Deployment page.
      *
      * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}>
      */
     public function status(): array
     {
-        return $this->bundles->status();
+        return $this->sources->status();
     }
 
     /**
@@ -51,11 +51,11 @@ class DeploymentService
      */
     public function localStatus(): array
     {
-        return $this->bundles->status(includeRemote: false);
+        return $this->sources->status(includeRemote: false);
     }
 
     /**
-     * The distinct GitHub owners across the deployment's Distribution Bundles, with the
+     * The distinct GitHub owners across the deployment's software sources, with the
      * repos under each and whether a token is stored — drives GitHub Access.
      * Local-only (no network); reachability is checked on demand via testOwner().
      *
@@ -63,7 +63,7 @@ class DeploymentService
      */
     public function owners(): array
     {
-        return $this->bundles->owners();
+        return $this->sources->owners();
     }
 
     /**
@@ -74,11 +74,11 @@ class DeploymentService
      */
     public function testOwner(string $owner, ?string $token = null): array
     {
-        return $this->bundles->testOwner($owner, $token);
+        return $this->sources->testOwner($owner, $token);
     }
 
     /**
-     * Pull the given Distribution Bundles (by key; empty = all), then refresh autoload,
+     * Pull the given software sources (by key; empty = all), then refresh autoload,
      * migrate, and gracefully reload workers. Each repo pulls with its owner's token
      * (public repos pull token-free). Returns a log.
      *
@@ -167,7 +167,7 @@ class DeploymentService
             $afterReload($reloadOk);
         }
 
-        foreach ($this->bundles->verifyTargets($targets) as $line) {
+        foreach ($this->sources->verifyTargets($targets) as $line) {
             $record($line);
         }
 
@@ -182,7 +182,7 @@ class DeploymentService
      */
     private function updateTargets(array $keys): array
     {
-        $byKey = collect($this->bundles->distributions())->keyBy('key');
+        $byKey = collect($this->sources->sources())->keyBy('key');
 
         return $keys === [] ? $byKey->values()->all() : $byKey->only($keys)->values()->all();
     }
@@ -193,9 +193,9 @@ class DeploymentService
      */
     private function pullTargets(array $targets, callable $record): void
     {
-        foreach ($targets as $dist) {
-            $record((string) __('Pulling :label…', ['label' => $dist['label']]));
-            $record($this->bundles->pull($dist));
+        foreach ($targets as $source) {
+            $record((string) __('Pulling :label…', ['label' => $source['label']]));
+            $record($this->sources->pull($source));
         }
     }
 
@@ -268,7 +268,7 @@ class DeploymentService
 
     public function tokenFor(string $owner): ?string
     {
-        return $this->bundles->tokenFor($owner);
+        return $this->sources->tokenFor($owner);
     }
 
     /**
@@ -276,7 +276,7 @@ class DeploymentService
      */
     public function saveToken(string $owner, string $token): void
     {
-        $this->bundles->saveToken($owner, $token);
+        $this->sources->saveToken($owner, $token);
     }
 
     private function runComposerInstall(): string
@@ -328,17 +328,17 @@ class DeploymentService
     private function completionLine(array $log): string
     {
         if (DeploymentLogClassifier::hasError($log)) {
-            return (string) __('Update finished with errors. Some steps did not complete; the Distribution Bundle table and log show what still needs attention.');
+            return (string) __('Update finished with errors. Some steps did not complete; the software source table and log show what still needs attention.');
         }
 
         if (DeploymentLogClassifier::hasWarning($log)) {
             if (DeploymentLogClassifier::hasVerificationWarning($log)) {
-                return (string) __('Update finished with warnings. One or more selected Distribution Bundles could not be verified at the branch head; review the lines above before trusting the table.');
+                return (string) __('Update finished with warnings. One or more selected software sources could not be verified at the branch head; review the lines above before trusting the table.');
             }
 
             return (string) __('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.');
         }
 
-        return (string) __('Update complete. Selected Distribution Bundles are up to date and workers were reloaded.');
+        return (string) __('Update complete. Selected software sources are up to date and workers were reloaded.');
     }
 }

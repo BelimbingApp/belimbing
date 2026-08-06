@@ -3,11 +3,11 @@
 use App\Base\Locale\Services\LocaleSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Livewire\Settings\Appearance;
-use App\Modules\Core\User\Models\User;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\Company\Models\Company;
+use App\Core\User\Livewire\Settings\Appearance;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 it('gives a user without an employee complete appearance preferences', function (): void {

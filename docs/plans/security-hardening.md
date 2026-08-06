@@ -1,7 +1,7 @@
 # docs/plans/security-hardening.md
 
 Status: In progress — response-header/CORS, proxy trust, AI shell code gates, SSRF pinning, media stored-XSS hardening, and secure-defaults/CI are code-complete; eBay webhook hardening remains pending in the commerce repo, with shell ops, media authz, and nested-repo CI residuals tracked below.
-Last Updated: 2026-07-07
+Last Updated: 2026-08-05
 Sources: Audit of `app/`, `routes/`, `config/`, `bootstrap/app.php`, `Caddyfile`, `.env.example` (vendor/ excluded). Root `AGENTS.md` for design principles.
 Agents: claude/claude-fable-5, codex/gpt-5
 
@@ -153,7 +153,7 @@ Evidence: `tests/Feature/System/SecurityCheckCommandTest.php` (5 passing); `.git
 - [x] Document `APP_DEBUG`/`SESSION_ENCRYPT` production expectations in `.env.example` and add a documented `SESSION_SECURE_COOKIE` line — claude/claude-fable-5
 - [x] Remove the stale `composer.json` audit ignore `PKSA-5jz8-6tcw-pbk4`; current `composer.lock` has `phpunit/phpunit` 12.5.30, beyond the patched 12.5.22 release for CVE-2026-41570 — codex/gpt-5
 - [x] Add `.github/workflows/security.yml` running `composer audit`, `bun audit`, and a gitleaks secret scan on push/PR and weekly — claude/claude-fable-5
-- [ ] Residual: extend the same CI security scans into the nested gitignored domain repos (blb-people, blb-commerce, extensions/kiat).
+- [ ] Residual: extend the same CI security scans into the nested gitignored Domain and Extension repositories (`app/Domains/People`, `app/Domains/Commerce`, `app/Extensions/Kiat`).
 
 ## What looked healthy
 - SQL access uses Eloquent / bound `whereRaw` placeholders — no injection found in audited code.

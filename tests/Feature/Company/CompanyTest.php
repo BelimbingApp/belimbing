@@ -1,9 +1,9 @@
 <?php
 
-use App\Modules\Core\Address\Models\Address;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\CompanyRelationship;
-use App\Modules\Core\Company\Models\RelationshipType;
+use App\Core\Address\Models\Address;
+use App\Core\Company\Models\Company;
+use App\Core\Company\Models\CompanyRelationship;
+use App\Core\Company\Models\RelationshipType;
 use Illuminate\Support\Facades\DB;
 
 function removeSeededLicenseeCompany(): void

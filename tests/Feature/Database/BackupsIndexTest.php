@@ -2,7 +2,7 @@
 
 use App\Base\Database\Livewire\Backups\Index;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;

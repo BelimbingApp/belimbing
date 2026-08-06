@@ -1,16 +1,16 @@
 # 18e_roster-form-consolidation.md
 
 **Status:** Complete
-**Last Updated:** 2026-05-21
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
 - `docs/plans/base-audit-subject-index.md` — delegated audit replacement; adds `subject_name`, `subject_id`, `subject_identifier`, and expanded roster rows to `base_audit_mutations`. Phase 2's `people_attendance_roster_cell_log` table and `AttendanceRosterAssignmentObserver` are replaced by enriched rows on the mutations table.
 - `docs/plans/people/18b_roster-grid-interaction.md` — grid interaction layer (complete)
 - `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-form.blade.php` — form to be retired
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid to receive folded features
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php` — list view to receive folded sections
-- `app/Modules/People/Attendance/Livewire/Concerns/ManagesRosterOperations.php` — backend operations
-- `app/Modules/People/Attendance/Services/AttendanceDayResolverService.php` — resolver to be updated
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid to receive folded features
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php` — list view to receive folded sections
+- `app/Domains/People/Attendance/Livewire/Concerns/ManagesRosterOperations.php` — backend operations
+- `app/Domains/People/Attendance/Services/AttendanceDayResolverService.php` — resolver to be updated
 **Agents:** claude/sonnet-4.6; amp/gpt-5
 
 ## Problem Essence

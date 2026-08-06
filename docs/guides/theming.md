@@ -1,18 +1,18 @@
 # Theme Customization Guide
 
 **Document Type:** Developer Guide
-**Audience:** BLB framework, pluggable module, and extension developers
-**Last Updated:** 2026-05-25
+**Audience:** BLB framework, Domain Module, and Extension Module developers
+**Last Updated:** 2026-08-05
 
 ---
 
 ## Overview
 
-BLB currently has one framework theme surface: `resources/core/`. Pluggable
-modules do **not** use companion presentation trees under `resources/`, and
-there is no `VITE_THEME_DIR` activation flow. Module-owned presentation belongs
-beside the module code under `app/Modules/{Domain}/{Module}/Views/` or
-`extensions/{owner}/{module}/Views/` and is registered by that module's
+BLB has one shared framework theme surface: `resources/core/`. Modules do **not**
+use companion presentation trees under `resources/`, and there is no
+`VITE_THEME_DIR` activation flow. Module-owned presentation belongs beside the
+code under `app/Core/{Module}/Views/`, `app/Domains/{Domain}/{Module}/Views/`, or
+`app/Extensions/{Extension}/{Module}/Views/` and is registered by that Module's
 `ServiceProvider`.
 
 Theme work falls into two buckets:
@@ -44,33 +44,33 @@ future palette changes stay centralized.
 
 Shared Blade components live in `resources/core/views/components/`. Change them
 there only when the change is meant to improve BLB for every adopter. Private
-extension modules should not shadow framework components through a parallel view
+Extension Modules should not shadow framework components through a parallel view
 tree.
 
-For pluggable module pages, prefer composing the existing core components from
+For Module pages, prefer composing the existing Core components from
 views under the module's `Views/` directory. If a reusable component is missing,
 add it to `resources/core/` and contribute it upstream instead of creating a
 module-only duplicate.
 
 ## Module Views
 
-Pluggable module Livewire components and routes should render namespaced views
-loaded by the module provider:
+Module-owned Livewire components and routes should render namespaced views
+loaded by the Module provider:
 
 ```php
 public function boot(): void
 {
-    $this->loadViewsFrom(__DIR__.'/Views', 'owner-module');
+    $this->loadViewsFrom(__DIR__.'/Views', 'domain-module');
 }
 ```
 
 Then render module views with that namespace, for example
-`view('owner-module::livewire.dashboard.index')`.
+`view('domain-module::livewire.dashboard.index')`.
 
-This keeps the extension removable as one directory:
+This keeps optional composition removable with its owning Domain or Extension:
 
 ```text
-app/Modules/{Domain}/{Module}/ or extensions/{owner}/{module}/
+app/Domains/{Domain}/{Module}/ or app/Extensions/{Extension}/{Module}/
 ├── Livewire/
 ├── Views/
 │   └── livewire/
@@ -100,7 +100,7 @@ When adding or changing tokens:
 4. Test both light and dark modes.
 5. Put reusable UI improvements in `resources/core/`.
 
-### For Pluggable Module and Extension Developers
+### For Domain and Extension Module Developers
 
 1. Keep module-owned views under the module root in `Views/`.
 2. Reuse core components where possible instead of copying them.

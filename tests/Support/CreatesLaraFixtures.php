@@ -2,9 +2,9 @@
 
 namespace Tests\Support;
 
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 
 trait CreatesLaraFixtures
 {

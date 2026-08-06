@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainLifecycleLedger;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Foundation\Events\DomainLifecycleAction;
@@ -16,7 +17,7 @@ use InvalidArgumentException;
  * Installs, disables, and uninstalls non-Core domains.
  *
  * A fresh Belimbing clone ships the Platform Baseline (Base + Core). Each
- * add-in domain is a nested git checkout mounted at app/Modules/{Domain};
+ * add-in domain is a nested git checkout mounted at app/Domains/{Domain};
  * installing clones the repo from the catalog (config: domains.catalog) and
  * runs pending migrations; uninstalling deletes the checkout and — only when
  * explicitly requested — drops the tables, ledger rows, and settings the
@@ -67,10 +68,10 @@ class DomainInstaller
     {
         $domains = [];
 
-        foreach (glob(app_path('Modules/*'), GLOB_ONLYDIR) ?: [] as $path) {
+        foreach (glob(ApplicationTopology::domainPattern(), GLOB_ONLYDIR) ?: [] as $path) {
             $name = basename($path);
 
-            if ($name === 'Core' || $this->directoryIsEmpty($path)) {
+            if ($this->directoryIsEmpty($path)) {
                 continue;
             }
 
@@ -110,8 +111,8 @@ class DomainInstaller
      */
     public function hasAnyInstalled(): bool
     {
-        foreach (glob(app_path('Modules/*'), GLOB_ONLYDIR) ?: [] as $path) {
-            if (basename($path) !== 'Core' && ! $this->directoryIsEmpty($path)) {
+        foreach (glob(ApplicationTopology::domainPattern(), GLOB_ONLYDIR) ?: [] as $path) {
+            if (! $this->directoryIsEmpty($path)) {
                 return true;
             }
         }
@@ -308,7 +309,7 @@ class DomainInstaller
 
     private function assertInstalled(string $domain): void
     {
-        if ($domain === 'Core' || preg_match('/^[A-Z][A-Za-z0-9]*$/', $domain) !== 1) {
+        if (preg_match('/^[A-Z][A-Za-z0-9]*$/', $domain) !== 1) {
             throw new InvalidArgumentException("Invalid domain name [$domain].");
         }
 
@@ -319,7 +320,7 @@ class DomainInstaller
 
     private function domainPath(string $domain): string
     {
-        return app_path('Modules/'.$domain);
+        return ApplicationTopology::domainPath($domain);
     }
 
     /**

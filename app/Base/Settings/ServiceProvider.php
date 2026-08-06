@@ -3,6 +3,7 @@
 namespace App\Base\Settings;
 
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Settings\Console\Commands\ImportEnvironmentSettingsCommand;
 use App\Base\Settings\Contracts\SettingsService;
@@ -12,6 +13,7 @@ use App\Base\Settings\Services\DatabaseSettingsService;
 use App\Base\Settings\Services\RuntimeSettingClaimRegistry;
 use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Base\Settings\Services\SettingManifestCompiler;
+use App\Base\Support\Str;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -89,9 +91,10 @@ class ServiceProvider extends BaseServiceProvider
     private function discoverSettingsConfigFiles(): array
     {
         $files = DomainState::filterPaths(array_merge(
-            glob(app_path('Base/*/Config/settings.php')) ?: [],
-            glob(app_path('Modules/*/*/Config/settings.php')) ?: [],
-            glob(base_path('extensions/*/*/Config/settings.php')) ?: [],
+            ...array_map(
+                static fn (string $pattern): array => glob($pattern) ?: [],
+                ApplicationTopology::contributionPatterns('Config/settings.php'),
+            ),
         ));
 
         sort($files);
@@ -106,14 +109,15 @@ class ServiceProvider extends BaseServiceProvider
 
         return match ($segments[0] ?? null) {
             'app' => match ($segments[1] ?? null) {
-                'Base' => 'base.'.strtolower((string) ($segments[2] ?? 'unknown')),
-                'Modules' => strtolower((string) ($segments[2] ?? 'unknown'))
-                    .'.'.strtolower((string) ($segments[3] ?? 'unknown')),
+                'Base' => 'base.'.Str::pascalToKebab((string) ($segments[2] ?? 'unknown')),
+                'Core' => 'core.'.Str::pascalToKebab((string) ($segments[2] ?? 'unknown')),
+                'Domains' => Str::pascalToKebab((string) ($segments[2] ?? 'unknown'))
+                    .'.'.Str::pascalToKebab((string) ($segments[3] ?? 'unknown')),
+                'Extensions' => 'extension.'
+                    .Str::pascalToKebab((string) ($segments[2] ?? 'unknown'))
+                    .'.'.Str::pascalToKebab((string) ($segments[3] ?? 'unknown')),
                 default => 'app.unknown',
             },
-            'extensions' => 'extension.'
-                .strtolower((string) ($segments[1] ?? 'unknown'))
-                .'.'.strtolower((string) ($segments[2] ?? 'unknown')),
             default => 'unknown',
         };
     }

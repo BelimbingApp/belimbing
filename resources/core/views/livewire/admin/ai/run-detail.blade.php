@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\RunDetail;
+use App\Core\AI\Livewire\RunDetail;
 use Illuminate\Support\Str;
 
 /** @var RunDetail $this */

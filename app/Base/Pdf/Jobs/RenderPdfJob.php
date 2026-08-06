@@ -5,7 +5,7 @@ namespace App\Base\Pdf\Jobs;
 use App\Base\Pdf\Events\PdfArtifactRendered;
 use App\Base\Pdf\Services\PdfPostProcessor;
 use App\Base\Pdf\Services\PdfRenderer;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;

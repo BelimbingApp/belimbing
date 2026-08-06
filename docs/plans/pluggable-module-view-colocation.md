@@ -11,21 +11,21 @@ BLB is moving toward pluggable modules for every domain outside Base and Core, b
 
 ## Desired Outcome
 
-Pluggable modules become full-stack ownership units. A module's routes, Livewire classes, views, migrations, config, tests, and module-specific assets live under that module root, so a nested-git or composer plugin can be installed, removed, reviewed, and released as one coherent directory.
+Domain and Extension modules become full-stack ownership units. A module's routes, Livewire classes, views, migrations, config, tests, and module-specific assets live under that module root, so its owning Domain or Extension can be enabled, updated, reviewed, and released as one coherent unit.
 
 ## Top-Level Components
 
 - **Framework infrastructure:** `app/Base/{Module}` remains non-pluggable and does not own product UI.
-- **Application Core:** `app/Modules/Core/{Module}` and `resources/core` remain framework-owned. Shared layouts, shell chrome, and reusable Blade components live here.
-- **Pluggable domain modules:** `app/Modules/{Domain}/{Module}` for non-Core domains owns full-stack module internals, including `Views/`.
-- **Licensee extensions:** `extensions/{owner}/{module}` follows the same full-stack shape as pluggable domain modules.
+- **Application Core:** `app/Core/{Module}` and `resources/core` remain framework-owned. Shared layouts, shell chrome, and reusable Blade components live here.
+- **Domain modules:** `app/Domains/{Domain}/{Module}` own full-stack business-module internals, including `Views/`.
+- **Extensions:** `app/Extensions/{Extension}/{Module}` follow the same full-stack shape as Domain modules.
 - **Frontend build:** Tailwind and Vite watch module-owned `Views/` directories in addition to `resources/core/views`.
 
 ## Design Decisions
 
 ### Full-stack module colocation is the default outside Base/Core
 
-For People, Commerce, Operation, Finance, Sales, Procurement, and future domains, new module-owned Blade views belong under the module's `Views/` directory. This matches the pluggable architecture: plugins are vertical products, not backend packages with UI fragments elsewhere.
+For People, Commerce, Operation, Finance, Sales, Procurement, and future domains, new module-owned Blade views belong under the module's `Views/` directory. This matches the four-root architecture: Domains and Extensions are vertical products, not backend packages with UI fragments elsewhere.
 
 ### `resources/core` remains the shared framework UI surface
 
@@ -33,11 +33,11 @@ The application shell, shared layouts, reusable components, design tokens, and c
 
 ### Namespaced module views are the contract
 
-Each module or plugin registers its `Views/` directory through its service provider and renders views by namespace. This avoids global view-path precedence and keeps ownership explicit.
+Each module registers its `Views/` directory through its service provider and renders views by namespace. This avoids global view-path precedence and keeps ownership explicit.
 
-### No per-licensee `resources/extensions` layer
+### No extension-specific `resources/` layer
 
-Licensee UI follows the same module-colocation rule as every other plugin. A separate `resources/extensions` layer would reintroduce scattered ownership and hidden override behavior.
+Extension UI follows the same module-colocation rule as every other module. A separate extension-specific `resources/` layer would reintroduce scattered ownership and hidden override behavior.
 
 ### Assets use explicit host build entry points
 
@@ -52,7 +52,7 @@ Nested-git plugins do not auto-inject scripts or styles.
 
 - Base and Core are framework-owned and not pluggable.
 - `resources/core` is the only global framework presentation tree.
-- Non-Core domain modules and extensions own module-specific presentation under `Views/` in the module root.
+- Domain modules and Extensions own module-specific presentation under `Views/` in the module root.
 - Framework docs and agent guidance should reject new module-owned Blade files under `resources/core` unless the file is genuinely shared framework UI.
 - Build tooling must scan module `Views/` paths so colocated Blade files participate in Tailwind class discovery and dev refresh.
 - Module-owned CSS and JavaScript source belongs under `Assets/` and requires explicit host build wiring; framework-wide tokens and shared JavaScript remain in `resources/core`.

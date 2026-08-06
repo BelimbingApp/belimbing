@@ -50,8 +50,8 @@ Every pack layer is effective-dated. Rates change year-over-year; classification
 
 ## Where to look
 
-- `app/Modules/People/Payroll/Models/PayrollPayItemClassification.php` — the classification row.
-- `app/Modules/People/Payroll/Services/PayItemClassifier.php` — the resolver.
-- `app/Modules/People/Payroll/Models/PayrollStatutoryRuleSet.php` and `PayrollStatutoryRuleRow.php` — the rate tables.
-- `app/Modules/People/Payroll/Models/PayrollEmployerStatutoryProfile.php` and `PayrollEmployeeStatutoryProfile.php` — per-entity statutory data.
-- `app/Modules/People/Payroll/Services/PayrollRunCalculator.php` — the country-neutral calculator that reads all of the above.
+- `app/Domains/People/Payroll/Models/PayrollPayItemClassification.php` — the classification row.
+- `app/Domains/People/Payroll/Services/PayItemClassifier.php` — the resolver.
+- `app/Domains/People/Payroll/Models/PayrollStatutoryRuleSet.php` and `PayrollStatutoryRuleRow.php` — the rate tables.
+- `app/Domains/People/Payroll/Models/PayrollEmployerStatutoryProfile.php` and `PayrollEmployeeStatutoryProfile.php` — per-entity statutory data.
+- `app/Domains/People/Payroll/Services/PayrollRunCalculator.php` — the country-neutral calculator that reads all of the above.

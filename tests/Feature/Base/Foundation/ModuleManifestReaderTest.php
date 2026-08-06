@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\File;
 
 const MODULE_MANIFEST_ROOT_PREFIX = 'framework/testing/module-manifests-';
 const MODULE_MANIFEST_COMPOSER_JSON = '/composer.json';
-const MODULE_MANIFEST_EXTENSIONS_SEGMENT = '/extensions/';
+const MODULE_MANIFEST_EXTENSIONS_SEGMENT = '/app/Extensions/';
 const ACME_PAYROLL_MODULE = 'acme/payroll';
 const ACME_DEPENDENT_MODULE = 'acme/dependent';
 const ACME_REQUIRED_MODULE = 'acme/required';
@@ -15,7 +15,7 @@ const REQUIRED_MODULE_SUFFIX = '/required';
 const DISABLED_MANIFEST_PROVIDER = 'zz-disabled-for-manifest-test/provider';
 
 it('reads extra.blb metadata from People sub-module composer.json files', function (): void {
-    $reader = new ModuleManifestReader([base_path('app/Modules/People')]);
+    $reader = new ModuleManifestReader([base_path('app/Domains/People')]);
 
     $manifests = $reader->all();
 
@@ -34,8 +34,8 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
     expect($attendance->version)->not->toBe('')
         ->and($attendance->description)->not->toBe('')
         ->and($attendance->publishesEvents)->toContain(
-            'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
-            'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
+            'App\\Domains\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
+            'App\\Domains\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
         );
 
     $payroll = collect($manifests)->firstWhere('name', 'blb/payroll');
@@ -43,19 +43,22 @@ it('reads extra.blb metadata from People sub-module composer.json files', functi
     expect($payroll->version)->not->toBe('')
         ->and($payroll->description)->not->toBe('')
         ->and($payroll->consumesEvents)->toContain(
-            'App\\Modules\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
-            'App\\Modules\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
+            'App\\Domains\\People\\Attendance\\Events\\AttendanceOvertimeApproved',
+            'App\\Domains\\People\\Attendance\\Events\\AttendanceAllowanceMaterialized',
         );
-})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
+})->skip(fn (): bool => ! is_dir(app_path('Domains/People')), 'People domain not installed');
 
 it('treats conventional app module paths as installed required modules', function (): void {
-    $reader = new ModuleManifestReader([base_path('app/Modules')]);
+    $reader = new ModuleManifestReader([
+        base_path('app/Core'),
+        base_path('app/Domains'),
+    ]);
 
     $manifests = $reader->all();
     $unmet = $reader->verifyRequiredModules($manifests);
 
     expect($unmet)->toBe([]);
-})->skip(fn (): bool => ! is_dir(app_path('Modules/People')), 'People domain not installed');
+})->skip(fn (): bool => ! is_dir(app_path('Domains/People')), 'People domain not installed');
 
 it('reads extension manifests from owner and module depth', function (): void {
     $root = storage_path(MODULE_MANIFEST_ROOT_PREFIX.bin2hex(random_bytes(4)));
@@ -74,7 +77,7 @@ it('reads extension manifests from owner and module depth', function (): void {
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
-        $manifests = (new ModuleManifestReader([$root.'/extensions']))->all();
+        $manifests = (new ModuleManifestReader([$root.'/app/Extensions']))->all();
 
         expect($manifests)->toHaveCount(1)
             ->and($manifests[0]->name)->toBe(ACME_PAYROLL_MODULE)
@@ -108,7 +111,7 @@ it('uses manifest module identity instead of also accepting the conventional pat
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
-        $reader = new ModuleManifestReader([$root.'/extensions']);
+        $reader = new ModuleManifestReader([$root.'/app/Extensions']);
 
         expect($reader->moduleRoots())->toHaveKey('vendor/payroll')
             ->not->toHaveKey(ACME_PAYROLL_MODULE)
@@ -232,8 +235,8 @@ it('accepts common composer-style required module version constraints', function
 
 it('does not count disabled domains as installed dependencies', function (): void {
     $statePath = storage_path('framework/testing/disabled-domains-'.bin2hex(random_bytes(4)).'.json');
-    $disabledDomain = app_path('Modules/ZzDisabledForManifestTest');
-    $enabledDomain = app_path('Modules/ZzEnabledForManifestTest');
+    $disabledDomain = app_path('Domains/ZzDisabledForManifestTest');
+    $enabledDomain = app_path('Domains/ZzEnabledForManifestTest');
 
     DomainState::useStatePath($statePath);
     DomainState::disable('ZzDisabledForManifestTest');
@@ -258,7 +261,7 @@ it('does not count disabled domains as installed dependencies', function (): voi
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
 
     try {
-        $reader = new ModuleManifestReader([app_path('Modules')]);
+        $reader = new ModuleManifestReader([app_path('Domains')]);
 
         expect(collect($reader->all())->pluck('module')->all())->not->toContain(DISABLED_MANIFEST_PROVIDER)
             ->and(collect($reader->allIncludingDisabledDomains())->pluck('module')->all())->toContain(DISABLED_MANIFEST_PROVIDER)

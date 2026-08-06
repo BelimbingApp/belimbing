@@ -1,0 +1,238 @@
+<?php
+
+use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\Enums\AiApiType;
+use App\Core\AI\DTO\LaraTaskExecutionProfile;
+use App\Core\AI\Enums\ExecutionMode;
+use App\Core\AI\Enums\OperationStatus;
+use App\Core\AI\Enums\OperationType;
+use App\Core\AI\Jobs\RunLaraTaskProfileJob;
+use App\Core\AI\Models\OperationDispatch;
+use App\Core\AI\Services\AgentExecutionContext;
+use App\Core\AI\Services\ConfigResolver;
+use App\Core\AI\Services\DispatchTranscriptBridge;
+use App\Core\AI\Services\LaraPromptFactory;
+use App\Core\AI\Services\LaraTaskExecutionProfileRegistry;
+use App\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Auth;
+use Tests\TestCase;
+
+uses(TestCase::class, LazilyRefreshDatabase::class);
+
+const LARA_PROFILE_TASK_DASHBOARD = 'Build a dashboard page';
+const LARA_PROFILE_TASK_RESEARCH_DOCS = 'Investigate the latest AI provider docs changes';
+const LARA_PROFILE_BASE_PROMPT = 'Base Lara prompt';
+
+it('runs the Lara coding task profile and clears auth and execution context', function (): void {
+    $user = User::factory()->create();
+
+    $dispatch = OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
+        'id' => 'op_lara_task_profile',
+        'operation_type' => OperationType::AgentTask,
+        'employee_id' => Employee::LARA_ID,
+        'acting_for_user_id' => $user->id,
+        'task' => LARA_PROFILE_TASK_DASHBOARD,
+        'status' => OperationStatus::Queued,
+        'meta' => [
+            'task_profile' => 'coding',
+        ],
+    ]));
+
+    Auth::login($user);
+
+    $context = app(AgentExecutionContext::class);
+    $context->set(
+        employeeId: Employee::LARA_ID,
+        actingForUserId: $user->id,
+        entityType: null,
+        entityId: null,
+        dispatchId: $dispatch->id,
+    );
+
+    $profile = new LaraTaskExecutionProfile(
+        taskKey: 'coding',
+        label: 'Coding',
+        systemPromptPath: app_path('Core/AI/Resources/tasks/coding/system_prompt.md'),
+        allowedToolNames: ['bash'],
+        executionMode: ExecutionMode::Background,
+    );
+
+    $capturedRunId = null;
+    $runtime = Mockery::mock(AgenticRuntime::class);
+    $runtime->shouldReceive('run')
+        ->once()
+        ->withArgs(function (...$args) use (&$capturedRunId): bool {
+            [$messages, $employeeId, $runId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+            $capturedRunId = $runId;
+
+            expect($policy)->not->toBeNull()
+                ->and($policy->mode)->toBe(ExecutionMode::Background);
+
+            return $employeeId === Employee::LARA_ID
+                && $messages[0]->content === LARA_PROFILE_TASK_DASHBOARD
+                && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
+                && str_contains($systemPrompt, 'coding task profile')
+                && $modelOverride === null
+                && $sessionId === null
+                && $configOverride['model'] === 'gpt-coder'
+                && $allowedToolNames === ['bash'];
+        })
+        ->andReturnUsing(function () use (&$capturedRunId): array {
+            return [
+                'content' => 'Implemented the dashboard page.',
+                'run_id' => $capturedRunId,
+                'meta' => ['model' => 'gpt-coder'],
+            ];
+        });
+
+    $promptFactory = Mockery::mock(LaraPromptFactory::class);
+    $promptFactory->shouldReceive('buildForCurrentUser')
+        ->once()
+        ->with(LARA_PROFILE_TASK_DASHBOARD)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT);
+
+    $profileRegistry = Mockery::mock(LaraTaskExecutionProfileRegistry::class);
+    $profileRegistry->shouldReceive('find')
+        ->once()
+        ->with('coding')
+        ->andReturn($profile);
+    $profileRegistry->shouldReceive('composeSystemPrompt')
+        ->once()
+        ->with($profile, LARA_PROFILE_BASE_PROMPT)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's coding task profile.");
+
+    $configResolver = Mockery::mock(ConfigResolver::class);
+    $configResolver->shouldReceive('resolveTask')
+        ->once()
+        ->with(Employee::LARA_ID, 'coding')
+        ->andReturn([
+            'api_key' => 'key',
+            'base_url' => 'https://api.example.test/v1',
+            'model' => 'gpt-coder',
+            'execution_controls' => ExecutionControls::defaults(),
+            'timeout' => 60,
+            'provider_name' => 'openai',
+            'api_type' => AiApiType::OpenAiChatCompletions,
+        ]);
+
+    $job = new RunLaraTaskProfileJob($dispatch->id);
+    $job->handle(
+        $runtime,
+        $context,
+        $configResolver,
+        app(DispatchTranscriptBridge::class),
+        $promptFactory,
+        $profileRegistry,
+    );
+
+    $dispatch->refresh();
+
+    expect($dispatch->status)->toBe(OperationStatus::Succeeded)
+        ->and($dispatch->run_id)->toBe($capturedRunId)
+        ->and($dispatch->result_summary)->toBe('Implemented the dashboard page.')
+        ->and(data_get($dispatch->meta, 'task_profile'))->toBe('coding')
+        ->and(Auth::check())->toBeFalse()
+        ->and($context->active())->toBeFalse();
+});
+
+it('runs the Lara research task profile with the resolved research model', function (): void {
+    $user = User::factory()->create();
+
+    $dispatch = OperationDispatch::unguarded(fn () => OperationDispatch::query()->create([
+        'id' => 'op_lara_research_profile',
+        'operation_type' => OperationType::AgentTask,
+        'employee_id' => Employee::LARA_ID,
+        'acting_for_user_id' => $user->id,
+        'task' => LARA_PROFILE_TASK_RESEARCH_DOCS,
+        'status' => OperationStatus::Queued,
+        'meta' => [
+            'task_profile' => 'research',
+        ],
+    ]));
+
+    $profile = new LaraTaskExecutionProfile(
+        taskKey: 'research',
+        label: 'Research',
+        systemPromptPath: app_path('Core/AI/Resources/tasks/research/system_prompt.md'),
+        allowedToolNames: ['guide', 'web_search', 'web_fetch'],
+        executionMode: ExecutionMode::Background,
+    );
+
+    $capturedRunId2 = null;
+    $runtime = Mockery::mock(AgenticRuntime::class);
+    $runtime->shouldReceive('run')
+        ->once()
+        ->withArgs(function (...$args) use (&$capturedRunId2): bool {
+            [$messages, $employeeId, $runId, $systemPrompt, $modelOverride, $policy, $sessionId, $configOverride, $allowedToolNames] = $args;
+            $capturedRunId2 = $runId;
+
+            expect($policy)->not->toBeNull()
+                ->and($policy->mode)->toBe(ExecutionMode::Background);
+
+            return $employeeId === Employee::LARA_ID
+                && $messages[0]->content === LARA_PROFILE_TASK_RESEARCH_DOCS
+                && str_contains($systemPrompt, LARA_PROFILE_BASE_PROMPT)
+                && str_contains($systemPrompt, 'research task profile')
+                && $modelOverride === null
+                && $sessionId === null
+                && $configOverride['model'] === 'gpt-research'
+                && $allowedToolNames === ['guide', 'web_search', 'web_fetch'];
+        })
+        ->andReturnUsing(function () use (&$capturedRunId2): array {
+            return [
+                'content' => 'Collected the latest provider docs changes.',
+                'run_id' => $capturedRunId2,
+                'meta' => ['model' => 'gpt-research'],
+            ];
+        });
+
+    $promptFactory = Mockery::mock(LaraPromptFactory::class);
+    $promptFactory->shouldReceive('buildForCurrentUser')
+        ->once()
+        ->with(LARA_PROFILE_TASK_RESEARCH_DOCS)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT);
+
+    $profileRegistry = Mockery::mock(LaraTaskExecutionProfileRegistry::class);
+    $profileRegistry->shouldReceive('find')
+        ->once()
+        ->with('research')
+        ->andReturn($profile);
+    $profileRegistry->shouldReceive('composeSystemPrompt')
+        ->once()
+        ->with($profile, LARA_PROFILE_BASE_PROMPT)
+        ->andReturn(LARA_PROFILE_BASE_PROMPT."\n\nTask profile instructions:\nYou are running Lara's research task profile.");
+
+    $configResolver = Mockery::mock(ConfigResolver::class);
+    $configResolver->shouldReceive('resolveTask')
+        ->once()
+        ->with(Employee::LARA_ID, 'research')
+        ->andReturn([
+            'api_key' => 'key',
+            'base_url' => 'https://api.example.test/v1',
+            'model' => 'gpt-research',
+            'execution_controls' => ExecutionControls::defaults(),
+            'timeout' => 60,
+            'provider_name' => 'openai',
+            'api_type' => AiApiType::OpenAiChatCompletions,
+        ]);
+
+    $job = new RunLaraTaskProfileJob($dispatch->id);
+    $job->handle(
+        $runtime,
+        app(AgentExecutionContext::class),
+        $configResolver,
+        app(DispatchTranscriptBridge::class),
+        $promptFactory,
+        $profileRegistry,
+    );
+
+    $dispatch->refresh();
+
+    expect($dispatch->status)->toBe(OperationStatus::Succeeded)
+        ->and($dispatch->run_id)->toBe($capturedRunId2)
+        ->and($dispatch->result_summary)->toBe('Collected the latest provider docs changes.')
+        ->and(data_get($dispatch->meta, 'task_profile'))->toBe('research');
+});

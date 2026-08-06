@@ -1,8 +1,8 @@
 <?php
 namespace App\Base\System\Livewire\TestTransport;
 
-use App\Modules\Core\AI\Enums\AiRunStatus;
-use App\Modules\Core\AI\Models\AiRun;
+use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Models\AiRun;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
 

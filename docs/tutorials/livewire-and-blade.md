@@ -3,7 +3,7 @@
 **Document Type:** Tutorial
 **Purpose:** Learn how standard Livewire class-based components work with Blade in BLB
 **Related:** [Livewire Docs](https://livewire.laravel.com/docs), [UI Layout Spec](../architecture/ui-layout.md)
-**Last Updated:** 2026-03-10
+**Last Updated:** 2026-08-05
 
 ---
 
@@ -11,7 +11,7 @@
 
 This tutorial explains **Livewire components** (class-based) and **Blade** (Laravel's templating engine) as used in Belimbing. By the end you'll understand the two-file structure (PHP class + Blade template), how they connect, and common patterns for state, actions, and binding.
 
-BLB uses **standard Livewire class-based components** — a PHP class in the module namespace and a Blade template in `resources/core/views/livewire/`. This separation lets licensees override templates without touching business logic.
+BLB uses **standard Livewire class-based components**: a PHP class in its owning Base component or Module namespace plus a Blade template. Shared framework presentation lives in `resources/core/views/livewire/`; optional Domain and Extension presentation stays in the owning Module's `Views/` directory. There is no global template-override tree.
 
 ---
 
@@ -21,19 +21,20 @@ Every Livewire component is a pair:
 
 | File | Location | Role |
 |------|----------|------|
-| **PHP class** | `app/Modules/Core/<Module>/Livewire/` or `app/Base/<Module>/Livewire/` | State, actions, data queries |
-| **Blade template** | `resources/core/views/livewire/<area>/<name>.blade.php` | Layout, HTML, `wire:*` bindings |
+| **PHP class** | `app/Base/{Component}/Livewire/`, `app/Core/{Module}/Livewire/`, `app/Domains/{Domain}/{Module}/Livewire/`, or `app/Extensions/{Extension}/{Module}/Livewire/` | State, actions, data queries |
+| **Shared Blade template** | `resources/core/views/livewire/{area}/{name}.blade.php` | Framework-shell presentation |
+| **Module Blade template** | owning Module `Views/livewire/{area}/{name}.blade.php` | Core-, Domain-, or Extension-owned presentation registered by its provider |
 
 The PHP class `render()` method connects the two by returning `view('livewire.<dot.path>')`.
 
 **Minimal example:**
 
-PHP class (`app/Modules/Core/Geonames/Livewire/Admin1/Index.php`):
+PHP class (`app/Core/Geonames/Livewire/Admin1/Index.php`):
 
 ```php
 <?php
 
-namespace App\Modules\Core\Geonames\Livewire\Admin1;
+namespace App\Core\Geonames\Livewire\Admin1;
 
 use Livewire\Component;
 
@@ -73,7 +74,7 @@ Blade template (`resources/core/views/livewire/admin/geonames/admin1/index.blade
 ### 2.1 Extending Component and traits
 
 ```php
-namespace App\Modules\Core\Geonames\Livewire\Admin1;
+namespace App\Core\Geonames\Livewire\Admin1;
 
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -275,9 +276,9 @@ The important idea: **state and logic live in the PHP class; the Blade template 
 Classes are placed in the module that owns the domain logic:
 
 ```
-app/Modules/Core/Geonames/Livewire/Admin1/Index.php      → Geonames module
-app/Modules/Core/Company/Livewire/Companies/Index.php     → Company module
-app/Base/Authz/Livewire/Roles/Index.php                   → Authz (Base) module
+app/Core/Geonames/Livewire/Admin1/Index.php      → Geonames Module in the Core Domain
+app/Core/Company/Livewire/Companies/Index.php    → Company Module in the Core Domain
+app/Base/Authz/Livewire/Roles/Index.php          → Authz Base component
 ```
 
 ### Blade template placement
@@ -295,7 +296,7 @@ resources/core/views/livewire/admin/roles/index.blade.php
 Routes use explicit class references:
 
 ```php
-use App\Modules\Core\Geonames\Livewire\Admin1\Index;
+use App\Core\Geonames\Livewire\Admin1\Index;
 
 Route::get('/admin/geonames/admin1', Index::class)
     ->name('admin.geonames.admin1.index');
@@ -303,7 +304,7 @@ Route::get('/admin/geonames/admin1', Index::class)
 
 ### Component auto-discovery
 
-BLB auto-discovers all Livewire components via `ComponentDiscoveryService`. It scans `app/Base/*/Livewire/` and `app/Modules/*/*/Livewire/`, parses each class's `view()` call to derive the component name, and registers it with Livewire. No manual registration needed.
+BLB auto-discovers Livewire components via `ComponentDiscoveryService` in Base → Core → enabled Domains → Extensions order. It uses the four-root `ApplicationTopology` patterns, derives each component name from its `view()` call, and registers it with Livewire. No manual registration is needed for a conforming component.
 
 ---
 

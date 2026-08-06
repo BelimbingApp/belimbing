@@ -2,7 +2,7 @@
 
 **Status:** Complete
 **Last Updated:** 2026-07-24
-**Sources:** `docs/architecture/settings.md`; `docs/architecture/module-system.md`; `.env.example`; `config/app.php`; `config/mail.php`; `config/session.php`; `app/Base/AI/Config/ai.php`; `app/Base/Settings/`; `app/Base/DateTime/`; `app/Modules/Core/User/Models/User.php`; user discussion on environment ownership, runtime settings, and user preferences
+**Sources:** `docs/architecture/settings.md`; `docs/architecture/module-system.md`; `.env.example`; `config/app.php`; `config/mail.php`; `config/session.php`; `app/Base/AI/Config/ai.php`; `app/Base/Settings/`; `app/Base/DateTime/`; `app/Core/User/Models/User.php`; user discussion on environment ownership, runtime settings, and user preferences
 **Agents:** Codex/GPT-5
 
 ## Problem Essence

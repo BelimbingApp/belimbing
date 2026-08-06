@@ -2,9 +2,9 @@
 
 namespace App\Base\AI\Livewire\Concerns;
 
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\Runtime\RuntimeCredentialResolver;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\AI\Services\Runtime\RuntimeCredentialResolver;
 
 /**
  * Shared model-loading and resolution logic for Livewire components that

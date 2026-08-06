@@ -2,6 +2,7 @@
 
 namespace App\Base\Dashboard\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -22,13 +23,17 @@ class WidgetDiscoveryService
      * Same shape as menu discovery: Base modules, domain anchors, leaf
      * modules, and extensions at both vendor and package level.
      */
-    protected array $scanPatterns = [
-        'app/Base/*/Config/dashboard.php',
-        'app/Modules/*/Config/dashboard.php',
-        'app/Modules/*/*/Config/dashboard.php',
-        'extensions/*/Config/dashboard.php',
-        'extensions/*/*/Config/dashboard.php',
-    ];
+    protected function scanPatterns(): array
+    {
+        return [
+            ApplicationTopology::baseComponentPattern('Config/dashboard.php'),
+            ApplicationTopology::coreModulePattern('Config/dashboard.php'),
+            ApplicationTopology::domainPattern('Config/dashboard.php'),
+            ApplicationTopology::domainModulePattern('Config/dashboard.php'),
+            ApplicationTopology::extensionSourcePattern('Config/dashboard.php'),
+            ApplicationTopology::extensionModulePattern('Config/dashboard.php'),
+        ];
+    }
 
     /**
      * Discover all widget definition arrays from configured paths.
@@ -39,8 +44,8 @@ class WidgetDiscoveryService
     {
         $widgets = collect();
 
-        foreach ($this->scanPatterns as $pattern) {
-            $files = DomainState::filterPaths(glob(base_path($pattern)) ?: []);
+        foreach ($this->scanPatterns() as $pattern) {
+            $files = DomainState::filterPaths(glob($pattern) ?: []);
 
             foreach ($files as $file) {
                 $this->processFile($file, $widgets);

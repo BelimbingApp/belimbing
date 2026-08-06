@@ -18,7 +18,7 @@ The result: business facts stay where they belong; statutory routing stays in on
 
 ### Pay-item code: where, why, alternatives
 
-- **Defined in:** `PayrollPayItem` (model at `app/Modules/People/Payroll/Models/PayrollPayItem.php`). One row per pay component the system knows about (`BASIC`, `OT_NORMAL`, `MEAL_ALLOW_SHIFT`, `EPF_EE`, etc.).
+- **Defined in:** `PayrollPayItem` (model at `app/Domains/People/Payroll/Models/PayrollPayItem.php`). One row per pay component the system knows about (`BASIC`, `OT_NORMAL`, `MEAL_ALLOW_SHIFT`, `EPF_EE`, etc.).
 - **Referenced by:** every source module, as a string on `PayrollInput.pay_item_code`. Never via foreign key.
 - **Classified by:** `PayrollPayItemClassification` rows scoped per country.
 
@@ -34,7 +34,7 @@ Why a string code rather than a foreign-key reference:
 
 ### Module boundaries — what is and isn't in People
 
-The People domain is the **HR** domain. Sub-modules under `app/Modules/People/`:
+The People Domain is the **HR** Domain. Its Modules live under `app/Domains/People/`:
 
 - `People/Settings` — shared people-domain data (work profile, calendars).
 - `People/Attendance` — clock events, shifts, overtime, lateness, attendance-conditioned allowances.

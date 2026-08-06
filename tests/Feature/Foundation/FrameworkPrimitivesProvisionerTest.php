@@ -6,9 +6,9 @@ use App\Base\Authz\Models\Role;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 
 const BLB_FRAMEWORK_PROVISIONER_TEST_ADMIN_EMAIL = 'provisioner-admin@example.com';

@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Core\AI\Enums\LifecycleAction;
-use App\Modules\Core\AI\Livewire\ControlPlane;
+use App\Core\AI\Enums\LifecycleAction;
+use App\Core\AI\Livewire\ControlPlane;
 use Illuminate\Support\Number;
 
 /** @var ControlPlane $this */

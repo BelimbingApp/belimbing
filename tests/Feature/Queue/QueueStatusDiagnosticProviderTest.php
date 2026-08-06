@@ -2,13 +2,13 @@
 
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Queue\Services\QueueStatusDiagnosticProvider;
-use App\Modules\Core\AI\Enums\AiRunStatus;
-use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Jobs\RunChatTurnJob;
-use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Enums\RunPhase;
+use App\Core\AI\Jobs\RunChatTurnJob;
+use App\Core\AI\Models\AiRun;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;

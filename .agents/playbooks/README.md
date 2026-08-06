@@ -21,16 +21,19 @@ Targeted implementation context so agents can build features without broad codeb
 Load the relevant anchor when the task touches that domain. These do not replace playbooks — they provide cross-cutting conventions.
 
 - UI conventions: `resources/core/views/AGENTS.md`
+- Four-root topology and ownership: `docs/architecture/module-system.md`
 - Database conventions: `app/Base/Database/AGENTS.md`
 - Authz conventions: `app/Base/Authz/AGENTS.md`
 - Foundation provider ordering: `app/Base/Foundation/AGENTS.md`
+- Optional Domain authoring: `app/Domains/AGENTS.md`
+- Extension authoring: `app/Extensions/AGENTS.md`
 
 ## Playbook Index
 
 - id: FEAT-NEW-BUSINESS-MODULE
   intent: create a complete new business module from scratch using the IT Ticket pattern
   checklist:
-    - task creates a new module directory under app/Modules/
+    - task creates a full-stack Module under app/Core, app/Domains, or app/Extensions
     - task requires model, migration, CRUD pages, routes, menu, and authz
   load: .agents/playbooks/feat-new-business-module.md
 
@@ -44,7 +47,7 @@ Load the relevant anchor when the task touches that domain. These do not replace
 - id: FEAT-MODULE-SCHEMA
   intent: implement module schema or seeder changes using module-aware migration flow
   checklist:
-    - task creates or edits migration in app/Base or app/Modules
+    - task creates or edits a migration under any supported app root
     - task adds, removes, or changes module seeder registration
   load: .agents/playbooks/feat-module-schema.md
 

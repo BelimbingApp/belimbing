@@ -10,7 +10,7 @@ use App\Base\Support\Str;
  * `extra.blb` block and returns parsed manifests.
  *
  * Operates on filesystem paths — does not require composer's autoloader
- * to be aware of the modules. Used by the Modules screen and the database
+ * to be aware of the modules. Used by the Domains screen and the database
  * migration preflight to verify required-module dependencies.
  */
 class ModuleManifestReader
@@ -18,8 +18,9 @@ class ModuleManifestReader
     /**
      * @param  list<string>  $rootPaths  filesystem directories to scan. A root
      *                                   may be a module root, a one-level module
-     *                                   collection (`app/Base`), or a two-level
-     *                                   collection (`app/Modules`, `extensions`).
+     *                                   collection (`app/Base`, `app/Core`), or a
+     *                                   two-level collection (`app/Domains`,
+     *                                   `app/Extensions`).
      */
     public function __construct(
         private readonly array $rootPaths,
@@ -284,12 +285,16 @@ class ModuleManifestReader
             return 'base/'.$this->pascalSegmentToIdentifier($segments[2]);
         }
 
-        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Modules' && isset($segments[2], $segments[3])) {
+        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Core' && isset($segments[2])) {
+            return 'core/'.$this->pascalSegmentToIdentifier($segments[2]);
+        }
+
+        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Domains' && isset($segments[2], $segments[3])) {
             return $this->pascalSegmentToIdentifier($segments[2]).'/'.$this->pascalSegmentToIdentifier($segments[3]);
         }
 
-        if (($segments[0] ?? null) === 'extensions' && isset($segments[1], $segments[2])) {
-            return $segments[1].'/'.$segments[2];
+        if (($segments[0] ?? null) === 'app' && ($segments[1] ?? null) === 'Extensions' && isset($segments[2], $segments[3])) {
+            return $this->pascalSegmentToIdentifier($segments[2]).'/'.$this->pascalSegmentToIdentifier($segments[3]);
         }
 
         return null;

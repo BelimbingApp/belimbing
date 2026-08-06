@@ -1,7 +1,7 @@
 # people/07_leave-module-design
 
 **Status:** In Progress
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Leave is one of the planned People submodules; entitlement, balances, requests, approvals, carry-forward, and team calendar visibility called out at suite level
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Country-neutral core + country-pack architecture and effective-dated statutory data; unpaid leave already modelled as a neutral `PayrollInput` type that the country pack classifies; statutory profile resolver, run lifecycle, and audit patterns this plan should mirror
@@ -10,9 +10,9 @@
 - `docs/plans/people/06_ipayroll-employee-module-gap-bridge.md` — Employee workbench naming, payroll data readiness, work-profile dependencies that Leave entitlement and approval routing depend on
 - `docs/plans/people/04_pdf-generation-strategy.md` — `App\Base\Pdf\Jobs\RenderPdfJob` is the queue-friendly entry point for any printable Leave document (year planner, balance statement, leave history report)
 - `docs/plans/people/sbg_leave_ref/` — SBG's live HR2000 e-Leave configuration export: leave types, leave groups (FM/FW/MM/SINGLE), leave policies per type, leave entitlement bands, and balance/application snapshots. Primary parity source for Phase 7 and for shaping the policy/entitlement schema.
-- `app/Modules/People/Settings/Models/PeopleCalendarException.php` — existing work-calendar exception model Leave should consume
-- `app/Modules/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` — neutral pay-input contract through which approved unpaid leave and leave-encashment payouts feed payroll
-- `app/Modules/Core/Employee/` — canonical employee identity, supervisor/reporting line, employment dates that drive entitlement accrual and approval routing
+- `app/Domains/People/Settings/Models/PeopleCalendarException.php` — existing work-calendar exception model Leave should consume
+- `app/Domains/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` — neutral pay-input contract through which approved unpaid leave and leave-encashment payouts feed payroll
+- `app/Core/Employee/` — canonical employee identity, supervisor/reporting line, employment dates that drive entitlement accrual and approval routing
 - Malaysia Employment Act 1955 (as amended Act A1651, in force 2023-01-01) — statutory minima for annual leave, sick leave, hospitalization leave, maternity leave (98 days), paternity leave (7 days), and gazetted public holidays
 - `docs/architecture/module-system.md` — module placement; `docs/plans/AGENTS.md` — plan conventions
 **Agents:** amp/claude-haiku-4.5, copilot/gpt-5.4
@@ -23,7 +23,7 @@ BLB's People suite currently has no Leave capability. Without it, the Payroll mo
 
 ## Desired Outcome
 
-A Leave module under `app/Modules/People/Leave/` that gives a small-to-mid-size Malaysian employer a credible end-to-end leave operation — entitlement configuration, accrual and balances, employee/manager request and approval workflow, calendar visibility, attachments, cancellations, replacement and carry-forward rules, and clean handoff to Payroll for unpaid leave and any encashment — while preserving the same architectural shape Payroll established: a country-neutral Leave Core in `belimbingapp/belimbing`, Malaysia statutory leave behaviour in `BelimbingApp/blb-payroll-my` (or a sibling `blb-people-my` if the boundary proves separate), and SBG-specific leave policies and templates in `kiatng/blb-sbg`. Done means HR can run a normal monthly leave cycle for SBG, the figures match HR2000 within the parity scope, and no Malaysia-specific column or class lives in Leave Core.
+A Leave Module under `app/Domains/People/Leave/` that gives a small-to-mid-size Malaysian employer a credible end-to-end leave operation — entitlement configuration, accrual and balances, employee/manager request and approval workflow, calendar visibility, attachments, cancellations, replacement and carry-forward rules, and clean handoff to Payroll for unpaid leave and any encashment — while preserving the same architectural shape Payroll established: a country-neutral Leave Module in `belimbingapp/belimbing`, Malaysia statutory leave behaviour in `BelimbingApp/blb-payroll-my` (or a sibling `blb-people-my` if the boundary proves separate), and SBG-specific leave policies and templates in `kiatng/blb-sbg`. Done means HR can run a normal monthly leave cycle for SBG, the figures match HR2000 within the parity scope, and no Malaysia-specific column or class lives in the Leave Module.
 
 ## Top-Level Components
 

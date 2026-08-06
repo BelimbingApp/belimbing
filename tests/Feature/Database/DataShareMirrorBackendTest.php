@@ -491,7 +491,7 @@ it('adds transitive foreign key dependencies to one review pass', function (): v
         fn (string $table): DataShareMirrorCatalogTable => new DataShareMirrorCatalogTable(
             $table,
             'Sbg',
-            'extensions/sbg/ibg',
+            'app/Extensions/SbGroup/Ibg',
             'create_sbg_tables.php',
             true,
             true,
@@ -647,7 +647,7 @@ it('renders the Local catalog even when the remote endpoint is unreachable', fun
     TableRegistry::query()->create([
         'table_name' => 'zzz_local_first_probe',
         'module_name' => 'Probe',
-        'module_path' => 'app/Modules/Probe',
+        'module_path' => 'app/Domains/Probe',
         'migration_file' => 'probe.php',
     ]);
 
@@ -678,7 +678,7 @@ it('reports exact live row counts for reachable Local and remote tables', functi
     TableRegistry::query()->create([
         'table_name' => 'zzz_live_count_probe',
         'module_name' => 'Probe',
-        'module_path' => 'app/Modules/Probe',
+        'module_path' => 'app/Domains/Probe',
         'migration_file' => 'probe.php',
     ]);
 
@@ -704,7 +704,7 @@ it('builds the review catalog without scanning live row counts', function (): vo
     TableRegistry::query()->create([
         'table_name' => 'zzz_review_catalog_probe',
         'module_name' => 'Probe',
-        'module_path' => 'app/Modules/Probe',
+        'module_path' => 'app/Domains/Probe',
         'migration_file' => 'probe.php',
     ]);
 
@@ -1017,7 +1017,7 @@ it('builds the Local catalog with no remote call at all', function (): void {
     TableRegistry::query()->create([
         'table_name' => 'zz_local_first_probe',
         'module_name' => 'Probe',
-        'module_path' => 'app/Modules/Probe',
+        'module_path' => 'app/Domains/Probe',
         'migration_file' => 'probe.php',
     ]);
 

@@ -9,12 +9,12 @@ use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 /**
- * Discovers BLB bundles published under the BelimbingApp GitHub org.
+ * Discovers BLB software sources published under the BelimbingApp GitHub org.
  *
  * Per docs/plans/plugin-manager-ui.md:
  *  - Trusts exactly one source: the BelimbingApp org.
  *  - Anonymous GitHub API access (60 req/hr is comfortable for ~10 repos).
- *  - 24h-default cache in `base_foundation_bundle_catalog_cache`.
+ *  - 24h-default cache in the legacy-named catalog cache table.
  *  - Read-only: no install, no code execution. The UI surfaces a copy-
  *    to-clipboard install command; operators run it from a shell.
  */
@@ -24,8 +24,11 @@ class BelimbingAppCatalogService
 
     private const ORG = 'BelimbingApp';
 
-    private const TOPIC = 'blb-bundle';
+    private const TOPIC = 'blb-source';
 
+    private const LEGACY_TOPIC = 'blb-bundle';
+
+    /** Persisted compatibility name; product language no longer exposes Bundle. */
     private const TABLE = 'base_foundation_bundle_catalog_cache';
 
     public function __construct(
@@ -37,13 +40,13 @@ class BelimbingAppCatalogService
      */
     public function ttlHours(): int
     {
-        $configured = (int) config('bundle_catalog.ttl_hours', 24);
+        $configured = (int) config('source_catalog.ttl_hours', 24);
 
         return $configured > 0 ? $configured : 24;
     }
 
     /**
-     * @return list<BundleCatalogEntry>
+     * @return list<SoftwareSourceCatalogEntry>
      */
     public function available(): array
     {
@@ -70,7 +73,7 @@ class BelimbingAppCatalogService
      * Returns the resulting list of entries. Catches per-repo failures
      * so a single malformed composer.json does not abort the whole sync.
      *
-     * @return list<BundleCatalogEntry>
+     * @return list<SoftwareSourceCatalogEntry>
      */
     public function refresh(): array
     {
@@ -161,14 +164,15 @@ class BelimbingAppCatalogService
             $repos,
             fn ($repo): bool => is_array($repo)
                 && is_array($repo['topics'] ?? null)
-                && in_array(self::TOPIC, $repo['topics'], true),
+                && (in_array(self::TOPIC, $repo['topics'], true)
+                    || in_array(self::LEGACY_TOPIC, $repo['topics'], true)),
         ));
     }
 
     /**
      * @param  array<string, mixed>  $repo
      */
-    private function buildEntryForRepo(array $repo): ?BundleCatalogEntry
+    private function buildEntryForRepo(array $repo): ?SoftwareSourceCatalogEntry
     {
         $repoName = (string) ($repo['name'] ?? '');
         $htmlUrl = (string) ($repo['html_url'] ?? '');
@@ -190,7 +194,7 @@ class BelimbingAppCatalogService
 
         $sha = $this->fetchDefaultBranchSha($repoName, $defaultBranch);
 
-        return new BundleCatalogEntry(
+        return new SoftwareSourceCatalogEntry(
             repoName: $repoName,
             htmlUrl: $htmlUrl,
             composerName: (string) ($manifestData['name'] ?? ''),
@@ -238,7 +242,7 @@ class BelimbingAppCatalogService
         return is_string($sha) ? $sha : null;
     }
 
-    private function rowToEntry(object $row): BundleCatalogEntry
+    private function rowToEntry(object $row): SoftwareSourceCatalogEntry
     {
         $manifest = [];
         if (is_string($row->manifest)) {
@@ -246,7 +250,7 @@ class BelimbingAppCatalogService
             $manifest = is_array($decodedManifest) ? $decodedManifest : [];
         }
 
-        return new BundleCatalogEntry(
+        return new SoftwareSourceCatalogEntry(
             repoName: (string) $row->repo_name,
             htmlUrl: (string) $row->html_url,
             composerName: (string) ($row->composer_name ?? ''),

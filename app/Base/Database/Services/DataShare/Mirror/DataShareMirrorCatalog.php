@@ -246,7 +246,7 @@ class DataShareMirrorCatalog
         $paths = [database_path('migrations/'.$migration)];
 
         if ($table->modulePath !== null
-            && preg_match('#^(?:app/(?:Base|Modules)/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)?|extensions/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$#', $table->modulePath) === 1) {
+            && preg_match('#^app/(?:Base|Core)/[A-Za-z0-9_.-]+$|^app/(?:Domains|Extensions)/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', $table->modulePath) === 1) {
             $paths[] = base_path($table->modulePath.'/Database/Migrations/'.$migration);
         }
 

@@ -360,7 +360,7 @@ the touched area, then widen only as needed. Example:
 
 ```bash
 # Targeted tests for touched domain first
-php artisan test tests/Unit/Modules/Core/AI/Services/LaraPromptFactoryExceptionTest.php
+php artisan test tests/Unit/Core/AI/Services/LaraPromptFactoryExceptionTest.php
 
 # Then formatting
 vendor/bin/pint --dirty

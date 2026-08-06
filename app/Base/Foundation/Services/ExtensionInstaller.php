@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
@@ -12,15 +13,15 @@ use Illuminate\Support\Facades\Process;
 use InvalidArgumentException;
 
 /**
- * Installs and uninstalls private licensee extensions under `extensions/{folder}`.
+ * Installs and uninstalls private Extensions under `app/Extensions/{Extension}`.
  *
- * Each catalog entry (config: extensions.catalog) is a nested git repo cloned
- * into `extensions/{folder}`; one repo may contain several modules. Private
+ * Each catalog entry (config: extensions.catalog) is a nested Git repository
+ * cloned into `app/Extensions/{Extension}`; one repository may contain several modules. Private
  * repos are cloned with the GitHub token stored per owner by GitHub Access
  * (`integrations.github.token.{github-owner}`) — the owner is parsed from the
  * repo URL, so the folder may differ from the GitHub account.
  *
- * Parallel to DomainInstaller, but two levels deep (`extensions/{owner}/{module}`)
+ * Parallel to DomainInstaller, but two levels deep (`app/Extensions/{Extension}/{Module}`)
  * and credentialed. See docs/guides/extensions/private-extension-repositories.md.
  */
 class ExtensionInstaller
@@ -71,7 +72,7 @@ class ExtensionInstaller
     {
         $extensions = [];
 
-        foreach (glob(base_path('extensions/*'), GLOB_ONLYDIR) ?: [] as $path) {
+        foreach (glob(ApplicationTopology::extensionSourcePattern(), GLOB_ONLYDIR) ?: [] as $path) {
             if ($this->directoryIsEmpty($path)) {
                 continue;
             }
@@ -99,7 +100,7 @@ class ExtensionInstaller
     }
 
     /**
-     * Clone the catalog repo into `extensions/{folder}` (token-authenticated for
+     * Clone the catalog repo into `app/Extensions/{Extension}` (token-authenticated for
      * private repos) and run its pending migrations in a fresh subprocess.
      *
      * @return array{ok: bool, log: string}
@@ -249,14 +250,14 @@ class ExtensionInstaller
 
     private function assertFolderName(string $folder): void
     {
-        if (preg_match('/^[a-z0-9][a-z0-9-]*$/', $folder) !== 1) {
+        if (preg_match('/^[A-Z][A-Za-z0-9]*$/', $folder) !== 1) {
             throw new InvalidArgumentException("Invalid extension folder [$folder].");
         }
     }
 
     private function extensionPath(string $folder): string
     {
-        return base_path('extensions/'.$folder);
+        return ApplicationTopology::extensionPath($folder);
     }
 
     /**

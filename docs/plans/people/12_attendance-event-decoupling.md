@@ -1,16 +1,16 @@
 # people/12_attendance-event-decoupling
 
 **Status:** Complete — all six phases landed (2026-05-16). Two follow-ups documented in Notes: composer-merge-plugin install (sandbox blocker) and a full runtime "boot without Payroll" test.
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-05
 **Owners:** unassigned. See [Distribution Notes](#distribution-notes) for per-phase pickup guidance.
 **Sources:**
 - `docs/architecture/module-system.md` — defines the pluggable seam: source modules emit events, plugins listen, no source-module imports of plugin classes.
 - `docs/plans/people/10_payroll-intake-dependency-inversion.md` — landed `PayrollContributionIntake` and `PayrollContributionPayload`. The intake stays; this plan moves it behind a listener so producers stop importing it.
 - `docs/plans/people/11_attendance-shift-and-allowance-coverage.md` — Allowance rules now scope to shift template; relevant because this plan changes how the rule's payroll mapping is stored.
-- `app/Modules/People/Attendance/Services/AttendanceOvertimeService.php` — the one producer-side intake caller in Attendance today.
-- `app/Modules/People/Attendance/Models/AttendanceAllowanceRule.php` — owns `payroll_pay_item_code` column, which moves out.
-- `app/Modules/People/Attendance/Livewire/AllowanceRules.php` + `Livewire/Concerns/InteractsWithAttendanceScreen.php` — UI dropdown for pay-item codes, which goes away.
-- `app/Modules/People/Attendance/Services/AttendancePolicyValidationService.php` and `AttendancePolicySimulationService.php` — both read `payroll_pay_item_code` from Attendance rows; they have to read from a Payroll-side mapping instead.
+- `app/Domains/People/Attendance/Services/AttendanceOvertimeService.php` — the one producer-side intake caller in Attendance today.
+- `app/Domains/People/Attendance/Models/AttendanceAllowanceRule.php` — owns `payroll_pay_item_code` column, which moves out.
+- `app/Domains/People/Attendance/Livewire/AllowanceRules.php` + `Livewire/Concerns/InteractsWithAttendanceScreen.php` — UI dropdown for pay-item codes, which goes away.
+- `app/Domains/People/Attendance/Services/AttendancePolicyValidationService.php` and `AttendancePolicySimulationService.php` — both read `payroll_pay_item_code` from Attendance rows; they have to read from a Payroll-side mapping instead.
 
 **Agents:** claud/opus-4.7
 
@@ -31,7 +31,7 @@ Attendance is the most complex of the three People producers (Leave, Claim are s
 
 When this plan is complete:
 
-1. Attendance dispatches public events for facts payroll may care about. No Attendance class imports anything under `App\Modules\People\Payroll\`.
+1. Attendance dispatches public events for facts payroll may care about. No Attendance class imports anything under `App\Domains\People\Payroll\`.
 2. `payroll_pay_item_code` is removed from `AttendanceAllowanceRule`. A Payroll-side mapping table owns the assignment.
 3. The Attendance UI does not surface payroll-vocabulary fields.
 4. The existing `PayrollContributionIntake` becomes the **internal write path** of a Payroll-side listener. It is no longer called from Attendance.
@@ -48,7 +48,7 @@ When this plan is complete:
 | `Listeners\RecordAttendanceAllowanceContribution` | Payroll | Looks up the pay-item mapping for the rule, builds a payload, calls intake. |
 | `payroll_attendance_rule_pay_items` table | Payroll | Maps `(company_id, attendance_allowance_rule_id) → payroll_pay_item_code` with effective dating. Replaces the column on `AttendanceAllowanceRule`. |
 | Payroll-side mapping UI | Payroll | Operator screen to assign pay-item codes per attendance allowance rule. Replaces the dropdown in the Attendance allowance form. |
-| Composer manifests | each sub-module | `composer.json` per `app/Modules/People/{Module}/` with `extra.blb` block. |
+| Composer manifests | each People Module | `composer.json` per `app/Domains/People/{Module}/` with `extra.blb` block. |
 | Manifest reader | BLB Core | Boot-time check that `extra.blb.requires-modules` are present; logs missing optional modules. Minimum viable scope here. |
 | Standalone-mode test | Attendance | Asserts Attendance boots, renders UI, and processes OT/allowance flows with Payroll's ServiceProvider not loaded. |
 
@@ -72,7 +72,7 @@ When this plan is complete:
 
 **D9. No event versioning yet.** First-version events have no `V2` suffix. Versioning only when a real breaking change forces it.
 
-**D10. Architectural test enforces the boundary.** A test fails if any class under `App\Modules\People\Attendance\` imports from `App\Modules\People\Payroll\`. Test lives in `tests/Architecture/` or equivalent.
+**D10. Architectural test enforces the boundary.** A test fails if any class under `App\Domains\People\Attendance\` imports from `App\Domains\People\Payroll\`. Test lives in `tests/Architecture/` or equivalent.
 
 ## Out of Scope (deferred to other plans)
 
@@ -296,7 +296,7 @@ For agents picking up work from this plan:
 
 1. **`wikimedia/composer-merge-plugin` install** — sandbox lacks the composer binary and no People sub-module currently has PHP-package deps to merge. The BLB-side manifest reader (`App\Base\Foundation\ModuleManifest\ModuleManifestReader`) operates on filesystem paths and does not need merge-plugin. Install when the first module ships a non-trivial `require` block.
 
-2. **Boot-time manifest verification** — the reader is implemented and tested but not wired into `App\Base\Foundation\Providers\ProviderRegistry`. Adding it means: instantiate the reader at boot, scan `app/Modules/*/*` and `extensions/*/*`, call `verifyRequiredModules`, and throw on unmet required modules with a clear message. Separate change because it touches the framework boot path.
+2. **Boot-time manifest verification** — the reader is implemented and tested but not wired into `App\Base\Foundation\Providers\ProviderRegistry`. Adding it means: instantiate the reader at boot, obtain discovery roots through `App\Base\Foundation\ApplicationTopology` in contract order (Base → Core → enabled Domains → Extensions), call `verifyRequiredModules`, and throw on unmet required modules with a clear message. Separate change because it touches the framework boot path.
 
 3. **Full runtime standalone-mode test** — `AttendanceStandaloneContractTest` covers the seam at the manifest + event level. A full "boot the framework with Payroll's ServiceProvider not registered and exercise Attendance UI" test requires `ProviderRegistry::resolve()` to honor an exclusion list. Worth doing alongside the boot-time manifest verification above.
 

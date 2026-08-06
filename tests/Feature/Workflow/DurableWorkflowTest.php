@@ -22,7 +22,7 @@ use App\Base\Workflow\Process\ProcessCoordinator;
 use App\Base\Workflow\Process\ProcessDefinitionRegistry;
 use App\Base\Workflow\Services\TransitionOutboxDispatcher;
 use App\Base\Workflow\Services\WorkflowEngine;
-use App\Modules\Core\Company\Models\Company;
+use App\Core\Company\Models\Company;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;

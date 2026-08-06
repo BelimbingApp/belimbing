@@ -1,14 +1,14 @@
 # people/13_leave-event-decoupling
 
 **Status:** Phase 1 complete (2026-05-16). Pay-item-code migration and column rename deferred. {claud/opus-4.7}
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-05
 **Owners:** claud/opus-4.7
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` — canonical pattern. This plan adopts plan 12's design decisions (events first, producer-domain payloads, intake stays as listener's internal write path, architectural test as boundary guard).
 - `docs/architecture/module-system.md` — module-system architecture.
-- `app/Modules/People/Leave/Services/LeavePayrollHandoffService.php` — leave-applied handoff that calls intake.
-- `app/Modules/People/Leave/Services/LeaveEncashmentService.php` — encashment handoff that calls intake.
-- `app/Modules/People/Leave/Models/LeaveType.php` — owns `interacts_with_payroll`, `payroll_pay_item_code`.
+- `app/Domains/People/Leave/Services/LeavePayrollHandoffService.php` — leave-applied handoff that calls intake.
+- `app/Domains/People/Leave/Services/LeaveEncashmentService.php` — encashment handoff that calls intake.
+- `app/Domains/People/Leave/Models/LeaveType.php` — owns `interacts_with_payroll`, `payroll_pay_item_code`.
 
 **Agents:** claud/opus-4.7
 
@@ -22,7 +22,7 @@ Two Leave services import `PayrollContributionIntake` / `PayrollContributionPayl
 
 1. Leave dispatches public events on the two handoff points (leave applied + leave encashed).
 2. Payroll has listeners for each event; intake stays unchanged.
-3. No Leave class imports anything under `App\Modules\People\Payroll\`.
+3. No Leave class imports anything under `App\Domains\People\Payroll\`.
 4. Architectural test (`LeaveDoesNotImportPayrollTest`) enforces the boundary.
 
 ## Out of Scope (deferred)
@@ -55,7 +55,7 @@ Two Leave services import `PayrollContributionIntake` / `PayrollContributionPayl
 - [x] Full People test suite green — 28 Leave tests passing. {claud/opus-4.7}
 
 **Exit criterion:**
-- [x] Leave imports nothing under `App\Modules\People\Payroll\`.
+- [x] Leave imports nothing under `App\Domains\People\Payroll\`.
 - [x] Leave-applied + encashment tests still produce the expected `PayrollInput` rows via the listener.
 
 Subsequent phases (pay-item mapping, column audits) follow the plan 12 numbering and pattern when scheduled.

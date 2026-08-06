@@ -1,22 +1,22 @@
 <?php
 
 use App\Base\Foundation\Enums\StatusVariant;
-use App\Base\Software\Inventory\InstalledBundle;
+use App\Base\Software\Inventory\InstalledSource;
 use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Software\Services\SoftwareInventoryStatusDiagnosticProvider;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
-function softwareDiagnosticBundle(
+function softwareDiagnosticSource(
     string $key,
     string $label,
-    string $kind = InstalledBundle::KIND_BUSINESS_DOMAIN,
+    string $kind = InstalledSource::KIND_DOMAIN,
     array $workingTree = [],
     array $dependencyIssues = [],
-): InstalledBundle {
-    return new InstalledBundle(
+): InstalledSource {
+    return new InstalledSource(
         key: $key,
         label: $label,
         kind: $kind,
@@ -32,10 +32,10 @@ function softwareDiagnosticBundle(
     );
 }
 
-function fakeSoftwareInventory(array $bundles): void
+function fakeSoftwareInventory(array $sources): void
 {
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')->andReturn($bundles);
+    $inventory->shouldReceive('installedSourcesForStatusDiagnostics')->andReturn($sources);
 
     app()->instance(SoftwareInventoryService::class, $inventory);
 }
@@ -49,10 +49,10 @@ function setSoftwareDiagnosticRoute(string $routeName): void
     app()->instance('request', $request);
 }
 
-it('reports module dependency issues for users who can view modules', function (): void {
+it('reports module dependency issues for users who can view Domains', function (): void {
     fakeSoftwareInventory([
-        softwareDiagnosticBundle(
-            'app-Modules-People',
+        softwareDiagnosticSource(
+            'domain-people',
             'People',
             dependencyIssues: [
                 [
@@ -72,40 +72,42 @@ it('reports module dependency issues for users who can view modules', function (
     expect($diagnostics[0]->id)->toBe('software.module-dependencies')
         ->and($diagnostics[0]->severity)->toBe(StatusVariant::Error)
         ->and($diagnostics[0]->summary)->toBe('1 module dependency issue needs attention')
-        ->and($diagnostics[0]->target)->toBe(route('admin.system.software.modules.index'))
+        ->and($diagnostics[0]->detail)->toContain('Open Domains')
+        ->and($diagnostics[0]->target)->toBe(route('admin.system.software.domains.index'))
         ->and($diagnostics[0]->metadata)->toMatchArray([
             'dependency_issues' => 1,
-            'affected_bundles' => ['People'],
+            'affected_sources' => ['People'],
         ]);
 });
 
-it('reports dirty and unpushed add-in bundles as one aggregate warning', function (): void {
+it('reports dirty and unpushed add-in sources as one aggregate warning', function (): void {
     fakeSoftwareInventory([
-        softwareDiagnosticBundle('platform', 'Platform', InstalledBundle::KIND_PLATFORM, ['dirty' => 4, 'ahead' => 2]),
-        softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 3]),
-        softwareDiagnosticBundle('extensions-kiat', 'Kiat', InstalledBundle::KIND_EXTENSION, ['ahead' => 2]),
+        softwareDiagnosticSource('platform', 'Platform', InstalledSource::KIND_PLATFORM, ['dirty' => 4, 'ahead' => 2]),
+        softwareDiagnosticSource('domain-people', 'People', workingTree: ['dirty' => 3]),
+        softwareDiagnosticSource('extension-kiat', 'Kiat', InstalledSource::KIND_EXTENSION, ['ahead' => 2]),
     ]);
 
     $diagnostics = collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
 
     expect($diagnostics)->toHaveCount(1);
-    expect($diagnostics[0]->id)->toBe('software.bundle-drift')
+    expect($diagnostics[0]->id)->toBe('software.source-drift')
         ->and($diagnostics[0]->severity)->toBe(StatusVariant::Warning)
-        ->and($diagnostics[0]->summary)->toBe('2 add-in bundles have local drift')
-        ->and($diagnostics[0]->target)->toBe(route('admin.system.software.modules.index').'#add-in-bundle-drift')
+        ->and($diagnostics[0]->summary)->toBe('2 add-in sources have local drift')
+        ->and($diagnostics[0]->detail)->toContain('Open Domains')
+        ->and($diagnostics[0]->target)->toBe(route('admin.system.software.domains.index').'#add-in-source-drift')
         ->and($diagnostics[0]->metadata)->toMatchArray([
-            'affected_bundles' => ['People', 'Kiat'],
-            'dirty_bundles' => 1,
+            'affected_sources' => ['People', 'Kiat'],
+            'dirty_sources' => 1,
             'unpushed_commits' => 2,
         ]);
 });
 
 it('reuses the expensive git inventory snapshot across status bar renders', function (): void {
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')
+    $inventory->shouldReceive('installedSourcesForStatusDiagnostics')
         ->once()
         ->andReturn([
-            softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+            softwareDiagnosticSource('domain-people', 'People', workingTree: ['dirty' => 1]),
         ]);
     app()->instance(SoftwareInventoryService::class, $inventory);
 
@@ -118,10 +120,10 @@ it('reuses the expensive git inventory snapshot across status bar renders', func
 
 it('serves status bar renders from a scheduler-warmed snapshot without rescanning', function (): void {
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')
+    $inventory->shouldReceive('installedSourcesForStatusDiagnostics')
         ->once()
         ->andReturn([
-            softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+            softwareDiagnosticSource('domain-people', 'People', workingTree: ['dirty' => 1]),
         ]);
     app()->instance(SoftwareInventoryService::class, $inventory);
 
@@ -131,7 +133,7 @@ it('serves status bar renders from a scheduler-warmed snapshot without rescannin
     $diagnostics = collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()));
 
     expect($diagnostics)->toHaveCount(1)
-        ->and($diagnostics[0]->id)->toBe('software.bundle-drift');
+        ->and($diagnostics[0]->id)->toBe('software.source-drift');
 });
 
 it('caches an inventory snapshot that survives hardened cache serialization', function (): void {
@@ -139,7 +141,7 @@ it('caches an inventory snapshot that survives hardened cache serialization', fu
     // so any cached object silently unserializes to __PHP_Incomplete_Class.
     // The tests' array store never serializes, so simulate the round-trip here.
     fakeSoftwareInventory([
-        softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+        softwareDiagnosticSource('domain-people', 'People', workingTree: ['dirty' => 1]),
     ]);
 
     collect(app(SoftwareInventoryStatusDiagnosticProvider::class)->diagnosticsFor(createAdminUser()))->all();
@@ -151,9 +153,9 @@ it('caches an inventory snapshot that survives hardened cache serialization', fu
         ->and(collect($roundTripped)->flatten()->filter(fn ($value) => is_object($value)))->toBeEmpty();
 });
 
-it('hides software diagnostics from users without module inventory access', function (): void {
+it('hides software diagnostics from users without Domains inventory access', function (): void {
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');
+    $inventory->shouldNotReceive('installedSourcesForStatusDiagnostics');
     app()->instance(SoftwareInventoryService::class, $inventory);
 
     $user = User::factory()->create([
@@ -165,22 +167,22 @@ it('hides software diagnostics from users without module inventory access', func
 
 it('surfaces software diagnostics through the status bar aggregator', function (): void {
     fakeSoftwareInventory([
-        softwareDiagnosticBundle('app-Modules-People', 'People', workingTree: ['dirty' => 1]),
+        softwareDiagnosticSource('domain-people', 'People', workingTree: ['dirty' => 1]),
     ]);
 
     $response = $this->actingAs(createAdminUser())
         ->get(route('admin.system.info.index'));
 
     $response->assertOk()
-        ->assertSee('1 add-in bundle has local drift')
-        ->assertSee('href="'.route('admin.system.software.modules.index').'#add-in-bundle-drift"', false);
+        ->assertSee('1 add-in source has local drift')
+        ->assertSee('href="'.route('admin.system.software.domains.index').'#add-in-source-drift"', false);
 });
 
-it('suppresses software diagnostics on the modules inventory page', function (): void {
-    setSoftwareDiagnosticRoute('admin.system.software.modules.index');
+it('suppresses software diagnostics on the Domains inventory page', function (): void {
+    setSoftwareDiagnosticRoute('admin.system.software.domains.index');
 
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');
+    $inventory->shouldNotReceive('installedSourcesForStatusDiagnostics');
     $inventory->shouldNotReceive('dependencyIssuesForStatusDiagnostics');
     app()->instance(SoftwareInventoryService::class, $inventory);
 
@@ -191,7 +193,7 @@ it('keeps dependency diagnostics on the updates page without running inventory g
     setSoftwareDiagnosticRoute('admin.system.software.updates.index');
 
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldNotReceive('installedBundlesForStatusDiagnostics');
+    $inventory->shouldNotReceive('installedSourcesForStatusDiagnostics');
     $inventory->shouldReceive('dependencyIssuesForStatusDiagnostics')->once()->andReturn([
         [
             'issue' => 'missing',
@@ -209,6 +211,6 @@ it('keeps dependency diagnostics on the updates page without running inventory g
         ->and($diagnostics[0]->id)->toBe('software.module-dependencies')
         ->and($diagnostics[0]->metadata)->toMatchArray([
             'dependency_issues' => 1,
-            'affected_bundles' => ['blb/payroll-my'],
+            'affected_sources' => ['blb/payroll-my'],
         ]);
 });

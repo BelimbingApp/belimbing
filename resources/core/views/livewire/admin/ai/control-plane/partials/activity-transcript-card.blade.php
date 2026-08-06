@@ -1,6 +1,6 @@
 <?php
-/** @var list<\App\Modules\Core\AI\DTO\Message> $transcript */
-/** @var \App\Modules\Core\AI\DTO\Message|null $triggeringPrompt */
+/** @var list<\App\Core\AI\DTO\Message> $transcript */
+/** @var \App\Core\AI\DTO\Message|null $triggeringPrompt */
 ?>
 <x-ui.card id="activity-transcript-card">
     <x-ui.disclosure

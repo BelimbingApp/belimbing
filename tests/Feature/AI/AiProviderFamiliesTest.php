@@ -3,11 +3,11 @@
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\PhotoCleanup\StabilityConfiguration;
-use App\Modules\Core\AI\Livewire\Providers\Providers;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Services\AiProviderFamilyRegistry;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
+use App\Core\AI\Livewire\Providers\Providers;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Services\AiProviderFamilyRegistry;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
 use Livewire\Livewire;
 
 function aiProviderFamily(string $key)

@@ -1,173 +1,199 @@
 # FEAT-NEW-BUSINESS-MODULE
 
-Intent: create a complete business module from scratch by composing atomic playbooks in the correct sequence.
+Intent: create a complete business Module from scratch after choosing its owning Core, Domain, or Extension boundary.
 
 ## When To Use
 
-- Building a new module under `app/Modules/{Domain}/{Module}/` (`Domain` is `Core`, `Operation`, `Commerce`, or `People`).
-- Module requires the full surface: model, migration, CRUD pages, routes, menu, authz, seeders.
+- Building a new full-stack Module under `app/Core/{Module}`, `app/Domains/{Domain}/{Module}`, or `app/Extensions/{Extension}/{Module}`.
+- The Module requires schema, models, routes, authorization, menu contribution, Livewire pages, views, seeders, and tests.
 
 ## Do Not Use When
 
-- Adding a feature to an existing module (use the specific atomic playbook).
-- Building Base infrastructure (not a module).
+- Adding a feature to an existing Module; use the specific feature playbook.
+- Building framework infrastructure; Base uses `app/Base/{Component}` and is not a business Module.
+- Creating an empty speculative Module without a real ownership or lifecycle boundary.
+
+## Choose Ownership First
+
+| Owner | Module root | Namespace prefix | Use when |
+|---|---|---|---|
+| required Core Domain | `app/Core/{Module}` | `App\Core\{Module}` | capability is part of every Belimbing installation and updates with the platform |
+| optional Domain | `app/Domains/{Domain}/{Module}` | `App\Domains\{Domain}\{Module}` | capability belongs to an installable enterprise Domain |
+| Extension | `app/Extensions/{Extension}/{Module}` | `App\Extensions\{Extension}\{Module}` | deployment-owned customization needs relaxed cross-Domain placement |
+
+An optional Domain is the install/enable/disable/update unit and contains Modules. Do not create a separate lifecycle switch for each Module unless the architecture explicitly defines a slot or contribution seam.
+
+All physical ownership segments are PascalCase. Give the Module a stable, path-independent kebab-case ID such as `core/company`, `people/payroll`, or `sb-group/qac`.
 
 ## Canonical Reference
 
-The IT Ticket module (`app/Modules/Operation/IT/`) is the canonical first business module. Use it as the template for all new business modules.
+The IT Ticket Module at `app/Domains/Operation/IT/` is the reference for a complete optional-Domain business Module. Copy its contracts and internal shape, not its business names or migration prefix.
 
 ## Module File Manifest
 
-Every business module produces this file set. The agent should create all files — no discovery sweeps needed.
+`{ModuleRoot}` below means one of the three business Module paths selected above.
 
-```
-app/Modules/{Domain}/{Module}/
-├── ServiceProvider.php                          # Auto-discovered; usually empty
+```text
+{ModuleRoot}/
+├── ServiceProvider.php
+├── composer.json                              # when identity/dependencies/events need metadata
 ├── Config/
-│   ├── authz.php                                # Capability keys
-│   └── menu.php                                 # Navigation items
+│   ├── authz.php
+│   └── menu.php
 ├── Models/
-│   └── {Entity}.php                             # Eloquent model
+│   └── {Entity}.php
 ├── Livewire/
 │   └── {Entities}/
-│       ├── Index.php                            # List + search + pagination
-│       ├── Create.php                           # Create form
-│       └── Show.php                             # Detail + transitions (if workflow)
+│       ├── Index.php
+│       ├── Create.php
+│       └── Show.php
 ├── Routes/
-│   └── web.php                                  # Route definitions
+│   └── web.php
+├── Views/
+│   └── livewire/{feature}/{entities}/
+│       ├── index.blade.php
+│       ├── create.blade.php
+│       └── show.blade.php
 ├── Database/
 │   ├── Migrations/
-│   │   └── {prefix}_create_{table}_table.php    # Schema + seeder registration
+│   │   └── {prefix}_create_{table}_table.php
 │   ├── Seeders/
-│   │   ├── {Entity}WorkflowSeeder.php           # If workflow module
+│   │   ├── {Entity}WorkflowSeeder.php
 │   │   └── Dev/
-│   │       └── Dev{Entity}Seeder.php            # Dev data
+│   │       └── Dev{Entity}Seeder.php
 │   └── Factories/
-│       └── {Entity}Factory.php                  # Test factory
-
-resources/core/views/livewire/{module}/{entities}/
-├── index.blade.php
-├── create.blade.php
-└── show.blade.php
+│       └── {Entity}Factory.php
+└── Tests/
+    ├── Feature/
+    └── Unit/
 ```
+
+Core tests conventionally live in root `tests/Feature/Core/{Module}` and `tests/Unit/Core/{Module}`. Optional Domain and Extension tests travel with their source under the Module or Domain `Tests/` tree.
 
 ## Implementation Sequence
 
-Execute these phases in order. Each phase maps to a playbook for detailed contract.
+### Phase 1: schema and seeders — `FEAT-MODULE-SCHEMA`
 
-### Phase 1: Schema & Seeder — `FEAT-MODULE-SCHEMA`
+1. Read `docs/architecture/database.md` and choose the owning Domain's migration prefix.
+2. Create the migration in `{ModuleRoot}/Database/Migrations/` with explicit indexes and foreign keys.
+3. Register production seeders from the migration with `RegistersSeeders` when schema lifecycle should control them.
+4. Create factories and idempotent production seeders.
+5. Keep local sample data in `Database/Seeders/Dev/` using `DevSeeder`.
 
-1. Create migration in `Database/Migrations/` with the correct prefix (`0300_*` for `Operation`, `0310_*` for `Commerce`; see `docs/architecture/database.md`).
-2. Define schema with proper indexes and foreign keys.
-3. Register workflow seeder (if applicable) via `RegistersSeeders` trait.
-4. Create workflow seeder in `Database/Seeders/` (if workflow module) — see `FEAT-WORKFLOW-CONSUMER`.
-5. Create factory in `Database/Factories/`.
+Reference files:
 
-**Reference files:**
-- `app/Modules/Operation/IT/Database/Migrations/0300_01_01_000000_create_operation_it_tickets_table.php`
-- `app/Modules/Operation/IT/Database/Seeders/TicketWorkflowSeeder.php`
-- `app/Modules/Operation/IT/Database/Factories/TicketFactory.php`
+- `app/Domains/Operation/IT/Database/Migrations/0300_01_01_000000_create_operation_it_tickets_table.php`
+- `app/Domains/Operation/IT/Database/Seeders/TicketWorkflowSeeder.php`
+- `app/Domains/Operation/IT/Database/Factories/TicketFactory.php`
 
-### Phase 2: Model — `FEAT-WORKFLOW-CONSUMER` (if workflow) or standalone
+### Phase 2: model and domain behavior
 
-1. Create model in `Models/` with `$table`, `$fillable`, `casts()`.
-2. Add `HasWorkflowStatus` trait and implement `flow()` if workflow module.
-3. Define relationships (`BelongsTo`, etc.).
-4. Override `newFactory()` to return the module factory.
+1. Create the model with explicit `$table`, `$fillable`, casts, and relationships.
+2. Put business invariants in domain services or value objects rather than Livewire actions.
+3. If the entity has a status lifecycle, apply `FEAT-WORKFLOW-CONSUMER` and seed the workflow contract.
+4. Override `newFactory()` when the module-owned factory is outside Laravel's default location.
 
-**Reference file:**
-- `app/Modules/Operation/IT/Models/Ticket.php`
+Reference: `app/Domains/Operation/IT/Models/Ticket.php`.
 
-### Phase 3: Feature Pages — `FEAT-MODULE-FEATURE`
+### Phase 3: route, authz, menu, and pages — `FEAT-MODULE-FEATURE`
 
-1. Create `Config/authz.php` with capability keys following `<domain>.<resource>.<action>` grammar.
-2. Create `Config/menu.php` with menu items, parent, permission, route name.
-3. Create `Routes/web.php` with auth + `authz:` middleware per route.
-4. Create `ServiceProvider.php` (auto-discovered; typically empty for pure modules).
-5. Create `Livewire/{Entities}/Index.php` — use `ResetsPaginationOnSearch`, `WithPagination`.
-6. Create `Livewire/{Entities}/Create.php` — validate, persist, record initial `StatusHistory` (if workflow).
-7. Create `Livewire/{Entities}/Show.php` — detail view, transitions (if workflow), timeline.
-8. Create matching Blade views in `resources/core/views/livewire/{module}/{entities}/`.
-9. Create tests covering authz, CRUD, and search.
+1. Create `Config/authz.php` using the established capability grammar.
+2. Create `Config/menu.php` with stable item IDs, route names, and permission requirements.
+3. Create authenticated routes with `authz:` middleware.
+4. Create the provider and register Module-owned views with a stable view namespace.
+5. Build Index/Create/Show components with existing Livewire concerns.
+6. Keep Blade views in `{ModuleRoot}/Views/`; promote only reusable framework components to `resources/core`.
+7. Add authorization, validation, CRUD, search, and failure-path tests.
 
-**Reference files:**
-- `app/Modules/Operation/IT/Config/authz.php`
-- `app/Modules/Operation/IT/Config/menu.php`
-- `app/Modules/Operation/IT/Routes/web.php`
-- `app/Modules/Operation/IT/ServiceProvider.php`
-- `app/Modules/Operation/IT/Livewire/Tickets/Index.php`
-- `app/Modules/Operation/IT/Livewire/Tickets/Create.php`
-- `app/Modules/Operation/IT/Livewire/Tickets/Show.php`
-- `resources/core/views/livewire/it/tickets/index.blade.php`
-- `resources/core/views/livewire/it/tickets/create.blade.php`
-- `resources/core/views/livewire/it/tickets/show.blade.php`
+Reference files:
 
-### Phase 4: Dev Seeder — `FEAT-MODULE-SCHEMA`
+- `app/Domains/Operation/IT/Config/authz.php`
+- `app/Domains/Operation/IT/Config/menu.php`
+- `app/Domains/Operation/IT/Routes/web.php`
+- `app/Domains/Operation/IT/ServiceProvider.php`
+- `app/Domains/Operation/IT/Livewire/Tickets/Index.php`
+- `app/Domains/Operation/IT/Livewire/Tickets/Create.php`
+- `app/Domains/Operation/IT/Livewire/Tickets/Show.php`
+- `app/Domains/Operation/IT/Views/livewire/it/tickets/index.blade.php`
+- `app/Domains/Operation/IT/Views/livewire/it/tickets/create.blade.php`
+- `app/Domains/Operation/IT/Views/livewire/it/tickets/show.blade.php`
 
-1. Create `Database/Seeders/Dev/Dev{Entity}Seeder.php` extending `DevSeeder`.
-2. Set `$dependencies` for topological ordering.
-3. Create sample data at various lifecycle stages (if workflow, use `WorkflowEngine`).
+### Phase 4: manifest and contracts
 
-**Reference file:**
-- `app/Modules/Operation/IT/Database/Seeders/Dev/DevTicketSeeder.php`
+Add `composer.json` → `extra.blb` when the Module publishes identity or dependency metadata:
 
-### Phase 5: Authz Sync & Verify
+- `module`: stable ID;
+- `version`: contract version;
+- `requires-modules`: hard dependencies;
+- `optional-modules`: optional integrations;
+- `publishes-events` / `consumes-events`: public event seams.
 
-1. Run `php artisan db:seed --class="App\Base\Authz\Database\Seeders\AuthzRoleCapabilitySeeder"`.
-2. Run `php artisan migrate --seed` to verify full bootstrap.
-3. Verify route accessibility, menu visibility, and capability enforcement.
+Do not expose another Module's tables or internal services as the integration contract. Use events for published facts and service contracts for synchronous collaboration.
+
+### Phase 5: verify
+
+1. Run the owning source's focused tests.
+2. Run `php artisan migrate --dev` in local development to prove migration and seeder discovery.
+3. Refresh authz data through the established seeder workflow after changing capabilities.
+4. Verify route access, menu visibility, view namespace registration, and denied states.
+5. For optional Domains, verify disabling the Domain removes the new provider, routes, config, menu, and UI surface.
+6. Verify Tailwind production scanning and Vite refresh cover the new installed source.
 
 ## Naming Conventions
 
 | Asset | Convention | Example |
-|-------|-----------|---------|
-| Module directory | PascalCase | `app/Modules/Operation/IT/` |
-| Table name | snake_case with module prefix | `operation_it_tickets` |
-| Flow identifier | snake_case | `it_ticket` |
-| Capability keys | `<flow>.<resource>.<action>` | `it_ticket.ticket.create` |
-| Route names | dot-separated lowercase | `it.tickets.index` |
-| URL paths | slash-separated lowercase | `it/tickets` |
-| Menu item IDs | dot-separated lowercase | `it.tickets` |
-| Migration prefix | `0300_*` Operation, `0310_*` Commerce | `0300_01_01_000000_` |
-| Livewire namespace | `{module}.{entities}.{page}` | Auto from directory |
+|---|---|---|
+| ownership directories | PascalCase | `app/Domains/Operation/IT` |
+| stable Module ID | kebab-case, path-independent | `operation/it` |
+| table | snake_case with ownership prefix | `operation_it_tickets` |
+| flow identifier | snake_case | `it_ticket` |
+| capability | dot-separated lowercase | `it_ticket.ticket.create` |
+| route name | dot-separated lowercase | `it.tickets.index` |
+| URL | slash-separated lowercase | `it/tickets` |
+| menu item ID | dot-separated lowercase | `it.tickets` |
+| view namespace | stable lowercase name | `operation-it::livewire.it.tickets.index` |
 
-## Auto-Discovery (No Manual Registration Needed)
+## Discovery
 
-These are discovered automatically from glob patterns — do not register manually:
+The selected Module root participates in the four-root discovery contract:
 
-- **ServiceProvider**: `app/Modules/*/*/ServiceProvider.php`
-- **Routes**: `app/Modules/*/*/Routes/web.php`
-- **Menu config**: `app/Modules/*/*/Config/menu.php`
-- **Authz config**: `app/Modules/*/*/Config/authz.php`
-- **Audit config**: `app/Modules/*/*/Config/audit.php` (optional — only when module needs audit exclusions)
-- **Migrations**: `app/Modules/*/*/Database/Migrations/`
-- **Livewire components**: `app/Modules/*/*/Livewire/**/*.php`
-- **Dev seeders**: `app/Modules/*/*/Database/Seeders/Dev/Dev*Seeder.php`
+- Core Module: `app/Core/*/{Artifact}`
+- optional Domain Module: `app/Domains/*/*/{Artifact}`
+- Extension Module: `app/Extensions/*/*/{Artifact}`
+
+Providers, routes, menu/authz/settings config, migrations, seeders, and Livewire components use the documented scanner for their artifact. Views require the Module provider's `loadViewsFrom()` call. Use `ApplicationTopology`; never add a one-off root glob.
 
 ## Required Invariants
 
-- Module path follows `app/Modules/{Core|Operation|Commerce}/{Module}/` — two levels under `Modules/`, not three.
-- All auto-discovered files use the exact directory names above (PascalCase).
-- No manual provider, route, or Livewire component registration.
-- Authz seeder must be re-run after changing `Config/authz.php`.
-- Blade views go in `resources/core/views/livewire/{module}/{entities}/`, not inside the module directory.
-- All user-facing strings use `__()` translation helpers.
+- The Module occupies exactly one ownership path; no duplicate or overlay path exists.
+- Core is `app/Core/{Module}`, never a child of the optional Domain collection.
+- Optional Domain and Extension Modules are exactly two ownership levels below their collection root.
+- Physical ownership segments are PascalCase; persisted IDs remain kebab-case and independent of paths.
+- No manual provider, route, or Livewire registration when the standard discovery contract already applies.
+- Optional-Domain contributions disappear completely when the Domain is disabled.
+- Module-owned views stay with the Module; `resources/core` receives only shared framework presentation.
+- Extension flexibility does not weaken authz, tenancy, dependency, migration, or test requirements.
+- User-facing strings use translation helpers.
 
 ## Test Checklist
 
-- Migration runs cleanly via `php artisan migrate`.
-- Workflow seeder is idempotent (if applicable).
-- Index page renders and search filters correctly.
-- Create form validates and persists.
-- Show page displays detail and supports transitions (if workflow).
-- Authz gates block unauthorized access (route middleware + action-level).
-- Dev seeder creates sample data at various lifecycle stages.
+- Migration and seeders run through the Module-aware flow.
+- Production seeders are idempotent; dev seeders are local-only.
+- Index renders and search/pagination behavior is correct.
+- Create validates and persists atomically.
+- Show presents current state and valid actions.
+- Authz blocks unauthorized route access and server-side actions.
+- Cross-Module dependencies use declared contracts and metadata.
+- Disabled optional Domain contributes no runtime surface.
+- Production asset build sees Module-owned Blade classes.
 
 ## Common Pitfalls
 
-- Creating a third directory level (e.g., `Modules/Operation/IT/Ticket/`) — keep it flat at the module level.
-- Manually registering providers, routes, or Livewire components instead of relying on auto-discovery.
-- Forgetting to run the authz seeder after adding capabilities.
-- Placing Blade views inside the module directory instead of `resources/core/views/`.
-- Using raw Tailwind primitives instead of semantic tokens.
-- Hardcoding English strings instead of using `__()`.
+- Treating Core as an optional Domain path.
+- Adding a third ownership level below a Domain when it is only an entity or feature.
+- Creating a Base component for enterprise behavior.
+- Treating an Extension's relaxed taxonomy as permission for hidden dependencies.
+- Putting optional-Domain views in `resources/core`.
+- Manually registering artifacts already covered by discovery.
+- Deriving persisted identity from the current path or PHP class.
+- Hardcoding English strings or raw visual primitives instead of shared UI contracts.

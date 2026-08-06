@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\File;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 
-const MIGRATION_EXTENSION_ROOT = 'extensions/';
+const MIGRATION_EXTENSION_ROOT = 'app/Extensions/';
 const MIGRATION_REQUIRED_SUFFIX = '/required';
 const MIGRATION_DEPENDENT_SUFFIX = '/dependent';
 const MIGRATION_MIGRATIONS_SUFFIX = '/Database/Migrations';
@@ -243,9 +243,9 @@ test('extension migration provenance resolves to the extension module path', fun
         }
     };
 
-    $modulePath = $probe->pathFor(base_path('extensions/sb-group/ibp/Database/Migrations/2026_01_01_000000_create_table.php'));
+    $modulePath = $probe->pathFor(app_path('Extensions/SbGroup/Ibp/Database/Migrations/2026_01_01_000000_create_table.php'));
 
-    expect($modulePath)->toBe('extensions/sb-group/ibp')
+    expect($modulePath)->toBe('app/Extensions/SbGroup/Ibp')
         ->and($probe->nameFor($modulePath))->toBe('ibp');
 });
 
@@ -253,7 +253,7 @@ test('migrate command reports orphaned registry entries removed during reconcili
     TableRegistry::query()->create([
         'table_name' => 'ghost_registry_entry',
         'module_name' => 'User',
-        'module_path' => 'app/Modules/Core/User',
+        'module_path' => 'app/Core/User',
         'migration_file' => '0200_01_20_000001_create_ghost_registry_entry.php',
     ]);
 

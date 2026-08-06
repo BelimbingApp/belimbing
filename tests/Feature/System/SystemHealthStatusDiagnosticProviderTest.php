@@ -3,8 +3,8 @@
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Services\SystemHealthProbe;
 use App\Base\System\Services\SystemHealthStatusDiagnosticProvider;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 
 function fakeSystemHealthProbe(array $unwritablePaths, array $writablePaths = []): void
 {

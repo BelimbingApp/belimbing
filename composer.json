@@ -49,7 +49,7 @@
             "Database\\Seeders\\": "database/seeders/"
         },
         "files": [
-            "app/Base/Foundation/bootstrap/autoload_extensions.php"
+            "app/Base/Foundation/bootstrap/autoload_legacy_application_classes.php"
         ]
     },
     "autoload-dev": {

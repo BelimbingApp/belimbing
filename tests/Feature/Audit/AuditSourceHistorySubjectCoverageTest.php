@@ -12,16 +12,16 @@ use App\Base\Workflow\Models\KanbanColumn;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Models\StatusTransition;
 use App\Base\Workflow\Models\Workflow;
-use App\Modules\Core\Address\Models\Address;
-use App\Modules\Core\Address\Models\Addressable;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\CompanyRelationship;
-use App\Modules\Core\Company\Models\Department;
-use App\Modules\Core\Company\Models\DepartmentType;
-use App\Modules\Core\Company\Models\ExternalAccess;
-use App\Modules\Core\Company\Models\RelationshipType;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Address\Models\Address;
+use App\Core\Address\Models\Addressable;
+use App\Core\Company\Models\Company;
+use App\Core\Company\Models\CompanyRelationship;
+use App\Core\Company\Models\Department;
+use App\Core\Company\Models\DepartmentType;
+use App\Core\Company\Models\ExternalAccess;
+use App\Core\Company\Models\RelationshipType;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 
 const AUDIT_SUBJECT_COVERAGE_TRACE = 'SUBJCVRG0001';
 

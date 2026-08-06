@@ -101,7 +101,7 @@ Coders read key-value pairs faster than prose. When listing entities (pay compon
 - **Notes:** <anything non-obvious>
 ```
 
-Lead with the owning module precisely — `People/Attendance`, not "Attendance," and not "owned by Attendance." The `<Domain>/<SubModule>` path lets the reader map the entry onto a directory in `app/Modules/` without looking it up.
+Lead with the owning Module precisely—`People/Attendance`, not "Attendance," and not "owned by Attendance." The stable `<domain>/<module>` identity lets the reader map optional-Domain code to `app/Domains/{Domain}/{Module}` without guessing. Use `Core/{Module}` for the required Core Domain and `{Extension}/{Module}` for Extensions.
 
 ### Each chapter needs a Background section
 
@@ -109,7 +109,7 @@ The catalogue is the *what*. The Background section answers the questions the ca
 
 - **What problem are we solving?** State the friction that the design responds to (often: many modules contributing facts to one artifact without coupling).
 - **How does BLB solve it?** State the chosen mechanism in two or three bullets.
-- **Where is the key abstraction defined?** Name the canonical table or class, with file path. (For the People domain: `PayrollPayItem` at `app/Modules/People/Payroll/Models/`.)
+- **Where is the key abstraction defined?** Name the canonical table or class, with file path. (For the People Domain: `PayrollPayItem` at `app/Domains/People/Payroll/Models/`.)
 - **What alternatives were considered? Why rejected?** Coders trust a design more when they can see the path not taken.
 - **What trade-offs were accepted?** Every choice costs something. Name the cost and how it is mitigated.
 
@@ -136,7 +136,7 @@ The reader's time is the constraint. A short sentence is better than a clear par
 
 ### Ground every chapter in real code
 
-Reference real class names, file paths, model names. The point of a tutorial that lives in the repo (rather than on a wiki) is that the reader can click through. A chapter with no `app/Modules/...` references is a smell.
+Reference real class names, file paths, and model names. The point of a tutorial that lives in the repo (rather than on a wiki) is that the reader can click through. A chapter should point to the owning `app/Core/...`, `app/Domains/...`, or `app/Extensions/...` path.
 
 ### Worked example traces one thing end-to-end
 
@@ -167,7 +167,7 @@ Split the glossary into sections (framework terms, generic domain concepts, coun
 - [ ] Worked example traces one scenario through real classes with the actual envelope row shape.
 - [ ] Anti-patterns section in the worked example.
 - [ ] Glossary grouped by audience need, not alphabetical.
-- [ ] A coder unfamiliar with the domain can read it in ~30 minutes and immediately find their way around `app/Modules/<Domain>/*`.
+- [ ] A coder unfamiliar with the Domain can read it in ~30 minutes and immediately find their way around `app/Domains/{Domain}/*` (or `app/Core/*` for the required Core Domain).
 
 ## Examples of domains likely to need crash courses
 

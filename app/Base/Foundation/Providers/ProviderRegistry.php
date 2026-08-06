@@ -2,9 +2,9 @@
 
 namespace App\Base\Foundation\Providers;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
-use App\Base\Support\Str;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 
@@ -15,40 +15,60 @@ class ProviderRegistry
      *
      * Every provider is discovered from its owning component — there is no
      * app-level escape hatch, because a provider that does not belong to a
-     * Base component, a module, or an extension does not belong anywhere.
+     * Base component, Core/Domain module, or Extension does not belong anywhere.
      *
      * @return array<int, class-string<ServiceProvider>>
      */
     public static function resolve(): array
     {
         // Ordering is part of the framework contract:
-        // Base infrastructure -> business modules -> extensions.
+        // Base infrastructure -> Core -> enabled Domains -> Extensions.
         // This keeps bootstrapping deterministic and prevents subtle dependency breakage.
         return array_merge(
             self::discoverBaseProviders(),
-            self::discoverModuleProviders(),
+            self::discoverCoreProviders(),
+            self::discoverDomainProviders(),
             self::discoverExtensionProviders(),
         );
     }
 
     /**
-     * Discover module service providers from app/Modules.
+     * Discover platform-owned Core module providers.
+     *
+     * @return array<int, class-string<ServiceProvider>>
+     */
+    public static function discoverCoreProviders(): array
+    {
+        return self::providersAt(ApplicationTopology::coreModulePattern('ServiceProvider.php'));
+    }
+
+    /**
+     * Discover providers from enabled optional Domains.
+     *
+     * @return array<int, class-string<ServiceProvider>>
+     */
+    public static function discoverDomainProviders(): array
+    {
+        $paths = DomainState::filterPaths(
+            glob(ApplicationTopology::domainModulePattern('ServiceProvider.php')) ?: [],
+        );
+
+        sort($paths);
+
+        return self::providersFromPaths($paths);
+    }
+
+    /**
+     * Discover Core and enabled Domain providers as one module list.
+     *
+     * Retained for introspection callers that reason about modules rather than
+     * provider ordering. Runtime boot uses the explicit methods above.
      *
      * @return array<int, class-string<ServiceProvider>>
      */
     public static function discoverModuleProviders(): array
     {
-        $paths = DomainState::filterPaths(glob(app_path('Modules/*/*/ServiceProvider.php')) ?: []);
-
-        sort($paths);
-
-        $providers = [];
-        foreach ($paths as $path) {
-            $providers[] = AppPath::toClass($path)
-                ?? throw new InvalidArgumentException("Expected app path under app/: [$path].");
-        }
-
-        return self::validateProviders($providers);
+        return array_merge(self::discoverCoreProviders(), self::discoverDomainProviders());
     }
 
     /**
@@ -58,11 +78,40 @@ class ProviderRegistry
      */
     public static function discoverBaseProviders(): array
     {
-        $pattern = app_path('Base/*/ServiceProvider.php');
-        $paths = glob($pattern) ?: [];
+        return self::providersAt(ApplicationTopology::baseComponentPattern('ServiceProvider.php'));
+    }
 
+    /**
+     * Discover installed Extension module providers.
+     *
+     * Extensions load last so explicit contribution seams may decorate the
+     * platform. They must not rely on accidental provider ordering.
+     *
+     * @return array<int, class-string<ServiceProvider>>
+     */
+    public static function discoverExtensionProviders(): array
+    {
+        return self::providersAt(ApplicationTopology::extensionModulePattern('ServiceProvider.php'));
+    }
+
+    /**
+     * @return array<int, class-string<ServiceProvider>>
+     */
+    private static function providersAt(string $pattern): array
+    {
+        $paths = glob($pattern) ?: [];
         sort($paths);
 
+        return self::providersFromPaths($paths);
+    }
+
+    /**
+     * @param  list<string>  $paths
+     * @return array<int, class-string<ServiceProvider>>
+     *
+     */
+    private static function providersFromPaths(array $paths): array
+    {
         $providers = [];
         foreach ($paths as $path) {
             $providers[] = AppPath::toClass($path)
@@ -70,53 +119,6 @@ class ProviderRegistry
         }
 
         return self::validateProviders($providers);
-    }
-
-    /**
-     * Discover extension service providers from extensions/.
-     *
-     * Extensions follow the two-level {owner}/{module}/ layout and load
-     * after Base and Module providers so they can safely override core bindings.
-     *
-     * @return array<int, class-string<ServiceProvider>>
-     */
-    public static function discoverExtensionProviders(): array
-    {
-        $pattern = base_path('extensions/*/*/ServiceProvider.php');
-        $paths = glob($pattern) ?: [];
-
-        sort($paths);
-
-        $providers = [];
-        foreach ($paths as $path) {
-            $providers[] = self::extensionClassFromPath($path);
-        }
-
-        return self::validateProviders($providers);
-    }
-
-    /**
-     * Convert an extension path into a fully-qualified class name.
-     *
-     * Maps `extensions/sb-group/qac/ServiceProvider.php` to `Extensions\SbGroup\Qac\ServiceProvider`.
-     */
-    private static function extensionClassFromPath(string $path): string
-    {
-        $basePath = rtrim(self::normalizePathSeparators(base_path('extensions')), DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR;
-        $relativePath = str_replace($basePath, '', self::normalizePathSeparators($path));
-
-        $segments = explode(DIRECTORY_SEPARATOR, str_replace('.php', '', $relativePath));
-        $classSegments = array_map(Str::kebabToPascal(...), $segments);
-
-        return 'Extensions\\'.implode('\\', $classSegments);
-    }
-
-    /**
-     * Normalize path separators so discovery works across slash styles.
-     */
-    private static function normalizePathSeparators(string $path): string
-    {
-        return str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $path);
     }
 
     /**

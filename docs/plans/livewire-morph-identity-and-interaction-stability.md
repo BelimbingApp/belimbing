@@ -1,8 +1,8 @@
 # Livewire Morph Identity and Interaction Stability
 
 Status: In progress
-Last Updated: 2026-07-25
-Sources: `resources/core/views/AGENTS.md`, `resources/core/views/components/ui/tabs.blade.php`, `resources/core/views/components/ui/tab.blade.php`, `tests/Feature/Modules/Core/Ui/TabsViewTest.php`
+Last Updated: 2026-08-05
+Sources: `resources/core/views/AGENTS.md`, `resources/core/views/components/ui/tabs.blade.php`, `resources/core/views/components/ui/tab.blade.php`, `tests/Feature/Core/Ui/TabsViewTest.php`
 Agents: Codex/gpt-5.6-sol
 
 ## Problem Essence

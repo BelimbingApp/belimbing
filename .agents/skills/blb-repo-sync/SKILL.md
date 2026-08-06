@@ -1,8 +1,8 @@
 ---
 name: blb-repo-sync
 description: >-
-  Syncs the Belimbing platform repo and nested-git Distribution Bundles
-  (domains, extensions) on main only, then migrates when needed per APP_ENV.
+  Syncs the Belimbing platform repo and nested-git Domain and Extension
+  repositories on main only, then migrates when needed per APP_ENV.
   Use when the user asks to pull, push, rebase, sync, or update checkouts.
   Do not use on non-main branches.
 ---
@@ -24,18 +24,18 @@ Typical paths (skip anything not cloned):
 | Path | Example remote |
 |------|----------------|
 | `<platform-root>` | `BelimbingApp/belimbing` |
-| `app/Modules/Commerce` | `BelimbingApp/blb-commerce` |
-| `app/Modules/Operation` | `BelimbingApp/blb-operation` |
-| `app/Modules/People` | `BelimbingApp/blb-people` |
-| `extensions/ham` | `kiatng/blb-ham` |
-| `extensions/kiat` | `kiatng/blb-kiat` |
-| `extensions/sb-group` | `kiatng/blb-sbg` |
+| `app/Domains/Commerce` | `BelimbingApp/blb-commerce` |
+| `app/Domains/Operation` | `BelimbingApp/blb-operation` |
+| `app/Domains/People` | `BelimbingApp/blb-people` |
+| `app/Extensions/Ham` | `kiatng/blb-ham` |
+| `app/Extensions/Kiat` | `kiatng/blb-kiat` |
+| `app/Extensions/SbGroup` | `kiatng/blb-sbg` |
 
-`app/Modules/Core` lives in the platform repo. Before acting: `git -C <path> status -sb`.
+`app/Core` lives in the platform repo. Before acting: `git -C <path> status -sb`.
 
 ## Sync Workflow
 
-Confirm each checkout is on `main` (`git -C <path> rev-parse --abbrev-ref HEAD`). Platform first, then domains, then extensions. Finish conflicts in one checkout before the next.
+Confirm each checkout is on `main` (`git -C <path> rev-parse --abbrev-ref HEAD`). Sync in application discovery order: platform first (Base and Core), then optional Domains, then Extensions. Finish conflicts in one checkout before the next.
 
 ### Pull (default)
 

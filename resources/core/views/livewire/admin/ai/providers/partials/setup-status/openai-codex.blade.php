@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup;
+use App\Core\AI\Livewire\Providers\OpenAiCodexSetup;
 
 /** @var OpenAiCodexSetup $this */
 $codexAuthState = is_array($this->authState) ? $this->authState : [];

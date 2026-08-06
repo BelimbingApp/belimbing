@@ -41,13 +41,23 @@ Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of
 - **Never `useCurrent()`** on `timestamp` columns — captures DB session TZ, not UTC. Set `now()` from app code.
 - **Throw domain exceptions** at module boundaries, not generic `RuntimeException`/`Exception`, when the failure belongs to a named subsystem.
 
-## 5. Module-First Placement
-Verify placement against `docs/architecture/module-system.md` before creating module assets (config, migrations, seeders, views, tests). When in doubt, stop and check first.
+## 5. Four-Root Application Placement
 
-- **Base and Core are framework-owned.** Shared application shell, reusable Blade components, and framework-wide tokens live under `resources/core`.
-- **Pluggable domains are full-stack modules.** For non-Core domains (`People`, `Commerce`, `Operation`, future `Finance`, `Sales`, `Procurement`, etc.) and `extensions/{owner}/{module}`, keep module-owned Blade views under the module root in `Views/`; do not scatter them under `resources/`. Those views use the same UI standards as Core: `DESIGN.md` (intent) and `resources/core/views/AGENTS.md` (authoring rules).
-- **Module assets are explicit.** If a non-Core module genuinely needs owned CSS or JavaScript, keep source under that module's `Assets/` directory and wire it through an explicit reviewed Vite entry/import. Do not inject global scripts/styles or create new `resources/*` trees.
-- **Promote deliberately.** If a module view reveals a reusable framework component, extract the shared component to `resources/core` and keep the module screen in the module.
+Application-owned PHP code belongs to exactly one of four roots. Verify placement against `docs/architecture/module-system.md` before creating config, migrations, seeders, views, assets, or tests.
+
+- **`app/Base/{Component}` (`App\Base`)** — framework infrastructure and cross-cutting primitives. Base components are not business domains.
+- **`app/Core/{Module}` (`App\Core`)** — the required Core Domain. Core owns Modules, ships with the platform, and cannot be disabled or uninstalled independently.
+- **`app/Domains/{Domain}/{Module}` (`App\Domains`)** — optional business Domains such as `People`, `Commerce`, and `Operation`. A Domain is the installable, enableable, disableable, and updateable unit; it contains one or more Modules.
+- **`app/Extensions/{Extension}/{Module}` (`App\Extensions`)** — operator- or user-chosen Extensions. Extensions are intentionally a relaxed mixed bag, but their module boundaries and integration surfaces must still be explicit.
+
+Physical ownership segments (`Component`, `Domain`, `Extension`, `Module`) use PascalCase. Persisted and external identities are stable, lowercase, path-independent IDs such as `core/company`, `people/payroll`, and `sb-group/qac`; never derive an identity by lowercasing a current filesystem path.
+
+Discovery order is a framework contract: **Base → Core → enabled Domains → Extensions**. Use `App\Base\Foundation\ApplicationTopology` rather than adding one-off root globs.
+
+- **Presentation follows ownership.** Domain and Extension views live in the owning Module's `Views/`; Core Modules may also own local views when they are not shared framework presentation. Do not scatter Module views under new `resources/*` trees. All follow `DESIGN.md` and `resources/core/views/AGENTS.md`.
+- **The shared shell stays framework-owned.** Reusable Blade components, the application shell, and framework-wide tokens live under `resources/core`.
+- **Module assets are explicit.** If a Module genuinely needs owned CSS or JavaScript, keep source in its `Assets/` directory and wire it through an explicit reviewed Vite entry/import. Do not inject global scripts/styles.
+- **Promote deliberately.** If a Module view reveals a reusable framework component, extract it to `resources/core` and keep the Module screen in its owning Module.
 
 ## 6. Version Control & Workflow
 

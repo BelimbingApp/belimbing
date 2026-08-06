@@ -1,8 +1,8 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Services\ModelDiscoveryService;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Services\ModelDiscoveryService;
 use Illuminate\Support\Facades\Http;
 
 test('an operator-pinned setting overrides the auto-resolved client_version', function (): void {

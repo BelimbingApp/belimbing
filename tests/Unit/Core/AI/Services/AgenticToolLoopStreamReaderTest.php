@@ -1,0 +1,246 @@
+<?php
+
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\Enums\AiApiType;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ReasoningVisibility;
+use App\Base\AI\Enums\ToolChoiceMode;
+use App\Base\AI\Services\LlmClient;
+use App\Core\AI\Services\AgenticExecutionControlResolver;
+use App\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
+use App\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Core\AI\Services\ControlPlane\WireLogger;
+use App\Core\AI\Values\CallUsage;
+use Illuminate\Foundation\Testing\TestCase;
+
+uses(TestCase::class);
+
+const AGENTIC_STREAM_READER_NEED_TOOL_RESULT = 'Need tool result.';
+
+function makeAgenticToolLoopStreamReader(LlmClient $llmClient, ?RunRecorder $runRecorder = null): AgenticToolLoopStreamReader
+{
+    return new AgenticToolLoopStreamReader(
+        $llmClient,
+        Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+        app(AgenticExecutionControlResolver::class),
+        $runRecorder ?? Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
+    );
+}
+
+/**
+ * @param  array<string, mixed>  $runtimeOverrides
+ * @param  array<string, mixed>  $providerOverrides
+ * @param  array<string, mixed>  $toolLoopStateOverrides
+ * @return array{events: list<array<string, mixed>>, result: array<string, mixed>}
+ */
+function consumeToolLoopIteration(
+    AgenticToolLoopStreamReader $reader,
+    string $runId,
+    array $runtimeOverrides = [],
+    array $providerOverrides = [],
+    array $toolLoopStateOverrides = [],
+    AiApiType $apiType = AiApiType::OpenAiChatCompletions,
+    int $iteration = 0,
+): array {
+    $runtime = [
+        'model' => 'gpt-5.4',
+        'execution_controls' => ExecutionControls::defaults(maxOutputTokens: 512, temperature: 0.7),
+        'timeout' => 60,
+        'provider_name' => 'openai',
+    ];
+    $provider = [
+        'base_url' => 'https://api.example.test/v1',
+        'api_key' => 'test-key',
+    ];
+    $toolLoopState = [
+        'apiMessages' => [
+            ['role' => 'user', 'content' => 'Echo world'],
+        ],
+        'tools' => [],
+    ];
+
+    $runtime = array_replace($runtime, $runtimeOverrides);
+    $provider = array_replace($provider, $providerOverrides);
+    $toolLoopState = array_replace($toolLoopState, $toolLoopStateOverrides);
+
+    $stream = $reader->consumeIterationStream(
+        $runId,
+        $runtime,
+        $provider,
+        $toolLoopState,
+        $apiType,
+        $iteration,
+    );
+
+    $events = iterator_to_array($stream, false);
+
+    return [
+        'events' => array_values($events),
+        'result' => $stream->getReturn(),
+    ];
+}
+
+it('captures reasoning_content deltas for follow-up tool loop requests', function (): void {
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chatStream')
+        ->once()
+        ->with(Mockery::on(function (ChatRequest $request): bool {
+            return $request->executionControls->tools->choice === ToolChoiceMode::Auto
+                && $request->executionControls->reasoning->visibility === ReasoningVisibility::None
+                && $request->executionControls->tools->preserveReasoningContext === false;
+        }))
+        ->andReturn((function (): Generator {
+            yield [
+                'type' => 'thinking_delta',
+                'text' => AGENTIC_STREAM_READER_NEED_TOOL_RESULT,
+                'source' => 'reasoning_content',
+            ];
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => 0,
+                'id' => 'call_stream_reasoning_1',
+                'name' => 'echo_tool',
+                'arguments_delta' => '',
+            ];
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => 0,
+                'id' => null,
+                'name' => null,
+                'arguments_delta' => '{"input":"world"}',
+            ];
+            yield [
+                'type' => 'done',
+                'finish_reason' => 'tool_calls',
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                'latency_ms' => 123,
+            ];
+        })());
+
+    $reader = makeAgenticToolLoopStreamReader($llmClient);
+    ['events' => $events, 'result' => $result] = consumeToolLoopIteration(
+        $reader,
+        'run_123',
+        runtimeOverrides: [
+            'model' => 'moonshotai/kimi-k2.5',
+            'provider_name' => 'moonshotai',
+        ],
+        toolLoopStateOverrides: [
+            'tools' => [[
+                'type' => 'function',
+                'function' => [
+                    'name' => 'echo_tool',
+                    'description' => 'Echo input',
+                    'parameters' => ['type' => 'object', 'properties' => []],
+                ],
+            ]],
+        ],
+        apiType: AiApiType::OpenAiChatCompletions,
+    );
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0]['event'])->toBe('status')
+        ->and($events[0]['data']['phase'])->toBe('thinking_delta')
+        ->and($events[0]['data']['delta'])->toBe(AGENTIC_STREAM_READER_NEED_TOOL_RESULT);
+
+    expect($result['reasoning_content'])->toBe(AGENTIC_STREAM_READER_NEED_TOOL_RESULT)
+        ->and($result['tool_calls'][0]['id'])->toBe('call_stream_reasoning_1')
+        ->and($result['tool_calls'][0]['function']['arguments'])->toBe('{"input":"world"}')
+        ->and($result['latency_ms'])->toBe(123)
+        ->and($result['finish_reason'])->toBe('tool_calls');
+});
+
+it('returns the runtime error when the iteration stream fails', function (): void {
+    $runtimeError = AiRuntimeError::fromType(
+        AiErrorType::RateLimit,
+        'Rate limit exceeded by provider.',
+        latencyMs: 77,
+    );
+
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chatStream')
+        ->once()
+        ->with(Mockery::type(ChatRequest::class))
+        ->andReturn((function () use ($runtimeError): Generator {
+            yield [
+                'type' => 'thinking_delta',
+                'text' => 'Checking quotas...',
+                'source' => 'reasoning_content',
+            ];
+            yield [
+                'type' => 'error',
+                'runtime_error' => $runtimeError,
+            ];
+        })());
+
+    $reader = makeAgenticToolLoopStreamReader($llmClient);
+    ['events' => $events, 'result' => $result] = consumeToolLoopIteration(
+        $reader,
+        'run_456',
+        toolLoopStateOverrides: [
+            'apiMessages' => [
+                ['role' => 'user', 'content' => 'Retry later'],
+            ],
+        ],
+        apiType: AiApiType::OpenAiChatCompletions,
+    );
+
+    expect($events)->toHaveCount(1)
+        ->and($events[0]['event'])->toBe('status')
+        ->and($events[0]['data']['delta'])->toBe('Checking quotas...')
+        ->and($result['runtime_error'])->toBe($runtimeError);
+});
+
+it('records normalized usage for the completed stream iteration', function (): void {
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chatStream')
+        ->once()
+        ->andReturn((function (): Generator {
+            yield [
+                'type' => 'done',
+                'finish_reason' => 'stop',
+                'usage' => [
+                    'prompt_tokens' => 100,
+                    'completion_tokens' => 25,
+                    'total_tokens' => 125,
+                    'prompt_tokens_details' => ['cached_tokens' => 64],
+                ],
+                'latency_ms' => 321,
+            ];
+        })());
+
+    $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+    $runRecorder->shouldReceive('recordCall')
+        ->once()
+        ->withArgs(function (
+            string $runId,
+            int $attemptIndex,
+            ?string $provider,
+            ?string $model,
+            ?string $finishReason,
+            ?int $latencyMs,
+            ?CallUsage $usage,
+        ): bool {
+            return $runId === 'run_usage'
+                && $attemptIndex === 2
+                && $provider === 'openai'
+                && $model === 'gpt-5.4'
+                && $finishReason === 'stop'
+                && $latencyMs === 321
+                && $usage?->promptTokens === 100
+                && $usage->cachedInputTokens === 64
+                && $usage->completionTokens === 25
+                && $usage->totalTokens === 125;
+        });
+
+    $reader = makeAgenticToolLoopStreamReader($llmClient, $runRecorder);
+
+    consumeToolLoopIteration(
+        $reader,
+        'run_usage',
+        apiType: AiApiType::OpenAiChatCompletions,
+        iteration: 2,
+    );
+});

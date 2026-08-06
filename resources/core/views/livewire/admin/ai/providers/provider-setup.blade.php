@@ -1,6 +1,6 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Providers\ProviderSetup $this */
-/** @var \App\Modules\Core\AI\Models\AiProvider|null $connectedProvider */
+/** @var \App\Core\AI\Livewire\Providers\ProviderSetup $this */
+/** @var \App\Core\AI\Models\AiProvider|null $connectedProvider */
 /** @var \Illuminate\Support\Collection $models */
 
 $providerHeaderHelpPartial = $this->providerHeaderHelpPartial();

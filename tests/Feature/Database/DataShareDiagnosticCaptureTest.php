@@ -7,7 +7,7 @@ use App\Base\Database\Services\DataShare\ColumnRedactor;
 use App\Base\Database\Services\DataShare\DependencyClosureResolver;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;

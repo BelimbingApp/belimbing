@@ -1,5 +1,5 @@
 Status: Phase 7 complete
-Last Updated: 2026-05-05
+Last Updated: 2026-08-05
 Sources: docs/architecture/database.md; app/Base/Database/AGENTS.md; app/Base/Database/Console/Commands/FreshCommand.php; app/Base/Database/Console/Commands/WipeCommand.php; docs/architecture/settings.md; docs/architecture/ai/agent-model.md; docs/runbooks/database-backup.md
 Agents: Codex/GPT-5; Amp/claude-sonnet-4-5; Copilot/claude-sonnet-4-6
 
@@ -18,7 +18,7 @@ Encryption is a tier choice, picked at deploy time. **Core Belimbing** ships and
 - **none** — for very small deployments with no sensitive data, where the storage layer's own access controls are sufficient.
 - **app-key** (default) — envelope encryption keyed from `APP_KEY`; no separate passphrase required.
 
-**Optional modalities** that need multi-recipient keys, cloud KMS, or org-specific crypto (examples: age-style public recipients, AWS or GCP KMS envelopes) are **not** committed work in core. They belong in **licensee extensions** under `extensions/`, registered against a small, documented extension contract (Phase 4). That keeps operational and compliance complexity with the party that needs it.
+**Optional modalities** that need multi-recipient keys, cloud KMS, or org-specific crypto (examples: age-style public recipients, AWS or GCP KMS envelopes) are **not** committed work in core. They belong in **licensee Extensions** under `app/Extensions/{Extension}/{Module}`, registered against a small, documented extension contract (Phase 4). That keeps operational and compliance complexity with the party that needs it.
 
 The same backup command works whether the active database is PostgreSQL or SQLite. Manual restore always targets a **non-current** database or file path; promotion is by reconfiguring the app, not by a framework flag.
 
@@ -45,7 +45,7 @@ Deployments pick one mode:
 
 ### Extension-supplied encryption (planned contract)
 
-Extensions under `extensions/{owner}/{module}/` may register additional mode names (factories) so `backup.encryption.mode` can select them. The contract (Phase 4 deliverable) should specify at minimum: a **stable `encryption_mode` string** written to the manifest; **no extra plaintext artifacts** on local disk beyond what the mode strictly needs (same bar as core); **configuration ownership** (optional `backup.encryption.*` keys are extension-defined — core may list inert placeholders for documentation only); **vendor-prefixed mode names** (e.g. `ext-acme-kms`) to avoid colliding with future core keywords; and **runbook hooks** (extension authors document restore and rotation for their modality). Core continues to validate and implement only `none` and `app-key`.
+Extensions under `app/Extensions/{Extension}/{Module}` may register additional mode names (factories) so `backup.encryption.mode` can select them. The contract (Phase 4 deliverable) should specify at minimum: a **stable `encryption_mode` string** written to the manifest; **no extra plaintext artifacts** on local disk beyond what the mode strictly needs (same bar as core); **configuration ownership** (optional `backup.encryption.*` keys are extension-defined — core may list inert placeholders for documentation only); **vendor-prefixed mode names** (e.g. `ext-acme-kms`) to avoid colliding with future core keywords; and **runbook hooks** (extension authors document restore and rotation for their modality). Core continues to validate and implement only `none` and `app-key`.
 
 ### Backups support both PostgreSQL and SQLite
 

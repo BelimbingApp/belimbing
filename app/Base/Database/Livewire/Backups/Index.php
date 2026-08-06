@@ -9,7 +9,7 @@ use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Filesystem\FilesystemManager;
 use Livewire\Component;

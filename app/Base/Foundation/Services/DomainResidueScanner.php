@@ -2,6 +2,7 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Settings\Models\Setting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -34,10 +35,11 @@ class DomainResidueScanner
     private function migrationPathPatterns(): array
     {
         return [
-            app_path('Base/*/Database/Migrations/*.php'),
-            app_path('Modules/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::baseComponentPattern('Database/Migrations/*.php'),
+            ApplicationTopology::coreModulePattern('Database/Migrations/*.php'),
+            ApplicationTopology::domainModulePattern('Database/Migrations/*.php'),
             database_path('migrations/*.php'),
-            base_path('extensions/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::extensionModulePattern('Database/Migrations/*.php'),
         ];
     }
 
@@ -365,11 +367,10 @@ class DomainResidueScanner
      */
     private function declaredSettingKeys(): array
     {
-        $files = array_merge(
-            glob(app_path('Base/*/Config/settings.php')) ?: [],
-            glob(app_path('Modules/*/*/Config/settings.php')) ?: [],
-            glob(base_path('extensions/*/*/Config/settings.php')) ?: [],
-        );
+        $files = array_merge(...array_map(
+            static fn (string $pattern): array => glob($pattern) ?: [],
+            ApplicationTopology::contributionPatterns('Config/settings.php'),
+        ));
 
         return self::settingKeysDeclaredIn($files);
     }

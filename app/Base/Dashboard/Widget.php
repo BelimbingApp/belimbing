@@ -22,7 +22,7 @@ use Throwable;
  * throws — a broken widget (bad query, missing class after a partial
  * cross-repo update) reports the exception and renders the fallback card
  * while the rest of the dashboard stays alive. `render()` intentionally
- * remains overridable while independently deployed distribution bundles
+ * remains overridable while independently deployed software sources
  * migrate from the legacy render contract; legacy overrides bypass this
  * guard and must own their own failure handling.
  */

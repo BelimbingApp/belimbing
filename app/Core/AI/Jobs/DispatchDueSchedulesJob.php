@@ -1,0 +1,49 @@
+<?php
+namespace App\Core\AI\Jobs;
+
+use App\Core\AI\Services\Scheduling\SchedulePlanner;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Queue job that finds and dispatches all due schedule definitions.
+ *
+ * Invoked by the SchedulesTickCommand on each scheduler tick. Delegates
+ * all logic to the SchedulePlanner service.
+ */
+class DispatchDueSchedulesJob implements ShouldQueue
+{
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+
+    /**
+     * Dedicated queue for schedule dispatch work.
+     */
+    public const QUEUE = 'ai-schedules';
+
+    /**
+     * The number of seconds the job can run before timing out.
+     */
+    public int $timeout = 120;
+
+    public function __construct()
+    {
+        $this->onQueue(self::QUEUE);
+    }
+
+    /**
+     * Find and dispatch all due schedules.
+     */
+    public function handle(SchedulePlanner $planner): void
+    {
+        $dispatched = $planner->dispatchDue();
+
+        Log::info('Schedule tick completed.', [
+            'dispatched' => $dispatched,
+        ]);
+    }
+}

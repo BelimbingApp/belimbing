@@ -15,6 +15,7 @@ use App\Base\Audit\Services\AuditSemanticActionRecorder;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Contracts\DomainLifecycleLedger;
 use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Events\DomainLifecycleAction;
@@ -134,10 +135,7 @@ class ServiceProvider extends BaseServiceProvider
         $config = $this->app->make('config');
         $basePath = realpath(__DIR__.'/Config/audit.php');
 
-        $patterns = [
-            app_path('Base/*/Config/audit.php'),
-            app_path('Modules/*/*/Config/audit.php'),
-        ];
+        $patterns = ApplicationTopology::contributionPatterns('Config/audit.php');
 
         foreach ($patterns as $pattern) {
             foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {

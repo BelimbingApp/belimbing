@@ -8,7 +8,7 @@ use App\Base\Authz\Exceptions\UnknownCapabilityException;
 use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
-use App\Modules\Core\AI\Enums\AIErrorCode;
+use App\Core\AI\Enums\AIErrorCode;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 

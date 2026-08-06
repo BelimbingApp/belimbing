@@ -1,8 +1,8 @@
 # ai-lara-resident-coding-agent-gap.md
 
 **Status:** In Progress
-**Last Updated:** 2026-07-09
-**Sources:** `docs/architecture/ai/lara.md`, `docs/architecture/ai/current-state.md`, `app/Modules/Core/AI/ServiceProvider.php`, `app/Modules/Core/AI/Services/AgentToolRegistry.php`, `app/Modules/Core/AI/Services/ChatTurnRunner.php`, `app/Modules/Core/AI/Services/SessionManager.php`, `app/Modules/Core/AI/Tools/EditTool.php`, `app/Modules/Core/AI/Tools/BrowserTool.php`, `resources/core/views/components/layouts/app.blade.php`
+**Last Updated:** 2026-08-05
+**Sources:** `docs/architecture/ai/lara.md`, `docs/architecture/ai/current-state.md`, `app/Core/AI/ServiceProvider.php`, `app/Core/AI/Services/AgentToolRegistry.php`, `app/Core/AI/Services/ChatTurnRunner.php`, `app/Core/AI/Services/SessionManager.php`, `app/Core/AI/Tools/EditTool.php`, `app/Core/AI/Tools/BrowserTool.php`, `resources/core/views/components/layouts/app.blade.php`
 **Agents:** Codex/gpt-5.5-medium, Codex/GPT-5, Grok/Cursor
 
 ## Problem Essence

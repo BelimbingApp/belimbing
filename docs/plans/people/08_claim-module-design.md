@@ -1,7 +1,7 @@
 # people/08_claim-module-design
 
 **Status:** In Progress — Claim Core skeleton with employee submission/approval slice; encumbrance/approval-reevaluation guardrails closed; cancel + reimbursement lifecycles added; multi-line submission service path, on-behalf service validation, service-year band matching, cohort-predicate eligibility, finance CSV exports (accounting, reimbursement statement, utilization, approval aging), and Policy Studio service primitives (validation + simulation + CLI) landed 2026-05-14
-**Last Updated:** 2026-05-14
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — Claims is a first-class People workflow with entitlements, attachments, approval limits, payroll reimbursement integration, and reporting.
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core and country-pack boundary that Claim must feed through neutral `PayrollInput` reimbursement rows.
@@ -10,8 +10,8 @@
 - `docs/plans/people/05_sbg-ipayroll-settings-gap-bridge.md` — People Settings reference data, work profile, employee account access, imports, notification delivery log, and provider dictionaries that Claim should consume instead of duplicating.
 - `docs/plans/people/06_ipayroll-employee-module-gap-bridge.md` — Employee workbench and work-profile dependencies that Claim entitlement, approval routing, and payroll readiness consume.
 - `docs/plans/people/07_leave-module-design.md` — Leave module lifecycle, country-pack, approval, notification, report, and payroll-handoff patterns that Claim should mirror where the domains overlap.
-- `app/Modules/People/Payroll/Models/PayrollInput.php` — existing neutral payroll input surface with `TYPE_REIMBURSEMENT`, `source_type`, and `source_id` for claim-to-payroll handoff.
-- `app/Modules/People/Settings/Models/PeopleReferenceEntry.php` — existing typed reference data, including organization, demographic, bank, statutory-office, medical-provider, and training-provider categories.
+- `app/Domains/People/Payroll/Models/PayrollInput.php` — existing neutral payroll input surface with `TYPE_REIMBURSEMENT`, `source_type`, and `source_id` for claim-to-payroll handoff.
+- `app/Domains/People/Settings/Models/PeopleReferenceEntry.php` — existing typed reference data, including organization, demographic, bank, statutory-office, medical-provider, and training-provider categories.
 - `docs/plans/people/sbg_claim_ref/` — SBG iPayroll claim setup screenshots and exports for claim category, claim type, claim group, claim entitlement, and claim client/max-limit setup.
 - `docs/architecture/module-system.md` — module placement; `docs/plans/AGENTS.md` — plan conventions.
 **Agents:** amp/gpt-5.1-codex, amp/claude-opus-4-7, claude-code/claude-opus-4-7
@@ -22,7 +22,7 @@ BLB does not yet have a Claim module. Payroll can already accept neutral reimbur
 
 ## Desired Outcome
 
-A Claim module under `app/Modules/People/Claim/` that supports employee and on-behalf claim submission, entitlement and limit policies, receipt/document attachments, multi-tier approval with approver amount limits, cancellation/withdrawal, payroll reimbursement handoff, and operational reports. The user-facing menu label should remain “Claims”, but the module directory and code namespace should follow BLB’s singular module naming convention. The module should be country-neutral in Core, consume People Settings for employees, organization, provider, and payment references, reuse shared attachment/PDF infrastructure, and feed Payroll through existing `PayrollInput` reimbursement rows. Malaysia tax/statutory treatment of reimbursed items belongs in the Malaysia payroll country pack; SBG-specific claim types, limits, labels, and accounting mappings belong in `kiatng/blb-sbg`. Claim advances are schema-ready but become a go-live workflow only if SBG confirms active use.
+A Claim Module under `app/Domains/People/Claim/` that supports employee and on-behalf claim submission, entitlement and limit policies, receipt/document attachments, multi-tier approval with approver amount limits, cancellation/withdrawal, payroll reimbursement handoff, and operational reports. The user-facing menu label should remain “Claims”, but the Module directory and code namespace should follow BLB’s singular Module naming convention. The Module should be country-neutral in the People Domain, consume People Settings for employees, organization, provider, and payment references, reuse shared attachment/PDF infrastructure, and feed Payroll through existing `PayrollInput` reimbursement rows. Malaysia tax/statutory treatment of reimbursed items belongs in the Malaysia payroll country pack; SBG-specific claim types, limits, labels, and accounting mappings belong in `kiatng/blb-sbg`. Claim advances are schema-ready but become a go-live workflow only if SBG confirms active use.
 
 ## Top-Level Components
 
@@ -44,7 +44,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ## Design Decisions
 
-**Use singular `Claim` for the module and “Claims” for the product surface.** BLB’s module convention is a singular PascalCase capability/domain directory, so the module path should be `app/Modules/People/Claim/`. The menu label and likely URI can remain plural/user-friendly (`Claims`, `people/claims`) because employees and managers work through a claims workbench. Route names and capabilities should follow the singular module namespace (`people.claim.index`, `people.claim.view`, `people.claim.approve`, `people.claim.manage`). Tables and models should use singular nouns for entities (`ClaimRequest`, `ClaimLine`, `ClaimPolicy`) following local Laravel naming conventions.
+**Use singular `Claim` for the Module and “Claims” for the product surface.** BLB’s Module convention is a singular PascalCase capability directory inside its owning Domain, so the Module path is `app/Domains/People/Claim/`. The menu label and likely URI can remain plural/user-friendly (`Claims`, `people/claims`) because employees and managers work through a claims workbench. Route names and capabilities should follow the singular Module namespace (`people.claim.index`, `people.claim.view`, `people.claim.approve`, `people.claim.manage`). Tables and models should use singular nouns for entities (`ClaimRequest`, `ClaimLine`, `ClaimPolicy`) following local Laravel naming conventions.
 
 **Claim is People/Finance-adjacent, not a Payroll submodule.** Payroll should not own receipts, employee claim policy, approval routing, or entitlement balances. Claim owns the operational workflow and writes neutral reimbursement inputs into Payroll only after approval. Payroll owns period locking, pay-item classification, statutory treatment, payslip display, and final reimbursement outcome.
 
@@ -228,7 +228,7 @@ A Claim module under `app/Modules/People/Claim/` that supports employee and on-b
 
 ### Phase 1 — Claim Core skeleton
 
-- [x] Create the `app/Modules/People/Claim/` module shell with config, authz, menu, routes, service provider if needed, Livewire workbench entry point, and migration placement following the People module pattern. {amp/gpt-5.1-codex}
+- [x] Create the `app/Domains/People/Claim/` Module shell with config, authz, menu, routes, service provider if needed, Livewire workbench entry point, and migration placement following the People Domain pattern. {amp/gpt-5.1-codex}
 - [x] Create claim category and claim type catalog storage with neutral codes, category grouping, receipt rules, input unit/calculation mode, provider requirement, payroll handoff eligibility, default pay item code, DR/CR accounting mapping keys, alternative approval route, and sort order. {amp/gpt-5.1-codex}
 - [x] Create effective-dated claim policy storage for item mode (`single_value`, `range`, `service_year`), logical threshold rows, rate/rate type, per-day/unit cap, monthly cap, yearly cap, service-year bands, eligibility, receipt thresholds, provider restrictions, mileage/rate rules, currency conversion, and pending-encumbrance behavior. {amp/gpt-5.1-codex}
 - [x] Create claim assignment storage binding employee cohorts to `(claim type, claim policy)` rows with active status, hidden-from-application, combine tag/use-combine, sort order, and source aliases. {amp/gpt-5.1-codex}

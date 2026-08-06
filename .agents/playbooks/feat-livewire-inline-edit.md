@@ -17,7 +17,7 @@ Intent: implement inline editable Livewire show pages with field-level validatio
 ## Minimal File Pack
 
 - `app/Base/Foundation/Livewire/Concerns/SavesValidatedFields.php`
-- `app/Modules/Core/User/Livewire/Users/Show.php`
+- `app/Core/User/Livewire/Users/Show.php`
 
 ## Reference Shape
 

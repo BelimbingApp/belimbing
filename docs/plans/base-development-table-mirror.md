@@ -1,8 +1,8 @@
 # Base Development Table Mirror
 
 Status: In progress — provider onboarding and portable SQLite-to-PostgreSQL mirroring are replacing the PostgreSQL-only assumption
-Last Updated: 2026-07-21
-Sources: `docs/plans/base-data-share.md`; `docs/runbooks/development-table-mirror.md`; `docs/architecture/database.md`; `docs/architecture/module-system.md`; `app/Base/Database`; `app/Base/Settings`; `app/Base/Media/PhotoCleanup`; `app/Modules/Core/AI`; `resources/core/views/AGENTS.md`
+Last Updated: 2026-08-05
+Sources: `docs/plans/base-data-share.md`; `docs/runbooks/development-table-mirror.md`; `docs/architecture/database.md`; `docs/architecture/module-system.md`; `app/Base/Database`; `app/Base/Settings`; `app/Base/Media/PhotoCleanup`; `app/Core/AI`; `resources/core/views/AGENTS.md`
 Agents: Codex/Sol-Ultra; codex/sol-extra
 
 ## Problem Essence

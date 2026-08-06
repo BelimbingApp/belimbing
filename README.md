@@ -38,7 +38,7 @@ Belimbing is in active development. Human and AI agents are welcome to look arou
 
 ## Quick Install
 
-Setup will take about an hour. A fresh platform clone starts with Base and Core. Optional domains can be installed later from Administration > System > Software > Modules or by mounting the relevant domain distribution at `app/Modules/{Domain}`.
+Setup will take about an hour. A fresh platform clone starts with Base and the required Core Domain. Optional Domains can be installed later from Administration > System > Software > Domains or by mounting the relevant Domain source at `app/Domains/{Domain}`.
 
 The easiest way to get started is with an AI Agent prompt:
 ```text

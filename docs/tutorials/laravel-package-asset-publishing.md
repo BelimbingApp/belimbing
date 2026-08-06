@@ -2,7 +2,7 @@
 
 **Document Type:** Tutorial
 **Purpose:** Explain how Laravel packages publish migrations, models, seeders, and other assets using the standard publishing pattern
-**Related:** [Database Migrations](../database/MIGRATION_WORKFLOW.md), [Extension Database Migrations](../extensions/database-migrations.md)
+**Related:** [Database Architecture](../architecture/database.md), [Extension Database Migrations](../guides/extensions/database-migrations.md)
 **Last Updated:** 2026-01-XX
 
 ---
@@ -666,6 +666,6 @@ This pattern enables packages to provide default implementations while giving de
 ## Related Documentation
 
 - [Laravel Package Development](https://laravel.com/docs/packages) - Official Laravel package development guide
-- [Database Migrations Workflow](../database/MIGRATION_WORKFLOW.md) - How migrations work in this project
-- [Extension Database Migrations](../extensions/database-migrations.md) - Publishing migrations in extensions
+- [Database Architecture](../architecture/database.md) - How migrations work in this project
+- [Extension Database Migrations](../guides/extensions/database-migrations.md) - Publishing migrations in Extensions
 - [Laravel Service Providers](https://laravel.com/docs/providers) - Understanding Service Providers

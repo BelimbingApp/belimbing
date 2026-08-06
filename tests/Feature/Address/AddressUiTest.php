@@ -1,9 +1,9 @@
 <?php
 
-use App\Modules\Core\Address\Models\Address;
-use App\Modules\Core\Geonames\Models\Admin1;
-use App\Modules\Core\Geonames\Models\Country;
-use App\Modules\Core\Geonames\Models\Postcode;
+use App\Core\Address\Models\Address;
+use App\Core\Geonames\Models\Admin1;
+use App\Core\Geonames\Models\Country;
+use App\Core\Geonames\Models\Postcode;
 use Livewire\Livewire;
 
 const ADDRESS_UI_WAREHOUSE_LINE = '88 River Road';

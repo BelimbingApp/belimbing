@@ -2,8 +2,18 @@
 
 namespace App\Base\Database\Services;
 
+use App\Base\Foundation\ApplicationTopology;
+
 final class IncubatingMigrationFiles
 {
+    /** @var list<string> */
+    private const REPLAY_SAFE_SCHEMA_METHODS = [
+        'getcolumnlisting',
+        'hascolumn',
+        'hascolumns',
+        'hastable',
+    ];
+
     /**
      * @param  list<string>  $migrationPaths
      * @return list<string>
@@ -70,6 +80,88 @@ final class IncubatingMigrationFiles
 
     public function contentsAreIncubating(string $contents): bool
     {
+        return $this->contentsUseMarkerTrait($contents, 'IncubatingSchema');
+    }
+
+    public function contentsReplayAfterIncubatingSchema(string $contents): bool
+    {
+        return $this->contentsUseMarkerTrait($contents, 'ReplaysAfterIncubatingSchema');
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function replayAfterIncubatingSchemaViolations(string $contents): array
+    {
+        $tokens = token_get_all($contents);
+        $violations = [];
+
+        foreach ($tokens as $index => $token) {
+            if (is_array($token) && $this->tokenNames($token, 'Schema')) {
+                $doubleColon = $this->nextSignificantTokenIndex($tokens, $index + 1);
+                $method = $doubleColon === null
+                    ? null
+                    : $this->nextSignificantTokenIndex($tokens, $doubleColon + 1);
+
+                if ($doubleColon !== null
+                    && is_array($tokens[$doubleColon])
+                    && $tokens[$doubleColon][0] === T_DOUBLE_COLON
+                    && $method !== null) {
+                    $methodToken = $tokens[$method];
+
+                    if (is_array($methodToken) && $methodToken[0] === T_STRING) {
+                        $openingParenthesis = $this->nextSignificantTokenIndex($tokens, $method + 1);
+
+                        if ($openingParenthesis !== null
+                            && $tokens[$openingParenthesis] === '('
+                            && ! in_array(strtolower($methodToken[1]), self::REPLAY_SAFE_SCHEMA_METHODS, true)) {
+                            $violations[] = 'Schema::'.$methodToken[1].'()';
+                        }
+                    } elseif (! is_array($methodToken) || $methodToken[0] !== T_CLASS) {
+                        $violations[] = 'dynamic Schema call';
+                    }
+                }
+            }
+
+            if (is_array($token)
+                && $token[0] === T_STRING
+                && in_array(strtolower($token[1]), [
+                    'statement',
+                    'unprepared',
+                    'affectingstatement',
+                    'getschemabuilder',
+                    'getdoctrineschemamanager',
+                    'createschemamanager',
+                ], true)) {
+                $operator = $this->previousSignificantTokenIndex($tokens, $index - 1);
+
+                if ($operator !== null
+                    && is_array($tokens[$operator])
+                    && in_array($tokens[$operator][0], [T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_NULLSAFE_OBJECT_OPERATOR], true)) {
+                    $violations[] = $token[1].'()';
+                }
+            }
+
+            if (! is_array($token)
+                || ! in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) {
+                continue;
+            }
+
+            $literal = $token[0] === T_CONSTANT_ENCAPSED_STRING
+                ? $this->literalString($token[1])
+                : $token[1];
+
+            if ($literal !== null
+                && preg_match('/\b(?:ALTER|CREATE(?:\s+OR\s+REPLACE)?|DROP|TRUNCATE|RENAME)\s+(?:TABLE|INDEX|DATABASE|SCHEMA|VIEW|TYPE|CONSTRAINT|SEQUENCE)\b/i', $literal) === 1) {
+                $violations[] = 'raw DDL';
+            }
+        }
+
+        return array_values(array_unique($violations));
+    }
+
+    private function contentsUseMarkerTrait(string $contents, string $trait): bool
+    {
         $tokens = token_get_all($contents);
         $braceDepth = 0;
         $classDepths = [];
@@ -83,7 +175,7 @@ final class IncubatingMigrationFiles
                     continue;
                 }
 
-                if ($this->tokenUsesIncubatingSchema($token, $classDepths, $tokens, $index)) {
+                if ($this->tokenUsesMarkerTrait($token, $classDepths, $tokens, $index, $trait)) {
                     return true;
                 }
 
@@ -195,11 +287,16 @@ final class IncubatingMigrationFiles
      * @param  list<int>  $classDepths
      * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
      */
-    private function tokenUsesIncubatingSchema(array $token, array $classDepths, array $tokens, int $index): bool
-    {
+    private function tokenUsesMarkerTrait(
+        array $token,
+        array $classDepths,
+        array $tokens,
+        int $index,
+        string $trait,
+    ): bool {
         return $token[0] === T_USE
             && $classDepths !== []
-            && $this->traitUseIncludesIncubatingSchema($tokens, $index);
+            && $this->traitUseIncludes($tokens, $index, $trait);
     }
 
     /**
@@ -234,7 +331,7 @@ final class IncubatingMigrationFiles
     /**
      * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
      */
-    private function traitUseIncludesIncubatingSchema(array $tokens, int $useIndex): bool
+    private function traitUseIncludes(array $tokens, int $useIndex, string $trait): bool
     {
         for ($index = $useIndex + 1, $count = count($tokens); $index < $count; $index++) {
             $token = $tokens[$index];
@@ -251,7 +348,7 @@ final class IncubatingMigrationFiles
                 return false;
             }
 
-            if ($this->tokenNames($token, 'IncubatingSchema')) {
+            if ($this->tokenNames($token, $trait)) {
                 return true;
             }
         }
@@ -265,6 +362,20 @@ final class IncubatingMigrationFiles
     private function nextSignificantTokenIndex(array $tokens, int $start): ?int
     {
         for ($index = $start, $count = count($tokens); $index < $count; $index++) {
+            if (! $this->tokenIsIgnorable($tokens[$index])) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  list<array{0: int, 1: string, 2?: int}|string>  $tokens
+     */
+    private function previousSignificantTokenIndex(array $tokens, int $start): ?int
+    {
+        for ($index = $start; $index >= 0; $index--) {
             if (! $this->tokenIsIgnorable($tokens[$index])) {
                 return $index;
             }
@@ -310,10 +421,11 @@ final class IncubatingMigrationFiles
     private function defaultDiscoveryPathPatterns(): array
     {
         return [
-            app_path('Base/*/Database/Migrations'),
-            app_path('Modules/*/*/Database/Migrations'),
+            ApplicationTopology::baseComponentPattern('Database/Migrations'),
+            ApplicationTopology::coreModulePattern('Database/Migrations'),
+            ApplicationTopology::domainModulePattern('Database/Migrations'),
             database_path('migrations'),
-            base_path('extensions/*/*/Database/Migrations'),
+            ApplicationTopology::extensionModulePattern('Database/Migrations'),
         ];
     }
 }

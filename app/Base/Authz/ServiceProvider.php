@@ -16,6 +16,7 @@ use App\Base\Authz\Services\AuthorizationEngine;
 use App\Base\Authz\Services\AuthzMenuAccessChecker;
 use App\Base\Authz\Services\DatabaseDecisionLogger;
 use App\Base\Authz\Services\ImpersonationManager;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Menu\Contracts\MenuAccessChecker;
 use Illuminate\Contracts\Config\Repository;
@@ -109,10 +110,11 @@ class ServiceProvider extends BaseServiceProvider
         $basePath = realpath(__DIR__.'/Config/authz.php');
 
         $patterns = [
-            app_path('Base/*/Config/authz.php'),
-            app_path('Modules/*/*/Config/authz.php'),
-            base_path('extensions/*/Config/authz.php'),
-            base_path('extensions/*/*/Config/authz.php'),
+            ApplicationTopology::baseComponentPattern('Config/authz.php'),
+            ApplicationTopology::coreModulePattern('Config/authz.php'),
+            ApplicationTopology::domainModulePattern('Config/authz.php'),
+            ApplicationTopology::extensionSourcePattern('Config/authz.php'),
+            ApplicationTopology::extensionModulePattern('Config/authz.php'),
         ];
 
         foreach ($patterns as $pattern) {

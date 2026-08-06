@@ -2,12 +2,17 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Foundation\ApplicationTopology;
+use App\Base\Foundation\Compatibility\LegacyApplicationClassMap;
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
+use App\Base\Support\Str;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Seeder Registry Model
@@ -24,7 +29,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $seeder_class Fully qualified seeder class name
  * @property string|null $module_name Module name (e.g., 'Geonames')
- * @property string|null $module_path Module path (e.g., 'app/Modules/Core/Geonames')
+ * @property string|null $module_path Module path (e.g., 'app/Core/Geonames')
  * @property string|null $migration_file Migration file that registered this seeder
  * @property string $status Current execution status
  * @property Carbon|null $ran_at Timestamp when seeder completed
@@ -144,7 +149,7 @@ class SeederRegistry extends Model
      *
      * @param  string  $seederClass  Fully qualified seeder class name
      * @param  string|null  $moduleName  Module name (e.g., 'Geonames')
-     * @param  string|null  $modulePath  Module path (e.g., 'app/Modules/Core/Geonames')
+     * @param  string|null  $modulePath  Module path (e.g., 'app/Core/Geonames')
      * @param  string|null  $migrationFile  Migration file that registered this seeder (null for discovered seeders)
      */
     public static function register(
@@ -153,36 +158,41 @@ class SeederRegistry extends Model
         ?string $modulePath,
         ?string $migrationFile = null
     ): void {
-        // Use updateOrCreate to handle rollback/re-run: reset status to pending
-        self::query()->updateOrCreate(
-            ['seeder_class' => $seederClass],
-            [
-                'module_name' => $moduleName,
-                'module_path' => $modulePath,
-                'migration_file' => $migrationFile,
-                'status' => self::STATUS_PENDING,
-                'ran_at' => null,
-                'error_message' => null,
-            ]
-        );
+        $canonicalClass = LegacyApplicationClassMap::canonical($seederClass);
+
+        DB::transaction(static function () use ($canonicalClass, $moduleName, $modulePath, $migrationFile): void {
+            self::query()
+                ->whereIn('seeder_class', LegacyApplicationClassMap::equivalents($canonicalClass))
+                ->where('seeder_class', '!=', $canonicalClass)
+                ->delete();
+
+            // Rollback/re-run intentionally makes the one canonical identity pending again.
+            self::query()->updateOrCreate(
+                ['seeder_class' => $canonicalClass],
+                [
+                    'module_name' => $moduleName,
+                    'module_path' => $modulePath,
+                    'migration_file' => $migrationFile,
+                    'status' => self::STATUS_PENDING,
+                    'ran_at' => null,
+                    'error_message' => null,
+                ]
+            );
+        });
     }
 
     /**
-     * Ensure BLB seeders under app/Base/<module>/Database/Seeders and
-     * app/Modules/<layer>/<module>/Database/Seeders are in the registry.
+     * Ensure BLB seeders under every active application root are registered.
      * Mirrors the layer pattern used by InteractsWithModuleMigrations.
      * Only inserts when seeder_class is missing; does not overwrite migration-registered rows.
      */
     public static function ensureDiscoveredRegistered(): void
     {
-        $patterns = [
-            app_path('Base/*/Database/Seeders/*.php'),
-            app_path('Modules/*/*/Database/Seeders/*.php'),
-        ];
+        $patterns = ApplicationTopology::contributionPatterns('Database/Seeders/*.php');
 
         $files = [];
         foreach ($patterns as $pattern) {
-            $files = array_merge($files, glob($pattern) ?: []);
+            $files = array_merge($files, DomainState::filterPaths(glob($pattern) ?: []));
         }
         foreach ($files as $file) {
             self::registerDiscoveredFile($file);
@@ -202,7 +212,7 @@ class SeederRegistry extends Model
             return;
         }
 
-        if (! str_starts_with($rel, 'app/Base/') && ! str_starts_with($rel, 'app/Modules/')) {
+        if (ApplicationTopology::rootFor($file) === null) {
             return;
         }
 
@@ -216,14 +226,20 @@ class SeederRegistry extends Model
             return;
         }
 
-        if (self::query()->where('seeder_class', $fqcn)->exists()) {
+        if (self::query()
+            ->whereIn('seeder_class', LegacyApplicationClassMap::equivalents($fqcn))
+            ->exists()) {
             return;
         }
 
         $beforeSeeders = '/Database/Seeders/';
         $pos = strpos($rel, $beforeSeeders);
         $modulePath = $pos !== false ? substr($rel, 0, $pos) : null;
-        $moduleName = $modulePath ? basename($modulePath) : null;
+        $moduleName = $modulePath !== null
+            ? (ApplicationTopology::belongsToRoot($modulePath, ApplicationTopology::EXTENSIONS)
+                ? Str::pascalToKebab(basename($modulePath))
+                : basename($modulePath))
+            : null;
 
         self::register($fqcn, $moduleName, $modulePath, null);
     }
@@ -235,7 +251,9 @@ class SeederRegistry extends Model
      */
     public static function unregister(string $seederClass): void
     {
-        self::query()->where('seeder_class', $seederClass)->delete();
+        self::query()
+            ->whereIn('seeder_class', LegacyApplicationClassMap::equivalents($seederClass))
+            ->delete();
     }
 
     /**

@@ -5,7 +5,7 @@ use App\Base\Foundation\Exceptions\BlbConfigurationException;
 use App\Base\Foundation\Exceptions\BlbDataContractException;
 use App\Base\Foundation\Exceptions\BlbIntegrationException;
 use App\Base\Foundation\Exceptions\BlbInvariantViolationException;
-use App\Modules\Core\AI\Enums\AIErrorCode;
+use App\Core\AI\Enums\AIErrorCode;
 
 it('stores reason code and context on BLB configuration exceptions', function (): void {
     $exception = new BlbConfigurationException(

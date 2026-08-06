@@ -4,9 +4,9 @@
 declare(strict_types=1);
 
 /**
- * Bootstrap SonarCloud + GitHub Actions secrets for BLB module Distribution Bundles.
+ * Bootstrap SonarCloud + GitHub Actions secrets for BLB domain repositories.
  *
- * Reads module registry (scripts/ci/module-repos.json), ensures each module has a
+ * Reads the domain registry (scripts/ci/domain-repos.json), ensures each domain has a
  * SonarCloud project, then publishes SONAR_TOKEN to GitHub:
  *   1. Organization secret (preferred — all current and future BelimbingApp repos)
  *   2. Per-repo fallback when gh lacks admin:org
@@ -31,7 +31,7 @@ function parseArguments(array $argv): array
 {
     $options = [
         'verify-only' => false,
-        'registry' => dirname(__DIR__).'/ci/module-repos.json',
+        'registry' => dirname(__DIR__).'/ci/domain-repos.json',
         'github-org' => 'BelimbingApp',
     ];
 
@@ -95,7 +95,7 @@ function resolveSonarToken(): string
 /**
  * @return array{
  *     sonar_organization: string,
- *     modules: array<string, array{repo: string, path: string, sonar_project_key?: string}>
+ *     domains: array<string, array{repo: string, path: string, sonar_project_key?: string}>
  * }
  */
 function loadRegistry(string $path): array
@@ -107,7 +107,7 @@ function loadRegistry(string $path): array
     }
 
     $registry = json_decode((string) file_get_contents($path), true);
-    if (! is_array($registry) || ! isset($registry['modules']) || ! is_array($registry['modules'])) {
+    if (! is_array($registry) || ! isset($registry['domains']) || ! is_array($registry['domains'])) {
         fwrite(STDERR, "Invalid registry: {$path}\n");
 
         exit(1);
@@ -119,15 +119,15 @@ function loadRegistry(string $path): array
 }
 
 /**
- * @param  array{repo: string, path: string, sonar_project_key?: string}  $module
+ * @param  array{repo: string, path: string, sonar_project_key?: string}  $domain
  */
-function sonarProjectKey(array $module): string
+function sonarProjectKey(array $domain): string
 {
-    if (isset($module['sonar_project_key']) && $module['sonar_project_key'] !== '') {
-        return $module['sonar_project_key'];
+    if (isset($domain['sonar_project_key']) && $domain['sonar_project_key'] !== '') {
+        return $domain['sonar_project_key'];
     }
 
-    $repo = $module['repo'];
+    $repo = $domain['repo'];
     $shortName = str_contains($repo, '/') ? substr($repo, strrpos($repo, '/') + 1) : $repo;
 
     return PROJECT_KEY_PREFIX.$shortName;
@@ -416,22 +416,22 @@ $existing = existingSonarProjects($token, $organization);
 $repos = [];
 $missing = [];
 
-foreach ($registry['modules'] as $domain => $module) {
-    if (! is_array($module) || ! isset($module['repo'])) {
+foreach ($registry['domains'] as $domainName => $domain) {
+    if (! is_array($domain) || ! isset($domain['repo'])) {
         continue;
     }
 
-    $projectKey = sonarProjectKey($module);
-    $repos[] = $module['repo'];
-    $shortName = str_contains($module['repo'], '/') ? substr($module['repo'], strrpos($module['repo'], '/') + 1) : $module['repo'];
+    $projectKey = sonarProjectKey($domain);
+    $repos[] = $domain['repo'];
+    $shortName = str_contains($domain['repo'], '/') ? substr($domain['repo'], strrpos($domain['repo'], '/') + 1) : $domain['repo'];
 
     if (isset($existing[$projectKey])) {
-        fwrite(STDERR, "SonarCloud project exists: {$projectKey} ({$domain})\n");
+        fwrite(STDERR, "SonarCloud project exists: {$projectKey} ({$domainName})\n");
 
         continue;
     }
 
-    $missing[] = [$projectKey, $shortName, $domain];
+    $missing[] = [$projectKey, $shortName, $domainName];
 }
 
 if ($options['verify-only']) {

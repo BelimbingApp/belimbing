@@ -3,7 +3,7 @@
 namespace App\Base\Media\PhotoCleanup;
 
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
-use App\Modules\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProvider;
 
 /**
  * Resolves the PhotoRoom API key for the Remove Background API. Credentials

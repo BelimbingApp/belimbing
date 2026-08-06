@@ -1,0 +1,233 @@
+<?php
+
+namespace App\Core\AI\Livewire\Concerns;
+
+use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Support\Str as BlbStr;
+use App\Core\AI\Models\AiProvider;
+
+/**
+ * Provider CRUD state and actions for the provider manager component.
+ *
+ * Handles manual add/edit/delete of company-scoped AI providers, including
+ * template pre-fill from the models.dev catalog and priority reordering.
+ */
+trait ManagesProviders
+{
+    public bool $showProviderForm = false;
+
+    public bool $isEditingProvider = false;
+
+    public ?int $editingProviderId = null;
+
+    public string $providerName = '';
+
+    public string $providerDisplayName = '';
+
+    public string $providerBaseUrl = '';
+
+    public string $providerApiKey = '';
+
+    public bool $providerHasStoredApiKey = false;
+
+    public bool $providerIsActive = true;
+
+    public string $selectedTemplate = '';
+
+    public bool $showDeleteProvider = false;
+
+    public ?int $deletingProviderId = null;
+
+    public string $deletingProviderName = '';
+
+    public function openCreateProvider(): void
+    {
+        $this->resetProviderForm();
+        $this->isEditingProvider = false;
+        $this->showProviderForm = true;
+    }
+
+    /**
+     * Apply a provider template, pre-filling form fields from config.
+     */
+    public function applyTemplate(string $templateKey): void
+    {
+        $this->selectedTemplate = $templateKey;
+
+        if ($templateKey === '') {
+            return;
+        }
+
+        $template = app(ModelCatalogService::class)->getProvider($templateKey);
+
+        if ($template === null) {
+            return;
+        }
+
+        $this->providerName = $templateKey;
+        $this->providerDisplayName = $template['display_name'] ?? '';
+        $this->providerBaseUrl = $template['base_url'] ?? '';
+    }
+
+    public function openEditProvider(int $providerId): void
+    {
+        $provider = $this->companyLlmProviders()->find($providerId);
+
+        if (! $provider) {
+            return;
+        }
+
+        $this->resetProviderForm();
+        $this->isEditingProvider = true;
+        $this->editingProviderId = $providerId;
+        $this->providerName = $provider->name;
+        $this->providerDisplayName = $provider->display_name ?? '';
+        $this->providerBaseUrl = $provider->base_url;
+        $this->providerHasStoredApiKey = ! empty($provider->credentials['api_key']);
+        $this->providerApiKey = '';
+        $this->providerIsActive = $provider->is_active;
+        $this->showProviderForm = true;
+
+        if (method_exists($this, 'afterOpenEditProvider')) {
+            $this->afterOpenEditProvider($provider);
+        }
+    }
+
+    public function saveProvider(): void
+    {
+        $companyId = $this->getCompanyId();
+
+        if ($companyId === null) {
+            $this->notifyError(__('Provider was not saved. No company context is available.'));
+
+            return;
+        }
+
+        $rules = [
+            'providerName' => ['required', 'string', 'max:255'],
+            'providerDisplayName' => ['nullable', 'string', 'max:255'],
+            'providerBaseUrl' => ['required', 'string', 'max:2048'],
+            'providerIsActive' => ['boolean'],
+        ];
+
+        if ($this->isEditingProvider) {
+            $rules['providerApiKey'] = ['nullable', 'string', 'max:2048'];
+        } else {
+            $rules['providerApiKey'] = ['required', 'string', 'max:2048'];
+        }
+
+        $this->validate($rules);
+
+        $data = [
+            'company_id' => $companyId,
+            'name' => $this->providerName,
+            'display_name' => $this->providerDisplayName ?: $this->providerName,
+            'base_url' => $this->providerBaseUrl,
+            'is_active' => $this->providerIsActive,
+        ];
+
+        if ($this->isEditingProvider && $this->editingProviderId) {
+            $provider = $this->companyLlmProviders()->find($this->editingProviderId);
+
+            if ($provider) {
+                unset($data['name']);
+
+                if (! BlbStr::isUnchangedSecretValue($this->providerApiKey)) {
+                    $data['credentials'] = ['api_key' => $this->providerApiKey];
+                }
+
+                $provider->update($data);
+                $this->notify(__('Provider updated.'));
+            } else {
+                $this->notifyError(__('Provider was not found.'));
+            }
+        } else {
+            $data['auth_type'] = 'api_key';
+            $data['family'] = AiProvider::FAMILY_LLM;
+            $data['credentials'] = ['api_key' => $this->providerApiKey];
+            $data['connection_config'] = [];
+            $data['created_by'] = auth()->user()->employee?->id;
+            $provider = AiProvider::query()->create($data);
+            $provider->assignNextPriority();
+            $this->notify(__('Provider connected.'));
+        }
+
+        $this->dispatchLaraActivationState();
+        $this->showProviderForm = false;
+        $this->resetProviderForm();
+    }
+
+    public function confirmDeleteProvider(int $providerId): void
+    {
+        $provider = $this->companyLlmProviders()->find($providerId);
+
+        if (! $provider) {
+            return;
+        }
+
+        $this->deletingProviderId = $providerId;
+        $this->deletingProviderName = $provider->display_name ?? $provider->name;
+        $this->showDeleteProvider = true;
+    }
+
+    public function deleteProvider(): void
+    {
+        if ($this->deletingProviderId === null) {
+            return;
+        }
+
+        $provider = $this->companyLlmProviders()->find($this->deletingProviderId);
+
+        if ($provider) {
+            $provider->models()->delete();
+            $provider->delete();
+            $this->dispatchLaraActivationState();
+            $this->notify(__('Provider disconnected.'));
+        } else {
+            $this->notifyError(__('Provider was not found.'));
+        }
+
+        if ($this->expandedProviderId === $this->deletingProviderId) {
+            $this->expandedProviderId = null;
+        }
+
+        $this->showDeleteProvider = false;
+        $this->deletingProviderId = null;
+        $this->deletingProviderName = '';
+    }
+
+    /**
+     * Move a provider up one position in priority (lower number = higher priority).
+     */
+    public function movePriorityUp(int $providerId): void
+    {
+        $provider = $this->companyLlmProviders()->find($providerId);
+
+        if (! $provider || $provider->priority <= 1) {
+            return;
+        }
+
+        $above = $this->companyLlmProviders()
+            ->where('priority', $provider->priority - 1)
+            ->first();
+
+        if ($above) {
+            $provider->swapPriority($above);
+            $this->notify(__('Provider priority updated.'));
+            $this->dispatch('priority-changed', $providerId);
+        }
+    }
+
+    private function resetProviderForm(): void
+    {
+        $this->editingProviderId = null;
+        $this->providerName = '';
+        $this->providerDisplayName = '';
+        $this->providerBaseUrl = '';
+        $this->providerApiKey = '';
+        $this->providerHasStoredApiKey = false;
+        $this->providerIsActive = true;
+        $this->selectedTemplate = '';
+        $this->resetValidation();
+    }
+}

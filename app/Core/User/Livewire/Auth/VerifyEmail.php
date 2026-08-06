@@ -1,0 +1,50 @@
+<?php
+namespace App\Core\User\Livewire\Auth;
+
+use App\Core\User\Actions\Logout;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Session;
+use Illuminate\View\View;
+use Livewire\Attributes\Layout;
+use Livewire\Component;
+
+#[Layout('components.layouts.auth')]
+class VerifyEmail extends Component
+{
+    /**
+     * Send an email verification notification to the user.
+     */
+    public function sendVerification(): void
+    {
+        Auth::user()->sendEmailVerificationNotification();
+
+        Session::flash('status', 'verification-link-sent');
+    }
+
+    /**
+     * Log the current user out of the application.
+     */
+    public function logout(Logout $logout): void
+    {
+        $logout();
+
+        $this->redirect('/', navigate: true);
+    }
+
+    /**
+     * Handle the component's rendering hook.
+     */
+    public function rendering(View $view): void
+    {
+        if (Auth::user()->hasVerifiedEmail()) {
+            // Full page load (not navigate): crossing the guest auth layout into the
+            // app shell, where a wire:navigate morph cannot render the persisted chrome.
+            $this->redirectIntended(default: route('dashboard', absolute: false));
+        }
+    }
+
+    public function render(): \Illuminate\Contracts\View\View
+    {
+        return view('livewire.auth.verify-email');
+    }
+}

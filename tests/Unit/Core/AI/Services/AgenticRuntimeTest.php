@@ -1,0 +1,1027 @@
+<?php
+
+use App\Base\AI\Contracts\Tool;
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ProviderRequestMapping;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Tools\ToolResult;
+use App\Core\AI\DTO\ExecutionPolicy;
+use App\Core\AI\Enums\ExecutionMode;
+use App\Core\AI\Enums\RunPhase;
+use App\Core\AI\Services\AgenticExecutionControlResolver;
+use App\Core\AI\Services\AgentToolRegistry;
+use App\Core\AI\Services\ConfigResolver;
+use App\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Core\AI\Services\ControlPlane\WireLogger;
+use App\Core\AI\Services\Orchestration\RuntimeHookRegistry;
+use App\Core\AI\Services\Orchestration\RuntimeHookRunner;
+use App\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Core\AI\Services\Runtime\AgenticToolLoopStreamReader;
+use App\Core\AI\Services\Runtime\RuntimeHookCoordinator;
+use App\Core\AI\Services\Runtime\RuntimeMessageBuilder;
+use App\Core\AI\Services\Runtime\RuntimeResponseFactory;
+use App\Core\AI\Services\Runtime\RuntimeSessionContext;
+use App\Core\AI\Values\CallUsage;
+use Illuminate\Foundation\Testing\TestCase;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Psr\Log\NullLogger;
+use Tests\Support\MakesRuntimeResponses;
+
+uses(TestCase::class, MakesRuntimeResponses::class);
+
+const AGENTIC_RUNTIME_SYSTEM_PROMPT = 'You are Lara.';
+const AGENTIC_RUNTIME_TOO_MANY_REQUESTS = 'HTTP 429: Too Many Requests';
+const AGENTIC_RUNTIME_HELLO_RESPONSE = 'Hello, I am Lara!';
+const AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS = '{"input":"world"}';
+
+final class StreamAdvancedBeforeConsumption extends RuntimeException {}
+const AGENTIC_RUNTIME_WIRE_LOG_EXTENSION = '.jsonl';
+
+class TestTool implements Tool
+{
+    /**
+     * @param  array<string, mixed>  $schema
+     */
+    public function __construct(
+        private readonly string $toolName,
+        private readonly string $toolDescription,
+        private readonly array $schema,
+        private readonly string $toolResult,
+    ) {}
+
+    public function name(): string
+    {
+        return $this->toolName;
+    }
+
+    public function description(): string
+    {
+        return $this->toolDescription;
+    }
+
+    public function parametersSchema(): array
+    {
+        return $this->schema;
+    }
+
+    public function requiredCapability(): ?string
+    {
+        return null;
+    }
+
+    public function category(): ToolCategory
+    {
+        return ToolCategory::SYSTEM;
+    }
+
+    public function riskClass(): ToolRiskClass
+    {
+        return ToolRiskClass::READ_ONLY;
+    }
+
+    public function displayName(): string
+    {
+        return $this->toolName;
+    }
+
+    public function summary(): string
+    {
+        return $this->toolDescription;
+    }
+
+    public function explanation(): string
+    {
+        return '';
+    }
+
+    public function setupRequirements(): array
+    {
+        return [];
+    }
+
+    public function testExamples(): array
+    {
+        return [];
+    }
+
+    public function healthChecks(): array
+    {
+        return [];
+    }
+
+    public function limits(): array
+    {
+        return [];
+    }
+
+    public function execute(array $arguments): ToolResult
+    {
+        if (empty($arguments)) {
+            return ToolResult::success($this->toolResult);
+        }
+
+        return ToolResult::success($this->toolResult.json_encode($arguments));
+    }
+}
+
+function buildGenericTool(
+    string $name,
+    string $description,
+    array $schema,
+    string $result,
+): Tool {
+    return new TestTool($name, $description, $schema, $result);
+}
+
+function buildEchoTool(): Tool
+{
+    return buildGenericTool(
+        'echo_tool',
+        'Echoes input',
+        ['type' => 'object', 'properties' => ['input' => ['type' => 'string']]],
+        'executed:echo_tool:world',
+    );
+}
+
+function buildNavigateActionTool(): Tool
+{
+    return buildGenericTool(
+        'navigate_tool',
+        'Returns agent actions',
+        ['type' => 'object'],
+        '<agent-action>Livewire.navigate(\'/dashboard\')</agent-action>',
+    );
+}
+
+function buildSessionEchoTool(): Tool
+{
+    return new class implements Tool
+    {
+        public function name(): string
+        {
+            return 'session_echo_tool';
+        }
+
+        public function description(): string
+        {
+            return 'Returns the active runtime session ID.';
+        }
+
+        public function parametersSchema(): array
+        {
+            return ['type' => 'object', 'properties' => []];
+        }
+
+        public function requiredCapability(): ?string
+        {
+            return null;
+        }
+
+        public function category(): ToolCategory
+        {
+            return ToolCategory::SYSTEM;
+        }
+
+        public function riskClass(): ToolRiskClass
+        {
+            return ToolRiskClass::READ_ONLY;
+        }
+
+        public function displayName(): string
+        {
+            return 'session_echo_tool';
+        }
+
+        public function summary(): string
+        {
+            return 'Echo runtime session';
+        }
+
+        public function explanation(): string
+        {
+            return '';
+        }
+
+        public function setupRequirements(): array
+        {
+            return [];
+        }
+
+        public function testExamples(): array
+        {
+            return [];
+        }
+
+        public function healthChecks(): array
+        {
+            return [];
+        }
+
+        public function limits(): array
+        {
+            return [];
+        }
+
+        public function execute(array $arguments): ToolResult
+        {
+            return ToolResult::success(app(RuntimeSessionContext::class)->sessionId() ?? 'no-session');
+        }
+    };
+}
+
+function defaultAgenticConfigResolver(): ConfigResolver
+{
+    return test()->mockResolvedConfigResolver([
+        test()->makeConfig('test-provider', 'gpt-4', 'test-key'),
+    ]);
+}
+
+function runAgenticConversation(
+    LlmClient $llmClient,
+    ?ConfigResolver $configResolver = null,
+    ?AgentToolRegistry $toolRegistry = null,
+    string $userMessage = 'Hello',
+    string $systemPrompt = 'Prompt',
+    ?ExecutionPolicy $policy = null,
+    ?array $allowedToolNames = null,
+    ?AiRuntimeSettings $runtimeSettings = null,
+): array {
+    return test()
+        ->makeAgenticRuntime(
+            $llmClient,
+            $configResolver ?? defaultAgenticConfigResolver(),
+            $toolRegistry,
+            runtimeSettings: $runtimeSettings,
+        )
+        ->run([test()->makeMessage('user', $userMessage)], 1, (string) Str::ulid(), $systemPrompt, null, $policy, null, null, $allowedToolNames);
+}
+
+function runToolRoundLimitScenario(
+    int $globalLimit,
+    string $callId,
+    ?ExecutionPolicy $policy = null,
+): array {
+    $llmClient = Mockery::mock(LlmClient::class);
+    $llmClient->shouldReceive('chat')
+        ->times(3)
+        ->andReturn(test()->makeToolCallResponse($callId, 'echo_tool', AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS));
+
+    return runAgenticConversation(
+        $llmClient,
+        toolRegistry: test()->makeToolRegistry(buildEchoTool()),
+        userMessage: 'Loop forever',
+        systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        policy: $policy,
+        runtimeSettings: test()->makeAiRuntimeSettings($globalLimit),
+    );
+}
+
+describe('AgenticRuntime (sync)', function () {
+    it('returns direct response when LLM produces no tool calls', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn([
+            'content' => AGENTIC_RUNTIME_HELLO_RESPONSE,
+            'latency_ms' => 150,
+            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+        ]);
+
+        $result = runAgenticConversation($llmClient, userMessage: 'Hi', systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT);
+
+        expect($result['content'])->toBe(AGENTIC_RUNTIME_HELLO_RESPONSE);
+        expect($result['run_id'])->toHaveLength(26);
+        expect($result['meta']['model'])->toBe('gpt-4');
+        expect($result['meta']['provider_name'])->toBe('test-provider');
+        expect($result['meta'])->not->toHaveKey('tool_actions');
+    });
+
+    it('writes wire logs into the global run-scoped directory', function () {
+        $workspacePath = storage_path('framework/testing/agentic-wire-log-'.str()->random(16));
+        $wireLogPath = storage_path('framework/testing/agentic-wire-logs-'.str()->random(16));
+        config()->set('ai.workspace_path', $workspacePath);
+        config()->set('ai.wire_logging.enabled', true);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')
+            ->once()
+            ->with(Mockery::on(function (ChatRequest $request): bool {
+                $request->transportTap?->request(
+                    $request,
+                    new ProviderRequestMapping(payload: ['model' => $request->model]),
+                    '/chat/completions',
+                    false,
+                );
+
+                return true;
+            }))
+            ->andReturn([
+                'content' => AGENTIC_RUNTIME_HELLO_RESPONSE,
+                'latency_ms' => 150,
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+            ]);
+
+        $wireLogger = new class($wireLogPath) extends WireLogger
+        {
+            public function __construct(
+                private readonly string $testWireLogPath,
+            ) {}
+
+            public function path(string $runId): string
+            {
+                return $this->testWireLogPath.'/'.$runId.'.jsonl';
+            }
+        };
+
+        $runtime = new AgenticRuntime(
+            defaultAgenticConfigResolver(),
+            $llmClient,
+            $this->makeToolRegistry(),
+            $this->makePassthroughCredentialResolver(),
+            new RuntimeMessageBuilder,
+            new RuntimeResponseFactory,
+            new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
+            $runRecorderForToolLoop = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing(),
+            new AgenticToolLoopStreamReader($llmClient, $wireLogger, app(AgenticExecutionControlResolver::class), $runRecorderForToolLoop),
+            app(RuntimeSessionContext::class),
+            $wireLogger,
+            app(AgenticExecutionControlResolver::class),
+            $this->makeAiRuntimeSettings(),
+        );
+
+        $result = $runtime->run(
+            [$this->makeMessage('user', 'Hi')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        expect(file_exists($wireLogPath.'/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeTrue()
+            ->and(file_exists($workspacePath.'/1/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse()
+            ->and(file_exists($workspacePath.'/0/wire-logs/'.$result['run_id'].AGENTIC_RUNTIME_WIRE_LOG_EXTENSION))->toBeFalse();
+
+        File::deleteDirectory($workspacePath);
+        File::deleteDirectory($wireLogPath);
+    });
+});
+
+describe('AgenticRuntime (sync tool loop)', function () {
+    describe('tool discovery and execution', function () {
+        it('omits disallowed tools from the LLM request', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($request): bool {
+                    return $request->tools === null;
+                })
+                ->andReturn([
+                    'content' => 'Coding profile response',
+                    'latency_ms' => 120,
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 8],
+                ]);
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                allowedToolNames: [],
+            );
+
+            expect($result['content'])->toBe('Coding profile response');
+        });
+
+        it('executes tool calls and feeds results back to LLM', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
+            );
+
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
+            );
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Echo world',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world');
+            expect($result['meta']['tool_actions'])->toHaveCount(1);
+            expect($result['meta']['tool_actions'][0]['tool'])->toBe('echo_tool');
+            expect($result['meta']['tool_actions'][0]['arguments'])->toBe(['input' => 'world']);
+        });
+
+        it('continues sync tool loops until the model stops calling tools', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')
+                ->times(24)
+                ->andReturn($this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}'));
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Loop forever',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world')
+                ->and($result['meta']['tool_actions'])->toHaveCount(24);
+        });
+
+        it('stops before executing tools beyond the configured loop limit', function () {
+            $result = runToolRoundLimitScenario(2, 'call_loop');
+
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolRoundLimit->value)
+                ->and($result['meta']['tool_actions'])->toHaveCount(2);
+        });
+
+        it('honours a per-run tool-round limit instead of the global default', function () {
+            $result = runToolRoundLimitScenario(
+                24,
+                'call_policy_loop',
+                ExecutionPolicy::interactive()->withMaxToolRounds(2),
+            );
+
+            expect($result['meta']['error_type'])->toBe(AiErrorType::ToolRoundLimit->value)
+                ->and($result['meta']['diagnostic'])->toContain('configured limit of 2')
+                ->and($result['meta']['tool_actions'])->toHaveCount(2);
+        });
+
+        it('uses capability-neutral guidance when a tool result is truncated', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_large', 'large_tool', '{}')
+            );
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function (ChatRequest $request): bool {
+                    $toolMessage = collect($request->messages)
+                        ->last(fn (array $message): bool => ($message['role'] ?? null) === 'tool');
+                    $content = (string) ($toolMessage['content'] ?? '');
+
+                    return str_contains($content, 'Narrow the tool query, filters, or page range')
+                        && ! str_contains($content, 'Use bash');
+                })
+                ->andReturn($this->makeFinalResponse('Enough detail.'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildGenericTool(
+                    'large_tool',
+                    'Returns a large result',
+                    ['type' => 'object'],
+                    str_repeat('x', 20100),
+                )),
+            );
+
+            expect($result['content'])->toBe('Enough detail.')
+                ->and($result['meta']['tool_actions'][0]['result_truncated'])->toBeTrue()
+                ->and($result['meta']['tool_actions'][0]['result_length'])->toBe(20100);
+        });
+    });
+
+    describe('per-call usage recording', function () {
+        it('records one usage call per successful synchronous tool-loop iteration', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeToolCallResponse('call_001', 'echo_tool', '{"input": "world"}')
+            );
+            $llmClient->shouldReceive('chat')->once()->andReturn(
+                $this->makeFinalResponse('The echo result was: executed:echo_tool:world')
+            );
+
+            $recorded = [];
+            $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+            $runRecorder->shouldReceive('recordCall')
+                ->twice()
+                ->withArgs(function (
+                    string $runId,
+                    int $attemptIndex,
+                    ?string $provider,
+                    ?string $model,
+                    ?string $finishReason,
+                    ?int $latencyMs,
+                    ?CallUsage $usage,
+                ) use (&$recorded): bool {
+                    $recorded[] = [
+                        'attempt_index' => $attemptIndex,
+                        'provider' => $provider,
+                        'model' => $model,
+                        'finish_reason' => $finishReason,
+                        'latency_ms' => $latencyMs,
+                        'prompt_tokens' => $usage?->promptTokens,
+                        'completion_tokens' => $usage?->completionTokens,
+                    ];
+
+                    return preg_match('/^[0-9A-HJKMNP-TV-Z]{26}$/i', $runId) === 1
+                        && $provider === 'test-provider'
+                        && $model === 'gpt-4'
+                        && $usage !== null;
+                })
+                ->andReturnNull();
+
+            $runtime = new AgenticRuntime(
+                defaultAgenticConfigResolver(),
+                $llmClient,
+                $this->makeToolRegistry(buildEchoTool()),
+                $this->makePassthroughCredentialResolver(),
+                new RuntimeMessageBuilder,
+                new RuntimeResponseFactory,
+                new RuntimeHookCoordinator(new RuntimeHookRunner(new RuntimeHookRegistry, new NullLogger)),
+                $runRecorder,
+                new AgenticToolLoopStreamReader(
+                    $llmClient,
+                    Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+                    app(AgenticExecutionControlResolver::class),
+                    $runRecorder,
+                ),
+                app(RuntimeSessionContext::class),
+                Mockery::mock(WireLogger::class)->shouldIgnoreMissing(),
+                app(AgenticExecutionControlResolver::class),
+                $this->makeAiRuntimeSettings(),
+            );
+
+            $result = $runtime->run(
+                [$this->makeMessage('user', 'Echo world')],
+                1,
+                (string) Str::ulid(),
+                AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world')
+                ->and($recorded)->toHaveCount(2)
+                ->and($recorded[0])->toMatchArray([
+                    'attempt_index' => 0,
+                    'finish_reason' => 'tool_calls',
+                    'latency_ms' => 200,
+                    'prompt_tokens' => 20,
+                    'completion_tokens' => 15,
+                ])
+                ->and($recorded[1])->toMatchArray([
+                    'attempt_index' => 1,
+                    'finish_reason' => 'stop',
+                    'latency_ms' => 150,
+                    'prompt_tokens' => 30,
+                    'completion_tokens' => 10,
+                ]);
+        });
+    });
+
+    describe('reasoning across tool steps', function () {
+        it('preserves assistant reasoning_content across tool loop iterations', function () {
+            $llmClient = Mockery::mock(LlmClient::class);
+
+            $llmClient->shouldReceive('chat')->once()->andReturn([
+                'content' => null,
+                'reasoning_content' => 'Need the tool result before answering.',
+                'latency_ms' => 200,
+                'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 15],
+                'tool_calls' => [
+                    [
+                        'id' => 'call_reasoning_001',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'echo_tool',
+                            'arguments' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
+                        ],
+                    ],
+                ],
+            ]);
+
+            $llmClient->shouldReceive('chat')
+                ->once()
+                ->withArgs(function ($request): bool {
+                    $assistantMessages = array_values(array_filter(
+                        $request->messages,
+                        static fn (array $message): bool => ($message['role'] ?? null) === 'assistant'
+                    ));
+
+                    if ($assistantMessages === []) {
+                        return false;
+                    }
+
+                    $assistantMessage = $assistantMessages[0];
+
+                    return ($assistantMessage['reasoning_content'] ?? null) === 'Need the tool result before answering.'
+                        && ($assistantMessage['tool_calls'][0]['id'] ?? null) === 'call_reasoning_001';
+                })
+                ->andReturn($this->makeFinalResponse('The echo result was: executed:echo_tool:world'));
+
+            $result = runAgenticConversation(
+                $llmClient,
+                toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+                userMessage: 'Echo world',
+                systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            );
+
+            expect($result['content'])->toContain('executed:echo_tool:world');
+        });
+    });
+});
+
+describe('AgenticRuntime (sync context and errors)', function () {
+
+    it('exposes the active chat session to tool execution and clears it afterwards', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeToolCallResponse('call_001', 'session_echo_tool', '{}')
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Session: sess_tool_123')
+        );
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildSessionEchoTool()),
+        );
+
+        $result = $runtime->run(
+            [test()->makeMessage('user', 'Delegate this task')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            null,
+            null,
+            'sess_tool_123',
+        );
+
+        expect($result['content'])->toContain('sess_tool_123')
+            ->and(app(RuntimeSessionContext::class)->sessionId())->toBeNull();
+    });
+
+    it('prepends client actions collected from tool results to final content', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeToolCallResponse('call_002', 'navigate_tool', '{}')
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Navigated successfully.')
+        );
+
+        $result = runAgenticConversation(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildNavigateActionTool()),
+            userMessage: 'Go to dashboard',
+            systemPrompt: AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        expect($result['content'])->toStartWith('<agent-action>Livewire.navigate(\'/dashboard\')</agent-action>')
+            ->and($result['content'])->toContain('Navigated successfully.');
+    });
+
+    it('returns error when no LLM configuration is available', function () {
+        $configResolver = Mockery::mock(ConfigResolver::class);
+        $configResolver->shouldReceive('resolveDefault')->with(1)->andReturn(null);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $result = runAgenticConversation($llmClient, $configResolver);
+
+        expect($result['content'])->toContain('⚠');
+        expect($result['meta'])->toHaveKey('error');
+    });
+
+    it('returns error when LLM call fails with non-retryable error', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::AuthError, 'Invalid API key', 50)
+        );
+
+        $result = runAgenticConversation($llmClient);
+
+        expect($result['content'])->toContain('⚠');
+        expect($result['meta']['error_type'])->toBe('auth_error');
+        expect($result['meta']['retry_attempts'])->toBe([]);
+    });
+
+    it('enforces one execution deadline across the whole sync run', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldNotReceive('chat');
+
+        $result = runAgenticConversation(
+            $llmClient,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 0),
+        );
+
+        expect($result['meta']['error_type'])->toBe(AiErrorType::Timeout->value)
+            ->and($result['content'])->toContain('execution budget');
+    });
+});
+
+describe('AgenticRuntime (sync fallback)', function () {
+
+    it('retries once on retryable error then returns error if retry also fails', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->twice()->andReturn(
+            $this->makeErrorResponse(AiErrorType::RateLimit, 'Rate limit exceeded', 50)
+        );
+
+        $result = runAgenticConversation($llmClient);
+
+        expect($result['content'])->toContain('⚠');
+        expect($result['meta']['error_type'])->toBe('rate_limit');
+        expect($result['meta']['retry_attempts'])->toHaveCount(1);
+        expect($result['meta']['retry_attempts'][0]['error_type'])->toBe('rate_limit');
+    });
+
+    it('retries once on retryable error then succeeds if retry works', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::Timeout, 'Connection timed out', 5000)
+        );
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeFinalResponse('Success after retry!')
+        );
+
+        $result = runAgenticConversation($llmClient);
+
+        expect($result['content'])->toBe('Success after retry!');
+        expect($result['meta']['retry_attempts'])->toHaveCount(1);
+        expect($result['meta']['retry_attempts'][0]['error_type'])->toBe('timeout');
+    });
+
+    it('does not retry timeout when full budget was consumed', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chat')->once()->andReturn(
+            $this->makeErrorResponse(AiErrorType::Timeout, 'Request timed out', 55000)
+        );
+
+        $result = runAgenticConversation(
+            $llmClient,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 60),
+        );
+
+        expect($result['meta']['error_type'])->toBe('timeout');
+        expect($result['meta']['retry_attempts'])->toBeEmpty();
+    });
+
+});
+
+describe('AgenticRuntime (streaming failures and tool-round policy)', function () {
+    it('surfaces a streaming runtime error directly (no cross-provider fallback)', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () {
+            yield ['type' => 'error', 'runtime_error' => AiRuntimeError::fromType(
+                AiErrorType::RateLimit,
+                AGENTIC_RUNTIME_TOO_MANY_REQUESTS,
+                latencyMs: 50
+            ), 'latency_ms' => 50];
+        });
+
+        $runtime = $this->makeAgenticRuntime($llmClient);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        ));
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent)->not->toBeNull()
+            ->and($errorEvent['data']['meta']['error_type'] ?? null)->toBe('rate_limit');
+        expect(collect($events)->pluck('event')->all())->not->toContain('done');
+    });
+
+    it('persists and emits a streaming tool-round limit failure', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->twice()->andReturnUsing(function () {
+            yield [
+                'type' => 'tool_call_delta',
+                'index' => 0,
+                'id' => 'call_loop',
+                'name' => 'echo_tool',
+                'arguments_delta' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
+            ];
+            yield [
+                'type' => 'done',
+                'finish_reason' => 'tool_calls',
+                'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                'latency_ms' => 20,
+            ];
+        });
+
+        $recordedFailure = null;
+        $runRecorder = Mockery::mock(RunRecorder::class)->shouldIgnoreMissing();
+        $runRecorder->shouldReceive('fail')
+            ->once()
+            ->withArgs(function (string $runId, AiRuntimeError $error, array $meta) use (&$recordedFailure): bool {
+                $recordedFailure = [$runId, $error->errorType, $meta['error_type'] ?? null];
+
+                return $error->errorType === AiErrorType::ToolRoundLimit;
+            });
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+            runRecorder: $runRecorder,
+        );
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Loop forever')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: ExecutionPolicy::interactive()->withMaxToolRounds(1),
+        ));
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::ToolRoundLimit->value)
+            ->and(collect($events)->where('data.phase', 'tool_finished'))->toHaveCount(1)
+            ->and($recordedFailure[1] ?? null)->toBe(AiErrorType::ToolRoundLimit)
+            ->and($recordedFailure[2] ?? null)->toBe(AiErrorType::ToolRoundLimit->value);
+    });
+
+    it('warns at 80 percent, nudges completion, and reports final tool totals', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $requests = [];
+        $callNumber = 0;
+
+        $llmClient->shouldReceive('chatStream')
+            ->times(5)
+            ->andReturnUsing(function (ChatRequest $request) use (&$requests, &$callNumber) {
+                $requests[] = $request;
+                $callNumber++;
+
+                if ($callNumber <= 4) {
+                    yield [
+                        'type' => 'tool_call_delta',
+                        'index' => 0,
+                        'id' => 'call_round_'.$callNumber,
+                        'name' => 'echo_tool',
+                        'arguments_delta' => AGENTIC_RUNTIME_WORLD_TOOL_ARGUMENTS,
+                    ];
+                    yield [
+                        'type' => 'done',
+                        'finish_reason' => 'tool_calls',
+                        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                        'latency_ms' => 20,
+                    ];
+
+                    return;
+                }
+
+                yield ['type' => 'content_delta', 'text' => 'Finished safely.'];
+                yield [
+                    'type' => 'done',
+                    'finish_reason' => 'stop',
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                    'latency_ms' => 20,
+                ];
+            });
+
+        $runtime = $this->makeAgenticRuntime(
+            $llmClient,
+            toolRegistry: $this->makeToolRegistry(buildEchoTool()),
+        );
+        $events = collect(iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Complete this task')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: ExecutionPolicy::interactive()->withMaxToolRounds(5),
+        )));
+
+        $warning = $events->firstWhere('data.phase', 'tool_round_warning');
+        $done = $events->firstWhere('event', 'done');
+        $finalRequestSystemMessages = collect($requests[4]->messages)
+            ->where('role', 'system')
+            ->pluck('content');
+
+        expect($warning['data']['tool_round_count'] ?? null)->toBe(4)
+            ->and($warning['data']['max_tool_rounds'] ?? null)->toBe(5)
+            ->and($done['data']['meta']['tool_round_count'] ?? null)->toBe(4)
+            ->and($done['data']['meta']['tool_call_count'] ?? null)->toBe(4)
+            ->and($done['data']['meta']['max_tool_rounds'] ?? null)->toBe(5)
+            ->and($finalRequestSystemMessages->contains(
+                fn (mixed $content): bool => is_string($content)
+                    && str_contains($content, 'completed 4 of 5 allowed tool-calling rounds')
+                    && str_contains($content, 'Prioritize completing'),
+            ))->toBeTrue();
+    });
+});
+
+describe('AgenticRuntime (streaming execution and event delivery)', function () {
+    it('enforces the execution deadline before opening a stream', function () {
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldNotReceive('chatStream');
+
+        $runtime = $this->makeAgenticRuntime($llmClient);
+        $events = iterator_to_array($runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            policy: new ExecutionPolicy(ExecutionMode::Interactive, 0),
+        ));
+
+        $errorEvent = collect($events)->firstWhere('event', 'error');
+
+        expect($errorEvent['data']['meta']['error_type'] ?? null)->toBe(AiErrorType::Timeout->value);
+    });
+
+    it('yields stream events before the full provider stream completes', function () {
+        $allowCompletion = false;
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $llmClient->shouldReceive('chatStream')->once()->andReturnUsing(function () use (&$allowCompletion) {
+            return (function () use (&$allowCompletion) {
+                yield ['type' => 'thinking_delta', 'text' => 'Inspecting...'];
+
+                if (! $allowCompletion) {
+                    throw new StreamAdvancedBeforeConsumption(
+                        'Stream advanced before caller consumed the first chunk',
+                    );
+                }
+
+                yield ['type' => 'content_delta', 'text' => 'Hi'];
+                yield [
+                    'type' => 'done',
+                    'finish_reason' => 'stop',
+                    'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+                    'latency_ms' => 200,
+                ];
+            })();
+        });
+
+        $runtime = $this->makeAgenticRuntime($llmClient);
+        $stream = $runtime->runStream(
+            [test()->makeMessage('user', 'Hello')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+        );
+
+        $firstEvent = $stream->current();
+
+        expect($firstEvent['event'])->toBe('status')
+            ->and($firstEvent['data']['phase'])->toBe(RunPhase::AwaitingLlm->value)
+            ->and($firstEvent['data']['iteration'])->toBe(0)
+            ->and($firstEvent['data']['run_id'])->toHaveLength(26);
+
+        $stream->next();
+        $secondEvent = $stream->current();
+
+        expect($secondEvent['event'])->toBe('status')
+            ->and($secondEvent['data']['phase'])->toBe('thinking_delta')
+            ->and($secondEvent['data']['delta'])->toBe('Inspecting...');
+
+        $allowCompletion = true;
+
+        $thirdEvent = null;
+        for ($i = 0; $i < 3; $i++) {
+            $stream->next();
+            $thirdEvent = $stream->current();
+            if (($thirdEvent['event'] ?? null) === 'delta') {
+                break;
+            }
+        }
+
+        expect($thirdEvent)->not->toBeNull()
+            ->and($thirdEvent['event'])->toBe('delta')
+            ->and($thirdEvent['data']['text'])->toBe('Hi');
+
+        $stream->next();
+        $doneEvent = $stream->current();
+
+        expect($doneEvent['event'])->toBe('done')
+            ->and($doneEvent['data']['meta']['latency_ms'])->toBe(200);
+    });
+});
+
+describe('AgenticRuntime (error surfacing)', function () {
+    it('applies a model override to the resolved primary config', function () {
+        $primary = $this->makeConfig('github-copilot', 'gpt-primary-slot');
+        $configResolver = $this->mockResolvedConfigResolver([$primary]);
+
+        $llmClient = Mockery::mock(LlmClient::class);
+        $seenModels = [];
+        $llmClient->shouldReceive('chat')->once()->andReturnUsing(function (ChatRequest $request) use (&$seenModels): array {
+            $seenModels[] = [$request->model, $request->baseUrl];
+
+            return $this->makeFinalResponse('Override applied');
+        });
+
+        $runtime = $this->makeAgenticRuntime($llmClient, $configResolver);
+        $result = $runtime->run(
+            [test()->makeMessage('user', 'Hi')],
+            1,
+            (string) Str::ulid(),
+            AGENTIC_RUNTIME_SYSTEM_PROMPT,
+            'claude-opus-4.6',
+        );
+
+        expect($result['content'])->toContain('Override applied')
+            ->and($seenModels)->toHaveCount(1)
+            ->and($seenModels[0][0])->toBe('claude-opus-4.6')
+            ->and($seenModels[0][1])->toBe($primary['base_url']);
+    });
+});

@@ -3,7 +3,7 @@
 namespace App\Base\Database\Seeders;
 
 use App\Base\Database\Exceptions\DevSeederProductionEnvironmentException;
-use App\Modules\Core\Company\Models\Company;
+use App\Core\Company\Models\Company;
 use Illuminate\Database\Seeder;
 
 abstract class DevSeeder extends Seeder

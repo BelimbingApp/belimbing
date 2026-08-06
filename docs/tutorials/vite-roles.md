@@ -2,7 +2,7 @@
 
 **Document Type:** Tutorial
 **Purpose:** Explain BLB's Vite workflow and the licensee-controlled reload setting
-**Last Updated:** 2026-07-21
+**Last Updated:** 2026-08-05
 
 Vite builds BLB's CSS and JavaScript from `resources/app.css` and
 `resources/core/js/app.js`. Laravel's `@vite` directive reads the generated
@@ -29,8 +29,8 @@ VITE_HOT_RELOAD=true
 ```
 
 With the normal local launcher running, Vite then enables HMR for CSS and
-JavaScript and Laravel's Vite plugin refreshes the configured Core, module,
-and extension Blade paths. Caddy proxies the Vite development routes and
+JavaScript and Laravel's Vite plugin refreshes the configured shared Core,
+Core Module, optional Domain Module, and Extension Module Blade paths. Caddy proxies the Vite development routes and
 WebSocket only inside the local development topology.
 
 Set `VITE_HOT_RELOAD=false` (or remove the setting) to return to manual

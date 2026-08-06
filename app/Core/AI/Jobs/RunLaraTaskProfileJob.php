@@ -1,0 +1,194 @@
+<?php
+namespace App\Core\AI\Jobs;
+
+use App\Core\AI\DTO\ExecutionPolicy;
+use App\Core\AI\DTO\Message;
+use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Models\AiRun;
+use App\Core\AI\Models\OperationDispatch;
+use App\Core\AI\Services\AgentExecutionContext;
+use App\Core\AI\Services\ConfigResolver;
+use App\Core\AI\Services\DispatchTranscriptBridge;
+use App\Core\AI\Services\LaraPromptFactory;
+use App\Core\AI\Services\LaraTaskExecutionProfileRegistry;
+use App\Core\AI\Services\Runtime\AgenticRuntime;
+use App\Core\Employee\Models\Employee;
+use DateTimeImmutable;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+
+class RunLaraTaskProfileJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    public const QUEUE = 'ai-agent-tasks';
+
+    public int $timeout = 600;
+
+    public function __construct(
+        public string $dispatchId,
+    ) {
+        $this->onQueue(self::QUEUE);
+    }
+
+    public function displayName(): string
+    {
+        return 'RunLaraTaskProfile['.$this->dispatchId.']';
+    }
+
+    public function handle(
+        AgenticRuntime $runtime,
+        AgentExecutionContext $context,
+        ConfigResolver $configResolver,
+        DispatchTranscriptBridge $transcriptBridge,
+        LaraPromptFactory $promptFactory,
+        LaraTaskExecutionProfileRegistry $profileRegistry,
+    ): void {
+        $dispatch = null;
+
+        try {
+            $dispatch = OperationDispatch::query()->find($this->dispatchId);
+
+            if ($dispatch === null || $dispatch->isTerminal()) {
+                return;
+            }
+
+            $dispatch->markRunning();
+
+            if ($dispatch->acting_for_user_id !== null) {
+                Auth::loginUsingId($dispatch->acting_for_user_id);
+            }
+
+            $context->set(
+                employeeId: Employee::LARA_ID,
+                actingForUserId: $dispatch->acting_for_user_id,
+                entityType: $dispatch->entity_type,
+                entityId: $dispatch->entity_id,
+                dispatchId: $dispatch->id,
+            );
+
+            $taskProfileKey = data_get($dispatch->meta, 'task_profile');
+
+            if (! is_string($taskProfileKey) || $taskProfileKey === '') {
+                $this->markFailed($dispatch, 'No Lara task profile was specified.', $transcriptBridge);
+
+                return;
+            }
+
+            $profile = $profileRegistry->find($taskProfileKey);
+
+            if ($profile === null) {
+                $this->markFailed($dispatch, 'Unknown Lara task profile: '.$taskProfileKey, $transcriptBridge);
+
+                return;
+            }
+
+            $resolvedConfig = $configResolver->resolveTask(Employee::LARA_ID, $taskProfileKey);
+
+            if ($resolvedConfig === null) {
+                $this->markFailed(
+                    $dispatch,
+                    'No LLM configuration resolved for Lara task profile: '.$taskProfileKey,
+                    $transcriptBridge,
+                );
+
+                return;
+            }
+
+            $systemPrompt = $profileRegistry->composeSystemPrompt(
+                $profile,
+                $promptFactory->buildForCurrentUser($dispatch->task),
+            );
+
+            $policy = ExecutionPolicy::forMode($profile->executionMode);
+            $runId = (string) Str::ulid();
+
+            AiRun::query()->create([
+                'id' => $runId,
+                'employee_id' => Employee::LARA_ID,
+                'session_id' => data_get($dispatch->meta, 'session_id'),
+                'acting_for_user_id' => $dispatch->acting_for_user_id,
+                'dispatch_id' => $dispatch->id,
+                'source' => 'background',
+                'execution_mode' => $policy->mode->value,
+                'status' => AiRunStatus::Queued,
+                'runtime_meta' => ['task_profile' => $profile->taskKey],
+            ]);
+
+            $result = $runtime->run(
+                messages: [new Message(
+                    role: 'user',
+                    content: $dispatch->task,
+                    timestamp: new DateTimeImmutable,
+                )],
+                employeeId: Employee::LARA_ID,
+                runId: $runId,
+                systemPrompt: $systemPrompt,
+                policy: $policy,
+                sessionId: data_get($dispatch->meta, 'session_id'),
+                configOverride: $resolvedConfig,
+                allowedToolNames: $profile->allowedToolNames,
+            );
+
+            $this->recordResult($dispatch, $result, $profile->taskKey, $transcriptBridge);
+        } catch (\Throwable $e) {
+            report($e);
+
+            if ($dispatch !== null && ! $dispatch->isTerminal()) {
+                $this->markFailed($dispatch, $e->getMessage(), $transcriptBridge);
+            }
+
+            throw $e;
+        } finally {
+            $context->clear();
+            Auth::logout();
+        }
+    }
+
+    /**
+     * @param  array{content: string, run_id: string, meta: array<string, mixed>}  $result
+     */
+    private function recordResult(
+        OperationDispatch $dispatch,
+        array $result,
+        string $taskProfileKey,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
+        $hasError = isset($result['meta']['error_type']);
+
+        if ($hasError) {
+            $this->markFailed(
+                $dispatch,
+                (string) ($result['meta']['error'] ?? 'Unknown runtime error'),
+                $transcriptBridge,
+            );
+
+            return;
+        }
+
+        $dispatch->markSucceeded(
+            $result['run_id'],
+            $result['content'] ?? '',
+            [
+                'runtime_meta' => $result['meta'] ?? [],
+                'task_profile' => $taskProfileKey,
+            ],
+        );
+
+        $transcriptBridge->appendSucceeded($dispatch);
+    }
+
+    private function markFailed(
+        OperationDispatch $dispatch,
+        string $errorMessage,
+        DispatchTranscriptBridge $transcriptBridge,
+    ): void {
+        $dispatch->markFailed($errorMessage);
+        $transcriptBridge->appendFailed($dispatch, $errorMessage);
+    }
+}

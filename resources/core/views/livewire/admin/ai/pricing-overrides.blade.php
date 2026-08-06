@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\PricingOverrides $this */
+/** @var \App\Core\AI\Livewire\PricingOverrides $this */
 ?>
 <div>
     <x-slot name="title">{{ __('Pricing Overrides') }}</x-slot>

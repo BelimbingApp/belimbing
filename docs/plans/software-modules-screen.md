@@ -1,17 +1,22 @@
 # software-modules-screen
 
-**Status:** Complete (2026-06-22). Implemented on branch `feat/software-modules-screen`. {claud/opus-4.8}
-**Last Updated:** 2026-06-22
+**Status:** Superseded by ADR 0001; historical implementation record originally completed 2026-06-22.
+**Last Updated:** 2026-08-06
 **Sources:**
-- `docs/architecture/module-system.md` — Distribution Bundle / domain / module model the screen surfaces.
+- `docs/architecture/decisions/0001-four-root-application-topology.md` — superseding topology and operator vocabulary.
+- `docs/architecture/module-system.md` — current Domain-and-Module contract; it supersedes the Bundle-era model cited by this plan.
 - `app/Base/Foundation/Livewire/BundleManager.php` — the read-only inventory + BelimbingApp catalog being merged in.
 - `app/Base/Foundation/Livewire/DomainManager.php` + `App\Base\Foundation\Services\DomainInstaller` — domain install/enable/disable/uninstall being merged in.
 - `app/Base/Foundation/ModuleManifest/ModuleManifestReader.php`, `BelimbingAppCatalogService` — existing data sources to compose.
 - `DESIGN.md`, `docs/modules/menu-prd.md` — UX and menu conventions (siblings sort ascending by label).
 
-**Agents:** claud/opus-4.8
+**Agents:** claud/opus-4.8, codex/gpt-5.6-sol
 
 ---
+
+## Supersession Note
+
+This document preserves the June 2026 implementation decision and evidence; it is not the current software-composition contract. ADR 0001 later retired Distribution Bundle and **Modules** as the primary operator noun. The current screen is **Domains** at `admin/system/software/domains`, where Domains are lifecycle units and Modules are their contained capabilities. References below to the Modules screen, Bundles, `BundleManager`, and the old route are historical and must not guide new implementation.
 
 ## Problem Essence
 

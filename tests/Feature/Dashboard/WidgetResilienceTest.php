@@ -8,7 +8,7 @@ use App\Base\Livewire\ComponentDiscoveryService;
 use App\Base\Perf\Livewire\Widgets\RequestHealth;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Base\ZzBrokenFixture\Livewire\Broken;
-use App\Modules\Core\AI\Livewire\Widgets\OperationsStatus;
+use App\Core\AI\Livewire\Widgets\OperationsStatus;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\File;

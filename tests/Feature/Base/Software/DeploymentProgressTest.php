@@ -1,7 +1,7 @@
 <?php
 
 use App\Base\Software\Services\DeploymentRunHistory;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Str;
 

@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Blueprint (Study & Plan)
 **Status:** Active parity map with implemented OpenClaw-parity Phases 1-6 plus later runtime and ledger updates
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-08-05
 **Related:** `docs/Base/AI/tool-framework.md` (tool abstraction layer), `docs/architecture/ai/lara.md` §3 (Lara vs agents), §14 (Tool Calling), `docs/architecture/ai/agent-model.md` §13–§14, `docs/architecture/ai/current-state.md`
 
 > **Important:** The tool-calling infrastructure described here is **agent-generic**, not Lara-specific. All tools implement the `Tool` contract (`App\Base\AI\Contracts\Tool`), extend `AbstractTool` or `AbstractActionTool`, are registered in the shared `AgentToolRegistry`, and execute through the common `AgenticRuntime`. Lara is distinguished from other agents by her framework-controlled identity, personality, and mission — not by unique tool code. Which tools a agent can use is a **policy decision** controlled by authz role assignment. See `docs/architecture/ai/lara.md` §3 for the full distinction.
@@ -405,7 +405,7 @@ Inbound Message (WhatsApp/Telegram/LinkedIn/Signal/iMessage/etc.)
 
 **6c. Channel Adapters** — Per-platform integration modules
 
-Each channel is a BLB module under `app/Modules/Channels/`:
+Each platform channel is a BLB Module under `app/Domains/Channels/{Channel}`. Deployment-specific channel adapters may instead live in `app/Extensions/{Extension}/{Module}` while implementing the same Core AI contract:
 
 **Business account channels:**
 
@@ -834,7 +834,7 @@ Each phase is independently valuable. Phase 1 makes Lara immediately more useful
 OpenClaw's `ToolInputError` (400) and `ToolAuthorizationError` (403) hierarchy is clean. BLB should add:
 
 ```php
-namespace App\Modules\Core\AI\Exceptions;
+namespace App\Core\AI\Exceptions;
 
 class ToolInputException extends \RuntimeException
 {

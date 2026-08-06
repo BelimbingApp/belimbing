@@ -7,9 +7,9 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 
 /**
  * Provision platform primitives: licensee company, admin user, and Lara.

@@ -16,14 +16,14 @@ use App\Base\Database\Services\DataShare\Mirror\DataShareMirrorManager;
 use App\Base\Database\Services\DataShare\Mirror\SupabaseMirrorSetupService;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Livewire\Livewire;
 
-const MIRROR_UI_SBG_EXTENSION_PATH = 'extensions/sbg';
+const MIRROR_UI_SBG_EXTENSION_PATH = 'app/Extensions/SbGroup/Ibp';
 
 beforeEach(function (): void {
     $catalog = Mockery::mock(DataShareScopeCatalog::class);
@@ -189,7 +189,7 @@ it('chooses one mirror direction and selects only conservative visible row-count
         [
             'table' => 'other_pull_candidate',
             'module_name' => 'Other',
-            'module_path' => 'extensions/other',
+            'module_path' => 'app/Extensions/Other/Sample',
             'local_exists' => true,
             'mirror_exists' => true,
             'local_rows' => 0,

@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\CompanyRelationship;
-use App\Modules\Core\Company\Models\RelationshipType;
+use App\Core\Company\Models\Company;
+use App\Core\Company\Models\CompanyRelationship;
+use App\Core\Company\Models\RelationshipType;
 
 test('relationship is active when within valid period', function (): void {
     [$company1, $company2, $type] = createCompanyRelationshipFixture();

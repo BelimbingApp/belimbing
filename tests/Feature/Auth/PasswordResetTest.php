@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Auth\ForgotPassword;
-use App\Modules\Core\User\Livewire\Auth\ResetPassword;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Livewire\Auth\ForgotPassword;
+use App\Core\User\Livewire\Auth\ResetPassword;
+use App\Core\User\Models\User;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Support\Facades\Event;

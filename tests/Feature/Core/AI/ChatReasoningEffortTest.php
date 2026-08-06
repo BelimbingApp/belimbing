@@ -1,0 +1,153 @@
+<?php
+
+use App\Core\AI\Livewire\Chat;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\AI\Models\AiRun;
+use App\Core\AI\Services\SessionManager;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
+use Livewire\Livewire;
+
+const CHAT_REASONING_KIMI_K3_MODEL = 'kimi-k3';
+const CHAT_REASONING_KIMI_K2_PREVIEW_MODEL = 'kimi-k2-0905-preview';
+
+beforeEach(function (): void {
+    config()->set('ai.workspace_path', storage_path('framework/testing/ai-chat-effort-'.Str::random(16)));
+});
+
+afterEach(function (): void {
+    $workspacePath = config('ai.workspace_path');
+
+    if (is_string($workspacePath)) {
+        File::deleteDirectory($workspacePath);
+    }
+});
+
+function createChatEffortFixture(): array
+{
+    Company::provisionLicensee('Test Company');
+    Employee::provisionLara();
+
+    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $employee = Employee::factory()->create([
+        'company_id' => $company->id,
+        'status' => 'active',
+    ]);
+
+    $provider = AiProvider::query()->create([
+        'company_id' => $company->id,
+        'name' => 'moonshotai',
+        'display_name' => 'Moonshot AI',
+        'base_url' => 'https://api.kimi.example.test/v1',
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'test-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+
+    foreach ([CHAT_REASONING_KIMI_K3_MODEL, CHAT_REASONING_KIMI_K2_PREVIEW_MODEL] as $index => $modelId) {
+        AiProviderModel::query()->create([
+            'ai_provider_id' => $provider->id,
+            'model_id' => $modelId,
+            'is_active' => true,
+            'is_default' => $index === 0,
+        ]);
+    }
+
+    $user = User::factory()->create([
+        'company_id' => $company->id,
+        'employee_id' => $employee->id,
+    ]);
+
+    return [$user, $provider];
+}
+
+function chatReasoningModel(AiProvider $provider, string $modelId = CHAT_REASONING_KIMI_K3_MODEL): string
+{
+    return $provider->id.':::'.$modelId;
+}
+
+function startChatWithEffort(AiProvider $provider, string $effort, string $modelId = CHAT_REASONING_KIMI_K3_MODEL): mixed
+{
+    return Livewire::test(Chat::class)
+        ->call('createSession')
+        ->set('selectedModel', chatReasoningModel($provider, $modelId))
+        ->set('selectedEffort', $effort);
+}
+
+test('selecting an effort persists it as a session execution-controls override', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = startChatWithEffort($provider, 'max');
+
+    $sessionId = $component->get('selectedSessionId');
+
+    expect($component->get('selectedEffort'))->toBe('max')
+        ->and(app(SessionManager::class)->getExecutionControlsOverride(Employee::LARA_ID, $sessionId))
+        ->toBe(['reasoning' => ['effort' => 'max']]);
+});
+
+test('efforts unsupported by the selected model are rejected', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = startChatWithEffort($provider, 'low');
+
+    $sessionId = $component->get('selectedSessionId');
+
+    expect($component->get('selectedEffort'))->toBeNull()
+        ->and(app(SessionManager::class)->getExecutionControlsOverride(Employee::LARA_ID, $sessionId))
+        ->toBeNull();
+});
+
+test('switching to a model without effort support clears the override', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = startChatWithEffort($provider, 'max')
+        ->set('selectedModel', chatReasoningModel($provider, CHAT_REASONING_KIMI_K2_PREVIEW_MODEL));
+
+    $sessionId = $component->get('selectedSessionId');
+
+    expect($component->get('selectedEffort'))->toBeNull()
+        ->and(app(SessionManager::class)->getExecutionControlsOverride(Employee::LARA_ID, $sessionId))
+        ->toBeNull();
+});
+
+test('the session effort override survives a session switch round-trip', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = startChatWithEffort($provider, 'max');
+
+    $firstSessionId = $component->get('selectedSessionId');
+
+    $component
+        ->call('createSession')
+        ->call('selectSession', $firstSessionId);
+
+    expect($component->get('selectedSessionId'))->toBe($firstSessionId)
+        ->and($component->get('selectedEffort'))->toBe('max');
+});
+
+test('a queued turn snapshots the effort selected with its model', function (): void {
+    [$user, $provider] = createChatEffortFixture();
+    test()->actingAs($user);
+
+    $component = startChatWithEffort($provider, 'max')
+        ->set('messageInput', 'Use the selected model and effort.');
+
+    $result = $component->instance()->prepareStreamingRun();
+    $turn = AiRun::query()->findOrFail($result['runId']);
+
+    expect($turn->runtime_meta['model_override'])->toBe(chatReasoningModel($provider))
+        ->and($turn->runtime_meta['execution_controls_override'])->toBe([
+            'reasoning' => ['effort' => 'max'],
+        ]);
+});

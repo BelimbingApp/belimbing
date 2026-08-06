@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Providers\OpenAiCodexSetup $this */
+/** @var \App\Core\AI\Livewire\Providers\OpenAiCodexSetup $this */
 ?>
 
 <div

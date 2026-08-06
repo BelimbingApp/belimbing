@@ -1,4 +1,4 @@
-@php /** @var \App\Modules\Core\AI\Livewire\Widgets\OperationsStatus $this */ @endphp
+@php /** @var \App\Core\AI\Livewire\Widgets\OperationsStatus $this */ @endphp
 <div>
     <x-ui.card>
         <x-ui.widget-header :title="__('AI Operations')" icon="heroicon-o-cpu-chip" />

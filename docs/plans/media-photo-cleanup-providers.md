@@ -2,7 +2,7 @@
 
 **Status:** Complete (Phase 3 landed)
 **Last Updated:** 2026-06-22
-**Sources:** `app/Base/Media/PhotoCleanup/*` (the shipped engine + PhotoRoom/Poof adapters), `docs/architecture/module-system.md` (Contract + adapters), `extensions/ham/docs/plans/ham-auto-parts-continuation.md` (PhotoRoom chosen as the *first* provider), `docs/plans/ai-provider-families.md` (existing family/registry shape mirrored as a template, not shared), the 2026-06-22 Vision-providers copy/handshake thread (honest `Add key` / `Key stored` / `Ready` taxonomy plus per-provider handshake findings).
+**Sources:** `app/Base/Media/PhotoCleanup/*` (the shipped engine + PhotoRoom/Poof adapters), `docs/architecture/module-system.md` (Contract + adapters), `app/Extensions/Ham/docs/plans/ham-auto-parts-continuation.md` (PhotoRoom chosen as the *first* provider), `docs/plans/ai-provider-families.md` (existing family/registry shape mirrored as a template, not shared), the 2026-06-22 Vision-providers copy/handshake thread (honest `Add key` / `Key stored` / `Ready` taxonomy plus per-provider handshake findings).
 **Agents:** claude/Sonnet-4.6, glm/GLM-5.2, amp/gpt-5.1-codex
 
 ## Problem Essence

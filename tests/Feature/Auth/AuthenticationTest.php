@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Auth\Login;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Livewire\Auth\Login;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;

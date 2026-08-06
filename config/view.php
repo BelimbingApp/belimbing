@@ -8,8 +8,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | BLB framework views live under resources/core/views. Pluggable module
-    | views live with their module under app/Modules/{Domain}/{Module}/Views
-    | or extensions/{owner}/{module}/Views and are registered by that module's
+    | views live with their module under app/Domains/{Domain}/{Module}/Views
+    | or app/Extensions/{Extension}/{Module}/Views and are registered by that module's
     | ServiceProvider with loadViewsFrom.
     |
     */

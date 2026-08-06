@@ -152,6 +152,12 @@ it('pascalToKebab leaves single-word segments lowercase', function (): void {
     expect(Str::pascalToKebab('Qac'))->toBe('qac');
 });
 
+it('pascalToKebab preserves initialisms as one logical word', function (): void {
+    expect(Str::pascalToKebab('AI'))->toBe('ai')
+        ->and(Str::pascalToKebab('PDFRenderer'))->toBe('pdf-renderer')
+        ->and(Str::pascalToKebab('AIModel'))->toBe('ai-model');
+});
+
 // ---------------------------------------------------------------------------
 // isUnchangedSecretValue
 // ---------------------------------------------------------------------------

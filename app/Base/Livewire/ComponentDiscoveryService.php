@@ -2,6 +2,7 @@
 
 namespace App\Base\Livewire;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
 use App\Base\Support\Str as BlbStr;
@@ -18,19 +19,24 @@ class ComponentDiscoveryService
      *
      * Supports Base modules and Core modules.
      */
-    protected array $scanPatterns = [
-        'app/Base/*/Livewire',
-        'app/Modules/*/*/Livewire',
-    ];
+    protected function scanPatterns(): array
+    {
+        return [
+            ApplicationTopology::baseComponentPattern('Livewire'),
+            ApplicationTopology::coreModulePattern('Livewire'),
+            ApplicationTopology::domainModulePattern('Livewire'),
+        ];
+    }
 
     /**
      * Extension Livewire directories. Extension component names are prefixed
      * with their view namespace ("kiat-investment.widgets.foo") so different
      * extensions can never collide with each other or with core components.
      */
-    protected array $extensionScanPatterns = [
-        'extensions/*/*/Livewire',
-    ];
+    protected function extensionScanPatterns(): array
+    {
+        return [ApplicationTopology::extensionModulePattern('Livewire')];
+    }
 
     /**
      * Discover all Livewire component classes and their view-derived names.
@@ -47,16 +53,16 @@ class ComponentDiscoveryService
     {
         $components = [];
 
-        foreach ($this->scanPatterns as $pattern) {
-            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
+        foreach ($this->scanPatterns() as $pattern) {
+            $directories = DomainState::filterPaths(glob($pattern, GLOB_ONLYDIR) ?: []);
 
             foreach ($directories as $directory) {
                 $this->scanDirectory($directory, $components);
             }
         }
 
-        foreach ($this->extensionScanPatterns as $pattern) {
-            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
+        foreach ($this->extensionScanPatterns() as $pattern) {
+            $directories = glob($pattern, GLOB_ONLYDIR) ?: [];
 
             foreach ($directories as $directory) {
                 $this->scanDirectory($directory, $components, prefixViewNamespace: true);
@@ -189,36 +195,13 @@ class ComponentDiscoveryService
     /**
      * Convert an absolute file path to a fully-qualified class name.
      *
-     * app/ maps to App\ (PSR-4); extensions/{owner}/{module}/ maps to
-     * Extensions\{Owner}\{Module}\ per ExtensionAutoloader's kebab-to-Pascal
-     * convention.
+     * Every discoverable class lives below app/ and maps to App\ through the
+     * application's ordinary PSR-4 rule.
      *
      * @param  string  $path  Absolute file path
      */
     protected function classFromPath(string $path): ?string
     {
-        return AppPath::toClass($path) ?? $this->extensionClassFromPath($path);
-    }
-
-    private function extensionClassFromPath(string $path): ?string
-    {
-        $normalized = str_replace('\\', '/', $path);
-        $base = rtrim(str_replace('\\', '/', base_path('extensions')), '/').'/';
-
-        if (! str_starts_with($normalized, $base)) {
-            return null;
-        }
-
-        $segments = explode('/', substr($normalized, strlen($base)));
-
-        if (count($segments) < 3) {
-            return null;
-        }
-
-        $owner = str()->studly(array_shift($segments));
-        $module = str()->studly(array_shift($segments));
-        $rest = str_replace('.php', '', implode('\\', $segments));
-
-        return 'Extensions\\'.$owner.'\\'.$module.'\\'.$rest;
+        return AppPath::toClass($path);
     }
 }

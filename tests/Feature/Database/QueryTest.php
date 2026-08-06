@@ -10,11 +10,11 @@ use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Livewire\Queries\Index;
 use App\Base\Database\Livewire\Queries\Show;
 use App\Base\Database\Services\QueryExecutor;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\User\Models\Query;
-use App\Modules\Core\User\Models\User;
-use App\Modules\Core\User\Models\UserPin;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\User\Models\Query;
+use App\Core\User\Models\User;
+use App\Core\User\Models\UserPin;
 use Tests\Support\PermissiveUrlSafetyGuard;
 
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';

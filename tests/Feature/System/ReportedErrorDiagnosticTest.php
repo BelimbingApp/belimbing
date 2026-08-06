@@ -4,8 +4,8 @@ use App\Base\Authz\Capability\CapabilityCatalog;
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Base\System\Services\ReportedErrorStatusDiagnosticProvider;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 
 it('records reported exceptions with fingerprint dedup and a rolling window', function (): void {
     $recorder = app(ReportedErrorRecorder::class);

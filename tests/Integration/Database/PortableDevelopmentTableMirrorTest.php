@@ -179,7 +179,7 @@ function portableCreateFixtureSchema(): void
             $connection->table('base_database_tables')->insert([
                 'table_name' => $table,
                 'module_name' => 'Portable mirror integration',
-                'module_path' => 'app/Modules/Core/User',
+                'module_path' => 'app/Core/User',
                 'migration_file' => null,
                 'created_at' => now(),
                 'updated_at' => now(),

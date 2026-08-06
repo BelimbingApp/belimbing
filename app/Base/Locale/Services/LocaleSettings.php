@@ -4,7 +4,7 @@ namespace App\Base\Locale\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 
 final readonly class LocaleSettings
 {

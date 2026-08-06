@@ -7,8 +7,8 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Integration\Livewire\OutboundExchanges\Index;
 use App\Base\Integration\Models\OutboundExchange;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 
 const OUTBOUND_EXCHANGES_UI_ENDPOINT = 'https://provider.example/things';
 

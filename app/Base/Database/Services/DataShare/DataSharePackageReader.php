@@ -12,6 +12,8 @@ use JsonException;
 
 class DataSharePackageReader
 {
+    private const LINE_READ_CHUNK_BYTES = 64 * 1024;
+
     /** @var array<string, list<string>> */
     private array $columns = [];
 
@@ -321,14 +323,10 @@ class DataSharePackageReader
     private function readCanonicalLine($stream): array
     {
         $max = $this->settings->integer('data_share.transfer_limits.max_record_line_bytes', 32 * 1024 * 1024, 1, 2147483647);
-        $raw = fgets($stream, $max + 2);
+        $raw = $this->readBoundedLine($stream, $max);
 
-        if ($raw === false || ! str_ends_with($raw, "\n")) {
+        if (! str_ends_with($raw, "\n")) {
             throw DataSharePackageException::invalidPackage(__('a canonical line is truncated.'));
-        }
-
-        if (strlen($raw) > $max) {
-            throw DataSharePackageException::recordLineTooLarge($max);
         }
 
         try {
@@ -342,6 +340,44 @@ class DataSharePackageReader
         }
 
         return ['raw' => $raw, 'value' => $value];
+    }
+
+    /**
+     * Read through the first newline without asking PHP to reserve the entire
+     * configured record limit for ordinary small lines.
+     *
+     * @param  resource  $stream
+     */
+    private function readBoundedLine($stream, int $max): string
+    {
+        $raw = '';
+
+        while (true) {
+            $remainingWithOversizeSentinel = $max + 1 - strlen($raw);
+
+            if ($remainingWithOversizeSentinel < 1) {
+                throw DataSharePackageException::recordLineTooLarge($max);
+            }
+
+            $chunk = fgets(
+                $stream,
+                min(self::LINE_READ_CHUNK_BYTES, $remainingWithOversizeSentinel) + 1,
+            );
+
+            if ($chunk === false) {
+                return $raw;
+            }
+
+            $raw .= $chunk;
+
+            if (strlen($raw) > $max) {
+                throw DataSharePackageException::recordLineTooLarge($max);
+            }
+
+            if (str_ends_with($raw, "\n")) {
+                return $raw;
+            }
+        }
     }
 
     /**

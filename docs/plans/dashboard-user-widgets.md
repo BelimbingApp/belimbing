@@ -1,8 +1,8 @@
 # dashboard-user-widgets
 
 **Status:** Phases 1–2 implemented and tested; Phase 3 (breadth) open
-**Last Updated:** 2026-07-23
-**Sources:** `resources/core/views/dashboard.blade.php`; `app/Modules/Core/User/Routes/web.php`; `app/Base/Foundation/Services/LandingPageResolver.php`; `app/Base/Menu/`; `docs/architecture/settings.md`; `docs/plans/livewire-islands-adoption.md`; user discussion on replacing the placeholder dashboard
+**Last Updated:** 2026-08-05
+**Sources:** `resources/core/views/dashboard.blade.php`; `app/Core/User/Routes/web.php`; `app/Base/Foundation/Services/LandingPageResolver.php`; `app/Base/Menu/`; `docs/architecture/settings.md`; `docs/plans/livewire-islands-adoption.md`; user discussion on replacing the placeholder dashboard
 **Agents:** Amp/claude-fable-5; Codex/GPT-5
 
 ## Problem Essence
@@ -75,7 +75,7 @@ Recommendation: edit mode with catalog + simple reorder; no grid-packing library
 Affected pages: `/dashboard`
 Goal: placeholder gone; the dashboard shows real authz-filtered widgets in default order; a user lacking a widget's capability does not see it.
 Validation: Pest feature tests for registry filtering and page render; `php artisan blb:perf:page-weights` on `/dashboard`.
-Evidence: `app/Base/Dashboard/` (DTO, discovery, registry, `DashboardLayout`, `Widget` base class, Livewire page, routes); `resources/core/views/livewire/dashboard/`; `tests/Feature/Dashboard/DashboardPageTest.php` (6 passed); `app/Modules/People/Leave/Tests/Feature/PendingApprovalsWidgetTest.php` (2 passed); page weight `/dashboard` 7.2 KB, 0 queries at first paint, lazy widgets confirmed.
+Evidence: `app/Base/Dashboard/` (DTO, discovery, registry, `DashboardLayout`, `Widget` base class, Livewire page, routes); `resources/core/views/livewire/dashboard/`; `tests/Feature/Dashboard/DashboardPageTest.php` (6 passed); `app/Domains/People/Leave/Tests/Feature/PendingApprovalsWidgetTest.php` (2 passed); page weight `/dashboard` 7.2 KB, 0 queries at first paint, lazy widgets confirmed.
 
 - [x] Create `app/Base/Dashboard/` with widget definition DTO, discovery service, registry, and ServiceProvider (shape mirrors `Base/Menu`) {Amp/claude-fable-5}
 - [x] `DashboardLayout::visibleFor()` resolves visible widgets per user via `AuthorizationService` and `Actor::forUser()` {Amp/claude-fable-5}
@@ -100,9 +100,9 @@ Validation: Pest tests for prefs round-trip and stale-id fall-through.
 ### Phase 3 — breadth
 
 Goal: each installed business domain offers at least one genuinely useful widget; size variants render correctly.
-Scope: widget authoring by domain modules; no registry contract changes expected. Widget authoring is agent-driven: the authoring contract lives in `app/Modules/AGENTS.md` (auto-loads for module work; `extensions/AGENTS.md` points there for extension authors), so any agent building a domain feature can add its widget without reading this plan.
+Scope: widget authoring by Domain Modules; no registry contract changes expected. Widget authoring is agent-driven: the authoring contract lives in `app/Domains/AGENTS.md` (auto-loads for Domain work; `app/Extensions/AGENTS.md` points there for Extension authors), so any agent building a Domain feature can add its widget without reading this plan.
 
-- [x] Widget authoring guide for AI coding agents: declare/implement/test contract with reference implementations, in `app/Modules/AGENTS.md`; pointer added to `extensions/AGENTS.md` {Amp/claude-fable-5}
+- [x] Widget authoring guide for AI coding agents: declare/implement/test contract with reference implementations, in `app/Domains/AGENTS.md`; pointer added to `app/Extensions/AGENTS.md` {Amp/claude-fable-5}
 - [ ] Per-widget size overrides in the saved layout honored by the grid
 - [ ] Additional domain widgets as real operational needs are identified (add rows here per widget as they are agreed)
 - [ ] Revisit company/role default layouts via `Base/Settings` cascade only if that lands on the roadmap (see Design Decisions)

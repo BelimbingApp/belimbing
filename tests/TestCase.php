@@ -49,7 +49,7 @@ abstract class TestCase extends BaseTestCase
 
         parent::setUp();
 
-        // #[Lazy]/#[Defer] pages (Modules, Updates, GitHub Access) would render
+        // #[Lazy]/#[Defer] pages (Domains, Updates, GitHub Access) would render
         // only their skeleton placeholder under test, hiding the real component
         // from every assertion. Livewire clears the flag on flush-state, which
         // fires after every Livewire::test operation — so re-arm it on each

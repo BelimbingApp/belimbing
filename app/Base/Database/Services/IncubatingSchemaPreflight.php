@@ -349,8 +349,9 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
     }
 
     /**
-     * Include later applied migration files only when they are explicitly
-     * incubating. A stable forward migration may have added columns, indexes,
+     * Include later applied migration files when they are explicitly
+     * incubating or explicitly declare an idempotent data-only replay. Any
+     * other stable forward migration may have added columns, indexes,
      * constraints, or transformed data; leaving its ledger row applied while
      * replaying the original create migration produces an obsolete schema.
      *
@@ -370,7 +371,8 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
         );
         $earliestRebuild = min($migrationNames);
         $fileSet = array_fill_keys($migrationFiles, true);
-        $incubating = [];
+        $replayable = [];
+        $unsafeReplayMigrations = [];
         $conflicts = [];
 
         foreach ($appliedMigrationSources as $source) {
@@ -385,7 +387,19 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             }
 
             if ($this->migrationFiles->contentsAreIncubating($source['contents'])) {
-                $incubating[$source['file']] = true;
+                $replayable[$source['file']] = true;
+
+                continue;
+            }
+
+            if ($this->migrationFiles->contentsReplayAfterIncubatingSchema($source['contents'])) {
+                $violations = $this->migrationFiles->replayAfterIncubatingSchemaViolations($source['contents']);
+
+                if ($violations === []) {
+                    $replayable[$source['file']] = true;
+                } else {
+                    $unsafeReplayMigrations[$source['file']] = $violations;
+                }
 
                 continue;
             }
@@ -398,11 +412,15 @@ final class IncubatingSchemaPreflight implements IncubatingSchemaInspector
             }
         }
 
+        if ($unsafeReplayMigrations !== []) {
+            throw IncubatingSchemaConflictException::forUnsafeReplayMigrations($unsafeReplayMigrations);
+        }
+
         if ($conflicts !== []) {
             throw IncubatingSchemaConflictException::forAppliedForwardMigrations($conflicts);
         }
 
-        return array_keys($incubating);
+        return array_keys($replayable);
     }
 
     /**

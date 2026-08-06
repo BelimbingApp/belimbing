@@ -77,7 +77,7 @@
             </x-ui.card>
         @empty
             <x-ui.card>
-                <p class="text-sm text-muted">{{ __('No GitHub-hosted Distribution Bundles found in this deployment.') }}</p>
+                <p class="text-sm text-muted">{{ __('No GitHub-hosted software sources found in this deployment.') }}</p>
             </x-ui.card>
         @endforelse
 

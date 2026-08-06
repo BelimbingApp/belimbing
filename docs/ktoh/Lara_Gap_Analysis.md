@@ -74,4 +74,4 @@ This document highlights the gaps between the ideated features for Lara and the 
 ### References:
 - `Lara_Ideation.md`
 - `Base AI` Services (`app/Base/AI`)
-- `Core AI` Services (`app/Modules/Core/AI`)
+- `Core AI` Services (`app/Core/AI`)

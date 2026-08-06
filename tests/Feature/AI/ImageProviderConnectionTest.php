@@ -3,8 +3,8 @@
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
-use App\Modules\Core\AI\Livewire\Providers\Providers;
-use App\Modules\Core\AI\Models\AiProvider;
+use App\Core\AI\Livewire\Providers\Providers;
+use App\Core\AI\Models\AiProvider;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 

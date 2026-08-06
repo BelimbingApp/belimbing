@@ -8,8 +8,9 @@ use Throwable;
 /**
  * Thin, testable wrapper around the git CLI scoped to one working-tree path.
  *
- * Bundles live in their own nested git repos, so several subsystems (the deploy
- * console, schema incubation) must run git inside a specific checkout. This hides
+ * Domains and Extensions may live in their own nested source repositories, so
+ * several subsystems (the deploy console, schema incubation) must run git inside
+ * a specific checkout. This hides
  * the Process plumbing and the HTTPS token header behind verbs, and stays a deep
  * module: only the operations we actually use. It shells out through the Process
  * facade, so `Process::fake()` drives it in tests with no extra seams.

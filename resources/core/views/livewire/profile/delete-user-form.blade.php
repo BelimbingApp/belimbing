@@ -22,9 +22,9 @@
 
             <x-ui.acknowledge-input
                 id="delete-user-confirm"
-                :phrase="\App\Modules\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE"
+                :phrase="\App\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE"
                 :label="__('Acknowledgment')"
-                :help="__('Type :phrase to reveal the delete button.', ['phrase' => \App\Modules\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE])"
+                :help="__('Type :phrase to reveal the delete button.', ['phrase' => \App\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE])"
                 wire:model.live.debounce.250ms="confirmText"
             />
 
@@ -33,7 +33,7 @@
                     {{ __('Cancel') }}
                 </x-ui.button>
 
-                @if (trim($confirmText) === \App\Modules\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE)
+                @if (trim($confirmText) === \App\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE)
                     <x-ui.button type="submit" variant="danger" data-test="confirm-delete-user-button">
                         {{ __('Permanently delete account') }}
                     </x-ui.button>

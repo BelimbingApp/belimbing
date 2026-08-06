@@ -3,7 +3,7 @@
 namespace Tests\Support;
 
 use App\Base\AI\Tools\ToolResult;
-use App\Modules\Core\AI\Tools\BrowserTool;
+use App\Core\AI\Tools\BrowserTool;
 use Tests\TestCase;
 
 /**

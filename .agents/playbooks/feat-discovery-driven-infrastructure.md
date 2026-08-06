@@ -1,83 +1,111 @@
 # FEAT-DISCOVERY
 
-Intent: extend BLB auto-discovery infrastructure instead of adding manual module registration.
+Intent: extend BLB auto-discovery while preserving the centralized four-root topology and complete optional-Domain state filtering.
 
 ## When To Use
 
-- Adding framework-level discovery for routes, menus, providers, or Livewire components.
-- Standardizing how modules are detected from path conventions.
+- Adding framework-level discovery for providers, routes, menus, config contributions, migrations, seeders, Livewire components, tests, views, assets, or agent skills.
+- Standardizing how artifacts are found across more than one application root.
+- Adding an explicit Domain- or Extension-level contribution anchor above Module roots.
 
 ## Do Not Use When
 
-- Module can use existing discovery patterns without framework changes.
-- Change is feature-local and does not affect framework bootstrapping.
+- A Module can use an existing discovery contract without changing framework behavior.
+- The change is local to one Module and its provider can register it through an existing supported seam.
+- The proposal creates a fifth application root or an environment-specific topology.
 
 ## Minimal File Pack
 
+- `docs/architecture/module-system.md`
+- `app/Base/Foundation/ApplicationTopology.php`
+- `app/Base/Foundation/Services/DomainState.php`
 - `app/Base/Foundation/Providers/ProviderRegistry.php`
-- `app/Base/Routing/RouteDiscoveryService.php`
-- `app/Base/Menu/Services/MenuDiscoveryService.php`
+- the owning discovery service and its focused test
 
 ## Reference Shape
 
-- Discovery services expose `discover()` returning structured paths or mappings.
-- Service providers consume discovery output and register resources.
-- Sorting and deterministic order are enforced before registration.
-- Validation runs at registry level (example: menu circular parent checks).
+- `ApplicationTopology` defines all root and contribution patterns.
+- Discovery preserves Base → Core → enabled Domains → Extensions order.
+- `DomainState` removes disabled optional-Domain paths from every runtime surface.
+- Discovery methods return structured paths or mappings; their owning provider registers the result.
+- Paths are sorted deterministically before registration.
+- Registries reject ambiguous duplicate identities rather than letting load order decide silently.
+
+## Contribution Locations
+
+| Ownership kind | Shape | Namespace |
+|---|---|---|
+| Base component | `app/Base/{Component}` | `App\Base\{Component}` |
+| Core Module | `app/Core/{Module}` | `App\Core\{Module}` |
+| optional Domain Module | `app/Domains/{Domain}/{Module}` | `App\Domains\{Domain}\{Module}` |
+| Extension Module | `app/Extensions/{Extension}/{Module}` | `App\Extensions\{Extension}\{Module}` |
+
+Physical ownership segments are PascalCase. Stable logical IDs remain kebab-case and path-independent.
 
 ## Module Config Discovery Convention
 
-Framework-level modules auto-discover `Config/{name}.php` from all Base and Module directories, merging module-declared values into the framework config. This keeps module-specific concerns local — modules never edit framework configs.
+A Module influences framework behavior by declaring the documented `Config/{name}.php` file locally. Framework discovery merges only the keys that surface owns, so Modules do not edit Base config.
 
-| Framework Module | Discovered File | Merged Keys | Discovery Location |
+| Framework surface | Discovered file | Typical keys | Owning discovery |
 |---|---|---|---|
-| Authz | `Config/authz.php` | `capabilities`, `roles` | `Authz\ServiceProvider::discoverModuleAuthzConfigs()` |
+| Authz | `Config/authz.php` | `domains`, `capabilities`, `roles` | `Authz\ServiceProvider` |
 | Menu | `Config/menu.php` | `items` | `Menu\Services\MenuDiscoveryService` |
-| Audit | `Config/audit.php` | `exclude_models` | `Audit\ServiceProvider::discoverModuleAuditConfigs()` |
+| Audit | `Config/audit.php` | `exclude_models` | `Audit\ServiceProvider` |
+| Settings | `Config/settings.php` | setting definitions and runtime claims | `Settings\ServiceProvider` |
 
-**Principle:** When a module needs to influence framework behavior (e.g., exclude a model from auditing, declare capabilities, add menu items), it declares a local `Config/{name}.php` returning only the keys it cares about. The framework module's discovery method globs `app/Base/*/Config/{name}.php` and `app/Modules/*/*/Config/{name}.php`, skipping its own base config, and merges arrays additively.
-
-**When adding a new discoverable config key to a framework module:**
-
-1. Add the merge logic in the framework module's ServiceProvider (follow `discoverModuleAuthzConfigs` pattern).
-2. Update this table.
-3. Add the new config file to the auto-discovery list in `feat-new-business-module.md`.
+Use `ApplicationTopology::contributionPatterns('Config/{name}.php')` when the surface supports the standard four-root Module shape. If a surface also supports a Domain or Extension source anchor, add `domainPattern()` or `extensionSourcePattern()` explicitly and document why collection-level ownership is necessary. A source anchor is not an implicit Module.
 
 ## Required Invariants
 
-- Deterministic load order across runs.
-- Independent module boot where possible; no hidden provider order assumptions.
-- Fail fast on invalid provider classes.
-- Prefer contracts and adapters over direct cross-module coupling.
+- Exactly four application roots: Base, Core, Domains, Extensions.
+- Deterministic Base → Core → enabled Domains → Extensions order.
+- Complete `DomainState` filtering for optional-Domain contributions.
+- Independent provider boot where practical; no hidden ordering dependency.
+- Extension-last loading is used only through explicit contribution or decoration seams.
+- Fail fast on invalid provider classes and duplicate stable identities.
+- No local string globs that reconstruct topology already expressed by `ApplicationTopology`.
+- No manual central registration list for a convention-discoverable artifact.
 
 ## Implementation Skeleton
 
 ```php
+use App\Base\Foundation\ApplicationTopology;
+use App\Base\Foundation\Services\DomainState;
+
 public function discover(): array
 {
     $items = [];
 
-    foreach ($this->scanPatterns as $pattern) {
-        foreach (glob(base_path($pattern)) ?: [] as $path) {
+    foreach (ApplicationTopology::contributionPatterns('Config/example.php') as $pattern) {
+        foreach (DomainState::filterPaths(glob($pattern) ?: []) as $path) {
             $items[] = $path;
         }
     }
 
+    $items = array_values(array_unique($items));
     sort($items);
 
     return $items;
 }
 ```
 
+If the discovery result must preserve root precedence after sorting, sort within each pattern and append the groups in `ApplicationTopology` order instead of globally sorting the merged list.
+
 ## Test Checklist
 
-- Newly placed module file is discovered without manual registration.
-- Discovery order is stable.
-- Invalid file/class handling fails clearly or logs deterministic warning.
-- Existing modules remain loadable after changes.
+- A conforming artifact in each supported root is discovered without manual registration.
+- Base, Core, Domain, and Extension contributions resolve in the documented order.
+- A disabled optional Domain contributes nothing to the new surface.
+- Re-enabling the Domain restores discovery without editing its files.
+- Invalid or duplicate contributions fail clearly and deterministically.
+- Unsupported source-level files remain inert.
+- Existing Modules remain loadable after the change.
 
 ## Common Pitfalls
 
-- Adding one-off manual registration that bypasses discovery contract.
-- Non-deterministic ordering causing flaky boot behavior.
-- Scanning overly broad paths that increase startup cost.
+- Adding a one-off glob for only the Module that motivated the feature.
+- Forgetting Core because it no longer sits inside the optional Domain collection.
+- Treating an Extension root as a strict business Domain.
+- Filtering providers for disabled Domains while still loading their routes, config, or migrations.
+- Globally sorting paths and accidentally erasing the four-root precedence contract.
+- Assuming an installed nested repository is visible to Tailwind or Vite without an explicit source/refresh path.

@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
 use Illuminate\Support\Collection;
 
 /**

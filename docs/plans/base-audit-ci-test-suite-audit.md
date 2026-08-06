@@ -33,5 +33,5 @@ Evidence:
 - A full local `php artisan test` run exceeded the 10-minute command limit in this workspace before completing.
 
 Follow-ups:
-- Commerce item subject-history coverage belongs in `app/Modules/Commerce` if not already covered there, including item fitment, catalog attribute values, marketplace listing inclusion, and noisy listing draft/snapshot exclusion.
-- People employee detail bridge coverage belongs in `app/Modules/People` if not already covered there.
+- Commerce item subject-history coverage belongs in `app/Domains/Commerce` if not already covered there, including item fitment, catalog attribute values, marketplace listing inclusion, and noisy listing draft/snapshot exclusion.
+- People employee detail bridge coverage belongs in `app/Domains/People` if not already covered there.

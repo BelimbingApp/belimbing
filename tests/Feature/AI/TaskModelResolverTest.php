@@ -1,11 +1,11 @@
 <?php
 
 use App\Base\AI\Enums\ReasoningVisibility;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\AI\Services\ConfigResolver;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\AI\Services\ConfigResolver;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 

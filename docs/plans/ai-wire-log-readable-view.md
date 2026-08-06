@@ -1,7 +1,7 @@
 Agent: Codex, Claude
 Status: Phase 1 Implemented
-Last Updated: 2026-04-27
-Sources: `docs/plans/ai-control-plane-debuggability.md`; `resources/core/views/livewire/admin/ai/control-plane/partials/wire-log.blade.php`; `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`; `tests/Feature/Modules/Core/AI/ControlPlaneInspectorTest.php`
+Last Updated: 2026-08-05
+Sources: `docs/plans/ai-control-plane-debuggability.md`; `resources/core/views/livewire/admin/ai/control-plane/partials/wire-log.blade.php`; `app/Core/AI/Services/ControlPlane/WireLogger.php`; `tests/Feature/Core/AI/ControlPlaneInspectorTest.php`
 
 ## Problem Essence
 

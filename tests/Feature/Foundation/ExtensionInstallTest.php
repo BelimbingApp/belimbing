@@ -1,11 +1,11 @@
 <?php
 
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
-use App\Base\Foundation\Livewire\Modules;
+use App\Base\Foundation\Livewire\Domains;
 use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 use Tests\Support\FakeDomainRuntimeReloader;
 
-const EXTENSION_INSTALL_FOLDER = 'zzkiat';
+const EXTENSION_INSTALL_FOLDER = 'Zzkiat';
 const EXTENSION_INSTALL_REPO = 'https://github.com/zzowner/blb-zzkiat';
 const EXTENSION_INSTALL_OWNER = 'zzowner';
 const EXTENSION_INSTALL_TOKEN = 'ghp_testtoken1234567890abcdef';
@@ -21,7 +21,7 @@ const EXTENSION_INSTALL_TABLE = 'zzkiat_table';
 const EXTENSION_INSTALL_SETTING = 'zzkiat.option';
 const EXTENSION_INSTALL_MIGRATION = '2099_01_01_000000_create_zzkiat_table_table';
 const EXTENSION_INSTALL_RELOAD_SCHEDULED = 'Domain runtime reload scheduled in the background.';
-const EXTENSION_INSTALL_BASE_PATH = 'extensions/';
+const EXTENSION_INSTALL_BASE_PATH = 'app/Extensions/';
 
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
@@ -48,7 +48,7 @@ function createExtensionInstallFakeCheckout(): string
         <<<'PHP'
         <?php
 
-        namespace Extensions\Zzkiat\Sample;
+        namespace App\Extensions\Zzkiat\Sample;
 
         use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -114,8 +114,8 @@ it('marks a catalog extension token-ready when a token is stored for its owner',
 it('lists available extensions on the Available tab', function (): void {
     $this->actingAs(createAdminUser());
 
-    Livewire::test(Modules::class, ['tab' => 'available'])
-        ->assertSee('Available extensions')
+    Livewire::test(Domains::class, ['tab' => 'available'])
+        ->assertSee('Available Extensions')
         ->assertSee(EXTENSION_INSTALL_FOLDER);
 });
 
@@ -124,9 +124,9 @@ it('clones an extension with the stored github token and redirects', function ()
     $this->actingAs(createAdminUser());
     Process::fake();
 
-    Livewire::test(Modules::class)
+    Livewire::test(Domains::class)
         ->call('installExtension', EXTENSION_INSTALL_FOLDER)
-        ->assertRedirect(route('admin.system.software.modules.index'));
+        ->assertRedirect(route('admin.system.software.domains.index'));
 
     $expectedAuthHeader = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.EXTENSION_INSTALL_TOKEN);
 
@@ -140,7 +140,7 @@ it('blocks extension install for users without the manage capability', function 
     $this->actingAs(User::factory()->create());
     Process::fake();
 
-    Livewire::test(Modules::class)->call('installExtension', EXTENSION_INSTALL_FOLDER)->assertForbidden();
+    Livewire::test(Domains::class)->call('installExtension', EXTENSION_INSTALL_FOLDER)->assertForbidden();
 
     Process::assertDidntRun(fn ($process): bool => in_array('clone', $process->command, true));
 });

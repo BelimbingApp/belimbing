@@ -1,16 +1,16 @@
 # people/06_ipayroll-employee-module-gap-bridge
 
 **Status:** In Progress
-**Last Updated:** 2026-05-12
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/ipayroll_employee/` — iPayroll employee screenshots and exported setup workbooks
 - `docs/plans/people/sbg_ipayroll_ref/` — CSV mirror of SBG iPayroll reference exports
 - `docs/plans/people/01_people-modules.md` — People suite module map
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 i-Payroll operational parity benchmark
 - `docs/plans/people/05_sbg-ipayroll-settings-gap-bridge.md` — People Settings bridge and naming judgement
-- `app/Modules/Core/Employee/` — current canonical Employee model, admin screens, relationships, and employee types
-- `app/Modules/People/Employees/` — current People-facing employee directory
-- `app/Modules/People/Settings/` — current People Settings bridge for reference data, work profiles, account access, change requests, imports, logs, calendars, and restricted-person controls
+- `app/Core/Employee/` — current canonical Employee model, admin screens, relationships, and employee types
+- `app/Domains/People/Employees/` — current People-facing employee directory
+- `app/Domains/People/Settings/` — current People Settings bridge for reference data, work profiles, account access, change requests, imports, logs, calendars, and restricted-person controls
 **Agents:** GitHub Copilot/gpt-5.5, GitHub Copilot/gpt-5.4
 
 ## Problem Essence
@@ -36,11 +36,11 @@ Bridge the gap by turning Employee into the HR workbench that sits on top of Cor
 
 | Component | Responsibility | Primary owner |
 |-----------|----------------|---------------|
-| Core Employee root | Stable employment identity, company scope, reporting line, user relationship, basic lifecycle status, and addresses. | `app/Modules/Core/Employee` |
-| Employee work profile | Cost center, organization unit, employment group, job title, workforce class, job grade, work calendar, pay basis, hire/resign dates, and source metadata. | `app/Modules/People/Settings` data, surfaced by `app/Modules/People/Employees` |
-| Employee workbench | Searchable/filterable employee grid, saved employee views, bulk readiness actions, employee detail drill-down, and migration status. | `app/Modules/People/Employees` |
-| Employee detail sections | HR/personnel, work profile, payroll data-readiness, statutory summary, addresses, documents, account access, change requests, subordinate/team context, and audit/history. | `app/Modules/People/Employees` with module-specific sections |
-| Employee account access | Provision, activate/revoke, invite, and audit employee access to employee self-service workflows. | `app/Modules/People/Settings` service, surfaced by Employees and Settings |
+| Core Employee root | Stable employment identity, company scope, reporting line, user relationship, basic lifecycle status, and addresses. | `app/Core/Employee` |
+| Employee work profile | Cost center, organization unit, employment group, job title, workforce class, job grade, work calendar, pay basis, hire/resign dates, and source metadata. | `app/Domains/People/Settings` data, surfaced by `app/Domains/People/Employees` |
+| Employee workbench | Searchable/filterable employee grid, saved employee views, bulk readiness actions, employee detail drill-down, and migration status. | `app/Domains/People/Employees` |
+| Employee detail sections | HR/personnel, work profile, payroll data-readiness, statutory summary, addresses, documents, account access, change requests, subordinate/team context, and audit/history. | `app/Domains/People/Employees` with module-specific sections |
+| Employee account access | Provision, activate/revoke, invite, and audit employee access to employee self-service workflows. | `app/Domains/People/Settings` service, surfaced by Employees and Settings |
 | Profile change requests | Controlled employee-submitted changes with review, approval/rejection, and explicit application to canonical fields. | People employee-facing workflows plus Employees review surface |
 | Employee data migration | Import SBG/iPayroll employee and setup data, map source codes to BLB references, dry-run errors, aliases, and readiness reports. | People Settings import services plus SBG private seed/mapping repo |
 | Restricted-person safeguards | Restricted-person register, reason visibility policy, retention policy, and rehiring safeguards. | People Settings/Compliance, linked from Employees only for authorized users |

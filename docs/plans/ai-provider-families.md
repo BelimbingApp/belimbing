@@ -1,8 +1,8 @@
 # ai-provider-families
 
 **Status:** In progress
-**Last Updated:** 2026-06-17
-**Sources:** `app/Base/AI` (LLM provider engine: `LlmClient`, `AiApiType`, protocol clients), `app/Modules/Core/AI` (provider admin: `AiProvider`/`AiProviderModel`, `ModelCatalogService`, `Providers` hub), `app/Base/Media/PhotoCleanup` (image provider: `PhotoCleanupProvider`, `PhotoRoomConfiguration`), `app/Base/AI/Contracts/Tool.php` (the container-tag registry pattern this mirrors), `docs/architecture/module-system.md` (Contract + adapters, discovery), `docs/plans/media-photo-cleanup-providers.md` (the image family's internal sub-plan).
+**Last Updated:** 2026-08-05
+**Sources:** `app/Base/AI` (LLM provider engine: `LlmClient`, `AiApiType`, protocol clients), `app/Core/AI` (provider admin: `AiProvider`/`AiProviderModel`, `ModelCatalogService`, `Providers` hub), `app/Base/Media/PhotoCleanup` (image provider: `PhotoCleanupProvider`, `PhotoRoomConfiguration`), `app/Base/AI/Contracts/Tool.php` (the container-tag registry pattern this mirrors), `docs/architecture/module-system.md` (Contract + adapters, discovery), `docs/plans/media-photo-cleanup-providers.md` (the image family's internal sub-plan).
 **Agents:** claude/Sonnet-4.6
 
 ## Problem Essence

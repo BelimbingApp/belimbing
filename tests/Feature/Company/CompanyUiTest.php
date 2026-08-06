@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\Company\Exceptions\LicenseeCompanyDeletionException;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Exceptions\LicenseeCompanyDeletionException;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 // ---------------------------------------------------------------------------

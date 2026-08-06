@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Tools\Catalog;
+use App\Core\AI\Livewire\Tools\Catalog;
 
 /** @var Catalog $this */
 ?>

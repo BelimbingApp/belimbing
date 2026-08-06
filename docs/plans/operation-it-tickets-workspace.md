@@ -2,7 +2,7 @@
 
 Status: Complete — reviewed and approved for merge
 Last Updated: 2026-07-17
-Sources: `app/Modules/Operation/IT/*`, `app/Base/Workflow/*`, `DESIGN.md`, root `AGENTS.md`
+Sources: `app/Domains/Operation/IT/*`, `app/Base/Workflow/*`, `DESIGN.md`, root `AGENTS.md`
 Agents: claude/claude-fable-5, openai/codex
 
 ## Problem Essence

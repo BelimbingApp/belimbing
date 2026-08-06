@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestException;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
@@ -17,9 +18,10 @@ final class ModuleMigrationDependencyChecker
     public function migrationPaths(): array
     {
         $paths = array_merge(
-            glob(app_path('Base/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            DomainState::filterPaths(glob(app_path('Modules/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: []),
-            glob(base_path('extensions/*/*/Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::baseComponentPattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::coreModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            DomainState::filterPaths(glob(ApplicationTopology::domainModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: []),
+            glob(ApplicationTopology::extensionModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
         );
 
         sort($paths);
@@ -53,9 +55,10 @@ final class ModuleMigrationDependencyChecker
     private function reader(): ModuleManifestReader
     {
         return new ModuleManifestReader([
-            app_path('Base'),
-            app_path('Modules'),
-            base_path('extensions'),
+            ApplicationTopology::baseRoot(),
+            ApplicationTopology::coreRoot(),
+            ApplicationTopology::domainsRoot(),
+            ApplicationTopology::extensionsRoot(),
         ]);
     }
 

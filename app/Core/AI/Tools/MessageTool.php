@@ -1,0 +1,511 @@
+<?php
+namespace App\Core\AI\Tools;
+
+use App\Base\AI\Enums\ToolCategory;
+use App\Base\AI\Enums\ToolRiskClass;
+use App\Base\AI\Tools\AbstractActionTool;
+use App\Base\AI\Tools\Concerns\ProvidesToolMetadata;
+use App\Base\AI\Tools\Schema\ToolSchemaBuilder;
+use App\Base\AI\Tools\ToolArgumentException;
+use App\Base\AI\Tools\ToolResult;
+use App\Core\AI\Contracts\Messaging\ChannelAdapter;
+use App\Core\AI\DTO\Messaging\ChannelCapabilities;
+use App\Core\AI\Exceptions\ChannelNotAvailableException;
+use App\Core\AI\Exceptions\NoChannelAccountException;
+use App\Core\AI\Services\AgentExecutionContext;
+use App\Core\AI\Services\Messaging\ChannelAdapterRegistry;
+use App\Core\AI\Services\Messaging\OutboundMessageService;
+use App\Core\AI\Services\Messaging\OutboundSendResult;
+use App\Core\Employee\Models\Employee;
+use Illuminate\Support\Facades\Auth;
+
+/**
+ * Multi-channel messaging tool for Agents.
+ *
+ * Provides enterprise-grade messaging across multiple platforms (WhatsApp,
+ * Telegram, Slack, Email) via a single deep tool with action-based dispatch.
+ * Send and reply actions route through OutboundMessageService for durable
+ * delivery with conversation/message persistence. Other actions (react,
+ * edit, delete, poll, list, search) remain stubbed until their backing
+ * services are implemented.
+ *
+ * Gated by `admin.ai.tool.message.execute` authz capability.
+ * Per-channel send capabilities (e.g., `messaging.whatsapp.send`) are
+ * enforced at the authz layer, not within this tool.
+ */
+class MessageTool extends AbstractActionTool
+{
+    use ProvidesToolMetadata;
+
+    /**
+     * Valid actions for messaging.
+     *
+     * @var list<string>
+     */
+    private const ACTIONS = [
+        'send',
+        'reply',
+        'react',
+        'edit',
+        'delete',
+        'poll',
+        'list_conversations',
+        'search',
+    ];
+
+    /**
+     * Maximum text message length.
+     */
+    private const MAX_TEXT_LENGTH = 50000;
+
+    /**
+     * Maximum number of poll options.
+     */
+    private const MAX_POLL_OPTIONS = 10;
+
+    private readonly MessageToolSupport $support;
+
+    public function __construct(
+        private readonly ChannelAdapterRegistry $adapterRegistry,
+        private readonly OutboundMessageService $outboundService,
+        private readonly AgentExecutionContext $executionContext,
+    ) {
+        $this->support = new MessageToolSupport($adapterRegistry);
+    }
+
+    public function name(): string
+    {
+        return 'message';
+    }
+
+    public function description(): string
+    {
+        return 'Send and manage messages across channels (WhatsApp, Telegram, Slack, Email). '
+            .'Supports sending text/media, replying, reacting, editing, deleting messages, '
+            .'creating polls, listing conversations, and searching message history. '
+            .'Each action requires a channel parameter to route to the correct platform.';
+    }
+
+    public function category(): ToolCategory
+    {
+        return ToolCategory::MESSAGING;
+    }
+
+    public function riskClass(): ToolRiskClass
+    {
+        return ToolRiskClass::MESSAGING;
+    }
+
+    public function requiredCapability(): ?string
+    {
+        return 'admin.ai.tool.message.execute';
+    }
+
+    protected function toolMetadata(): array
+    {
+        return [
+            'displayName' => 'Message',
+            'summary' => 'Send messages across WhatsApp, Telegram, Slack, and other channels.',
+            'explanation' => 'Multi-channel messaging tool that allows Agents to communicate with '
+                .'customers, partners, and teams. Supports WhatsApp, Telegram, LinkedIn, Slack, '
+                .'email, and more. Each channel requires separate account configuration and authorization.',
+            'setupRequirements' => [
+                'At least one messaging channel account configured',
+                'Channel-specific credentials set up',
+            ],
+            'testExamples' => [],
+            'healthChecks' => [
+                'Channel adapter registry loaded',
+                'At least one channel configured',
+            ],
+            'limits' => [
+                'Each channel gated by separate authz capabilities',
+                'Company-scoped account isolation',
+            ],
+        ];
+    }
+
+    protected function actions(): array
+    {
+        return self::ACTIONS;
+    }
+
+    protected function schema(): ToolSchemaBuilder
+    {
+        return ToolSchemaBuilder::make()
+            ->string('channel', 'Channel to use: whatsapp, telegram, slack, email.')->required()
+            ->string('target', 'Recipient identifier (phone number, chat ID, email address, channel name).')
+            ->string('text', 'Message text content (max '.self::MAX_TEXT_LENGTH.' characters).')
+            ->string('subject', 'Email subject line (for email channel only).')
+            ->string('media_path', 'Path to media file to attach (for "send" action).')
+            ->string('message_id', 'Platform-specific message ID (for reply, react, edit, delete actions).')
+            ->string('emoji', 'Emoji to react with (for "react" action).')
+            ->string('question', 'Poll question (for "poll" action).')
+            ->array('options', 'Poll options (for "poll" action, max '.self::MAX_POLL_OPTIONS.').')
+            ->string('query', 'Search query (for "search" action).')
+            ->integer('limit', 'Maximum results to return (for list_conversations and search, default 10).');
+    }
+
+    protected function handleAction(string $action, array $arguments): ToolResult
+    {
+        $channel = $this->requireString($arguments, 'channel');
+
+        if (! $this->adapterRegistry->isAvailable($channel)) {
+            $available = $this->adapterRegistry->channels();
+
+            return ToolResult::error(
+                'Channel "'.$channel.'" is not available. '
+                    .($available !== [] ? 'Available channels: '.implode(', ', $available).'.' : 'No channels are configured.'),
+                'channel_unavailable',
+            );
+        }
+
+        return match ($action) {
+            'send' => $this->handleSend($channel, $arguments),
+            'reply' => $this->handleReply($channel, $arguments),
+            'react' => $this->handleReact($channel, $arguments),
+            'edit' => $this->handleEdit($channel, $arguments),
+            'delete' => $this->handleDelete($channel, $arguments),
+            'poll' => $this->handlePoll($channel, $arguments),
+            'list_conversations' => $this->handleListConversations($channel, $arguments),
+            'search' => $this->handleSearch($channel, $arguments),
+        };
+    }
+
+    /**
+     * Handle the "send" action.
+     *
+     * Routes through OutboundMessageService for durable delivery with
+     * conversation/message persistence.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleSend(string $channel, array $arguments): ToolResult
+    {
+        $target = $this->requireString($arguments, 'target');
+        $text = $this->requireString($arguments, 'text');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
+
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for message delivery.',
+                'no_company_context',
+            );
+        }
+
+        $options = array_filter([
+            'subject' => $this->optionalString($arguments, 'subject'),
+            'media_path' => $this->optionalString($arguments, 'media_path'),
+        ]);
+
+        try {
+            $result = $this->outboundService->send($companyId, $channel, $target, $text, $options);
+
+            return $this->support->formatOutboundResult('send', $channel, $target, $result);
+        } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
+            return ToolResult::error($e->getMessage(), 'channel_error');
+        }
+    }
+
+    /**
+     * Handle the "reply" action.
+     *
+     * Routes through OutboundMessageService to find the original
+     * conversation and deliver the reply with persistence.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleReply(string $channel, array $arguments): ToolResult
+    {
+        $text = $this->requireString($arguments, 'text');
+        $messageId = $this->requireString($arguments, 'message_id');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
+
+        $companyId = $this->resolveCompanyId();
+
+        if ($companyId === null) {
+            return ToolResult::error(
+                'Cannot determine company context for message delivery.',
+                'no_company_context',
+            );
+        }
+
+        try {
+            $result = $this->outboundService->reply($companyId, $channel, $messageId, $text);
+
+            return $this->support->formatOutboundResult('reply', $channel, null, $result);
+        } catch (ChannelNotAvailableException|NoChannelAccountException $e) {
+            return ToolResult::error($e->getMessage(), 'channel_error');
+        }
+    }
+
+    /**
+     * Handle the "react" action.
+     *
+     * Reacts to a message with an emoji. Stubbed — no backing service yet.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleReact(string $channel, array $arguments): ToolResult
+    {
+        $this->support->assertCapability($channel, 'supportsReactions', $channel.' does not support reactions.');
+
+        return $this->support->encodeResponse([
+            'action' => 'react',
+            'channel' => $channel,
+            'message_id' => $this->requireString($arguments, 'message_id'),
+            'emoji' => $this->requireString($arguments, 'emoji'),
+            'status' => 'reacted',
+            'message' => 'Reaction added (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Handle the "edit" action.
+     *
+     * Edits a previously sent message. Stubbed — no backing service yet.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleEdit(string $channel, array $arguments): ToolResult
+    {
+        $this->support->assertCapability($channel, 'supportsEditing', $channel.' does not support message editing.');
+
+        $text = $this->requireString($arguments, 'text');
+        $this->support->assertTextLength($text, self::MAX_TEXT_LENGTH);
+
+        return $this->support->encodeResponse([
+            'action' => 'edit',
+            'channel' => $channel,
+            'message_id' => $this->requireString($arguments, 'message_id'),
+            'text' => $text,
+            'status' => 'edited',
+            'message' => 'Message edited (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Handle the "delete" action.
+     *
+     * Deletes a previously sent message. Stubbed — no backing service yet.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleDelete(string $channel, array $arguments): ToolResult
+    {
+        $this->support->assertCapability($channel, 'supportsDeletion', $channel.' does not support message deletion.');
+
+        return $this->support->encodeResponse([
+            'action' => 'delete',
+            'channel' => $channel,
+            'message_id' => $this->requireString($arguments, 'message_id'),
+            'status' => 'deleted',
+            'message' => 'Message deleted (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Handle the "poll" action.
+     *
+     * Creates a poll in the target conversation. Stubbed — no backing service yet.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handlePoll(string $channel, array $arguments): ToolResult
+    {
+        $this->support->assertCapability($channel, 'supportsPolls', $channel.' does not support polls.');
+
+        return $this->support->encodeResponse([
+            'action' => 'poll',
+            'channel' => $channel,
+            'target' => $this->requireString($arguments, 'target'),
+            'question' => $this->requireString($arguments, 'question'),
+            'options' => $this->support->validatedPollOptions($arguments['options'] ?? [], self::MAX_POLL_OPTIONS),
+            'status' => 'created',
+            'message' => 'Poll created (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Handle the "list_conversations" action.
+     *
+     * Lists recent conversations on the specified channel. Stubbed.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleListConversations(string $channel, array $arguments): ToolResult
+    {
+        return $this->support->encodeResponse([
+            'action' => 'list_conversations',
+            'channel' => $channel,
+            'limit' => $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50),
+            'conversations' => [],
+            'status' => 'listed',
+            'message' => 'Conversations listed (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Handle the "search" action.
+     *
+     * Searches message history across the specified channel. Stubbed.
+     *
+     * @param  string  $channel  Channel identifier
+     * @param  array<string, mixed>  $arguments  Parsed arguments from LLM
+     */
+    private function handleSearch(string $channel, array $arguments): ToolResult
+    {
+        $this->support->assertCapability($channel, 'supportsSearch', $channel.' does not support message search.');
+
+        return $this->support->encodeResponse([
+            'action' => 'search',
+            'channel' => $channel,
+            'query' => $this->requireString($arguments, 'query'),
+            'limit' => $this->optionalInt($arguments, 'limit', 10, min: 1, max: 50),
+            'results' => [],
+            'status' => 'searched',
+            'message' => 'Search completed (stub). Channel adapter integration pending.',
+        ]);
+    }
+
+    /**
+     * Resolve the company ID from agent execution context or auth.
+     */
+    private function resolveCompanyId(): ?int
+    {
+        // Priority 1: Agent execution context (queued job)
+        if ($this->executionContext->active()) {
+            $employee = Employee::query()->find($this->executionContext->employeeId());
+
+            if ($employee !== null) {
+                return $employee->company_id;
+            }
+        }
+
+        // Priority 2: Authenticated user
+        $user = Auth::user();
+
+        if ($user !== null && method_exists($user, 'getCompanyId')) {
+            return $user->getCompanyId();
+        }
+
+        return null;
+    }
+}
+
+/**
+ * Internal helper for MessageTool validation and channel capability checks.
+ *
+ * Throws ToolArgumentException for all validation failures so they are
+ * caught by AbstractTool::execute() and formatted as ToolResult::error().
+ */
+final class MessageToolSupport
+{
+    public function __construct(
+        private readonly ChannelAdapterRegistry $adapterRegistry,
+    ) {}
+
+    /**
+     * @throws ToolArgumentException If the text exceeds the maximum length
+     */
+    public function assertTextLength(string $text, int $maxTextLength): void
+    {
+        if (mb_strlen($text) > $maxTextLength) {
+            throw new ToolArgumentException('"text" must not exceed '.$maxTextLength.' characters.');
+        }
+    }
+
+    public function channelCapabilities(string $channel): ChannelCapabilities
+    {
+        return $this->resolveAdapter($channel)->capabilities();
+    }
+
+    /**
+     * @throws ToolArgumentException If the channel does not support the capability
+     */
+    public function assertCapability(string $channel, string $capabilityProperty, string $errorMessage): void
+    {
+        if (! $this->channelCapabilities($channel)->{$capabilityProperty}) {
+            throw new ToolArgumentException($errorMessage);
+        }
+    }
+
+    /**
+     * @return list<string>
+     *
+     * @throws ToolArgumentException If options are invalid
+     */
+    public function validatedPollOptions(mixed $options, int $maxPollOptions): array
+    {
+        if (! is_array($options) || count($options) < 2) {
+            throw new ToolArgumentException('"options" must be an array with at least 2 items.');
+        }
+
+        if (count($options) > $maxPollOptions) {
+            throw new ToolArgumentException('"options" must not exceed '.$maxPollOptions.' items.');
+        }
+
+        $normalized = [];
+
+        foreach ($options as $option) {
+            if (! is_string($option) || trim($option) === '') {
+                throw new ToolArgumentException('Each poll option must be a non-empty string.');
+            }
+
+            $normalized[] = trim($option);
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param  string  $action  The action name ('send' or 'reply')
+     * @param  string  $channel  Channel identifier
+     * @param  string|null  $target  Recipient (null for reply)
+     * @param  OutboundSendResult  $result  Service result
+     */
+    public function formatOutboundResult(string $action, string $channel, ?string $target, OutboundSendResult $result): ToolResult
+    {
+        if (! $result->success) {
+            return ToolResult::error($result->error ?? 'Message delivery failed.', 'delivery_failed');
+        }
+
+        return $this->encodeResponse(array_filter([
+            'action' => $action,
+            'channel' => $channel,
+            'target' => $target,
+            'status' => 'sent',
+            'message_id' => $result->messageId,
+            'conversation_id' => $result->conversationId,
+            'message_record_id' => $result->messageRecordId,
+        ]));
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function encodeResponse(array $payload): ToolResult
+    {
+        return ToolResult::success(
+            json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+        );
+    }
+
+    /**
+     * @throws ToolArgumentException If the channel adapter is not registered
+     */
+    private function resolveAdapter(string $channel): ChannelAdapter
+    {
+        return $this->adapterRegistry->resolve($channel)
+            ?? throw new ToolArgumentException('Channel "'.$channel.'" is not registered.');
+    }
+}

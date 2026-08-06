@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Setup\Lara $this */
+/** @var \App\Core\AI\Livewire\Setup\Lara $this */
 ?>
 <div>
     <x-slot name="title">{{ $laraActivated ? __('Lara') : __('Set Up Lara') }}</x-slot>

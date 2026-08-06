@@ -5,7 +5,7 @@ namespace App\Base\Workflow\Listeners;
 use App\Base\Workflow\Events\TransitionCompleted;
 use App\Base\Workflow\Models\StatusConfig;
 use App\Base\Workflow\Notifications\TransitionNotification;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Collection;
 
 /**

@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Settings\DeleteUserForm;
-use App\Modules\Core\User\Livewire\Settings\Profile;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Livewire\Settings\DeleteUserForm;
+use App\Core\User\Livewire\Settings\Profile;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 const PROFILE_TEST_USER_NAME = 'Test User';

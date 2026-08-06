@@ -5,8 +5,8 @@ use App\Base\Media\PhotoCleanup\PhotoCleanupException;
 use App\Base\Media\PhotoCleanup\PhotoCleanupService;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\Services\MediaAssetStore;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\Company\Models\Company;
+use App\Core\AI\Models\AiProvider;
+use App\Core\Company\Models\Company;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 

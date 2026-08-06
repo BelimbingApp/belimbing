@@ -1,14 +1,14 @@
 # people/14_claim-event-decoupling
 
 **Status:** Phase 1 complete (2026-05-16). Pay-item-code migration deferred. {claud/opus-4.7}
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-05
 **Owners:** claud/opus-4.7
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` — canonical pattern.
 - `docs/plans/people/13_leave-event-decoupling.md` — sibling Leave plan.
 - `docs/architecture/module-system.md`.
-- `app/Modules/People/Claim/Services/ClaimPayrollHandoffService.php` — queue + reverse paths that call intake.
-- `app/Modules/People/Claim/Models/ClaimType.php`, `ClaimLine.php` — own `payroll_pay_item_code`, `payroll_eligible`.
+- `app/Domains/People/Claim/Services/ClaimPayrollHandoffService.php` — queue + reverse paths that call intake.
+- `app/Domains/People/Claim/Models/ClaimType.php`, `ClaimLine.php` — own `payroll_pay_item_code`, `payroll_eligible`.
 
 **Agents:** claud/opus-4.7
 
@@ -22,7 +22,7 @@
 
 1. Claim dispatches public events at the two handoff points (lines queued + lines reversed).
 2. Payroll listens on both; intake unchanged.
-3. No Claim class imports anything under `App\Modules\People\Payroll\`.
+3. No Claim class imports anything under `App\Domains\People\Payroll\`.
 4. Architectural test gates the boundary.
 
 ## Out of Scope (deferred)
@@ -58,7 +58,7 @@
 - [x] Full People test suite green — 52 Claim tests passing. {claud/opus-4.7}
 
 **Exit criterion:**
-- [x] Claim imports nothing under `App\Modules\People\Payroll\`.
+- [x] Claim imports nothing under `App\Domains\People\Payroll\`.
 - [x] Queueing an approved claim produces the right `PayrollInput` rows via the listener.
 - [x] Reverse path still produces compensating entries via the listener.
 

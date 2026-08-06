@@ -73,7 +73,7 @@ cat vendor/vendor/package-name/database/migrations/*.php | grep "Schema::create"
 - Ensure BLB tables use prefixes to avoid conflicts
 
 **Option B: Build Our Own Module**
-- Create module in `app/Modules/Core/`, `app/Modules/Operation/`, or `app/Modules/Commerce/`
+- Choose the truthful owner, then create the Module at `app/Core/{Module}`, `app/Domains/{Domain}/{Module}`, or `app/Extensions/{Extension}/{Module}`
 - Follow BLB table naming conventions
 - Full control and customization
 - Example: Geonames module (we built instead of using package)
@@ -108,7 +108,7 @@ cat vendor/vendor/package-name/database/migrations/*.php | grep "Schema::create"
 ### [Package Name]
 - **Evaluated**: YYYY-MM-DD
 - **Reason**: [why we chose to build our own]
-- **Alternative**: app/Modules/Core/ModuleName
+- **Alternative**: app/Core/ModuleName
 - **Tables**: [our table names]
 ```
 
@@ -124,7 +124,7 @@ cat vendor/vendor/package-name/database/migrations/*.php | grep "Schema::create"
 - ✅ Scope well-defined, manageable to implement
 - ✅ Needed full control over data structure
 
-**Decision:** Build own module as `app/Modules/Core/Geonames`
+**Decision:** Build our own Module as `app/Core/Geonames`
 - Tables: `geonames_countries`, `geonames_admin1`, `geonames_cities`
 - Full control, no conflicts, integrated with BLB architecture
 

@@ -1,13 +1,13 @@
 # Data Share Mirror History and Freshness
 
 **Status:** In progress
-**Last Updated:** 2026-08-02
-**Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Foundation/Contracts/SemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `extensions/sb-group/ibp/Models/ImportBatch.php`, `extensions/sb-group/ibp/Services/MarketSpotImportRunner.php`, `extensions/sb-group/ibp/Services/LegacyAxImporter.php`, `docs/plans/base-schedule-observability.md`
+**Last Updated:** 2026-08-05
+**Sources:** `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorManager.php`, `app/Base/Database/Services/DataShare/Mirror/DataShareMirrorCatalog.php`, `app/Base/Database/Livewire/DataShare/Concerns/ManagesDevelopmentTableMirror.php`, `app/Base/Database/DTO/DataShare/Mirror/DataShareMirrorExecutionResult.php`, `app/Base/Audit/AGENTS.md`, `app/Base/Audit/Services/AuditSemanticActionRecorder.php`, `app/Base/Foundation/Contracts/SemanticActionRecorder.php`, `app/Base/Schedule/Services/ScheduleRunRecorder.php`, `app/Extensions/SbGroup/Ibp/Models/ImportBatch.php`, `app/Extensions/SbGroup/Ibp/Services/MarketSpotImportRunner.php`, `app/Extensions/SbGroup/Ibp/Services/LegacyAxImporter.php`, `docs/plans/base-schedule-observability.md`
 **Agents:** Amp/OpenAI Codex, Codex/GPT-5, Codex/gpt-5.6-sol, Claude/claude-opus-5
 
 ## Implementation Status (2026-08-02)
 
-**Built and tested** (`tests/Feature/Database/DataOperationLedgerTest.php`, `DataOperationsPageTest.php`, `DataShareMirrorBackendTest.php`, `extensions/sb-group/ibp/Tests/Feature/ImportMarketSpotCommandTest.php`):
+**Built and tested** (`tests/Feature/Database/DataOperationLedgerTest.php`, `DataOperationsPageTest.php`, `DataShareMirrorBackendTest.php`, `app/Extensions/SbGroup/Ibp/Tests/Feature/ImportMarketSpotCommandTest.php`):
 
 - The shared ledger — `base_database_data_operation_runs`, `base_database_data_operation_tables`, `base_database_data_share_observations` (incubating, `base_`-prefixed, auto-increment id; all three permanently protected from mirroring).
 - Foundation `DataOperationRecorder` contract (`open`/`resume`/`recordTable`/`finalize`) with a `Null` default and the real `LedgerDataOperationRecorder`: current browser/console actor attribution, best-effort **idempotent** audit projection (guarded, no backlink), first-terminal-status-wins, and rejection of late summary writes/resume after terminalization. Queue/scheduler actor kinds, browser role/surface, and exact schedule context still require the deferred execution-context contract.
@@ -259,7 +259,7 @@ Validation: Focused Backend/UI tests; isolated PostgreSQL 17/18 native integrati
 
 ### Phase 2 — Import and mass-update provenance
 
-Affected pages: `/admin/system/data-operations`, `/admin/audit/actions`, `extensions/sb-group/ibp` import workbench
+Affected pages: `/admin/system/data-operations`, `/admin/audit/actions`, `app/Extensions/SbGroup/Ibp` import workbench
 
 Goal: The AX/IBP import (and later Investment processes) write the same durable provenance as mirror—one run, per-table effect counts and key ranges—reusing the shared ledger and audit bridge, correctly attributed across the subprocess boundary, without triggering any mirror.
 

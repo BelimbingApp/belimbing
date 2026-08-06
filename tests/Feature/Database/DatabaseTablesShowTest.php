@@ -4,7 +4,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 const USERS_TABLE_NAME = 'users';
 const USERS_MIGRATION_FILE = '0200_01_20_000000_create_users_table.php';
-const USERS_MIGRATION_PATH = 'app/Modules/Core/User/Database/Migrations/0200_01_20_000000_create_users_table.php';
+const USERS_MIGRATION_PATH = 'app/Core/User/Database/Migrations/0200_01_20_000000_create_users_table.php';
 
 uses(RefreshDatabase::class);
 

@@ -1,88 +1,76 @@
-# Payroll Plugin Extraction Runbook
+# Payroll Module Source Extraction Runbook
 
 **Document Type:** Operational runbook
-**Scope:** Extracting `app/Modules/People/Payroll/` from the main BLB repo into a standalone nested-git repo (`blb-payroll-my`).
-**Last Updated:** 2026-05-16
-**Status:** Not executed. This runbook documents the procedure; the actual extraction will be performed when the architecture-spec Phase 2 milestone lands.
+**Scope:** Extracting `app/Domains/People/Payroll` from the People Domain repository into a standalone nested Git source (`blb-payroll-my`) mounted at the same Module slot
+**Last Updated:** 2026-08-05
+**Status:** Not executed. Run only when the Payroll slot decision and repository are approved.
 
----
+## Outcome
 
-## What this is
+Payroll currently belongs to the optional People Domain source. This procedure changes only its Git ownership: the stable Module remains:
 
-After Plans 12–17, Attendance, Leave, Claim, Settings, and Employees do not import anything from `App\Modules\People\Payroll\`. The plug-out experiment proves the source modules function when Payroll's `ServiceProvider` is disabled. The next milestone is **physical extraction** — Payroll becomes its own git repository at `github.com/BelimbingApp/blb-payroll-my`, cloned into the same canonical path (`app/Modules/People/Payroll/`) via the nested-git pattern already used by `extensions/{licensee}/`.
+- path: `app/Domains/People/Payroll`;
+- namespace: `App\Domains\People\Payroll`;
+- Module ID: `people/payroll`.
 
-When this is done, "uninstall Payroll" becomes `rm -rf app/Modules/People/Payroll/` — no main-repo commit required.
+After extraction, the People repository stops tracking the `Payroll/` directory and a selected Payroll source fills that exact slot as a nested repository. Dependents continue to use Payroll's documented intake/events/contracts; they never identify the implementation by its Git remote.
+
+This is a whole-Module slot extraction, not an independent enable/disable toggle inside the People Domain. A deployment without a Payroll implementation omits the slot source. Switching implementations on a live database remains a data-migration project.
 
 ## Prerequisites
 
-- Plans 12, 13, 14, 15, 16, 17 complete and verified.
-- All five `*DoesNotImportPayrollTest` plus `PayrollIntakeBoundaryTest` green.
-- `git filter-repo` installed locally (`pip install git-filter-repo` or `brew install git-filter-repo`). `git subtree split` is an alternative but produces less clean history.
-- A public origin created: `github.com/BelimbingApp/blb-payroll-my` (empty, no initial commit).
-- A throwaway working copy of the main repo — do not run the extraction in your primary checkout.
+- The People producer Modules do not import Payroll implementation classes outside the documented intake/event boundary.
+- All `*DoesNotImportPayrollTest` tests and `app/Domains/People/Payroll/Tests/Feature/PayrollIntakeBoundaryTest.php` pass.
+- `git filter-repo` is installed locally.
+- `github.com/BelimbingApp/blb-payroll-my` exists and is empty.
+- The People source repository (`BelimbingApp/blb-people`) is clean and pushed.
+- You have a throwaway clone of the People repository. Never rewrite history in the primary composed checkout.
+- The compatibility-safe landing order and temporary CI behavior are agreed before either repository is pushed.
 
 ## Procedure
 
-### Step 1 — extract history into a temporary directory
+### 1. Extract Payroll history from the People repository
 
-Clone the main repo into a scratch path. From there, `git filter-repo` rewrites history to contain only `app/Modules/People/Payroll/`.
+The People repository root corresponds to `app/Domains/People` in a composed checkout, so `Payroll/` is the path to filter:
 
 ```bash
-git clone git@github.com:BelimbingApp/belimbing.git /tmp/blb-payroll-extract
+git clone git@github.com:BelimbingApp/blb-people.git /tmp/blb-payroll-extract
 cd /tmp/blb-payroll-extract
 
 git filter-repo \
-    --path app/Modules/People/Payroll/ \
-    --path-rename app/Modules/People/Payroll/:
+    --path Payroll/ \
+    --path-rename Payroll/:
 ```
 
-The `--path-rename` line strips the leading `app/Modules/People/Payroll/` so the resulting repo's root maps cleanly back to `app/Modules/People/Payroll/` on checkout. Verify:
+The extracted repository root should directly contain Payroll's Module files, including its co-located tests:
 
-```bash
-ls
-# Should show: Config/ Console/ Contracts/ CountryPacks/ Database/ Listeners/ Livewire/ Models/ Routes/ Services/ ServiceProvider.php composer.json ...
-
-git log --oneline | wc -l
-# Should be roughly the count of commits that touched Payroll, not the full main-repo log.
-```
-
-### Step 2 — also include tests under the same path policy
-
-The Payroll tests live at `tests/Feature/Modules/People/Payroll/`. They should ship with the plugin.
-
-Re-run filter-repo with both paths preserved:
-
-```bash
-# In a fresh clone (filter-repo refuses to run on a dirty repo)
-rm -rf /tmp/blb-payroll-extract
-git clone git@github.com:BelimbingApp/belimbing.git /tmp/blb-payroll-extract
-cd /tmp/blb-payroll-extract
-
-git filter-repo \
-    --path app/Modules/People/Payroll/ \
-    --path tests/Feature/Modules/People/Payroll/ \
-    --path-rename app/Modules/People/Payroll/:src/ \
-    --path-rename tests/Feature/Modules/People/Payroll/:tests/
-```
-
-The resulting layout:
-
-```
+```text
 /tmp/blb-payroll-extract/
-├── src/                  # was app/Modules/People/Payroll/
-│   ├── Config/
-│   ├── Console/
-│   ├── ...
-│   ├── ServiceProvider.php
-│   └── composer.json
-└── tests/                # was tests/Feature/Modules/People/Payroll/
-    ├── PayrollContributionIntakeTest.php
-    └── ...
+├── Config/
+├── Contracts/
+├── CountryPacks/
+├── Database/
+├── Listeners/
+├── Livewire/
+├── Models/
+├── Routes/
+├── Services/
+├── Tests/
+├── Views/
+├── ServiceProvider.php
+└── composer.json
 ```
 
-> **Note:** the `src/` and `tests/` convention is a placeholder. If you prefer Plan-12 §7.5's "canonical path" model (the plugin repo's root maps directly to `app/Modules/People/Payroll/` and tests live in a `tests/` subfolder), adjust the `--path-rename` directives accordingly.
+Verify the history contains Payroll changes rather than the full People log:
 
-### Step 3 — push to the new origin
+```bash
+git log --oneline | wc -l
+git status --short
+```
+
+Do not introduce a `src/` wrapper. The repository root must mount directly at the canonical Module path so its existing PSR-4 mapping, views, migrations, tests, and discovery surfaces remain unchanged.
+
+### 2. Push the extracted source
 
 ```bash
 cd /tmp/blb-payroll-extract
@@ -93,128 +81,160 @@ git push -u origin main
 git push --tags
 ```
 
-Sanity check: visit the GitHub UI; confirm the file tree and history.
+Inspect the remote file tree and history before modifying the People repository.
 
-### Step 4 — wire the main repo to ignore the path
+### 3. Stop tracking the slot in the People repository
 
-In a working copy of the main repo (not the extraction scratch), update `.gitignore`:
+In a clean People repository checkout, add this source-boundary rule to its `.gitignore`:
 
-```diff
-+ # Payroll is now a separate plugin repo (blb-payroll-my); see docs/runbooks/payroll-plugin-extraction.md.
-+ app/Modules/People/Payroll/
-+ tests/Feature/Modules/People/Payroll/
+```gitignore
+# The people/payroll slot is supplied by a separate nested source.
+/Payroll/
 ```
 
-Remove the now-redundant files from the main repo's tracking:
+Then remove Payroll from the People repository index:
 
 ```bash
-git rm -r --cached app/Modules/People/Payroll/ tests/Feature/Modules/People/Payroll/
-git commit -m "chore: stop tracking app/Modules/People/Payroll (extracted to blb-payroll-my)"
+git rm -r --cached Payroll/
+git commit -m "chore: extract people/payroll source"
 ```
 
-> **Important:** `git rm -r --cached` does NOT delete the files on disk. They stay in your working tree but are no longer tracked. Combined with the `.gitignore` entries, future changes to those files will not surface in `git status`.
+`git rm --cached` leaves the current files on disk, but the subsequent nested clone needs an empty target. After verifying the extraction remote and preserving any local changes, remove or relocate that untracked working copy before cloning. Do not delete it until its contents and Git status are proven recoverable.
 
-### Step 5 — clone the new plugin repo into the canonical path
+The platform repository needs no new ignore rule: it already ignores the optional Domain checkout at `app/Domains/People`. The People source owns the nested slot boundary.
 
-In your main-repo working copy:
+### 4. Mount the Payroll source at the canonical slot
+
+From the composed Belimbing checkout:
 
 ```bash
-git clone git@github.com:BelimbingApp/blb-payroll-my.git app/Modules/People/Payroll
+git clone git@github.com:BelimbingApp/blb-payroll-my.git app/Domains/People/Payroll
 ```
 
-(If the extraction used a `src/` layout, the clone is `git clone <repo> app/Modules/People/Payroll` and Payroll's autoload PSR-4 needs to reference `src/`. If the extraction preserved root mapping, no PSR-4 change needed.)
-
-Verify:
+Verify both repository boundaries:
 
 ```bash
-ls app/Modules/People/Payroll/.git
-# .git directory exists — confirms it's a nested git repo
-git -C app/Modules/People/Payroll/ remote -v
-# Should show github.com/BelimbingApp/blb-payroll-my, not the main repo
+git -C app/Domains/People remote -v
+git -C app/Domains/People/Payroll remote -v
+git -C app/Domains/People/Payroll status -sb
 ```
 
-### Step 6 — run the full People test suite
+The inner remote must be `blb-payroll-my`; the outer remote must remain `blb-people`.
+
+### 5. Prove discovery and boundaries
+
+Run the composed migration and test flows from the platform root:
 
 ```bash
-php artisan migrate:fresh --env=testing
-php artisan test tests/Feature/Modules/People
+php artisan migrate --dev
+php artisan test app/Domains/People/Payroll/Tests
+php artisan test app/Domains/People/Tests
 ```
 
-Expected: same number of tests passing as before the extraction. The migrations registered by Payroll's plugin are auto-discovered the same way as any other module migration. The architectural and contract tests do not care whether Payroll's files come from the main repo or a nested clone.
+Then run the full People source suite used by its CI. Expected behavior is identical to the pre-extraction baseline:
 
-### Step 7 — update onboarding docs
+- `App\Domains\People\Payroll\ServiceProvider` is discovered;
+- Payroll migrations and seeders load through the standard Domain Module patterns;
+- `people/payroll` remains the manifest identity;
+- Module-owned views and assets resolve from the same path;
+- producer boundary guards remain green.
 
-Document the new clone step:
+### 6. Update CI and setup automation
 
-- `README.md` — add a section "Setting up Payroll" that explains the nested clone.
-- `CONTRIBUTING.md` — describe the dual-PR workflow when a change spans main + plugin.
-- `docs/architecture/module-system.md` — update the distribution model to show the actual layout now in production.
-
-### Step 8 — update CI
-
-The main-repo CI must clone the plugin too, or it can't run the full Payroll test suite.
-
-GitHub Actions example:
+Any CI job that expects the complete People Domain must clone Payroll before running the People suite:
 
 ```yaml
-- name: Clone Payroll plugin
-  run: git clone --depth 1 https://github.com/BelimbingApp/blb-payroll-my.git app/Modules/People/Payroll
+- name: Clone Payroll Module source
+  run: git clone --depth 1 https://github.com/BelimbingApp/blb-payroll-my.git app/Domains/People/Payroll
 ```
 
-If using GitLab/Bitbucket, the equivalent runs in the `before_script` or first job step.
+If the Payroll repository is private, use the deployment's approved read credential and avoid printing it. Pinning a tag or commit is preferable for reproducible release jobs.
+
+Update composed-checkout setup and `.agents/skills/blb-repo-sync/SKILL.md` so the sync order becomes platform → People Domain → Payroll slot → Extensions. A parent source must exist before a nested source can be mounted below it.
+
+### 7. Update operator and contributor documentation
+
+Document:
+
+- how a fresh deployment obtains the selected `people/payroll` source;
+- which Payroll revision belongs to each platform/People release;
+- the multi-repository change and review workflow;
+- the supported no-Payroll composition, if it remains a product option;
+- data migration requirements before changing slot implementations.
+
+Source/repository details belong in setup, update, and diagnostics documentation. Operator business surfaces continue to present the People Domain and Payroll Module.
+
+## Landing Order
+
+Avoid a period where the People repository no longer contains Payroll but CI/setup still assumes it does.
+
+1. Push and verify `blb-payroll-my`.
+2. Land platform/setup/CI support capable of cloning the new source while the old tracked path still works.
+3. Land the People repository commit that stops tracking `Payroll/`.
+4. Update deployment composition pins and run the complete verification suite.
+
+If repository protections require a different order, use a temporary compatibility branch or pinned commit explicitly; do not support two runtime filesystem paths.
 
 ## Rollback
 
-If something breaks after extraction and you need to undo:
+If extraction must be undone:
 
-1. In a fresh clone of the main repo at the commit BEFORE the `git rm --cached` commit, the files are still in history. Use `git checkout <hash> -- app/Modules/People/Payroll/ tests/Feature/Modules/People/Payroll/`.
-2. Revert the `.gitignore` change.
-3. `git add` the files back and commit.
+1. In the People repository, revert the commit that removed `Payroll/` and its `.gitignore` rule.
+2. Remove or relocate the nested Payroll checkout only after proving it is clean and pushed.
+3. Restore the tracked `Payroll/` directory from the People commit before extraction.
+4. Remove the temporary CI clone step.
+5. Run the composed People migration and test suite again.
 
-The new `blb-payroll-my` repo can sit dormant until you're ready to retry; it doesn't have to be deleted.
+The standalone Payroll repository may remain archived for a later retry; deleting the remote is unnecessary.
 
-## What changes for downstream consumers
+## Contributor Workflow After Extraction
 
-After extraction, anyone working on Payroll:
-
-1. `cd app/Modules/People/Payroll/` — they're inside the plugin's git context. `git status`, `git commit`, `git push` operate against the plugin's origin.
-2. `cd -` — they're back in the main repo's context.
-
-A change that spans both repos requires two commits, two pushes, two PRs. This is the same cost the existing `extensions/{licensee}/` model already incurs.
-
-Cross-repo coordination tips:
-
-- Land the source-module event change (main repo) first.
-- Update Payroll's listener (plugin repo) second, referencing the now-merged event class.
-- Note required plugin version in the main repo's release notes.
-
-## What does NOT change
-
-- The plugin's code does not move. Same files, same paths, same namespaces.
-- The boot mechanism (path-based `ProviderRegistry::resolve`) does not change.
-- Test discovery does not change — Payroll's tests still live at `tests/Feature/Modules/People/Payroll/`, just sourced from the plugin clone.
-- Migrations still timestamp into the `0320_03_*` band; they auto-discover via the registry the same way.
-
-## Verifying full plug-out after extraction
-
-The plug-out experiment from Plan 15's exit verifies a future scenario: a deployment that does not need payroll simply skips the Payroll clone. From a clean main-repo checkout:
+Payroll work happens inside its nested repository:
 
 ```bash
-# Do NOT clone Payroll into app/Modules/People/Payroll/
-php artisan migrate:fresh --env=testing
-php artisan test tests/Feature/Modules/People/Attendance tests/Feature/Modules/People/Leave tests/Feature/Modules/People/Claim tests/Feature/Modules/People/Settings tests/Feature/Modules/People/Employees
+cd app/Domains/People/Payroll
+git status
+git commit -m "Payroll change"
+git push origin main
 ```
 
-Expected: source-module tests that don't depend on Payroll classes pass; the three integration-style tests that assert a `PayrollInput` row was created fail (identical to the current `ServiceProvider.php.disabled` experiment).
+People producer work happens one repository above. A change spanning both boundaries needs separate commits, reviews, pushes, and an explicit landing order.
 
-If anything else fails, the boundary regressed since Plan 15 — investigate before completing extraction.
+Prefer compatibility sequencing:
 
-## Composer migration (much later — architecture-spec Phase 4)
+1. land an additive producer event or contract change;
+2. update Payroll to consume it;
+3. remove deprecated producer behavior only after every supported Payroll source has migrated.
 
-When `blb-payroll-my` is mature enough to publish to Packagist (or a private Satis), the nested-git step is replaced by `composer require blb/payroll-my`. The plugin's `composer.json` is already in place from Plan 12 Phase 5. Switching from nested-git to composer is a deployment-time change; nothing about the code's structure has to move.
+## What Does Not Change
 
-## See also
+- The canonical Module path, namespace, and stable ID.
+- Base → Core → enabled Domains → Extensions discovery order.
+- Payroll's provider, migrations, routes, config, views, and test contracts.
+- The People Domain's install/enable/disable/update lifecycle.
+- The rule that code removal and persistent-data cleanup are separate decisions.
 
-- `docs/architecture/module-system.md` — the architecture spec this runbook executes.
-- `docs/guides/extensions/private-extension-repositories.md` — the existing nested-git pattern (used by `extensions/{licensee}/`) that Payroll extraction is modelled on.
-- `docs/plans/people/12_attendance-event-decoupling.md` through `17_claim-pay-item-mapping.md` — the prerequisite decoupling work.
+## Verify the No-Payroll Composition
+
+Only run this check if omitting the Payroll slot is a supported deployment composition. Start from a clean People checkout without the nested Payroll source:
+
+```bash
+php artisan migrate --dev
+php artisan test app/Domains/People/Attendance/Tests
+php artisan test app/Domains/People/Leave/Tests
+php artisan test app/Domains/People/Claim/Tests
+php artisan test app/Domains/People/Settings/Tests
+php artisan test app/Domains/People/Employees/Tests
+```
+
+Producer Modules must boot and complete their own behavior without Payroll listeners. Tests whose purpose is Payroll integration should be skipped by composition or run only after the slot source is mounted; unrelated failures indicate the contract boundary regressed.
+
+## Future Package Delivery
+
+A future package source may replace the nested Git checkout if it mounts the same canonical Module root and preserves `App\Domains\People\Payroll`, `people/payroll`, migrations, views, tests, and manifests. Changing delivery mechanism must not change business identity or consumer contracts.
+
+## See Also
+
+- `docs/architecture/module-system.md` — Domain, Module, source, and slot contracts.
+- `docs/guides/extensions/private-extension-repositories.md` — nested private-source safety pattern.
+- `docs/plans/people/12_attendance-event-decoupling.md` through `17_claim-pay-item-mapping.md` — historical prerequisite decoupling work.

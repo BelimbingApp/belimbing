@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Core\Company\Livewire\Companies;
+
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
+use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+class Index extends Component
+{
+    use InteractsWithNotifications;
+    use ResetsPaginationOnSearch;
+    use TogglesSort;
+    use WithPagination;
+
+    public string $search = '';
+
+    public string $statusFilter = 'all';
+
+    public string $sortBy = 'name';
+
+    public string $sortDir = 'asc';
+
+    private const SORTABLE = [
+        'name' => 'companies.name',
+        'status' => 'companies.status',
+        'jurisdiction' => 'companies.jurisdiction',
+    ];
+
+    public function updatedStatusFilter(): void
+    {
+        $this->resetPage();
+    }
+
+    public function sort(string $column): void
+    {
+        $this->toggleSort(
+            column: $column,
+            allowedColumns: self::SORTABLE,
+            defaultDir: [
+                'name' => 'asc',
+                'status' => 'asc',
+                'jurisdiction' => 'asc',
+            ],
+        );
+    }
+
+    public function statusVariant(string $status): string
+    {
+        return match ($status) {
+            'active' => 'success',
+            'suspended' => 'danger',
+            'pending' => 'warning',
+            default => 'default',
+        };
+    }
+
+    public function delete(int $companyId): void
+    {
+        if (! auth()->user()?->can('admin.company.delete')) {
+            abort(403);
+        }
+
+        $company = Company::query()->withCount('children')->findOrFail($companyId);
+
+        if (! auth()->user()?->isPlatformAdmin() && $company->id !== auth()->user()?->getCompanyId()) {
+            abort(403);
+        }
+
+        if ($company->id === Company::LICENSEE_ID) {
+            $this->notifyError(__('The licensee company cannot be deleted.'));
+
+            return;
+        }
+
+        if ($company->children_count > 0) {
+            $this->notifyError(__('Cannot delete a company that has subsidiaries.'));
+
+            return;
+        }
+
+        $company->delete();
+
+        $this->notify(__('Company deleted successfully.'));
+    }
+
+    public function render(): View
+    {
+        $sortColumn = self::SORTABLE[$this->sortBy] ?? 'companies.name';
+
+        /** @var User $user */
+        $user = auth()->user();
+
+        return view('livewire.admin.companies.index', [
+            'companies' => Company::query()
+                ->with('parent')
+                ->when(! $user->isPlatformAdmin(), fn (Builder $q) => $q->where('companies.id', $user->getCompanyId()))
+                ->when($this->statusFilter !== 'all', fn (Builder $q) => $q->where('companies.status', $this->statusFilter))
+                ->when($this->search, function ($query, $search): void {
+                    $query->where(function (Builder $q) use ($search): void {
+                        $q->where('companies.name', 'like', '%'.$search.'%')
+                            ->orWhere('companies.legal_name', 'like', '%'.$search.'%')
+                            ->orWhere('companies.code', 'like', '%'.$search.'%')
+                            ->orWhere('companies.email', 'like', '%'.$search.'%')
+                            ->orWhere('companies.jurisdiction', 'like', '%'.$search.'%');
+                    });
+                })
+                ->orderBy($sortColumn, $this->sortDir)
+                ->orderByDesc('companies.id')
+                ->paginate(15),
+        ]);
+    }
+}

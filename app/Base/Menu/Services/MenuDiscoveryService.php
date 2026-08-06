@@ -2,6 +2,7 @@
 
 namespace App\Base\Menu\Services;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
@@ -14,21 +15,25 @@ class MenuDiscoveryService
     /**
      * Glob patterns for menu file discovery.
      *
-     * One-level patterns (e.g. `app/Modules/<Domain>/Config/menu.php`) are
+     * One-level patterns (e.g. `app/Domains/<Domain>/Config/menu.php`) are
      * "domain anchors" — stable files where a domain declares its top-level
      * bucket. Leaf modules / packages live one level deeper and declare only
      * leaves and intermediate containers, never a root. Extensions follow the
-     * same shape: `extensions/<vendor>/Config/menu.php` for vendor-anchored
-     * buckets, `extensions/<vendor>/<package>/Config/menu.php` for package
-     * leaves.
+     * same shape: `app/Extensions/<Extension>/Config/menu.php` for source-level
+     * buckets and `app/Extensions/<Extension>/<Module>/Config/menu.php` for
+     * module leaves.
      */
-    protected array $scanPatterns = [
-        'app/Base/*/Config/menu.php',
-        'app/Modules/*/Config/menu.php',
-        'app/Modules/*/*/Config/menu.php',
-        'extensions/*/Config/menu.php',
-        'extensions/*/*/Config/menu.php',
-    ];
+    protected function scanPatterns(): array
+    {
+        return [
+            ApplicationTopology::baseComponentPattern('Config/menu.php'),
+            ApplicationTopology::coreModulePattern('Config/menu.php'),
+            ApplicationTopology::domainPattern('Config/menu.php'),
+            ApplicationTopology::domainModulePattern('Config/menu.php'),
+            ApplicationTopology::extensionSourcePattern('Config/menu.php'),
+            ApplicationTopology::extensionModulePattern('Config/menu.php'),
+        ];
+    }
 
     /**
      * Discover all menu items from configured paths.
@@ -37,8 +42,8 @@ class MenuDiscoveryService
     {
         $items = collect();
 
-        foreach ($this->scanPatterns as $pattern) {
-            $files = DomainState::filterPaths(glob(base_path($pattern)) ?: []);
+        foreach ($this->scanPatterns() as $pattern) {
+            $files = DomainState::filterPaths(glob($pattern) ?: []);
 
             foreach ($files as $file) {
                 $this->processFile($file, $items);
@@ -59,8 +64,8 @@ class MenuDiscoveryService
     {
         $parts = [];
 
-        foreach ($this->scanPatterns as $pattern) {
-            foreach (DomainState::filterPaths(glob(base_path($pattern)) ?: []) as $file) {
+        foreach ($this->scanPatterns() as $pattern) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 $parts[] = $file.':'.@filemtime($file);
             }
         }
@@ -139,28 +144,32 @@ class MenuDiscoveryService
     {
         // Extract from patterns:
         // app/Base/Menu/Config/menu.php             -> Menu
-        // app/Modules/Commerce/Config/menu.php      -> Commerce        (domain anchor)
-        // app/Modules/Core/Geonames/Config/menu.php -> Geonames        (leaf)
-        // extensions/ham/Config/menu.php            -> ham             (vendor anchor)
-        // extensions/ham/auto-parts/Config/menu.php -> auto-parts      (package leaf)
+        // app/Domains/Commerce/Config/menu.php      -> Commerce        (domain anchor)
+        // app/Core/Geonames/Config/menu.php          -> Geonames        (leaf)
+        // app/Extensions/Ham/Config/menu.php         -> Ham             (source anchor)
+        // app/Extensions/Ham/AutoParts/Config/menu.php -> AutoParts     (package leaf)
 
         if (preg_match('#app/Base/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 
-        if (preg_match('#app/Modules/[^/]+/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+        if (preg_match('#app/Core/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 
-        if (preg_match('#app/Modules/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+        if (preg_match('#app/Domains/[^/]+/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 
-        if (preg_match('#extensions/[^/]+/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+        if (preg_match('#app/Domains/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 
-        if (preg_match('#extensions/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+        if (preg_match('#app/Extensions/[^/]+/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
+            return $matches[1];
+        }
+
+        if (preg_match('#app/Extensions/([^/]+)/Config/menu\.php#', $relativePath, $matches)) {
             return $matches[1];
         }
 
@@ -175,7 +184,7 @@ class MenuDiscoveryService
     protected function extractModulePath(string $relativePath): ?string
     {
         // Extract directory containing the menu.php
-        // app/Modules/Core/Geonames/Config/menu.php -> app/Modules/Core/Geonames
+        // app/Core/Geonames/Config/menu.php -> app/Core/Geonames
 
         $parts = explode('/Config/menu.php', $relativePath);
 

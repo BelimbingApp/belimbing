@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Providers\Providers;
+use App\Core\AI\Livewire\Providers\Providers;
 
 /** @var Providers $this */
 /** @var bool $laraActivated */

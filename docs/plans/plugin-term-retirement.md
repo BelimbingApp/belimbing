@@ -1,15 +1,20 @@
 # plugin-term-retirement
 
-**Status:** Complete (2026-06-21). Phases 1–2 implemented; Phases 3–4 dropped — "plugin" is accurate where it remains (see those phases).
-**Last Updated:** 2026-06-21
+**Status:** Superseded in install-unit vocabulary by ADR 0001; historical implementation record originally completed 2026-06-21.
+**Last Updated:** 2026-08-06
 **Sources:**
-- `docs/architecture/module-system.md` — Vocabulary note that defines Module / Distribution Bundle (Bundle) / adapter / extension seam and records "plugin" as retired on operator surfaces.
+- `docs/architecture/decisions/0001-four-root-application-topology.md` — superseding four-root topology and Domain/Extension vocabulary.
+- `docs/architecture/module-system.md` — current Domain-and-Module contract; it supersedes the Distribution Bundle vocabulary this plan originally cited.
 - `docs/plans/plugin-manager-ui.md` — the shipped dashboard this plan renames; its Design Decisions are partly stale and are corrected here.
 - `app/Base/Foundation/Services/LandingPageResolver.php` — in-repo precedent for aliasing renamed menu IDs that are persisted in user-scoped settings.
 
-**Agents:** claud/opus-4.8
+**Agents:** claud/opus-4.8, codex/gpt-5.6-sol
 
 ---
+
+## Supersession Note
+
+This document preserves the June 2026 Plugin → Bundle work and its evidence. ADR 0001 subsequently retired **Distribution Bundle** and **Bundle** as product/general-architecture nouns: optional enterprise lifecycle units are Domains, deployment-owned mixed-bag sources are Extensions, and Modules remain contained implementation boundaries. The historical conclusions below about genuine plug-in seams may still be valid, but their Bundle-era install-unit and operator-screen claims are not current architecture.
 
 ## Problem Essence
 

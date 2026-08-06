@@ -1,17 +1,20 @@
 # people/10_payroll-intake-dependency-inversion
 
-**Status:** Complete — all phases landed. Phase 1 intake skeleton, Phase 2 schema realignment, Phases 3–5 producer rewrites (Attendance, Claim, Leave + Encashment), Phase 6 architectural test + cross-link doc, Phase 7 pending materializer hook + safety-net command. Concurrent-insert test on a real DB driver remains deferred to a future CI integration (SQLite cannot exercise true row locking).
-**Last Updated:** 2026-05-13
+**Status:** Complete as the Payroll intake foundation. Plans 12–14 subsequently superseded the direct producer-call boundary with producer-owned events and Payroll-owned listeners; the intake remains Payroll's internal write path. The concurrent-insert test on a real DB driver remains deferred to a future CI integration (SQLite cannot exercise true row locking).
+**Last Updated:** 2026-08-06
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll Core/country-pack boundary and the neutral `PayrollInput` contract that all upstream sources feed.
 - `docs/plans/people/07_leave-module-design.md` — Leave module's `LeavePayrollHandoffService` and `LeaveEncashmentService` both write `PayrollInput` rows directly.
 - `docs/plans/people/08_claim-module-design.md` — Claim module's `ClaimPayrollHandoffService` writes `PayrollInput::TYPE_REIMBURSEMENT` rows; open guardrails record duplicate-source race and stale-policy approval risks tied to this direction.
 - `docs/plans/people/09_attendance-module-design.md` — Attendance overtime already writes to Payroll via `AttendanceOvertimeService`, and the module ships its own `attendance_payroll_handoffs` table whose composite uniqueness key prototypes the pending-store pattern this plan generalizes.
-- `app/Modules/People/Claim/Services/ClaimPayrollHandoffService.php`, `app/Modules/People/Leave/Services/LeavePayrollHandoffService.php`, `app/Modules/People/Leave/Services/LeaveEncashmentService.php`, `app/Modules/People/Attendance/Services/AttendanceOvertimeService.php` — the five current producer-side writers (Claim 1, Leave 2, Attendance 1 with more to come) that import `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`.
+- `docs/plans/people/12_attendance-event-decoupling.md`, `13_leave-event-decoupling.md`, `14_claim-event-decoupling.md` — later evolution that moved the intake behind Payroll listeners so producer modules remain installable without Payroll.
+- `app/Domains/People/Claim/Services/ClaimPayrollHandoffService.php`, `app/Domains/People/Leave/Services/LeavePayrollHandoffService.php`, `app/Domains/People/Leave/Services/LeaveEncashmentService.php`, `app/Domains/People/Attendance/Services/AttendanceOvertimeService.php` — the four producer-side writers (Claim 1, Leave 2, Attendance 1) whose pre-plan implementations imported `PayrollInput`, `PayrollRun`, and `PayrollRunParticipant`.
 - `app/Modules/People/Attendance/Models/AttendancePayrollHandoff.php` and migration `0320_01_15_000000_create_attendance_core_tables.php:364` — module-local handoff store with composite source key, to be generalized and moved into Payroll.
-- `app/Modules/People/Payroll/Models/PayrollRun.php` — actual run status vocabulary (`draft|calculated|reviewed|approved|closed|voided`) and `assertMutable` semantics (blocks only `closed|voided`).
-- `app/Modules/People/Payroll/Models/PayrollInput.php` — neutral integration surface (`source_type`, `source_id`, `pay_item_code`, `input_type`, `amount`/`quantity`, `occurred_on`, `metadata`).
+- `app/Domains/People/Payroll/Models/PayrollRun.php` — actual run status vocabulary (`draft|calculated|reviewed|approved|closed|voided`) and `assertMutable` semantics (blocks only `closed|voided`).
+- `app/Domains/People/Payroll/Models/PayrollInput.php` — neutral integration surface (`source_type`, `source_id`, `pay_item_code`, `input_type`, `amount`/`quantity`, `occurred_on`, `metadata`).
 **Agents:** amp/claude-opus-4-7, claude/opus-4.7
+
+> **Evolution note:** The direct-call language below records Plan 10's landed design at that point in time. Plans 12–14 are authoritative for the current producer boundary: producers emit their own domain events, Payroll optionally listens, and only Payroll code constructs `PayrollContributionPayload` or calls `PayrollContributionIntake`.
 
 ## Problem Essence
 
@@ -26,12 +29,12 @@ Five producer-side services (Claim×1, Leave×2, Attendance×1, with Attendance 
 ## Desired Outcome
 
 Payroll owns:
-1. A typed payload contract (`PayrollContributionPayload`) and a single intake service (`PayrollContributionIntake::ingest`) that producers call directly inside their own transactions.
+1. A typed payload contract (`PayrollContributionPayload`) and a single intake service (`PayrollContributionIntake::ingest`) that its event listeners call after translating producer-domain facts.
 2. A durable pending store (a Payroll-owned table generalized from `attendance_payroll_handoffs`) so a contribution survives even when no open run currently covers its `occurred_on`. The intake either writes a `PayrollInput` immediately or persists the pending row and later materializes it when a run opens.
 3. The composite uniqueness key — `(source_type, source_id, pay_item_code, period_anchor)` — applied at the DB level on both the pending store and `payroll_inputs`. Producers that fan out multiple pay items per source (Attendance period lines) are first-class, not edge cases.
-4. The status read API (`PayrollContributionStatus`) that producers call instead of joining `payroll_inputs` themselves.
+4. The status read API (`PayrollContributionStatus`) used by Payroll-owned surfaces instead of joining `payroll_inputs` themselves.
 
-Producers (Claim, Leave including encashment, Attendance including overtime) stop importing any Payroll model. Domain events are *not* the foundation — they are an optional adapter that can sit on top of the synchronous intake call later if asynchronous handoff is ever needed.
+Producers (Claim, Leave including encashment, Attendance including overtime) import no Payroll class. Their producer-owned events are the optional-module boundary; Payroll listeners keep the synchronous, idempotent intake engine behind that boundary.
 
 ## Top-Level Components
 
@@ -41,14 +44,14 @@ Producers (Claim, Leave including encashment, Attendance including overtime) sto
 | `PayrollContributionIntake` service | Single entry point. Resolves target run if one is open; ensures participant; performs an atomic upsert keyed on the composite source tuple. If no run is open, persists a pending contribution row instead. Returns a structured outcome. | Payroll Core |
 | `payroll_pending_contributions` table | Payroll-owned durable store for contributions that arrived before an open run exists, or that need re-materialization (e.g. reversal after run close). Composite-unique on `(source_type, source_id, pay_item_code, period_anchor)`. Generalizes the existing `attendance_payroll_handoffs` table. | Payroll Core |
 | Pending materializer | Run-open hook that scans `payroll_pending_contributions` for rows whose `period_anchor` falls in the new run and writes corresponding `PayrollInput` rows. | Payroll Core |
-| `PayrollContributionStatus` query | Read API returning `{ state, payroll_input_id, payroll_run_id, payroll_run_status, last_updated_at, last_event_reason }`. State vocabulary aligned to actual Payroll model: `absent`, `pending`, `queued_in_run`, `calculated`, `closed`, `voided`, `reversed`, `rejected_locked`. | Payroll Core |
+| `PayrollContributionStatus` query | Read API returning `{ state, payroll_input_id, payroll_run_id, payroll_run_status, payroll_pending_contribution_id, reason }`. State vocabulary aligned to actual Payroll model: `absent`, `pending`, `queued_in_run`, `calculated`, `closed`, `voided`, `reversed`, `rejected_locked`. | Payroll Core |
 | Atomic upsert path | DB-level: either `INSERT ... ON CONFLICT DO NOTHING` (PostgreSQL) / `INSERT IGNORE` + reload (MySQL), or a `try { insert } catch (UniqueViolation) { reload }` wrapper. `firstOrCreate` is explicitly insufficient because it is select-then-insert and racy. | Payroll Core |
-| Producer call site | Each producer service calls `PayrollContributionIntake::ingest($payload)` inside its existing `DB::transaction`. No event indirection, no Payroll model imports. | Each producer module |
-| Optional event adapter (deferred) | If asynchronous intake is later required (bulk Attendance finalize, cross-process flow), introduce a Payroll-owned event class that wraps the payload and a listener that calls intake. Not part of v1. | Deferred |
+| Producer event site | Each producer emits a producer-owned fact event without importing Payroll. Dispatch is harmless when Payroll is not installed. | Each producer module |
+| Event translation | Payroll listeners consume published producer events, build the Payroll-owned payload, and call the same intake engine. | Payroll Core |
 
 ## Design Decisions
 
-**The foundation is a synchronous Payroll-owned contract, not events.** Plan 10 v1 had producer modules owning event classes that Payroll listened to, which contradicted the "Payroll Core does not import producer classes" rule. Drop events. Producers call a Payroll service directly with a Payroll-owned DTO. The dependency direction is unambiguous: producers depend on a Payroll contract, Payroll depends on nothing producer-specific.
+**Historical v1 decision — superseded by Plans 12–14.** Plan 10 initially chose direct synchronous calls. The later module-lifecycle design established producer-owned events as the installable boundary: producers remain independent of Payroll, while Payroll declares optional producer dependencies and translates their published events into its unchanged intake contract.
 
 **The atomic unit is one pay-item contribution, not one producer request.** The source granularity must match what produces a single `PayrollInput`. Today that varies:
 - Claim: one claim line → one input.
@@ -65,7 +68,7 @@ The composite uniqueness key `(source_type, source_id, pay_item_code, period_anc
 
 **Uniqueness is enforced at the DB level, not by the application.** `firstOrCreate` is select-then-insert and loses under concurrent approval. The intake uses an atomic upsert path appropriate to the driver. The plan does not pick the SQL dialect specifics in advance, but Phase 2 must demonstrate the path is genuinely atomic with a concurrent-insert test.
 
-**Producer call sites stay synchronous and inside the producer transaction.** Today, `ApproveClaimRequestService` calls handoff inside `DB::transaction`. Move it to `PayrollContributionIntake::ingest($payload)`; identical commit semantics, identical rollback semantics. Async is not part of v1.
+**Historical v1 transaction decision — superseded at the module boundary.** Event dispatch remains synchronous today, but producers no longer call or observe the intake outcome. Listeners own the intake transaction and idempotency semantics.
 
 **Reversal is a Payroll-owned operation, called by producers via the same intake API.** Adding `PayrollContributionIntake::reverse($sourceRef, $reason)` keeps the API symmetric. Producers do not branch on payroll run state — they call reverse, and intake decides delete-pending, reverse-input, or queue-compensating-input in the next open run.
 
@@ -110,14 +113,14 @@ The architectural test in the cleanup phase will fail if any of these still impo
 
 **`PayrollContributionStatus::for($sourceType, $sourceId, $payItemCode = null, $periodAnchor = null)` returns:**
 - `state`: `absent | pending | queued_in_run | calculated | closed | voided | reversed | rejected_locked`;
-- references: `payroll_input_id`, `payroll_run_id`, `payroll_run_status`, `period_id`;
-- audit: `last_updated_at`, `last_event_reason`.
-- When `pay_item_code` or `period_anchor` are omitted, returns the aggregate set so a producer can show "all contributions from this leave request" without re-implementing the composite lookup.
+- references: `payroll_input_id`, `payroll_run_id`, `payroll_run_status`, `payroll_pending_contribution_id`;
+- context: `reason`.
+- When `pay_item_code` or `period_anchor` are omitted, `for()` returns the most recent matching contribution. `allFor()` returns the aggregate set.
 
 **The contract forbids:**
-- producer modules importing `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`, or any Payroll service other than `PayrollContributionIntake` and `PayrollContributionStatus`;
+- production producer modules importing any class below `App\Domains\People\Payroll`;
 - producer migrations referencing payroll tables for handoff (Attendance's `attendance_payroll_handoffs` is retired);
-- Payroll Core importing producer-specific classes (event classes, if introduced later, are Payroll-owned wrappers around the payload).
+- Payroll listeners bypassing `PayrollContributionIntake` to write Payroll models directly. Payroll may consume producer-owned event classes through declared optional module dependencies.
 
 ## Risks and Guardrails
 
@@ -128,7 +131,7 @@ The architectural test in the cleanup phase will fail if any of these still impo
 - **Risk: reversal semantics differ across producers.** Guardrail: Payroll defines the three reversal outcomes (delete-pending, delete-in-draft, compensating-input) and producers do not branch. Per-producer reversal policy lives as configuration on the intake, not as producer code.
 - **Risk: `AttendancePayrollHandoff` table holds in-flight data when the migration ships.** Guardrail: Phase 5 includes a one-shot data migration from `attendance_payroll_handoffs` to `payroll_pending_contributions` before dropping the old table.
 - **Risk: refactor stalls halfway.** Guardrail: phases 3–5 (Claim, Leave-including-encashment, Attendance-including-overtime) land in a single release. The architectural test in Phase 6 fails if any producer still imports a Payroll model, locking the inversion in.
-- **Risk: events are reintroduced opportunistically and recreate the original confusion.** Guardrail: events stay deferred. Any future event adapter is a Payroll-owned wrapper that calls the same intake; producers never own event classes that Payroll subscribes to.
+- **Risk: event listeners recreate multiple Payroll writers.** Guardrail: every producer-event listener translates into `PayrollContributionPayload` and delegates to the one `PayrollContributionIntake`; listeners do not write Payroll models directly.
 
 ## Phases
 
@@ -222,7 +225,7 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 
 ### Phase 6 — Architectural lock-in  ✅ DONE
 
-- [x] Added `tests/Feature/Modules/People/Payroll/PayrollIntakeBoundaryTest.php` that walks Leave/Claim/Attendance source files and asserts no `use App\Modules\People\Payroll\Models\*` imports. Currently green. Will fail loudly if a future agent reaches back across the boundary. {amp/claude-opus-4-7}
+- [x] Added `app/Domains/People/Payroll/Tests/Feature/PayrollIntakeBoundaryTest.php` that walks Leave/Claim/Attendance source files and asserts no `use App\Domains\People\Payroll\Models\*` imports. Currently green. Will fail loudly if a future agent reaches back across the boundary. {amp/claude-opus-4-7}
 - [x] Authored `docs/architecture/payroll-intake.md` defining the public contract surfaces, must/must-not rules for producers, state vocabulary, idempotency guarantee, and pointer to plan 10. {amp/claude-opus-4-7}
 - [ ] Update plan 02 (Payroll Malaysia top-level design) to record that producer ingestion is Payroll-owned. Deferred — plan 02 is more about country-pack boundaries than producer ingestion; not strictly required for follow-on agents. Open as a low-priority polish.
 
@@ -231,7 +234,7 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 - [x] Pending materializer: `PayrollContributionIntake::materializePendingForRun(PayrollRun)` scans pending rows whose `period_anchor` falls in the run's period and re-ingests them. Wired to `PayrollRun::created` model event so it runs automatically the moment a covering run is created. Test coverage added in `PayrollContributionIntakeTest`. {amp/claude-opus-4-7}
 - [x] `blb:payroll:materialize-pending` Artisan command registered in the Payroll service provider. Sweeps open runs (optionally filtered by `--company` or `--run`) and reports per-run summaries. Safe to schedule daily as a backstop. {amp/claude-opus-4-7}
 - [ ] Concurrent-insert test in a driver that supports real locking (verify exactly one `people_payroll_pending_contributions` row under two parallel ingests of the same payload). SQLite-in-memory cannot exercise true row locking; this lands when CI gets a MySQL/Postgres lane. The atomic upsert path (`catch (UniqueViolation) → reload`) is in place and the DB-level unique index will enforce singleness even under contention; only the test is missing.
-- [ ] Optional: Payroll-owned event class wrapping the payload as a foundation for any future async/queued intake. Do not ship without a concrete async use case.
+- [x] Superseded by Plans 12–14: producer-owned domain events now form the optional-module boundary and Payroll listeners translate them into the existing intake contract.
 
 ## Open Research Before Implementation
 
@@ -240,4 +243,4 @@ Single atomic step covering two spec-drift fixes that both open every People mig
 - Does the reversal API need a "force" mode for HR/Finance correction flows (override locked-run rejection with explicit authorization)? Likely yes for Claim; the gate is authz, not intake logic.
 - When Attendance period handoff lands, will it dispatch one payload per (period, employee, pay_item) or one per (period, employee)? The composite key forces the former; confirm this matches plan 09's intent.
 - Should `PayrollContributionStatus` cache its lookups? Producer Operations views may query it for hundreds of rows on render.
-- Is there value in a future event adapter (Phase 6 optional bullet), or is direct synchronous intake sufficient permanently? Revisit only if a real async use case emerges.
+- Plans 12–14 resolved the boundary question in favor of producer-owned domain events with synchronous Payroll listeners. Any future queued delivery must preserve the same intake idempotency key and optional-module boundary.

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
 use Tests\Support\FakeDomainRuntimeReloader;
 
 const DOMAIN_INSTALLER_FIXTURE_DOMAIN = 'ZzInstallable';
-const DOMAIN_INSTALLER_FIXTURE_PATH = 'Modules/ZzInstallable';
+const DOMAIN_INSTALLER_FIXTURE_PATH = 'Domains/ZzInstallable';
 const DOMAIN_INSTALLER_FIXTURE_REPO = 'https://example.test/zz.git';
 const DOMAIN_INSTALLER_FIXTURE_DESCRIPTION = 'Fixture domain.';
 const DOMAIN_INSTALLER_FIXTURE_MIGRATION = '2099_01_01_000000_create_zz_install_table_table';

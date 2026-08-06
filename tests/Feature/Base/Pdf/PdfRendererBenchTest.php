@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
+use App\Core\AI\Services\Browser\PlaywrightRunner;
 
 beforeEach(function () {
     if (env('BLB_PDF_BENCH') !== '1') {

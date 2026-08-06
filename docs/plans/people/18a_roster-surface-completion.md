@@ -1,13 +1,13 @@
 # 18a_roster-surface-completion.md
 
 **Status:** Complete
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
 - `docs/plans/people/16_attendance-roster-builder-dhh-followups.md` — origin of deferred items
-- `app/Modules/People/Attendance/Livewire/Rosters.php`
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php`
+- `app/Domains/People/Attendance/Livewire/Rosters.php`
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php`
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-list.blade.php`
 **Agents:** claude/sonnet-4.6
 
 ## Problem Essence

@@ -1,7 +1,7 @@
 # people/09_attendance-module-design
 
 **Status:** In Progress
-**Last Updated:** 2026-05-27
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/01_people-modules.md` - Attendance is a planned People module for daily attendance, clock-in/out, overtime calculation, shift patterns, conditional allowances, payroll feed, and future mobile/geofenced attendance.
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` - Payroll expects attendance/overtime inputs as neutral `PayrollInput` rows and keeps rotating shifts, GPS/geofence, and device binding outside payroll v1 unless SBG confirms day-one need.
@@ -24,10 +24,10 @@
 - `docs/plans/people/18c_roster-self-service.md` - employee schedule, acknowledgment, print, and export slice that informs the roster-facing employee experience.
 - `docs/plans/people/18d_roster-payroll-reconciliation.md` - payroll lock, planned-vs-actual reconciliation, and OT flag slice that matches the remaining payroll-facing Attendance work.
 - `docs/plans/people/sbg_attendance_ref/` - SBG HR2000 Time Management screenshots: TMS Group setup, punch windows, daily/monthly rounding, daily-rated workday flags, break/lateness options, overtime adjustment/export, conditional allowances, absenteeism batch entry, time clock audit, geofence, and geogroup setup.
-- `app/Modules/People/Settings/Models/PeopleCalendarException.php` - existing work-calendar exception model Attendance consumes for non-working days, company holidays, and special workdays.
-- `app/Modules/People/Settings/Models/EmployeeWorkProfile.php` - effective employee work profile used to resolve calendar, cost center, supervisor, pay basis, and workforce class.
-- `app/Modules/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` - neutral payroll-input surface for overtime earnings, attendance allowances, lateness deductions, unpaid absence deductions, and one-off time adjustments.
-- `app/Modules/People/Attendance/Events/AttendanceOvertimeApproved.php` and `app/Modules/People/Payroll/Listeners/RecordAttendanceOvertimeContribution.php` - the shipped overtime event/listener seam that replaced direct Attendance → Payroll imports.
+- `app/Domains/People/Settings/Models/PeopleCalendarException.php` - existing work-calendar exception model Attendance consumes for non-working days, company holidays, and special workdays.
+- `app/Domains/People/Settings/Models/EmployeeWorkProfile.php` - effective employee work profile used to resolve calendar, cost center, supervisor, pay basis, and workforce class.
+- `app/Domains/People/Payroll/Models/PayrollInput.php` and `PayrollPayItem.php` - neutral payroll-input surface for overtime earnings, attendance allowances, lateness deductions, unpaid absence deductions, and one-off time adjustments.
+- `app/Domains/People/Attendance/Events/AttendanceOvertimeApproved.php` and `app/Domains/People/Payroll/Listeners/RecordAttendanceOvertimeContribution.php` - the shipped overtime event/listener seam that replaced direct Attendance → Payroll imports.
 - `docs/architecture/database.md` - reserves migration prefix `0320_01_15_*` for People Attendance with dependencies on Company, Employee, User, Settings, Payroll, and Workflow.
 - `docs/architecture/module-system.md` - module placement and singular PascalCase module directory convention.
 - `docs/plans/AGENTS.md` - plan conventions.
@@ -39,7 +39,7 @@ BLB has a substantial Attendance module, but the remaining work is the operator-
 
 ## Desired Outcome
 
-An Attendance module under `app/Modules/People/Attendance/` that records and explains daily attendance from schedules, clock events, manual adjustments, and approved exceptions; supports shift and roster patterns including 24-hour and rotating shifts; publishes payroll-facing events that Payroll materializes into neutral contributions; and exposes employee, supervisor, HR, and payroll surfaces through the People workbench. Core Attendance should remain country-neutral. Malaysia statutory or wage-classification behavior belongs in the Malaysia payroll country pack, while SBG-specific shift rules, allowance formulas, import mappings, and device/geofence policy belong in `kiatng/blb-sbg`.
+An Attendance Module under `app/Domains/People/Attendance/` that records and explains daily attendance from schedules, clock events, manual adjustments, and approved exceptions; supports shift and roster patterns including 24-hour and rotating shifts; publishes payroll-facing events that Payroll materializes into neutral contributions; and exposes employee, supervisor, HR, and payroll surfaces through the People workbench. The Attendance Module should remain country-neutral. Malaysia statutory or wage-classification behavior belongs in the Malaysia payroll country pack, while SBG-specific shift rules, allowance formulas, import mappings, and device/geofence policy belong in `kiatng/blb-sbg`.
 
 The immediate build slice is the setup-activation and payroll-facing surface work: source-evidence, version activation, roster-change notifications, payroll tabs, reconciliation reports, CSV exports, and saved filters. Device/geofence and SBG import stay later phases.
 
@@ -67,7 +67,7 @@ The immediate build slice is the setup-activation and payroll-facing surface wor
 
 ## Design Decisions
 
-**Use singular `Attendance` for the module and keep "Time Management" as benchmark language only.** The module path should be `app/Modules/People/Attendance/`, matching the database registry and BLB's singular capability convention. HR2000 labels such as e-TMS are evidence of operational scope, not vocabulary to copy into Core.
+**Use singular `Attendance` for the Module and keep "Time Management" as benchmark language only.** The Module path is `app/Domains/People/Attendance/`, matching the database registry and BLB's singular capability convention. HR2000 labels such as e-TMS are evidence of operational scope, not vocabulary to copy into the People Domain.
 
 **Attendance is the source of operational time facts; Payroll only classifies and pays them.** Payroll should not own schedules, punches, roster changes, geofence evidence, or overtime approval. Attendance owns the time lifecycle and publishes payroll-facing events for approved/finalized facts; Payroll materializes those contributions through its own listener/intake path.
 
@@ -286,7 +286,7 @@ The immediate build slice is the setup-activation and payroll-facing surface wor
 
 ### Phase 1 - Attendance Core skeleton
 
-- [x] Create `app/Modules/People/Attendance/` using migration prefix `0320_01_15_*`, module authz, menu config, routes, service provider, and Livewire workbench shell. {codex/gpt-5}
+- [x] Create `app/Domains/People/Attendance/` using migration prefix `0320_01_15_*`, Module authz, menu config, routes, service provider, and Livewire workbench shell. {codex/gpt-5}
 - [x] Create shift template, punch acceptance window, roster pattern, roster assignment, attendance policy group, attendance day, clock event, attendance adjustment, overtime request, allowance rule, absenteeism batch, geofence/geofence group, and payroll handoff reference tables/models. {codex/gpt-5}
 - [x] Implement append-only clock event ingestion for manual/web entries and file imports, including source, actor, timezone, device/location evidence fields, and correction lineage. Web, manual, import, and correction APIs are implemented behind `ClockEventIngestionService`; file parser UX remains a later import surface. {codex/gpt-5}
 - [x] Implement attendance-day projection from roster, rule policy, clock events, and calendar exceptions while the period is open. Roster-aware day resolution, clock-event projection, and calendar-exception integration are implemented; `AttendanceDayProjectionService` now handles lateness grace, work-hour rounding, unpaid break deduction, OT minimum suppression, missing-punch/late/early-out/absent tags, and cross-midnight payroll attribution. Phase 2 still owns the remaining edge rules: monthly rounding, pay-basis-specific break exclusion, daily-rated workday counting, and break-lateness offset. {codex/gpt-5, claude-code/opus-4.7}

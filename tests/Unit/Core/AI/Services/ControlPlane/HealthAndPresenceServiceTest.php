@@ -1,0 +1,358 @@
+<?php
+
+use App\Base\Settings\Contracts\SettingsService;
+use App\Core\AI\DTO\ControlPlane\HealthSnapshot;
+use App\Core\AI\DTO\Session;
+use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Enums\ControlPlaneTarget;
+use App\Core\AI\Enums\PresenceState;
+use App\Core\AI\Enums\ToolHealthState;
+use App\Core\AI\Enums\ToolReadiness;
+use App\Core\AI\Models\AiRun;
+use App\Core\AI\Services\ControlPlane\HealthAndPresenceService;
+use App\Core\AI\Services\SessionManager;
+use App\Core\AI\Services\ToolReadinessService;
+use App\Core\Employee\Models\Employee;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Tests\TestCase;
+
+uses(TestCase::class, LazilyRefreshDatabase::class);
+
+const HAPS_TOOL_NAME = 'bash';
+const HAPS_EMPLOYEE_ID = 1;
+const HAPS_PROVIDER_NAME = 'anthropic';
+const HAPS_PROVIDER_LAST_TEST_AT = '.last_test_at';
+const HAPS_PROVIDER_LAST_TEST_SUCCESS = '.last_test_success';
+
+function makeHapsService(
+    ?ToolReadinessService $toolReadiness = null,
+    ?SessionManager $sessionManager = null,
+    ?SettingsService $settings = null,
+): HealthAndPresenceService {
+    return new HealthAndPresenceService(
+        $toolReadiness ?? Mockery::mock(ToolReadinessService::class),
+        $sessionManager ?? Mockery::mock(SessionManager::class),
+        $settings ?? app(SettingsService::class),
+    );
+}
+
+function hapsSession(int $minutesAgo = 5): Session
+{
+    $lastActivity = (new DateTimeImmutable)->modify("-{$minutesAgo} minutes");
+
+    return new Session(
+        id: 'sess_haps_001',
+        employeeId: HAPS_EMPLOYEE_ID,
+        channelType: 'web',
+        title: 'Test',
+        createdAt: $lastActivity,
+        lastActivityAt: $lastActivity,
+    );
+}
+
+function hapsCreateAiRun(array $overrides = []): AiRun
+{
+    if (! Employee::query()->whereKey(HAPS_EMPLOYEE_ID)->exists()) {
+        Employee::factory()->create(['id' => HAPS_EMPLOYEE_ID]);
+    }
+
+    return AiRun::unguarded(fn () => AiRun::query()->create(array_merge([
+        'id' => 'run_'.uniqid(),
+        'employee_id' => HAPS_EMPLOYEE_ID,
+        'session_id' => 'sess_haps_001',
+        'source' => 'chat',
+        'execution_mode' => 'streaming',
+        'status' => AiRunStatus::Succeeded,
+        'provider_name' => 'anthropic',
+        'model' => 'claude-opus-4',
+        'latency_ms' => 100,
+        'started_at' => now(),
+        'finished_at' => now(),
+    ], $overrides)));
+}
+
+// ------------------------------------------------------------------
+// toolSnapshot
+// ------------------------------------------------------------------
+
+describe('toolSnapshot', function () {
+    it('returns a healthy active snapshot for a ready tool with fresh verification', function () {
+        $freshTime = (new DateTimeImmutable)->format('c');
+
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('snapshot')
+            ->with(HAPS_TOOL_NAME)
+            ->andReturn([
+                'readiness' => ToolReadiness::READY,
+                'lastVerified' => ['at' => $freshTime, 'success' => true],
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshot = $service->toolSnapshot(HAPS_TOOL_NAME);
+
+        expect($snapshot)->toBeInstanceOf(HealthSnapshot::class)
+            ->and($snapshot->targetType)->toBe(ControlPlaneTarget::Tool)
+            ->and($snapshot->targetId)->toBe(HAPS_TOOL_NAME)
+            ->and($snapshot->readiness)->toBe(ToolReadiness::READY)
+            ->and($snapshot->health)->toBe(ToolHealthState::HEALTHY)
+            ->and($snapshot->presence)->toBe(PresenceState::Active);
+    });
+
+    it('returns unknown health when tool is not ready', function () {
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('snapshot')
+            ->with(HAPS_TOOL_NAME)
+            ->andReturn([
+                'readiness' => ToolReadiness::UNCONFIGURED,
+                'lastVerified' => null,
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshot = $service->toolSnapshot(HAPS_TOOL_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::UNKNOWN)
+            ->and($snapshot->presence)->toBe(PresenceState::Offline);
+    });
+
+    it('returns failing health when last verification failed', function () {
+        $recentTime = (new DateTimeImmutable)->format('c');
+
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('snapshot')
+            ->with(HAPS_TOOL_NAME)
+            ->andReturn([
+                'readiness' => ToolReadiness::READY,
+                'lastVerified' => ['at' => $recentTime, 'success' => false],
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshot = $service->toolSnapshot(HAPS_TOOL_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::FAILING);
+    });
+
+    it('returns degraded health when verification is stale', function () {
+        $staleTime = (new DateTimeImmutable)->modify('-48 hours')->format('c');
+
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('snapshot')
+            ->with(HAPS_TOOL_NAME)
+            ->andReturn([
+                'readiness' => ToolReadiness::READY,
+                'lastVerified' => ['at' => $staleTime, 'success' => true],
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshot = $service->toolSnapshot(HAPS_TOOL_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::DEGRADED);
+    });
+
+    it('returns unknown health when no verification has been performed', function () {
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('snapshot')
+            ->with(HAPS_TOOL_NAME)
+            ->andReturn([
+                'readiness' => ToolReadiness::READY,
+                'lastVerified' => null,
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshot = $service->toolSnapshot(HAPS_TOOL_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::UNKNOWN);
+    });
+});
+
+// ------------------------------------------------------------------
+// allToolSnapshots
+// ------------------------------------------------------------------
+
+describe('allToolSnapshots', function () {
+    it('returns snapshots for all known tools', function () {
+        $freshTime = (new DateTimeImmutable)->format('c');
+
+        $toolReadiness = Mockery::mock(ToolReadinessService::class);
+        $toolReadiness->shouldReceive('allSnapshots')
+            ->andReturn([
+                'bash' => [
+                    'readiness' => ToolReadiness::READY,
+                    'lastVerified' => ['at' => $freshTime, 'success' => true],
+                ],
+                'web_search' => [
+                    'readiness' => ToolReadiness::UNCONFIGURED,
+                    'lastVerified' => null,
+                ],
+            ]);
+
+        $service = makeHapsService(toolReadiness: $toolReadiness);
+        $snapshots = $service->allToolSnapshots();
+
+        expect($snapshots)->toHaveCount(2)
+            ->and($snapshots[0]->targetId)->toBe('bash')
+            ->and($snapshots[0]->health)->toBe(ToolHealthState::HEALTHY)
+            ->and($snapshots[1]->targetId)->toBe('web_search')
+            ->and($snapshots[1]->health)->toBe(ToolHealthState::UNKNOWN);
+    });
+});
+
+// ------------------------------------------------------------------
+// agentSnapshot
+// ------------------------------------------------------------------
+
+describe('agentSnapshot', function () {
+    it('detects active presence when session activity is recent', function () {
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 5)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->targetType)->toBe(ControlPlaneTarget::Agent)
+            ->and($snapshot->presence)->toBe(PresenceState::Active);
+    });
+
+    it('detects idle presence when session activity is within idle threshold', function () {
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 30)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->presence)->toBe(PresenceState::Idle);
+    });
+
+    it('detects offline presence when no recent sessions', function () {
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 120)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->presence)->toBe(PresenceState::Offline);
+    });
+
+    it('detects offline presence when agent has no sessions', function () {
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->presence)->toBe(PresenceState::Offline)
+            ->and($snapshot->health)->toBe(ToolHealthState::UNKNOWN);
+    });
+
+    it('computes healthy agent health from successful recent runs', function () {
+        hapsCreateAiRun(['started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['started_at' => now()->subMinute()]);
+
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 5)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->health)->toBe(ToolHealthState::HEALTHY);
+    });
+
+    it('computes failing agent health when most recent runs have errors', function () {
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'timeout', 'started_at' => now()->subMinutes(3)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'rate_limit', 'started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'auth', 'started_at' => now()->subMinute()]);
+
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 5)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->health)->toBe(ToolHealthState::FAILING);
+    });
+
+    it('computes degraded agent health when some runs have errors', function () {
+        hapsCreateAiRun(['started_at' => now()->subMinutes(3)]);
+        hapsCreateAiRun(['status' => AiRunStatus::Failed, 'error_type' => 'timeout', 'started_at' => now()->subMinutes(2)]);
+        hapsCreateAiRun(['started_at' => now()->subMinute()]);
+
+        $sessionManager = Mockery::mock(SessionManager::class);
+        $sessionManager->shouldReceive('list')
+            ->with(HAPS_EMPLOYEE_ID)
+            ->andReturn([hapsSession(minutesAgo: 5)]);
+
+        $service = makeHapsService(sessionManager: $sessionManager);
+        $snapshot = $service->agentSnapshot(HAPS_EMPLOYEE_ID);
+
+        expect($snapshot->health)->toBe(ToolHealthState::DEGRADED);
+    });
+});
+
+// ------------------------------------------------------------------
+// providerSnapshot
+// ------------------------------------------------------------------
+
+describe('providerSnapshot', function () {
+    it('returns unknown health when provider has never been tested', function () {
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
+            ->andReturn(null);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
+            ->andReturn(false);
+
+        $service = makeHapsService(settings: $settings);
+        $snapshot = $service->providerSnapshot(HAPS_PROVIDER_NAME);
+
+        expect($snapshot->targetType)->toBe(ControlPlaneTarget::Provider)
+            ->and($snapshot->health)->toBe(ToolHealthState::UNKNOWN)
+            ->and($snapshot->presence)->toBe(PresenceState::Offline);
+    });
+
+    it('returns healthy when last test succeeded recently', function () {
+        $recentTime = (new DateTimeImmutable)->format('c');
+
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
+            ->andReturn($recentTime);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
+            ->andReturn(true);
+
+        $service = makeHapsService(settings: $settings);
+        $snapshot = $service->providerSnapshot(HAPS_PROVIDER_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::HEALTHY)
+            ->and($snapshot->presence)->toBe(PresenceState::Active);
+    });
+
+    it('returns failing when last test failed', function () {
+        $recentTime = (new DateTimeImmutable)->format('c');
+
+        $settings = Mockery::mock(SettingsService::class);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_AT)
+            ->andReturn($recentTime);
+        $settings->shouldReceive('get')
+            ->with('ai.providers.'.HAPS_PROVIDER_NAME.HAPS_PROVIDER_LAST_TEST_SUCCESS)
+            ->andReturn(false);
+
+        $service = makeHapsService(settings: $settings);
+        $snapshot = $service->providerSnapshot(HAPS_PROVIDER_NAME);
+
+        expect($snapshot->health)->toBe(ToolHealthState::FAILING);
+    });
+});

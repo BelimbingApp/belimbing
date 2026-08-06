@@ -5,9 +5,9 @@ use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Support\Js;
 
 const TZ_SET_COMPANY_TIMEZONE_KL = 'Asia/Kuala_Lumpur';

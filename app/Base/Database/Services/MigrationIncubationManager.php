@@ -4,6 +4,7 @@ namespace App\Base\Database\Services;
 
 use App\Base\Database\Exceptions\IncubatingSchemaMutationException;
 use App\Base\Database\Models\TableRegistry;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Support\Git\GitRepository;
 use Illuminate\Support\Str;
 
@@ -145,8 +146,8 @@ final class MigrationIncubationManager
     }
 
     /**
-     * The nearest ancestor directory that is a git repository — the platform root for
-     * platform/module files, or a nested bundle repo for files under extensions.
+     * The nearest ancestor directory that is a git repository — either the platform
+     * root or the nearest Domain or Extension source repository.
      */
     private function repositoryRoot(string $path): ?string
     {
@@ -176,10 +177,11 @@ final class MigrationIncubationManager
     private function migrationPathByFileName(string $migrationFile): ?string
     {
         $patterns = [
-            app_path('Base/*/Database/Migrations/*.php'),
-            app_path('Modules/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::baseComponentPattern('Database/Migrations/*.php'),
+            ApplicationTopology::coreModulePattern('Database/Migrations/*.php'),
+            ApplicationTopology::domainModulePattern('Database/Migrations/*.php'),
             database_path('migrations/*.php'),
-            base_path('extensions/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::extensionModulePattern('Database/Migrations/*.php'),
         ];
 
         foreach ($patterns as $pattern) {

@@ -2,6 +2,8 @@
 
 namespace App\Base\Foundation\Services;
 
+use App\Base\Foundation\ApplicationTopology;
+
 /**
  * Deploy-local domain state: which installed domains are disabled.
  *
@@ -95,7 +97,7 @@ class DomainState
     /**
      * Drop discovery paths that belong to disabled domains.
      *
-     * Every discovery service that globs app/Modules passes its results
+     * Every discovery service that globs app/Domains passes its results
      * through here, so one state file silences a domain everywhere.
      *
      * @param  list<string>  $paths
@@ -110,7 +112,7 @@ class DomainState
         }
 
         $prefixes = array_map(
-            fn (string $domain): string => str_replace('\\', '/', app_path('Modules/'.$domain)),
+            fn (string $domain): string => str_replace('\\', '/', ApplicationTopology::domainPath($domain)),
             $disabled,
         );
 

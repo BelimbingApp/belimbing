@@ -1,8 +1,8 @@
 # commerce-multi-channel-marketplace
 
 **Status:** Phases A–F built and tested, with one carve-out: Phase C's order ingestion is functional via the incremental, idempotent **cron poll** (the inbound loop works end to end today); the **modern Notification API webhook** (real-time push) is the remaining live-eBay integration — signature crypto, subscription registration, CSRF-exempt public endpoint, and multi-tenant account→company mapping all need live eBay to build and verify safely. Phase D (conformance) and Phase E (per-listing modal) done; the optional cross-channel overview is deferred. Phase F (blocked-to-listed flow on the item page) done 2026-06-11.
-**Last Updated:** 2026-06-11
-**Sources:** `extensions/ham/docs/plans/ham-ebay-sandbox-live-validation.md` (single-channel eBay publish proven end-to-end); the existing Marketplace channel abstraction (`MarketplaceChannel`, `MarketplaceChannelRegistry`, `MarketplaceChannelProvider`); the inventory item page (`commerce/inventory/items/{item}`); design discussion 2026-06-08.
+**Last Updated:** 2026-08-05
+**Sources:** `app/Extensions/Ham/docs/plans/ham-ebay-sandbox-live-validation.md` (single-channel eBay publish proven end-to-end); the existing Marketplace channel abstraction (`MarketplaceChannel`, `MarketplaceChannelRegistry`, `MarketplaceChannelProvider`); the inventory item page (`commerce/inventory/items/{item}`); design discussion 2026-06-08.
 **Agents:** claude/claude-opus-4-8; amp/gpt-5.1-codex
 
 ## Problem Essence
@@ -59,7 +59,7 @@ Goal: a reviewer can scan the item in clear sections, see every channel it is (o
 - [x] Make the channels list render from the channel registry (no hard-coded eBay). {amp/gpt-5.1-codex}
 - [x] Align the eBay marketplace page with the Pull/Push model: one **Pull from eBay** action imports listings and orders; the page lists synced and ready-to-list inventory while publishing remains on the item page. {amp/gpt-5.1-codex}
 
-Evidence: implemented in `app/Modules/Commerce/Inventory/Livewire/Items/Show.php`, `app/Modules/Commerce/Inventory/Views/livewire/commerce/inventory/items/show.blade.php`, `app/Modules/Commerce/Marketplace/Services/MarketplaceListingPushService.php`, the marketplace channel contract/provider, and the eBay channel page. Focused tests: `php artisan test tests/Feature/Modules/Commerce/Inventory/ItemWorkbenchTest.php tests/Feature/Modules/Commerce/Marketplace/EbayListingReadinessServiceTest.php tests/Feature/Modules/Commerce/Marketplace/EbayMarketplaceTest.php --stop-on-failure`; browser-reviewed with Playwright on `/commerce/inventory/items/{item}`.
+Evidence: implemented in `app/Domains/Commerce/Inventory/Livewire/Items/Show.php`, `app/Domains/Commerce/Inventory/Views/livewire/commerce/inventory/items/show.blade.php`, `app/Domains/Commerce/Marketplace/Services/MarketplaceListingPushService.php`, the marketplace channel contract/provider, and the eBay channel page. Focused tests: `php artisan test app/Domains/Commerce/Inventory/Tests/Feature/ItemWorkbenchTest.php app/Domains/Commerce/Marketplace/Tests/Feature/EbayListingReadinessServiceTest.php app/Domains/Commerce/Marketplace/Tests/Feature/EbayMarketplaceTest.php --stop-on-failure`; browser-reviewed with Playwright on `/commerce/inventory/items/{item}`.
 
 ### Phase B — Availability sync (the overselling keystone) ✅ done 2026-06-08 (claude/claude-opus-4-8)
 
@@ -116,7 +116,7 @@ Goal: when an item is blocked, fixing the blockers is the operator's job — the
 - [x] **Publish path hardened by a live blocked-to-listed walkthrough** (item 8 published end-to-end on sandbox via the UI, 2026-06-12): push retries are idempotent (offer recovered by SKU when a failed publish lost the id); push errors surface eBay's own sentences, not just an exchange id; a missing description blocks publish (eBay 25016) unless a live listing body exists to fall back on; the Categories UI derives `listing_marketplace_id` (Motors offers publish on EBAY_MOTORS); brand ships with eBay's "Does Not Apply" MPN placeholder when none is mapped (BrandMPN pair rule); aspect facts keep `value` even when null (an array_filter dropped the key, crashing readiness once aspect mappings existed). Aspect-mapping seeding/UI remains the open item — mappings for category 177697 were created programmatically. {claude/claude-fable-5}
 - [x] **Photo hosting is part of push, not a readiness wall.** `EbayPictureService` uploads local photo bytes to eBay Picture Services during create/revise and stores the returned EPS URL on the media asset (`metadata.public_url`); the dead-end `publish_safe_photos` blocker (nothing in BLB could ever satisfy it) was removed. Live-verified against sandbox EPS. The category blocker also now distinguishes "assign a template in Catalog Fit" from "map this template in eBay settings" and names the template. {claude/claude-fable-5}
 
-Evidence: `app/Modules/Commerce/Inventory/Livewire/Items/Show.php` (`refreshAllChannelReadiness`), the item concerns (fitments/attributes/catalog-fit), `show.blade.php` + `partials/channel-gap-list.blade.php`, `extensions/ham/auto-parts/Readiness/AutoPartsReadinessContributor.php`. Tests: `php artisan test app/Modules/Commerce extensions/ham/auto-parts/Tests` (147 + 44 passing).
+Evidence: `app/Domains/Commerce/Inventory/Livewire/Items/Show.php` (`refreshAllChannelReadiness`), the item concerns (fitments/attributes/catalog-fit), `show.blade.php` + `partials/channel-gap-list.blade.php`, `app/Extensions/Ham/AutoParts/Readiness/AutoPartsReadinessContributor.php`. Tests: `php artisan test app/Domains/Commerce app/Extensions/Ham/AutoParts/Tests` (147 + 44 passing).
 
 ## Out of Scope / Later
 

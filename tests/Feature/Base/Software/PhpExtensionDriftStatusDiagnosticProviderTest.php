@@ -3,8 +3,8 @@
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\PhpExtensionDriftStatusDiagnosticProvider;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 
 const PHP_EXTENSION_DRIFT_DIAGNOSTIC_FAKE_EXTENSION = 'zz_never_loaded_test_extension';

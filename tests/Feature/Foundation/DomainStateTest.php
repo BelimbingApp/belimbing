@@ -8,7 +8,7 @@ use App\Base\Settings\Models\Setting;
 use Illuminate\Support\Facades\File;
 
 afterEach(function (): void {
-    File::deleteDirectory(app_path('Modules/ZzStateDomain'));
+    File::deleteDirectory(app_path('Domains/ZzStateDomain'));
 });
 
 it('persists disable and enable', function (): void {
@@ -27,10 +27,10 @@ it('persists disable and enable', function (): void {
 
 it('filters only paths under disabled domains', function (): void {
     $paths = [
-        app_path('Modules/People/Settings/Config/menu.php'),
-        app_path('Modules/Core/User/Config/menu.php'),
+        app_path('Domains/People/Settings/Config/menu.php'),
+        app_path('Core/User/Config/menu.php'),
         app_path('Base/Menu/Config/menu.php'),
-        base_path('extensions/acme/widget/Config/menu.php'),
+        app_path('Extensions/Acme/Widget/Config/menu.php'),
     ];
 
     expect(DomainState::filterPaths($paths))->toBe($paths);
@@ -46,7 +46,7 @@ it('hides a disabled domain from provider and menu discovery while its data stay
         'withMenu' => true,
     ]);
 
-    $provider = 'App\Modules\ZzStateDomain\Sample\ServiceProvider';
+    $provider = 'App\Domains\ZzStateDomain\Sample\ServiceProvider';
     $menuIds = fn (): array => app(MenuDiscoveryService::class)->discover()->pluck('id')->all();
 
     expect(ProviderRegistry::discoverModuleProviders())->toContain($provider)

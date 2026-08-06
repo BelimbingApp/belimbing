@@ -7,8 +7,8 @@ use App\Base\Perf\Livewire\Dashboard\Index;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
@@ -56,8 +56,8 @@ function writePerfFixture(string $dir, array $overrides = []): void
 it('shows the performance dashboard to authorized admins', function (): void {
     writePerfFixture($this->perfDir);
     writePerfFixture($this->perfDir, [
-        'route' => 'admin.system.software.modules.index',
-        'path' => '/admin/system/software/modules',
+        'route' => 'admin.system.software.domains.index',
+        'path' => '/admin/system/software/domains',
         'ms' => 9421.4,
         'procs' => 18,
         'proc_ms' => 8259.7,
@@ -67,7 +67,7 @@ it('shows the performance dashboard to authorized admins', function (): void {
         ->get(route('admin.system.perf.index'))
         ->assertOk()
         ->assertSee('Where the time goes')
-        ->assertSee('admin.system.software.modules.index')
+        ->assertSee('admin.system.software.domains.index')
         ->assertSee('Recording settings')
         ->assertSee('perf:slowest');
 });

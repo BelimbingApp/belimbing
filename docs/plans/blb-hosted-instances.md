@@ -1,8 +1,8 @@
 # blb-hosted-instances
 
 **Status:** Phase 0 done; Phase 2 production instance built and verified at the origin on the Windows host (2026-06-13) — running on `https://blb.belimbing.app:8643`, first admin + "Kiat Solutions" company seeded, encrypted backup validated, boot-time services + go-live scripted in `D:\Repo\BelimbingApp\ops\`. Remaining to go live: run the elevated service installer + reboot check, flip the Cloudflare tunnel ingress (needs dev's API token; touches the shared edge), restrict Access to Kiat + Ham. Phase 1 (demo) deferred (KIV) by Kiat 2026-06-14. eBay publish still depends on open productization items in the ham validation plan.
-**Last Updated:** 2026-06-14
-**Sources:** `extensions/ham/docs/plans/ham-ebay-sandbox-live-validation.md` (steps A–D, host decision, Windows validation pass item); design discussion 2026-06-12/13 (Windows-native FrankenPHP decision, demo-site idea, phone-test Host-header lesson).
+**Last Updated:** 2026-08-05
+**Sources:** `app/Extensions/Ham/docs/plans/ham-ebay-sandbox-live-validation.md` (steps A–D, host decision, Windows validation pass item); design discussion 2026-06-12/13 (Windows-native FrankenPHP decision, demo-site idea, phone-test Host-header lesson).
 **Agents:** claude/claude-fable-5
 
 ## Problem Essence
@@ -45,7 +45,7 @@ BLB exists only as Kiat's WSL2 dev instance. Ham needs a hosted production insta
 - **`blb.belimbing.app` is reserved for Ham.** The demo gets its own hostname so no one ever migrates users between meanings of a URL.
 - **Demo is a throwaway by design.** Own database, reseeded on a schedule from dev seeders + the Ham auto-parts catalog seeds. The dev no-wipe rule protects *working* data; the demo DB's whole purpose is to be rebuilt, so a scheduled fresh rebuild is the feature, not a violation. No eBay connection in the demo initially (the marketplace pages honestly show "not connected"); a separate sandbox keyset is a later option if demos need the publish story.
 - **Invite = Access policy + BLB user.** Adding an invitee is two steps: their email into the demo Access policy, a demo-company user in BLB. No public signup surface exists; removing them is the reverse.
-- **Deploys are git-driven.** Each instance directory holds the three nested repos (main, `app/Modules/Commerce`, `extensions/ham`) pinned to their main branches; a deploy is pull ×3, composer install, asset build, migrate. No artifact pipeline until the pain demands one.
+- **Deploys are git-driven.** Each instance directory holds the three nested repos (main, `app/Domains/Commerce`, `app/Extensions/Ham`) pinned to their main branches; a deploy is pull ×3, composer install, asset build, migrate. No artifact pipeline until the pain demands one.
 - **Windows validation pass gates prod** (recorded in the ham validation plan): full Pest suite on the host, one sandbox publish smoke, services surviving an unattended reboot.
 
 ## Public Contract
@@ -61,7 +61,7 @@ BLB exists only as Kiat's WSL2 dev instance. Ham needs a hosted production insta
 Goal: the box can run a BLB instance natively.
 
 - [x] Install native runtime set: **FrankenPHP 1.12.4 (bundled PHP 8.5.7, Caddy 2.11.4)** at `C:\Users\user1\.frankenphp`; **SQLite** (PHP `pdo_sqlite`/`sqlite3` from the FrankenPHP bundle — chosen over MySQL/MariaDB), **Bun 1.3.14** (winget), local **Composer 2.10.1** under `storage/app/.devops`, git, gh. PHP CLI quirk recorded: the bundled `php.exe` loads no default ini, so all CLI/scheduled commands must set `PHPRC` to `storage/app/.devops/php` (handled by `ops/_env.ps1`). Bun on Windows needs `bun install --backend copyfile` (cross-volume hardlink EPERM otherwise).
-- [x] Instance directory layout (recorded): one folder per instance under `D:\Repo\BelimbingApp\` — `production\` (belimbing main + nested `app\Modules\Commerce` and `extensions\ham`), future `demo\`, and `ops\` for instance runtime scripts kept **outside** the checkouts so git-driven deploys stay clean. Per-instance public port: prod **8643** (443 is held by WSL2 dev's `wslrelay` on `::1`).
+- [x] Instance directory layout (recorded): one folder per instance under `D:\Repo\BelimbingApp\` — `production\` (belimbing main + nested `app\Domains\Commerce` and `app\Extensions\Ham`), future `demo\`, and `ops\` for instance runtime scripts kept **outside** the checkouts so git-driven deploys stay clean. Per-instance public port: prod **8643** (443 is held by WSL2 dev's `wslrelay` on `::1`).
 - [x] `cloudflared` Windows service confirmed Running + StartType Automatic (token/remotely-managed tunnel — no local config.yml; ingress changes via API).
 
 ### [KIV] Phase 1 — Demo instance
@@ -85,7 +85,7 @@ Risks: demo exposes whatever AI/provider features are configured — leave provi
 
 Goal: Ham's instance live at `blb.belimbing.app`; continues into Phase 3 of the ham validation plan (production keyset, OAuth, first live listing).
 
-Progress 2026-06-13: instance running and verified at the origin (`https://blb.belimbing.app:8643`, `tls internal`); root 302→`https://blb.belimbing.app/login` (clean public hostname, no internal-name leak); login page renders with built assets; first admin `kiatng@hotmail.com` / company "Kiat Solutions" seeded and `Auth::validate` passes. Runtime/ops scripts live in `D:\Repo\BelimbingApp\ops\`. Three repos cloned at **main** (note: dev's `extensions/ham` runs the `commerce-ebay-account-setup` feature branch — confirm `main` carries the aspect-mapping seeder before any live publish).
+Progress 2026-06-13: instance running and verified at the origin (`https://blb.belimbing.app:8643`, `tls internal`); root 302→`https://blb.belimbing.app/login` (clean public hostname, no internal-name leak); login page renders with built assets; first admin `kiatng@hotmail.com` / company "Kiat Solutions" seeded and `Auth::validate` passes. Runtime/ops scripts live in `D:\Repo\BelimbingApp\ops\`. Three repos cloned at **main** (note: dev's `app/Extensions/Ham` source runs the `commerce-ebay-account-setup` feature branch — confirm `main` carries the aspect-mapping seeder before any live publish).
 
 - [x] Same recipe as demo with prod values; **no dev seeders** — fresh DB created with `migrate --seed --force` (production seeders only). Aspect-mapping seeder dependency for eBay publish still open (ham validation plan).
 - [x] Flipped the `blb.belimbing.app` tunnel ingress (tunnel `blb`, id `cba63ef8-c687-465d-ba5e-65353cffd18f`) from `local.blb.lara` origin to `https://127.0.0.1:8643` (originServerName + httpHostHeader = `blb.belimbing.app`, http2Origin + noTLSVerify). eBay-hook rule and 404 catch-all untouched. Cloudflare API params copied from dev into the **prod** instance settings (`integrations.cloudflare.*`, prod-owned now). 2026-06-13.

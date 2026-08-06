@@ -5,9 +5,9 @@ use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -23,14 +23,14 @@ function timezoneKeyRenameMigration(): Migration
 function timezoneUserScopeMigration(): Migration
 {
     return require app_path(
-        'Modules/Core/User/Database/Migrations/0200_01_20_000006_migrate_timezone_mode_to_user_scope.php',
+        'Core/User/Database/Migrations/0200_01_20_000006_migrate_timezone_mode_to_user_scope.php',
     );
 }
 
 function timezoneCompanyScopeMigration(): Migration
 {
     return require app_path(
-        'Modules/Core/Company/Database/Migrations/0200_01_07_001002_migrate_localization_timezone_to_company_scope.php',
+        'Core/Company/Database/Migrations/0200_01_07_001002_migrate_localization_timezone_to_company_scope.php',
     );
 }
 

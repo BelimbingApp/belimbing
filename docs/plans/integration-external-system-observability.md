@@ -1,8 +1,8 @@
 # integration-external-system-observability
 
 **Status:** In Progress — Phases 1–5 complete; Phase 6 remains deferred.
-**Last Updated:** 2026-05-05
-**Sources:** `app/Base/Integration`, `app/Base/AI/Services/ProviderDiscoveryService.php`, `app/Modules/Core/AI/Services/ModelDiscoveryService.php`, `app/Modules/Core/AI/Services/ControlPlane/WireLogger.php`, `docs/plans/ai-control-plane-debuggability.md`, `extensions/ham/docs/plans/ham-auto-parts-continuation.md`
+**Last Updated:** 2026-08-05
+**Sources:** `app/Base/Integration`, `app/Base/AI/Services/ProviderDiscoveryService.php`, `app/Core/AI/Services/ModelDiscoveryService.php`, `app/Core/AI/Services/ControlPlane/WireLogger.php`, `docs/plans/ai-control-plane-debuggability.md`, `app/Extensions/Ham/docs/plans/ham-auto-parts-continuation.md`
 **Agents:** Codex/GPT-5
 
 ## Problem Essence

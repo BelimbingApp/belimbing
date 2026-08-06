@@ -2,6 +2,9 @@
 
 namespace App\Base\Database\Concerns;
 
+use App\Base\Foundation\ApplicationTopology;
+use App\Base\Support\Str;
+
 /**
  * Shared logic for deriving module name and path from a migration file path.
  *
@@ -14,14 +17,19 @@ trait ExtractsModuleProvenance
      * Extract module path from migration file path.
      *
      * @param  string  $migrationPath  Full path to migration file
-     * @return string|null Module path (e.g., 'app/Modules/Core/Geonames')
+     * @return string|null Module path (e.g., 'app/Core/Geonames')
      */
     protected function extractModulePath(string $migrationPath): ?string
     {
         $normalized = str_replace('\\', '/', $migrationPath);
 
-        // Pattern: .../app/Modules/{Layer}/{Module}/Database/Migrations/{file}
-        if (preg_match('#app/Modules/[^/]+/[^/]+#', $normalized, $matches)) {
+        // Pattern: .../app/Core/{Module}/Database/Migrations/{file}
+        if (preg_match('#app/Core/[^/]+#', $normalized, $matches)) {
+            return $matches[0];
+        }
+
+        // Pattern: .../app/Domains/{Domain}/{Module}/Database/Migrations/{file}
+        if (preg_match('#app/Domains/[^/]+/[^/]+#', $normalized, $matches)) {
             return $matches[0];
         }
 
@@ -30,8 +38,8 @@ trait ExtractsModuleProvenance
             return $matches[0];
         }
 
-        // Pattern: .../extensions/{owner}/{module}/Database/Migrations/{file}
-        if (preg_match('#extensions/[^/]+/[^/]+#', $normalized, $matches)) {
+        // Pattern: .../app/Extensions/{Extension}/{Module}/Database/Migrations/{file}
+        if (preg_match('#app/Extensions/[^/]+/[^/]+#', $normalized, $matches)) {
             return $matches[0];
         }
 
@@ -41,7 +49,7 @@ trait ExtractsModuleProvenance
     /**
      * Extract module name from module path.
      *
-     * e.g., 'app/Modules/Core/Geonames' → 'Geonames'
+     * e.g., 'app/Core/Geonames' → 'Geonames'
      *
      * @param  string|null  $modulePath  Module path
      * @return string|null Module name
@@ -52,6 +60,12 @@ trait ExtractsModuleProvenance
             return null;
         }
 
-        return basename($modulePath);
+        $moduleName = basename($modulePath);
+
+        // Extension directories became PascalCase in the four-root topology,
+        // but their persisted logical module names remain kebab-case.
+        return ApplicationTopology::belongsToRoot($modulePath, ApplicationTopology::EXTENSIONS)
+            ? Str::pascalToKebab($moduleName)
+            : $moduleName;
     }
 }

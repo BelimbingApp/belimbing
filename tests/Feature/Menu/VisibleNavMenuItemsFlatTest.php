@@ -6,7 +6,7 @@ use App\Base\Menu\Services\MenuLinkResolver;
 use App\Base\Menu\Services\MenuRegistryLoader;
 use App\Base\Menu\Services\PinMetadataNormalizer;
 use App\Base\Menu\Services\VisibleNavMenuItemsFlat;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;

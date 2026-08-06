@@ -2,7 +2,7 @@
 
 use App\Base\AI\Services\AiRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\AI\Tools\BashTool;
+use App\Core\AI\Tools\BashTool;
 
 // The tool only resolves a ShellCommandRunner once the gate passes, so a
 // `bash_disabled` result proves no command reached the shell — had the gate

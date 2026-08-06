@@ -101,7 +101,7 @@ if [[ "$use_supabase" == false ]]; then
     touch database/database.sqlite
 fi
 
-install_bundle() {
+install_source() {
     local repository=$1
     local destination=$2
 
@@ -118,15 +118,15 @@ install_bundle() {
     git clone --branch main --single-branch "$repository" "$destination"
 }
 
-echo '==> Installing domain Distribution Bundles'
-install_bundle https://github.com/BelimbingApp/blb-commerce.git app/Modules/Commerce
-install_bundle https://github.com/BelimbingApp/blb-operation.git app/Modules/Operation
-install_bundle https://github.com/BelimbingApp/blb-people.git app/Modules/People
+echo '==> Installing Domains'
+install_source https://github.com/BelimbingApp/blb-commerce.git app/Domains/Commerce
+install_source https://github.com/BelimbingApp/blb-operation.git app/Domains/Operation
+install_source https://github.com/BelimbingApp/blb-people.git app/Domains/People
 
 echo '==> Installing private blb-* extensions'
-install_bundle https://github.com/kiatng/blb-ham.git extensions/ham
-install_bundle https://github.com/kiatng/blb-kiat.git extensions/kiat
-install_bundle https://github.com/kiatng/blb-sbg.git extensions/sb-group
+install_source https://github.com/kiatng/blb-ham.git app/Extensions/Ham
+install_source https://github.com/kiatng/blb-kiat.git app/Extensions/Kiat
+install_source https://github.com/kiatng/blb-sbg.git app/Extensions/SbGroup
 
 echo '==> Installing locked PHP and JavaScript dependencies'
 composer install --no-interaction --prefer-dist --optimize-autoloader

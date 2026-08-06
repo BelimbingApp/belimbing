@@ -4,7 +4,7 @@
 
 The Operation Quality module provides industry-standard **NCR / CAPA / SCAR** quality management, aligned with ISO 9001 and IATF 16949 vocabulary. It is designed as a reusable BLB framework module that licensees extend with organisation-specific fields, approval gates, and numbering formats.
 
-**Path:** `app/Modules/Operation/Quality/`
+**Path:** `app/Domains/Operation/Quality/`
 **Migration prefix:** `0300_01_03_*`
 **Workflow flows:** `quality_ncr`, `quality_scar`
 
@@ -202,7 +202,7 @@ All routes require `auth` middleware with `authz:` capability checks.
 ## File Structure
 
 ```
-app/Modules/Operation/Quality/
+app/Domains/Operation/Quality/
 ├── ServiceProvider.php
 ├── Config/
 │   ├── authz.php

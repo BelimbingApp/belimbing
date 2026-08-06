@@ -34,8 +34,8 @@ function Invoke-BLBPull {
 }
 
 Invoke-BLBPull $script:ProjectRoot 'belimbing'
-Invoke-BLBPull (Join-Path $script:ProjectRoot 'app\Modules\Commerce') 'commerce'
-Invoke-BLBPull (Join-Path $script:ProjectRoot 'extensions\ham') 'ham'
+Invoke-BLBPull (Join-Path $script:ProjectRoot 'app\Domains\Commerce') 'commerce'
+Invoke-BLBPull (Join-Path $script:ProjectRoot 'app\Extensions\Ham') 'ham'
 
 Push-Location $script:ProjectRoot
 try {

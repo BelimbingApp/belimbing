@@ -1,0 +1,242 @@
+<?php
+
+namespace App\Core\AI\Models;
+
+use App\Core\AI\Enums\AuthType;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class AiProvider extends Model
+{
+    public const FAMILY_LLM = 'llm';
+
+    public const FAMILY_IMAGE = 'image';
+
+    /**
+     * @var string
+     */
+    protected $table = 'ai_providers';
+
+    /**
+     * @var array<int, string>
+     */
+    protected $fillable = [
+        'company_id',
+        'name',
+        'family',
+        'display_name',
+        'base_url',
+        'auth_type',
+        'credentials',
+        'connection_config',
+        'is_active',
+        'priority',
+        'created_by',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'auth_type' => AuthType::class,
+            'credentials' => 'encrypted:array',
+            'connection_config' => 'array',
+            'is_active' => 'boolean',
+            'priority' => 'integer',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Backward-compat accessor: reads api_key from the credentials bag.
+     *
+     * Used by callers migrating from the old single-column schema.
+     * Prefer reading from credentials directly in new code.
+     */
+    public function getApiKeyAttribute(): ?string
+    {
+        return data_get($this->credentials, 'api_key');
+    }
+
+    /**
+     * Get the company that owns this provider.
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
+     * Get the employee who created this provider.
+     */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'created_by');
+    }
+
+    /**
+     * Get the models registered under this provider.
+     */
+    public function models(): HasMany
+    {
+        return $this->hasMany(AiProviderModel::class, 'ai_provider_id');
+    }
+
+    /**
+     * Scope to active providers only.
+     */
+    public function scopeActive($query): void
+    {
+        $query->where('is_active', true);
+    }
+
+    /**
+     * Scope to providers with priority set (priority > 0), ordered by priority ascending.
+     */
+    public function scopePrioritized($query): void
+    {
+        $query->where('priority', '>', 0)->orderBy('priority');
+    }
+
+    /**
+     * Scope to providers belonging to a specific company.
+     *
+     * @param  int  $companyId  Company ID
+     */
+    public function scopeForCompany($query, int $companyId): void
+    {
+        $query->where('company_id', $companyId);
+    }
+
+    /**
+     * Scope to language-model providers only.
+     */
+    public function scopeLlm($query): void
+    {
+        $query->where('family', self::FAMILY_LLM);
+    }
+
+    /**
+     * Scope to Vision (image) providers only.
+     */
+    public function scopeImage($query): void
+    {
+        $query->where('family', self::FAMILY_IMAGE);
+    }
+
+    /**
+     * Get configured active providers for a company in runtime order.
+     *
+     * @return EloquentCollection<int, self>
+     */
+    public static function getConfiguredForCompany(int $companyId): EloquentCollection
+    {
+        return self::query()
+            ->forCompany($companyId)
+            ->llm()
+            ->active()
+            ->orderBy('priority')
+            ->orderBy('display_name')
+            ->get();
+    }
+
+    /**
+     * Assign the next available priority for this provider's company.
+     *
+     * Sets this provider to the lowest priority (highest number + 1).
+     * If it already has a priority, does nothing.
+     */
+    public function assignNextPriority(): void
+    {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
+        if ($this->priority > 0) {
+            return;
+        }
+
+        $maxPriority = (int) self::query()
+            ->where('company_id', $this->company_id)
+            ->llm()
+            ->max('priority');
+
+        $this->update(['priority' => $maxPriority + 1]);
+    }
+
+    /**
+     * Set this provider as the top priority (1) for its company.
+     *
+     * Shifts all other prioritized providers down by 1.
+     */
+    public function setTopPriority(): void
+    {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
+        if ($this->priority === 1) {
+            return;
+        }
+
+        // Shift existing priorities down to make room at 1
+        self::query()
+            ->where('company_id', $this->company_id)
+            ->llm()
+            ->where('priority', '>', 0)
+            ->where('id', '!=', $this->id)
+            ->increment('priority');
+
+        $this->update(['priority' => 1]);
+    }
+
+    /**
+     * Remove this provider from the priority ordering.
+     */
+    public function clearPriority(): void
+    {
+        if ($this->family !== self::FAMILY_LLM) {
+            return;
+        }
+
+        $oldPriority = $this->priority;
+
+        if ($oldPriority === 0) {
+            return;
+        }
+
+        $this->update(['priority' => 0]);
+
+        // Close the gap in priority sequence
+        self::query()
+            ->where('company_id', $this->company_id)
+            ->llm()
+            ->where('priority', '>', $oldPriority)
+            ->decrement('priority');
+    }
+
+    /**
+     * Swap priority with another provider.
+     *
+     * @param  self  $other  The provider to swap priorities with
+     */
+    public function swapPriority(self $other): void
+    {
+        if ($this->family !== self::FAMILY_LLM || $other->family !== self::FAMILY_LLM) {
+            return;
+        }
+
+        $thisPriority = $this->priority;
+        $otherPriority = $other->priority;
+
+        $this->update(['priority' => $otherPriority]);
+        $other->update(['priority' => $thisPriority]);
+    }
+}

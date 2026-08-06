@@ -14,7 +14,7 @@ use Throwable;
 final class SoftwareUpdateCommand extends Command
 {
     protected $signature = 'blb:software:update
-        {keys?* : Distribution Bundle keys to update.}
+        {keys?* : Software source keys to update.}
         {--run-id= : Reserved deployment run identifier.}';
 
     protected $description = 'Run a software update outside the web-worker lifecycle.';

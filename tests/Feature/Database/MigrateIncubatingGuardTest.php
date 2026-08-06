@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
-const MIGRATE_GUARD_DIR = 'extensions/test-vendor/guard-mod/Database/Migrations';
+const MIGRATE_GUARD_DIR = 'app/Extensions/TestVendor/GuardMod/Database/Migrations';
 const MIGRATE_GUARD_FILE = '2099_01_01_010101_create_test_guard_widgets_table.php';
 const MIGRATE_GUARD_TABLE = 'test_guard_widgets';
 const MIGRATE_GUARD_FAIL_FILE = '2099_01_01_010102_create_test_guard_failing_widgets_table.php';

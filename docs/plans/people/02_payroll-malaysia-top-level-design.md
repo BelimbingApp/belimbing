@@ -1,7 +1,7 @@
 # people/02_payroll-malaysia-top-level-design
 
 **Status:** Phase 5 in progress — Malaysia contribution calculations are component/category-aware; payroll PDF artifact persistence and operational report exports are wired
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/01_people-modules.md` — People suite framing and Payroll as a planned module
 - `docs/plans/people/04_pdf-generation-strategy.md` — PDF rendering infrastructure (complete); supplies `RenderPdfJob`, `PdfRenderer`, `PdfPostProcessor`, and the artifact contract that Phases 5 and 9 consume
@@ -32,7 +32,7 @@ The recommendation is a hybrid architecture:
 
 - **Country-neutral Payroll Core** owns pay periods, payroll runs, input collection, calculation orchestration, ledger-like result storage, approvals, payslips, accounting exports, reversals, and audit trails.
 - **Country Packs** own statutory rules and local outputs for a jurisdiction. They should be designed as extension-compatible modules from day one. The first pack is Malaysia (`MY`). Future packs such as Singapore (`SG`) or Indonesia (`ID`) plug into the same core.
-- **First-party incubation, extension destination.** Malaysia may live internally while Payroll Core is young, but it must use the same contract a future `extensions/belimbing/payroll-my` package would use. Once the contract proves stable, country packs become first-party or third-party extensions.
+- **First-party incubation, Extension destination.** Malaysia may live internally while the country-neutral Payroll Module is young, but it must use the same contract a future `app/Extensions/Belimbing/PayrollMy` package would use. Once the contract proves stable, country packs become first-party or third-party Extensions.
 - **Effective-dated statutory data** stores contribution tables, caps, rates, brackets, rounding policies, and file-format versions with validity windows. Rules never look up “current” values implicitly; every payroll run resolves rules as of the pay period/payment date and snapshots the version used.
 - **Deterministic code for complex rules, data tables for rates.** Use code interfaces for logic that is genuinely procedural, such as PCB formulas or statutory eligibility. Use data tables for official schedules, rates, caps, wage bands, and text-file layouts. Avoid building a broad no-code payroll DSL in the first version.
 
@@ -125,11 +125,11 @@ The core should support:
 
 BLB already has an extension model, and payroll country packs fit that model well because statutory payroll behavior is naturally jurisdiction-specific, changes independently from the country-neutral core, and benefits from local expert maintenance. The long-term target should be:
 
-- `app/Modules/People/Payroll` — the country-neutral Payroll Core.
-- `BelimbingApp/blb-payroll-my` — public first-party Malaysia statutory pack repository, installed into BLB as `extensions/belimbing/payroll-my`.
-- `BelimbingApp/blb-payroll-sg` — public first-party Singapore statutory pack repository, if BLB chooses to maintain it, installed as `extensions/belimbing/payroll-sg`.
-- `extensions/{vendor}/payroll-{country}` — community, vendor, or licensee country packs.
-- `extensions/{licensee}/payroll-{country}-custom` — business-specific statutory overrides, union rules, file layouts, or reporting variations where legally safe.
+- `app/Domains/People/Payroll` — the country-neutral Payroll Module.
+- `BelimbingApp/blb-payroll-my` — public first-party Malaysia statutory pack repository, installed into BLB as `app/Extensions/Belimbing/PayrollMy`.
+- `BelimbingApp/blb-payroll-sg` — public first-party Singapore statutory pack repository, if BLB chooses to maintain it, installed as `app/Extensions/Belimbing/PayrollSg`.
+- `app/Extensions/{Vendor}/Payroll{Country}` — community, vendor, or licensee country packs.
+- `app/Extensions/{Licensee}/Payroll{Country}Custom` — business-specific statutory overrides, union rules, file layouts, or reporting variations where legally safe.
 
 Country-pack extensions should be stricter than ordinary UI/menu extensions. Payroll packs are financial/regulatory code, so the installation contract should require explicit compatibility with the Payroll Core version, statutory-data version metadata, deterministic calculators, validation fixtures, and audit/explanation output for each statutory line.
 
@@ -148,7 +148,7 @@ There are three viable placement models for country packs.
 | Option | Shape | Strengths | Weaknesses | Recommendation |
 |--------|-------|-----------|------------|----------------|
 | **Internal packs inside Payroll** | `People/Payroll` contains `MY`, later `SG`, etc. | Simple for first launch, one deployment, fastest iteration. | Core may gradually absorb country-specific assumptions if discipline is weak. | Acceptable only as incubation for Malaysia while the contract is still moving. |
-| **Extension packs** | Core Payroll ships neutral APIs; `extensions/vendor/payroll-my` provides Malaysia. | Best long-term ecosystem story, countries can be maintained independently, aligns with BLB extension model. | More upfront API discipline and installation/version management. | Preferred target architecture. Country packs should be extension-shaped even before they physically move to `extensions/`. |
+| **Extension packs** | The Payroll Module ships neutral APIs; `app/Extensions/Belimbing/PayrollMy` provides Malaysia. | Best long-term ecosystem story, countries can be maintained independently, aligns with BLB Extension model. | More upfront API discipline and installation/version management. | Preferred target architecture. Country packs should be Extension-shaped even before they physically move to `app/Extensions/`. |
 | **Pure database-config rules** | Admins configure formulas/tables without code. | Appealing for frequent rate changes and customer customization. | Payroll logic becomes shallow, hard to test, hard to audit, and dangerous for complex tax formulas. | Do not start here. Use data-driven tables inside tested country-pack code instead. |
 
 Recommended path: **build Malaysia as a reference first-party country pack behind a country-pack interface**, and keep its structure extension-compatible from the first commit. It can be physically internal during incubation if that speeds refactoring, but the design target is a first-party extension pack. The core should never depend on concrete Malaysia classes, EPF/SOCSO/PCB table names, or Malaysia-specific database columns.
@@ -327,7 +327,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 10 — Extension hardening and second-country proof
 
-- [ ] Decide when to physically maintain Malaysia in the public `BelimbingApp/blb-payroll-my` repository and install it as `extensions/belimbing/payroll-my`.
+- [ ] Decide when to physically maintain Malaysia in the public `BelimbingApp/blb-payroll-my` repository and install it as `app/Extensions/Belimbing/PayrollMy`.
 - [ ] Validate the country-pack contract with a thin second-country spike before building another full statutory pack.
 - [ ] Confirm which SBG-specific payroll rules belong in `kiatng/blb-sbg` versus upstream in `BelimbingApp/blb-payroll-my`.
 
@@ -338,4 +338,4 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 - Confirm LHDN 2026 PCB computerized-calculation verification expectations for BLB: whether BLB as open-source software should seek verification, provide a verification harness, or leave verification to licensees/custom implementers.
 - Confirm state-by-state zakat salary deduction workflows and whether BLB should ship generic zakat deduction plus state metadata first, rather than full state-specific integrations.
 - Confirm HRD Corp employer eligibility rules by industry and employee-count threshold beyond the basic levy calculation.
-- Decide whether Payroll belongs as `app/Modules/People/Payroll` from the start or whether it should become a deeper cross-cutting People/Finance boundary once accounting exists.
+- Decide whether Payroll remains in `app/Domains/People/Payroll` or becomes a deeper cross-cutting People/Finance boundary once accounting exists.

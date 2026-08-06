@@ -1,13 +1,13 @@
 # people/04_pdf-generation-strategy
 
 **Status:** Complete. PDF infrastructure (`app/Base/Pdf/`) is the single source of truth for visual PDFs across BLB. Phase 3 (Payroll wiring) is **delegated to `02_payroll-malaysia-top-level-design.md`** under Phases 5 (operational outputs) and 9 (Self-Service documents); the renderer surface is stable and ready to consume. Only operational item still open: qpdf binary rollout to each deployment target — install instructions at `docs/guides/pdf-rendering.md`.
-**Last Updated:** 2026-07-25
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — payslip and statutory output requirements (Phases on payslip PDF, report exports, ESS document delivery)
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 parity items including payslip PDF, EA/CP8A/PCB2 forms, password-encrypted PDF distribution, ESS document access
 - `composer.json` — current dependency floor; license is `MIT`; no PDF library is presently installed
-- `app/Modules/Core/AI/Services/Browser/PlaywrightRunner.php` — current Playwright runner; spawns a fresh Chromium per command, with session persistence noted as future work
-- `app/Modules/Core/AI/Services/Browser/BrowserPoolManager.php` — in-memory ledger of per-company browser context IDs and concurrency limits; not a process pool
+- `app/Core/AI/Services/Browser/PlaywrightRunner.php` — current Playwright runner; spawns a fresh Chromium per command, with session persistence noted as future work
+- `app/Core/AI/Services/Browser/BrowserPoolManager.php` — in-memory ledger of per-company browser context IDs and concurrency limits; not a process pool
 - `resources/core/scripts/browser-runner.mjs` — Node runner that already exposes a `handlePdf` action returning `pdf_base64` over JSON; treat as a prototype, not a finished renderer
 - `LICENSE` — MIT (matches the `MIT` SPDX expression in `composer.json`)
 - Setasign FPDI (MIT core) — https://www.setasign.com/products/fpdi/about/ — PDF-Parser add-on required for compressed PDFs is commercial; rejected on that ground

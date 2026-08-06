@@ -5,8 +5,8 @@ use App\Base\Software\Livewire\Deployment\Index;
 use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
-use App\Base\Software\Services\DistributionBundleRepository;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
+use App\Base\Software\Services\SoftwareSourceRepository;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use App\Base\Support\DetachedProcessLauncher;
 use App\Base\Support\PhpCli;
@@ -23,7 +23,7 @@ const DEPLOYMENT_UPDATE_REMOTE_SHA = 'feedfacefeedfacefeedfacefeedfacefeedface';
 const DEPLOYMENT_UPDATE_FRONTEND_BUILT = 'Frontend assets built.';
 const DEPLOYMENT_UPDATE_LAST_RUN_LABEL = 'Last run';
 const DEPLOYMENT_UPDATE_VERIFIED_PLATFORM = 'Verified: Belimbing (platform) is at deadbee and matches main.';
-const DEPLOYMENT_UPDATE_COMPLETE = 'Update complete. Selected Distribution Bundles are up to date and workers were reloaded.';
+const DEPLOYMENT_UPDATE_COMPLETE = 'Update complete. Selected software sources are up to date and workers were reloaded.';
 const DEPLOYMENT_UPDATE_REMOTE = 'https://github.com/BelimbingApp/belimbing.git';
 const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
 const DEPLOYMENT_UPDATE_LOG_FORMAT = '--format=%H%x1f%cI%x1f%an%x1f%s';
@@ -53,8 +53,8 @@ function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?str
 
 function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null): mixed
 {
-    // When $remoteSha is null, the remote HEAD matches the local SHA so bundles
-    // report up_to_date. Pass a distinct $remoteSha to simulate a bundle that
+    // When $remoteSha is null, the remote HEAD matches the local SHA so sources
+    // report up_to_date. Pass a distinct $remoteSha to simulate a source that
     // is behind its remote (up_to_date === false after loadLatestStatus).
     $remoteSha ??= $sha;
 
@@ -345,7 +345,7 @@ function fakeDeploymentReloadFallbackResponse(string $requestUrl): mixed
     return Http::response('', 500);
 }
 
-test('deployment page lists Distribution Bundles with status for admins', function (): void {
+test('deployment page lists software sources with status for admins', function (): void {
     $user = createAdminUser();
     fakeDeploymentUpdateProcesses();
     Http::fake();
@@ -354,13 +354,13 @@ test('deployment page lists Distribution Bundles with status for admins', functi
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
         ->assertSee('Updates')
-        ->assertSee('Distribution Bundles')
-        ->assertSee('Distribution Bundle')
-        ->assertSee('A Distribution Bundle is BLB&#039;s installable, versioned code bundle.', false)
+        ->assertSee('software sources')
+        ->assertSee('software source')
+        ->assertSee('A software source is the repository that delivers the platform, a Domain, a module slot, or an Extension.', false)
         ->assertSee('FrankenPHP workers')
         ->assertSee('No reload has been recorded yet.')
         ->assertSee('Belimbing (platform)')
-        ->assertSee('BelimbingApp/belimbing') // discovered platform bundle's Git repository
+        ->assertSee('BelimbingApp/belimbing') // discovered platform source's Git repository
         ->assertSee('Checking latest')
         ->assertSee('Reload FrankenPHP')
         ->assertSee('Streaming live output. You can dismiss this window; the run continues.')
@@ -411,7 +411,7 @@ test('failed remote checks name the repos instead of assuming they are private',
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        ->assertSee('Could not check latest commits for these Distribution Bundles: BelimbingApp/belimbing')
+        ->assertSee('Could not check latest commits for these software sources: BelimbingApp/belimbing')
         ->assertSee('Public repositories do not need a token')
         ->assertSee('Could not read latest commit for BelimbingApp/belimbing@main via git ls-remote (fatal: unable to access repository)')
         ->assertDontSee('A private repository could not be checked');
@@ -422,10 +422,10 @@ test('failed remote checks name the repos instead of assuming they are private',
 test('deployment local status tolerates git launch failures', function (): void {
     Process::fake(fn () => throw new DeploymentUpdateGitLaunchException('git executable was not found'));
 
-    $expectedBundleCount = count(app(DistributionBundleRepository::class)->distributions());
+    $expectedSourceCount = count(app(SoftwareSourceRepository::class)->sources());
     $status = app(DeploymentService::class)->localStatus();
 
-    expect($status)->toHaveCount($expectedBundleCount)
+    expect($status)->toHaveCount($expectedSourceCount)
         ->and(collect($status)->pluck('current')->filter()->all())->toBe([])
         ->and(collect($status)->pluck('latest')->filter()->all())->toBe([]);
 });
@@ -439,7 +439,7 @@ test('deployment status reports remote process pool failures as row errors', fun
         return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
     });
 
-    $status = app(DistributionBundleRepository::class)->status(useRemoteCache: false);
+    $status = app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
 
     expect(collect($status)->pluck('error')->filter()->first())
         ->toContain('Could not start Git remote status checks: process pool unavailable');
@@ -458,7 +458,7 @@ test('deployment status does not cache transient remote failures', function (): 
         return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
     });
 
-    $repository = app(DistributionBundleRepository::class);
+    $repository = app(SoftwareSourceRepository::class);
 
     $first = $repository->status();
     $repository->status();
@@ -478,7 +478,7 @@ test('deployment status deduplicates remote latest checks in each render', funct
         return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
     });
 
-    $repository = app(DistributionBundleRepository::class);
+    $repository = app(SoftwareSourceRepository::class);
     $first = $repository->status();
     $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
 
@@ -492,7 +492,7 @@ test('deployment status deduplicates remote latest checks in each render', funct
     $repository->status(useRemoteCache: false);
 
     expect($lsRemoteCount - $beforeBypass)->toBe($uniqueRemoteChecks)
-        ->and($first)->toHaveCount(count($repository->distributions()));
+        ->and($first)->toHaveCount(count($repository->sources()));
 });
 
 test('reload only schedules a graceful worker reload and records a log', function (): void {
@@ -1064,7 +1064,7 @@ test('behind is a Livewire public property so Alpine can react to it via $wire a
     // as a public property synced via $wire, so x-bind:disabled="! $wire.behind"
     // re-evaluates reactively when the property changes after loadLatestStatus.
     $user = createAdminUser();
-    // Remote HEAD differs from the local SHA so the bundle is behind after
+    // Remote HEAD differs from the local SHA so the source is behind after
     // loadLatestStatus triggers the remote status fetch.
     fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA);
     Http::fake();
@@ -1279,7 +1279,7 @@ test('the worker reload records a warning when application health does not recov
     });
 });
 
-test('a diverged bundle reports an actionable message instead of raw git hints', function (): void {
+test('a diverged source reports an actionable message instead of raw git hints', function (): void {
     Process::fake(function ($process) {
         if (in_array(DEPLOYMENT_UPDATE_FF_ONLY, $process->command, true)) {
             return Process::result(
@@ -1293,7 +1293,7 @@ test('a diverged bundle reports an actionable message instead of raw git hints',
         return Process::result('https://github.com/kiatng/blb-sbg.git');
     });
 
-    $message = app(DistributionBundleRepository::class)->pull(['label' => 'blb-sbg', 'path' => '/srv/blb-sbg']);
+    $message = app(SoftwareSourceRepository::class)->pull(['label' => 'blb-sbg', 'path' => '/srv/blb-sbg']);
 
     expect($message)
         ->toContain('blb-sbg has diverged from its remote')
@@ -1302,7 +1302,7 @@ test('a diverged bundle reports an actionable message instead of raw git hints',
         ->not->toContain('fatal:');
 });
 
-function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
+function fakeSourceGit(string $porcelain, string $leftRightCount): Closure
 {
     return function ($process) use ($porcelain, $leftRightCount) {
         $command = gitCommandWithoutConfig($process->command);
@@ -1328,29 +1328,29 @@ function fakeBundleGit(string $porcelain, string $leftRightCount): Closure
     };
 }
 
-test('bundle status surfaces a dirty and diverged working tree', function (): void {
+test('source status surfaces a dirty and diverged working tree', function (): void {
     // git status --porcelain=v1 --branch reports "[ahead N, behind N]" on the branch header.
-    Process::fake(fakeBundleGit(" M a.php\n?? b.php\n D c.php", "4\t2"));
+    Process::fake(fakeSourceGit(" M a.php\n?? b.php\n D c.php", "4\t2"));
 
-    $platform = collect(app(DistributionBundleRepository::class)->status())->firstWhere('key', 'platform');
+    $platform = collect(app(SoftwareSourceRepository::class)->status())->firstWhere('key', 'platform');
 
     expect($platform['working_tree']['dirty'])->toBe(3)
         ->and($platform['working_tree']['ahead'])->toBe(2)
         ->and($platform['working_tree']['behind'])->toBe(4);
 });
 
-test('a clean bundle reports a clean working tree', function (): void {
-    Process::fake(fakeBundleGit('', "0\t0"));
+test('a clean source reports a clean working tree', function (): void {
+    Process::fake(fakeSourceGit('', "0\t0"));
 
-    $platform = collect(app(DistributionBundleRepository::class)->status())->firstWhere('key', 'platform');
+    $platform = collect(app(SoftwareSourceRepository::class)->status())->firstWhere('key', 'platform');
 
     expect($platform['working_tree'])->toBe(['dirty' => 0, 'ahead' => 0, 'behind' => 0]);
 });
 
-test('the deployment page flags a bundle with uncommitted and unpushed changes', function (): void {
+test('the deployment page flags a source with uncommitted and unpushed changes', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
-    Process::fake(fakeBundleGit(" M ibp/Database/Migrations/x.php\n?? y.php", "0\t2"));
+    Process::fake(fakeSourceGit(" M ibp/Database/Migrations/x.php\n?? y.php", "0\t2"));
     Http::fake();
 
     Livewire::test(Index::class)

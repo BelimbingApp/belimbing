@@ -9,8 +9,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
-const TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH = 'app/Modules/Core/User';
-const TABLE_REGISTRY_RECONCILIATION_EXT_DIR = 'extensions/test-vendor/test-mod/Database/Migrations';
+const TABLE_REGISTRY_RECONCILIATION_USER_MODULE_PATH = 'app/Core/User';
+const TABLE_REGISTRY_RECONCILIATION_EXT_DIR = 'app/Extensions/TestVendor/TestMod/Database/Migrations';
 
 uses(RefreshDatabase::class);
 
@@ -185,7 +185,7 @@ PHP);
 
         expect($entry)->not()->toBeNull()
             ->and($entry->module_name)->toBe('test-mod')
-            ->and($entry->module_path)->toBe('extensions/test-vendor/test-mod')
+            ->and($entry->module_path)->toBe('app/Extensions/TestVendor/TestMod')
             ->and($entry->migration_file)->toBe('2099_01_01_000000_create_test_vendor_ext_table.php');
     } finally {
         @unlink($file);

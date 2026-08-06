@@ -423,7 +423,7 @@
     >
         <x-ui.page-header
             :title="__('Updates')"
-            :subtitle="__('Launch a durable background update per Distribution Bundle. The detached process survives web-worker restarts, runs migrations under maintenance mode, reloads the runtime, and records its progress here.')"
+            :subtitle="__('Launch a durable background update per software source. The detached process survives web-worker restarts, runs migrations under maintenance mode, reloads the runtime, and records its progress here.')"
         />
 
         @if (session('status'))
@@ -454,7 +454,7 @@
 
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
-                {{ __('Could not check latest commits for these Distribution Bundles: :bundles. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['bundles' => implode(', ', $checkFailures)]) }}
+                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['sources' => implode(', ', $checkFailures)]) }}
                 <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
             </x-ui.alert>
         @endif
@@ -499,10 +499,10 @@
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="min-w-0 flex-1">
                         <div class="inline-flex max-w-full items-center gap-2">
-                            <h2 class="text-base font-medium text-ink">{{ __('Distribution Bundles') }}</h2>
+                            <h2 class="text-base font-medium text-ink">{{ __('Software sources') }}</h2>
                             <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
                         </div>
-                        <p class="mt-1 text-sm text-muted">{{ __('Update launches a detached process that pulls the selected bundles, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, and reloads workers. Private repositories use the token set in') }}
+                        <p class="mt-1 text-sm text-muted">{{ __('Update launches a detached process that pulls the selected sources, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, and reloads workers. Private repositories use the token set in') }}
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
@@ -528,15 +528,15 @@
                     aria-label="{{ __('Click to dismiss') }}"
                 >
                     <div class="p-4">
-                        <p>{{ __('A Distribution Bundle is BLB\'s installable, versioned code bundle. Each bundle lands at a known path and namespace, such as the Belimbing platform, a domain, a slot, or an extension. Today, bundles are delivered as Git repositories.') }}</p>
+                        <p>{{ __('A software source is the repository that delivers the platform, a Domain, a module slot, or an Extension. Domains and Extensions remain the operator-facing lifecycle units; source details explain where updates come from.') }}</p>
                     </div>
                 </div>
             </div>
 
-            <x-ui.table container="flush" :caption="__('Deployment Distribution Bundles')">
+            <x-ui.table container="flush" :caption="__('Deployment software sources')">
                 <x-slot name="head">
                     <tr>
-                        <x-ui.th>{{ __('Distribution Bundle') }}</x-ui.th>
+                        <x-ui.th>{{ __('Software source') }}</x-ui.th>
                         <x-ui.th>{{ __('Branch') }}</x-ui.th>
                         <x-ui.th>{{ __('Current') }}</x-ui.th>
                         <x-ui.th>{{ __('Latest') }}</x-ui.th>
@@ -550,13 +550,13 @@
                             <div class="text-sm font-medium text-ink">{{ $s['label'] }}</div>
                             <div class="font-mono text-xs text-muted">{{ $s['repo'] ?? $s['path'] }}</div>
                             @if ($s['working_tree']['dirty'] > 0 || $s['working_tree']['ahead'] > 0)
-                                {{-- Uncommitted/unpushed changes inside a bundle's own nested repo never show in the platform repo's git status; surface them here so a tool that wrote into the bundle (e.g. schema incubation) can't leave the operator in the dark. --}}
+                                {{-- Uncommitted/unpushed changes inside a source's own nested repo never show in the platform repo's git status; surface them here so a tool that wrote into the source (e.g. schema incubation) can't leave the operator in the dark. --}}
                                 <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
                                     @if ($s['working_tree']['dirty'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this bundle — commit them in its repository.')">{{ trans_choice('{1} :count uncommitted change|[2,*] :count uncommitted changes', (int) $s['working_tree']['dirty'], ['count' => $s['working_tree']['dirty']]) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Uncommitted changes in this source — commit them in its repository.')">{{ trans_choice('{1} :count uncommitted change|[2,*] :count uncommitted changes', (int) $s['working_tree']['dirty'], ['count' => $s['working_tree']['dirty']]) }}</x-ui.badge>
                                     @endif
                                     @if ($s['working_tree']['ahead'] > 0)
-                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this bundle\'s remote.')">{{ trans_choice('{1} :count unpushed commit|[2,*] :count unpushed commits', (int) $s['working_tree']['ahead'], ['count' => $s['working_tree']['ahead']]) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Local commits not yet pushed to this source\'s remote.')">{{ trans_choice('{1} :count unpushed commit|[2,*] :count unpushed commits', (int) $s['working_tree']['ahead'], ['count' => $s['working_tree']['ahead']]) }}</x-ui.badge>
                                     @endif
                                 </div>
                             @endif

@@ -2,9 +2,9 @@
 
 namespace Tests\Support;
 
-use App\Modules\Core\Geonames\Models\Admin1;
-use App\Modules\Core\Geonames\Models\Country;
-use App\Modules\Core\Geonames\Models\Postcode;
+use App\Core\Geonames\Models\Admin1;
+use App\Core\Geonames\Models\Country;
+use App\Core\Geonames\Models\Postcode;
 
 /**
  * Seed minimal GeoNames rows for pagination/list UI tests.

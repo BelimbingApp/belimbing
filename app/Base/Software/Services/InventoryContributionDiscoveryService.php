@@ -2,6 +2,8 @@
 
 namespace App\Base\Software\Services;
 
+use App\Base\Foundation\ApplicationTopology;
+use App\Base\Foundation\Services\DomainState;
 use App\Base\Software\Inventory\Contracts\InventoryContributionProvider;
 use Throwable;
 
@@ -11,7 +13,7 @@ use Throwable;
  *
  * A host module advertises its seam's provider by class:
  *
- *     return ['contribution_providers' => [\App\Modules\…\SomeContributionProvider::class]];
+ *     return ['contribution_providers' => [\App\Domains\…\SomeContributionProvider::class]];
  *
  * Modelled on the Commerce/Payroll discovery seams. Tolerant by design: this feeds a
  * read-only operator report, so a provider that fails to construct or describe itself
@@ -49,7 +51,7 @@ class InventoryContributionDiscoveryService
         $classes = [];
 
         foreach ($this->scanPatterns ?? $this->defaultScanPatterns() as $pattern) {
-            foreach (glob($pattern) ?: [] as $file) {
+            foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
                 foreach ($this->providersInFile($file) as $class) {
                     $classes[$class] = $class;
                 }
@@ -88,9 +90,6 @@ class InventoryContributionDiscoveryService
      */
     private function defaultScanPatterns(): array
     {
-        return [
-            base_path('app/Modules/*/*/Config/inventory.php'),
-            base_path('extensions/*/*/Config/inventory.php'),
-        ];
+        return ApplicationTopology::contributionPatterns('Config/inventory.php');
     }
 }

@@ -8,9 +8,9 @@
 
 This review covers integration opportunities for the newly added `geonames_cities` dataset across:
 
-- `App\Modules\Core\Geonames`
-- `App\Modules\Core\Address`
-- `App\Modules\Core\Company`
+- `App\Core\Geonames`
+- `App\Core\Address`
+- `App\Core\Company`
 - timezone-aware UI and related display flows
 
 The goal is to make practical, BLB-aligned use of cities data instead of leaving it as a seeded but mostly unconsumed dataset.
@@ -51,9 +51,9 @@ This means the new cities data is structurally present, but not yet woven into t
 
 The strongest current integration seam is the Address geo lookup stack:
 
-- `app/Modules/Core/Address/Concerns/HasAddressGeoLookups.php`
-- `app/Modules/Core/Address/Livewire/AbstractAddressForm.php`
-- `app/Modules/Core/Address/Http/Controllers/PostcodeSearchController.php`
+- `app/Core/Address/Concerns/HasAddressGeoLookups.php`
+- `app/Core/Address/Livewire/AbstractAddressForm.php`
+- `app/Core/Address/Http/Controllers/PostcodeSearchController.php`
 
 Today these flows support:
 
@@ -68,7 +68,7 @@ This is the most natural place to introduce city-backed lookup behavior.
 
 Company address management already reuses the shared address form logic:
 
-- `app/Modules/Core/Company/Livewire/Companies/Show.php`
+- `app/Core/Company/Livewire/Companies/Show.php`
 
 That makes company address modals an immediate downstream beneficiary of any city integration added in the Address layer.
 
@@ -82,8 +82,8 @@ The Geonames module currently exposes admin surfaces for:
 
 But not for cities:
 
-- `app/Modules/Core/Geonames/Routes/web.php`
-- `app/Modules/Core/Geonames/Config/menu.php`
+- `app/Core/Geonames/Routes/web.php`
+- `app/Core/Geonames/Config/menu.php`
 
 This leaves the new dataset less observable and harder to validate operationally.
 
@@ -249,7 +249,7 @@ This keeps timezone display reliable without pretending that every address can a
 
 ### 5. Teach `AddressCreator` to resolve city names
 
-`app/Modules/Core/Address/Services/AddressCreator.php` is a good place to use city data for imported or AI-parsed addresses.
+`app/Core/Address/Services/AddressCreator.php` is a good place to use city data for imported or AI-parsed addresses.
 
 If raw input contains a recognizable city name, the service could:
 
@@ -282,7 +282,7 @@ Adding cities there is functionally possible, but it risks turning the trait int
 
 Introduce a deeper interface that owns geospatial lookup behavior for addresses, for example:
 
-- `App\Modules\Core\Address\Services\GeonamesAddressLookup`
+- `App\Core\Address\Services\GeonamesAddressLookup`
 
 Possible responsibilities:
 
@@ -376,7 +376,7 @@ Recommended sequence:
 
 The best first slice is:
 
-1. Add query scopes and basic relationships to `App\Modules\Core\Geonames\Models\City`.
+1. Add query scopes and basic relationships to `App\Core\Geonames\Models\City`.
 2. Add city search to the address geo lookup layer.
 3. Reuse that in company address modals.
 4. Add a simple Geonames Cities admin browser.

@@ -15,7 +15,7 @@ beforeEach(function (): void {
 test('schema incubation index can add selected tables to source incubation', function (): void {
     $this->actingAs(createAdminUser());
     Process::fake(); // intercept the auto-commit so the test never writes real git history
-    $migrationPath = app_path('Modules/Core/AI/Database/Migrations/0200_02_01_000003_create_ai_browser_sessions_table.php');
+    $migrationPath = app_path('Core/AI/Database/Migrations/0200_02_01_000003_create_ai_browser_sessions_table.php');
     $original = file_get_contents($migrationPath);
 
     try {

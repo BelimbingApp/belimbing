@@ -2,6 +2,8 @@
 
 namespace App\Base\Database\Models;
 
+use App\Base\Foundation\ApplicationTopology;
+use App\Base\Support\Str;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -13,7 +15,7 @@ use Illuminate\Support\Facades\Schema;
  * @property int $id
  * @property string $table_name Physical database table name
  * @property string|null $module_name Module name (e.g., 'AI')
- * @property string|null $module_path Module path (e.g., 'app/Modules/Core/AI')
+ * @property string|null $module_path Module path (e.g., 'app/Core/AI')
  * @property string|null $migration_file Migration file that created this table
  */
 class TableRegistry extends Model
@@ -53,7 +55,7 @@ class TableRegistry extends Model
      *
      * @param  string  $tableName  Physical database table name
      * @param  string|null  $moduleName  Module name (e.g., 'AI')
-     * @param  string|null  $modulePath  Module path (e.g., 'app/Modules/Core/AI')
+     * @param  string|null  $modulePath  Module path (e.g., 'app/Core/AI')
      * @param  string|null  $migrationFile  Migration file that created this table
      */
     public static function register(
@@ -93,7 +95,7 @@ class TableRegistry extends Model
     /**
      * Auto-discover tables from migration files and register them.
      *
-     * Scans migration files under app/Base and app/Modules for Schema::create()
+     * Scans migration files under all four application roots for Schema::create()
      * calls, extracts table names, and registers any not already in the registry.
      */
     public static function ensureDiscoveredRegistered(): void
@@ -208,10 +210,11 @@ class TableRegistry extends Model
     private static function discoverDeclaredTables(): array
     {
         $patterns = [
-            app_path('Base/*/Database/Migrations/*.php'),
-            app_path('Modules/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::baseComponentPattern('Database/Migrations/*.php'),
+            ApplicationTopology::coreModulePattern('Database/Migrations/*.php'),
+            ApplicationTopology::domainModulePattern('Database/Migrations/*.php'),
             database_path('migrations/*.php'),
-            base_path('extensions/*/*/Database/Migrations/*.php'),
+            ApplicationTopology::extensionModulePattern('Database/Migrations/*.php'),
         ];
 
         $files = [];
@@ -256,12 +259,15 @@ class TableRegistry extends Model
         $modulePath = null;
         $moduleName = null;
 
-        if (preg_match('#app/Modules/[^/]+/[^/]+#', $rel, $pathMatch)
+        if (preg_match('#app/Core/[^/]+#', $rel, $pathMatch)
+            || preg_match('#app/Domains/[^/]+/[^/]+#', $rel, $pathMatch)
             || preg_match('#app/Base/[^/]+#', $rel, $pathMatch)
-            || preg_match('#extensions/[^/]+/[^/]+#', $rel, $pathMatch)
+            || preg_match('#app/Extensions/[^/]+/[^/]+#', $rel, $pathMatch)
         ) {
             $modulePath = $pathMatch[0];
-            $moduleName = basename($modulePath);
+            $moduleName = ApplicationTopology::belongsToRoot($modulePath, ApplicationTopology::EXTENSIONS)
+                ? Str::pascalToKebab(basename($modulePath))
+                : basename($modulePath);
         }
 
         $declaredTables = [];

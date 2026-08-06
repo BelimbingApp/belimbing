@@ -1,0 +1,22 @@
+<?php
+namespace App\Core\AI\DTO\ControlPlane;
+
+use App\Core\AI\Enums\ControlPlaneTarget;
+use App\Core\AI\Enums\TelemetryEventType;
+
+final readonly class TelemetryRecordRequest
+{
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    public function __construct(
+        public TelemetryEventType $eventType,
+        public array $payload = [],
+        public ?string $runId = null,
+        public ?string $sessionId = null,
+        public ?string $dispatchId = null,
+        public ?int $employeeId = null,
+        public ?ControlPlaneTarget $targetType = null,
+        public ?string $targetId = null,
+    ) {}
+}

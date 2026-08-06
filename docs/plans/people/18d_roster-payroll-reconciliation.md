@@ -1,12 +1,12 @@
 # 18d_roster-payroll-reconciliation.md
 
 **Status:** Complete
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 chain reference
 - `docs/plans/people/09_attendance-module-design.md` — attendance module design
-- `app/Modules/People/Attendance/Livewire/Rosters.php`
+- `app/Domains/People/Attendance/Livewire/Rosters.php`
 **Agents:** claude/sonnet-4.6
 
 ## Problem Essence

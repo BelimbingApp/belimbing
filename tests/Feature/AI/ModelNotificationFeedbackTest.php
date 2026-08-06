@@ -1,11 +1,11 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Providers\Providers;
-use App\Modules\Core\AI\Models\AiProvider;
-use App\Modules\Core\AI\Models\AiProviderModel;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\AI\Livewire\Providers\Providers;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Models\AiProviderModel;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 function createModelNotificationProvider(): AiProviderModel

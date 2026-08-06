@@ -7,8 +7,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 const bladeRefreshPaths = [
     'resources/core/views/**/*.blade.php',
-    'app/Modules/*/*/Views/**/*.blade.php',
-    'extensions/*/*/Views/**/*.blade.php',
+    'app/Core/*/Views/**/*.blade.php',
+    'app/Domains/*/*/Views/**/*.blade.php',
+    'app/Extensions/*/*/Views/**/*.blade.php',
 ];
 
 export default defineConfig(({ mode }) => {

@@ -1,0 +1,463 @@
+<?php
+
+namespace App\Core\AI\Services;
+
+use App\Core\AI\DTO\ToolUseEntry;
+use App\Core\AI\Enums\RunEventType;
+use App\Core\AI\Models\AiRun;
+
+/**
+ * Materializes transcript entries from a completed chat run's event stream.
+ *
+ * The run event stream (ai_run_events) is the live contract — the
+ * source of truth during an active chat run. This service reads those events
+ * after the run completes and writes the equivalent transcript entries
+ * via MessageManager so the conversation history is available for page
+ * reload, context building, and search.
+ *
+ * Replaces the previous inline persistence pattern where ChatRunPersister
+ * consumed raw runtime events during the stream. Now all persistence
+ * flows through run events first.
+ */
+class ChatRunPersister
+{
+    /**
+     * Materialize transcript entries from a run's durable event stream.
+     *
+     * Reads the turn's events in seq order and writes thinking, tool call,
+     * tool result, and assistant message entries to the transcript. Handles
+     * both successful and failed runs.
+     *
+     * @param  AiRun  $turn  The completed (or failed) chat run
+     * @param  MessageManager  $mm  Message manager instance
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $sessionId  Session UUID
+     * @param  array<string, mixed>  $extraMeta  Extra metadata for the assistant message (e.g., prompt_package)
+     */
+    public function materializeFromTurn(
+        AiRun $turn,
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $extraMeta = [],
+    ): void {
+        $events = $turn->events()->orderBy('seq')->get();
+        $state = new class
+        {
+            public ?string $runId = null;
+
+            public bool $thinkingPending = false;
+
+            public string $thinkingContent = '';
+
+            public string $streamedContent = '';
+
+            public string $fullContent = '';
+
+            public bool $hadError = false;
+
+            public ?string $stopNote = null;
+
+            /** @var array<string, mixed> */
+            public array $usageMeta = [];
+
+            /** @var array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}> */
+            public array $pendingToolCalls = [];
+        };
+        $state->runId = $turn->id;
+
+        foreach ($events as $event) {
+            $payload = is_array($event->payload) ? $event->payload : [];
+            $this->applyTurnEventToMaterialization($turn, $mm, $employeeId, $sessionId, $event->event_type, $payload, $state);
+        }
+
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+        $assistantContent = $this->resolvedAssistantContent($state);
+
+        if (! $state->hadError && ($assistantContent !== '' || $state->stopNote !== null) && $state->runId !== null) {
+            $meta = array_merge(
+                $this->runMetaFromRecord($state->runId),
+                $state->usageMeta,
+                $extraMeta,
+            );
+
+            if ($state->stopNote !== null) {
+                $meta['stop_note'] = $state->stopNote;
+            }
+
+            $mm->appendAssistantMessage($employeeId, $sessionId, $assistantContent, $state->runId, $meta);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{
+     *     runId: ?string,
+     *     thinkingPending: bool,
+     *     thinkingContent: string,
+     *     fullContent: string,
+     *     hadError: bool,
+     *     stopNote: ?string,
+     *     usageMeta: array<string, mixed>
+     * }  $state
+     */
+    private function applyTurnEventToMaterialization(
+        AiRun $turn,
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        RunEventType $type,
+        array $payload,
+        object $state,
+    ): void {
+        match ($type) {
+            RunEventType::RunStarted => $this->materializeRunStarted($payload, $state),
+            RunEventType::AssistantThinkingStarted => $this->materializeThinkingStarted($mm, $employeeId, $sessionId, $state),
+            RunEventType::AssistantThinkingDelta => $this->materializeThinkingDelta($payload, $state),
+            RunEventType::AssistantIterationCompleted => $this->materializeIterationCompleted($mm, $employeeId, $sessionId, $state),
+            RunEventType::ToolStarted => $this->materializeToolStarted($payload, $state),
+            RunEventType::ToolFinished => $this->materializeToolFinished($mm, $employeeId, $sessionId, $payload, $state),
+            RunEventType::ToolDenied => $this->materializeToolDenied($mm, $employeeId, $sessionId, $payload, $state),
+            RunEventType::AssistantOutputDelta => $this->materializeOutputDelta($payload, $state),
+            RunEventType::AssistantOutputBlockCommitted => $this->materializeOutputCommitted($payload, $state),
+            RunEventType::UsageUpdated => $this->materializeUsageUpdated($payload, $state),
+            RunEventType::RunCancelled => $this->materializeRunCancelled($payload, $state),
+            RunEventType::RunFailed => $this->materializeRunFailed($turn, $mm, $employeeId, $sessionId, $payload, $state),
+            default => null,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeRunStarted(array $payload, object $state): void
+    {
+        $state->runId = is_string($payload['run_id'] ?? null) ? $payload['run_id'] : $state->runId;
+    }
+
+    /**
+     * @param  object{thinkingPending: bool, thinkingContent: string}  $state
+     */
+    private function materializeThinkingStarted(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
+        $state->thinkingPending = true;
+        $state->thinkingContent = '';
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{thinkingContent: string}  $state
+     */
+    private function materializeThinkingDelta(array $payload, object $state): void
+    {
+        $state->thinkingContent .= $payload['delta'] ?? '';
+    }
+
+    /**
+     * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
+     */
+    private function materializeIterationCompleted(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+    }
+
+    /**
+     * Persist the accumulated thinking entry if pending and non-empty.
+     *
+     * The runtime emits a `thinking` phase status at the start of every
+     * tool-loop iteration as a live UI progress indicator. This does NOT
+     * mean the model produced reasoning content — actual content only
+     * arrives via `thinking_delta` events. Only persist when the model
+     * genuinely produced reasoning text; discard empty thinking blocks
+     * so the transcript does not contain ghost working-phase entries.
+     *
+     * @param  object{runId: ?string, thinkingPending: bool, thinkingContent: string}  $state
+     */
+    private function flushPendingThinking(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        object $state,
+    ): void {
+        if (! $state->thinkingPending || $state->runId === null) {
+            return;
+        }
+
+        if ($state->thinkingContent !== '') {
+            $mm->appendThinking($employeeId, $sessionId, $state->runId, $state->thinkingContent);
+        }
+
+        $state->thinkingPending = false;
+    }
+
+    /**
+     * Buffer the tool call data until the corresponding ToolFinished arrives.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  object{pendingToolCalls: array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}>}  $state
+     */
+    private function materializeToolStarted(
+        array $payload,
+        object $state,
+    ): void {
+        $index = (int) ($payload['tool_call_index'] ?? 0);
+
+        $state->pendingToolCalls[$index] = [
+            'tool' => (string) ($payload['tool'] ?? ''),
+            'args_summary' => (string) ($payload['args_summary'] ?? '{}'),
+            'display_summary' => is_string($payload['display_summary'] ?? null) ? $payload['display_summary'] : '',
+            'tool_call_index' => $index,
+        ];
+    }
+
+    /**
+     * Write a single tool_use entry merging buffered call data with the result.
+     *
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string, pendingToolCalls: array<int, array{tool: string, args_summary: string, display_summary: string, tool_call_index: int}>}  $state
+     */
+    private function materializeToolFinished(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        if ($state->runId === null) {
+            return;
+        }
+
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
+        $index = (int) ($payload['tool_call_index'] ?? 0);
+        $buffered = $state->pendingToolCalls[$index] ?? null;
+        unset($state->pendingToolCalls[$index]);
+
+        $mm->appendToolUse(
+            $employeeId,
+            $sessionId,
+            $state->runId,
+            new ToolUseEntry(
+                toolName: (string) ($payload['tool'] ?? ($buffered['tool'] ?? '')),
+                argsSummary: $buffered['args_summary'] ?? '{}',
+                toolCallIndex: $buffered['tool_call_index'] ?? $index,
+                resultPreview: (string) ($payload['result_preview'] ?? ''),
+                resultLength: (int) ($payload['result_length'] ?? 0),
+                status: (string) ($payload['status'] ?? 'success'),
+                durationMs: (int) ($payload['duration_ms'] ?? 0),
+                errorPayload: is_array($payload['error_payload'] ?? null) ? $payload['error_payload'] : null,
+                displaySummary: $buffered['display_summary'] ?? '',
+            ),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string}  $state
+     */
+    private function materializeToolDenied(
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        if ($state->runId === null) {
+            return;
+        }
+
+        $this->flushPendingThinking($mm, $employeeId, $sessionId, $state);
+
+        $mm->appendHookAction(
+            $employeeId,
+            $sessionId,
+            $state->runId,
+            'pre_tool_use',
+            'tool_denied',
+            [
+                'tool' => (string) ($payload['tool'] ?? ''),
+                'reason' => (string) ($payload['reason'] ?? 'denied by policy'),
+                'source' => (string) ($payload['source'] ?? 'hook'),
+            ],
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{streamedContent: string}  $state
+     */
+    private function materializeOutputDelta(array $payload, object $state): void
+    {
+        $state->streamedContent .= (string) ($payload['delta'] ?? '');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{fullContent: string}  $state
+     */
+    private function materializeOutputCommitted(array $payload, object $state): void
+    {
+        $state->fullContent = (string) ($payload['content'] ?? '');
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{usageMeta: array<string, mixed>}  $state
+     */
+    private function materializeUsageUpdated(array $payload, object $state): void
+    {
+        $state->usageMeta['tokens'] = $payload;
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{stopNote: ?string}  $state
+     */
+    private function materializeRunCancelled(array $payload, object $state): void
+    {
+        $reason = (string) ($payload['reason'] ?? '');
+
+        if (str_starts_with($reason, 'User cancelled')) {
+            $state->stopNote = __('You stopped this run before it finished.');
+        }
+
+        // Discard any pending empty thinking block — the model was
+        // interrupted before producing reasoning content.
+        if ($state->thinkingPending && $state->thinkingContent === '') {
+            $state->thinkingPending = false;
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  object{runId: ?string, hadError: bool}  $state
+     */
+    private function materializeRunFailed(
+        AiRun $turn,
+        MessageManager $mm,
+        int $employeeId,
+        string $sessionId,
+        array $payload,
+        object $state,
+    ): void {
+        // Discard any pending thinking block — the model never actually
+        // produced reasoning content when the run fails immediately.
+        $state->thinkingPending = false;
+        $state->thinkingContent = '';
+
+        $state->hadError = true;
+        $errorMessage = $payload['message'] ?? __('An unexpected error occurred. Please try again.');
+        $errorMeta = is_array($payload['meta'] ?? null)
+            ? $payload['meta']
+            : [];
+
+        $providerName = (string) ($errorMeta['provider_name'] ?? '');
+        $model = (string) ($errorMeta['model'] ?? '');
+        $providerTag = '';
+        if ($providerName !== '' && $providerName !== 'unknown') {
+            $providerTag = $providerName.'/'.$model;
+        } elseif ($model !== '' && $model !== 'unknown') {
+            $providerTag = $model;
+        }
+
+        $content = __('⚠ :detail', ['detail' => $errorMessage]);
+
+        if ($providerTag !== '') {
+            $content .= ' ('.$providerTag.')';
+        }
+
+        $mm->appendAssistantMessage(
+            $employeeId,
+            $sessionId,
+            $content,
+            $state->runId ?? $turn->id,
+            $errorMeta,
+        );
+    }
+
+    /**
+     * Resolve the best assistant content captured during the run.
+     *
+     * Uses the committed block when present; otherwise falls back to the
+     * accumulated output deltas so cancelled runs still preserve partial
+     * responses already shown to the user.
+     *
+     * @param  object{fullContent: string, streamedContent: string}  $state
+     */
+    private function resolvedAssistantContent(object $state): string
+    {
+        if ($state->fullContent !== '') {
+            return $state->fullContent;
+        }
+
+        return $state->streamedContent;
+    }
+
+    /**
+     * Extract LLM identity metadata from the AiRun record for transcript persistence.
+     *
+     * @return array<string, mixed>
+     */
+    private function runMetaFromRecord(string $runId): array
+    {
+        $run = AiRun::query()->find($runId);
+
+        if ($run === null) {
+            return [];
+        }
+
+        $meta = [];
+
+        if (is_string($run->provider_name) && $run->provider_name !== '') {
+            $meta['provider_name'] = $run->provider_name;
+            $meta['llm']['provider'] = $run->provider_name;
+        }
+
+        if (is_string($run->model) && $run->model !== '') {
+            $meta['model'] = $run->model;
+            $meta['llm']['model'] = $run->model;
+        }
+
+        if (is_int($run->latency_ms)) {
+            $meta['latency_ms'] = $run->latency_ms;
+        }
+
+        foreach (['tool_round_count', 'tool_call_count', 'max_tool_rounds'] as $key) {
+            $value = $run->meta[$key] ?? null;
+
+            if (is_int($value)) {
+                $meta[$key] = $value;
+            }
+        }
+
+        $aiActiveDurationMs = app(AiRunDurations::class)->activeMilliseconds($run);
+        if ($aiActiveDurationMs !== null) {
+            $meta['ai_active_duration_ms'] = $aiActiveDurationMs;
+        }
+
+        $tokens = [
+            'input' => $run->prompt_tokens,
+            'cached' => $run->cached_input_tokens,
+            'output' => $run->completion_tokens,
+            'reasoning' => $run->reasoning_tokens,
+            'total' => $run->total_tokens,
+        ];
+
+        if (array_filter($tokens, static fn ($value): bool => $value !== null) !== []) {
+            $meta['tokens'] = $tokens;
+        }
+
+        return $meta;
+    }
+}

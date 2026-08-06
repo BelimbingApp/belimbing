@@ -131,7 +131,7 @@ class Index extends Component
                 'severity' => StatusVariant::Warning,
                 'source' => 'Menu',
                 'summary' => 'Menu item hidden: Supplier Research',
-                'detail' => 'Route commerce.supplier-research.show cannot be generated. Source: app/Modules/Commerce/Config/menu.php.',
+                'detail' => 'Route commerce.supplier-research.show cannot be generated. Source: app/Domains/Commerce/Config/menu.php.',
             ],
             [
                 'severity' => StatusVariant::Warning,

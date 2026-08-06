@@ -16,7 +16,7 @@ Intent: add BLB console commands and Laravel command overrides with consistent n
 ## Minimal File Pack
 
 - `app/Base/Workflow/Console/Commands/WorkflowCreateCommand.php`
-- `app/Modules/Core/User/Console/Commands/CreateUserCommand.php`
+- `app/Core/User/Console/Commands/CreateUserCommand.php`
 
 ## Reference Shape
 

@@ -1,8 +1,8 @@
 # Lara Concurrent Runs
 
 **Status:** In Progress
-**Last Updated:** 2026-06-07
-**Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Modules/Core/AI/Livewire/Chat.php`, `app/Modules/Core/AI/Livewire/Concerns/HandlesStreaming.php`, `app/Modules/Core/AI/Http/Controllers/RunStreamController.php`
+**Last Updated:** 2026-08-05
+**Sources:** `run_qLd8OtMmZbtY`, `docs/todo/ai/ai-chat-coding-agent-console.md`, `docs/todo/ai/lara-realtime-console.md`, `resources/core/views/livewire/ai/chat.blade.php`, `app/Core/AI/Livewire/Chat.php`, `app/Core/AI/Livewire/Concerns/HandlesStreaming.php`, `app/Core/AI/Http/Controllers/RunStreamController.php`
 **Agents:** Amp/GPT-5
 
 ## Problem Essence

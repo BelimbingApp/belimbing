@@ -1,11 +1,11 @@
 # people/01_people-modules
 
 **Status:** Identified
-**Last Updated:** 2026-05-11
+**Last Updated:** 2026-08-05
 **Sources:**
-- `app/Modules/People/` — current module tree (Config, Employees)
-- `app/Modules/Core/Employee/` — core Employee model and domain logic
-- `app/Modules/Core/Company/` — company hierarchy used for scoping
+- `app/Domains/People/` — current People Domain module tree (Config, Employees)
+- `app/Core/Employee/` — Core Employee model and domain logic
+- `app/Core/Company/` — Core company hierarchy used for scoping
 - `docs/plans/people/02_payroll-malaysia-top-level-design.md` — Payroll architecture and Malaysia country-pack research
 - `docs/plans/people/03_payroll-hr2000-ipayroll-parity-benchmark.md` — HR2000 i-Payroll parity benchmark
 - `docs/plans/people/04_pdf-generation-strategy.md` — PDF rendering infrastructure (complete); Payroll and Self-Service consume `App\Base\Pdf\Jobs\RenderPdfJob` for every visual document
@@ -19,7 +19,7 @@ The People domain currently has only a basic employee listing. An effective HR f
 
 ## Desired Outcome
 
-A modular HR suite under `app/Modules/People/` that gives a small-to-mid-size business the core people-management capabilities they need, without requiring a separate HRIS. Each module is a self-contained Livewire submodule following the existing pattern (Config, Routes, Livewire components) and scoped to the licensee's company hierarchy.
+A modular HR suite under `app/Domains/People/` that gives a small-to-mid-size business the core people-management capabilities they need, without requiring a separate HRIS. Each module is a self-contained Livewire submodule following the existing pattern (Config, Routes, Livewire components) and scoped to the licensee's company hierarchy.
 
 ## Top-Level Components
 

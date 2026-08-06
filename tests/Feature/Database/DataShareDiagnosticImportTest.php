@@ -6,7 +6,7 @@ use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\DiagnosticPackageImporter;
 use App\Base\Database\Services\DataShare\DiagnosticPackageInbox;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;

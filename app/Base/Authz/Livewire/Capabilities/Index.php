@@ -3,6 +3,7 @@
 namespace App\Base\Authz\Livewire\Capabilities;
 
 use App\Base\Authz\Capability\CapabilityKey;
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Foundation\Services\DomainState;
 use Illuminate\Contracts\View\View;
@@ -63,10 +64,10 @@ class Index extends Component
     private function buildCapabilityModuleMap(): array
     {
         $map = [];
-        $patterns = [
-            app_path('Base/*/Config/authz.php'),
-            app_path('Modules/*/*/Config/authz.php'),
-        ];
+        $patterns = ApplicationTopology::contributionPatterns(
+            'Config/authz.php',
+            includeExtensionSource: true,
+        );
 
         foreach ($patterns as $pattern) {
             foreach (DomainState::filterPaths(glob($pattern) ?: []) as $file) {
@@ -89,14 +90,30 @@ class Index extends Component
      */
     private function extractModuleName(string $filePath): string
     {
+        $filePath = str_replace('\\', '/', $filePath);
+
         // app/Base/Authz/Config/authz.php → Base / Authz
         if (preg_match('#app/Base/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
             return 'Base / '.$m[1];
         }
 
-        // app/Modules/Core/User/Config/authz.php → Core / User
-        if (preg_match('#app/Modules/([^/]+)/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
+        // app/Core/User/Config/authz.php → Core / User
+        if (preg_match('#app/Core/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
+            return 'Core / '.$m[1];
+        }
+
+        // app/Domains/People/Leave/Config/authz.php → People / Leave
+        if (preg_match('#app/Domains/([^/]+)/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
             return $m[1].' / '.$m[2];
+        }
+
+        // Source-level anchors are explicitly supported for Extensions.
+        if (preg_match('#app/Extensions/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
+            return 'Extension / '.$m[1];
+        }
+
+        if (preg_match('#app/Extensions/([^/]+)/([^/]+)/Config/authz\.php$#', $filePath, $m)) {
+            return 'Extension / '.$m[1].' / '.$m[2];
         }
 
         return 'Unknown';

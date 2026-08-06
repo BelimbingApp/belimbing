@@ -3,10 +3,10 @@
 namespace App\Base\Software\Inventory;
 
 /**
- * A Module as it appears inside an InstalledBundle on the Software Inventory.
+ * A Module as it appears inside an InstalledSource on the Software Inventory.
  *
  * Modules are ownership boundaries, not install units: an operator never installs
- * or removes a Module on its own — it rides along with the Bundle that delivers it.
+ * or removes a Module on its own — it rides along with the Source that delivers it.
  * Immutable value object built by SoftwareInventoryService from a ModuleManifest.
  */
 final readonly class InstalledModule

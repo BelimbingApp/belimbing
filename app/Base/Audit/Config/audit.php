@@ -3,7 +3,7 @@
 use App\Base\Database\Models\DataOperationRun;
 use App\Base\Database\Models\DataOperationTableSummary;
 use App\Base\Database\Models\DataShareMirrorObservation;
-use App\Modules\Core\AI\Models\OperationDispatch;
+use App\Core\AI\Models\OperationDispatch;
 
 return [
 

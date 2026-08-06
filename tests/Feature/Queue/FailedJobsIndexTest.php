@@ -1,12 +1,12 @@
 <?php
 
 use App\Base\Queue\Livewire\FailedJobs\Index as FailedJobsIndex;
-use App\Modules\Core\AI\Enums\AiRunStatus;
-use App\Modules\Core\AI\Enums\RunPhase;
-use App\Modules\Core\AI\Jobs\RunChatTurnJob;
-use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\Employee\Models\Employee;
-use App\Modules\Core\User\Models\User;
+use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Enums\RunPhase;
+use App\Core\AI\Jobs\RunChatTurnJob;
+use App\Core\AI\Models\AiRun;
+use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;

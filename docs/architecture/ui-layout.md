@@ -1,5 +1,8 @@
 # UI Layout Architecture
 
+**Document Type:** Architecture Specification
+**Purpose:** Define the authenticated shell, responsive layout, and framework-versus-Module presentation boundaries
+**Last Updated:** 2026-08-05
 **Layout file:** `resources/core/views/components/layouts/app.blade.php`
 
 ## Layout Zones
@@ -86,7 +89,7 @@ The menu has two sections:
 - User-curated list of frequently used **pages**, keyed by **normalized URL** (not menu-item IDs). Pins can target any navigable route the user chooses to pin.
 - **Drag-reorderable** within the pinned section (HTML5 drag-and-drop, Alpine handlers). Visual feedback: dragged item dims, accent-colored insertion line at drop target.
 - **Pin action:** Pin control on navigable menu items (and page-level pin events) adds/removes by URL.
-- **Storage:** Per-user rows in `user_pins` (`UserPin`), with `url_hash` for uniqueness. Mutations: `POST` routes named `pins.toggle` and `pins.reorder` (see `app/Modules/Core/User/Routes/web.php` — `api/pins/toggle`, `api/pins/reorder` under the authenticated group).
+- **Storage:** Per-user rows in `user_pins` (`UserPin`), with `url_hash` for uniqueness. Mutations: `POST` routes named `pins.toggle` and `pins.reorder` (see `app/Core/User/Routes/web.php` — `api/pins/toggle`, `api/pins/reorder` under the authenticated group).
 - **Optimistic UI:** Alpine state updates immediately on pin/unpin/reorder; fetch fires in background. Server response reconciles state. On failure, state rolls back (toggle) or keeps optimistic order (reorder).
 - Pinned URLs also appear in their normal place in the main menu tree when that route exists there.
 - Drag-reorder only available in expanded sidebar mode; rail mode shows pinned items as icons without reorder.
@@ -183,7 +186,7 @@ Modes are mutually exclusive (stored in Alpine + `localStorage`):
 - **Resolution model:** diagnostics are live state, not tickets. A warning disappears when its provider no longer emits it; acknowledgement/snooze must not be treated as resolution.
 - **Visibility:** providers must enforce the authorization rule for the diagnostic detail they expose. The menu provider requires `admin.system.menu-inspector.view`.
 - **Noise control:** repeated server logs should be throttled at the producer boundary with a diagnostic-specific fingerprint rather than a global log deduplicator.
-- **Current producers:** menu link resolution failures, queue failure health, FrankenPHP worker reload health, software inventory health, frontend build staleness, and required filesystem writability. Broken menu items are hidden from the shell, logged with source context, and surfaced as a status-bar warning linking to Menu Inspector. Queue diagnostics link to Failed Jobs when recent failures or failed job rows need operator attention. FrankenPHP reload diagnostics link to Updates when a reload is pending or the last worker reload failed. Software inventory diagnostics link to Modules when module dependencies are broken or add-in bundles have local dirty/unpushed drift. Frontend build diagnostics link to Updates when the built assets in `public/build` are older than their JS/CSS sources or missing entirely (with no Vite dev server running) — the stale-bundle failure class that otherwise blanks Alpine-gated chrome silently; the app layout's self-contained boot beacon (`#blb-boot-beacon`, removed by a healthy `blbSidebarMenu` boot) covers the same class for end users. Filesystem diagnostics link to System Info when PHP cannot write to required runtime paths.
+- **Current producers:** menu link resolution failures, queue failure health, FrankenPHP worker reload health, software inventory health, frontend build staleness, and required filesystem writability. Broken menu items are hidden from the shell, logged with source context, and surfaced as a status-bar warning linking to Menu Inspector. Queue diagnostics link to Failed Jobs when recent failures or failed job rows need operator attention. FrankenPHP reload diagnostics link to Updates when a reload is pending or the last worker reload failed. Software inventory diagnostics link to Domains when Module dependencies are broken or installed Domain/Extension sources have local dirty or unpushed changes. Frontend build diagnostics link to Updates when the built assets in `public/build` are older than their JS/CSS sources or missing entirely (with no Vite dev server running)—the stale asset-build failure class that otherwise blanks Alpine-gated chrome silently; the app layout's self-contained boot beacon (`#blb-boot-beacon`, removed by a healthy `blbSidebarMenu` boot) covers the same class for end users. Filesystem diagnostics link to System Info when PHP cannot write to required runtime paths.
 
 ## Alpine.js Application State
 
@@ -274,21 +277,21 @@ Volt embeds PHP logic inside Blade files, collapsing the controller/view boundar
 
 ### Page Structure
 
-Core framework pages may still be a pair split between `app/Modules/Core` and `resources/core`:
+Core framework pages may still split Module-owned logic from shared framework presentation:
 
 ```
-app/Http/Livewire/Dashboard.php                        # Logic
-resources/core/views/livewire/dashboard.blade.php      # Presentation
+app/Core/{Module}/Livewire/Dashboard.php                  # Core Module logic
+resources/core/views/livewire/dashboard.blade.php         # Shared framework presentation
 ```
 
-Pluggable modules and extensions keep their own Livewire components and presentation together:
+Optional Domain and Extension Modules keep their own Livewire components and presentation together:
 
 ```
-app/Modules/{Domain}/{Module}/Livewire/Dashboard.php   # Pluggable module logic
-app/Modules/{Domain}/{Module}/Views/livewire/dashboard.blade.php       # Pluggable module presentation
+app/Domains/{Domain}/{Module}/Livewire/Dashboard.php
+app/Domains/{Domain}/{Module}/Views/livewire/dashboard.blade.php
 
-extensions/{owner}/{module}/Livewire/Dashboard.php          # Extension logic
-extensions/{owner}/{module}/Views/livewire/dashboard.blade.php         # Extension presentation
+app/Extensions/{Extension}/{Module}/Livewire/Dashboard.php
+app/Extensions/{Extension}/{Module}/Views/livewire/dashboard.blade.php
 ```
 
 ### What Is Preserved
@@ -302,32 +305,35 @@ Removing Volt loses nothing at runtime:
 | Alpine interactivity | Alpine.js (`x-data`, `@click`) | No -- pure frontend |
 | Component reactivity | Livewire lifecycle | No -- standard Livewire components have full support |
 
-## Core / Pluggable Module Directory Separation
+## Framework / Module Directory Separation
 
 BLB enforces a clear physical boundary between framework-owned presentation and
 module-owned presentation. Framework views and assets live under
-`resources/core/`; pluggable module views live under
-`app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/`
-and are loaded by the module provider.
-There is no `resources/extensions` layer.
+`resources/core/`; optional Domain and Extension views live under their owning
+Module at `app/Domains/{Domain}/{Module}/Views/` or
+`app/Extensions/{Extension}/{Module}/Views/` and are loaded by the Module
+provider. Core Modules may also own local `Views/` when the presentation is not
+part of the shared shell. There is no global Extension view-override layer.
 
 ### Directory Structure
 
 ```
 app/                                      # Business logic (PHP)
   Base/                                   #   BLB framework internals
-  Modules/                                #   BLB modules
-    Core/                                 #   Non-pluggable core modules
+  Core/                                   #   Required Core Domain Modules
+    {Module}/
+      Livewire/
+      Views/                              #   Optional Module-local presentation
+  Domains/                                #   Optional enterprise Domains
     {Domain}/
       {Module}/
-        Livewire/                         #   Pluggable module Livewire components
-        Views/                            #   Pluggable module Blade templates
-
-extensions/
-  {owner}/
-    {module}/
-      Livewire/                           #   Extension Livewire components
-      Views/                              #   Extension Blade templates
+        Livewire/                         #   Domain Module components
+        Views/                            #   Domain Module templates
+  Extensions/                             #   Deployment-owned mixed bag
+    {Extension}/
+      {Module}/
+        Livewire/                         #   Extension Module components
+        Views/                            #   Extension Module templates
 
 resources/                                # Presentation only
   core/                                   # BLB framework-owned -- do not edit
@@ -344,14 +350,14 @@ resources/                                # Presentation only
 
 **Override model:**
 
-| What | BLB core location | Pluggable location | Mechanism |
+| What | Framework location | Module-owned location | Mechanism |
 |------|-------------------|---------------------------|-----------|
-| Design tokens | `resources/core/css/tokens.css` | No extension override path | Framework CSS import |
-| CSS components | `resources/core/css/components.css` | No extension override path | Framework CSS import |
-| Framework Blade components | `resources/core/views/components/` | Reuse from extension views | Laravel view/component resolution |
-| Framework page templates | `resources/core/views/livewire/` | No extension override path | Core Livewire views |
-| Pluggable module page templates | — | `app/Modules/{Domain}/{Module}/Views/` or `extensions/{owner}/{module}/Views/` | Module provider `loadViewsFrom` |
-| Pluggable module page logic | — | `app/Modules/{Domain}/{Module}/Livewire/` or `extensions/{owner}/{module}/Livewire/` | Module routes/components |
+| Design tokens | `resources/core/css/tokens.css` | No global override path | Framework CSS import |
+| CSS components | `resources/core/css/components.css` | No global override path | Framework CSS import |
+| Framework Blade components | `resources/core/views/components/` | Reused by all Module views | Laravel view/component resolution |
+| Framework page templates | `resources/core/views/livewire/` | No global override path | Core Livewire views |
+| Module page templates | — | `app/Core/{Module}/Views/`, `app/Domains/{Domain}/{Module}/Views/`, or `app/Extensions/{Extension}/{Module}/Views/` | Module provider `loadViewsFrom` |
+| Module page logic | — | matching Module `Livewire/` directory under Core, Domains, or Extensions | Module routes/components |
 
 ### Load Order
 
@@ -363,14 +369,14 @@ resources/                                # Presentation only
 @import './core/css/components.css';
 ```
 
-Pluggable modules load their own namespaced views from their `ServiceProvider`.
+Modules load their own namespaced views from their `ServiceProvider`.
 They should compose framework components instead of shadowing them through a
 global view override path.
 
 ### Design Principles
 
 - **Ownership is visible.** Framework presentation is in `resources/core/`; module presentation is in the module.
-- **Plugins are removable.** Removing a pluggable module removes its views with its code.
+- **Optional composition is removable.** Removing a Domain or Extension removes its owned views with its code.
 - **No hidden override layer.** Core UI changes happen in core; module UI is namespaced by the module provider.
 
 ## Future Status Signals

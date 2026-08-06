@@ -1,11 +1,11 @@
 # people/16_leave-pay-item-mapping
 
 **Status:** Complete (2026-05-16). {claud/opus-4.7}
-**Last Updated:** 2026-05-16
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/12_attendance-event-decoupling.md` Phase 2 — canonical pattern (allowance-rule mapping table).
 - `docs/plans/people/13_leave-event-decoupling.md` — established the event seam.
-- `app/Modules/People/Payroll/Models/PayrollAttendanceRulePayItem.php` — sibling mapping model used as template.
+- `app/Domains/People/Payroll/Models/PayrollAttendanceRulePayItem.php` — sibling mapping model used as template.
 
 ## Problem
 

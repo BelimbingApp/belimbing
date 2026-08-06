@@ -2,6 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the renderer surface, template convention, auth model, and artifact contract for PDF generation in BLB
+**Last Updated:** 2026-08-05
 **Related:** `docs/plans/people/04_pdf-generation-strategy.md`, `docs/guides/pdf-rendering.md`
 
 ---
@@ -62,7 +63,7 @@ resources/core/views/pdf/
 
 Resolved by Blade as `pdf.payroll.payslip`, `pdf.quality.ncr-report`, etc.
 
-Extension-owned PDF templates live with the extension module under `extensions/{owner}/{module}/Views/` and are registered by that module's `ServiceProvider`. Core PDF templates live under `resources/core/views/`; BLB no longer supports a `resources/extensions` override path.
+Extension-owned PDF templates live with the Extension Module under `app/Extensions/{Extension}/{Module}/Views/` and are registered by that Module's `ServiceProvider`. Core PDF templates live under `resources/core/views/`; BLB does not support a global Extension override path.
 
 ### Styling
 
@@ -117,9 +118,9 @@ For a 16 GB / 8-core production host, a starting point of 4–6 PDF workers leav
 
 ### Per-company throttling
 
-`App\Modules\Core\AI\Services\Browser\BrowserPoolManager` already tracks a per-company context budget (`ai.tools.browser.max_contexts_per_company`, default 3) for the AI browser tool. It records **logical contexts** in memory — not OS processes — and that is the right level of abstraction. PDF rendering does not currently consult `BrowserPoolManager`; the queue worker count is the bound, and per-company fairness is left to queue-level mechanisms (separate queues per tenant, queue prioritization, etc.) if it becomes needed.
+`App\Core\AI\Services\Browser\BrowserPoolManager` already tracks a per-company context budget (`ai.tools.browser.max_contexts_per_company`, default 3) for the AI browser tool. It records **logical contexts** in memory — not OS processes — and that is the right level of abstraction. PDF rendering does not currently consult `BrowserPoolManager`; the queue worker count is the bound, and per-company fairness is left to queue-level mechanisms (separate queues per tenant, queue prioritization, etc.) if it becomes needed.
 
-If a future requirement is "no single tenant should hog more than N parallel PDF renders," the cleanest implementation is for `RenderPdfJob::handle` to acquire a `BrowserPoolManager` context for the tenant before invoking the renderer and release it after. The Phase 1 spike intentionally does not do this — it would couple `Base/Pdf` to `Modules/Core/AI` and introduce a behavior the renderer's contract does not require.
+If a future requirement is "no single tenant should hog more than N parallel PDF renders," the cleanest implementation is for `RenderPdfJob::handle` to acquire a `BrowserPoolManager` context for the tenant before invoking the renderer and release it after. The Phase 1 spike intentionally does not do this — it would couple `Base/Pdf` to `Core/AI` and introduce a behavior the renderer's contract does not require.
 
 ### What does NOT live in this pool
 

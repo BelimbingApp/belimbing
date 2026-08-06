@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Notifications\Bell;
+use App\Core\User\Livewire\Notifications\Bell;
 
 /** @var Bell $this */
 $badgeCount = $unreadCount > 99 ? '99+' : (string) $unreadCount;

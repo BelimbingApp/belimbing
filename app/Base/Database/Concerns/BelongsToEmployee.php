@@ -2,7 +2,7 @@
 
 namespace App\Base\Database\Concerns;
 
-use App\Modules\Core\Employee\Models\Employee;
+use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 trait BelongsToEmployee

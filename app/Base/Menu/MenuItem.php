@@ -2,6 +2,8 @@
 
 namespace App\Base\Menu;
 
+use App\Base\Foundation\ApplicationTopology;
+
 readonly class MenuItem
 {
     public function __construct(
@@ -44,7 +46,8 @@ readonly class MenuItem
      */
     public function isFromExtension(): bool
     {
-        return $this->sourceFile !== null && str_starts_with($this->sourceFile, 'extensions/');
+        return $this->sourceFile !== null
+            && ApplicationTopology::belongsToRoot($this->sourceFile, ApplicationTopology::EXTENSIONS);
     }
 
     /**

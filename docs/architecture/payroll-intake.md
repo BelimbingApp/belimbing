@@ -2,23 +2,25 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the contract through which People producer modules (Leave, Claim, Attendance) hand off operational facts to Payroll.
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-08-06
 
 ## Why this exists
 
 Payroll consumes operational facts that originate in other People modules: unpaid-leave days, approved claim reimbursements, overtime hours, leave encashment payouts, attendance-driven allowances and deductions. Without a single owned contract, every producer module had to know Payroll's internal tables — `payroll_runs`, `payroll_run_participants`, `payroll_inputs` — pick a target run, create participants, and reinvent duplicate protection. That direction was wrong: producers became junior Payroll authors and no module owned Payroll's invariants. See `docs/plans/people/10_payroll-intake-dependency-inversion.md` for the full history.
 
-The intake contract inverts the direction. Producers depend on a small, Payroll-owned API. Payroll owns run selection, participant creation, idempotency, locked-period correction, and durable pending state.
+The integration contract inverts the direction. Producers publish facts in their own vocabulary and do not depend on Payroll. When Payroll is installed, its listeners translate those facts into a Payroll-owned intake payload. Payroll owns run selection, participant creation, idempotency, locked-period correction, and durable pending state.
 
 ## The contract
 
-Three public surfaces, all under `App\Modules\People\Payroll\Contracts\Intake` and `App\Modules\People\Payroll\Services`:
+The contract has a producer boundary and a Payroll-internal intake engine:
 
-1. **`PayrollContributionPayload`** (readonly DTO). Describes one atomic contribution: company, employee, currency, occurred_on, pay_item_code, input_type, amount/quantity/rate, accounting snapshot, source ref, metadata, idempotency key.
-2. **`PayrollContributionIntake`** (service).
+1. **Producer-domain events.** Attendance, Claim, and Leave publish their own events below their respective `Events/` namespaces. The event payload describes the operational fact without importing a Payroll type. Dispatch remains safe when Payroll is absent.
+2. **Payroll-owned listeners.** Listeners below `App\Domains\People\Payroll\Listeners` subscribe to those published events, resolve Payroll-owned mappings, build a `PayrollContributionPayload`, and call the intake service. This is the only producer-to-Payroll translation layer.
+3. **`PayrollContributionPayload`** (readonly DTO). Describes one atomic contribution: company, employee, currency, occurred_on, pay_item_code, input_type, amount/quantity/rate, accounting snapshot, source ref, metadata, idempotency key.
+4. **`PayrollContributionIntake`** (service).
    - `ingest(PayrollContributionPayload): PayrollContributionOutcome` — idempotent. Materialises a `PayrollInput` if a writable run covers the period, otherwise persists a pending row.
    - `reverse(sourceType, sourceId, payItemCode, periodAnchor, reason): PayrollContributionOutcome` — delete the materialised input if still in a draft run, or insert a compensating reversal in the next open run; mark the pending row reversed either way.
-3. **`PayrollContributionStatus`** (service). `for(...)` and `allFor(...)` read APIs returning a `PayrollContributionOutcome` keyed on the same composite tuple. Producers query this instead of joining `people_payroll_inputs` directly.
+5. **`PayrollContributionStatus`** (service). `for(...)` and `allFor(...)` are Payroll-owned read APIs returning a `PayrollContributionOutcome` keyed on the same composite tuple. Payroll surfaces use this instead of joining `people_payroll_inputs` directly.
 
 The composite source key is `(source_type, source_id, pay_item_code, period_anchor)`, enforced at the DB level on `people_payroll_pending_contributions` via a unique index.
 
@@ -26,18 +28,18 @@ The composite source key is `(source_type, source_id, pay_item_code, period_anch
 
 Producers (Leave, Claim, Attendance, and any future module that contributes to payroll) **must**:
 
-- Call `PayrollContributionIntake::ingest()` inside their own transaction at the point where the operational fact becomes payroll-relevant (claim approved, leave applied, OT request approved, encashment recorded).
-- Define a stable `source_type` constant on their service (e.g. `AttendanceOvertimeService::SOURCE_TYPE = 'attendance_overtime_request'`). Source types are how Payroll and downstream reporting recognise the origin of a contribution.
-- Pass the producer's own row id as `sourceId`. The source row must remain in the producer module; Payroll never reaches back across the boundary.
-- Use the producer's natural date (incurred_on, starts_on, occurred_at) as `periodAnchor`. Payroll resolves the target run from this date.
+- Publish the documented producer-domain event at the point where the operational fact becomes Payroll-relevant (claim queued or reversed, leave applied or encashed, overtime approved, allowance materialised).
+- Keep event payloads in producer vocabulary. The source row remains in the producer module; Payroll listeners may read it through the declared optional dependency when translation needs additional context.
+- Include the producer's stable row identity and natural date (incurred_on, starts_on, occurred_at) so the listener can derive the intake source tuple and period anchor.
+- Treat successful dispatch as “the fact was published,” not proof that Payroll materialised or accepted a contribution.
 
 Producers **must not**:
 
-- Import `PayrollInput`, `PayrollRun`, `PayrollRunParticipant`, or any other Payroll model not exposed through the intake namespace.
-- Query `people_payroll_inputs` directly. Use `PayrollContributionStatus` instead.
+- Import any class under `App\Domains\People\Payroll` from production producer code.
+- Query `people_payroll_inputs` directly. Payroll-owned status surfaces use `PayrollContributionStatus` instead.
 - Choose target runs, create participant rows, or enforce idempotency themselves. Those are Payroll's responsibilities.
 
-A PHPUnit guard (`tests/Feature/Modules/People/Payroll/PayrollIntakeBoundaryTest.php`) scans Leave/Claim/Attendance for forbidden imports and fails the build if any return. Do not add files to its allowlist; route the dependency through intake instead.
+Boundary guards in Attendance, Claim, Leave, and Payroll scan production source trees for forbidden imports and fail the build if any return. Tests are outside this production dependency rule because integration tests may deliberately assemble both sides. Do not add production files to an allowlist; publish a producer event and translate it in Payroll instead.
 
 ## State vocabulary
 
@@ -72,5 +74,5 @@ When a contribution targets a run that is `reviewed` or `approved` (mutable but 
 
 - `docs/plans/people/10_payroll-intake-dependency-inversion.md` — design rationale, phase log, and risks/guardrails.
 - `docs/architecture/database.md` — the People tier scheme (`_01_*` foundation, `_02_*` producers, `_03_*` consumers) that encodes this direction in the migration registry.
-- `app/Modules/People/Payroll/Contracts/Intake/` — DTO, state constants, and outcome class.
-- `app/Modules/People/Payroll/Services/PayrollContributionIntake.php` and `PayrollContributionStatus.php` — service implementations.
+- `app/Domains/People/Payroll/Contracts/Intake/` — DTO, state constants, and outcome class.
+- `app/Domains/People/Payroll/Services/PayrollContributionIntake.php` and `PayrollContributionStatus.php` — service implementations.

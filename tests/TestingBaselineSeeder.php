@@ -5,8 +5,8 @@ namespace Tests;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Employee\Models\Employee;
+use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Seeder;
 
 /**

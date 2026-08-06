@@ -1,11 +1,11 @@
 # 18b_roster-grid-interaction.md
 
 **Status:** Complete
-**Last Updated:** 2026-05-20
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/18_roster_master.md` — master plan
-- `app/Modules/People/Attendance/Livewire/Rosters.php` — `saveCellOverride()` to be extended to batch
-- `app/Modules/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid cell rendering
+- `app/Domains/People/Attendance/Livewire/Rosters.php` — `saveCellOverride()` to be extended to batch
+- `app/Domains/People/Attendance/Views/livewire/people/attendance/partials/rosters-grid.blade.php` — grid cell rendering
 - `resources/core/views/components/ui/day-tile.blade.php` — cell tile component
 **Agents:** claude/sonnet-4.6
 

@@ -3,7 +3,7 @@
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Software\Services\FrontendBuildStatusDiagnosticProvider;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function (): void {

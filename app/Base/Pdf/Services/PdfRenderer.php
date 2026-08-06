@@ -4,7 +4,7 @@ namespace App\Base\Pdf\Services;
 
 use App\Base\Pdf\Exceptions\PdfRenderException;
 use App\Base\Pdf\ValueObjects\PdfArtifact;
-use App\Modules\Core\AI\Services\Browser\PlaywrightRunner;
+use App\Core\AI\Services\Browser\PlaywrightRunner;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\View\Factory as ViewFactory;

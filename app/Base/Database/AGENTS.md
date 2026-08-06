@@ -51,7 +51,14 @@ return new class extends Migration
 };
 ```
 
-Seeders under `app/Base/*/Database/Seeders/` and `app/Modules/*/*/Database/Seeders/` are also auto-discovered on `--seed` even without `registerSeeder()`. Extension seeders that should run with the migration flow should be registered from an extension migration with `RegistersSeeders`. Plain `migrate` (no `--seed`) never runs seeders.
+Production seeders are auto-discovered on `--seed` from all four roots, even without `registerSeeder()`:
+
+- `app/Base/*/Database/Seeders/`
+- `app/Core/*/Database/Seeders/`
+- `app/Domains/*/*/Database/Seeders/` for enabled Domains
+- `app/Extensions/*/*/Database/Seeders/`
+
+Register a seeder from its owning migration with `RegistersSeeders` when migration lifecycle should control it explicitly. Plain `migrate` (no `--seed`) never runs seeders.
 
 ```bash
 # Run all pending seeders
@@ -94,7 +101,7 @@ Dev seeders extend `App\Base\Database\Seeders\DevSeeder`, implement `seed()` (no
 
 The incubating rebuild is atomic at the planning boundary: BLB computes the full foreign-key dependency closure before dropping anything. It may cascade into a dependent table only when that table's owning migration is also source-declared incubating. A stable or undeclared dependent refuses the command; mark the whole disposable dependency chain incubating, split the dependency, or use a forward migration. Registry ownership alone never authorizes deleting a stable table.
 
-The same planning boundary protects schema maturity across migration history. If a later applied migration references a table in the rebuild scope, that later migration must also be source-declared incubating so its ledger row is cleared and the complete chain replays. A later stable migration refuses the command before any drop; otherwise the original create migration could recreate an obsolete table while Laravel continued to treat its later column, index, constraint, or data migration as already applied.
+The same planning boundary protects schema maturity across migration history. If a later applied migration references a table in the rebuild scope, that later migration must also be source-declared incubating so its ledger row is cleared and the complete chain replays. A later stable migration refuses the command before any drop; otherwise the original create migration could recreate an obsolete table while Laravel continued to treat its later column, index, constraint, or data migration as already applied. The narrow exception is an idempotent, data-only migration using `ReplaysAfterIncubatingSchema`: its ledger row joins the replay, but the marker never authorizes schema creation, alteration, or deletion.
 
 Use `migrate --seed --seeder=...` when you want one specific seeder class instead of the full `--dev` dev-seeder sweep.
 
@@ -128,6 +135,44 @@ return new class extends Migration
     use IncubatingSchema;
 };
 ```
+
+### Declare a stable data migration replayable
+
+`ReplaysAfterIncubatingSchema` is the narrow companion marker for a stable, idempotent, data-only migration whose result must be recomputed after an incubating table it reads or updates is rebuilt:
+
+```php
+use App\Base\Database\Concerns\ReplaysAfterIncubatingSchema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    use ReplaysAfterIncubatingSchema;
+
+    public function up(): void
+    {
+        DB::table('example_table')->updateOrInsert(
+            ['stable_key' => 'default'],
+            ['derived_value' => 'canonical'],
+        );
+    }
+
+    public function down(): void
+    {
+        // Remove only derived state, or remain an intentional no-op.
+    }
+};
+```
+
+The marker is declared when the migration is authored; it is not permission to edit stable migration behavior after application. Do not retrofit it into an applied stable migration merely to make `migrate --dev` pass. A retrofit requires an explicit recovery procedure or accepted ADR proving that the existing `up()` is already data-only and idempotent, identifying every database that may have applied it, and recording replay evidence. Any behavior change still belongs in a new forward migration.
+
+Marker requirements:
+
+- `up()` is safe to run repeatedly and contains no schema-mutating `Schema` calls or raw DDL. Read-only `Schema::hasTable()`, `hasColumn()`, `hasColumns()`, and `getColumnListing()` checks are allowed.
+- Referenced incubating tables appear as literal names in source so preflight can discover the dependency; do not construct those table names dynamically.
+- `down()` removes only replay-derived state or is an intentional no-op; it never restores obsolete topology or data identities.
+- The marker affects only local/testing incubating replay. It does not make the migration incubating and does not cause production/staging `migrate` to rerun an applied migration.
+- If an already-applied stable migration blocks a rebuild and has no approved replay contract, preserve its source and change the schema strategy or rebuild the disposable database from scratch.
 
 ## Practical Guardrails
 

@@ -1,0 +1,25 @@
+<?php
+namespace App\Core\AI\Http\Controllers;
+
+use App\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexAuthManager;
+use App\Core\AI\Services\OpenAiCodexAuth\OpenAiCodexOAuthException;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Session;
+
+final class OpenAiCodexOAuthCallbackController
+{
+    public function __invoke(Request $request): RedirectResponse
+    {
+        try {
+            $provider = app(OpenAiCodexAuthManager::class)->completeCallback($request);
+            Session::flash('success', __('OpenAI Codex connected.'));
+
+            return redirect()->route('admin.ai.providers.setup', ['providerKey' => $provider->name]);
+        } catch (OpenAiCodexOAuthException $e) {
+            Session::flash('error', __('OpenAI Codex sign-in failed: :message', ['message' => $e->getMessage()]));
+
+            return redirect()->route('admin.ai.providers.setup', ['providerKey' => 'openai-codex']);
+        }
+    }
+}

@@ -7,7 +7,7 @@ use App\Base\Authz\Livewire\Roles\Create as RolesCreate;
 use App\Base\Authz\Livewire\Roles\Index as RolesIndex;
 use App\Base\Authz\Livewire\Roles\Show as RolesShow;
 use App\Base\Authz\Services\ImpersonationManager;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {

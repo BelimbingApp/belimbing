@@ -17,11 +17,11 @@ Intent: add a permissioned CRUD feature to a module — route, authz, Livewire c
 
 ## Minimal File Pack
 
-- `app/Modules/Operation/IT/Routes/web.php`
-- `app/Modules/Operation/IT/Config/authz.php`
-- `app/Modules/Operation/IT/Config/menu.php`
-- `app/Modules/Operation/IT/Livewire/Tickets/Index.php`
-- `resources/core/views/livewire/it/tickets/index.blade.php`
+- `app/Domains/Operation/IT/Routes/web.php`
+- `app/Domains/Operation/IT/Config/authz.php`
+- `app/Domains/Operation/IT/Config/menu.php`
+- `app/Domains/Operation/IT/Livewire/Tickets/Index.php`
+- `app/Domains/Operation/IT/Views/livewire/it/tickets/index.blade.php`
 
 ## Reference Shape
 
@@ -31,7 +31,7 @@ Intent: add a permissioned CRUD feature to a module — route, authz, Livewire c
 - **Menu**: auto-discovered from `Config/menu.php`. Each item needs `id`, `label`, `route`, `permission`, `parent`, `position`.
 - **Authz**: auto-discovered from `Config/authz.php`. Capability key grammar: `<domain>.<resource>.<action>`.
 - **Audit**: optional `Config/audit.php` for module-specific audit exclusions (e.g., `exclude_models`). See `FEAT-DISCOVERY` § Module Config Discovery Convention.
-- **ServiceProvider**: auto-discovered from `ServiceProvider.php`. Usually empty for pure modules.
+- **ServiceProvider**: auto-discovered from `ServiceProvider.php`. Register Module-owned views with `loadViewsFrom()` and keep only behavior not covered by framework scanners here.
 - Run authz seeder after any `Config/authz.php` change: `php artisan db:seed --class="App\Base\Authz\Database\Seeders\AuthzRoleCapabilitySeeder"`.
 
 ```php
@@ -83,7 +83,7 @@ class Index extends Component
 
     public function render(): View
     {
-        return view('livewire.module.entities.index', [
+        return view('module-view-namespace::livewire.module.entities.index', [
             'entities' => Entity::query()
                 ->when($this->search, fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
                 ->latest()
@@ -170,7 +170,7 @@ test('unauthorized user is denied', function (): void {
 - Validation happens before any write operation.
 - Blade views use semantic tokens and `x-ui.*` components, never raw primitives.
 - All user-facing strings use `__()` translation helpers.
-- Blade views go in `resources/core/views/livewire/{module}/{entities}/`, not inside the module directory.
+- Domain and Extension Blade views live in the owning Module's `Views/` directory and use its registered view namespace. Promote only reusable framework components to `resources/core`.
 
 ## Test Checklist
 

@@ -12,9 +12,9 @@ use App\Base\Media\Models\MediaAsset;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\Services\MediaAssetStore;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\Company\Models\RelationshipType;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\Company\Models\RelationshipType;
+use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
@@ -25,7 +25,7 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
-    ->in('Feature', '../app/Modules/*/Tests/Feature', '../app/Modules/*/*/Tests/Feature', '../extensions/*/*/Tests/Feature');
+    ->in('Feature', '../app/Core/*/Tests/Feature', '../app/Domains/*/Tests/Feature', '../app/Domains/*/*/Tests/Feature', '../app/Extensions/*/*/Tests/Feature');
 
 /**
  * Seed configured system roles and their capabilities for feature tests.
@@ -334,7 +334,7 @@ final class StubTool implements Tool
 }
 
 /**
- * Create a throwaway fake domain checkout under app/Modules.
+ * Create a throwaway fake domain checkout under app/Domains.
  *
  * The checkout carries one Sample module with a runnable migration that
  * claims a table, a settings declaration, and (optionally) a discoverable
@@ -346,7 +346,7 @@ final class StubTool implements Tool
  */
 function createFakeDomainCheckout(string $domain, string $table, string $settingKey, array $options = []): string
 {
-    $base = app_path('Modules/'.$domain);
+    $base = app_path('Domains/'.$domain);
     $module = $base.'/Sample';
 
     File::ensureDirectoryExists($module.'/Database/Migrations');
@@ -400,7 +400,7 @@ function createFakeDomainCheckout(string $domain, string $table, string $setting
             <<<PHP
             <?php
 
-            namespace App\Modules\\{$domain}\Sample;
+            namespace App\Domains\\{$domain}\Sample;
 
             use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 

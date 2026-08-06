@@ -1,9 +1,9 @@
 <?php
 
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\AI\Livewire\Setup\Lara;
-use App\Modules\Core\AI\Services\ChatTurnRunner;
-use App\Modules\Core\AI\Services\LaraInteractiveToolSet;
+use App\Core\AI\Livewire\Setup\Lara;
+use App\Core\AI\Services\ChatTurnRunner;
+use App\Core\AI\Services\LaraInteractiveToolSet;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Livewire\Livewire;

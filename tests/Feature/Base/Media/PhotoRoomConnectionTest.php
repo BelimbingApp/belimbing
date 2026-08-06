@@ -4,7 +4,7 @@ use App\Base\Media\PhotoCleanup\Contracts\TestsConnection;
 use App\Base\Media\PhotoCleanup\PhotoCleanupConnectionTester;
 use App\Base\Media\PhotoCleanup\PhotoRoomClient;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
-use App\Modules\Core\Company\Models\Company;
+use App\Core\Company\Models\Company;
 use Illuminate\Support\Facades\Http;
 
 const PHOTOROOM_ACCOUNT_ENDPOINT = 'https://image-api.photoroom.com/*';

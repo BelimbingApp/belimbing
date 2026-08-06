@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\PricingOverrides;
-use App\Modules\Core\AI\Models\AiPricingOverride;
-use App\Modules\Core\AI\Services\Pricing\PricingSourceRegistry;
+use App\Core\AI\Livewire\PricingOverrides;
+use App\Core\AI\Models\AiPricingOverride;
+use App\Core\AI\Services\Pricing\PricingSourceRegistry;
 use Livewire\Livewire;
 
 test('pricing overrides page renders for AI admins', function (): void {

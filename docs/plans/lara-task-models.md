@@ -2,7 +2,7 @@
 
 **Status:** Superseded in part by [Lara: Collapse Primary/Backup Into Provider Priority](ai-lara-collapse-into-provider-priority.md) — Primary/Backup as a chat-config concept and `mode=primary` for tasks have been removed.
 **Last Updated:** 2026-05-03
-**Sources:** `app/Modules/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Modules/Core/AI/Services/ConfigResolver.php`, `app/Modules/Core/AI/Livewire/Setup/Lara.php`, `app/Modules/Core/AI/Livewire/Playground.php`, `app/Modules/Core/AI/Config/menu.php`, `app/Modules/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 one visible system primitive, §15.2 config.json shape), `docs/architecture/ai/lara.md`
+**Sources:** `app/Core/AI/Livewire/Concerns/ManagesChatSessions.php`, `app/Core/AI/Services/ConfigResolver.php`, `app/Core/AI/Livewire/Setup/Lara.php`, `app/Core/AI/Livewire/Playground.php`, `app/Core/AI/Config/menu.php`, `app/Core/AI/Routes/web.php`, `resources/core/views/livewire/admin/setup/lara.blade.php`, `docs/architecture/ai/agent-model.md` (§2.9 one visible system primitive, §15.2 config.json shape), `docs/architecture/ai/lara.md`
 
 ## Problem Essence
 
@@ -35,7 +35,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
 - Recommendation is on-demand, not re-evaluated automatically at task runtime. Once saved, the task keeps using the stored choice until the user refreshes or changes it.
 - Task config is persisted in Lara's workspace `config.json` under `llm.tasks.*`. Each task entry carries `mode` (`recommended` or `manual`), and a stable saved `provider`/`model` pair plus an optional `reason` string for UI display.
 - The initial shipped UI exposes `Titling`, `Research`, and `Coding` together on the dedicated Task Models page. `titling` is fully wired as a simple task, and both `coding` and `research` are wired as Lara agentic execution profiles for delegated background work.
-- Agentic task execution profiles (system prompt template, tool set, iteration limits) are framework-defined and versioned with BLB, not user-configurable. They live in the codebase (e.g., `app/Modules/Core/AI/Resources/tasks/`), not in workspace config. Users only configure model selection per task.
+- Agentic task execution profiles (system prompt template, tool set, iteration limits) are framework-defined and versioned with BLB, not user-configurable. They live in the codebase (e.g., `app/Core/AI/Resources/tasks/`), not in workspace config. Users only configure model selection per task.
 
 ## Top-Level Components
 

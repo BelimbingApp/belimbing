@@ -34,7 +34,21 @@ final class IncubatingSchemaConflictException extends BlbConfigurationException
             ->implode(', ');
 
         return new self(
-            'Cannot rebuild incubating schema because an applied stable migration may contain later changes to it: '.$details.'. Rebuilding only the original migration would omit that mature schema. Use a forward migration, or mark the complete disposable migration chain incubating before retrying.'
+            'Cannot rebuild incubating schema because an applied stable migration may contain later changes to it: '.$details.'. Rebuilding only the original migration would omit that mature schema. Use a new forward migration, rebuild from a canonical baseline, or follow the documented recovery/ADR process; do not retrofit replay metadata merely to bypass this guard.'
+        );
+    }
+
+    /**
+     * @param  array<string, list<string>>  $migrations
+     */
+    public static function forUnsafeReplayMigrations(array $migrations): self
+    {
+        $details = collect($migrations)
+            ->map(fn (array $operations, string $migration): string => $migration.' uses '.implode(', ', $operations))
+            ->implode('; ');
+
+        return new self(
+            'Cannot rebuild incubating schema because a migration marked ReplaysAfterIncubatingSchema is not data-only: '.$details.'. Remove schema operations or make the complete disposable migration chain incubating before retrying.'
         );
     }
 

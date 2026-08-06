@@ -11,7 +11,7 @@
 | Concern | Tool | Bundled? |
 |---|---|---|
 | HTML → PDF rendering | Chromium via Playwright (Node) | Yes — `playwright` is in `package.json` |
-| Subprocess driver | `app/Modules/Core/AI/Services/Browser/PlaywrightRunner` | Yes |
+| Subprocess driver | `app/Core/AI/Services/Browser/PlaywrightRunner` | Yes |
 | Renderer service | `app/Base/Pdf/Services/PdfRenderer` | Yes |
 | Post-processing (password, encryption, merge) | `qpdf` CLI | **No — install separately** |
 

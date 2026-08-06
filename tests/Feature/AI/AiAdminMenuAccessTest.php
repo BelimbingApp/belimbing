@@ -5,8 +5,8 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Menu\Contracts\NavigableMenuSnapshot;
 use App\Base\Menu\MenuBuilder;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 
 test('ai admin menu is hidden when the user lacks AI admin capabilities', function (): void {
     $company = Company::factory()->create();

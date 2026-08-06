@@ -2,6 +2,7 @@
 
 namespace App\Base\Routing;
 
+use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 
 class RouteDiscoveryService
@@ -9,13 +10,12 @@ class RouteDiscoveryService
     /**
      * Glob patterns for route directory discovery.
      *
-     * Supports Base modules, Modules, and extensions.
+     * Supports Base components and modules in Core, Domains, and Extensions.
      */
-    protected array $scanPatterns = [
-        'app/Base/*/Routes',
-        'app/Modules/*/*/Routes',
-        'extensions/*/*/Routes',
-    ];
+    protected function scanPatterns(): array
+    {
+        return ApplicationTopology::contributionPatterns('Routes');
+    }
 
     /**
      * Discover all route files organized by type (web, api).
@@ -26,8 +26,8 @@ class RouteDiscoveryService
     {
         $routes = [];
 
-        foreach ($this->scanPatterns as $pattern) {
-            $directories = DomainState::filterPaths(glob(base_path($pattern), GLOB_ONLYDIR) ?: []);
+        foreach ($this->scanPatterns() as $pattern) {
+            $directories = DomainState::filterPaths(glob($pattern, GLOB_ONLYDIR) ?: []);
 
             foreach ($directories as $directory) {
                 foreach (['web', 'api'] as $type) {

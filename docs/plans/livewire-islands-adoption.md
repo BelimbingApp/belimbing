@@ -1,7 +1,7 @@
 # livewire-islands-adoption
 
 **Status:** Largely complete — delivered: `@island` API confirmed against 4.3.1; IBP executive-dashboard fully islanded (4 charts deferred, browser-verified); guide + decision note (Phase 5). Deliberately not done: eBay (Phase 2 — descoped, would need a `dashboard()` refactor first or it worsens perf), catalog (Phase 4 — descoped, keep the `#[Lazy]` child), device-flow pilot (deprioritized). Blocked: Lara chat (Phase 3 — needs a live agent turn to verify; not shipping unverified). See Findings + per-phase notes for rationale.
-**Last Updated:** 2026-06-07
+**Last Updated:** 2026-08-05
 **Sources:** Livewire 4 Islands docs (`.../docs/4.x/islands`), `@island` ref (`.../directive-island`); use-cases/metrics/anti-patterns (`hoceine.com/blog/livewire-islands-architecture`, `desarrollolibre.net/.../islands-in-laravel-livewire-complete-guide-and-use-cases`, `laravel-news.com/everything-we-know-about-livewire-4`); vendor `SupportIslands` (`IslandCompiler`); related `performance-page-rendering.md` (notes `@island` unused; Phase 3 deferred eBay `stats()`); code: `ai/chat.blade.php` (root `wire:poll.2s`, ~1,989 lines), `Providers/{Providers,ProviderSetup,CatalogBrowser}.php` + setup partials, `Marketplace/Livewire/Ebay/Index.php` (`stats()` loads all listings), `ibp/.../ExecutiveDashboard.php` (multi-query `render()`). Livewire 4.3.1.
 **Agents:** claude/opus-4.8
 
@@ -68,7 +68,7 @@ Goal: both pages paint immediately; the stats/widget panels stream in afterward 
 - [~] **eBay — descoped (not done; descope is the deliberate outcome).** The expensive `dashboard()` feeds 5 *scattered* panels, and each deferred island is a separate request, so deferring them would re-run `dashboard()` up to 5× (worse than today's 1×); a stats-only island removes nothing from first paint. Proper fix = restructure/cache `dashboard()` first, then island — a separate effort, tracked here, not an island drop-in. — claude/opus-4.8
 - [x] Measure first-paint gain (IBP dashboard): 4 deferred islands, charts off first paint; tests green. — claude/opus-4.8
 
-Evidence: `extensions/sb-group/ibp/Livewire/Dashboard/ExecutiveDashboard.php` (4 chart computeds; slim `render()`), `extensions/.../Views/livewire/dashboard/executive-dashboard.blade.php` (4 `@island(defer)` + `@placeholder`); verified via Playwright on `sbg/ibp/executive-dashboard` (raw server HTML = 4 deferred, vs hydrated = all loaded). Required `octane:reload` to pick up view changes; `@php` block form (not shorthand) inside islands.
+Evidence: `app/Extensions/SbGroup/Ibp/Livewire/Dashboard/ExecutiveDashboard.php` (4 chart computeds; slim `render()`), `app/Extensions/SbGroup/Ibp/Views/livewire/dashboard/executive-dashboard.blade.php` (4 `@island(defer)` + `@placeholder`); verified via Playwright on `sbg/ibp/executive-dashboard` (raw server HTML = 4 deferred, vs hydrated = all loaded). Required `octane:reload` to pick up view changes; `@php` block form (not shorthand) inside islands.
 
 ### Phase 3 — Lara chat live-turn island (headline, highest risk) — BLOCKED on verification
 

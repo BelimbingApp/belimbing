@@ -1,14 +1,14 @@
 # people/11_attendance-shift-and-allowance-coverage
 
 **Status:** Complete (2026-05-15) — all four originally scheduled changes shipped, including the previously deferred work-minute deduction. (1) multi-break shift template with per-break paid flag, (2) shift-scoped allowance rule with nullable `attendance_shift_template_id` FK, (3) `day_type_overrides` column dropped, (4) `AttendanceDayProjectionService` now reads per-break `paid` and deducts only the unpaid breaks from worked minutes.
-**Last Updated:** 2026-05-15
+**Last Updated:** 2026-08-05
 **Sources:**
 - `docs/plans/people/09_attendance-module-design.md` — parent Attendance design. Splits the legacy "TMS Group" monolith into `AttendanceShiftTemplate` (schedule) + `AttendancePolicyGroup` (rules) + `AttendanceAllowanceRule` (allowance triggers) + `AttendanceRosterPattern` (rotation) + `AttendanceRosterAssignment` (per-employee assignment). That split is deliberate and not under review here.
 - `docs/plans/people/sbg_attendance_ref/app.hrserver.com.my_Core.QtmsSetup_QtmsGroup.png` — one real-world example of how a legacy product (HR2000) exposes rotation, day-type variation, multi-break, and per-shift allowance on a single screen. Used to surface candidate requirements, not as a parity target.
-- `app/Modules/People/Attendance/Models/AttendanceShiftTemplate.php` — `break_windows` JSON array, `day_type_overrides` JSON object (column reserved, never read or written by code today).
-- `app/Modules/People/Attendance/Models/AttendancePunchWindow.php` — independent `earliest_at` / `expected_at` / `latest_at` per event type.
-- `app/Modules/People/Attendance/Models/AttendanceAllowanceRule.php` — scoped today by nullable `attendance_policy_group_id` only.
-- `app/Modules/People/Attendance/Livewire/ShiftTemplates.php` — UI handles one break; ignores `day_type_overrides`.
+- `app/Domains/People/Attendance/Models/AttendanceShiftTemplate.php` — `break_windows` JSON array, `day_type_overrides` JSON object (column reserved, never read or written by code today).
+- `app/Domains/People/Attendance/Models/AttendancePunchWindow.php` — independent `earliest_at` / `expected_at` / `latest_at` per event type.
+- `app/Domains/People/Attendance/Models/AttendanceAllowanceRule.php` — scoped today by nullable `attendance_policy_group_id` only.
+- `app/Domains/People/Attendance/Livewire/ShiftTemplates.php` — UI handles one break; ignores `day_type_overrides`.
 
 **Agents:** claude-code/opus-4.7
 

@@ -4,7 +4,7 @@ namespace App\Base\Database\Livewire\Concerns;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 
 trait AuthorizesDataShareOperations
 {

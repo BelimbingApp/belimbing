@@ -1,0 +1,31 @@
+<?php
+namespace App\Core\AI\Jobs;
+
+use App\Core\AI\Services\Memory\MemoryCompactor;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+
+/**
+ * Queue job to compact daily memory notes into durable knowledge for an agent.
+ */
+class CompactAgentMemoryJob implements ShouldQueue
+{
+    use Dispatchable;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
+
+    public function __construct(
+        public readonly int $employeeId,
+    ) {
+        $this->onQueue('default');
+    }
+
+    public function handle(MemoryCompactor $compactor): void
+    {
+        $compactor->compact($this->employeeId);
+    }
+}

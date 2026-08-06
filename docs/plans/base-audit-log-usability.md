@@ -13,7 +13,7 @@
 - `app/Base/Audit/Listeners/MutationListener.php` — automatic mutation writer and subject hooks.
 - `app/Base/Audit/Livewire/AuditLog/Actions.php` and `resources/core/views/livewire/admin/audit/actions.blade.php` — current Actions page behavior.
 - `app/Base/Audit/Livewire/AuditLog/Mutations.php` and `resources/core/views/livewire/admin/audit/mutations.blade.php` — current Data Mutations page behavior.
-- `resources/core/views/livewire/admin/users/show.blade.php` and `app/Modules/Core/User/Models/User.php` — first source-record history candidate.
+- `resources/core/views/livewire/admin/users/show.blade.php` and `app/Core/User/Models/User.php` — first source-record history candidate.
 - `app/Base/Foundation/Contracts/SemanticActionRecorder.php` — decoupled semantic action capture boundary.
 - `app/Base/Audit/Services/AuditSemanticActionRecorder.php` — Audit implementation of semantic product-action persistence.
 **Agents:** amp/gpt-5, codex/gpt-5

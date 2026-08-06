@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Tools\Workspace;
+use App\Core\AI\Livewire\Tools\Workspace;
 
 /** @var Workspace $this */
 ?>

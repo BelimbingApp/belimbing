@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Chat $this */
+/** @var \App\Core\AI\Livewire\Chat $this */
 ?>
 <div
     class="h-full flex flex-col"

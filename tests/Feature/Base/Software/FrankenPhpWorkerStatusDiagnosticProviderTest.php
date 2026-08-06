@@ -5,8 +5,8 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\FrankenPhpWorkerStatusDiagnosticProvider;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 
 const FRANKENPHP_RELOAD_NEEDS_ATTENTION = 'FrankenPHP worker reload needs attention';

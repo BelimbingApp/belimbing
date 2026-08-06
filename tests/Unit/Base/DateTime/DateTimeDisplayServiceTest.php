@@ -8,7 +8,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\Exceptions\InvalidSettingScopeException;
 use App\Base\Settings\Models\Setting;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;

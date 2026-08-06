@@ -22,14 +22,14 @@
  *   Bucket        Top-level buckets are declared by their domain anchor:
  *   declarations
  *                     admin       app/Base/Menu/Config/menu.php   (this file)
- *                     commerce    app/Modules/Commerce/Config/menu.php
- *                     operations  app/Modules/Operation/Config/menu.php
- *                     people      app/Modules/People/Config/menu.php
+ *                     commerce    app/Domains/Commerce/Config/menu.php
+ *                     operations  app/Domains/Operation/Config/menu.php
+ *                     people      app/Domains/People/Config/menu.php
  *
  *                 Leaf modules / packages declare only leaves and intermediate
  *                 containers, never a root. Extensions follow the same shape:
- *                 extensions/<vendor>/Config/menu.php may declare top-level
- *                 buckets the same way core domains do.
+ *                 app/Extensions/<Extension>/Config/menu.php may declare
+ *                 top-level buckets the same way domains do.
  *
  *                 Reservations for future buckets without a domain home yet
  *                 (finance, procurement, maintenance, production) live below

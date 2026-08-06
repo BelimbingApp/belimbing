@@ -1,0 +1,219 @@
+<?php
+
+namespace App\Core\AI\Services\Runtime;
+
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Exceptions\GithubCopilotAuthException;
+use App\Base\AI\Services\UrlSafetyGuard;
+use App\Core\AI\Enums\AuthType;
+use App\Core\AI\Models\AiProvider;
+use App\Core\AI\Services\ProviderDefinitionRegistry;
+
+/**
+ * Resolves API credentials for runtime calls by dispatching through provider definitions.
+ *
+ * Each provider's definition owns its credential transformation logic
+ * (e.g. token exchange for GitHub Copilot, connectivity probes for local providers).
+ */
+class RuntimeCredentialResolver
+{
+    public function __construct(
+        private readonly ProviderDefinitionRegistry $registry,
+        private readonly ?UrlSafetyGuard $urlSafetyGuard = null,
+    ) {}
+
+    /**
+     * Resolve API credentials for a runtime request.
+     *
+     * @param  array<string, mixed>  $config  Provider config with api_key, base_url, provider_name
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
+     */
+    public function resolve(array $config): array
+    {
+        $configurationError = $this->configurationError($config);
+
+        if ($configurationError !== null) {
+            return $configurationError;
+        }
+
+        // SSRF guard: validate the base URL BEFORE credential resolution,
+        // because some definitions (e.g., CopilotProxyDefinition) make HTTP
+        // requests during resolveRuntime(). Validating after would allow
+        // SSRF attacks to slip through the connectivity probe.
+        // Local providers (e.g., Ollama on localhost) are allowed to target
+        // private networks; all other auth types must use public URLs.
+        $providerName = (string) ($config['provider_name'] ?? 'default');
+        $definition = $this->registry->for($providerName);
+        $allowPrivate = $definition->authType() === AuthType::Local;
+        $urlError = ($this->urlSafetyGuard ?? app(UrlSafetyGuard::class))
+            ->validate((string) ($config['base_url'] ?? ''), allowPrivateNetwork: $allowPrivate);
+
+        if ($urlError !== true) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    'Provider base URL failed safety check: '.$urlError,
+                ),
+            ];
+        }
+
+        $credentials = $this->resolveCredentials($config);
+
+        if (isset($credentials['runtime_error'])) {
+            return $credentials;
+        }
+
+        // Re-validate the resolved base URL in case the definition changed it.
+        $resolvedUrlError = ($this->urlSafetyGuard ?? app(UrlSafetyGuard::class))
+            ->validate($credentials['base_url'], allowPrivateNetwork: $allowPrivate);
+
+        if ($resolvedUrlError !== true) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    'Provider base URL failed safety check: '.$resolvedUrlError,
+                ),
+            ];
+        }
+
+        return $credentials;
+    }
+
+    /**
+     * Resolve credentials by dispatching to the provider's definition.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
+     */
+    private function resolveCredentials(array $config): array
+    {
+        $providerName = $config['provider_name'] ?? 'default';
+
+        if ($providerName === 'default') {
+            return [
+                'api_key' => $config['api_key'],
+                'base_url' => $config['base_url'],
+                'headers' => [],
+            ];
+        }
+
+        return $this->resolveViaDefinition($this->providerFromConfig($providerName, $config));
+    }
+
+    /**
+     * Resolve credentials through the provider's definition.
+     *
+     * @return array{api_key: string, base_url: string, headers: array<string, string>}|array{runtime_error: AiRuntimeError}
+     */
+    private function resolveViaDefinition(AiProvider $provider): array
+    {
+        $definition = $this->registry->for($provider->name);
+
+        try {
+            $resolved = $definition->resolveRuntime($provider);
+
+            return [
+                'api_key' => $resolved->apiKey ?? '',
+                'base_url' => $resolved->baseUrl,
+                'headers' => $resolved->headers,
+            ];
+        } catch (GithubCopilotAuthException $e) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::AuthError,
+                    "Provider {$provider->name}: {$e->getMessage()}",
+                    'Re-authenticate via the GitHub Copilot device flow.',
+                ),
+            ];
+        } catch (\RuntimeException $e) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConnectionError,
+                    "Provider {$provider->name}: {$e->getMessage()}",
+                ),
+            ];
+        }
+    }
+
+    /**
+     * Build a transient provider model from resolved runtime config.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    private function providerFromConfig(string $providerName, array $config): AiProvider
+    {
+        $providerId = $config['provider_id'] ?? null;
+
+        if (is_numeric($providerId)) {
+            $provider = AiProvider::query()->llm()->find((int) $providerId);
+
+            if ($provider instanceof AiProvider) {
+                return $provider;
+            }
+        }
+
+        $credentials = $config['credentials'] ?? null;
+        if (! is_array($credentials)) {
+            $credentials = ['api_key' => (string) ($config['api_key'] ?? '')];
+        }
+
+        $connectionConfig = $config['connection_config'] ?? null;
+        if (! is_array($connectionConfig)) {
+            $connectionConfig = [];
+        }
+
+        return new AiProvider([
+            'name' => $providerName,
+            'base_url' => (string) ($config['base_url'] ?? ''),
+            'credentials' => $credentials,
+            'connection_config' => $connectionConfig,
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @return array{runtime_error: AiRuntimeError}|null
+     */
+    private function configurationError(array $config): ?array
+    {
+        $providerName = $config['provider_name'] ?? 'default';
+
+        // Local providers may not require an API key
+        $definition = $this->registry->for($providerName);
+
+        if (! $definition->authType()->requiresApiKey()) {
+            // Only base_url is required for local/keyless providers
+            if (empty($config['base_url'])) {
+                return [
+                    'runtime_error' => AiRuntimeError::fromType(
+                        AiErrorType::ConfigError,
+                        "Base URL is not configured for provider {$providerName}",
+                    ),
+                ];
+            }
+
+            return null;
+        }
+
+        if (empty($config['api_key'])) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    "API key is not configured for provider {$providerName}",
+                ),
+            ];
+        }
+
+        if (empty($config['base_url'])) {
+            return [
+                'runtime_error' => AiRuntimeError::fromType(
+                    AiErrorType::ConfigError,
+                    "Base URL is not configured for provider {$providerName}",
+                ),
+            ];
+        }
+
+        return null;
+    }
+}

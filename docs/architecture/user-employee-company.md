@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Clarify the relationship model between User, Employee, and Company entities
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-08-05
 
 ---
 
@@ -391,6 +391,6 @@ if ($employee->user_id && $employee->company_id !== $employee->user->company_id)
 ---
 
 **Related Documents:**
-- `app/Modules/Core/User/README.md` - User module documentation
-- `app/Modules/Core/Employee/README.md` - Employee module documentation
-- `app/Modules/Core/Company/README.md` - Company module documentation
+- `app/Core/User/README.md` - User Module documentation
+- `app/Core/Employee/README.md` - Employee Module documentation
+- `app/Core/Company/README.md` - Company Module documentation

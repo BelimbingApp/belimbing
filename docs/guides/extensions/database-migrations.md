@@ -1,5 +1,8 @@
 # Extension Database Migrations
 
+**Document Type:** Developer Guide
+**Last Updated:** 2026-08-06
+
 This guide explains how extensions can create and manage database tables in the Belimbing application platform.
 
 ## Overview
@@ -8,12 +11,12 @@ Extensions can create their own database tables by placing migration files in th
 
 ## Extension Structure
 
-Extensions follow a two-level `{owner}/{module}/` layout under `extensions/`:
+Extension Modules follow a two-level `{Extension}/{Module}/` layout under `app/Extensions/`. Both ownership segments use PascalCase:
 
 ```
-extensions/
-├── {owner}/                   # Licensee, vendor, or organization name
-│   └── {module}/
+app/Extensions/
+├── {Extension}/               # Deployment-owned Extension source
+│   └── {Module}/
 │       ├── Config/
 │       │   └── quality.php
 │       ├── Database/
@@ -26,8 +29,8 @@ extensions/
 │       │   └── web.php
 │       └── ServiceProvider.php  # Module root
 │
-└── another-vendor/
-    └── analytics/
+└── Acme/
+    └── Analytics/
         └── [same structure]
 ```
 
@@ -38,10 +41,10 @@ Extension modules may publish a module-root `composer.json` with an `extra.blb` 
 ```json
 {
     "name": "acme/quality",
-    "type": "blb-plugin",
+    "type": "blb-module",
     "autoload": {
         "psr-4": {
-            "Extensions\\Acme\\Quality\\": ""
+            "App\\Extensions\\Acme\\Quality\\": ""
         }
     },
     "extra": {
@@ -62,26 +65,26 @@ Extension modules may publish a module-root `composer.json` with an `extra.blb` 
 }
 ```
 
-`extra.blb.module` is the stable BLB identity. Use `{owner}/{module}` for extensions. When present, this manifest identity is authoritative; the filesystem path is not a second alias. `extra.blb.requires-modules` declares hard dependencies by module identity; `*` means any installed version, while a non-wildcard constraint requires the required module to publish `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
+`extra.blb.module` is the stable BLB identity. Use a lowercase, kebab-case `{extension}/{module}` ID such as `sb-group/qac`; it is independent of the PascalCase physical path. When present, this manifest identity is authoritative and the filesystem path is not a second alias. `extra.blb.requires-modules` declares hard dependencies by Module identity; `*` means any installed version, while a non-wildcard constraint requires the required Module to publish `extra.blb.version`. BLB accepts common Composer-style constraints such as exact versions, comparison ranges, caret/tilde ranges, wildcards, and `||` alternatives.
 
 Before any module-aware migration command registers migration paths, BLB validates the installed manifest graph. Required modules must be installed and enabled, version constraints must be compatible, and migration filenames must make the dependency executable: the requiring module's earliest migration filename must sort after the latest migration filename in every required module that ships migrations. Laravel still sorts migrations by filename, so fix preflight failures by installing/enabling the required module, relaxing or correcting the constraint, or renaming migrations so the required module sorts first. Duplicate migration names across module paths are blocked because Laravel would otherwise keep only one file for that name. Explicit `--path` scopes choose what Laravel runs, but they do not bypass this global dependency preflight.
 
-Nested-git extensions and future Composer-delivered extensions use the same module-root manifest. Per-file schema maturity stays in the migration via `IncubatingSchema`. The `extra.blb.schema` block is only a coarse package default for future composerized plugins, useful for saying a whole pre-release package defaults to `incubating`; do not list individual migration files there.
+Nested-git Extensions and future package-delivered Extensions use the same Module-root manifest. Per-file schema maturity stays in the migration via `IncubatingSchema`. The `extra.blb.schema` block is only a coarse package default for a future packaged source, useful for saying a whole pre-release source defaults to `incubating`; do not list individual migration files there.
 
 ## Table Naming Conventions
 
-**Critical**: Extension tables must be prefixed with the owner and module name to prevent conflicts.
+**Critical**: Extension tables must be prefixed with the Extension and Module identity to prevent conflicts.
 
 ### Format
 ```
-{owner}_{module}_{entity}
+{extension}_{module}_{entity}
 ```
 
 ### Examples
-- `sbg_quality_inspections` — SBG owner, quality module, inspections entity
-- `sbg_quality_inspection_items` — SBG owner, quality module, inspection items entity
-- `acme_billing_invoices` — ACME owner, billing module, invoices entity
-- `acme_billing_invoice_lines` — ACME owner, billing module, invoice lines entity
+- `sbg_quality_inspections` — SB Group Extension, Quality Module, inspections entity
+- `sbg_quality_inspection_items` — SB Group Extension, Quality Module, inspection items entity
+- `acme_billing_invoices` — Acme Extension, Billing Module, invoices entity
+- `acme_billing_invoice_lines` — Acme Extension, Billing Module, invoice lines entity
 
 ### Why This Matters
 
@@ -166,10 +169,10 @@ Schema::create('sbg_quality_audit_assignments', function (Blueprint $table) {
 Extension migrations are discovered automatically from:
 
 ```text
-extensions/{owner}/{module}/Database/Migrations/
+app/Extensions/{Extension}/{Module}/Database/Migrations/
 ```
 
-Disabled application domains are excluded from migration discovery. Extensions are discovered from the `extensions/` tree and checked against the manifest dependency preflight described above. The extension still needs `ServiceProvider.php` for provider discovery and any module-owned services, config, commands, views, or authz integration, but migrations do not need `loadMigrationsFrom()`.
+Disabled optional Domains are excluded from migration discovery. Extension migrations are discovered from `app/Extensions/*/*/Database/Migrations/` after Base, Core, and enabled Domain migrations, then checked against the manifest dependency preflight described above. The Extension Module still needs `ServiceProvider.php` for provider discovery and any Module-owned services, config, commands, views, or authz integration, but migrations do not need `loadMigrationsFrom()`.
 
 ### Step 1: Create Service Provider
 
@@ -178,11 +181,11 @@ Create a `ServiceProvider.php` at your module's root directory:
 ```php
 <?php
 
-namespace Extensions\SbGroup\Quality;
+namespace App\Extensions\SbGroup\Quality;
 
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
-class ServiceProvider extends ServiceProvider
+class ServiceProvider extends BaseServiceProvider
 {
     /**
      * Register services.
@@ -204,11 +207,11 @@ class ServiceProvider extends ServiceProvider
 
 ### Step 2: Register Service Provider
 
-Extension providers are discovered automatically via `ProviderRegistry::resolve()` in `bootstrap/providers.php`. The registry scans `extensions/*/*/ServiceProvider.php`, so no manual registration is needed — just place your `ServiceProvider.php` at the module root and it will be picked up.
+Extension providers are discovered automatically via `ProviderRegistry::resolve()` in `bootstrap/providers.php`. The registry scans `app/Extensions/*/*/ServiceProvider.php` after Base, Core, and enabled Domains, so no manual registration is needed—place `ServiceProvider.php` at the Module root.
 
 If your extension is not being discovered, verify that:
-1. The file is at `extensions/{owner}/{module}/ServiceProvider.php`
-2. The namespace matches the directory structure (e.g., `Extensions\SbGroup\Qac`)
+1. The file is at `app/Extensions/{Extension}/{Module}/ServiceProvider.php`
+2. The namespace matches the PascalCase directory structure (for example, `App\Extensions\SbGroup\Qac`)
 3. Clear the config cache: `php artisan config:clear`
 
 ## Running Migrations
@@ -226,7 +229,7 @@ This will run all migrations, including those from extensions.
 To run only your extension's migrations (useful for testing):
 
 ```bash
-php artisan migrate --path=extensions/sb-group/qac/Database/Migrations
+php artisan migrate --path=app/Extensions/SbGroup/Qac/Database/Migrations
 ```
 
 ### Rolling Back Extension Migrations
@@ -234,8 +237,48 @@ php artisan migrate --path=extensions/sb-group/qac/Database/Migrations
 To rollback extension migrations:
 
 ```bash
-php artisan migrate:rollback --path=extensions/sb-group/qac/Database/Migrations
+php artisan migrate:rollback --path=app/Extensions/SbGroup/Qac/Database/Migrations
 ```
+
+## Schema Incubation and Data-only Replay
+
+Use `IncubatingSchema` only for in-progress schema that the local/testing `migrate --dev` workflow may rebuild. It is a per-migration source declaration, not a manifest setting and never a production permission to discard data. Follow the complete maturity and dependency rules in `app/Base/Database/AGENTS.md` and `docs/architecture/database.md`.
+
+A later stable migration that only derives or normalizes data may need to rerun after an incubating table is rebuilt. Declare `ReplaysAfterIncubatingSchema` when that migration is first authored:
+
+```php
+<?php
+
+use App\Base\Database\Concerns\ReplaysAfterIncubatingSchema;
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+
+return new class extends Migration
+{
+    use ReplaysAfterIncubatingSchema;
+
+    public function up(): void
+    {
+        DB::table('sbg_quality_inspections')->updateOrInsert(
+            ['code' => 'default'],
+            ['name' => 'Default inspection'],
+        );
+    }
+
+    public function down(): void
+    {
+        DB::table('sbg_quality_inspections')->where('code', 'default')->delete();
+    }
+};
+```
+
+This marker is not schema maturity and is not a shortcut around migration safety:
+
+- `up()` must be idempotent and data-only, with no schema-mutating `Schema` calls or raw DDL. The preflight permits only its explicit read-only schema-introspection methods.
+- Referenced incubating tables must appear as literal names in source so preflight can detect them.
+- `down()` removes only derived state or is an intentional no-op; it must not restore obsolete values.
+- The marker affects local/testing incubating replay only. It does not rerun an applied migration during production/staging `migrate`.
+- Do not add it to an already-applied stable migration merely to silence preflight. Retrofitting requires an explicit recovery procedure or accepted ADR with replay-safety evidence; behavior changes require a new forward migration.
 
 ## Migration Best Practices
 
@@ -326,8 +369,8 @@ Here's a complete example of an extension with migrations:
 ### Directory Structure
 
 ```
-extensions/sb-group/
-└── quality/
+app/Extensions/SbGroup/
+└── Quality/
     ├── Database/
     │   └── Migrations/
     │       ├── 2026_01_01_000000_create_sbg_quality_inspections_table.php
@@ -342,7 +385,7 @@ extensions/sb-group/
 ```php
 <?php
 
-namespace Extensions\SbGroup\Quality;
+namespace App\Extensions\SbGroup\Quality;
 
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
@@ -393,7 +436,7 @@ return new class extends Migration {
 **Problem**: `php artisan migrate` doesn't find extension migrations.
 
 **Solutions**:
-1. Verify the migration file is under `extensions/{owner}/{module}/Database/Migrations/`
+1. Verify the migration file is under `app/Extensions/{Extension}/{Module}/Database/Migrations/`
 2. Verify migration file follows Laravel naming convention (`YYYY_MM_DD_HHMMSS_description.php`)
 3. Ensure BLB's database migration commands are active for your environment
 4. Clear config cache: `php artisan config:clear`
@@ -403,7 +446,7 @@ return new class extends Migration {
 **Problem**: Migration fails with "Table already exists" error.
 
 **Solutions**:
-1. Ensure table name uses the full prefix: `{owner}_{module}_{entity}`
+1. Ensure table name uses the full prefix: `{extension}_{module}_{entity}`
 2. Check for duplicate migration files
 3. Verify migration hasn't already run: `php artisan migrate:status`
 

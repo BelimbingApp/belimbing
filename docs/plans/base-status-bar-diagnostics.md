@@ -1,7 +1,7 @@
 # base-status-bar-diagnostics
 
 **Status:** Phase 1-4 core providers implemented; noisy candidates rejected or deferred
-**Last Updated:** 2026-07-02
+**Last Updated:** 2026-08-05
 **Sources:** `resources/core/views/components/layouts/status-bar.blade.php`; `docs/architecture/ui-layout.md`; `app/Base/Menu/Services/VisibleNavMenuItemsFlat.php`; user discussion on surfacing menu route diagnostics
 **Agents:** Codex/GPT-5
 
@@ -47,7 +47,7 @@ Diagnostic entries should be plain data, not view fragments:
 
 - `id`: stable unique key for de-duplication, such as `menu.missing-route.investment.holdings`.
 - `severity`: `danger`, `warning`, or `info`.
-- `source`: short source label such as `Menu`, `Modules`, or `Updates`.
+- `source`: short source label such as `Menu`, `Software`, or `Updates`.
 - `summary`: one-line user-facing text.
 - `detail`: optional longer explanation for the click surface.
 - `target`: optional internal URL for remediation or inspection.
@@ -107,14 +107,14 @@ Validation: The audit produces a short candidate table in this plan, not code ch
 | Candidate | Source paths | Classification | Owner / auth | Remediation target | Decision |
 | --- | --- | --- | --- | --- | --- |
 | Queue failure-rate warning | `app/Base/Queue/Services/QueueFailureRateMonitor.php`; `app/Base/Queue/Config/menu.php`; `app/Base/Queue/Routes/web.php` | Status-bar diagnostic | Queue / `admin.system.failed-job.list` | Failed Jobs (`admin.system.failed-jobs.index`) | Implemented. Live check reads the existing `queue_failures` counter and failed job count, emits warning for failed jobs and danger above the existing high-rate threshold, and clears when those counts clear. |
-| Software bundle drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/modules.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic | Foundation/Software / `admin.system.software.modules.view` | Modules (`admin.system.software.modules.index`) | Implemented. Emits an error for module dependency issues and one aggregate warning for dirty/unpushed add-in bundles; platform checkout drift is ignored because it belongs to normal development/deployment workflow, not add-in lifecycle safety. |
+| Software source drift and dependency issues | `app/Base/Software/Services/SoftwareInventoryService.php`; `resources/core/views/livewire/base/foundation/domains.blade.php`; `app/Base/Foundation/Config/menu.php` | Status-bar diagnostic | Foundation/Software / `admin.system.software.domains.view` | Domains (`admin.system.software.domains.index`) | Implemented. Emits an error for Module dependency issues and one aggregate warning for dirty or unpushed Domain and Extension sources; platform checkout drift is ignored because it belongs to normal development/deployment workflow, not optional-source lifecycle safety. |
 | FrankenPHP worker reload pending/failed | `app/Base/Software/Services/FrankenPhpDomainRuntimeReloader.php`; `app/Base/Software/Services/DeploymentRunHistory.php`; `app/Base/Software/Services/DeploymentService.php`; `app/Base/Software/Routes/web.php` | Status-bar diagnostic | Software / `admin.system.software.updates.manage` | Updates (`admin.system.software.updates.index`) | Implemented. Emit warning while the background reload cache key is pending, and danger when the last recorded FrankenPHP worker reload failed. Clears when the pending reload finishes or a later reload succeeds. |
 | Storage writability and basic system health | `app/Base/System/Services/SystemHealthProbe.php`; `app/Base/System/Livewire/Info/Index.php` | Status-bar diagnostic | System / `admin.system.info.view` | System Info (`admin.system.info.index`) | Implemented for required filesystem paths only: `storage/app`, `storage/logs`, `storage/framework/cache`, `storage/framework/sessions`, `storage/framework/views`, and `bootstrap/cache`. Database outage remains rejected because the shell may not render. |
-| AI control-plane health snapshots | `app/Modules/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Modules/Core/AI/Livewire/ControlPlane.php` | Page-local/control-plane feedback | AI / `admin.ai.control-plane.view` | AI Control Plane | Rejected for status bar now. Current health snapshots intentionally produce unknown/stale/degraded states for tools, providers, and sessions; promoting those globally would create permanent noise without a single remediation path. Reconsider only when an active production-critical provider/runtime has a persisted failing state and a clear operator action. |
-| eBay endpoint diagnostics | `app/Modules/Commerce/Marketplace/Ebay/EbayDiagnosticsService.php`; `app/Modules/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php` | Page-local feedback | Marketplace settings | eBay Settings page | Reject for shared status bar now. The diagnostics are scoped to a manual settings workflow and already have immediate page remediation. |
-| Provider connect/model sync warnings | `app/Modules/Core/AI/Livewire/Providers/ProviderSetup.php`; `app/Modules/Core/AI/Livewire/Concerns/ManagesSync.php` | Page-local feedback plus logs | AI setup | Provider setup pages | Reject for shared status bar now. Promote only if a separate live provider-health source can prove ongoing outage for an active provider. |
+| AI control-plane health snapshots | `app/Core/AI/Services/ControlPlane/HealthAndPresenceService.php`; `app/Core/AI/Livewire/ControlPlane.php` | Page-local/control-plane feedback | AI / `admin.ai.control-plane.view` | AI Control Plane | Rejected for status bar now. Current health snapshots intentionally produce unknown/stale/degraded states for tools, providers, and sessions; promoting those globally would create permanent noise without a single remediation path. Reconsider only when an active production-critical provider/runtime has a persisted failing state and a clear operator action. |
+| eBay endpoint diagnostics | `app/Domains/Commerce/Marketplace/Ebay/EbayDiagnosticsService.php`; `app/Domains/Commerce/Marketplace/Views/livewire/commerce/marketplace/ebay/settings.blade.php` | Page-local feedback | Marketplace settings | eBay Settings page | Reject for shared status bar now. The diagnostics are scoped to a manual settings workflow and already have immediate page remediation. |
+| Provider connect/model sync warnings | `app/Core/AI/Livewire/Providers/ProviderSetup.php`; `app/Core/AI/Livewire/Concerns/ManagesSync.php` | Page-local feedback plus logs | AI setup | Provider setup pages | Reject for shared status bar now. Promote only if a separate live provider-health source can prove ongoing outage for an active provider. |
 | Cache warming failed | _(removed)_ | Log-only transient | Platform boot | None | Moot. Originally rejected as a boot-time opportunistic warmup with no durable live state. The warmer was later deleted as dead code — it was gated behind a config flag that was never enabled, and cached a value nothing read — so there is no candidate left to promote. |
-| Plugin contribution load warnings | `app/Modules/Commerce/Plugins/Services/CommercePluginDiscoveryService.php` | Log-only developer/config warning | Commerce plugins | None yet | Reject until Commerce owns a user-facing plugin diagnostics page. |
+| Plugin contribution load warnings | `app/Domains/Commerce/Plugins/Services/CommercePluginDiscoveryService.php` | Log-only developer/config warning | Commerce plugins | None yet | Reject until Commerce owns a user-facing plugin diagnostics page. |
 | Database connection recovery warning | `app/Base/Database/Middleware/DatabaseConnectionRecovery.php` | Log-only auto-recovery event | Database | Database tools | Reject for now. Auto-recovered transient failures should not become persistent shell warnings without a rate-limited live counter and remediation path. |
 
 ### Phase 4: Operational Health Sources
@@ -123,7 +123,7 @@ Goal: Promote existing health checks into the shared surface only where they are
 
 - [x] Add queue failure-rate provider backed by `queue_failures` / failed job count, linked to Failed Jobs. {Codex/GPT-5}
 - [x] Add FrankenPHP worker reload provider backed by pending reload state and last reload history, linked to Updates. {Codex/GPT-5}
-- [x] Add software bundle drift/dependency provider backed by `SoftwareInventoryService`, linked to Modules. {Codex/GPT-5}
+- [x] Add software source drift/dependency provider backed by `SoftwareInventoryService`, linked to Domains. {Codex/GPT-5}
 - [x] Add cheap system-health provider for storage writability and similar shell-safe checks, linked to System Info. {Codex/GPT-5}
 - [x] Evaluate AI control-plane health and reject tool-level unknown/stale states unless they are actionable and production-critical. {Codex/GPT-5}
 - [x] Evaluate scheduler/browser contributors and reject any that create noisy permanent warnings. {Codex/GPT-5}

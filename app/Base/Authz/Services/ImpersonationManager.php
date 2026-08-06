@@ -1,7 +1,7 @@
 <?php
 namespace App\Base\Authz\Services;
 
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Auth;
 use InvalidArgumentException;
 

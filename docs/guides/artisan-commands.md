@@ -1,7 +1,12 @@
-## Run specific migration files (idempotent)
+# Artisan Command Examples
 
-Example that run 2 migration files:
+**Document Type:** Developer Guide
+**Last Updated:** 2026-08-05
+
+## Run Specific Migration Files
+
+Pass `--path` once per migration file. Explicit paths do not bypass BLB's global Module dependency preflight.
 
 ```bash
-php artisan migrate --path=app/Modules/Core/AI/Database/Migrations/0200_02_01_000017_add_family_to_ai_providers_and_migrate_image_credentials.php --path=app/Modules/Commerce/Inventory/Database/Migrations/0310_01_01_000003_add_use_cleaned_photo_to_commerce_inventory_item_photos_table.php
+php artisan migrate --path=app/Core/AI/Database/Migrations/0200_02_01_000017_rename_max_tool_iterations_setting.php --path=app/Domains/Commerce/Inventory/Database/Migrations/0310_01_01_000003_repair_commerce_inventory_item_photo_state.php
 ```

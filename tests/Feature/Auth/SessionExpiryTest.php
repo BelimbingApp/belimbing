@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\User\Livewire\Auth\Login;
+use App\Core\User\Livewire\Auth\Login;
 use Livewire\Livewire;
 
 test('login page shows session expired notice when flashed', function (): void {

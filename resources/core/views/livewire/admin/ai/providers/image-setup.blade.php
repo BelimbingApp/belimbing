@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Core\AI\Livewire\Providers\ImageProviderSetup;
+use App\Core\AI\Livewire\Providers\ImageProviderSetup;
 
 /** @var ImageProviderSetup $this */
 ?>

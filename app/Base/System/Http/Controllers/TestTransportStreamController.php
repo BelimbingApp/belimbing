@@ -1,8 +1,8 @@
 <?php
 namespace App\Base\System\Http\Controllers;
 
-use App\Modules\Core\AI\Models\AiRun;
-use App\Modules\Core\AI\Models\AiRunEvent;
+use App\Core\AI\Models\AiRun;
+use App\Core\AI\Models\AiRunEvent;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;

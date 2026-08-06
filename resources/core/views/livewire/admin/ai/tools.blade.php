@@ -1,5 +1,5 @@
 <?php
-/** @var \App\Modules\Core\AI\Livewire\Tools $this */
+/** @var \App\Core\AI\Livewire\Tools $this */
 ?>
 <div>
     <x-slot name="title">{{ $toolName ? __('Tools') . ' — ' . $toolName : __('Tools') }}</x-slot>

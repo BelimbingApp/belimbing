@@ -6,7 +6,7 @@ format each per-file decision.
 
 ## keep — concrete behavior, acceptable signal
 
-`tests/Unit/Modules/Core/AI/Services/ProviderTestServiceTest.php` drives the
+`tests/Unit/Core/AI/Services/ProviderTestServiceTest.php` drives the
 real `LlmClient` through three protocols (Chat Completions, Responses,
 Anthropic Messages) and asserts both the success path and the structured-error
 path (`AiErrorType::AuthError`, `HTTP 401`, diagnostic content). A regression
@@ -17,7 +17,7 @@ in protocol routing or error normalization breaks it for a concrete reason.
 The provider test originally exercised only the success path. Tightening
 layered on the structured-error dataset and per-protocol `provider_name`
 assertions in
-`tests/Unit/Modules/Core/AI/Services/ProviderTestServiceTest.php` rather than
+`tests/Unit/Core/AI/Services/ProviderTestServiceTest.php` rather than
 replacing the original test. Tightening adds coverage; it does not start over.
 
 ## merge — collapse repeated scaffolding into deeper cases

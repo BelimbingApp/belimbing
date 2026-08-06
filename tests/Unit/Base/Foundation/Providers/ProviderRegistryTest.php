@@ -5,41 +5,29 @@ use Tests\TestCase;
 
 uses(TestCase::class);
 
-it('normalizes mixed path separators when resolving extension providers', function (): void {
-    $method = new ReflectionMethod(ProviderRegistry::class, 'extensionClassFromPath');
-    $method->setAccessible(true);
-
-    $basePath = str_replace('/', '\\', base_path('extensions'));
-    $path = $basePath.'/sb-group\\qac/ServiceProvider.php';
-
-    expect($method->invoke(null, $path))
-        ->toBe('Extensions\\SbGroup\\Qac\\ServiceProvider');
-});
-
-it('resolves Base providers before module providers', function (): void {
+it('resolves providers in the four-root application order', function (): void {
     $resolved = ProviderRegistry::resolve();
+    $ranks = array_map(static fn (string $provider): int => match (true) {
+        str_starts_with($provider, 'App\\Base\\') => 0,
+        str_starts_with($provider, 'App\\Core\\') => 1,
+        str_starts_with($provider, 'App\\Domains\\') => 2,
+        str_starts_with($provider, 'App\\Extensions\\') => 3,
+    }, $resolved);
 
-    $basePositions = array_keys(array_filter(
-        $resolved,
-        static fn (string $provider): bool => str_starts_with($provider, 'App\\Base\\'),
-    ));
+    $sortedRanks = $ranks;
+    sort($sortedRanks);
 
-    $modulePositions = array_keys(array_filter(
-        $resolved,
-        static fn (string $provider): bool => str_starts_with($provider, 'App\\Modules\\'),
-    ));
-
-    expect($basePositions)->not->toBeEmpty()
-        ->and($modulePositions)->not->toBeEmpty()
-        ->and(max($basePositions))->toBeLessThan(min($modulePositions));
+    expect($ranks)->toBe($sortedRanks)
+        ->and($ranks)->toContain(0, 1);
 });
 
 it('discovers every provider from an owning component, with no app-level escape hatch', function (): void {
     $orphans = array_values(array_filter(
         ProviderRegistry::resolve(),
         static fn (string $provider): bool => ! str_starts_with($provider, 'App\\Base\\')
-            && ! str_starts_with($provider, 'App\\Modules\\')
-            && ! str_starts_with($provider, 'Extensions\\'),
+            && ! str_starts_with($provider, 'App\\Core\\')
+            && ! str_starts_with($provider, 'App\\Domains\\')
+            && ! str_starts_with($provider, 'App\\Extensions\\'),
     ));
 
     expect($orphans)->toBeEmpty();

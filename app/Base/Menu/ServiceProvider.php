@@ -75,7 +75,7 @@ class ServiceProvider extends BaseServiceProvider
             // which holds for app->app navigation. Pages on a non-app layout (the
             // guest auth layout) must redirect INTO the app with a full page load,
             // NOT navigate: true — otherwise there is no chrome to keep and the
-            // sidebar/top/status bars render blank. See App\Modules\Core\User\Livewire\Auth.
+            // sidebar/top/status bars render blank. See App\Core\User\Livewire\Auth.
             if (request()->hasHeader('X-Livewire-Navigate')) {
                 $view->with('menuTree', []);
                 $view->with('menuItemsFlat', []);

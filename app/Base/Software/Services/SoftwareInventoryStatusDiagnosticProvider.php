@@ -5,7 +5,7 @@ namespace App\Base\Software\Services;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Enums\StatusVariant;
-use App\Base\Software\Inventory\InstalledBundle;
+use App\Base\Software\Inventory\InstalledSource;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -30,11 +30,11 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
      */
     public function diagnosticsFor(Authenticatable $user): iterable
     {
-        if (! $this->canViewModules($user)) {
+        if (! $this->canViewDomains($user)) {
             return [];
         }
 
-        if ($this->isModulesInventoryPage()) {
+        if ($this->isDomainsInventoryPage()) {
             return [];
         }
 
@@ -54,12 +54,12 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
 
         $dependencyIssueCount = array_sum(array_column($snapshot, 'dependency_issues'));
         if ($dependencyIssueCount > 0) {
-            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $this->dependencyBundleLabels($snapshot));
+            $diagnostics[] = $this->dependencyDiagnostic($dependencyIssueCount, $this->dependencySourceLabels($snapshot));
         }
 
-        $driftedBundles = $this->driftedAddInBundles($snapshot);
-        if ($driftedBundles !== []) {
-            $diagnostics[] = $this->driftDiagnostic($driftedBundles);
+        $driftedSources = $this->driftedAddInSources($snapshot);
+        if ($driftedSources !== []) {
+            $diagnostics[] = $this->driftDiagnostic($driftedSources);
         }
 
         return $diagnostics;
@@ -81,7 +81,7 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     }
 
     /**
-     * The status bar needs only a few scalar facts per bundle. Cache those as
+     * The status bar needs only a few scalar facts per source. Cache those as
      * plain arrays: cache.serializable_classes is disabled (gadget-chain
      * hardening), so cached objects come back as __PHP_Incomplete_Class.
      *
@@ -90,14 +90,14 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
     private function inventorySnapshot(): array
     {
         return array_map(
-            fn (InstalledBundle $bundle): array => [
-                'label' => $bundle->label,
-                'kind' => $bundle->kind,
-                'dirty' => $bundle->isDirty(),
-                'unpushed' => $bundle->unpushed(),
-                'dependency_issues' => count($bundle->dependencyIssues),
+            fn (InstalledSource $source): array => [
+                'label' => $source->label,
+                'kind' => $source->kind,
+                'dirty' => $source->isDirty(),
+                'unpushed' => $source->unpushed(),
+                'dependency_issues' => count($source->dependencyIssues),
             ],
-            $this->inventory->installedBundlesForStatusDiagnostics(),
+            $this->inventory->installedSourcesForStatusDiagnostics(),
         );
     }
 
@@ -130,11 +130,11 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
             summary: trans_choice(':count module dependency issue needs attention|:count module dependency issues need attention', $issueCount, [
                 'count' => $issueCount,
             ]),
-            detail: __('Open Modules to resolve missing or incompatible module dependencies before running migrations or enabling affected domains.'),
-            target: $this->modulesUrl(),
+            detail: __('Open Domains to resolve missing or incompatible module dependencies before running migrations or enabling affected domains.'),
+            target: $this->domainsUrl(),
             metadata: [
                 'dependency_issues' => $issueCount,
-                'affected_bundles' => $affectedLabels,
+                'affected_sources' => $affectedLabels,
             ],
         );
     }
@@ -143,11 +143,11 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
      * @param  list<array{label: string, dependency_issues: int}>  $snapshot
      * @return list<string>
      */
-    private function dependencyBundleLabels(array $snapshot): array
+    private function dependencySourceLabels(array $snapshot): array
     {
         return array_values(array_map(
-            fn (array $bundle): string => $bundle['label'],
-            array_filter($snapshot, fn (array $bundle): bool => $bundle['dependency_issues'] > 0),
+            fn (array $source): string => $source['label'],
+            array_filter($snapshot, fn (array $source): bool => $source['dependency_issues'] > 0),
         ));
     }
 
@@ -167,66 +167,66 @@ final class SoftwareInventoryStatusDiagnosticProvider implements StatusBarDiagno
      * @param  list<array{kind: string, dirty: bool, unpushed: int}>  $snapshot
      * @return list<array{label: string, kind: string, dirty: bool, unpushed: int, dependency_issues: int}>
      */
-    private function driftedAddInBundles(array $snapshot): array
+    private function driftedAddInSources(array $snapshot): array
     {
-        return array_values(array_filter($snapshot, function (array $bundle): bool {
-            if ($bundle['kind'] === InstalledBundle::KIND_PLATFORM) {
+        return array_values(array_filter($snapshot, function (array $source): bool {
+            if ($source['kind'] === InstalledSource::KIND_PLATFORM) {
                 return false;
             }
 
-            return $bundle['dirty'] || $bundle['unpushed'] > 0;
+            return $source['dirty'] || $source['unpushed'] > 0;
         }));
     }
 
     /**
-     * @param  list<array{label: string, dirty: bool, unpushed: int}>  $bundles
+     * @param  list<array{label: string, dirty: bool, unpushed: int}>  $sources
      */
-    private function driftDiagnostic(array $bundles): StatusBarDiagnostic
+    private function driftDiagnostic(array $sources): StatusBarDiagnostic
     {
-        $dirty = count(array_filter($bundles, fn (array $bundle): bool => $bundle['dirty']));
-        $unpushedCommits = array_sum(array_column($bundles, 'unpushed'));
+        $dirty = count(array_filter($sources, fn (array $source): bool => $source['dirty']));
+        $unpushedCommits = array_sum(array_column($sources, 'unpushed'));
 
         return new StatusBarDiagnostic(
-            id: 'software.bundle-drift',
+            id: 'software.source-drift',
             severity: StatusVariant::Warning,
             source: __('Software'),
-            summary: trans_choice('{1} :count add-in bundle has local drift|[2,*] :count add-in bundles have local drift', count($bundles), [
-                'count' => count($bundles),
+            summary: trans_choice('{1} :count add-in source has local drift|[2,*] :count add-in sources have local drift', count($sources), [
+                'count' => count($sources),
             ]),
-            detail: __('One or more add-in bundles have uncommitted changes or unpushed commits. Open Modules to see the affected checkout paths and resolve them before updating or changing add-ins.'),
-            target: $this->modulesUrl('#add-in-bundle-drift'),
+            detail: __('One or more add-in sources have uncommitted changes or unpushed commits. Open Domains to see the affected checkout paths and resolve them before updating or changing add-ins.'),
+            target: $this->domainsUrl('#add-in-source-drift'),
             metadata: [
-                'affected_bundles' => array_column($bundles, 'label'),
-                'dirty_bundles' => $dirty,
+                'affected_sources' => array_column($sources, 'label'),
+                'dirty_sources' => $dirty,
                 'unpushed_commits' => $unpushedCommits,
             ],
         );
     }
 
-    private function modulesUrl(string $fragment = ''): ?string
+    private function domainsUrl(string $fragment = ''): ?string
     {
-        if (! Route::has('admin.system.software.modules.index')) {
+        if (! Route::has('admin.system.software.domains.index')) {
             return null;
         }
 
-        return route('admin.system.software.modules.index').$fragment;
+        return route('admin.system.software.domains.index').$fragment;
     }
 
-    private function canViewModules(Authenticatable $user): bool
+    private function canViewDomains(Authenticatable $user): bool
     {
         try {
             return $this->authorizationService
-                ->can(Actor::forUser($user), 'admin.system.software.modules.view')
+                ->can(Actor::forUser($user), 'admin.system.software.domains.view')
                 ->allowed;
         } catch (\Throwable) {
             return false;
         }
     }
 
-    private function isModulesInventoryPage(): bool
+    private function isDomainsInventoryPage(): bool
     {
         try {
-            return request()->routeIs('admin.system.software.modules.index');
+            return request()->routeIs('admin.system.software.domains.index');
         } catch (\Throwable) {
             return false;
         }

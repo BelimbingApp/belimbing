@@ -15,8 +15,8 @@ it('returns null for paths outside the app directory', function (): void {
 });
 
 it('accepts alternate path separators when deriving the class name', function (): void {
-    $path = str_replace('/', '\\', app_path('Modules/Core/Company/Models/Company.php'));
+    $path = str_replace('/', '\\', app_path('Core/Company/Models/Company.php'));
 
     expect(AppPath::toClass($path))
-        ->toBe('App\Modules\Core\Company\Models\Company');
+        ->toBe('App\Core\Company\Models\Company');
 });

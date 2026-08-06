@@ -4,8 +4,8 @@ use App\Base\Perf\Livewire\Widgets\RequestHealth;
 use App\Base\Perf\Services\PerfRegressionStatusDiagnosticProvider;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 

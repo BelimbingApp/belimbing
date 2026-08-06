@@ -241,7 +241,7 @@ it('keeps shared-chrome page renders within the query budget', function (): void
     // The status bar's inventory provider would otherwise run the real nested
     // git scan (a dozen-plus subprocesses) inside the test process.
     $inventory = Mockery::mock(SoftwareInventoryService::class);
-    $inventory->shouldReceive('installedBundlesForStatusDiagnostics')->andReturn([]);
+    $inventory->shouldReceive('installedSourcesForStatusDiagnostics')->andReturn([]);
     app()->instance(SoftwareInventoryService::class, $inventory);
 
     $queries = 0;

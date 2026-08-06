@@ -2,8 +2,8 @@
 
 **Agents:** Amp/sonnet-4-5
 **Status:** In Progress (Phase 1 first slice landed)
-**Last Updated:** 2026-04-30
-**Sources:** `app/Modules/Core/AI/Services/ControlPlane/WireLogReadableFormatter.php`, `app/Modules/Core/AI/Services/AgenticFinalResponseStreamer.php`, `app/Modules/Core/AI/Services/AgenticToolLoopStreamReader.php`, `app/Modules/Core/AI/Services/MessageManager.php`, `app/Modules/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Base/AI/Services/Protocols/ChatCompletionsProtocolClient.php`, `app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php`, `app/Base/AI/Services/Protocols/AbstractResponsesProtocolClient.php`, `app/Base/AI/Services/Protocols/OpenAiCodexResponsesProtocolClient.php`, `app/Modules/Core/AI/Database/Migrations/0200_02_01_000013_create_ai_runs_table.php`, `docs/plans/ai-control-plane-debuggability.md`, `docs/plans/ai-operations-dashboard.md`
+**Last Updated:** 2026-08-05
+**Sources:** `app/Core/AI/Services/ControlPlane/WireLogReadableFormatter.php`, `app/Core/AI/Services/AgenticFinalResponseStreamer.php`, `app/Core/AI/Services/AgenticToolLoopStreamReader.php`, `app/Core/AI/Services/MessageManager.php`, `app/Core/AI/Services/ControlPlane/RunRecorder.php`, `app/Base/AI/Services/Protocols/ChatCompletionsProtocolClient.php`, `app/Base/AI/Services/Protocols/AnthropicMessagesProtocolClient.php`, `app/Base/AI/Services/Protocols/AbstractResponsesProtocolClient.php`, `app/Base/AI/Services/Protocols/OpenAiCodexResponsesProtocolClient.php`, `app/Core/AI/Database/Migrations/0200_02_01_000013_create_ai_runs_table.php`, `docs/plans/ai-control-plane-debuggability.md`, `docs/plans/ai-operations-dashboard.md`
 
 ## Problem Essence
 
@@ -81,10 +81,10 @@ Operations charts deep-link into the Control Plane via the established `from=ope
 
 ## Public Contract
 
-- `App\Modules\Core\AI\Values\CallUsage` — value object: `promptTokens`, `cachedInputTokens`, `completionTokens`, `reasoningTokens`, `totalTokens`, plus rate-limit fields and pricing snapshot fields. Nullable where the provider did not report them.
-- `App\Modules\Core\AI\Values\ProviderRateLimit` — `remainingRequests`, `remainingTokens`, `resetAt`, `limitRequests`, `limitTokens`.
-- `App\Modules\Core\AI\Services\Pricing\PricingSourceRegistry::resolve(provider, model): ?ResolvedRate` — returns the rate plus `source` and `version` strings, or `null` for unknown models.
-- `App\Modules\Core\AI\Services\Pricing\TokenCostCalculator::costFor(CallUsage, ResolvedRate): CallUsage` — fills cost fields.
+- `App\Core\AI\Values\CallUsage` — value object: `promptTokens`, `cachedInputTokens`, `completionTokens`, `reasoningTokens`, `totalTokens`, plus rate-limit fields and pricing snapshot fields. Nullable where the provider did not report them.
+- `App\Core\AI\Values\ProviderRateLimit` — `remainingRequests`, `remainingTokens`, `resetAt`, `limitRequests`, `limitTokens`.
+- `App\Core\AI\Services\Pricing\PricingSourceRegistry::resolve(provider, model): ?ResolvedRate` — returns the rate plus `source` and `version` strings, or `null` for unknown models.
+- `App\Core\AI\Services\Pricing\TokenCostCalculator::costFor(CallUsage, ResolvedRate): CallUsage` — fills cost fields.
 - `App\Base\AI\Services\Protocols\AbstractLlmProtocolClient::done()` — extended event payload includes `cached_input_tokens`, `reasoning_tokens`, `total_tokens`, `rate_limits`.
 - `AiRunCall` Eloquent model with `run()`, `usage()`, `cost()`, `rateLimits()` accessors.
 - `AiRun::aggregates(): RunAggregates` — derived totals across calls.

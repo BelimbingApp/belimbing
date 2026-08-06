@@ -5,15 +5,15 @@ use App\Base\Dashboard\Livewire\Index;
 use App\Base\Dashboard\Services\DashboardLayout;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
-use App\Modules\Core\Company\Models\Company;
-use App\Modules\Core\User\Models\User;
+use App\Core\Company\Models\Company;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
 
 const DASHBOARD_LEAVE_WIDGET = 'people.leave.pending-approvals';
 const DASHBOARD_PERF_WIDGET = 'perf.request-health';
 const DASHBOARD_AI_WIDGET = 'ai.operations-status';
-const DASHBOARD_TEST_LEAVE_CONFIG = 'app/Modules/People/Leave/Config/dashboard.php';
+const DASHBOARD_TEST_LEAVE_CONFIG = 'app/Domains/People/Leave/Config/dashboard.php';
 
 beforeEach(function (): void {
     // The fixture must live at the real discovery path — but on machines
@@ -36,9 +36,9 @@ afterEach(function (): void {
     }
 
     File::delete(base_path(DASHBOARD_TEST_LEAVE_CONFIG));
-    @rmdir(base_path('app/Modules/People/Leave/Config'));
-    @rmdir(base_path('app/Modules/People/Leave'));
-    @rmdir(base_path('app/Modules/People'));
+    @rmdir(base_path('app/Domains/People/Leave/Config'));
+    @rmdir(base_path('app/Domains/People/Leave'));
+    @rmdir(base_path('app/Domains/People'));
 });
 
 function installDashboardLeaveFixture(): void

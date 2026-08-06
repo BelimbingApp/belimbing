@@ -7,7 +7,7 @@ use App\Base\System\Livewire\Settings\General;
 use App\Base\System\Services\MailRuntimeSettings;
 use App\Base\System\Services\RuntimeConfigurationApplier;
 use App\Base\System\Services\SystemRuntimeSettings;
-use App\Modules\Core\User\Models\User;
+use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 

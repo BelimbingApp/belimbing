@@ -36,14 +36,14 @@ function mutationCases(): array
     return [
         new MutationCase(
             name: 'browser-artifact-test-must-enforce-test-root',
-            file: 'app/Modules/Core/AI/Services/Browser/BrowserArtifactStore.php',
+            file: 'app/Core/AI/Services/Browser/BrowserArtifactStore.php',
             search: <<<'PHP'
         return (string) config('ai.tools.browser.artifact_dir', self::DEFAULT_ARTIFACT_DIR);
 PHP,
             replace: <<<'PHP'
         return self::DEFAULT_ARTIFACT_DIR;
 PHP,
-            command: './vendor/bin/pest --compact tests/Unit/Modules/Core/AI/Services/Browser/BrowserArtifactStoreTest.php',
+            command: './vendor/bin/pest --compact tests/Unit/Core/AI/Services/Browser/BrowserArtifactStoreTest.php',
         ),
     ];
 }

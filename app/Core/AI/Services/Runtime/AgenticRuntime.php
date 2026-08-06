@@ -1,0 +1,1795 @@
+<?php
+
+namespace App\Core\AI\Services\Runtime;
+
+use App\Base\AI\Contracts\ProvidesDisplaySummary;
+use App\Base\AI\DTO\AiRuntimeError;
+use App\Base\AI\DTO\ChatRequest;
+use App\Base\AI\DTO\ExecutionControls;
+use App\Base\AI\Enums\AiApiType;
+use App\Base\AI\Enums\AiErrorType;
+use App\Base\AI\Services\AiRuntimeSettings;
+use App\Base\AI\Services\LlmClient;
+use App\Base\AI\Tools\ToolResult;
+use App\Base\Support\Json as BlbJson;
+use App\Core\AI\DTO\ExecutionPolicy;
+use App\Core\AI\DTO\Message;
+use App\Core\AI\Enums\RunPhase;
+use App\Core\AI\Models\AiRun;
+use App\Core\AI\Services\AgenticExecutionControlResolver;
+use App\Core\AI\Services\AgentToolRegistry;
+use App\Core\AI\Services\ConfigResolver;
+use App\Core\AI\Services\ControlPlane\RunRecorder;
+use App\Core\AI\Services\ControlPlane\RunRecorderStartInput;
+use App\Core\AI\Services\ControlPlane\WireLogger;
+use App\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
+use App\Core\AI\Values\CallUsage;
+use Closure;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
+
+/**
+ * Agentic runtime for Agents with tool-calling loop.
+ *
+ * Extends the standard agent runtime pattern with an iterative tool-calling loop:
+ * LLM call → tool execution → feed results back → LLM call → ... until the
+ * LLM produces a final text response or the maximum tool-round limit is reached.
+ *
+ * Resilience strategy:
+ * - Single retry on transient failures within the same provider/model
+ * - No silent fallback to a different provider/model — failures surface honestly
+ */
+class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted collaborators handle complexity without changing behaviour
+{
+    private const MAX_TOOL_RESULT_CHARS = 20000;
+
+    private const TOOL_ROUND_WARNING_PERCENT = 80;
+
+    public function __construct(
+        private readonly ConfigResolver $configResolver,
+        private readonly LlmClient $llmClient,
+        private readonly AgentToolRegistry $toolRegistry,
+        private readonly RuntimeCredentialResolver $credentialResolver,
+        private readonly RuntimeMessageBuilder $messageBuilder,
+        private readonly RuntimeResponseFactory $responseFactory,
+        private readonly RuntimeHookCoordinator $hookCoordinator,
+        private readonly RunRecorder $runRecorder,
+        private readonly AgenticToolLoopStreamReader $toolLoopStreamReader,
+        private readonly RuntimeSessionContext $sessionContext,
+        private readonly WireLogger $wireLogger,
+        private readonly AgenticExecutionControlResolver $executionControls,
+        private readonly AiRuntimeSettings $runtimeSettings,
+    ) {}
+
+    /**
+     * Run an agentic conversation turn with tool calling.
+     *
+     * Resolves a single LLM config for the agent (workspace or company default
+     * by priority) and runs the tool-calling loop against it. On failure, the
+     * error surfaces directly — there is no silent retry against a different
+     * provider or model. The loop's own in-call retry on transient errors is
+     * preserved (same provider/model, single extra attempt).
+     *
+     * @param  list<Message>  $messages  Conversation history
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $runId  Pre-minted AiRun ULID
+     * @param  string|null  $systemPrompt  System prompt
+     * @param  string|null  $modelOverride  Optional model override (plain model id or composite `providerId:::modelId`)
+     * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
+     * @param  string|null  $sessionId  Chat session ID for run ledger correlation
+     * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
+     * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
+     * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
+     * @param  RuntimeInvocationContext|null  $context  Invocation context for truthful source labelling; defaults to 'chat'
+     * @return array{content: string, run_id: string, meta: array<string, mixed>}
+     */
+    public function run(// NOSONAR (parameter count): public runtime API keeps explicit optional knobs
+        array $messages,
+        int $employeeId,
+        string $runId,
+        ?string $systemPrompt = null,
+        ?string $modelOverride = null,
+        ?ExecutionPolicy $policy = null,
+        ?string $sessionId = null,
+        ?array $configOverride = null,
+        ?array $allowedToolNames = null,
+        ?array $executionControlsOverride = null,
+        ?RuntimeInvocationContext $context = null,
+    ): array {
+        try {
+            [$policy, $deadline, $maxToolRounds, $config] = $this->initializeRuntimeInvocation(
+                messages: $messages,
+                employeeId: $employeeId,
+                runId: $runId,
+                policy: $policy,
+                sessionId: $sessionId,
+                configOverride: $configOverride,
+                source: $context?->source ?? 'chat',
+            );
+
+            if ($config === null) {
+                $configError = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+                $this->runRecorder->fail($runId, $configError);
+
+                return $this->responseFactory->error(
+                    $runId,
+                    'unknown',
+                    'unknown',
+                    $configError,
+                );
+            }
+
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
+
+            $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
+
+            $credentials = $this->credentialResolver->resolve($config);
+
+            if (isset($credentials['runtime_error'])) {
+                $errorResult = $this->responseFactory->error(
+                    $runId,
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $credentials['runtime_error'],
+                );
+                $this->runRecorder->fail($runId, $credentials['runtime_error'], $errorResult['meta']);
+
+                return $errorResult;
+            }
+
+            $config['timeout'] = max(1, $policy->timeoutSeconds);
+
+            $result = $this->runToolCallingLoop(
+                $runId,
+                $employeeId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $allowedToolNames,
+                $deadline,
+                $maxToolRounds,
+            );
+
+            $result['meta'] = $this->withResolvedSkillPackMeta($result['meta'] ?? []);
+
+            if (isset($result['meta']['error_type'])) {
+                $this->runRecorder->fail(
+                    $runId,
+                    $this->runtimeErrorFromAssistantMeta($result['meta']),
+                    $result['meta'],
+                );
+
+                return $result;
+            }
+
+            $this->runRecorder->complete($runId, $result['meta']);
+
+            return $result;
+        } finally {
+            $this->sessionContext->clear();
+        }
+    }
+
+    /**
+     * Run an agentic conversation turn with streaming for the final response.
+     *
+     * Tool-calling iterations run synchronously. Only the final text response
+     * is streamed as SSE-compatible events. Yields arrays with 'event' and 'data' keys.
+     *
+     * Resolves a single LLM config and runs the streaming tool loop against it.
+     * On failure, the error event surfaces directly — no silent retry to a
+     * different provider/model.
+     *
+     * @param  list<Message>  $messages  Conversation history
+     * @param  int  $employeeId  Agent employee ID
+     * @param  string  $runId  Pre-minted AiRun ULID
+     * @param  string|null  $systemPrompt  System prompt
+     * @param  string|null  $modelOverride  Optional model override; see {@see run()}
+     * @param  ExecutionPolicy|null  $policy  Execution policy (defaults to interactive)
+     * @param  string|null  $sessionId  Chat session ID for run ledger correlation
+     * @param  array<string, mixed>|null  $configOverride  Optional fully resolved config override
+     * @param  list<string>|null  $allowedToolNames  Optional task-profile tool allowlist
+     * @param  array<string, mixed>|null  $executionControlsOverride  Per-call execution controls overlay (e.g. session-scoped)
+     * @param  RuntimeInvocationContext|null  $context  Invocation context for truthful source labelling; defaults to 'stream'
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    public function runStream(// NOSONAR (parameter count): streaming API mirrors run() plus turn correlation
+        array $messages,
+        int $employeeId,
+        string $runId,
+        ?string $systemPrompt = null,
+        ?string $modelOverride = null,
+        ?ExecutionPolicy $policy = null,
+        ?string $sessionId = null,
+        ?array $configOverride = null,
+        ?array $allowedToolNames = null,
+        ?array $executionControlsOverride = null,
+        ?RuntimeInvocationContext $context = null,
+    ): \Generator {
+        try {
+            [$policy, $deadline, $maxToolRounds, $config] = $this->initializeRuntimeInvocation(
+                messages: $messages,
+                employeeId: $employeeId,
+                runId: $runId,
+                policy: $policy,
+                sessionId: $sessionId,
+                configOverride: $configOverride,
+                source: $context?->source ?? 'stream',
+            );
+
+            if ($config === null) {
+                $error = AiRuntimeError::fromType(AiErrorType::ConfigError, 'No LLM configuration resolved for employee '.$employeeId);
+                $this->runRecorder->fail($runId, $error);
+                yield ['event' => 'error', 'data' => [
+                    'message' => $error->userMessage,
+                    'run_id' => $runId,
+                    'meta' => $this->responseFactory->errorMeta('unknown', 'unknown', $error),
+                ]];
+
+                return;
+            }
+
+            if ($modelOverride !== null) {
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+            }
+
+            $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
+
+            $credentials = $this->credentialResolver->resolve($config);
+
+            if (isset($credentials['runtime_error'])) {
+                $error = $credentials['runtime_error'];
+                $errorMeta = $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $error,
+                );
+                $this->runRecorder->fail($runId, $error, $errorMeta);
+                yield ['event' => 'error', 'data' => [
+                    'message' => $error->userMessage,
+                    'run_id' => $runId,
+                    'meta' => $errorMeta,
+                ]];
+
+                return;
+            }
+
+            $config['timeout'] = max(1, $policy->timeoutSeconds);
+
+            yield from $this->runStreamingToolLoop(
+                $runId,
+                $employeeId,
+                $config,
+                $credentials,
+                $messages,
+                $systemPrompt,
+                $allowedToolNames,
+                $deadline,
+                $maxToolRounds,
+            );
+        } finally {
+            $this->sessionContext->clear();
+        }
+    }
+
+    /**
+     * Layer a per-call execution-controls overlay (typically session-scoped) onto
+     * the resolved config's existing controls. Empty/null overlay is a no-op.
+     *
+     * @param  array{execution_controls: ExecutionControls, ...}  $config
+     * @param  array<string, mixed>|null  $overlay
+     * @return array{execution_controls: ExecutionControls, ...}
+     */
+    /**
+     * Human-readable one-liner for a tool invocation, when the tool provides one.
+     *
+     * Never throws: arguments arrive exactly as the LLM produced them, and a
+     * broken summary must not break tool execution.
+     */
+    private function toolDisplaySummary(string $functionName, array $arguments): ?string
+    {
+        $tool = $this->toolRegistry->get($functionName);
+
+        if (! $tool instanceof ProvidesDisplaySummary) {
+            return null;
+        }
+
+        try {
+            $summary = trim($tool->displaySummary($arguments));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $summary !== '' ? Str::limit($summary, 160) : null;
+    }
+
+    private function applyExecutionControlsOverlay(array $config, ?array $overlay): array
+    {
+        if ($overlay === null || $overlay === []) {
+            return $config;
+        }
+
+        $config['execution_controls'] = ExecutionControls::fromConfig($overlay, $config['execution_controls']);
+
+        return $config;
+    }
+
+    /**
+     * @param  list<Message>  $messages
+     * @param  array<string, mixed>|null  $configOverride
+     * @return array{0: ExecutionPolicy, 1: float, 2: int, 3: array<string, mixed>|null}
+     */
+    private function initializeRuntimeInvocation(
+        array $messages,
+        int $employeeId,
+        string $runId,
+        ?ExecutionPolicy $policy,
+        ?string $sessionId,
+        ?array $configOverride,
+        string $source,
+    ): array {
+        $this->beginSessionContext($sessionId, $employeeId, $messages);
+
+        $policy ??= ExecutionPolicy::interactive();
+        $deadline = microtime(true) + max(0, $policy->timeoutSeconds);
+        $maxToolRounds = $this->maxToolRounds($policy);
+
+        $this->runRecorder->beginExecution(new RunRecorderStartInput(
+            runId: $runId,
+            employeeId: $employeeId,
+            source: $source,
+            executionMode: $policy->mode->value,
+            sessionId: $sessionId,
+            actingForUserId: auth()->id(),
+            timeoutSeconds: $policy->timeoutSeconds,
+        ));
+
+        return [
+            $policy,
+            $deadline,
+            $maxToolRounds,
+            $configOverride ?? $this->configResolver->resolveDefault($employeeId),
+        ];
+    }
+
+    /**
+     * Apply a composite (providerId:::modelId) or plain model override.
+     *
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
+     * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}
+     */
+    private function applyCompositeOrSimpleOverride(array $config, string $modelOverride): array
+    {
+        if (! str_contains($modelOverride, ':::')) {
+            $config['model'] = $modelOverride;
+
+            return $config;
+        }
+
+        [$providerId, $modelId] = explode(':::', $modelOverride, 2);
+        $providerConfig = $this->configResolver->resolveForProvider((int) $providerId, $modelId);
+
+        if ($providerConfig !== null) {
+            return $providerConfig;
+        }
+
+        // Fallback: use the model ID only if provider resolution fails
+        $config['model'] = $modelId;
+
+        return $config;
+    }
+
+    /**
+     * Execute the iterative tool-calling loop against a single resolved config.
+     *
+     * Each LLM call may retry once on transient errors against the same
+     * provider/model. There is no fallback to a different provider/model.
+     *
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  list<Message>  $messages
+     * @param  list<string>|null  $allowedToolNames
+     * @return array{content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function runToolCallingLoop(// NOSONAR (parameter count): explicit loop inputs keep side effects obvious
+        string $runId,
+        int $employeeId,
+        array $config,
+        array $credentials,
+        array $messages,
+        ?string $systemPrompt,
+        ?array $allowedToolNames,
+        float $deadline,
+        int $maxToolRounds,
+    ): array {
+        // Hook: PreContextBuild — augment system prompt before message assembly
+        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
+
+        $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser($allowedToolNames);
+
+        // Hook: PreToolRegistry — add/remove tools before the LLM sees them
+        $originalToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
+        $filteredToolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
+
+        $toolActions = [];
+        $clientActions = [];
+        $retryAttempts = [];
+        $hookMetadata = [];
+
+        if ($removedTools !== []) {
+            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
+        }
+
+        $this->recordToolAllowlistWireEvent($runId, $allowedToolNames, $tools);
+
+        $iteration = 0;
+
+        while (true) {
+            if ($this->configWithinExecutionBudget($config, $deadline) === null) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $this->executionBudgetError(),
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
+            // Hook: PreLlmCall — observe or augment before each LLM call
+            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $hookMetadata);
+
+            $result = $this->chatWithRetry(
+                $runId,
+                $credentials,
+                $config,
+                $apiMessages,
+                $tools,
+                $retryAttempts,
+                $deadline,
+            );
+
+            if (isset($result['runtime_error'])) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $result['runtime_error'],
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
+            $this->recordSuccessfulSyncCall($runId, $iteration, $config, $result);
+
+            if (($result['tool_calls'] ?? []) === []) {
+                $successResult = $this->successResult(
+                    $runId,
+                    $config,
+                    $result,
+                    $toolActions,
+                    $clientActions,
+                );
+                $successResult['meta']['retry_attempts'] = $retryAttempts;
+                $successResult['meta']['tool_round_count'] = $iteration;
+                $successResult['meta']['tool_call_count'] = count($toolActions);
+                $successResult['meta']['max_tool_rounds'] = $maxToolRounds;
+
+                // Hook: PostRun on success
+                $this->hookCoordinator->postRun($runId, $employeeId, true, $hookMetadata);
+                $successResult['meta']['hooks'] = $hookMetadata;
+
+                return $successResult;
+            }
+
+            if ($iteration >= $maxToolRounds) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $this->toolRoundLimitError($maxToolRounds),
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
+            $this->appendAssistantToolCallMessage($apiMessages, $result);
+            $toolError = $this->executeToolCallsWithHooks(
+                $runId,
+                $employeeId,
+                $result['tool_calls'],
+                $apiMessages,
+                $toolActions,
+                $clientActions,
+                $hookMetadata,
+                $allowedToolNames,
+                $deadline,
+            );
+
+            if ($toolError !== null) {
+                return $this->syncLoopErrorResult(
+                    $runId,
+                    $employeeId,
+                    $config,
+                    $toolError,
+                    $retryAttempts,
+                    $hookMetadata,
+                    $toolActions,
+                );
+            }
+
+            $iteration++;
+
+            if ($this->shouldWarnForToolRound($iteration, $maxToolRounds)) {
+                $this->appendToolRoundLimitNudge($apiMessages, $iteration, $maxToolRounds);
+            }
+        }
+    }
+
+    /**
+     * Build a failed sync result while preserving completed tool and hook evidence.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  list<array<string, mixed>>  $retryAttempts
+     * @param  array<string, mixed>  $hookMetadata
+     * @param  list<array<string, mixed>>  $toolActions
+     * @return array{content: string, run_id: string, meta: array<string, mixed>}
+     */
+    private function syncLoopErrorResult(
+        string $runId,
+        int $employeeId,
+        array $config,
+        AiRuntimeError $runtimeError,
+        array $retryAttempts,
+        array $hookMetadata,
+        array $toolActions,
+    ): array {
+        $errorResult = $this->responseFactory->error(
+            $runId,
+            $config['model'],
+            (string) ($config['provider_name'] ?? 'unknown'),
+            $runtimeError,
+        );
+        $this->hookCoordinator->postRun($runId, $employeeId, false, $hookMetadata);
+
+        $errorResult['meta']['retry_attempts'] = $retryAttempts;
+        $errorResult['meta']['hooks'] = $hookMetadata;
+
+        if ($toolActions !== []) {
+            $errorResult['meta']['tool_actions'] = $toolActions;
+        }
+
+        return $errorResult;
+    }
+
+    /**
+     * Persist usage for one successful synchronous tool-loop LLM call.
+     *
+     * Failed retry attempts currently have no provider usage payload, so only
+     * the successful result for each logical loop iteration is recorded.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $result
+     */
+    private function recordSuccessfulSyncCall(string $runId, int $iteration, array $config, array $result): void
+    {
+        $this->runRecorder->recordCall(
+            runId: $runId,
+            attemptIndex: $iteration,
+            provider: $config['provider_name'] ?? null,
+            model: $config['model'] ?? null,
+            finishReason: ($result['tool_calls'] ?? []) !== [] ? 'tool_calls' : 'stop',
+            latencyMs: isset($result['latency_ms']) ? (int) $result['latency_ms'] : null,
+            usage: CallUsage::fromProviderArray(is_array($result['usage'] ?? null) ? $result['usage'] : null),
+        );
+    }
+
+    /**
+     * Call the LLM with a single retry on transient failures.
+     *
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $tools
+     * @param  list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>  $retryAttempts
+     * @return array<string, mixed>
+     */
+    private function chatWithRetry(
+        string $runId,
+        array $credentials,
+        array $config,
+        array $apiMessages,
+        array $tools,
+        array &$retryAttempts,
+        float $deadline,
+    ): array {
+        $attemptConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+        if ($attemptConfig === null) {
+            return ['runtime_error' => $this->executionBudgetError()];
+        }
+
+        $result = $this->chatWithTools($runId, $credentials, $attemptConfig, $apiMessages, $tools);
+
+        if (! isset($result['runtime_error'])) {
+            return $result;
+        }
+
+        $runtimeError = $result['runtime_error'];
+
+        if (! $runtimeError->retryable) {
+            return $result;
+        }
+
+        // Don't retry timeouts that consumed most of the budget — retrying
+        // with the same budget will fail identically.
+        if ($runtimeError->errorType === AiErrorType::Timeout) {
+            $budgetMs = ($attemptConfig['timeout'] ?? 60) * 1000;
+
+            if ($runtimeError->latencyMs >= $budgetMs * 0.5) {
+                return $result;
+            }
+        }
+
+        $retryAttempts[] = [
+            'provider' => $config['provider_name'] ?? 'unknown',
+            'model' => $config['model'] ?? 'unknown',
+            'error' => $runtimeError->userMessage,
+            'error_type' => $runtimeError->errorType->value,
+            'latency_ms' => $runtimeError->latencyMs,
+        ];
+
+        $retryConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+        if ($retryConfig === null) {
+            return ['runtime_error' => $this->executionBudgetError()];
+        }
+
+        return $this->chatWithTools($runId, $credentials, $retryConfig, $apiMessages, $tools);
+    }
+
+    /**
+     * Call the LLM with the current conversation and available tools.
+     *
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $tools
+     * @return array<string, mixed>
+     */
+    private function chatWithTools(
+        string $runId,
+        array $credentials,
+        array $config,
+        array $apiMessages,
+        array $tools,
+    ): array {
+        $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
+        $executionControls = $this->executionControls->resolve(
+            $config['execution_controls'],
+            $config['provider_name'] ?? null,
+            $config['model'],
+            $apiType,
+            $tools !== [],
+        );
+
+        return $this->llmClient->chat(new ChatRequest(
+            $credentials['base_url'],
+            $credentials['api_key'],
+            $config['model'],
+            $apiMessages,
+            executionControls: $executionControls,
+            timeout: $config['timeout'],
+            providerName: $config['provider_name'],
+            tools: $tools !== [] ? $tools : null,
+            apiType: $apiType,
+            transportTap: $this->wireLogger->enabled()
+                ? new WireLoggingTransportTap($this->wireLogger, $runId)
+                : null,
+            providerHeaders: $credentials['headers'] ?? [],
+        ));
+    }
+
+    /**
+     * Append the assistant tool-call payload into the running conversation.
+     *
+     * When $phase is provided (e.g., 'commentary'), it is preserved on the
+     * message so convertToResponsesInputWithInstructions() can pass it through.
+     *
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  array<string, mixed>  $result
+     * @param  string|null  $phase  Responses API phase ('commentary' or 'final_answer')
+     */
+    private function appendAssistantToolCallMessage(array &$apiMessages, array $result, ?string $phase = null): void
+    {
+        $message = [
+            'role' => 'assistant',
+            'content' => $result['content'] ?? null,
+            'tool_calls' => $result['tool_calls'],
+        ];
+
+        if (is_string($result['reasoning_content'] ?? null) && $result['reasoning_content'] !== '') {
+            $message['reasoning_content'] = $result['reasoning_content'];
+        }
+
+        if (is_array($result['reasoning_blocks'] ?? null) && $result['reasoning_blocks'] !== []) {
+            $message['reasoning_blocks'] = $result['reasoning_blocks'];
+        }
+
+        if ($phase !== null) {
+            $message['phase'] = $phase;
+        }
+
+        $apiMessages[] = $message;
+    }
+
+    /**
+     * Execute a single tool call and format the follow-up metadata.
+     *
+     * Receives a ToolResult from the registry and casts to string for the
+     * LLM tool message. Structured error data is preserved in the action
+     * metadata for downstream UI consumption.
+     *
+     * @param  array<string, mixed>  $toolCall
+     * @param  list<string>|null  $allowedToolNames
+     * @return array{
+     *     action: array{tool: string, arguments: array<string, mixed>, result_preview: string, error_payload?: array<string, mixed>},
+     *     client_actions: list<string>,
+     *     message: array{role: string, tool_call_id: string, content: string}
+     * }
+     */
+    private function executeToolCall(array $toolCall, ?array $allowedToolNames = null): array
+    {
+        $functionName = (string) ($toolCall['function']['name'] ?? '');
+        $arguments = $this->decodeToolArguments($toolCall);
+        $toolCallId = (string) ($toolCall['id'] ?? '');
+        $toolResult = $this->toolRegistry->execute($functionName, $arguments, $allowedToolNames);
+
+        return $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
+    }
+
+    /**
+     * Build execution result from a completed ToolResult.
+     *
+     * @param  array<string, mixed>  $arguments
+     * @return array{action: array<string, mixed>, client_actions: list<string>, message: array<string, mixed>}
+     */
+    private function buildToolExecution(string $functionName, array $arguments, string $toolCallId, ToolResult $toolResult): array
+    {
+        $resultString = (string) $toolResult;
+        $originalLength = mb_strlen($resultString);
+
+        $action = [
+            'tool' => $functionName,
+            'arguments' => $arguments,
+            'result_preview' => Str::limit($resultString, 200),
+        ];
+
+        if ($toolResult->isError && $toolResult->errorPayload !== null) {
+            $action['error_payload'] = $this->buildErrorPayload($toolResult);
+        }
+
+        $clientActions = [];
+        if (preg_match_all('/<agent-action>.*?<\/agent-action>/s', $resultString, $matches) >= 1) {
+            $clientActions = $matches[0];
+        }
+
+        if ($originalLength > self::MAX_TOOL_RESULT_CHARS) {
+            $resultString = Str::limit($resultString, self::MAX_TOOL_RESULT_CHARS, "\n\n[Tool result truncated before returning to the model. Narrow the tool query, filters, or page range for more detail.]");
+            $action['result_truncated'] = true;
+            $action['result_length'] = $originalLength;
+        }
+
+        return [
+            'action' => $action,
+            'client_actions' => $clientActions,
+            'message' => [
+                'role' => 'tool',
+                'tool_call_id' => $toolCallId,
+                'content' => $resultString,
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildErrorPayload(ToolResult $toolResult): array
+    {
+        $errorData = [
+            'code' => $toolResult->errorPayload->code,
+            'message' => $toolResult->errorPayload->message,
+        ];
+
+        if ($toolResult->errorPayload->hint !== null) {
+            $errorData['hint'] = $toolResult->errorPayload->hint;
+        }
+
+        if ($toolResult->errorPayload->action !== null) {
+            $errorData['setup_action'] = [
+                'label' => $toolResult->errorPayload->action->label,
+                'suggested_prompt' => $toolResult->errorPayload->action->suggestedPrompt,
+            ];
+        }
+
+        return $errorData;
+    }
+
+    /**
+     * Decode JSON arguments from a tool call payload.
+     *
+     * @param  array<string, mixed>  $toolCall
+     * @return array<string, mixed>
+     */
+    private function decodeToolArguments(array $toolCall): array
+    {
+        return BlbJson::decodeArray((string) ($toolCall['function']['arguments'] ?? '{}')) ?? [];
+    }
+
+    /**
+     * Build a success result, guarding against blank responses.
+     *
+     * If the LLM returned empty content and there are no client actions,
+     * this is treated as an empty_response error rather than silently
+     * persisting a blank assistant message.
+     */
+    private function successResult(string $runId, array $config, array $llmResult, array $toolActions, array $clientActions = []): array
+    {
+        $content = $llmResult['content'] ?? '';
+
+        if ($clientActions !== []) {
+            $content = implode("\n", $clientActions)."\n".$content;
+        }
+
+        if (trim($content) === '' && $clientActions === []) {
+            return $this->responseFactory->error(
+                $runId,
+                $config['model'],
+                (string) ($config['provider_name'] ?? 'unknown'),
+                AiRuntimeError::fromType(
+                    AiErrorType::EmptyResponse,
+                    'LLM returned blank content after tool-calling loop',
+                    'The model may be unavailable or the prompt may need adjustment.',
+                    latencyMs: (int) ($llmResult['latency_ms'] ?? 0),
+                ),
+            );
+        }
+
+        $extraMeta = $toolActions !== [] ? ['tool_actions' => $toolActions] : [];
+
+        if (is_array($llmResult['provider_mapping'] ?? null) && $llmResult['provider_mapping'] !== []) {
+            $extraMeta['provider_mapping'] = $llmResult['provider_mapping'];
+        }
+
+        return $this->responseFactory->success($runId, $config, $llmResult, $extraMeta, $content);
+    }
+
+    /**
+     * Execute the tool-calling loop with streaming at every iteration.
+     *
+     * Every LLM call streams its response. Reasoning summary and preamble
+     * text yield to the UI in real time. Tool calls are accumulated from
+     * the same stream and executed as before. The final iteration completes
+     * inline — no second LLM call.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array{api_key: string, base_url: string}  $credentials
+     * @param  list<Message>  $messages
+     * @param  list<string>|null  $allowedToolNames
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function runStreamingToolLoop(// NOSONAR (parameter count): streaming loop keeps explicit state for tracing
+        string $runId,
+        int $employeeId,
+        array $config,
+        array $credentials,
+        array $messages,
+        ?string $systemPrompt,
+        ?array $allowedToolNames,
+        float $deadline,
+        int $maxToolRounds,
+    ): \Generator {
+        $toolLoopState = $this->initializeToolLoopState($runId, $employeeId, $messages, $systemPrompt, $allowedToolNames);
+        $toolLoopState['maxToolRounds'] = $maxToolRounds;
+
+        if ($toolLoopState['removedTools'] !== []) {
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'hook_action',
+                'stage' => 'pre_tool_registry',
+                'tools_removed' => $toolLoopState['removedTools'],
+                'run_id' => $runId,
+            ]];
+        }
+
+        $iteration = 0;
+        $toolIndex = 0;
+        $apiType = $config['api_type'] ?? AiApiType::OpenAiChatCompletions;
+
+        while (true) {
+            $iterationConfig = $this->configWithinExecutionBudget($config, $deadline);
+
+            if ($iterationConfig === null) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->executionBudgetError(), $toolLoopState);
+
+                return;
+            }
+
+            // Turn is blocked on the model round-trip for this loop iteration.
+            yield ['event' => 'status', 'data' => [
+                'phase' => RunPhase::AwaitingLlm->value,
+                'run_id' => $runId,
+                'iteration' => $iteration,
+            ]];
+
+            $this->hookCoordinator->preLlmCall($runId, $employeeId, $iteration, $toolLoopState['hookMetadata']);
+
+            $iterResult = yield from $this->toolLoopStreamReader->consumeIterationStream(
+                $runId,
+                $iterationConfig,
+                $credentials,
+                $toolLoopState,
+                $apiType,
+                $iteration,
+            );
+
+            if (isset($iterResult['runtime_error'])) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $iterResult['runtime_error'], $toolLoopState);
+
+                return;
+            }
+
+            if (($iterResult['cancelled'] ?? false) === true) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield ['event' => 'status', 'data' => [
+                    'phase' => RunPhase::Cancelled->value,
+                    'run_id' => $runId,
+                ]];
+
+                return;
+            }
+
+            if ($this->isToolLoopCancellationRequested($toolLoopState)) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+
+                yield from $this->emitStoppedAfterProviderResponse($runId, $iterResult, $toolLoopState);
+
+                return;
+            }
+
+            if (is_string($iterResult['finish_reason'] ?? null) && $iterResult['finish_reason'] !== '') {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'iteration_completed',
+                    'finish_reason' => $iterResult['finish_reason'],
+                    'iteration' => $iteration,
+                    'tool_call_count' => count($iterResult['tool_calls'] ?? []),
+                    'tool_round' => ($iterResult['tool_calls'] ?? []) !== [] && $iteration < $maxToolRounds
+                        ? $iteration + 1
+                        : null,
+                    'max_tool_rounds' => $maxToolRounds,
+                    'run_id' => $runId,
+                ]];
+            }
+
+            if (($iterResult['tool_calls'] ?? []) === []) {
+                $this->hookCoordinator->postRun($runId, $employeeId, true, $toolLoopState['hookMetadata']);
+
+                yield from $this->emitFinalResponse(
+                    $runId,
+                    $config,
+                    $iterResult,
+                    $toolLoopState,
+                    $toolLoopState['toolRoundCount'],
+                    $toolLoopState['toolCallCount'],
+                    $maxToolRounds,
+                );
+
+                return;
+            }
+
+            if ($iteration >= $maxToolRounds) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $this->toolRoundLimitError($maxToolRounds), $toolLoopState);
+
+                return;
+            }
+
+            $toolLoopState['toolRoundCount'] = $iteration + 1;
+            $toolLoopState['toolCallCount'] += count($iterResult['tool_calls']);
+
+            // Determine phase for context continuity: only commentary content is preserved
+            $phase = ($iterResult['commentary'] ?? '') !== '' ? 'commentary' : null;
+            $this->appendAssistantToolCallMessage($toolLoopState['apiMessages'], $iterResult, $phase);
+
+            $toolError = yield from $this->streamToolCalls(
+                $runId,
+                $employeeId,
+                $iterResult['tool_calls'],
+                $toolLoopState,
+                $toolIndex,
+                $allowedToolNames,
+                $deadline,
+            );
+
+            if ($toolError !== null) {
+                $this->hookCoordinator->postRun($runId, $employeeId, false, $toolLoopState['hookMetadata']);
+                yield $this->streamRuntimeErrorEvent($runId, $config, $toolError, $toolLoopState);
+
+                return;
+            }
+
+            $iteration = $toolLoopState['toolRoundCount'];
+
+            if ($this->shouldWarnForToolRound($iteration, $maxToolRounds)) {
+                $this->appendToolRoundLimitNudge($toolLoopState['apiMessages'], $iteration, $maxToolRounds);
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_round_warning',
+                    'tool_round_count' => $iteration,
+                    'max_tool_rounds' => $maxToolRounds,
+                    'run_id' => $runId,
+                ]];
+            }
+        }
+    }
+
+    /**
+     * Emit the final response events when the streaming loop completes without tool calls.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function emitFinalResponse(
+        string $runId,
+        array $config,
+        array $iterResult,
+        array $toolLoopState,
+        int $toolRoundCount,
+        int $toolCallCount,
+        int $maxToolRounds,
+    ): \Generator {
+        $fullContent = $this->finalContentFromIterationResult($iterResult, $toolLoopState);
+
+        if (trim($fullContent) === '' && $toolLoopState['clientActions'] === []) {
+            $emptyError = AiRuntimeError::fromType(
+                AiErrorType::EmptyResponse,
+                'Streaming response completed with no content',
+                latencyMs: (int) ($iterResult['latency_ms'] ?? 0),
+            );
+            $errorMeta = array_merge(
+                $this->responseFactory->errorMeta(
+                    $config['model'],
+                    (string) ($config['provider_name'] ?? 'unknown'),
+                    $emptyError,
+                ),
+                [
+                    'retry_attempts' => $toolLoopState['retryAttempts'],
+                    'tool_round_count' => $toolRoundCount,
+                    'tool_call_count' => $toolCallCount,
+                    'max_tool_rounds' => $maxToolRounds,
+                ],
+            );
+            $this->runRecorder->fail($runId, $emptyError, $errorMeta);
+
+            yield ['event' => 'error', 'data' => [
+                'message' => $emptyError->userMessage,
+                'run_id' => $runId,
+                'meta' => $errorMeta,
+            ]];
+
+            return;
+        }
+
+        // Stream the final content as a single delta
+        yield ['event' => 'delta', 'data' => ['text' => $fullContent]];
+
+        $meta = [
+            'model' => $config['model'],
+            'provider_name' => $config['provider_name'],
+            'llm' => [
+                'provider' => (string) ($config['provider_name'] ?? 'unknown'),
+                'model' => $config['model'],
+            ],
+            'latency_ms' => (int) ($iterResult['latency_ms'] ?? 0),
+            'tokens' => $iterResult['usage'] ?? [
+                'prompt' => null,
+                'completion' => null,
+            ],
+            'retry_attempts' => $toolLoopState['retryAttempts'],
+            'tool_round_count' => $toolRoundCount,
+            'tool_call_count' => $toolCallCount,
+            'max_tool_rounds' => $maxToolRounds,
+        ];
+
+        if (is_array($iterResult['provider_mapping'] ?? null) && $iterResult['provider_mapping'] !== []) {
+            $meta['provider_mapping'] = $iterResult['provider_mapping'];
+        }
+
+        if ($toolLoopState['toolActions'] !== []) {
+            $meta['tool_actions'] = $toolLoopState['toolActions'];
+        }
+
+        if (($toolLoopState['hookMetadata'] ?? []) !== []) {
+            $meta['hooks'] = $toolLoopState['hookMetadata'];
+        }
+
+        $meta = $this->withResolvedSkillPackMeta($meta);
+
+        $this->runRecorder->complete($runId, $meta);
+
+        yield ['event' => 'done', 'data' => [
+            'run_id' => $runId,
+            'content' => $fullContent,
+            'meta' => $meta,
+        ]];
+    }
+
+    /**
+     * Surface provider text that arrived after Stop, but do not execute tool calls
+     * or start another LLM iteration. Stop is a boundary against new work; the
+     * already-open stream is only drained for transparency.
+     *
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function emitStoppedAfterProviderResponse(
+        string $runId,
+        array $iterResult,
+        array $toolLoopState,
+    ): \Generator {
+        $fullContent = $this->finalContentFromIterationResult($iterResult, $toolLoopState);
+
+        if (trim($fullContent) !== '') {
+            yield ['event' => 'delta', 'data' => ['text' => $fullContent]];
+        }
+
+        yield ['event' => 'status', 'data' => [
+            'phase' => RunPhase::Cancelled->value,
+            'run_id' => $runId,
+            'provider_output_rendered' => trim($fullContent) !== '',
+            'skipped_tool_call_count' => count($iterResult['tool_calls'] ?? []),
+        ]];
+    }
+
+    /**
+     * @param  array<string, mixed>  $iterResult
+     * @param  array<string, mixed>  $toolLoopState
+     */
+    private function finalContentFromIterationResult(array $iterResult, array $toolLoopState): string
+    {
+        $fullContent = $iterResult['final_content'] ?? $iterResult['content'] ?? '';
+
+        if ($toolLoopState['clientActions'] !== []) {
+            return implode("\n", $toolLoopState['clientActions'])."\n".$fullContent;
+        }
+
+        return (string) $fullContent;
+    }
+
+    /**
+     * Rebuild a structured runtime error from assistant response metadata.
+     *
+     * Used when recording {@see RunRecorder::fail()} so ledger rows match the
+     * user-visible outcome instead of a generic aggregate message.
+     *
+     * @param  array<string, mixed>  $meta
+     */
+    private function runtimeErrorFromAssistantMeta(array $meta): AiRuntimeError
+    {
+        $type = AiErrorType::tryFrom((string) ($meta['error_type'] ?? '')) ?? AiErrorType::UnexpectedError;
+        $diagnostic = is_string($meta['diagnostic'] ?? null) ? $meta['diagnostic'] : '';
+
+        return new AiRuntimeError(
+            $type,
+            is_string($meta['error'] ?? null) ? $meta['error'] : null,
+            $diagnostic,
+            null,
+            null,
+            (int) ($meta['latency_ms'] ?? 0),
+            null,
+        );
+    }
+
+    /**
+     * Prepare the shared state for a tool-calling loop.
+     *
+     * @param  list<Message>  $messages
+     * @return array{
+     *     apiMessages: list<array<string, mixed>>,
+     *     tools: list<array<string, mixed>>,
+     *     toolActions: list<array<string, mixed>>,
+     *     clientActions: list<string>,
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>,
+     *     removedTools: list<string>,
+     *     allowedToolNames: list<string>|null,
+     *     cancelRequested: Closure|null,
+     *     toolRoundCount: int,
+     *     toolCallCount: int,
+     *     maxToolRounds: int
+     * }
+     */
+    private function initializeToolLoopState(
+        string $runId,
+        int $employeeId,
+        array $messages,
+        ?string $systemPrompt,
+        ?array $allowedToolNames = null,
+    ): array {
+        $systemPrompt = $this->hookCoordinator->preContextBuild($runId, $employeeId, $systemPrompt);
+        $apiMessages = $this->messageBuilder->build($messages, $systemPrompt);
+        $tools = $this->toolRegistry->toolDefinitionsForCurrentUser($allowedToolNames);
+
+        $originalToolNames = array_map(fn (array $tool): string => $tool['function']['name'] ?? '', $tools);
+        $tools = $this->hookCoordinator->preToolRegistry($runId, $employeeId, $tools);
+        $filteredToolNames = array_map(fn (array $tool): string => $tool['function']['name'] ?? '', $tools);
+        $removedTools = array_values(array_diff($originalToolNames, $filteredToolNames));
+
+        $hookMetadata = [];
+
+        if ($removedTools !== []) {
+            $hookMetadata['pre_tool_registry_removed'] = $removedTools;
+        }
+
+        $this->recordToolAllowlistWireEvent($runId, $allowedToolNames, $tools);
+
+        return [
+            'apiMessages' => $apiMessages,
+            'tools' => $tools,
+            'toolActions' => [],
+            'clientActions' => [],
+            'retryAttempts' => [],
+            'hookMetadata' => $hookMetadata,
+            'removedTools' => $removedTools,
+            'allowedToolNames' => $allowedToolNames,
+            'cancelRequested' => $this->cancellationCallbackForTurn($runId),
+            'toolRoundCount' => 0,
+            'toolCallCount' => 0,
+            'maxToolRounds' => 0,
+        ];
+    }
+
+    private function cancellationCallbackForTurn(?string $runId): ?Closure
+    {
+        if (! is_string($runId) || $runId === '') {
+            return null;
+        }
+
+        return static fn (): bool => Schema::hasTable('ai_runs')
+            && AiRun::query()
+                ->whereKey($runId)
+                ->whereNotNull('cancel_requested_at')
+                ->exists();
+    }
+
+    /**
+     * @param  array{cancelRequested?: Closure|null}  $toolLoopState
+     */
+    private function isToolLoopCancellationRequested(array $toolLoopState): bool
+    {
+        $cancelRequested = $toolLoopState['cancelRequested'] ?? null;
+
+        return $cancelRequested instanceof Closure && (bool) $cancelRequested();
+    }
+
+    /**
+     * @param  array{
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>
+     * }  $toolLoopState
+     * @return array{event: string, data: array<string, mixed>}
+     */
+    private function streamRuntimeErrorEvent(
+        string $runId,
+        array $config,
+        AiRuntimeError $runtimeError,
+        array $toolLoopState,
+    ): array {
+        $meta = array_merge(
+            $this->responseFactory->errorMeta(
+                $config['model'],
+                (string) ($config['provider_name'] ?? 'unknown'),
+                $runtimeError,
+            ),
+            [
+                'retry_attempts' => $toolLoopState['retryAttempts'],
+                'hooks' => $toolLoopState['hookMetadata'],
+                'tool_round_count' => (int) ($toolLoopState['toolRoundCount'] ?? 0),
+                'tool_call_count' => (int) ($toolLoopState['toolCallCount'] ?? 0),
+                'max_tool_rounds' => (int) ($toolLoopState['maxToolRounds'] ?? 0),
+            ],
+        );
+
+        if ($toolLoopState['toolActions'] !== []) {
+            $meta['tool_actions'] = $toolLoopState['toolActions'];
+        }
+
+        $this->runRecorder->fail($runId, $runtimeError, $meta);
+
+        return ['event' => 'error', 'data' => [
+            'message' => $runtimeError->userMessage,
+            'run_id' => $runId,
+            'meta' => $meta,
+        ]];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $toolCalls
+     * @param  array{
+     *     apiMessages: list<array<string, mixed>>,
+     *     tools: list<array<string, mixed>>,
+     *     toolActions: list<array<string, mixed>>,
+     *     clientActions: list<string>,
+     *     retryAttempts: list<array{provider: string, model: string, error: string, error_type: string, latency_ms: int}>,
+     *     hookMetadata: array<string, mixed>,
+     *     removedTools: list<string>,
+     *     allowedToolNames: list<string>|null
+     * }  $toolLoopState
+     * @param  list<string>|null  $allowedToolNames
+     * @return \Generator<int, array{event: string, data: array<string, mixed>}>
+     */
+    private function streamToolCalls(
+        string $runId,
+        int $employeeId,
+        array $toolCalls,
+        array &$toolLoopState,
+        int &$toolIndex,
+        ?array $allowedToolNames,
+        float $deadline,
+    ): \Generator {
+        $hookMetadata = &$toolLoopState['hookMetadata'];
+
+        foreach ($toolCalls as $toolCall) {
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+
+            $functionName = (string) ($toolCall['function']['name'] ?? '');
+            $arguments = $this->decodeToolArguments($toolCall);
+            $toolCallId = (string) ($toolCall['id'] ?? '');
+            $argsSummary = Str::limit(
+                json_encode($arguments, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+                200,
+            );
+            $displaySummary = $this->toolDisplaySummary($functionName, $arguments);
+
+            $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
+
+            if ($hookVerdict['denied']) {
+                $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+                $this->recordToolWireEvent($runId, 'tool.denied', [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
+                ]);
+
+                $toolLoopState['toolActions'][] = [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'result_preview' => $denialMessage,
+                    'status' => 'denied',
+                    'denial_reason' => $hookVerdict['reason'],
+                    'denial_source' => 'hook',
+                ];
+                $toolLoopState['apiMessages'][] = [
+                    'role' => 'tool',
+                    'tool_call_id' => $toolCallId,
+                    'content' => $denialMessage,
+                ];
+
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_denied',
+                    'tool' => $functionName,
+                    'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
+                    'run_id' => $runId,
+                ]];
+
+                $toolIndex++;
+
+                continue;
+            }
+
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'tool_started',
+                'tool' => $functionName,
+                'args_summary' => $argsSummary,
+                'display_summary' => $displaySummary,
+                'tool_call_index' => $toolIndex,
+                'started_at' => now()->toIso8601String(),
+                'run_id' => $runId,
+            ]];
+            $this->recordToolWireEvent($runId, 'tool.started', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'tool_call_index' => $toolIndex,
+            ]);
+
+            $toolStartTime = hrtime(true);
+
+            // Execute with streaming: yields stdout deltas, returns ToolResult
+            $toolStream = $this->toolRegistry->executeStreaming($functionName, $arguments, $allowedToolNames);
+
+            foreach ($toolStream as $chunk) {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_stdout',
+                    'tool' => $functionName,
+                    'delta' => $chunk,
+                    'run_id' => $runId,
+                ]];
+            }
+
+            $toolResult = $toolStream->getReturn();
+            $durationMs = (int) ((hrtime(true) - $toolStartTime) / 1_000_000);
+            $toolExecution = $this->buildToolExecution($functionName, $arguments, $toolCallId, $toolResult);
+
+            $toolLoopState['toolActions'][] = $toolExecution['action'];
+            array_push($toolLoopState['clientActions'], ...$toolExecution['client_actions']);
+            $toolLoopState['apiMessages'][] = $toolExecution['message'];
+
+            $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+
+            $resultString = $toolExecution['message']['content'] ?? '';
+
+            yield ['event' => 'status', 'data' => [
+                'phase' => 'tool_finished',
+                'tool' => $functionName,
+                'tool_call_index' => $toolIndex,
+                'result_preview' => $toolExecution['action']['result_preview'] ?? '',
+                'result_length' => mb_strlen($resultString),
+                'duration_ms' => $durationMs,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'run_id' => $runId,
+            ]];
+            $this->recordToolWireEvent($runId, 'tool.finished', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'tool_call_index' => $toolIndex,
+                'duration_ms' => $durationMs,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'result_full' => $resultString,
+            ]);
+
+            // Emit authorization denial as a hook_action for transcript visibility
+            if (($toolExecution['action']['error_payload']['code'] ?? null) === 'permission_denied') {
+                yield ['event' => 'status', 'data' => [
+                    'phase' => 'tool_denied',
+                    'tool' => $functionName,
+                    'reason' => $toolExecution['action']['error_payload']['message'] ?? 'permission denied',
+                    'source' => 'authorization',
+                    'run_id' => $runId,
+                ]];
+            }
+
+            $toolIndex++;
+
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Execute tool calls with PostToolResult hooks.
+     *
+     * Extends executeToolCalls with hook integration at each tool result.
+     *
+     * @param  list<array<string, mixed>>  $toolCalls
+     * @param  list<array<string, mixed>>  $apiMessages
+     * @param  list<array<string, mixed>>  $toolActions
+     * @param  list<string>  $clientActions
+     * @param  array<string, array<string, mixed>>  $hookMetadata
+     * @param  list<string>|null  $allowedToolNames
+     */
+    private function executeToolCallsWithHooks(// NOSONAR (parameter count): explicit plumbing; hook calls depend on these inputs
+        string $runId,
+        int $employeeId,
+        array $toolCalls,
+        array &$apiMessages,
+        array &$toolActions,
+        array &$clientActions,
+        array &$hookMetadata,
+        ?array $allowedToolNames,
+        float $deadline,
+    ): ?AiRuntimeError {
+        foreach ($toolCalls as $toolCall) {
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+
+            $functionName = (string) ($toolCall['function']['name'] ?? '');
+            $arguments = $this->decodeToolArguments($toolCall);
+            $toolCallId = (string) ($toolCall['id'] ?? '');
+
+            $hookVerdict = $this->hookCoordinator->preToolUse($runId, $employeeId, $functionName, $arguments, $hookMetadata);
+
+            if ($hookVerdict['denied']) {
+                $denialMessage = 'Tool call denied: '.($hookVerdict['reason'] ?? 'denied by policy');
+                $this->recordToolWireEvent($runId, 'tool.denied', [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'reason' => $hookVerdict['reason'],
+                    'source' => 'hook',
+                ]);
+                $toolActions[] = [
+                    'tool' => $functionName,
+                    'arguments' => $arguments,
+                    'result_preview' => $denialMessage,
+                    'status' => 'denied',
+                    'denial_reason' => $hookVerdict['reason'],
+                    'denial_source' => 'hook',
+                ];
+                $apiMessages[] = [
+                    'role' => 'tool',
+                    'tool_call_id' => $toolCallId,
+                    'content' => $denialMessage,
+                ];
+
+                continue;
+            }
+
+            $this->recordToolWireEvent($runId, 'tool.started', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+            ]);
+            $toolExecution = $this->executeToolCall($toolCall, $allowedToolNames);
+
+            $toolActions[] = $toolExecution['action'];
+            array_push($clientActions, ...$toolExecution['client_actions']);
+            $apiMessages[] = $toolExecution['message'];
+            $this->recordToolWireEvent($runId, 'tool.finished', [
+                'tool' => $functionName,
+                'arguments' => $arguments,
+                'tool_call_id' => $toolCallId,
+                'status' => isset($toolExecution['action']['error_payload']) ? 'error' : 'success',
+                'error_payload' => $toolExecution['action']['error_payload'] ?? null,
+                'result_full' => $toolExecution['message']['content'] ?? '',
+            ]);
+
+            $this->hookCoordinator->postToolResult($runId, $employeeId, $toolExecution['action'], $hookMetadata);
+
+            if ($this->executionBudgetExpired($deadline)) {
+                return $this->executionBudgetError();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Apply the remaining wall-clock budget to the next provider request.
+     *
+     * Tool implementations remain responsible for their own hard cancellation;
+     * the runtime checks the shared deadline before and after each tool call.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<string, mixed>|null
+     */
+    private function configWithinExecutionBudget(array $config, float $deadline): ?array
+    {
+        $remaining = $deadline - microtime(true);
+
+        if ($remaining <= 0) {
+            return null;
+        }
+
+        $config['timeout'] = max(1, (int) ceil($remaining));
+
+        return $config;
+    }
+
+    private function executionBudgetExpired(float $deadline): bool
+    {
+        return microtime(true) >= $deadline;
+    }
+
+    private function maxToolRounds(ExecutionPolicy $policy): int
+    {
+        return max(0, $policy->maxToolRounds ?? $this->runtimeSettings->maxToolRounds());
+    }
+
+    private function shouldWarnForToolRound(int $completedToolRounds, int $maxToolRounds): bool
+    {
+        if ($maxToolRounds <= 1 || $completedToolRounds >= $maxToolRounds) {
+            return false;
+        }
+
+        return $completedToolRounds === (int) ceil($maxToolRounds * self::TOOL_ROUND_WARNING_PERCENT / 100);
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $apiMessages
+     */
+    private function appendToolRoundLimitNudge(
+        array &$apiMessages,
+        int $completedToolRounds,
+        int $maxToolRounds,
+    ): void {
+        $nudge = "Runtime guardrail: You have completed {$completedToolRounds} of {$maxToolRounds} allowed tool-calling rounds. "
+            ."Prioritize completing the user's request. Avoid opening new work, verify only what is essential, "
+            .'and produce the final response as soon as the task can be handed off safely.';
+
+        foreach ($apiMessages as $index => $message) {
+            if (($message['role'] ?? null) !== 'system') {
+                continue;
+            }
+
+            $apiMessages[$index]['content'] = trim((string) ($message['content'] ?? ''))."\n\n{$nudge}";
+
+            return;
+        }
+
+        array_unshift($apiMessages, [
+            'role' => 'system',
+            'content' => $nudge,
+        ]);
+    }
+
+    private function executionBudgetError(): AiRuntimeError
+    {
+        return AiRuntimeError::fromType(
+            AiErrorType::Timeout,
+            'The agent exhausted its configured execution budget.',
+        );
+    }
+
+    private function toolRoundLimitError(int $limit): AiRuntimeError
+    {
+        return AiRuntimeError::fromType(
+            AiErrorType::ToolRoundLimit,
+            "The model requested another tool round after the configured limit of {$limit}.",
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function recordToolWireEvent(string $runId, string $type, array $payload): void
+    {
+        if (! $this->wireLogger->enabled()) {
+            return;
+        }
+
+        $this->wireLogger->append($runId, array_merge([
+            'type' => $type,
+        ], $payload));
+    }
+
+    /**
+     * Record which tool allowlist was selected for this run.
+     *
+     * @param  list<string>|null  $allowedToolNames
+     * @param  list<array<string, mixed>>  $tools
+     */
+    private function recordToolAllowlistWireEvent(string $runId, ?array $allowedToolNames, array $tools): void
+    {
+        if (! $this->wireLogger->enabled()) {
+            return;
+        }
+
+        $toolNames = array_map(fn (array $t): string => $t['function']['name'] ?? '', $tools);
+
+        $this->wireLogger->append($runId, [
+            'type' => 'tool_allowlist.selected',
+            'allowed_tools' => $allowedToolNames,
+            'effective_tools' => $toolNames,
+            'tool_count' => count($toolNames),
+        ]);
+    }
+
+    /**
+     * @param  list<mixed>  $messages
+     */
+    private function beginSessionContext(?string $sessionId, int $employeeId, array $messages): void
+    {
+        $this->sessionContext->set($sessionId);
+        $this->sessionContext->remember('employee_id', $employeeId);
+
+        $latest = $this->latestUserMessageContent($messages);
+
+        if ($latest !== null) {
+            $this->sessionContext->remember('latest_user_message', $latest);
+        }
+    }
+
+    /**
+     * @param  list<mixed>  $messages
+     */
+    private function latestUserMessageContent(array $messages): ?string
+    {
+        for ($i = count($messages) - 1; $i >= 0; $i--) {
+            $message = $messages[$i];
+            $role = is_object($message) ? ($message->role ?? null) : ($message['role'] ?? null);
+
+            if ($role !== 'user') {
+                continue;
+            }
+
+            // Always answer from the newest user message — an older turn's
+            // text must not drive skill selection for this turn.
+            $content = is_object($message) ? ($message->content ?? null) : ($message['content'] ?? null);
+            $text = $this->messageContentText($content);
+
+            return $text !== '' ? $text : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract text from string content or multimodal content blocks.
+     */
+    private function messageContentText(mixed $content): string
+    {
+        if (is_string($content)) {
+            return trim($content);
+        }
+
+        if (! is_array($content)) {
+            return '';
+        }
+
+        $parts = [];
+
+        foreach ($content as $block) {
+            $type = $this->contentBlockValue($block, 'type');
+            $text = $this->contentBlockValue($block, 'text');
+
+            if ($type === 'text' && is_string($text) && trim($text) !== '') {
+                $parts[] = trim($text);
+            }
+        }
+
+        return implode("\n", $parts);
+    }
+
+    private function contentBlockValue(mixed $block, string $key): mixed
+    {
+        if (is_object($block)) {
+            return $block->{$key} ?? null;
+        }
+
+        return is_array($block) ? ($block[$key] ?? null) : null;
+    }
+
+    /**
+     * @param  array<string, mixed>  $meta
+     * @return array<string, mixed>
+     */
+    private function withResolvedSkillPackMeta(array $meta): array
+    {
+        $resolved = $this->sessionContext->recall('resolved_skill_pack_ids');
+
+        if (! is_array($resolved) || $resolved === []) {
+            return $meta;
+        }
+
+        $meta['resolved_skill_pack_ids'] = array_values(array_filter(
+            $resolved,
+            fn (mixed $id): bool => is_string($id) && $id !== '',
+        ));
+
+        return $meta;
+    }
+}

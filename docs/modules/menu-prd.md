@@ -57,8 +57,13 @@
 
 ### Registration and Discovery
 - System scans menu definition files by convention:
-  - `app/Modules/{Layer}/{Module}/Config/menu.php`
-  - `extensions/{vendor}/{extension}/Config/menu.php`
+  - `app/Base/{Component}/Config/menu.php`
+  - `app/Core/{Module}/Config/menu.php`
+  - `app/Domains/{Domain}/Config/menu.php` for a Domain anchor
+  - `app/Domains/{Domain}/{Module}/Config/menu.php`
+  - `app/Extensions/{Extension}/Config/menu.php` for an Extension anchor
+  - `app/Extensions/{Extension}/{Module}/Config/menu.php`
+- Discovery order is Base → Core → enabled Domains → Extensions.
 - Discovery runs on cache miss; invalid files log warnings (non-fatal)
 
 ### Structure and Schema
@@ -203,7 +208,7 @@ if (app()->environment('local')) {
 
 ## 9. Menu Definition Format
 
-**File:** `app/Modules/{Layer}/{Module}/Config/menu.php`
+**File:** the owning Base component, Core Module, Domain/Extension anchor, or Domain/Extension Module `Config/menu.php` path listed above.
 
 **Structure (minimal example):**
 

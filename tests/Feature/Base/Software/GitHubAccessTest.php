@@ -6,11 +6,11 @@ use App\Base\Software\Services\DeploymentAdminEndpointResolver;
 use App\Base\Software\Services\DeploymentBuildRunner;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
-use App\Base\Software\Services\DistributionBundleRepository;
+use App\Base\Software\Services\SoftwareSourceRepository;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
-    app()->instance(DeploymentService::class, new class(app(DistributionBundleRepository::class), app(DeploymentBuildRunner::class), app(DeploymentAdminEndpointResolver::class), app(DeploymentRunHistory::class)) extends DeploymentService
+    app()->instance(DeploymentService::class, new class(app(SoftwareSourceRepository::class), app(DeploymentBuildRunner::class), app(DeploymentAdminEndpointResolver::class), app(DeploymentRunHistory::class)) extends DeploymentService
     {
         public function owners(): array
         {
