@@ -47,6 +47,7 @@ final class DeploymentWorkerReloader
         $log[] = $this->warmRuntimeBootstrap();
 
         $webReloaded = false;
+        $adminReachable = false;
         $reloadMessage = '';
         $adminUrl = '';
         $candidates = $this->adminEndpoints->candidates();
@@ -67,6 +68,8 @@ final class DeploymentWorkerReloader
                 $config = $this->sendFrankenPhpAdminRequest(
                     fn (): Response => $this->frankenPhpAdminHttp()->get($configUrl),
                 );
+                // An HTTP response of any status means something is listening here.
+                $adminReachable = true;
 
                 if ($this->frankenPhpWorkerConfigPresent($config)) {
                     $adminUrl = $restartUrl;
@@ -117,13 +120,57 @@ final class DeploymentWorkerReloader
             }
         }
 
+        // No admin endpoint answered. On its own that does NOT mean the runtime is
+        // down — a wrong CADDY_SERVER_ADMIN_PORT looks identical from here while
+        // workers keep serving old code — so confirm against the application
+        // itself. /up is exempt from maintenance mode, so it still answers while an
+        // update holds the site down. Silent there too means no worker pool exists
+        // to be holding stale classes, and whenever the app is next started it boots
+        // the freshly pulled files: there is no mixed-version window, so the caller
+        // must not strand the site in maintenance waiting for one to close.
+        $runtimeAbsent = ! $webReloaded
+            && ! $adminReachable
+            && ! $this->applicationResponding();
+
+        if ($runtimeAbsent) {
+            // Prefix comes from the classifier so "not a warning, but nothing was
+            // reloaded either" cannot drift out of sync with the completion line.
+            $reloadMessage = (string) __(':prefix, so none can be serving old code: the FrankenPHP admin API is not listening and the application is not answering health checks. The next start boots the updated code.', [
+                'prefix' => DeploymentLogClassifier::NO_RUNTIME_PREFIX,
+            ]);
+        }
+
         $log[] = $reloadMessage;
 
         Artisan::call('queue:restart');
         $log[] = (string) __('Queue restart signaled.');
-        $this->history->rememberReload($webReloaded, $reloadMessage, $adminUrl);
+        $this->history->rememberReload($webReloaded || $runtimeAbsent, $reloadMessage, $adminUrl);
 
         return $log;
+    }
+
+    /**
+     * One fast pass over the health endpoints: is anything serving this
+     * application right now? Unlike waitForApplicationHealth() this does not
+     * retry — it is asking whether a worker pool exists at all, not waiting for
+     * one to come back, so a single silent pass is the answer.
+     */
+    private function applicationResponding(): bool
+    {
+        foreach ($this->adminEndpoints->healthCheckUrls() as $url) {
+            try {
+                if (Http::connectTimeout(self::HEALTH_CONNECT_TIMEOUT_SECONDS)
+                    ->timeout(self::HEALTH_REQUEST_TIMEOUT_SECONDS)
+                    ->get($url)
+                    ->successful()) {
+                    return true;
+                }
+            } catch (\Throwable) {
+                // Unreachable candidate; keep probing the remaining URLs.
+            }
+        }
+
+        return false;
     }
 
     private function frankenPhpAdminHttp(): PendingRequest

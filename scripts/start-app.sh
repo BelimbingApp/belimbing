@@ -732,11 +732,42 @@ print_runtime_guidance() {
     return 0
 }
 
+# Probe Laravel's health route rather than the site root. /up is exempt from
+# maintenance mode, so readiness still passes when a previous update left the
+# site down — otherwise startup would abort before heal_stale_maintenance gets
+# to clear it. It is also a real check: the site root answers 200 with an empty
+# body when the request matches no Caddy vhost, which passes `curl -f` without
+# the application having served anything.
 get_healthcheck_url() {
     if [[ "${USE_NON_PRIVILEGED_PORT:-0}" = "1" ]]; then
-        printf '%s\n' "http://127.0.0.1:${APP_PORT}"
+        printf '%s\n' "http://127.0.0.1:${APP_PORT}/up"
     else
-        printf '%s\n' "https://${FRONTEND_DOMAIN}"
+        printf '%s\n' "https://${FRONTEND_DOMAIN}/up"
+    fi
+
+    return 0
+}
+
+# An update that could not confirm its worker reload leaves the site in
+# maintenance mode on purpose, to keep old in-memory workers from serving newly
+# pulled files. Booting fresh workers closes that window by construction, so a
+# hold owned by a run that is no longer active is now just downtime. The command
+# leaves a genuinely running update alone.
+heal_stale_maintenance() {
+    if ! command -v php >/dev/null 2>&1; then
+        log "Skipped maintenance heal: php not on PATH"
+        return 0
+    fi
+
+    local output
+    if output=$(cd "$PROJECT_ROOT" && php artisan blb:software:maintenance-heal 2>&1); then
+        if [[ -n "${output//[[:space:]]/}" ]]; then
+            echo -e "${CYAN}ℹ${NC} ${output}"
+        fi
+        log "Maintenance heal check: ${output:-no action needed}"
+    else
+        echo -e "${YELLOW}⚠${NC} Could not check for leftover maintenance mode: ${output}" >&2
+        log "WARNING: maintenance heal failed: ${output}"
     fi
 
     return 0
@@ -852,6 +883,10 @@ main() {
         cleanup 1 "FrankenPHP (Octane) failed to start on ${healthcheck_url}. See: ${dev_log}"
     fi
     log "Start-app total time so far: $(( $(now_epoch_s) - t0 ))s"
+
+    # Workers are up and serving the current code, so any maintenance hold left
+    # by an earlier update has nothing left to protect.
+    heal_stale_maintenance
 
     print_runtime_summary
 

@@ -2,6 +2,7 @@
 
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Livewire\Deployment\Index;
+use App\Base\Software\Services\DeploymentLogClassifier;
 use App\Base\Software\Services\DeploymentMaintenanceGuard;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
@@ -1379,4 +1380,104 @@ test('a failed migration halts the deployment before reloading workers', functio
 
     // Workers were never reloaded because the fresh migration process failed.
     Http::assertNothingSent();
+});
+
+test('an update with nothing running reports no stale workers instead of stranding the site', function (): void {
+    // Updating while the app is stopped: the admin API refuses the connection and
+    // /up is silent too, so no worker pool exists to be holding old classes. There
+    // is no mixed-version window to wait out, and the run must not leave the site
+    // on a 503 that only a human can clear.
+    withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2019', function (): void {
+        fakeDeploymentUpdateProcesses();
+        Http::fake(function (): void {
+            throw new ConnectionException('cURL error 7: Failed to connect to 127.0.0.1 port 2019 after 0 ms: Could not connect to server');
+        });
+
+        $log = app(DeploymentService::class)->update(['platform']);
+
+        expect(DeploymentLogClassifier::hasNoRuntimeNotice($log))->toBeTrue()
+            ->and(DeploymentLogClassifier::hasWarning($log))->toBeFalse()
+            ->and(DeploymentLogClassifier::hasError($log))->toBeFalse()
+            ->and($log)->toContain('Update complete. Selected software sources are up to date; no workers were running to reload, so the next start boots the updated code.');
+    });
+});
+
+test('an update keeps maintenance when the app still answers but the admin API does not', function (): void {
+    // The dangerous lookalike: a wrong CADDY_SERVER_ADMIN_PORT also refuses the
+    // connection, but the workers are very much alive and still hold the old
+    // classes. /up answering is what separates this from a stopped app, and this
+    // case must keep warning so the caller stays in maintenance.
+    withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2019', function (): void {
+        fakeDeploymentUpdateProcesses();
+        $healthUrl = rtrim((string) config('app.url'), '/').'/up';
+
+        Http::fake(function ($request) use ($healthUrl) {
+            if ($request->url() === $healthUrl) {
+                return Http::response('', 200);
+            }
+
+            throw new ConnectionException('cURL error 7: Failed to connect to 127.0.0.1 port 2019 after 0 ms: Could not connect to server');
+        });
+
+        $log = app(DeploymentService::class)->update(['platform']);
+
+        expect(DeploymentLogClassifier::hasNoRuntimeNotice($log))->toBeFalse()
+            ->and(DeploymentLogClassifier::hasWarning($log))->toBeTrue()
+            ->and($log)->not->toContain(DEPLOYMENT_UPDATE_COMPLETE);
+    });
+});
+
+test('startup heal lifts maintenance that a finished update left behind', function (): void {
+    // The stranding this command exists for: the run is over and its lease is
+    // gone, but the maintenance payload is still on disk, so every request 503s.
+    // Starting the app boots fresh workers on the pulled code, so the hold has
+    // nothing left to protect.
+    $runId = 'startup-heal-stale-hold';
+    Artisan::call('down');
+    $mode = app()->maintenanceMode();
+    $mode->activate(array_merge($mode->data(), [
+        DeploymentMaintenanceGuard::MAINTENANCE_DATA_RUN_ID => $runId,
+    ]));
+
+    try {
+        expect(app()->isDownForMaintenance())->toBeTrue()
+            ->and(Artisan::call('blb:software:maintenance-heal'))->toBe(0)
+            ->and(app()->isDownForMaintenance())->toBeFalse();
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+test('startup heal leaves a running update holding maintenance alone', function (): void {
+    // A live lease means a detached update is mid-run and restarts the worker pool
+    // itself. Healing here would reopen the site against half-updated code — the
+    // exact window the hold exists to close.
+    $runId = 'startup-heal-live-run';
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+
+    try {
+        $writeLease->invoke($maintenance, $runId, true);
+        $maintenance->enter($runId);
+
+        expect(Artisan::call('blb:software:maintenance-heal'))->toBe(0)
+            ->and($maintenance->ownsMaintenance($runId))->toBeTrue()
+            ->and(app()->isDownForMaintenance())->toBeTrue();
+    } finally {
+        $maintenance->disarm($runId);
+        Artisan::call('up');
+    }
+});
+
+test('startup heal does not touch maintenance mode it did not put there', function (): void {
+    // A plain `artisan down` carries no run id. Someone took the site down on
+    // purpose, and starting the app is not consent to publish it again.
+    Artisan::call('down');
+
+    try {
+        expect(Artisan::call('blb:software:maintenance-heal'))->toBe(0)
+            ->and(app()->isDownForMaintenance())->toBeTrue();
+    } finally {
+        Artisan::call('up');
+    }
 });

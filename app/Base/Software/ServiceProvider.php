@@ -4,6 +4,7 @@ namespace App\Base\Software;
 
 use App\Base\Foundation\Contracts\DomainRuntimeReloader;
 use App\Base\Software\Console\Commands\DomainRuntimeReloadCommand;
+use App\Base\Software\Console\Commands\SoftwareMaintenanceHealCommand;
 use App\Base\Software\Console\Commands\SoftwareUpdateCommand;
 use App\Base\Software\Console\Commands\SoftwareUpdateWatchdogCommand;
 use App\Base\Software\Console\Commands\WarmInventorySnapshotCommand;
@@ -24,6 +25,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->commands([
             DomainRuntimeReloadCommand::class,
+            SoftwareMaintenanceHealCommand::class,
             SoftwareUpdateCommand::class,
             SoftwareUpdateWatchdogCommand::class,
             WarmInventorySnapshotCommand::class,

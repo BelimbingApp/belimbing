@@ -523,6 +523,29 @@ try {
         }
     }
 
+    # An update that could not confirm its worker reload leaves the site in
+    # maintenance mode on purpose, to keep old in-memory workers from serving newly
+    # pulled files. These fresh workers close that window by construction, so a hold
+    # owned by a run that is no longer active is now just downtime. Wait for the app
+    # to answer /up (exempt from maintenance) and let the command decide — it leaves
+    # a genuinely running update alone.
+    $healDeadline = (Get-Date).AddSeconds(60)
+    while ((Get-Date) -lt $healDeadline) {
+        $healthStatus = ''
+        try {
+            $healthStatus = (& curl.exe -k -s -o NUL -w '%{http_code}' --max-time 3 --resolve $originResolve $originUrl 2>$null | Out-String).Trim()
+        } catch {
+            $healthStatus = ''
+        }
+
+        if ($healthStatus -eq '200') {
+            & $phpExe (Join-Path $ProjectRootPath 'artisan') 'blb:software:maintenance-heal'
+            break
+        }
+
+        Start-Sleep -Seconds 2
+    }
+
     Write-Host ""
     Write-Host "Belimbing is starting at https://$frontendDomain" -ForegroundColor Green
     Write-Host "Press Ctrl+C to stop this launcher. Child processes may need closing if PowerShell is terminated abruptly."

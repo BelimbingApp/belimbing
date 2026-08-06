@@ -96,6 +96,13 @@ class DeploymentService
      * therefore receives whether the reload produced a clean, healthy pool, and the
      * caller must keep the site in maintenance when it did not.
      *
+     * The one failure that is *not* a mixed-version risk is having no runtime at
+     * all (updating while the app is stopped): with no worker pool, nothing holds
+     * old code, and the next start boots the pulled files. DeploymentWorkerReloader
+     * detects that case — admin API silent *and* /up silent — and reports it as a
+     * notice rather than a warning, so $reloadOk stays true and the site is not
+     * stranded on a 503 waiting for a window that cannot open.
+     *
      * @param  list<string>  $keys
      * @param  (callable(string): void)|null  $progress
      * @param  (callable(bool): void)|null  $afterReload  Runs after the worker reload attempt (never on the pre-reload failure paths). Receives whether the reload produced a clean, healthy worker pool; the maintenance owner leaves maintenance only when this is true.
@@ -337,6 +344,10 @@ class DeploymentService
             }
 
             return (string) __('Update finished with warnings. Pull, build, and migration steps completed, but one or more follow-up checks need attention.');
+        }
+
+        if (DeploymentLogClassifier::hasNoRuntimeNotice($log)) {
+            return (string) __('Update complete. Selected software sources are up to date; no workers were running to reload, so the next start boots the updated code.');
         }
 
         return (string) __('Update complete. Selected software sources are up to date and workers were reloaded.');

@@ -95,6 +95,11 @@ it('renders a self-retrying maintenance page for manual downtime', function (): 
 });
 
 it('tells users an update is installing when the update owns maintenance mode', function (): void {
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    // A live lease is what makes the run current rather than abandoned wreckage;
+    // without it the page must fall back to generic maintenance copy (below).
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+    $writeLease->invoke($maintenance, 'test-run', true);
     Artisan::call('down', ['--retry' => 5]);
 
     try {
@@ -110,6 +115,74 @@ it('tells users an update is installing when the update owns maintenance mode', 
             ->assertSee('http-equiv="refresh"', false)
             ->assertDontSee(__('Down for maintenance'));
     } finally {
+        $maintenance->disarm('test-run');
+        Artisan::call('up');
+    }
+});
+
+test('the maintenance page falls back to planned work copy when the update lease is stale', function (): void {
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        $mode = app()->maintenanceMode();
+        $mode->activate(array_merge($mode->data(), [
+            DeploymentMaintenanceGuard::MAINTENANCE_DATA_RUN_ID => 'test-run',
+        ]));
+
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertSee(__('Down for maintenance'))
+            ->assertDontSee(__('Installing an update'));
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+test('a stranded maintenance page points an operator at the console that can lift it', function (): void {
+    // Run id stamped, lease gone: an update went down holding maintenance and is
+    // never coming back to lift it. The Updates console is maintenance-excepted
+    // and carries "Bring back online", so the 503 offers it rather than leaving a
+    // shell as the only way out.
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        $mode = app()->maintenanceMode();
+        $mode->activate(array_merge($mode->data(), [
+            DeploymentMaintenanceGuard::MAINTENANCE_DATA_RUN_ID => 'test-run',
+        ]));
+
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertSee(__('Administrator: bring the site back online'))
+            ->assertSee(route('admin.system.software.updates.index'), false);
+    } finally {
+        Artisan::call('up');
+    }
+});
+
+test('the maintenance page offers no recovery link when nothing is stranded', function (): void {
+    // Manual downtime carries no run id, and a running update lifts its own hold —
+    // neither is stranded, so neither should invite an operator to override it.
+    $maintenance = app(DeploymentMaintenanceGuard::class);
+    $writeLease = new ReflectionMethod($maintenance, 'writeLease');
+    $writeLease->invoke($maintenance, 'test-run', true);
+    Artisan::call('down', ['--retry' => 5]);
+
+    try {
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertDontSee(__('Administrator: bring the site back online'));
+
+        $mode = app()->maintenanceMode();
+        $mode->activate(array_merge($mode->data(), [
+            DeploymentMaintenanceGuard::MAINTENANCE_DATA_RUN_ID => 'test-run',
+        ]));
+
+        $this->get('/')
+            ->assertStatus(503)
+            ->assertDontSee(__('Administrator: bring the site back online'));
+    } finally {
+        $maintenance->disarm('test-run');
         Artisan::call('up');
     }
 });

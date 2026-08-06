@@ -69,6 +69,13 @@ final class SoftwareUpdateCommand extends Command
                 // TypeError this command exists to prevent. Stay in maintenance
                 // for manual recovery instead; the operator brings the site back
                 // online once the reload is fixed.
+                //
+                // Updating while the app is stopped is not that case: with no
+                // worker pool there is nothing holding old code, so the reloader
+                // reports it as a notice rather than a warning and $reloadSucceeded
+                // stays true. Starting the app is also the moment the hold stops
+                // being useful in general, so blb:software:maintenance-heal clears
+                // any hold left here whose run is no longer active.
                 afterReload: function (bool $reloadSucceeded) use ($maintenanceState, &$reloadAttempted, &$reloadOk, $maintenance, $runId): void {
                     $reloadAttempted = true;
                     $reloadOk = $reloadSucceeded;
