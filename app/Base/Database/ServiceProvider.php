@@ -23,6 +23,7 @@ use App\Base\Database\Console\Commands\ResetCommand;
 use App\Base\Database\Console\Commands\RevokeDataShareTransferOfferCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\SanitizeDevelopmentDatabaseCommand;
+use App\Base\Database\Console\Commands\SchemaDriftCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
 use App\Base\Database\Contracts\DataShareMirrorEngine;
@@ -30,6 +31,7 @@ use App\Base\Database\Contracts\DataShareMirrorProcessRunner;
 use App\Base\Database\Contracts\DataShareMirrorProvider;
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
+use App\Base\Database\Contracts\SchemaDriftInspection;
 use App\Base\Database\Postgres\GuardedPostgresConnection;
 use App\Base\Database\Services\Backup\Encryption\AppKeyEncryption;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
@@ -45,6 +47,7 @@ use App\Base\Database\Services\DataShare\Mirror\SymfonyDataShareMirrorProcessRun
 use App\Base\Database\Services\DevelopmentInstanceGuard;
 use App\Base\Database\Services\DevelopmentSanitizer;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
+use App\Base\Database\Services\SchemaDrift\SchemaDriftInspector;
 use App\Base\Database\Services\SessionStateDevelopmentSanitizer;
 use App\Base\Foundation\Contracts\DataOperationRecorder;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -73,6 +76,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->mergeConfigFrom(__DIR__.'/Config/data_share.php', 'data_share');
 
         $this->app->bind(IncubatingSchemaInspector::class, IncubatingSchemaPreflight::class);
+        $this->app->bind(SchemaDriftInspection::class, SchemaDriftInspector::class);
         $this->app->bind(DataShareMirrorProcessRunner::class, SymfonyDataShareMirrorProcessRunner::class);
 
         // Override Foundation's Null recorder with the real ledger recorder.
@@ -166,6 +170,7 @@ class ServiceProvider extends BaseServiceProvider
             RekeyCommand::class,
             RevokeDataShareTransferOfferCommand::class,
             SanitizeDevelopmentDatabaseCommand::class,
+            SchemaDriftCommand::class,
         ]);
     }
 

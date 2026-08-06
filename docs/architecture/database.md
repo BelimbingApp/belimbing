@@ -14,7 +14,8 @@ To manage this complexity, the framework enforces:
 3.  **Manifest Dependency Preflight**: To fail missing, disabled, incompatible, or misordered module dependencies before migrations run.
 4.  **Registry-Based Seeding**: To orchestrate seeding across modules without a monolithic `DatabaseSeeder`.
 5.  **Source-Declared Schema Incubation**: To let local/test databases rebuild in-progress schema while production/staging only run explicit, forward-safe changes.
-6.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
+6.  **Fail-Closed Schema Drift Inspection**: To compare the source-declared table, column, and index contract with a database without executing migration code.
+7.  **Migration-Scoped PostgreSQL Identifier Guarding**: To fail schema changes before PostgreSQL silently truncates overlong identifiers.
 
 ---
 
@@ -118,7 +119,15 @@ Declare the marker when the migration is created. Do not retrofit it into an alr
 
 ---
 
-## 5. PostgreSQL Identifier Guard
+## 5. Schema Drift Inspection
+
+`php artisan blb:schema:drift` statically replays supported migration `up()` source in Laravel's global filename order, then compares declared table, column, and ordinary/unique/primary Laravel index presence with the default database. Raw SQL indexes are checked only for presence by explicit name, not definition. The command has no custom options: the stable interface for coding agents is one command, deterministic line-oriented output, and exit codes `0` for fully checked and clean, `1` for confirmed drift, and `2` for incomplete analysis.
+
+The inspector fails closed when schema mutations depend on runtime values or unsupported constructs. It deliberately excludes column types/defaults, foreign keys, check constraints, and extra tables until those contracts can be proved safely. Extra live tables are owned by the Database Residue workflow, where provenance and deletion safety can be considered separately. Drift repair follows schema maturity: local incubating source uses `migrate --dev`, while stable schema uses forward migrations.
+
+---
+
+## 6. PostgreSQL Identifier Guard
 
 PostgreSQL limits identifiers to 63 bytes and silently truncates overlong names. BLB treats that as a migration-time schema error rather than allowing truncated table, column, index, or constraint names to be created.
 
@@ -128,7 +137,7 @@ The guarded path covers Laravel schema builder SQL and raw DDL executed with `DB
 
 ---
 
-## 6. Directory Structure
+## 7. Directory Structure
 
 All database assets live within their module to support portability.
 
@@ -150,7 +159,7 @@ app/Core/Geonames/
 
 ---
 
-## 7. Migration Registry
+## 8. Migration Registry
 
 This registry tracks the `YYYY_MM_DD` prefixes assigned to each module to prevent conflicts and document dependencies. Each module must have a unique `MM_DD` identifier within its owner range.
 
@@ -248,7 +257,7 @@ When adding a module, choose the owner first, reserve the next `MM_DD` that pres
 
 ---
 
-## 8. Related Documentation
+## 9. Related Documentation
 
 -   **[app/Base/Database/AGENTS.md](../../app/Base/Database/AGENTS.md)** — Single source for migrate/seeding CLI, RegistersSeeders trait, discovery paths, dev vs production seeders, development workflow, and database portability.
 -   **docs/architecture/module-system.md** — Full project directory layout.
