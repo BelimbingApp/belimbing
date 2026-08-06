@@ -25,13 +25,15 @@ class MenuDiscoveryService
      */
     protected function scanPatterns(): array
     {
+        $configFile = 'Config/menu.php';
+
         return [
-            ApplicationTopology::baseComponentPattern('Config/menu.php'),
-            ApplicationTopology::coreModulePattern('Config/menu.php'),
-            ApplicationTopology::domainPattern('Config/menu.php'),
-            ApplicationTopology::domainModulePattern('Config/menu.php'),
-            ApplicationTopology::extensionSourcePattern('Config/menu.php'),
-            ApplicationTopology::extensionModulePattern('Config/menu.php'),
+            ApplicationTopology::baseComponentPattern($configFile),
+            ApplicationTopology::coreModulePattern($configFile),
+            ApplicationTopology::domainPattern($configFile),
+            ApplicationTopology::domainModulePattern($configFile),
+            ApplicationTopology::extensionSourcePattern($configFile),
+            ApplicationTopology::extensionModulePattern($configFile),
         ];
     }
 

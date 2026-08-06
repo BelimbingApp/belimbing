@@ -844,7 +844,7 @@ return new class extends Migration
     private function normalizeUnmappedExtensionPath(string $value): string
     {
         $normalized = preg_replace_callback(
-            '#(?<![A-Za-z0-9_])extensions/([a-z0-9][a-z0-9-]*)(?:/([a-z0-9][a-z0-9-]*))?#',
+            '#(?<!\w)extensions/([a-z0-9][a-z0-9-]*)(?:/([a-z0-9][a-z0-9-]*))?#',
             static function (array $matches): string {
                 $path = 'app/Extensions/'.Str::studly($matches[1]);
 
@@ -854,7 +854,7 @@ return new class extends Migration
         ) ?? $value;
 
         return preg_replace_callback(
-            '#(?<![A-Za-z0-9_])extensions\\\\([a-z0-9][a-z0-9-]*)(?:\\\\([a-z0-9][a-z0-9-]*))?#',
+            '#(?<!\w)extensions\\\\([a-z0-9][a-z0-9-]*)(?:\\\\([a-z0-9][a-z0-9-]*))?#',
             static function (array $matches): string {
                 $path = 'app\\Extensions\\'.Str::studly($matches[1]);
 

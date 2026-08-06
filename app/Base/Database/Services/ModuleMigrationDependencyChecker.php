@@ -17,11 +17,13 @@ final class ModuleMigrationDependencyChecker
      */
     public function migrationPaths(): array
     {
+        $migrationDir = 'Database/Migrations';
+
         $paths = array_merge(
-            glob(ApplicationTopology::baseComponentPattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(ApplicationTopology::coreModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            DomainState::filterPaths(glob(ApplicationTopology::domainModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: []),
-            glob(ApplicationTopology::extensionModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::baseComponentPattern($migrationDir), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::coreModulePattern($migrationDir), GLOB_ONLYDIR) ?: [],
+            DomainState::filterPaths(glob(ApplicationTopology::domainModulePattern($migrationDir), GLOB_ONLYDIR) ?: []),
+            glob(ApplicationTopology::extensionModulePattern($migrationDir), GLOB_ONLYDIR) ?: [],
         );
 
         sort($paths);

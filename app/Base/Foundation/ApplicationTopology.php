@@ -69,7 +69,7 @@ final class ApplicationTopology
      */
     public static function rootFor(string $path): ?string
     {
-        $relative = self::repositoryRelativePath($path);
+        $relative = ApplicationTopologyPath::repositoryRelativePath($path);
 
         if ($relative === null) {
             return null;
@@ -116,32 +116,32 @@ final class ApplicationTopology
 
     public static function baseComponentPattern(string $artifact = ''): string
     {
-        return self::pattern(self::baseRoot(), '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::baseRoot(), '*', $artifact);
     }
 
     public static function coreModulePattern(string $artifact = ''): string
     {
-        return self::pattern(self::coreRoot(), '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::coreRoot(), '*', $artifact);
     }
 
     public static function domainPattern(string $artifact = ''): string
     {
-        return self::pattern(self::domainsRoot(), '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::domainsRoot(), '*', $artifact);
     }
 
     public static function domainModulePattern(string $artifact = ''): string
     {
-        return self::pattern(self::domainsRoot(), '*', '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::domainsRoot(), '*', '*', $artifact);
     }
 
     public static function extensionSourcePattern(string $artifact = ''): string
     {
-        return self::pattern(self::extensionsRoot(), '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::extensionsRoot(), '*', $artifact);
     }
 
     public static function extensionModulePattern(string $artifact = ''): string
     {
-        return self::pattern(self::extensionsRoot(), '*', '*', $artifact);
+        return ApplicationTopologyPath::pattern(self::extensionsRoot(), '*', '*', $artifact);
     }
 
     /**
@@ -168,31 +168,6 @@ final class ApplicationTopology
         return $patterns;
     }
 
-    private static function pattern(string ...$segments): string
-    {
-        $artifact = array_pop($segments);
-        $path = self::join(...$segments);
-
-        return $artifact === '' ? $path : self::join($path, $artifact);
-    }
-
-    private static function join(string ...$segments): string
-    {
-        $first = array_shift($segments);
-
-        if ($first === null) {
-            return '';
-        }
-
-        return implode(DIRECTORY_SEPARATOR, [
-            rtrim($first, '/\\'),
-            ...array_map(
-                static fn (string $segment): string => trim($segment, '/\\'),
-                $segments,
-            ),
-        ]);
-    }
-
     private static function assertRelativeRoot(string $root): void
     {
         if (! in_array($root, self::relativeRoots(), true)) {
@@ -201,76 +176,5 @@ final class ApplicationTopology
                 $root,
             ));
         }
-    }
-
-    private static function repositoryRelativePath(string $path): ?string
-    {
-        $normalized = self::normalizePath($path);
-
-        if ($normalized === null) {
-            return null;
-        }
-
-        $base = self::normalizePath(base_path());
-
-        if ($base === null) {
-            return null;
-        }
-
-        if (self::samePath($normalized, $base)) {
-            return '';
-        }
-
-        $basePrefix = $base.'/';
-        if (self::pathStartsWith($normalized, $basePrefix)) {
-            return substr($normalized, strlen($basePrefix));
-        }
-
-        if (self::isAbsolutePath($normalized)) {
-            return null;
-        }
-
-        return ltrim($normalized, '/');
-    }
-
-    private static function normalizePath(string $path): ?string
-    {
-        $normalized = rtrim(str_replace('\\', '/', trim($path)), '/');
-
-        if ($normalized === '') {
-            return '';
-        }
-
-        $segments = explode('/', $normalized);
-        if (in_array('.', $segments, true) || in_array('..', $segments, true)) {
-            return null;
-        }
-
-        return $normalized;
-    }
-
-    private static function isAbsolutePath(string $path): bool
-    {
-        return str_starts_with($path, '/')
-            || preg_match('/^[A-Za-z]:\//', $path) === 1;
-    }
-
-    private static function samePath(string $left, string $right): bool
-    {
-        return self::usesWindowsDrive($left) && self::usesWindowsDrive($right)
-            ? strcasecmp($left, $right) === 0
-            : $left === $right;
-    }
-
-    private static function pathStartsWith(string $path, string $prefix): bool
-    {
-        return self::usesWindowsDrive($path) && self::usesWindowsDrive($prefix)
-            ? str_starts_with(strtolower($path), strtolower($prefix))
-            : str_starts_with($path, $prefix);
-    }
-
-    private static function usesWindowsDrive(string $path): bool
-    {
-        return preg_match('/^[A-Za-z]:\//', $path) === 1;
     }
 }

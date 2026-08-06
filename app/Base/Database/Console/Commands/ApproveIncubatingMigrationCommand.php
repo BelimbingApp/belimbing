@@ -112,11 +112,13 @@ final class ApproveIncubatingMigrationCommand extends Command
      */
     private function migrationPaths(): array
     {
+        $migrationDir = 'Database/Migrations';
+
         return array_values(array_filter(array_merge(
-            glob(ApplicationTopology::baseComponentPattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(ApplicationTopology::coreModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(ApplicationTopology::domainModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
-            glob(ApplicationTopology::extensionModulePattern('Database/Migrations'), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::baseComponentPattern($migrationDir), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::coreModulePattern($migrationDir), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::domainModulePattern($migrationDir), GLOB_ONLYDIR) ?: [],
+            glob(ApplicationTopology::extensionModulePattern($migrationDir), GLOB_ONLYDIR) ?: [],
             [database_path('migrations')],
         ), 'is_dir'));
     }

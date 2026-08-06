@@ -235,11 +235,14 @@ class SeederRegistry extends Model
         $beforeSeeders = '/Database/Seeders/';
         $pos = strpos($rel, $beforeSeeders);
         $modulePath = $pos !== false ? substr($rel, 0, $pos) : null;
-        $moduleName = $modulePath !== null
-            ? (ApplicationTopology::belongsToRoot($modulePath, ApplicationTopology::EXTENSIONS)
+
+        if ($modulePath === null) {
+            $moduleName = null;
+        } else {
+            $moduleName = ApplicationTopology::belongsToRoot($modulePath, ApplicationTopology::EXTENSIONS)
                 ? Str::pascalToKebab(basename($modulePath))
-                : basename($modulePath))
-            : null;
+                : basename($modulePath);
+        }
 
         self::register($fqcn, $moduleName, $modulePath, null);
     }
