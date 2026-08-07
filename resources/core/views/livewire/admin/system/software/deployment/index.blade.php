@@ -573,11 +573,11 @@
                         <td class="px-table-cell-x py-table-cell-y align-top">
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
-                                <div class="text-xs text-muted">{{ $s['latest']['ago'] }}</div>
+                                <div class="text-xs text-muted">{{ $s['latest']['ago'] ?? __('Time unavailable') }}</div>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <span class="inline-flex items-center gap-1.5 text-xs text-muted">
                                     <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
-                                    {{ __('Checking latest…') }}
+                                    {{ __('Checking…') }}
                                 </span>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>

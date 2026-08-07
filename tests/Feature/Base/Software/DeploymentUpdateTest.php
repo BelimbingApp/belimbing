@@ -362,7 +362,7 @@ test('deployment page lists software sources with status for admins', function (
         ->assertSee('No reload has been recorded yet.')
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform source's Git repository
-        ->assertSee('Checking latest')
+        ->assertSee('Checking…')
         ->assertSee('Reload FrankenPHP')
         ->assertSee('Streaming live output. You can dismiss this window; the run continues.')
         ->assertSee('x-show="isFloating()"', false)
@@ -391,7 +391,7 @@ test('deployment page defers remote latest checks until livewire init', function
     $this->actingAs($user)
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
-        ->assertSee('Checking latest')
+        ->assertSee('Checking…')
         ->assertDontSee('Up to date');
 
     expect($lsRemoteCount)->toBe(0);
@@ -401,6 +401,37 @@ test('deployment page defers remote latest checks until livewire init', function
         ->assertSee('Up to date');
 
     expect($lsRemoteCount)->toBeGreaterThan(0);
+});
+
+test('deployment latest column shows the remote commit time when the commit is not available locally', function (): void {
+    $remoteDate = now()->subHours(4)->toIso8601String();
+
+    Process::fake(function ($process) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, DEPLOYMENT_UPDATE_REMOTE_SHA]) {
+            return Process::result(errorOutput: 'fatal: bad object '.DEPLOYMENT_UPDATE_REMOTE_SHA, exitCode: 128);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command, remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA) ?? Process::result();
+    });
+    Http::fake([
+        'api.github.com/repos/*/commits/*' => Http::response([
+            'sha' => DEPLOYMENT_UPDATE_REMOTE_SHA,
+            'commit' => [
+                'author' => ['name' => 'Remote Author', 'date' => $remoteDate],
+                'message' => 'Remote change',
+            ],
+        ]),
+    ]);
+
+    $component = Livewire::test(Index::class)
+        ->call('loadLatestStatus');
+
+    preg_match('/feedfac.*?<div class="text-xs text-muted">([^<]+)<\/div>/s', $component->html(), $latestTime);
+
+    expect($latestTime[1] ?? null)->toBeString()
+        ->not->toBe('')
+        ->not->toBe('Time unavailable');
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.github.com/repos/BelimbingApp/belimbing/commits/'.DEPLOYMENT_UPDATE_REMOTE_SHA);
 });
 
 test('failed remote checks name the repos instead of assuming they are private', function (): void {
@@ -1048,10 +1079,10 @@ test('the updates page suppresses wire:init during maintenance so Livewire 503s 
             ->assertSee('The site is in maintenance mode.')
             ->assertDontSee('wire:init="loadLatestStatus"', false);
 
-        // The "Checking latest…" spinner would spin forever without wire:init;
+        // The "Checking…" spinner would spin forever without wire:init;
         // it must be replaced by a plain em-dash while maintenance is active.
         $body = $response->getContent();
-        expect($body)->not->toContain('Checking latest…')
+        expect($body)->not->toContain('Checking…')
             ->and($body)->toContain('maintenanceActive');
     } finally {
         Artisan::call('up');

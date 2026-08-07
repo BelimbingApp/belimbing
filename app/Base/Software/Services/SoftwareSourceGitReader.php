@@ -109,6 +109,38 @@ final class SoftwareSourceGitReader
     }
 
     /**
+     * @param  array<string, mixed>  $payload
+     * @return array{sha: string, short: string, date: string|null, ago: string|null, author: string, subject: string}|null
+     */
+    public function githubCommit(string $expectedSha, array $payload): ?array
+    {
+        $sha = $payload['sha'] ?? null;
+        $commit = $payload['commit'] ?? null;
+
+        if (! is_string($sha) || strcasecmp($sha, $expectedSha) !== 0 || ! is_array($commit)) {
+            return null;
+        }
+
+        $committer = is_array($commit['committer'] ?? null) ? $commit['committer'] : [];
+        $author = is_array($commit['author'] ?? null) ? $commit['author'] : [];
+        $date = $committer['date'] ?? $author['date'] ?? null;
+
+        if (! is_string($date) || $date === '') {
+            return null;
+        }
+
+        $authorName = $author['name'] ?? $committer['name'] ?? '';
+        $message = is_string($commit['message'] ?? null) ? $commit['message'] : '';
+
+        return $this->commit(
+            $sha,
+            $date,
+            is_string($authorName) ? $authorName : '',
+            rtrim(explode("\n", $message, 2)[0], "\r"),
+        );
+    }
+
+    /**
      * @return array{0: string|null, 1: string|null, 2: string|null}
      */
     public function remoteIdentity(string $path, int $timeout = 60): array

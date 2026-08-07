@@ -4,9 +4,11 @@ namespace App\Base\Software\Services;
 
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Support\Str;
 use App\Base\Support\Git\GitRepository;
 use App\Base\Support\Git\GitResult;
+use App\Base\Support\Str;
+use Composer\CaBundle\CaBundle;
+use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -519,7 +521,105 @@ class SoftwareSourceRepository
             );
         }
 
+        return $this->resolveLatestCommitMetadata($latest, $requests);
+    }
+
+    /**
+     * `git ls-remote` returns the remote SHA without transferring its commit object.
+     * Preserve that fast check, then ask GitHub only for metadata that is not already
+     * available from the local object database.
+     *
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     */
+    private function resolveLatestCommitMetadata(array $latest, array $requests): array
+    {
+        $metadataRequests = [];
+
+        foreach ($latest as $key => [$commit]) {
+            if (! is_array($commit) || ($commit['date'] ?? null) !== null || ! isset($requests[$key])) {
+                continue;
+            }
+
+            $request = $requests[$key];
+            $metadataRequests[$key] = [
+                'owner' => $request['owner'],
+                'name' => $request['name'],
+                'sha' => (string) $commit['sha'],
+                'token' => $this->tokenFor($request['owner']),
+            ];
+        }
+
+        if ($metadataRequests === []) {
+            return $latest;
+        }
+
+        $responses = $this->requestLatestCommitMetadata($metadataRequests);
+        $authenticatedRequests = [];
+
+        foreach ($responses as $key => $response) {
+            $token = $metadataRequests[$key]['token'] ?? null;
+
+            if ($response instanceof Response
+                && in_array($response->status(), [401, 403, 404], true)
+                && is_string($token)
+                && $token !== '') {
+                $authenticatedRequests[$key] = $metadataRequests[$key];
+            }
+        }
+
+        if ($authenticatedRequests !== []) {
+            $responses = array_replace(
+                $responses,
+                $this->requestLatestCommitMetadata($authenticatedRequests, authenticated: true),
+            );
+        }
+
+        foreach ($responses as $key => $response) {
+            if (! $response instanceof Response || ! $response->successful() || ! isset($metadataRequests[$key])) {
+                continue;
+            }
+
+            $payload = $response->json();
+            $commit = is_array($payload)
+                ? $this->gitReader->githubCommit($metadataRequests[$key]['sha'], $payload)
+                : null;
+
+            if ($commit !== null) {
+                $latest[$key] = [$commit, null];
+            }
+        }
+
         return $latest;
+    }
+
+    /**
+     * @param  array<string, array{owner: string, name: string, sha: string, token: string|null}>  $requests
+     * @return array<string, Response|Throwable>
+     */
+    private function requestLatestCommitMetadata(array $requests, bool $authenticated = false): array
+    {
+        return Http::pool(function (Pool $pool) use ($requests, $authenticated): void {
+            foreach ($requests as $key => $request) {
+                $pending = $pool->as($key)
+                    ->acceptJson()
+                    ->withUserAgent('Belimbing Update Checker')
+                    ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
+                    ->timeout(15);
+
+                if ($authenticated && $request['token'] !== null) {
+                    $pending->withToken($request['token']);
+                }
+
+                $pending->get(sprintf(
+                    'https://api.github.com/repos/%s/%s/commits/%s',
+                    rawurlencode($request['owner']),
+                    rawurlencode($request['name']),
+                    rawurlencode($request['sha']),
+                ));
+            }
+        });
     }
 
     /**
@@ -543,6 +643,7 @@ class SoftwareSourceRepository
         $url = "/repos/{$owner}/{$name}{$path}";
         $base = Http::acceptJson()
             ->withUserAgent('Belimbing Update Checker')
+            ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
             ->timeout(15)
             ->baseUrl('https://api.github.com');
 
