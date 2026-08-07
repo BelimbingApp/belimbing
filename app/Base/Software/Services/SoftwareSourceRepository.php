@@ -30,7 +30,7 @@ class SoftwareSourceRepository
     private readonly SoftwareSourceLatestCommitFetcher $commitFetcher;
 
     public function __construct(
-        private readonly SettingsService $settings,
+        SettingsService $settings,
         ?SoftwareSourceGitReader $gitReader = null,
         ?GitHubTokenStore $tokens = null,
         ?SoftwareSourceLatestCommitFetcher $commitFetcher = null,
