@@ -4,36 +4,44 @@ name: domain-ci
 # Extensions are out of scope here — they are mostly private licensee repos.
 # A domain repo cannot build alone — it has no composer.json at the
 # root, no vendor/, no Laravel bootstrap, and no Pest config. This workflow
-# composes the domain against a platform checkout, resolves its cross-domain
-# dependencies from their manifests, then runs Pint, Pest (with coverage), and a
-# scoped SonarCloud scan. Caller repos invoke it via `uses:` (see each domain
-# repo's .github/workflows/ci.yml).
+# composes the domain against a platform checkout, resolves cross-domain
+# dependencies, then runs Pint, Pest (with coverage), and a scoped SonarCloud
+# scan. Existing callers remain supported while descriptor-based callers are
+# rolled out on immutable workflow refs.
 
 on:
   workflow_call:
     inputs:
-      domain-path:
-        description: 'Contract path the domain mounts at (e.g. app/Domains/People).'
-        required: true
+      domain-id:
+        description: 'Stable ID from scripts/ci/domain-repos.json.'
+        required: false
         type: string
+        default: ''
+      domain-path:
+        description: 'Legacy caller mount path. Omit when domain-id is supplied.'
+        required: false
+        type: string
+        default: ''
       platform-repo:
         description: 'Platform repository that owns Base + Core.'
         required: false
         type: string
         default: BelimbingApp/belimbing
       platform-ref:
-        description: 'Platform ref to build against. Pin to a tag for reproducible runs.'
+        description: 'Platform ref. New descriptor-based callers must use an exact commit SHA.'
         required: false
         type: string
         default: main
       sonar-project-key:
-        description: 'SonarCloud project key for this domain repo.'
-        required: true
+        description: 'Legacy caller Sonar project key. Omit when domain-id is supplied.'
+        required: false
         type: string
+        default: ''
       sonar-organization:
-        description: 'SonarCloud organization key.'
-        required: true
+        description: 'Legacy caller Sonar organization. Omit when domain-id is supplied.'
+        required: false
         type: string
+        default: ''
       php-version:
         required: false
         type: string
@@ -53,10 +61,15 @@ concurrency:
 
 jobs:
   ci:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     environment: Testing
     env:
-      DOMAIN_PATH: ${{ inputs.domain-path }}
+      DOMAIN_ID: ${{ inputs.domain-id }}
+      LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
+      LEGACY_SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
+      LEGACY_SONAR_ORGANIZATION: ${{ inputs.sonar-organization }}
 
     steps:
       - name: Checkout platform
@@ -68,18 +81,57 @@ jobs:
       - name: Checkout domain under test
         uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
         with:
-          path: ${{ inputs.domain-path }}
+          path: source-under-test
           fetch-depth: 0
 
-      - name: Compose cross-domain dependencies
+      - name: Resolve Domain descriptor
         run: |
-          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" > extra-repos.tsv
+          php scripts/ci/domain-ci.php validate
+          if [ -n "$DOMAIN_ID" ]; then
+            php scripts/ci/domain-ci.php resolve \
+              --domain-id="$DOMAIN_ID" \
+              --caller-repository="$GITHUB_REPOSITORY" \
+              --workflow-ref="${{ inputs.platform-ref }}" >> "$GITHUB_ENV"
+            DOMAIN_PATH=$(php scripts/ci/domain-ci.php resolve \
+              --domain-id="$DOMAIN_ID" \
+              --caller-repository="$GITHUB_REPOSITORY" \
+              --workflow-ref="${{ inputs.platform-ref }}" | sed -n 's/^DOMAIN_PATH=//p')
+            SONAR_PROJECT_KEY=$(jq -r --arg id "$DOMAIN_ID" '.domains[$id].sonar_project_key // empty' scripts/ci/domain-repos.json)
+            SONAR_ORGANIZATION=$(jq -r '.sonar_organization // empty' scripts/ci/domain-repos.json)
+          else
+            DOMAIN_PATH="$LEGACY_DOMAIN_PATH"
+            SONAR_PROJECT_KEY="$LEGACY_SONAR_PROJECT_KEY"
+            SONAR_ORGANIZATION="$LEGACY_SONAR_ORGANIZATION"
+          fi
+          test -n "$DOMAIN_PATH"
+          test -n "$SONAR_PROJECT_KEY"
+          test -n "$SONAR_ORGANIZATION"
+          echo "DOMAIN_PATH=$DOMAIN_PATH" >> "$GITHUB_ENV"
+          echo "SONAR_PROJECT_KEY=$SONAR_PROJECT_KEY" >> "$GITHUB_ENV"
+          echo "SONAR_ORGANIZATION=$SONAR_ORGANIZATION" >> "$GITHUB_ENV"
+          mkdir -p "$(dirname "$DOMAIN_PATH")"
+          mv source-under-test "$DOMAIN_PATH"
+
+      - name: Compose exact cross-domain dependencies
+        run: |
+          php scripts/ci/compose-domain.php --domain-path="$DOMAIN_PATH" --exact > extra-repos.tsv
           while IFS=$'\t' read -r repo path; do
             [ -z "$repo" ] && continue
-            echo "Cloning $repo -> $path"
-            git clone --depth=1 "https://github.com/${repo}.git" "$path"
+            ref=$(jq -r --arg repo "$repo" '.domains[] | select(.repo == $repo) | .ref' scripts/ci/domain-repos.json)
+            [[ "$ref" =~ ^[0-9a-f]{40}$ ]]
+            echo "Materializing $repo@$ref -> $path"
+            git clone --filter=blob:none --no-checkout "https://github.com/${repo}.git" "$path"
+            git -C "$path" checkout --detach "$ref"
+            printf '%s\t%s\t%s\n' "$repo" "$ref" "$path" >> materialization.tsv
           done < extra-repos.tsv
-          rm -f extra-repos.tsv
+          printf '%s\t%s\t%s\n' "BelimbingApp/belimbing" "${{ inputs.platform-ref }}" "." >> materialization.tsv
+          printf '%s\t%s\t%s\n' "${{ github.repository }}" "${{ github.sha }}" "$DOMAIN_PATH" >> materialization.tsv
+
+      - name: Upload materialization plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: domain-materialization
+          path: materialization.tsv
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
@@ -130,10 +182,10 @@ jobs:
           SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
-            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
-            -Dsonar.organization=${{ inputs.sonar-organization }}
-            -Dsonar.sources=${{ inputs.domain-path }}
-            -Dsonar.tests=${{ inputs.domain-path }}
-            -Dsonar.test.inclusions=${{ inputs.domain-path }}/**/Tests/**
+            -Dsonar.projectKey=${{ env.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ env.SONAR_ORGANIZATION }}
+            -Dsonar.sources=${{ env.DOMAIN_PATH }}
+            -Dsonar.tests=${{ env.DOMAIN_PATH }}
+            -Dsonar.test.inclusions=${{ env.DOMAIN_PATH }}/**/Tests/**
             -Dsonar.php.coverage.reportPaths=coverage.xml
-            -Dsonar.cpd.exclusions=${{ inputs.domain-path }}/**/Tests/**,${{ inputs.domain-path }}/**/Database/Migrations/**,${{ inputs.domain-path }}/**/Config/**,${{ inputs.domain-path }}/**/Routes/**
+            -Dsonar.cpd.exclusions=${{ env.DOMAIN_PATH }}/**/Tests/**,${{ env.DOMAIN_PATH }}/**/Database/Migrations/**,${{ env.DOMAIN_PATH }}/**/Config/**,${{ env.DOMAIN_PATH }}/**/Routes/**

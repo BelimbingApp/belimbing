@@ -1,9 +1,14 @@
 <?php
 
+use App\Base\Database\Contracts\SchemaDriftInspection;
 use App\Base\Database\Services\IncubatingSchemaApprovalRepository;
+use App\Base\Database\Services\SchemaDrift\SchemaDriftFinding;
+use App\Base\Database\Services\SchemaDrift\SchemaDriftFindingKind;
+use App\Base\Database\Services\SchemaDrift\SchemaDriftReport;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Mockery\MockInterface;
 
 const MIGRATE_GUARD_DIR = 'app/Extensions/TestVendor/GuardMod/Database/Migrations';
 const MIGRATE_GUARD_FILE = '2099_01_01_010101_create_test_guard_widgets_table.php';
@@ -98,6 +103,41 @@ test('plain migrate allows applied incubating schema and records a source baseli
     expect(DB::table('base_database_migration_sources')
         ->where('migration_name', str_replace('.php', '', MIGRATE_GUARD_FILE))
         ->value('source_sha256'))->toBe(hash_file('sha256', $path));
+});
+
+test('schema drift failure follows migration and prevents source baseline bookkeeping', function (): void {
+    writeIncubatingTestMigration(MIGRATE_GUARD_DIR, MIGRATE_GUARD_FILE, MIGRATE_GUARD_TABLE);
+    Schema::create(MIGRATE_GUARD_TABLE, function (Blueprint $table): void {
+        $table->id();
+    });
+    DB::table('migrations')->insert([
+        'migration' => str_replace('.php', '', MIGRATE_GUARD_FILE),
+        'batch' => 1,
+    ]);
+
+    $report = new SchemaDriftReport('testing', 'sqlite', ':memory:', 1, 1, [
+        new SchemaDriftFinding(
+            SchemaDriftFindingKind::MISSING_COLUMN,
+            MIGRATE_GUARD_TABLE,
+            'name',
+            MIGRATE_GUARD_FILE,
+            12,
+        ),
+    ], []);
+    $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
+        $mock->shouldReceive('inspect')->once()->with(null)->andReturn($report);
+    });
+
+    app()['env'] = 'production';
+
+    $this->artisan('migrate', ['--force' => true])
+        ->expectsOutputToContain('Applied incubating schema remains source-declared')
+        ->expectsOutput('RESULT DRIFT')
+        ->assertExitCode(1);
+
+    expect(DB::table('base_database_migration_sources')
+        ->where('migration_name', str_replace('.php', '', MIGRATE_GUARD_FILE))
+        ->exists())->toBeFalse();
 });
 
 test('plain migrate blocks applied incubating schema when its source hash changed', function (): void {
@@ -204,8 +244,50 @@ test('plain migrate runs a pending incubating migration with exact local approva
         ->and($approval['approvals'][0]['consumed_at'] ?? null)->toBeString();
 });
 
+test('schema drift failure leaves an applied incubating approval unconsumed', function (): void {
+    writeIncubatingTestMigration(MIGRATE_GUARD_DIR, MIGRATE_GUARD_FILE, MIGRATE_GUARD_TABLE);
+
+    $report = new SchemaDriftReport('testing', 'sqlite', ':memory:', 1, 1, [
+        new SchemaDriftFinding(
+            SchemaDriftFindingKind::MISSING_COLUMN,
+            MIGRATE_GUARD_TABLE,
+            'name',
+            MIGRATE_GUARD_FILE,
+            12,
+        ),
+    ], []);
+    $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
+        $mock->shouldReceive('inspect')->once()->with(null)->andReturn($report);
+    });
+
+    app()['env'] = 'production';
+
+    $this->artisan('blb:schema:approve-incubating', [
+        'migration' => str_replace('.php', '', MIGRATE_GUARD_FILE),
+        '--backup' => 'backup-before-drift-gate-test',
+        '--reason' => 'prove approval finalization follows drift inspection',
+    ])->assertExitCode(0);
+
+    $this->artisan('migrate', ['--force' => true])
+        ->expectsOutput('RESULT DRIFT')
+        ->assertExitCode(1);
+
+    $approval = json_decode((string) file_get_contents(app(IncubatingSchemaApprovalRepository::class)->path()), true);
+
+    expect(Schema::hasTable(MIGRATE_GUARD_TABLE))->toBeTrue()
+        ->and(DB::table('migrations')->where('migration', str_replace('.php', '', MIGRATE_GUARD_FILE))->exists())->toBeTrue()
+        ->and(DB::table('base_database_migration_sources')
+            ->where('migration_name', str_replace('.php', '', MIGRATE_GUARD_FILE))
+            ->exists())->toBeFalse()
+        ->and($approval['approvals'][0]['consumed_at'] ?? null)->toBeNull();
+});
+
 test('graceful failed approved incubating migration leaves approval unconsumed', function (): void {
     writeFailingMigrateGuardMigration(MIGRATE_GUARD_DIR, MIGRATE_GUARD_FAIL_FILE, MIGRATE_GUARD_FAIL_TABLE);
+
+    $this->mock(SchemaDriftInspection::class, function (MockInterface $mock): void {
+        $mock->shouldNotReceive('inspect');
+    });
 
     app()['env'] = 'production';
 

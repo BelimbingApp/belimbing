@@ -12,6 +12,9 @@ on:
     # without a push.
     - cron: '0 6 * * 1'
 
+permissions:
+  contents: read
+
 jobs:
   dependencies:
     name: Dependency audit

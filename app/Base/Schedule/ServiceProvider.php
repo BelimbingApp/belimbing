@@ -8,6 +8,8 @@ use App\Base\Schedule\Services\FrameworkScheduleDevelopmentSanitizer;
 use App\Base\Schedule\Services\ScheduleBoard;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
+use App\Base\Schedule\Services\ScheduleStatusBarDiagnosticProvider;
+use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
@@ -33,6 +35,8 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ScheduleHistoryPruner::class);
         $this->app->singleton(ScheduleRunRecorder::class);
         $this->app->singleton(ScheduleBoard::class);
+        $this->app->singleton(ScheduleStatusBarDiagnosticProvider::class);
+        $this->app->tag(ScheduleStatusBarDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(FrameworkScheduleDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
     }
 

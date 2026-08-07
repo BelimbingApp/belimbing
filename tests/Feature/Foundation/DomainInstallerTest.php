@@ -79,6 +79,21 @@ it('installs by cloning the catalog repo and migrating in a subprocess', functio
     expect(DomainState::isDisabled(DOMAIN_INSTALLER_FIXTURE_DOMAIN))->toBeFalse();
 });
 
+it('does not reload runtime after an install migration fails', function (): void {
+    config(['domains.catalog' => [
+        DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],
+    ]]);
+    Process::fake(fn ($process) => $process->command === PhpCli::current()->artisan(['migrate', '--force'])
+        ? Process::result(errorOutput: 'migration failed', exitCode: 1)
+        : Process::result());
+
+    $result = domainInstaller()->install(DOMAIN_INSTALLER_FIXTURE_DOMAIN);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['log'])->not->toContain(DOMAIN_INSTALLER_RELOAD_SCHEDULED)
+        ->and(domainInstallerRuntimeReloader()->calls)->toBe(0);
+});
+
 it('records retained audit actions for domain install and uninstall', function (): void {
     config(['domains.catalog' => [
         DOMAIN_INSTALLER_FIXTURE_DOMAIN => ['repo' => DOMAIN_INSTALLER_FIXTURE_REPO, 'description' => DOMAIN_INSTALLER_FIXTURE_DESCRIPTION],

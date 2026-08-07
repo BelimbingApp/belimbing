@@ -14,14 +14,25 @@ final class PerfPruneCommand extends Command
 
     public function handle(PerfLog $log, PerfRuntimeSettings $runtimeSettings): int
     {
-        $days = (int) ($this->option('days') ?? $runtimeSettings->retentionDays());
+        $daysOption = $this->option('days');
+        if ($daysOption !== null && (filter_var($daysOption, FILTER_VALIDATE_INT) === false || (int) $daysOption < 1)) {
+            $this->components->error('The --days value must be a positive integer.');
+
+            return self::INVALID;
+        }
+
+        $days = (int) ($daysOption ?? $runtimeSettings->retentionDays());
         $cutoffDay = now()->subDays($days)->format('Y-m-d');
         $deleted = 0;
 
         foreach ($log->files() as $file) {
             if (preg_match('/perf-(\d{4}-\d{2}-\d{2})\.jsonl$/', $file, $matches) === 1
                 && $matches[1] < $cutoffDay) {
-                unlink($file);
+                if (! @unlink($file)) {
+                    $this->components->error("Could not delete performance log file: {$file}");
+
+                    return self::FAILURE;
+                }
                 $deleted++;
             }
         }

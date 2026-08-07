@@ -11,14 +11,15 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:schema:drift')]
 final class SchemaDriftCommand extends Command
 {
-    protected $signature = 'blb:schema:drift';
+    protected $signature = 'blb:schema:drift {--database= : The database connection to inspect}';
 
-    protected $description = 'Compare migration-declared tables, columns, and indexes with the default database';
+    protected $description = 'Compare migration-declared tables, columns, and indexes with a database';
 
     public function handle(SchemaDriftInspection $inspector): int
     {
         try {
-            $report = $inspector->inspect();
+            $database = $this->option('database');
+            $report = $inspector->inspect(is_string($database) && $database !== '' ? $database : null);
         } catch (SchemaDriftInspectionException $exception) {
             $this->line('ERROR reason='.$this->quoted($exception->getMessage()));
             $this->line('RESULT INCOMPLETE');

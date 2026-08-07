@@ -136,6 +136,19 @@ it('clones an extension with the stored github token and redirects', function ()
         && in_array($expectedAuthHeader, $process->command, true));
 });
 
+it('does not reload runtime after an extension migration fails', function (): void {
+    app(SettingsService::class)->set('integrations.github.token.'.EXTENSION_INSTALL_OWNER, EXTENSION_INSTALL_TOKEN);
+    Process::fake(fn ($process) => in_array('migrate', $process->command, true)
+        ? Process::result(errorOutput: 'migration failed', exitCode: 1)
+        : Process::result());
+
+    $result = app(ExtensionInstaller::class)->install(EXTENSION_INSTALL_FOLDER, EXTENSION_INSTALL_REPO);
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['log'])->not->toContain(EXTENSION_INSTALL_RELOAD_SCHEDULED)
+        ->and(app(DomainRuntimeReloader::class)->calls)->toBe(0);
+});
+
 it('blocks extension install for users without the manage capability', function (): void {
     $this->actingAs(User::factory()->create());
     Process::fake();

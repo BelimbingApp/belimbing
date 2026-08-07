@@ -122,7 +122,9 @@ A failed migration guard also halts the Update flow before workers reload.
 
 ## Schema Drift Inspection
 
-Run `php artisan blb:schema:drift` to compare migration-declared table, column, and index presence with the default database connection. The command intentionally has no custom options so coding agents and humans share one blessed invocation. It reads migration source without executing it, replays supported `up()` operations in Laravel filename order, and prints deterministic records with the inspected connection, driver, and database identity.
+Run `php artisan blb:schema:drift` to compare migration-declared table, column, and index presence with the default database connection. Use `--database=<connection>` when inspecting a named connection. It reads migration source without executing it, replays supported `up()` operations in Laravel filename order, and prints deterministic records with the inspected connection, driver, and database identity.
+
+Every successful non-pretend BLB `migrate` and `migrate --dev` runs this inspection against the selected connection before migration-source baselines or approvals are finalized. Drift or incomplete inspection makes migration return non-zero, so deployment stops before worker reload. Pulling application source without running BLB's migration or deployment path is unsupported; cron and status-bar reporting are not substitute deployment guards.
 
 Exit codes are part of the agent contract:
 

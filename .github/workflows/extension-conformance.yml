@@ -1,0 +1,64 @@
+name: extension-conformance
+
+on:
+  workflow_call:
+    inputs:
+      extension-path:
+        description: Canonical mount path beneath app/Extensions.
+        required: true
+        type: string
+      platform-ref:
+        description: Exact 40-character compatible platform commit SHA.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate inputs
+        env:
+          EXTENSION_PATH: ${{ inputs.extension-path }}
+          PLATFORM_REF: ${{ inputs.platform-ref }}
+        run: |
+          [[ "$EXTENSION_PATH" =~ ^app/Extensions/[A-Z][A-Za-z0-9]*$ ]]
+          [[ "$PLATFORM_REF" =~ ^[0-9a-f]{40}$ ]]
+      - name: Checkout platform
+        uses: actions/checkout@v7
+        with:
+          repository: BelimbingApp/belimbing
+          ref: ${{ inputs.platform-ref }}
+      - name: Checkout Extension
+        uses: actions/checkout@v7
+        with:
+          path: ${{ inputs.extension-path }}
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.10'
+      - run: composer install --no-interaction --prefer-dist
+      - run: bun install --frozen-lockfile
+      - name: Prove composed migrations and schema
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
+          sed -i 's|^DB_DATABASE=.*|DB_DATABASE=${{ runner.temp }}/extension-conformance.sqlite|' .env
+          touch '${{ runner.temp }}/extension-conformance.sqlite'
+          php artisan key:generate
+          php artisan migrate --force --no-interaction
+      - name: Run Extension conformance
+        run: scripts/ci/extension-conformance.sh '${{ inputs.extension-path }}'
+      - name: Install Gitleaks
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+        run: |
+          curl -sSfL --proto '=https' --proto-redir '=https' "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          tar -xzf gitleaks.tar.gz gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+      - name: Scan Extension snapshot for secrets
+        run: gitleaks dir --redact --verbose '${{ inputs.extension-path }}'

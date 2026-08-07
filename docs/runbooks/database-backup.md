@@ -82,14 +82,14 @@ the backup pipeline or the DB schema.
 2. Provision a fresh restore target:
    - Postgres: `CREATE DATABASE blb_restore_drill_YYYYMMDD;`
    - SQLite: pick a path like `/tmp/blb-restore-drill-YYYYMMDD.sqlite`.
-3. Run the restore command:
+3. Download the selected artifact and its sidecar manifest to a secure staging host. Decrypt or copy it into a **new** local output file:
    ```
-   php artisan blb:db:backup:restore --backup-id={id} --target={path|dbname}
+   php artisan blb:db:backup:stage {artifact} {manifest} {new-output}
    ```
-   The restore command reads the manifest, unwraps the DEK using the current APP_KEY,
-   decrypts the artifact, and restores to the target. For `none` mode, proceed directly
-   to step 4 without decryption.
-4. Restore the plaintext artifact (if using `none` mode or after manual decryption):
+   Staging verifies the manifest hash, unwraps app-key artifacts using the current APP_KEY,
+   refuses to overwrite an existing output, and never connects to a database. `none` mode
+   is copied through the same command so the overwrite and integrity checks still apply.
+4. Import the staged plaintext artifact into the fresh target:
    - **Postgres**: `pg_restore --no-owner --no-privileges --clean --if-exists --host={host} --port={port} --username={user} --dbname=blb_restore_drill_YYYYMMDD {artifact}`
    - **SQLite**: `cp {artifact} /tmp/blb-restore-drill-YYYYMMDD.sqlite`
 5. Smoke checks against the restored target:
