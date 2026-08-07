@@ -7,12 +7,26 @@ use App\Base\Support\PhpCli;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Str;
 
 final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
 {
     public const PENDING_CACHE_KEY = 'domain-runtime.reload.pending';
 
+    /**
+     * Run id handed to the reload that this instance last launched, or null when
+     * nothing was launched (already scheduled, or the process failed to start).
+     * The caller stamps it on the run record it writes for the same click, which
+     * is what lets the detached process close that record when it finishes.
+     */
+    private ?string $scheduledRunId = null;
+
     public function __construct(private readonly DeploymentRunHistory $history) {}
+
+    public function scheduledRunId(): ?string
+    {
+        return $this->scheduledRunId;
+    }
 
     /**
      * @return list<string>
@@ -46,15 +60,19 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
         string $alreadyScheduledMessage,
         string $failureMessage,
     ): array {
+        $this->scheduledRunId = null;
+
         if (! Cache::add(self::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinutes(2))) {
             return [
                 $alreadyScheduledMessage,
             ];
         }
 
-        $result = $this->launchBackgroundReload($clearRuntimeCaches);
+        $runId = (string) Str::uuid();
+        $result = $this->launchBackgroundReload($clearRuntimeCaches, $runId);
 
         if ($result->successful()) {
+            $this->scheduledRunId = $runId;
             $this->history->rememberReloadScheduled($scheduledMessage);
 
             return [
@@ -74,11 +92,12 @@ final class FrankenPhpDomainRuntimeReloader implements DomainRuntimeReloader
         return [$message];
     }
 
-    private function launchBackgroundReload(bool $clearRuntimeCaches): ProcessResult
+    private function launchBackgroundReload(bool $clearRuntimeCaches, string $runId): ProcessResult
     {
         $command = PhpCli::current()->artisan([
             'blb:domain-runtime:reload',
             '--delay=2',
+            '--run-id='.$runId,
         ]);
 
         if ($clearRuntimeCaches) {

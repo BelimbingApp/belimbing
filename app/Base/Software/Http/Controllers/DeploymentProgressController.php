@@ -4,6 +4,7 @@ namespace App\Base\Software\Http\Controllers;
 
 use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
+use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Illuminate\Http\JsonResponse;
 
 /**
@@ -19,8 +20,12 @@ class DeploymentProgressController
 {
     use FormatsDeploymentRunOutput;
 
-    public function __invoke(DeploymentRunHistory $history): JsonResponse
+    public function __invoke(DeploymentRunHistory $history, SoftwareUpdateLauncher $launcher): JsonResponse
     {
+        // The poller stops on a terminal status, so an abandoned pending run would
+        // keep it polling forever. Reconcile here too, not just on render.
+        $history->abandonStalePendingRun($launcher->inProgress() || $history->reloadIsInProgress());
+
         $run = $history->lastDeploymentRun();
 
         if ($run === null) {

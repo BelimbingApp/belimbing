@@ -1469,6 +1469,213 @@ test('startup heal leaves a running update holding maintenance alone', function 
     }
 });
 
+test('a background reload closes the run box it left in progress', function (): void {
+    // The reported bug: the FrankenPHP card said "Workers reloaded" while the run
+    // box beside it still said "In progress", because the request that scheduled
+    // the reload could only record it as pending and nothing ever closed it.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+
+    try {
+        Livewire::test(Index::class)
+            ->call('reloadOnly')
+            ->assertDispatched('run-finished', status: 'pending', refresh: false)
+            // Without this the box would sit on "in progress" until a manual page
+            // reload, even though the record below now closes correctly.
+            ->assertDispatched('follow-update-progress');
+
+        $scheduled = app(SettingsService::class)->get('system.update.deployment.last_run');
+
+        expect($scheduled['status'])->toBe('pending')
+            ->and($scheduled['run_id'] ?? null)->toBeString();
+
+        Artisan::call('blb:domain-runtime:reload', [
+            '--delay' => 0,
+            '--run-id' => $scheduled['run_id'],
+        ]);
+
+        $finished = app(DeploymentRunHistory::class)->lastDeploymentRun();
+
+        expect($finished)->toMatchArray([
+            'status' => 'success',
+            'summary' => 'Runtime reload complete. Web workers are serving the current code.',
+        ])
+            // The scheduling line survives, so the box reads as one continuous run.
+            ->and($finished['log'])->toContain('Runtime reload scheduled in the background.')
+            ->and($finished['log'])->toContain(DEPLOYMENT_UPDATE_RELOADED);
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
+});
+
+test('a background reload that cannot reach the workers closes the run as a warning', function (): void {
+    // Honest in the other direction too: a reload that did not land must not sign
+    // the run off as success just because the process exited cleanly.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    fakeDeploymentUpdateProcesses();
+
+    try {
+        Livewire::test(Index::class)->call('reloadOnly');
+        $scheduled = app(SettingsService::class)->get('system.update.deployment.last_run');
+
+        // Admin API reachable but exposing no worker config, and the app answering
+        // health checks — a live runtime whose workers were not restarted.
+        withDeploymentAdminEnv(DEPLOYMENT_UPDATE_ADMIN_HOST, '2019', function () use ($scheduled): void {
+            fakeDeploymentUpdateHttp(reloadOk: false);
+
+            Artisan::call('blb:domain-runtime:reload', [
+                '--delay' => 0,
+                '--run-id' => $scheduled['run_id'],
+            ]);
+        });
+
+        expect(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray([
+            'status' => 'warning',
+            'summary' => 'Runtime reload finished with warnings; web workers may still be serving old code.',
+        ]);
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
+});
+
+test('a pending run nothing is working on is reported as failed instead of spinning forever', function (): void {
+    // Hard-killed detached process, or a record written before runs carried an id:
+    // either way nothing can ever close it, and the box would claim "in progress"
+    // for days. Nothing holds the launcher lock and no reload is live here.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'attempted_at' => now()->subHour()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => 'Runtime reload scheduled in the background.',
+        'log' => ['Runtime reload scheduled in the background.'],
+    ]);
+
+    Livewire::test(Index::class)->assertHasNoErrors();
+
+    expect(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray([
+        'status' => 'error',
+        'summary' => 'FAILED: this run never reported a result and the process doing the work is no longer running. Check the log above, then run it again.',
+    ]);
+});
+
+test('the progress feed stops polling an abandoned run', function (): void {
+    // The poller only stops on a terminal status, so it has to reconcile too —
+    // otherwise a browser left open polls a dead run indefinitely.
+    $user = createAdminUser();
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'attempted_at' => now()->subHour()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => 'Runtime reload scheduled in the background.',
+        'log' => ['Runtime reload scheduled in the background.'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.progress'))
+        ->assertOk()
+        ->assertJsonPath('status', 'error');
+});
+
+test('a pending run is left alone while its reload is still working', function (): void {
+    // The whole point of the pending state: a detached reload is out there and has
+    // not gone quiet, so reconciling would erase a live run's box mid-flight.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+    $history->rememberReloadRunning('Runtime reload is running.');
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'attempted_at' => now()->subHour()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => 'Runtime reload scheduled in the background.',
+        'log' => ['Runtime reload scheduled in the background.'],
+    ]);
+
+    Livewire::test(Index::class)->assertHasNoErrors();
+
+    expect($history->lastDeploymentRun())->toMatchArray(['status' => 'pending']);
+});
+
+test('a pending run is left alone while a detached update holds the lock', function (): void {
+    // A software update can be quiet for minutes during composer install. The
+    // launcher lock, not the log, is what says it is still alive.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun('quiet-but-running', ['platform'], 'Scheduled.');
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'run_id' => 'quiet-but-running',
+        'attempted_at' => now()->subHour()->utc()->toIso8601String(),
+        'updated_at' => now()->subHour()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => 'Scheduled.',
+        'log' => ['Scheduled.'],
+    ]);
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, 'quiet-but-running')->get();
+
+    try {
+        Livewire::test(Index::class)->assertHasNoErrors();
+
+        expect($history->lastDeploymentRun())->toMatchArray(['status' => 'pending']);
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+test('a freshly scheduled run is not mistaken for an abandoned one', function (): void {
+    // Between scheduling and the detached process recording its first line there is
+    // a gap with no owner signal yet; the staleness window is what protects it.
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'attempted_at' => now()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => 'Runtime reload scheduled in the background.',
+        'log' => ['Runtime reload scheduled in the background.'],
+    ]);
+
+    Livewire::test(Index::class)->assertHasNoErrors();
+
+    expect(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray(['status' => 'pending']);
+});
+
+test('a background reload cannot close a run it does not own', function (): void {
+    // The run box is a single shared record. A reload finishing must never sign off
+    // a software update that happens to be running at the same time.
+    $runId = 'unrelated-update-run';
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], 'Scheduled.');
+    fakeDeploymentUpdateProcesses();
+    fakeDeploymentUpdateHttp();
+    Cache::put(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY, now()->utc()->toIso8601String(), now()->addMinute());
+
+    try {
+        Artisan::call('blb:domain-runtime:reload', [
+            '--delay' => 0,
+            '--run-id' => 'some-other-reload',
+        ]);
+
+        expect($history->lastDeploymentRun())->toMatchArray([
+            'status' => 'pending',
+            'summary' => 'Scheduled.',
+        ]);
+    } finally {
+        Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
+    }
+});
+
 test('startup heal does not touch maintenance mode it did not put there', function (): void {
     // A plain `artisan down` carries no run id. Someone took the site down on
     // purpose, and starting the app is not consent to publish it again.

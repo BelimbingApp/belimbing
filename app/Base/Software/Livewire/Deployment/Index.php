@@ -67,7 +67,11 @@ class Index extends Component
 
     public function reloadOnly(DeploymentRunHistory $history, FrankenPhpDomainRuntimeReloader $runtimeReloader): void
     {
-        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule([], $runtimeReloader));
+        $this->runAction(
+            $history,
+            fn (): array => $this->appendRuntimeReloadSchedule([], $runtimeReloader),
+            $runtimeReloader,
+        );
     }
 
     public function rebuildPhp(
@@ -75,10 +79,14 @@ class Index extends Component
         DeploymentRunHistory $history,
         FrankenPhpDomainRuntimeReloader $runtimeReloader,
     ): void {
-        $this->runAction($history, fn (): array => $this->appendRuntimeReloadSchedule(
-            $deployment->rebuildPhp(),
+        $this->runAction(
+            $history,
+            fn (): array => $this->appendRuntimeReloadSchedule(
+                $deployment->rebuildPhp(),
+                $runtimeReloader,
+            ),
             $runtimeReloader,
-        ));
+        );
     }
 
     public function rebuildAssets(DeploymentService $deployment, DeploymentRunHistory $history): void
@@ -90,10 +98,18 @@ class Index extends Component
      * Authorize, reset the live log, run the work, then record a durable last-run so
      * the run box (and its time) survive a page reload or a fresh session.
      *
+     * Work that ends by scheduling a background reload can only be recorded as
+     * pending here. Passing $runtimeReloader stamps that reload's run id on the
+     * record so the detached process can close it with the real outcome; without it
+     * the box would sit on "in progress" even after the workers came back.
+     *
      * @param  callable(): list<string>  $work
      */
-    private function runAction(DeploymentRunHistory $history, callable $work): void
-    {
+    private function runAction(
+        DeploymentRunHistory $history,
+        callable $work,
+        ?FrankenPhpDomainRuntimeReloader $runtimeReloader = null,
+    ): void {
         $this->authorizeManage();
         $lock = app(SoftwareUpdateLauncher::class)->maintenanceActionLock();
 
@@ -111,9 +127,21 @@ class Index extends Component
             $this->startRunLog();
             $this->log = $work();
             $outcome = $this->runOutcome();
-            $history->rememberDeploymentRun($this->log, $outcome);
+            $history->rememberDeploymentRun(
+                $this->log,
+                $outcome,
+                $outcome === 'pending' ? $runtimeReloader?->scheduledRunId() : null,
+            );
             $this->streamRunRecordedMarker($outcome);
             $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending');
+
+            // The work moved to a detached process, so this response cannot know how
+            // it ends. Hand the browser to the progress poller — otherwise the box
+            // keeps saying "in progress" until someone reloads the page by hand,
+            // which is the promise the pending copy makes and used to break.
+            if ($outcome === 'pending') {
+                $this->dispatch('follow-update-progress');
+            }
         } finally {
             $lock->release();
         }
@@ -166,6 +194,13 @@ class Index extends Component
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
         // time are still there on a fresh visit (or after an interrupted run).
+        //
+        // Reconcile first: a pending record with no live process behind it is never
+        // going to close itself, so show it as the failure it is rather than an
+        // "in progress" that outlives the run by days.
+        $updateInProgress = $launcher->inProgress();
+        $history->abandonStalePendingRun($updateInProgress || $history->reloadIsInProgress());
+
         $lastRun = $history->lastDeploymentRun();
         $reloadState = $history->reloadState();
         $reloadStateStatus = $reloadState['status'] ?? null;
@@ -203,7 +238,7 @@ class Index extends Component
             'packageManager' => $deployment->frontendPackageManager(),
             'lastComposerRun' => $history->lastComposerRun(),
             'lastFrontendRun' => $history->lastFrontendRun(),
-            'updateInProgress' => $launcher->inProgress(),
+            'updateInProgress' => $updateInProgress,
             'missingExtensions' => $extensionDrift->missingExtensions(),
         ]);
     }

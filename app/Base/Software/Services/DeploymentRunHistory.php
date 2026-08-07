@@ -99,10 +99,22 @@ class DeploymentRunHistory
             return false;
         }
 
-        return $this->reloadAttemptIsStale($reloadState['attempted_at'] ?? null);
+        return $this->timestampIsStale($reloadState['attempted_at'] ?? null);
     }
 
-    private function reloadAttemptIsStale(mixed $attemptedAt): bool
+    /**
+     * Is a detached worker reload still expected to report back? Pending or running
+     * and not yet stale means a process is out there doing the work.
+     */
+    public function reloadIsInProgress(): bool
+    {
+        $state = $this->reloadState();
+
+        return in_array($state['status'] ?? null, ['pending', 'running'], true)
+            && ! $this->reloadStateIsStale($state);
+    }
+
+    private function timestampIsStale(mixed $attemptedAt): bool
     {
         if (! is_string($attemptedAt) || $attemptedAt === '') {
             return true;
@@ -136,17 +148,65 @@ class DeploymentRunHistory
      * Record the run shown in the Deployment page's run box so its outcome and time
      * survive a page reload or a brand-new session.
      *
+     * Pass $runId when the work continues in a detached process: the record is then
+     * closable by whoever knows that id, so the background job can finish it through
+     * completeDeploymentRun() instead of leaving the box on "in progress" forever.
+     *
      * @param  list<string>  $log
      */
-    public function rememberDeploymentRun(array $log, string $status): void
+    public function rememberDeploymentRun(array $log, string $status, ?string $runId = null): void
     {
-        $this->withDeploymentRunLock(function () use ($log, $status): void {
-            $this->settings->set(self::DEPLOYMENT_RUN_KEY, [
+        $this->withDeploymentRunLock(function () use ($log, $status, $runId): void {
+            // A detached job that already finished must not be dragged back to
+            // pending by the slower synchronous write that scheduled it.
+            $existing = $runId === null ? null : $this->deploymentRunRecord($runId);
+
+            if ($existing !== null && $this->deploymentRunIsTerminal($existing)) {
+                return;
+            }
+
+            $record = [
                 'attempted_at' => now()->utc()->toIso8601String(),
                 'status' => $status,
                 'summary' => $log === [] ? '' : (string) $log[array_key_last($log)],
                 'log' => array_values($log),
-            ]);
+            ];
+
+            if ($runId !== null) {
+                $record['run_id'] = $runId;
+            }
+
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
+        });
+    }
+
+    /**
+     * Close a run whose work finished in a detached process, keeping the lines the
+     * scheduling request already recorded and appending how it actually ended.
+     *
+     * No-ops when the stored record belongs to a different run (or to none at all),
+     * so a background reload can never overwrite an unrelated run's result.
+     *
+     * @param  list<string>  $lines
+     */
+    public function completeDeploymentRun(string $runId, string $status, array $lines): void
+    {
+        $this->withDeploymentRunLock(function () use ($runId, $status, $lines): void {
+            $record = $this->deploymentRunRecord($runId);
+
+            if ($record === null || $this->deploymentRunIsTerminal($record)) {
+                return;
+            }
+
+            $log = is_array($record['log'] ?? null)
+                ? array_values(array_filter($record['log'], 'is_string'))
+                : [];
+
+            $this->finishDeploymentRunUnlocked(
+                $runId,
+                $status,
+                array_merge($log, array_values(array_filter($lines, 'is_string'))),
+            );
         });
     }
 
@@ -205,6 +265,67 @@ class DeploymentRunHistory
             $log[] = $message;
             $this->finishDeploymentRunUnlocked($runId, 'error', $log);
         });
+    }
+
+    /**
+     * Close a pending run that nothing is going to finish.
+     *
+     * The run box only says "in progress" on the word of a detached process that
+     * promised to come back with a result. When no such process is alive and the
+     * record has been silent past the staleness window, that promise was broken —
+     * something killed the process between its last line and its result — and
+     * claiming "in progress" forever is a lie the operator cannot act on. It also
+     * covers records written before runs carried an id, which nothing can close.
+     *
+     * $ownerActive is whether a process that could still close this run is known to
+     * be running: a detached update holding the launcher lock, or a live reload.
+     * Callers own that check because the launcher depends on this class, not the
+     * other way around.
+     */
+    public function abandonStalePendingRun(bool $ownerActive): void
+    {
+        // Read before locking: on nearly every page view the run is already
+        // terminal, and taking the run lock per render would be pure overhead.
+        if ($ownerActive || ! $this->pendingRunLooksAbandoned()) {
+            return;
+        }
+
+        $this->withDeploymentRunLock(function (): void {
+            $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+            if (! is_array($record) || ! $this->pendingRunLooksAbandoned($record)) {
+                return;
+            }
+
+            $log = is_array($record['log'] ?? null)
+                ? array_values(array_filter($record['log'], 'is_string'))
+                : [];
+            $log[] = (string) __('FAILED: this run never reported a result and the process doing the work is no longer running. Check the log above, then run it again.');
+
+            $now = now()->utc()->toIso8601String();
+            $record['updated_at'] = $now;
+            $record['finished_at'] = $now;
+            $record['status'] = 'error';
+            $record['summary'] = $log[array_key_last($log)];
+            $record['log'] = array_slice($log, -300);
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
+        });
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $record
+     */
+    private function pendingRunLooksAbandoned(?array $record = null): bool
+    {
+        $record ??= $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+        if (! is_array($record) || ($record['status'] ?? null) !== 'pending') {
+            return false;
+        }
+
+        // appendDeploymentLine keeps updated_at fresh, so a run that is still
+        // talking to us is never mistaken for an abandoned one.
+        return $this->timestampIsStale($record['updated_at'] ?? $record['attempted_at'] ?? null);
     }
 
     /**
