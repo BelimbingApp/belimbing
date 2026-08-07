@@ -134,32 +134,57 @@ final class DeploymentWorkerReloader
     {
         $configUrl = "http://{$host}:{$port}/config/apps/frankenphp";
         $restartUrl = "http://{$host}:{$port}/frankenphp/workers/restart";
-        $adminUrl = $configUrl;
-        $adminReachable = false;
 
+        $probeFailure = $this->probeAdminConfig($configUrl);
+
+        return $probeFailure ?? $this->restartAndVerifyWorkers($restartUrl);
+    }
+
+    /**
+     * GET the FrankenPHP admin config. Returns null when a worker pool was found
+     * and the caller should proceed to restart it; otherwise the terminal outcome.
+     *
+     * @return array{web_reloaded: bool, admin_reachable: bool, stop: bool, message: string, admin_url: string}|null
+     */
+    private function probeAdminConfig(string $configUrl): ?array
+    {
         try {
             $config = $this->sendFrankenPhpAdminRequest(
                 fn (): Response => $this->frankenPhpAdminHttp()->get($configUrl),
             );
+
             // An HTTP response of any status means something is listening here.
-            $adminReachable = true;
-
-            if (! $this->frankenPhpWorkerConfigPresent($config)) {
-                Log::debug('FrankenPHP worker reload GET returned no worker config.', [
-                    'admin_url' => $configUrl,
-                    'status' => $config->status(),
-                ]);
-
-                return [
-                    'web_reloaded' => false,
-                    'admin_reachable' => true,
-                    'stop' => false,
-                    'message' => (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $configUrl]),
-                    'admin_url' => $adminUrl,
-                ];
+            if ($this->frankenPhpWorkerConfigPresent($config)) {
+                return null;
             }
 
-            $adminUrl = $restartUrl;
+            Log::debug('FrankenPHP worker reload GET returned no worker config.', [
+                'admin_url' => $configUrl,
+                'status' => $config->status(),
+            ]);
+
+            return [
+                'web_reloaded' => false,
+                'admin_reachable' => true,
+                'stop' => false,
+                'message' => (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url did not expose worker config. Check CADDY_SERVER_ADMIN_HOST and CADDY_SERVER_ADMIN_PORT.', ['url' => $configUrl]),
+                'admin_url' => $configUrl,
+            ];
+        } catch (\Throwable $exception) {
+            return $this->adminUnreachableOutcome($configUrl, false, $exception);
+        }
+    }
+
+    /**
+     * POST the FrankenPHP worker restart and wait for health to recover. Only
+     * called once probeAdminConfig() has confirmed the admin API exposes worker
+     * config.
+     *
+     * @return array{web_reloaded: bool, admin_reachable: bool, stop: bool, message: string, admin_url: string}
+     */
+    private function restartAndVerifyWorkers(string $restartUrl): array
+    {
+        try {
             $restart = $this->sendFrankenPhpAdminRequest(
                 fn (): Response => $this->frankenPhpAdminHttp()->post($restartUrl),
             );
@@ -175,50 +200,66 @@ final class DeploymentWorkerReloader
                     'admin_reachable' => true,
                     'stop' => false,
                     'message' => (string) __('Warning: web workers were not reloaded; the FrankenPHP admin API returned HTTP :status. Running workers may keep old code until they restart.', ['status' => $restart->status()]),
-                    'admin_url' => $adminUrl,
+                    'admin_url' => $restartUrl,
                 ];
             }
 
-            $healthFailure = $this->waitForApplicationHealth();
+            return $this->healthCheckOutcome($restartUrl);
+        } catch (\Throwable $exception) {
+            return $this->adminUnreachableOutcome($restartUrl, true, $exception);
+        }
+    }
 
-            if ($healthFailure === null) {
-                Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
+    /**
+     * @return array{web_reloaded: bool, admin_reachable: bool, stop: bool, message: string, admin_url: string}
+     */
+    private function healthCheckOutcome(string $restartUrl): array
+    {
+        $healthFailure = $this->waitForApplicationHealth();
 
-                return [
-                    'web_reloaded' => true,
-                    'admin_reachable' => true,
-                    'stop' => true,
-                    'message' => (string) __('Web workers reloaded.'),
-                    'admin_url' => $adminUrl,
-                ];
-            }
-
-            Log::debug('FrankenPHP worker reload health check failed.', [
-                'admin_url' => $restartUrl,
-                'message' => $healthFailure,
-            ]);
+        if ($healthFailure === null) {
+            Log::debug('FrankenPHP worker reload succeeded.', ['admin_url' => $restartUrl]);
 
             return [
-                'web_reloaded' => false,
+                'web_reloaded' => true,
                 'admin_reachable' => true,
                 'stop' => true,
-                'message' => (string) __('Warning: web workers restart was accepted, but the application health check did not recover: :message', ['message' => $healthFailure]),
-                'admin_url' => $adminUrl,
-            ];
-        } catch (\Throwable $exception) {
-            Log::debug('FrankenPHP worker reload request failed.', [
-                'admin_url' => $adminUrl,
-                'message' => $exception->getMessage(),
-            ]);
-
-            return [
-                'web_reloaded' => false,
-                'admin_reachable' => $adminReachable,
-                'stop' => false,
-                'message' => (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]),
-                'admin_url' => $adminUrl,
+                'message' => (string) __('Web workers reloaded.'),
+                'admin_url' => $restartUrl,
             ];
         }
+
+        Log::debug('FrankenPHP worker reload health check failed.', [
+            'admin_url' => $restartUrl,
+            'message' => $healthFailure,
+        ]);
+
+        return [
+            'web_reloaded' => false,
+            'admin_reachable' => true,
+            'stop' => true,
+            'message' => (string) __('Warning: web workers restart was accepted, but the application health check did not recover: :message', ['message' => $healthFailure]),
+            'admin_url' => $restartUrl,
+        ];
+    }
+
+    /**
+     * @return array{web_reloaded: bool, admin_reachable: bool, stop: bool, message: string, admin_url: string}
+     */
+    private function adminUnreachableOutcome(string $adminUrl, bool $adminReachable, \Throwable $exception): array
+    {
+        Log::debug('FrankenPHP worker reload request failed.', [
+            'admin_url' => $adminUrl,
+            'message' => $exception->getMessage(),
+        ]);
+
+        return [
+            'web_reloaded' => false,
+            'admin_reachable' => $adminReachable,
+            'stop' => false,
+            'message' => (string) __('Warning: web workers were not reloaded because the FrankenPHP admin API at :url could not be reached: :message', ['url' => $adminUrl, 'message' => $exception->getMessage()]),
+            'admin_url' => $adminUrl,
+        ];
     }
 
     /**
