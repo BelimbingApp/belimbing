@@ -535,6 +535,24 @@ class SoftwareSourceRepository
      */
     private function resolveLatestCommitMetadata(array $latest, array $requests): array
     {
+        $metadataRequests = $this->metadataRequestsNeedingDate($latest, $requests);
+
+        if ($metadataRequests === []) {
+            return $latest;
+        }
+
+        $responses = $this->requestLatestCommitMetadataWithAuthRetry($metadataRequests);
+
+        return $this->applyLatestCommitMetadataResponses($latest, $responses, $metadataRequests);
+    }
+
+    /**
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
+     * @return array<string, array{owner: string, name: string, sha: string, token: string|null}>
+     */
+    private function metadataRequestsNeedingDate(array $latest, array $requests): array
+    {
         $metadataRequests = [];
 
         foreach ($latest as $key => [$commit]) {
@@ -551,10 +569,15 @@ class SoftwareSourceRepository
             ];
         }
 
-        if ($metadataRequests === []) {
-            return $latest;
-        }
+        return $metadataRequests;
+    }
 
+    /**
+     * @param  array<string, array{owner: string, name: string, sha: string, token: string|null}>  $metadataRequests
+     * @return array<string, Response|Throwable>
+     */
+    private function requestLatestCommitMetadataWithAuthRetry(array $metadataRequests): array
+    {
         $responses = $this->requestLatestCommitMetadata($metadataRequests);
         $authenticatedRequests = [];
 
@@ -569,13 +592,24 @@ class SoftwareSourceRepository
             }
         }
 
-        if ($authenticatedRequests !== []) {
-            $responses = array_replace(
-                $responses,
-                $this->requestLatestCommitMetadata($authenticatedRequests, authenticated: true),
-            );
+        if ($authenticatedRequests === []) {
+            return $responses;
         }
 
+        return array_replace(
+            $responses,
+            $this->requestLatestCommitMetadata($authenticatedRequests, authenticated: true),
+        );
+    }
+
+    /**
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, Response|Throwable>  $responses
+     * @param  array<string, array{owner: string, name: string, sha: string, token: string|null}>  $metadataRequests
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     */
+    private function applyLatestCommitMetadataResponses(array $latest, array $responses, array $metadataRequests): array
+    {
         foreach ($responses as $key => $response) {
             if (! $response instanceof Response || ! $response->successful() || ! isset($metadataRequests[$key])) {
                 continue;

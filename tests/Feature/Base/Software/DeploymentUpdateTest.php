@@ -30,6 +30,7 @@ const DEPLOYMENT_UPDATE_BRANCH_ARG = '--abbrev-ref';
 const DEPLOYMENT_UPDATE_LOG_FORMAT = '--format=%H%x1f%cI%x1f%an%x1f%s';
 const DEPLOYMENT_UPDATE_FF_ONLY = '--ff-only';
 const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
+const DEPLOYMENT_UPDATE_CHECKING = 'Checking…';
 const DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE = 'Software update scheduled in a detached process.';
 const DEPLOYMENT_UPDATE_PULLING_PLATFORM = 'Pulling Belimbing (platform)…';
 const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
@@ -362,7 +363,7 @@ test('deployment page lists software sources with status for admins', function (
         ->assertSee('No reload has been recorded yet.')
         ->assertSee('Belimbing (platform)')
         ->assertSee('BelimbingApp/belimbing') // discovered platform source's Git repository
-        ->assertSee('Checking…')
+        ->assertSee(DEPLOYMENT_UPDATE_CHECKING)
         ->assertSee('Reload FrankenPHP')
         ->assertSee('Streaming live output. You can dismiss this window; the run continues.')
         ->assertSee('x-show="isFloating()"', false)
@@ -391,7 +392,7 @@ test('deployment page defers remote latest checks until livewire init', function
     $this->actingAs($user)
         ->get(route('admin.system.software.updates.index'))
         ->assertOk()
-        ->assertSee('Checking…')
+        ->assertSee(DEPLOYMENT_UPDATE_CHECKING)
         ->assertDontSee('Up to date');
 
     expect($lsRemoteCount)->toBe(0);
@@ -1082,7 +1083,7 @@ test('the updates page suppresses wire:init during maintenance so Livewire 503s 
         // The "Checking…" spinner would spin forever without wire:init;
         // it must be replaced by a plain em-dash while maintenance is active.
         $body = $response->getContent();
-        expect($body)->not->toContain('Checking…')
+        expect($body)->not->toContain(DEPLOYMENT_UPDATE_CHECKING)
             ->and($body)->toContain('maintenanceActive');
     } finally {
         Artisan::call('up');
