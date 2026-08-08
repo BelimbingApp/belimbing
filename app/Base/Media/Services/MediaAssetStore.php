@@ -4,6 +4,7 @@ namespace App\Base\Media\Services;
 
 use App\Base\Media\Exceptions\MediaStorageException;
 use App\Base\Media\Models\MediaAsset;
+use App\Base\Tenancy\Services\TenantStoragePath;
 use DateInterval;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -46,6 +47,8 @@ class MediaAssetStore
     {
         $this->guardNotEmpty('disk', $disk);
         $this->guardNotEmpty('directory', $directory);
+
+        $directory = app(TenantStoragePath::class)->prefix($directory);
 
         $filename = $file->getClientOriginalName();
         $mimeType = $file->getMimeType();

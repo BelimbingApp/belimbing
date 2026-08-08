@@ -2,6 +2,7 @@
 
 namespace App\Base\Settings\Services;
 
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Base\Settings\DTO\ScopeType;
@@ -281,9 +282,13 @@ class DatabaseSettingsService implements SettingsService
     /**
      * Build the scope chain for cascade resolution.
      *
-     * User scope cascades: user → company → global.
-     * Company scope cascades: company → global.
+     * User scope cascades: user → company → tenant → global.
+     * Company scope cascades: company → tenant → global.
+     * Tenant scope cascades: tenant → global.
      * Null scope: global only.
+     *
+     * Tenant links only apply to definitions that explicitly declare the
+     * tenant scope, so existing definitions resolve exactly as before.
      *
      * @return array<int, Scope|null>
      */
@@ -297,7 +302,27 @@ class DatabaseSettingsService implements SettingsService
             $chain = [$scope];
 
             if ($scope->companyId !== null) {
-                $chain[] = Scope::company($scope->companyId);
+                $chain[] = Scope::company($scope->companyId, $scope->tenantId);
+            }
+
+            $tenantId = $scope->tenantId ?? $this->tenantIdForCompany($scope->companyId);
+
+            if ($tenantId !== null) {
+                $chain[] = Scope::tenant($tenantId);
+            }
+
+            $chain[] = null;
+
+            return $chain;
+        }
+
+        if ($scope->type === ScopeType::COMPANY) {
+            $chain = [$scope];
+
+            $tenantId = $scope->tenantId ?? $this->tenantIdForCompany($scope->id);
+
+            if ($tenantId !== null) {
+                $chain[] = Scope::tenant($tenantId);
             }
 
             $chain[] = null;
@@ -306,6 +331,25 @@ class DatabaseSettingsService implements SettingsService
         }
 
         return [$scope, null];
+    }
+
+    /**
+     * Resolve the owning tenant for a company, when tenancy infrastructure
+     * is available. Returns null when no tenant mapping exists.
+     *
+     * Resolved per call rather than constructor-injected on purpose: Base/Authz
+     * binds a null directory that Core/Company replaces, and this service is a
+     * singleton that can be built during early boot. Capturing the dependency
+     * at construction would freeze the null implementation for the process and
+     * silently drop the tenant layer out of the cascade.
+     */
+    private function tenantIdForCompany(?int $companyId): ?int
+    {
+        if ($companyId === null) {
+            return null;
+        }
+
+        return app(TenantDirectory::class)->tenantIdForCompany($companyId);
     }
 
     /**

@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Contracts\AuthorizationService;
@@ -58,6 +59,10 @@ class AuditingAuthorizationService implements AuthorizationService
 
     /**
      * Filter resources by capability, logging each check.
+     *
+     * Conversion of raw resources (arrays, models) lives in exactly one
+     * place — the engine's resourceContext — so company extraction and
+     * tenant enrichment cannot diverge between decorated and raw paths.
      */
     public function filterAllowed(
         Actor $actor,
@@ -66,7 +71,7 @@ class AuditingAuthorizationService implements AuthorizationService
         array $context = []
     ): Collection {
         return collect($resources)->filter(function ($resource) use ($actor, $capability, $context): bool {
-            $resourceContext = $resource instanceof ResourceContext ? $resource : null;
+            $resourceContext = $this->engine->resourceContext($resource);
 
             return $this->can($actor, $capability, $resourceContext, $context)->allowed;
         })->values();

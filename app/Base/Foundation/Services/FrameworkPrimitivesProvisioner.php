@@ -7,6 +7,7 @@ use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Foundation\Exceptions\FrameworkPrimitivesNotConfiguredException;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
@@ -50,7 +51,7 @@ class FrameworkPrimitivesProvisioner
     /**
      * Provision all platform primitives.
      *
-     * Ordering: Licensee company → admin user → Lara employee.
+     * Ordering: Licensee tenant → Licensee company → admin user → Lara employee.
      * Each step depends on the previous being complete.
      *
      * @param  string|null  $companyName  Display name for the licensee company
@@ -58,9 +59,39 @@ class FrameworkPrimitivesProvisioner
      */
     public function provision(?string $companyName = null, ?string $companyCode = null): void
     {
+        $this->provisionLicenseeTenant($companyName);
         $this->provisionLicensee($companyName, $companyCode);
         $this->provisionAdminUser();
         $this->provisionLara();
+    }
+
+    /**
+     * Provision the licensee tenant at id=1, ahead of the licensee company.
+     *
+     * The tenant name tracks the licensee company name when one is known;
+     * an existing tenant with no better name available is left untouched.
+     *
+     * @param  string|null  $companyName  Display name for the licensee company
+     * @return bool Whether the tenant was created (false if updated/unchanged)
+     */
+    public function provisionLicenseeTenant(?string $companyName = null): bool
+    {
+        $name = is_string($companyName) && trim($companyName) !== '' ? trim($companyName) : null;
+
+        if ($name === null) {
+            $existingCompanyName = Company::query()->find(Company::LICENSEE_ID)?->name;
+            $name = is_string($existingCompanyName) && trim($existingCompanyName) !== ''
+                ? trim($existingCompanyName)
+                : null;
+        }
+
+        $wasCreated = Tenant::provisionLicenseeTenant($name);
+
+        if ($wasCreated) {
+            $this->log('Created licensee tenant: '.($name ?? 'Licensee'));
+        }
+
+        return $wasCreated;
     }
 
     /**

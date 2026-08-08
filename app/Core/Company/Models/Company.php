@@ -3,6 +3,7 @@
 namespace App\Core\Company\Models;
 
 use App\Base\Support\Str as BlbStr;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
 use App\Core\Address\Models\Addressable;
 use App\Core\Company\Database\Factories\CompanyFactory;
@@ -39,6 +40,7 @@ class Company extends Model
      */
     protected $fillable = [
         'parent_id',
+        'tenant_id',
         'name',
         'code',
         'status',
@@ -103,6 +105,18 @@ class Company extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'parent_id');
+    }
+
+    /**
+     * Get the tenant this company belongs to.
+     *
+     * A company's tenant assignment is set at creation and treated as
+     * immutable; moving a company across tenants is a data-migration
+     * decision, not an edit.
+     */
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'tenant_id');
     }
 
     /**
@@ -386,6 +400,7 @@ class Company extends Model
         }
 
         $attributes = [
+            'tenant_id' => Tenant::LICENSEE_TENANT_ID,
             'name' => $name,
             'status' => 'active',
         ];

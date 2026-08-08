@@ -23,6 +23,7 @@ class AuditMutation extends Model
      */
     protected $fillable = [
         'company_id',
+        'tenant_id',
         'actor_type',
         'actor_id',
         'actor_role',

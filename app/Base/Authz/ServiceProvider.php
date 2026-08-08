@@ -6,16 +6,19 @@ use App\Base\Authz\Capability\CapabilityCatalog;
 use App\Base\Authz\Capability\CapabilityRegistry;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\Contracts\DecisionLogger;
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Policies\ActorContextPolicy;
 use App\Base\Authz\Policies\CompanyScopePolicy;
 use App\Base\Authz\Policies\GrantPolicy;
 use App\Base\Authz\Policies\KnownCapabilityPolicy;
+use App\Base\Authz\Policies\TenantScopePolicy;
 use App\Base\Authz\Services\AuditingAuthorizationService;
 use App\Base\Authz\Services\AuthorizationEngine;
 use App\Base\Authz\Services\AuthzMenuAccessChecker;
 use App\Base\Authz\Services\DatabaseDecisionLogger;
 use App\Base\Authz\Services\ImpersonationManager;
+use App\Base\Authz\Support\NullTenantDirectory;
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Foundation\Services\DomainState;
 use App\Base\Menu\Contracts\MenuAccessChecker;
@@ -49,15 +52,20 @@ class ServiceProvider extends BaseServiceProvider
             return CapabilityRegistry::fromCatalog($catalog);
         });
 
+        // Default tenant directory; Core/Company binds the real company→tenant
+        // lookup. Plain bind (not singleton) so the later Core registration wins.
+        $this->app->bind(TenantDirectory::class, NullTenantDirectory::class);
+
         $this->app->singleton(GrantPolicy::class);
 
         $this->app->singleton(AuthorizationEngine::class, function ($app): AuthorizationEngine {
             return new AuthorizationEngine([
                 new ActorContextPolicy,
                 new KnownCapabilityPolicy($app->make(CapabilityRegistry::class)),
+                new TenantScopePolicy,
                 new CompanyScopePolicy,
                 $app->make(GrantPolicy::class),
-            ]);
+            ], $app->make(TenantDirectory::class));
         });
 
         $this->app->singleton(DecisionLogger::class, DatabaseDecisionLogger::class);

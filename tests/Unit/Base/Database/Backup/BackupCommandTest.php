@@ -79,6 +79,7 @@ function bcStageFiles(string $bytes, array $manifestData): array
     $manifest = $root.'/source.manifest.json';
     $output = $root.'/staged.bak';
     file_put_contents($artifact, $bytes);
+    $manifestData['sha256'] ??= hash_file('sha256', $artifact);
     file_put_contents($manifest, json_encode($manifestData, JSON_THROW_ON_ERROR));
 
     return compact('root', 'artifact', 'manifest', 'output');
@@ -295,7 +296,6 @@ it('stages a verified plaintext artifact without overwriting output', function (
     $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-test',
         'encryption_mode' => 'none',
-        'sha256' => hash_file('sha256', $artifact),
     ]);
     extract($files);
 
@@ -325,7 +325,6 @@ it('preserves a destination created while staging is in progress', function (): 
     $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-race-test',
         'encryption_mode' => 'race-test',
-        'sha256' => hash_file('sha256', $artifact),
     ]);
     extract($files);
     app(EncryptionModeRegistry::class)->register('race-test', function (array $_config) use ($output): NoneEncryption {
@@ -349,7 +348,6 @@ it('cleans its private staging directory when decryption fails', function (): vo
     $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-decrypt-failure-test',
         'encryption_mode' => 'failing-test',
-        'sha256' => hash_file('sha256', $artifact),
     ]);
     extract($files);
     $mode = Mockery::mock(EncryptionMode::class);

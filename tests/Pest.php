@@ -12,6 +12,7 @@ use App\Base\Media\Models\MediaAsset;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\Services\MediaAssetStore;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\RelationshipType;
 use App\Core\User\Models\User;
@@ -99,6 +100,32 @@ function createTenantOwnerUser(?int $companyId = null): User
     ]);
 
     return $user;
+}
+
+/**
+ * Create a non-licensee tenant for tenancy tests.
+ */
+function createTenant(array $attributes = []): Tenant
+{
+    return Tenant::query()->create(array_merge([
+        'name' => 'Test Tenant',
+        'status' => 'active',
+    ], $attributes));
+}
+
+/**
+ * Create a tenant with a company inside it, for tenant-scoped fixtures.
+ *
+ * @return array{Tenant, Company}
+ */
+function createTenantWithCompany(array $tenantAttributes = [], array $companyAttributes = []): array
+{
+    $tenant = createTenant($tenantAttributes);
+
+    return [
+        $tenant,
+        Company::factory()->create(array_merge(['tenant_id' => $tenant->id], $companyAttributes)),
+    ];
 }
 
 /**

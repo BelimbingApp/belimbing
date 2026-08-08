@@ -22,6 +22,7 @@ final readonly class SettingDefinition
     private const array SUPPORTED_SCOPES = [
         'company',
         'global',
+        'tenant',
         'user',
     ];
 

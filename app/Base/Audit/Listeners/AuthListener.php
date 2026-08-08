@@ -67,6 +67,7 @@ class AuthListener
 
         $this->buffer->bufferAction([
             'company_id' => $companyId,
+            'tenant_id' => $this->resolveTenantId($target),
             'actor_type' => $target !== null
                 ? $this->principalTypeForUser($target)->value
                 : PrincipalType::GUEST->value,
@@ -95,6 +96,7 @@ class AuthListener
 
         $this->buffer->bufferAction([
             'company_id' => $this->resolveCompanyId($guard, $eventUser),
+            'tenant_id' => $this->resolveTenantId($this->authUser($guard, $eventUser)),
             'actor_type' => $this->resolveActorType($guard, $eventUser),
             'actor_id' => $actorId,
             'actor_role' => $this->resolveActorRole($guard, $eventUser),
@@ -167,6 +169,21 @@ class AuthListener
         }
 
         return null;
+    }
+
+    /**
+     * Prefer request context; otherwise derive from the authenticatable's
+     * tenant_id attribute when the model exposes one.
+     */
+    private function resolveTenantId(?Authenticatable $user): ?int
+    {
+        if ($this->context->tenantId !== null) {
+            return $this->context->tenantId;
+        }
+
+        $tenantId = $user !== null ? data_get($user, 'tenant_id') : null;
+
+        return $tenantId !== null ? (int) $tenantId : null;
     }
 
     private function resolveActorRole(string $guard, ?Authenticatable $eventUser): ?string

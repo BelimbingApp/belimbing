@@ -12,6 +12,8 @@ use App\Base\Locale\Middleware\ApplyLocaleContext;
 use App\Base\Perf\Http\Middleware\RecordRequestPerformance;
 use App\Base\System\Http\Middleware\ApplyRuntimeConfiguration;
 use App\Base\System\Services\ReportedErrorRecorder;
+use App\Base\Tenancy\Enums\TenancyErrorCode;
+use App\Base\Tenancy\Middleware\ResolveTenantContext;
 use App\Core\AI\Enums\AIErrorCode;
 use App\Core\Company\Enums\CompanyErrorCode;
 use App\Core\Employee\Enums\EmployeeErrorCode;
@@ -101,6 +103,7 @@ $renderBlbException = static function (BlbException $exception, Request $request
         FoundationErrorCode::BLB_INVARIANT_VIOLATION,
         DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
         CompanyErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
+        TenancyErrorCode::LICENSEE_TENANT_DELETION_FORBIDDEN,
         EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
         default => 500,
     };
@@ -176,6 +179,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             DatabaseConnectionRecovery::class,
             ApplyLocaleContext::class,
+            ResolveTenantContext::class,
             SecurityHeaders::class,
         ]);
 

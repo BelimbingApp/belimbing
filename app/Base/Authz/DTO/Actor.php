@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\DTO;
 
 use App\Base\Authz\Enums\AuthorizationReasonCode;
@@ -17,6 +18,7 @@ final readonly class Actor
         public ?int $companyId,
         public ?int $actingForUserId = null,
         public array $attributes = [],
+        public ?int $tenantId = null,
     ) {}
 
     /**
@@ -36,6 +38,7 @@ final readonly class Actor
             companyId: self::resolveUserCompanyId($user),
             actingForUserId: $actingForUserId,
             attributes: $attributes,
+            tenantId: self::resolveUserTenantId($user),
         );
     }
 
@@ -94,5 +97,28 @@ final readonly class Actor
         $companyId = $user->getAttribute('company_id');
 
         return $companyId !== null ? (int) $companyId : null;
+    }
+
+    /**
+     * Resolve the actor's tenant from the user record.
+     *
+     * The tenant is derived data — a user's tenant is their company's tenant
+     * (exposed by the User model as a `tenant_id` attribute). Null means the
+     * tenant could not be resolved; tenant enforcement then fails closed at
+     * TenantScopePolicy when the resource carries a tenant.
+     */
+    private static function resolveUserTenantId(Authenticatable $user): ?int
+    {
+        if (! method_exists($user, 'getAttribute')) {
+            return null;
+        }
+
+        try {
+            $tenantId = $user->getAttribute('tenant_id');
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $tenantId !== null ? (int) $tenantId : null;
     }
 }

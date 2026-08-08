@@ -213,6 +213,27 @@ class User extends Authenticatable implements CompanyScoped
     }
 
     /**
+     * Get the tenant ID the user belongs to (read as the `tenant_id` attribute).
+     *
+     * Derived data: a user's tenant is their company's tenant. Returns null
+     * when the tenant cannot be resolved (no company, or schema not yet
+     * migrated); authorization then fails closed on tenant-owned resources.
+     */
+    public function getTenantIdAttribute(): ?int
+    {
+        try {
+            $tenantId = $this->company_id !== null
+                ? $this->company?->tenant_id
+                : $this->employee?->company?->tenant_id;
+        } catch (\Throwable) {
+            // Schema not yet migrated (early boot) or relation unresolvable.
+            return null;
+        }
+
+        return $tenantId !== null ? (int) $tenantId : null;
+    }
+
+    /**
      * Get the company this user belongs to.
      */
     public function company(): BelongsTo

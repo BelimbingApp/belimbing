@@ -43,6 +43,7 @@ class JobListener
 
         $this->buffer->bufferAction([
             'company_id' => $this->context->companyId,
+            'tenant_id' => $this->context->tenantId,
             'actor_type' => $this->context->actorType,
             'actor_id' => $this->context->actorId,
             'actor_role' => $this->context->actorRole,
