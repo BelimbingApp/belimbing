@@ -18,6 +18,7 @@ jobs:
     env:
       LICENSEE_COMPANY_NAME: Belimbing CI
       LICENSEE_COMPANY_CODE: belimbing_ci
+      BLB_BOOTSTRAP_ADMIN_FILE: ${{ runner.temp }}/blb-ci-bootstrap-admin.txt
 
     steps:
       - name: Checkout
@@ -54,6 +55,14 @@ jobs:
           sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
           sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
           sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
+
+      - name: Configure Framework Primitives for Testing
+        run: |
+          printf '%s\n' \
+            'Belimbing CI Administrator' \
+            'admin@ci.example.test' \
+            'testing-only-password' \
+            > "$BLB_BOOTSTRAP_ADMIN_FILE"
 
       - name: Generate Application Key
         run: php artisan key:generate
