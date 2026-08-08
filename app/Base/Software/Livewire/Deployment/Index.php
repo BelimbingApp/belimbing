@@ -65,15 +65,6 @@ class Index extends Component
         $this->runDetachedUpdate($history, $launcher, []);
     }
 
-    public function reloadOnly(DeploymentRunHistory $history, FrankenPhpDomainRuntimeReloader $runtimeReloader): void
-    {
-        $this->runAction(
-            $history,
-            fn (): array => $this->appendRuntimeReloadSchedule([], $runtimeReloader),
-            $runtimeReloader,
-        );
-    }
-
     public function rebuildPhp(
         DeploymentService $deployment,
         DeploymentRunHistory $history,

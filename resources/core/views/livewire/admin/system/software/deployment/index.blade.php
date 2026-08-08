@@ -45,8 +45,6 @@
             _pollFailingSince: null,
             _destroyed: false,
             _livewire503Guard: null,
-            reloadRequiresConfirmation: @js(app()->environment('production')),
-            reloadConfirmationMessage: @js(__('Reloading FrankenPHP restarts web workers and may briefly interrupt active requests. Continue?')),
             storageKey: 'belimbing.deployment.run-log-after-refresh',
             init() {
                 this.restoreAfterRefresh();
@@ -360,16 +358,6 @@
                 this.runLogOpen = false;
                 this.justRefreshed = false;
                 this.forgetAfterRefresh();
-            },
-            confirmWorkerReload(event) {
-                if (this.reloadRequiresConfirmation && ! window.confirm(this.reloadConfirmationMessage)) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-
-                    return;
-                }
-
-                this.openRunLog();
             },
             rememberAfterRefresh() {
                 try {
@@ -695,22 +683,9 @@
                             </p>
                         @endif
                     </div>
-                    <x-ui.button
-                        type="button"
-                        variant="outline"
-                        class="ml-auto shrink-0"
-                        wire:click="reloadOnly"
-                        x-on:click="confirmWorkerReload($event)"
-                        wire:loading.attr="disabled"
-                        x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || reloadInProgress"
-                        :disabled="$reloadInProgress"
-                        wire:target="reloadOnly"
-                    >
-                        <span wire:loading.remove wire:target="reloadOnly">
-                            {{ $reloadInProgress ? __('Reload pending') : ($reloadStateStalled ? __('Retry reload') : __('Reload FrankenPHP')) }}
-                        </span>
-                        <span wire:loading wire:target="reloadOnly">{{ __('Reloading…') }}</span>
-                    </x-ui.button>
+                    <p class="ml-auto max-w-sm text-right text-xs text-muted">
+                        {{ __('Worker reloads are run by the host deployment tool. This page records their health and outcome.') }}
+                    </p>
                 </div>
             </div>
         </x-ui.card>
