@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Integration\Services;
 
 use App\Base\Integration\Models\OutboundExchange;
@@ -20,8 +21,8 @@ class OutboundExchangePruner
                     ->orWhereNotNull('request_headers')
                     ->orWhereNotNull('response_headers');
             })
-            ->orderBy('occurred_at')
-            ->chunk(200, function ($rows) use (&$pruned): void {
+            ->orderBy('id')
+            ->chunkById(200, function ($rows) use (&$pruned): void {
                 foreach ($rows as $exchange) {
                     if (! $exchange instanceof OutboundExchange) {
                         continue;
@@ -32,18 +33,21 @@ class OutboundExchangePruner
                         continue;
                     }
 
-                    $exchange->forceFill([
-                        'request_headers' => null,
-                        'request_body' => null,
-                        'request_body_truncated' => false,
-                        'request_body_original_bytes' => null,
-                        'response_headers' => null,
-                        'response_body' => null,
-                        'response_body_truncated' => false,
-                        'response_body_original_bytes' => null,
-                    ])->save();
+                    $updated = OutboundExchange::query()
+                        ->whereKey($exchange->getKey())
+                        ->where('updated_at', $exchange->updated_at)
+                        ->update([
+                            'request_headers' => null,
+                            'request_body' => null,
+                            'request_body_truncated' => false,
+                            'request_body_original_bytes' => null,
+                            'response_headers' => null,
+                            'response_body' => null,
+                            'response_body_truncated' => false,
+                            'response_body_original_bytes' => null,
+                        ]);
 
-                    $pruned++;
+                    $pruned += $updated;
                 }
             });
 

@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Base\Database\Livewire\Backups\Index $this */
+
+use App\Base\Database\Livewire\Backups\Index;
+
+/** @var Index $this */
 ?>
 <div>
     <x-slot name="title">{{ __('Database Backups') }}</x-slot>
@@ -29,7 +32,7 @@
             </x-slot>
             <x-slot name="help">
                 <p><code>blb:db:backup</code> runs the same pipeline as the CLI: dump (driver-aware) → encrypt (mode-aware) → upload to disk → write sidecar manifest.</p>
-                <p class="mt-2">Restore is a manual CLI process. For <code>none</code>-mode SQLite artifacts: copy the <code>.bak</code> file to the target path. For PostgreSQL: <code>pg_restore --no-owner --no-privileges --clean --if-exists --dbname={target} {artifact}</code>. For <code>app-key</code>-mode artifacts, use <code>blb:db:backup:restore</code> — see <code>docs/runbooks/database-backup.md</code> for the full restore drill.</p>
+                <p class="mt-2">Restore is a deliberate, isolated operator process. First verify and stage an artifact with <code>blb:db:backup:stage {artifact} {manifest} {output}</code>, then follow <code>docs/runbooks/database-backup.md</code> to import it into a fresh target. Integrity verification detects artifact changes; it does not prove that a restore succeeds.</p>
                 <p class="mt-2">See <code>docs/runbooks/database-backup.md</code> for tier selection and APP_KEY rotation procedures.</p>
             </x-slot>
         </x-ui.page-header>

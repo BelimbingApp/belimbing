@@ -179,7 +179,9 @@ class DomainInstaller
             'exit_code' => $migrate->exitCode(),
         ]));
 
-        $log = array_merge($log, $this->reloadRuntimeLog());
+        if ($migrate->successful()) {
+            $log = array_merge($log, $this->reloadRuntimeLog());
+        }
 
         return [
             'ok' => $migrate->successful(),

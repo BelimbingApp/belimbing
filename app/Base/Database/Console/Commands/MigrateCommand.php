@@ -26,6 +26,8 @@ class MigrateCommand extends IlluminateMigrateCommand
     use GuardsPostgresMigrationIdentifiers;
     use InteractsWithModuleMigrations;
 
+    private bool $migrationsCompleted = false;
+
     /**
      * The console command description.
      *
@@ -86,20 +88,32 @@ class MigrateCommand extends IlluminateMigrateCommand
             $this->reportIncubatingSchemaWarnings($incubatingReport);
         }
 
-        try {
-            return $this->guardPostgresMigrationIdentifiers(
-                $this->option('database'),
-                fn (): int => parent::handle(),
-            );
-        } finally {
-            if ($incubatingReport !== null && ! $this->option('pretend')) {
-                $productionPolicy->recordAppliedIncubatingSources($this->getMigrationPaths(), $connectionName);
-                app(IncubatingSchemaApprovalRepository::class)->consume(
-                    $productionPolicy->appliedFindings($incubatingReport['approved'], $connectionName),
-                    $connectionName,
-                );
-            }
+        $this->migrationsCompleted = false;
+        $migrationStatus = $this->guardPostgresMigrationIdentifiers(
+            $this->option('database'),
+            fn (): int => parent::handle(),
+        );
+
+        if (! $this->migrationsCompleted || $migrationStatus !== Command::SUCCESS || $this->option('pretend')) {
+            return $migrationStatus;
         }
+
+        $driftArguments = $connectionName !== null ? ['--database' => $connectionName] : [];
+        $driftStatus = $this->call('blb:schema:drift', $driftArguments);
+
+        if ($driftStatus !== Command::SUCCESS) {
+            return $driftStatus;
+        }
+
+        if ($incubatingReport !== null) {
+            $productionPolicy->recordAppliedIncubatingSources($this->getMigrationPaths(), $connectionName);
+            app(IncubatingSchemaApprovalRepository::class)->consume(
+                $productionPolicy->appliedFindings($incubatingReport['approved'], $connectionName),
+                $connectionName,
+            );
+        }
+
+        return Command::SUCCESS;
     }
 
     /**
@@ -244,6 +258,10 @@ class MigrateCommand extends IlluminateMigrateCommand
                 }
             },
         );
+
+        // Laravel's --graceful option converts a thrown migration failure into
+        // exit code zero, so completion must be tracked independently.
+        $this->migrationsCompleted = true;
     }
 
     /**

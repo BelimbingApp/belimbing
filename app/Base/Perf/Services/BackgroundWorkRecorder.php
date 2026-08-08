@@ -35,6 +35,7 @@ final class BackgroundWorkRecorder
         'serve',
         'tinker',
         'db:wipe',
+        'blb:db:backup:stage',
     ];
 
     private const SKIPPED_COMMAND_PREFIXES = [

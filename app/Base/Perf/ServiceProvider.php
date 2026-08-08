@@ -17,6 +17,7 @@ use Illuminate\Cache\Events\CacheMissed;
 use Illuminate\Cache\Events\KeyWritten;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Process\Factory as ProcessFactory;
 use Illuminate\Queue\Events\JobFailed;
@@ -37,6 +38,13 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(PerfLog::class);
         $this->app->singleton(PerfRuntimeSettings::class);
         $this->app->singleton(BackgroundWorkRecorder::class);
+
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('perf:prune')
+                ->dailyAt('01:15')
+                ->withoutOverlapping();
+        });
         $this->app->singleton(PerfRegressionStatusDiagnosticProvider::class);
         $this->app->tag(PerfRegressionStatusDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
 

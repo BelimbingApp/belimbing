@@ -47,6 +47,9 @@ final class BackupService
         // Always validate before doing any work.
         $writer->ensureToolingAvailable();
         $encryption->ensureReady();
+        if ($this->findFingerprintMismatches($config, $diskName) !== []) {
+            throw BackupException::configurationInvalid('APP_KEY does not match one or more existing backup manifests; re-key them before creating another backup');
+        }
         $this->ensureDiskWritable($disk, $config, $diskName);
 
         if ($dryRun) {

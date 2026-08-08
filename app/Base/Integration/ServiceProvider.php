@@ -1,10 +1,13 @@
 <?php
+
 namespace App\Base\Integration;
 
+use App\Base\Integration\Console\Commands\PruneOutboundExchangePayloadsCommand;
 use App\Base\Integration\Services\IntegrationGateway;
 use App\Base\Integration\Services\OAuth2Client;
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Integration\Services\OutboundExchangePruner;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -15,5 +18,13 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(OAuth2Client::class);
         $this->app->singleton(OAuthTokenStore::class);
         $this->app->singleton(OutboundExchangePruner::class);
+        $this->commands([PruneOutboundExchangePayloadsCommand::class]);
+
+        $this->app->booted(function (): void {
+            $this->app->make(Schedule::class)
+                ->command('blb:integration:payloads:prune')
+                ->dailyAt('01:30')
+                ->withoutOverlapping();
+        });
     }
 }

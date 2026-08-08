@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Foundation\Enums\StatusVariant;
+use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -55,4 +56,30 @@ it('renders tagged diagnostics in the status bar detail surface', function (): v
         ->assertSee('aria-label="Close diagnostics"', false)
         ->assertSee('Open related page')
         ->assertDontSee('aria-label="Open related diagnostics"', false);
+});
+
+it('reports only stale previously recorded schedule activity', function (): void {
+    $run = ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => 'maintenance:test',
+        'name' => 'maintenance:test',
+        'status' => 'succeeded',
+        'started_at' => now()->subMinutes(20),
+        'finished_at' => now()->subMinutes(19),
+    ]);
+
+    $this->actingAs(createAdminUser());
+
+    $this->get(route('admin.system.info.index'))
+        ->assertOk()
+        ->assertSee('No recent scheduled activity was recorded');
+
+    $run->forceFill([
+        'started_at' => now(),
+        'finished_at' => now(),
+    ])->save();
+
+    $this->get(route('admin.system.info.index'))
+        ->assertOk()
+        ->assertDontSee('No recent scheduled activity was recorded');
 });

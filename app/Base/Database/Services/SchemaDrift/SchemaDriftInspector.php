@@ -17,14 +17,14 @@ final readonly class SchemaDriftInspector implements SchemaDriftInspection
         private DatabaseManager $database,
     ) {}
 
-    public function inspect(): SchemaDriftReport
+    public function inspect(?string $connectionName = null): SchemaDriftReport
     {
         try {
             $this->dependencies->assertReadyForMigration();
             $files = $this->migrationFiles();
             $migrations = array_map($this->parser->parse(...), $files);
             $declared = DeclaredSchema::fromMigrations($migrations);
-            $connection = $this->database->connection();
+            $connection = $this->database->connection($connectionName);
 
             $unreadable = $declared->unreadable;
             usort($unreadable, fn (array $left, array $right): int => [

@@ -6,5 +6,5 @@ use App\Base\Database\Services\SchemaDrift\SchemaDriftReport;
 
 interface SchemaDriftInspection
 {
-    public function inspect(): SchemaDriftReport;
+    public function inspect(?string $connection = null): SchemaDriftReport;
 }

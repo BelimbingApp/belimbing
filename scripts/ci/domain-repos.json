@@ -1,21 +1,29 @@
 {
-    "_comment": "Maps each BLB non-Core domain to the repository that owns it and the contract path it mounts at in the composed app. Used by scripts/ci/compose-domain.php to check out cross-domain dependencies during domain CI, and by scripts/ci/setup-sonar.php for SonarCloud project + SONAR_TOKEN bootstrap. Keys are the domain segment of a module id (people/attendance -> people). Core is intentionally absent because it ships in the platform repository. Extensions are intentionally excluded because this shared CI does not govern their relaxed repository layout.",
+    "_comment": "Validated descriptor for Belimbing-controlled Domains. Dependency refs are immutable commit SHAs. Extensions are intentionally excluded.",
+    "schema_version": 1,
+    "platform": {
+        "repo": "BelimbingApp/belimbing",
+        "ref": "main"
+    },
     "sonar_organization": "belimbingapp",
     "domains": {
         "people": {
             "repo": "BelimbingApp/blb-people",
             "path": "app/Domains/People",
-            "sonar_project_key": "BelimbingApp_blb-people"
+            "sonar_project_key": "BelimbingApp_blb-people",
+            "ref": "c2195fa4461949b9dc47f6e073192c0a0e8fb38f"
         },
         "commerce": {
             "repo": "BelimbingApp/blb-commerce",
             "path": "app/Domains/Commerce",
-            "sonar_project_key": "BelimbingApp_blb-commerce"
+            "sonar_project_key": "BelimbingApp_blb-commerce",
+            "ref": "deac42bc27e912555c4dbfcf773045f3242be8bd"
         },
         "operation": {
             "repo": "BelimbingApp/blb-operation",
             "path": "app/Domains/Operation",
-            "sonar_project_key": "BelimbingApp_blb-operation"
+            "sonar_project_key": "BelimbingApp_blb-operation",
+            "ref": "8a21b59ffd37ff4c6a93f135e735926782ea228a"
         }
     }
 }

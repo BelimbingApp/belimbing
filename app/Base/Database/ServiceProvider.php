@@ -24,6 +24,7 @@ use App\Base\Database\Console\Commands\RevokeDataShareTransferOfferCommand;
 use App\Base\Database\Console\Commands\RollbackCommand;
 use App\Base\Database\Console\Commands\SanitizeDevelopmentDatabaseCommand;
 use App\Base\Database\Console\Commands\SchemaDriftCommand;
+use App\Base\Database\Console\Commands\StageBackupCommand;
 use App\Base\Database\Console\Commands\StatusCommand;
 use App\Base\Database\Console\Commands\WipeCommand;
 use App\Base\Database\Contracts\DataShareMirrorEngine;
@@ -171,6 +172,7 @@ class ServiceProvider extends BaseServiceProvider
             RevokeDataShareTransferOfferCommand::class,
             SanitizeDevelopmentDatabaseCommand::class,
             SchemaDriftCommand::class,
+            StageBackupCommand::class,
         ]);
     }
 

@@ -1,5 +1,7 @@
 <?php
 
+use App\Base\Database\Exceptions\BackupException;
+use App\Base\Database\Services\Backup\Encryption\EncryptionMode;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Database\Services\Backup\Encryption\NoneEncryption;
 use App\Base\Settings\Contracts\SettingsService;
@@ -66,6 +68,28 @@ function bcRequireSodium(): void
     if (! extension_loaded('sodium')) {
         test()->markTestSkipped('The app-key backup mode requires ext-sodium.');
     }
+}
+
+/** @return array{root: string, artifact: string, manifest: string, output: string} */
+function bcStageFiles(string $bytes, array $manifestData): array
+{
+    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
+    mkdir($root);
+    $artifact = $root.'/source.bak';
+    $manifest = $root.'/source.manifest.json';
+    $output = $root.'/staged.bak';
+    file_put_contents($artifact, $bytes);
+    file_put_contents($manifest, json_encode($manifestData, JSON_THROW_ON_ERROR));
+
+    return compact('root', 'artifact', 'manifest', 'output');
+}
+
+function bcCleanupStageFiles(array $files): void
+{
+    @unlink($files['artifact']);
+    @unlink($files['manifest']);
+    @unlink($files['output']);
+    @rmdir($files['root']);
 }
 
 it('dry-run validates configuration and writes nothing', function (): void {
@@ -264,5 +288,107 @@ it('preflight ignores non-app-key manifests on the disk', function (): void {
         $this->artisan('blb:db:backup')->assertExitCode(0);
     } finally {
         bcCleanup($src);
+    }
+});
+
+it('stages a verified plaintext artifact without overwriting output', function (): void {
+    $files = bcStageFiles('verified backup bytes', [
+        'backup_id' => 'stage-test',
+        'encryption_mode' => 'none',
+        'sha256' => hash_file('sha256', $artifact),
+    ]);
+    extract($files);
+
+    $queries = [];
+    DB::listen(function ($query) use (&$queries): void {
+        $queries[] = $query->sql;
+    });
+
+    try {
+        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+            ->expectsOutputToContain('Backup staged without connecting to a database.')
+            ->assertSuccessful();
+
+        expect(file_get_contents($output))->toBe('verified backup bytes')
+            ->and($queries)->toBe([]);
+
+        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+            ->expectsOutputToContain('refusing to overwrite')
+            ->assertFailed();
+        expect(file_get_contents($output))->toBe('verified backup bytes');
+    } finally {
+        bcCleanupStageFiles($files);
+    }
+});
+
+it('preserves a destination created while staging is in progress', function (): void {
+    $files = bcStageFiles('verified backup bytes', [
+        'backup_id' => 'stage-race-test',
+        'encryption_mode' => 'race-test',
+        'sha256' => hash_file('sha256', $artifact),
+    ]);
+    extract($files);
+    app(EncryptionModeRegistry::class)->register('race-test', function (array $_config) use ($output): NoneEncryption {
+        file_put_contents($output, 'created by another process');
+
+        return new NoneEncryption;
+    });
+
+    try {
+        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+            ->expectsOutputToContain('refusing to overwrite')
+            ->assertFailed();
+
+        expect(file_get_contents($output))->toBe('created by another process');
+    } finally {
+        bcCleanupStageFiles($files);
+    }
+});
+
+it('cleans its private staging directory when decryption fails', function (): void {
+    $files = bcStageFiles('verified backup bytes', [
+        'backup_id' => 'stage-decrypt-failure-test',
+        'encryption_mode' => 'failing-test',
+        'sha256' => hash_file('sha256', $artifact),
+    ]);
+    extract($files);
+    $mode = Mockery::mock(EncryptionMode::class);
+    $mode->shouldReceive('ensureReady')->once();
+    $mode->shouldReceive('decryptFile')->once()->andReturnUsing(function (string $_source, string $destination): void {
+        file_put_contents($destination, 'partial plaintext');
+
+        throw BackupException::restoreFailed('simulated decryption failure');
+    });
+    $mode->shouldNotReceive('name', 'extension', 'encryptFile');
+    app(EncryptionModeRegistry::class)->register('failing-test', fn (array $_config): EncryptionMode => $mode);
+
+    try {
+        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+            ->expectsOutputToContain('simulated decryption failure')
+            ->assertFailed();
+
+        expect($output)->not->toBeFile()
+            ->and(glob($root.'/.blb-stage-*'))->toBe([]);
+    } finally {
+        bcCleanupStageFiles($files);
+    }
+});
+
+it('refuses to stage an artifact whose manifest hash does not match', function (): void {
+    $files = bcStageFiles('changed backup bytes', [
+        'backup_id' => 'stage-test',
+        'encryption_mode' => 'none',
+        'sha256' => str_repeat('0', 64),
+    ]);
+    extract($files);
+
+    try {
+        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+            ->expectsOutputToContain('Artifact SHA-256 does not match')
+            ->assertFailed();
+
+        expect($output)->not->toBeFile();
+    } finally {
+        bcCleanupStageFiles($files);
     }
 });

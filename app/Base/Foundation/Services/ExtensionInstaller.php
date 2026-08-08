@@ -150,7 +150,9 @@ class ExtensionInstaller
         $log[] = '$ php artisan migrate --force';
         $log[] = trim($migrate->output()."\n".$migrate->errorOutput());
 
-        $log = array_merge($log, $this->reloadRuntimeLog());
+        if ($migrate->successful()) {
+            $log = array_merge($log, $this->reloadRuntimeLog());
+        }
 
         $log[] = $migrate->successful()
             ? (string) __('Done — extension :folder installed. Its modules are live from the next page load.', ['folder' => $folder])

@@ -12,7 +12,7 @@ uses(TestCase::class);
 it('returns clean only when the entire report was checked and matched', function (): void {
     $report = new SchemaDriftReport('testing', 'sqlite', ':memory:', 2, 1, [], []);
     $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
-        $mock->shouldReceive('inspect')->once()->andReturn($report);
+        $mock->shouldReceive('inspect')->once()->with(null)->andReturn($report);
     });
 
     $this->artisan('blb:schema:drift')
@@ -27,7 +27,7 @@ it('returns one for confirmed drift', function (): void {
         new SchemaDriftFinding(SchemaDriftFindingKind::MISSING_COLUMN, 'widgets', 'name', 'widgets.php', 12),
     ], []);
     $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
-        $mock->shouldReceive('inspect')->once()->andReturn($report);
+        $mock->shouldReceive('inspect')->once()->with(null)->andReturn($report);
     });
 
     $this->artisan('blb:schema:drift')
@@ -43,11 +43,22 @@ it('returns two instead of guessing when source analysis is incomplete', functio
         'reason' => 'Runtime-dependent table name.',
     ]]);
     $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
-        $mock->shouldReceive('inspect')->once()->andReturn($report);
+        $mock->shouldReceive('inspect')->once()->with(null)->andReturn($report);
     });
 
     $this->artisan('blb:schema:drift')
         ->expectsOutput('UNREADABLE source="widgets.php:14" reason="Runtime-dependent table name."')
         ->expectsOutput('RESULT INCOMPLETE')
         ->assertExitCode(2);
+});
+
+it('inspects the explicitly selected database connection', function (): void {
+    $report = new SchemaDriftReport('reporting', 'sqlite', ':memory:', 2, 1, [], []);
+    $this->mock(SchemaDriftInspection::class, function (MockInterface $mock) use ($report): void {
+        $mock->shouldReceive('inspect')->once()->with('reporting')->andReturn($report);
+    });
+
+    $this->artisan('blb:schema:drift', ['--database' => 'reporting'])
+        ->expectsOutput('SCHEMA_DRIFT connection="reporting" driver="sqlite" database=":memory:" scope="tables,columns,indexes"')
+        ->assertExitCode(0);
 });

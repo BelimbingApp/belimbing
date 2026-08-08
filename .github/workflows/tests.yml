@@ -8,14 +8,23 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
     environment: Testing
+    env:
+      LICENSEE_COMPANY_NAME: Belimbing CI
+      LICENSEE_COMPANY_CODE: belimbing_ci
+      BLB_BOOTSTRAP_ADMIN_FILE: ${{ runner.temp }}/blb-ci-bootstrap-admin.txt
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        with:
+          fetch-depth: 0
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
@@ -47,8 +56,32 @@ jobs:
           sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
           sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
 
+      - name: Configure Framework Primitives for Testing
+        run: |
+          printf '%s\n' \
+            'Belimbing CI Administrator' \
+            'admin@ci.example.test' \
+            'testing-only-password' \
+            > "$BLB_BOOTSTRAP_ADMIN_FILE"
+
       - name: Generate Application Key
         run: php artisan key:generate
+
+      - name: Prove changed migration sources match the database
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
+            ':(glob)app/**/Database/Migrations/**/*.php' \
+            'database/migrations/*.php' \
+            'app/Base/Database/Services/SchemaDrift/*.php' \
+            'app/Base/Database/Console/Commands/SchemaDriftCommand.php'; then
+            echo 'Migration source and drift inspector are unchanged.'
+          else
+            php artisan migrate --force --no-interaction
+          fi
 
       - name: Build Assets
         run: bun run build
