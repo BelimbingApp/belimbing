@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Console\Commands;
 
+use App\Core\AI\Console\Commands\Concerns\BuildsLifecycleActionScope;
 use App\Core\AI\Enums\LifecycleAction;
 use App\Core\AI\Services\ControlPlane\LifecycleControlService;
 use Illuminate\Console\Command;
@@ -15,6 +17,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:ai:lifecycle:preview')]
 class LifecyclePreviewCommand extends Command
 {
+    use BuildsLifecycleActionScope;
+
     protected $description = 'Preview what a lifecycle action would affect';
 
     protected $signature = 'blb:ai:lifecycle:preview
@@ -37,7 +41,7 @@ class LifecyclePreviewCommand extends Command
             return self::FAILURE;
         }
 
-        $scope = $this->buildScope($action);
+        $scope = $this->buildLifecycleActionScope($action);
         $preview = $service->preview($action, $scope);
         $data = $preview->toArray();
 
@@ -53,31 +57,5 @@ class LifecyclePreviewCommand extends Command
         }
 
         return self::SUCCESS;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildScope(LifecycleAction $action): array
-    {
-        $scope = [];
-
-        if (in_array($action, [LifecycleAction::CompactMemory, LifecycleAction::PruneSessions], true)) {
-            $scope['employee_id'] = (int) $this->option('employee');
-        }
-
-        if (in_array($action, [LifecycleAction::PruneSessions, LifecycleAction::PruneWireLogs], true)) {
-            $scope['retention_days'] = (int) $this->option('retention-days');
-        }
-
-        if ($action === LifecycleAction::PruneArtifacts) {
-            $scope['session_id'] = $this->option('session');
-        }
-
-        if ($action === LifecycleAction::SweepOperations) {
-            $scope['stale_minutes'] = (int) $this->option('stale-minutes');
-        }
-
-        return $scope;
     }
 }

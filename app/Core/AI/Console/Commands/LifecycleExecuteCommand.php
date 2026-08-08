@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Console\Commands;
 
+use App\Core\AI\Console\Commands\Concerns\BuildsLifecycleActionScope;
 use App\Core\AI\Enums\LifecycleAction;
 use App\Core\AI\Services\ControlPlane\LifecycleControlService;
 use Illuminate\Console\Command;
@@ -15,6 +17,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 #[AsCommand(name: 'blb:ai:lifecycle:execute')]
 class LifecycleExecuteCommand extends Command
 {
+    use BuildsLifecycleActionScope;
+
     protected $description = 'Execute a lifecycle action (compact, prune, sweep, refresh) with audit';
 
     protected $signature = 'blb:ai:lifecycle:execute
@@ -38,7 +42,7 @@ class LifecycleExecuteCommand extends Command
             return self::FAILURE;
         }
 
-        $scope = $this->buildScope($action);
+        $scope = $this->buildLifecycleActionScope($action);
 
         // Require confirmation for destructive actions
         if ($action->isDestructive() && ! $this->option('confirm')) {
@@ -68,31 +72,5 @@ class LifecycleExecuteCommand extends Command
         }
 
         return $data['status'] === 'completed' ? self::SUCCESS : self::FAILURE;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildScope(LifecycleAction $action): array
-    {
-        $scope = [];
-
-        if (in_array($action, [LifecycleAction::CompactMemory, LifecycleAction::PruneSessions], true)) {
-            $scope['employee_id'] = (int) $this->option('employee');
-        }
-
-        if (in_array($action, [LifecycleAction::PruneSessions, LifecycleAction::PruneWireLogs], true)) {
-            $scope['retention_days'] = (int) $this->option('retention-days');
-        }
-
-        if ($action === LifecycleAction::PruneArtifacts) {
-            $scope['session_id'] = $this->option('session');
-        }
-
-        if ($action === LifecycleAction::SweepOperations) {
-            $scope['stale_minutes'] = (int) $this->option('stale-minutes');
-        }
-
-        return $scope;
     }
 }
