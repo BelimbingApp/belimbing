@@ -336,6 +336,12 @@ class DatabaseSettingsService implements SettingsService
     /**
      * Resolve the owning tenant for a company, when tenancy infrastructure
      * is available. Returns null when no tenant mapping exists.
+     *
+     * Resolved per call rather than constructor-injected on purpose: Base/Authz
+     * binds a null directory that Core/Company replaces, and this service is a
+     * singleton that can be built during early boot. Capturing the dependency
+     * at construction would freeze the null implementation for the process and
+     * silently drop the tenant layer out of the cascade.
      */
     private function tenantIdForCompany(?int $companyId): ?int
     {

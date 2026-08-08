@@ -7,6 +7,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Base\Tenancy\Services\ApplicationTenantContext;
+use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -88,5 +89,10 @@ class ServiceProvider extends BaseServiceProvider
 
         $events->listen(JobProcessed::class, $clear);
         $events->listen(JobFailed::class, $clear);
+        // A job that throws but has attempts left is released back to the
+        // queue: neither JobProcessed nor JobFailed fires, so without this the
+        // worker would carry that job's tenant into its idle loop and into
+        // shutdown handlers.
+        $events->listen(JobExceptionOccurred::class, $clear);
     }
 }

@@ -59,7 +59,7 @@ Tenancy must not tax the single-licensee SMB experience that is Belimbing's reas
 
 - `TenantContext`: resolves the current tenant ID or null; consumers fail closed on null.
 - `tenants` — `id`, `parent_id` (nullable, operator/reseller hierarchy), `name`, `status`; id=1 is the licensee tenant, upserted at install like `Company::LICENSEE_ID`.
-- `companies.tenant_id` — required FK, default/backfilled to 1.
+- `companies.tenant_id` — required (NOT NULL), indexed, default/backfilled to 1. No database foreign-key constraint: `companies` declares none today (`parent_id` included), and tenancy is not the place to change that convention. Integrity is held by the default, the undeletable licensee tenant, and soft-deleted tenants.
 - Authz: `tenant_scope` policy key, evaluated before `company_scope`; denies cross-tenant resource access regardless of role grants.
 - Settings: scope `tenant`; resolution order global → tenant → company → user.
 - AI config: agent workspace → company → tenant → runtime defaults.

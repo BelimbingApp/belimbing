@@ -5,7 +5,10 @@ use App\Base\Media\Services\MediaAssetStore;
 use App\Base\Settings\Models\Setting;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Services\TenantStoragePath;
+use Illuminate\Contracts\Queue\Job;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Queue\Events\JobExceptionOccurred;
+use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +53,24 @@ it('stamps the dispatch-time tenant onto queued jobs and clears after execution'
     Bus::dispatch(new TenantContextProbeJob);
 
     expect(TenantContextProbeJob::$observedTenantId)->toBeNull();
+});
+
+it('clears the tenant when a job throws but still has attempts left', function (): void {
+    // A released job fires neither JobProcessed nor JobFailed. Without a
+    // JobExceptionOccurred hook the worker would keep that job's tenant while
+    // it waits for the next one.
+    $context = app(TenantContext::class);
+    $context->set(11);
+
+    $job = Mockery::mock(Job::class);
+    $job->allows('payload')->andReturns(['tenantId' => 11]);
+
+    event(new JobProcessing('database', $job));
+    expect($context->currentTenantId())->toBe(11);
+
+    event(new JobExceptionOccurred('database', $job, new RuntimeException('transient')));
+
+    expect($context->currentTenantId())->toBeNull();
 });
 
 it('stamps mutation audit entries with the row tenant, then request context', function (): void {
