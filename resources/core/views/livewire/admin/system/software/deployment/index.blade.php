@@ -506,7 +506,7 @@
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -593,7 +593,7 @@
                             @elseif ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
