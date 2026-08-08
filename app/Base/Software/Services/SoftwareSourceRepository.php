@@ -4,22 +4,18 @@ namespace App\Base\Software\Services;
 
 use App\Base\Foundation\ApplicationTopology;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Base\Support\Str;
 use App\Base\Support\Git\GitRepository;
-use App\Base\Support\Git\GitResult;
+use App\Base\Support\Str;
+use Composer\CaBundle\CaBundle;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Process;
-use Throwable;
 
 /**
  * Discovers git-backed software sources and reads their local/remote state.
  */
 class SoftwareSourceRepository
 {
-    private const TOKEN_PREFIX = 'integrations.github.token.';
-
     private const REMOTE_STATUS_CACHE_SECONDS = 60;
 
     /**
@@ -29,9 +25,19 @@ class SoftwareSourceRepository
 
     private readonly SoftwareSourceGitReader $gitReader;
 
-    public function __construct(private readonly SettingsService $settings, ?SoftwareSourceGitReader $gitReader = null)
-    {
+    private readonly GitHubTokenStore $tokens;
+
+    private readonly SoftwareSourceLatestCommitFetcher $commitFetcher;
+
+    public function __construct(
+        SettingsService $settings,
+        ?SoftwareSourceGitReader $gitReader = null,
+        ?GitHubTokenStore $tokens = null,
+        ?SoftwareSourceLatestCommitFetcher $commitFetcher = null,
+    ) {
         $this->gitReader = $gitReader ?? new SoftwareSourceGitReader;
+        $this->tokens = $tokens ?? new GitHubTokenStore($settings);
+        $this->commitFetcher = $commitFetcher ?? new SoftwareSourceLatestCommitFetcher($this->gitReader, $this->tokens);
     }
 
     /**
@@ -88,7 +94,7 @@ class SoftwareSourceRepository
             );
         }
 
-        $latestResults = $this->fetchLatestCommits($latestRequests);
+        $latestResults = $this->commitFetcher->fetchLatestCommits($latestRequests);
 
         $this->applyLatestCommitResults($entries, $latestRequests, $latestRequestAliases, $latestResults);
 
@@ -187,14 +193,12 @@ class SoftwareSourceRepository
 
     public function tokenFor(string $owner): ?string
     {
-        $token = $this->settings->get(self::TOKEN_PREFIX.strtolower($owner));
-
-        return is_string($token) && trim($token) !== '' ? trim($token) : null;
+        return $this->tokens->tokenFor($owner);
     }
 
     public function saveToken(string $owner, string $token): void
     {
-        $this->settings->set(self::TOKEN_PREFIX.strtolower($owner), trim($token));
+        $this->tokens->saveToken($owner, $token);
     }
 
     /**
@@ -466,63 +470,6 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
-     */
-    private function fetchLatestCommits(array $requests): array
-    {
-        if ($requests === []) {
-            return [];
-        }
-
-        try {
-            $poolResults = Process::concurrently(function ($pool) use ($requests): void {
-                foreach ($requests as $key => $request) {
-                    $repo = new GitRepository($request['path'], $this->tokenFor($request['owner']));
-
-                    $pool->as($key)
-                        ->path($request['path'])
-                        ->timeout(30)
-                        ->command($repo->command([
-                            'ls-remote',
-                            '--exit-code',
-                            'origin',
-                            'refs/heads/'.$request['branch'],
-                        ], authenticated: true));
-                }
-            });
-        } catch (Throwable $exception) {
-            return array_map(
-                fn (array $request): array => [null, (string) __('Could not start Git remote status checks: :error', ['error' => $exception->getMessage()])],
-                $requests,
-            );
-        }
-
-        $latest = [];
-        foreach ($requests as $key => $request) {
-            $result = $poolResults[$key] ?? null;
-            $gitResult = $result !== null
-                ? new GitResult(
-                    ok: $result->successful(),
-                    output: trim($result->output()),
-                    error: trim($result->errorOutput()),
-                    exitCode: $result->exitCode() ?? -1,
-                )
-                : new GitResult(ok: false, output: '', error: (string) __('git process did not return a result'), exitCode: -1);
-
-            $latest[$key] = $this->gitReader->parseLatestCommitResult(
-                $request['path'],
-                $request['owner'],
-                $request['name'],
-                $request['branch'],
-                $gitResult,
-            );
-        }
-
-        return $latest;
-    }
-
-    /**
      * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null}  $entry
      * @param  array<string, mixed>|null  $latest
      */
@@ -543,6 +490,7 @@ class SoftwareSourceRepository
         $url = "/repos/{$owner}/{$name}{$path}";
         $base = Http::acceptJson()
             ->withUserAgent('Belimbing Update Checker')
+            ->withOptions(['verify' => CaBundle::getSystemCaRootBundlePath()])
             ->timeout(15)
             ->baseUrl('https://api.github.com');
 
