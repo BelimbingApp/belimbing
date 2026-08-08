@@ -249,12 +249,11 @@ test('openai codex setup disconnect clears credentials and resets auth state', f
         ->and($auth['last_error_message'] ?? null)->toBeNull();
 });
 
-test('openai codex setup completes pasted localhost callback URLs', function (): void {
+test('openai codex setup completes pasted callback values', function (string $state, bool $usesRedirectUrl, string $accountId, string $refreshToken): void {
     $user = createAdminUser();
     $provider = createOpenAiCodexProvider($user, pendingCodexAuthState());
     $provider->update(['credentials' => []]);
 
-    $state = 'state-123';
     Cache::put('openai_codex_oauth:'.$state, [
         'provider_id' => $provider->id,
         'company_id' => $user->company_id,
@@ -262,50 +261,27 @@ test('openai codex setup completes pasted localhost callback URLs', function ():
         'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
     ], 600);
 
-    fakeCodexOauthExchange(accountId: 'acct_manual', refreshToken: 'refresh-manual');
+    fakeCodexOauthExchange(accountId: $accountId, refreshToken: $refreshToken);
 
     $this->actingAs($user);
+    $manualRedirectInput = $usesRedirectUrl
+        ? app(OpenAiCodexAuthManager::class)->redirectUri().'?code=code-1&state='.$state
+        : 'code-1#'.$state;
 
     Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
-        ->set('manualRedirectInput', app(OpenAiCodexAuthManager::class)->redirectUri().'?code=code-1&state='.$state)
+        ->set('manualRedirectInput', $manualRedirectInput)
         ->call('completeOauthLogin')
         ->assertSet('connectedProviderId', $provider->id)
         ->assertSet('authState.status', 'connected')
         ->assertSet('manualCompletionError', null);
 
     $provider->refresh();
-    expect($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN] ?? null)->toBe('refresh-manual')
-        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID] ?? null)->toBe('acct_manual');
-});
-
-test('openai codex setup completes hash-separated callback values', function (): void {
-    $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, pendingCodexAuthState());
-    $provider->update(['credentials' => []]);
-
-    $state = 'state-hash';
-    Cache::put('openai_codex_oauth:'.$state, [
-        'provider_id' => $provider->id,
-        'company_id' => $user->company_id,
-        'verifier' => 'verifier-xyz',
-        'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
-    ], 600);
-
-    fakeCodexOauthExchange(accountId: 'acct_hash', refreshToken: 'refresh-hash');
-
-    $this->actingAs($user);
-
-    Livewire::test(OpenAiCodexSetup::class, ['providerKey' => OpenAiCodexDefinition::KEY])
-        ->set('manualRedirectInput', 'code-1#'.$state)
-        ->call('completeOauthLogin')
-        ->assertSet('connectedProviderId', $provider->id)
-        ->assertSet('authState.status', 'connected')
-        ->assertSet('manualCompletionError', null);
-
-    $provider->refresh();
-    expect($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN] ?? null)->toBe('refresh-hash')
-        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID] ?? null)->toBe('acct_hash');
-});
+    expect($provider->credentials[OpenAiCodexDefinition::CRED_REFRESH_TOKEN] ?? null)->toBe($refreshToken)
+        ->and($provider->credentials[OpenAiCodexDefinition::CRED_ACCOUNT_ID] ?? null)->toBe($accountId);
+})->with([
+    'localhost redirect URL' => ['state-123', true, 'acct_manual', 'refresh-manual'],
+    'hash-separated values' => ['state-hash', false, 'acct_hash', 'refresh-hash'],
+]);
 
 test('openai codex setup rejects pasted callback values without state', function (): void {
     $user = createAdminUser();

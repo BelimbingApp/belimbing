@@ -74,11 +74,11 @@ function validPromptPackageValidation(array $loadOrder): WorkspaceValidationResu
     );
 }
 
-it('assembles behavioral sections from workspace files in load order', function (): void {
+it('builds behavioral sections while handling empty workspace files', function (string $systemPrompt, string $operator, int $sectionCount): void {
     $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     $operatorPath = $this->tempDir.'/operator.md';
-    file_put_contents($systemPromptPath, 'You are Lara.');
-    file_put_contents($operatorPath, 'Company: Belimbing');
+    file_put_contents($systemPromptPath, $systemPrompt);
+    file_put_contents($operatorPath, $operator);
 
     $manifest = promptPackageManifest($this->tempDir, [
         WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
@@ -89,13 +89,18 @@ it('assembles behavioral sections from workspace files in load order', function 
     $factory = new PromptPackageFactory;
     $package = $factory->build($manifest, $validation);
 
-    expect($package->sections)->toHaveCount(2);
+    expect($package->sections)->toHaveCount($sectionCount);
     expect($package->sections[0]->label)->toBe('system_prompt');
-    expect($package->sections[0]->content)->toBe('You are Lara.');
+    expect($package->sections[0]->content)->toBe($systemPrompt);
     expect($package->sections[0]->type)->toBe(PromptSectionType::Behavioral);
-    expect($package->sections[1]->label)->toBe('operator');
-    expect($package->sections[1]->content)->toBe('Company: Belimbing');
-});
+    if ($sectionCount === 2) {
+        expect($package->sections[1]->label)->toBe('operator');
+        expect($package->sections[1]->content)->toBe($operator);
+    }
+})->with([
+    'populated workspace files' => ['You are Lara.', 'Company: Belimbing', 2],
+    'empty operator file' => ['Identity', '   ', 1],
+]);
 
 it('wraps extension content with append-only policy preamble', function (): void {
     $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
@@ -150,25 +155,6 @@ it('appends operational and transient sections after behavioral sections', funct
     expect($package->sections[0]->type)->toBe(PromptSectionType::Behavioral);
     expect($package->sections[1]->type)->toBe(PromptSectionType::Operational);
     expect($package->sections[2]->type)->toBe(PromptSectionType::Transient);
-});
-
-it('skips empty workspace files', function (): void {
-    $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
-    $operatorPath = $this->tempDir.'/operator.md';
-    file_put_contents($systemPromptPath, 'Identity');
-    file_put_contents($operatorPath, '   ');
-
-    $manifest = promptPackageManifest($this->tempDir, [
-        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-        WorkspaceFileEntry::found(WorkspaceFileSlot::Operator, $operatorPath, 'workspace'),
-    ]);
-    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Operator]);
-
-    $factory = new PromptPackageFactory;
-    $package = $factory->build($manifest, $validation);
-
-    expect($package->sections)->toHaveCount(1);
-    expect($package->sections[0]->label)->toBe('system_prompt');
 });
 
 it('throws when a resolved file cannot be read', function (): void {
