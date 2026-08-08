@@ -25,7 +25,6 @@ use Livewire\Livewire;
 const OAI_CODEX_BACKEND_BASE_URL = 'https://chatgpt.com/backend-api';
 const OAI_CODEX_MODELS_ENDPOINT_PATTERN = OAI_CODEX_BACKEND_BASE_URL.'/codex/models*';
 const OAI_CODEX_RECONNECT_HINT = 'Reconnect OpenAI Codex. If the failure persists, disable this provider because the external ChatGPT backend contract may have changed.';
-const OAI_CODEX_DEFAULT_MODEL = 'gpt-5.4';
 const OAI_CODEX_MODELS_DEV_PATTERN = 'https://models.dev/*';
 
 // Completing/disconnecting the Codex OAuth flow triggers ModelDiscoveryService,
@@ -73,15 +72,7 @@ function createConnectedOpenAiCodexProvider(User $user, array $authOverrides = [
 test('openai codex setup surfaces connected auth state and diagnostic action', function (): void {
     $user = createAdminUser();
 
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-                ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
-                ['slug' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
-            ],
-        ], 200),
-    ]);
+    fakeOpenAiCodexModels();
     $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.1-codex-mini');
 
@@ -99,15 +90,7 @@ test('openai codex setup surfaces connected auth state and diagnostic action', f
 });
 
 test('openai codex setup sync does not invent a default model', function (): void {
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-                ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
-                ['slug' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
-            ],
-        ], 200),
-    ]);
+    fakeOpenAiCodexModels();
 
     $user = createAdminUser();
     $provider = createConnectedOpenAiCodexProvider($user);
@@ -131,15 +114,7 @@ test('openai codex setup sync does not invent a default model', function (): voi
 });
 
 test('openai codex setup sync message reflects provider discovery sync', function (): void {
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-                ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
-                ['slug' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
-            ],
-        ], 200),
-    ]);
+    fakeOpenAiCodexModels();
 
     $user = createAdminUser();
     $provider = createConnectedOpenAiCodexProvider($user);
@@ -155,12 +130,8 @@ test('openai codex setup sync message reflects provider discovery sync', functio
 });
 
 test('openai codex sync records outbound exchange for model discovery', function (): void {
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-            ],
-        ], 200),
+    fakeOpenAiCodexModels([
+        ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
     ]);
 
     $user = createAdminUser();
@@ -186,12 +157,8 @@ test('openai codex model sync deletes inactive models not on the curated list', 
 test('openai codex setup records successful verification diagnostics', function (): void {
     $user = createAdminUser();
 
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-            ],
-        ], 200),
+    fakeOpenAiCodexModels([
+        ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
     ]);
 
     $provider = createConnectedOpenAiCodexProvider($user, [
@@ -228,12 +195,8 @@ test('openai codex setup records successful verification diagnostics', function 
 test('openai codex setup marks provider expired when verification returns auth error', function (): void {
     $user = createAdminUser();
 
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-            ],
-        ], 200),
+    fakeOpenAiCodexModels([
+        ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
     ]);
     $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.4')->setAsDefault();
@@ -267,15 +230,7 @@ test('openai codex setup marks provider expired when verification returns auth e
 
 test('openai codex setup disconnect clears credentials and resets auth state', function (): void {
     $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'connected',
-        'mode' => 'browser_pkce',
-        'completed_at' => now()->subMinutes(5)->toIso8601String(),
-        'last_refresh_at' => now()->subMinute()->toIso8601String(),
-        'plan_type' => 'codex_pro',
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    $provider = createOpenAiCodexProvider($user, connectedCodexAuthState());
 
     $this->actingAs($user);
 
@@ -296,14 +251,7 @@ test('openai codex setup disconnect clears credentials and resets auth state', f
 
 test('openai codex setup completes pasted localhost callback URLs', function (): void {
     $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'pending',
-        'mode' => 'browser_pkce',
-        'started_at' => now()->subMinute()->toIso8601String(),
-        'completed_at' => null,
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    $provider = createOpenAiCodexProvider($user, pendingCodexAuthState());
     $provider->update(['credentials' => []]);
 
     $state = 'state-123';
@@ -314,21 +262,7 @@ test('openai codex setup completes pasted localhost callback URLs', function ():
         'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
     ], 600);
 
-    $payload = base64_encode(json_encode([
-        'https://api.openai.com/auth' => [
-            'chatgpt_account_id' => 'acct_manual',
-        ],
-    ], JSON_THROW_ON_ERROR));
-    $payload = rtrim(strtr($payload, '+/', '-_'), '=');
-    $accessToken = 'aaa.'.$payload.'.zzz';
-
-    Http::fake([
-        'https://auth.openai.com/oauth/token' => Http::response([
-            'access_token' => $accessToken,
-            'refresh_token' => 'refresh-manual',
-            'expires_in' => 3600,
-        ]),
-    ]);
+    fakeCodexOauthExchange(accountId: 'acct_manual', refreshToken: 'refresh-manual');
 
     $this->actingAs($user);
 
@@ -346,14 +280,7 @@ test('openai codex setup completes pasted localhost callback URLs', function ():
 
 test('openai codex setup completes hash-separated callback values', function (): void {
     $user = createAdminUser();
-    $provider = createOpenAiCodexProvider($user, [
-        'status' => 'pending',
-        'mode' => 'browser_pkce',
-        'started_at' => now()->subMinute()->toIso8601String(),
-        'completed_at' => null,
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ]);
+    $provider = createOpenAiCodexProvider($user, pendingCodexAuthState());
     $provider->update(['credentials' => []]);
 
     $state = 'state-hash';
@@ -364,21 +291,7 @@ test('openai codex setup completes hash-separated callback values', function ():
         'redirect_uri' => app(OpenAiCodexAuthManager::class)->redirectUri(),
     ], 600);
 
-    $payload = base64_encode(json_encode([
-        'https://api.openai.com/auth' => [
-            'chatgpt_account_id' => 'acct_hash',
-        ],
-    ], JSON_THROW_ON_ERROR));
-    $payload = rtrim(strtr($payload, '+/', '-_'), '=');
-    $accessToken = 'aaa.'.$payload.'.zzz';
-
-    Http::fake([
-        'https://auth.openai.com/oauth/token' => Http::response([
-            'access_token' => $accessToken,
-            'refresh_token' => 'refresh-hash',
-            'expires_in' => 3600,
-        ]),
-    ]);
+    fakeCodexOauthExchange(accountId: 'acct_hash', refreshToken: 'refresh-hash');
 
     $this->actingAs($user);
 
@@ -396,14 +309,7 @@ test('openai codex setup completes hash-separated callback values', function ():
 
 test('openai codex setup rejects pasted callback values without state', function (): void {
     $user = createAdminUser();
-    createOpenAiCodexProvider($user, [
-        'status' => 'pending',
-        'mode' => 'browser_pkce',
-        'started_at' => now()->subMinute()->toIso8601String(),
-        'completed_at' => null,
-        'last_error_code' => null,
-        'last_error_message' => null,
-    ])->update(['credentials' => []]);
+    createOpenAiCodexProvider($user, pendingCodexAuthState())->update(['credentials' => []]);
 
     $this->actingAs($user);
 
@@ -417,12 +323,8 @@ test('openai codex setup rejects pasted callback values without state', function
 test('openai codex setup shows reconnect guidance when verification returns a hint', function (): void {
     $user = createAdminUser();
 
-    Http::fake([
-        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
-            'models' => [
-                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
-            ],
-        ], 200),
+    fakeOpenAiCodexModels([
+        ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
     ]);
     $provider = createConnectedOpenAiCodexProvider($user);
     createOpenAiCodexModel($provider, 'gpt-5.4')->setAsDefault();
@@ -485,6 +387,59 @@ function createOpenAiCodexModel(AiProvider $provider, string $modelId, bool $isD
         'is_active' => true,
         'is_default' => $isDefault,
     ]);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function pendingCodexAuthState(): array
+{
+    return [
+        'status' => 'pending',
+        'mode' => 'browser_pkce',
+        'started_at' => now()->subMinute()->toIso8601String(),
+        'completed_at' => null,
+        'last_error_code' => null,
+        'last_error_message' => null,
+    ];
+}
+
+/**
+ * @param  list<array{slug: string, display_name: string}>|null  $models
+ */
+function fakeOpenAiCodexModels(?array $models = null): void
+{
+    Http::fake([
+        OAI_CODEX_MODELS_ENDPOINT_PATTERN => Http::response([
+            'models' => $models ?? [
+                ['slug' => 'gpt-5.4', 'display_name' => 'gpt-5.4'],
+                ['slug' => 'gpt-5.4-mini', 'display_name' => 'gpt-5.4-mini'],
+                ['slug' => 'gpt-5.2', 'display_name' => 'gpt-5.2'],
+            ],
+        ], 200),
+    ]);
+}
+
+function fakeCodexOauthExchange(string $accountId, string $refreshToken): void
+{
+    Http::fake([
+        'https://auth.openai.com/oauth/token' => Http::response([
+            'access_token' => codexAccessTokenForAccount($accountId),
+            'refresh_token' => $refreshToken,
+            'expires_in' => 3600,
+        ]),
+    ]);
+}
+
+function codexAccessTokenForAccount(string $accountId): string
+{
+    $payload = base64_encode(json_encode([
+        'https://api.openai.com/auth' => [
+            'chatgpt_account_id' => $accountId,
+        ],
+    ], JSON_THROW_ON_ERROR));
+
+    return 'aaa.'.rtrim(strtr($payload, '+/', '-_'), '=').'.zzz';
 }
 
 function makeCodexProviderTestService(int $providerId, ProviderTestResult $result, string $modelId = 'gpt-5.4'): ProviderTestService

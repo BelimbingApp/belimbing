@@ -30,32 +30,61 @@ afterEach(function (): void {
     rmdir($this->tempDir);
 });
 
+/**
+ * @param  list<WorkspaceFileEntry>  $entries
+ */
+function promptPackageManifest(string $workspacePath, array $entries): WorkspaceManifest
+{
+    return new WorkspaceManifest(
+        employeeId: Employee::LARA_ID,
+        workspacePath: $workspacePath,
+        isSystemAgent: true,
+        frameworkResourcePath: null,
+        files: promptPackageFiles($entries),
+    );
+}
+
+/**
+ * @param  list<WorkspaceFileEntry>  $entries
+ * @return list<WorkspaceFileEntry>
+ */
+function promptPackageFiles(array $entries): array
+{
+    $files = [];
+    foreach (WorkspaceFileSlot::inLoadOrder() as $slot) {
+        $files[$slot->value] = WorkspaceFileEntry::missing($slot);
+    }
+    foreach ($entries as $entry) {
+        $files[$entry->slot->value] = $entry;
+    }
+
+    return array_values($files);
+}
+
+/**
+ * @param  list<WorkspaceFileSlot>  $loadOrder
+ */
+function validPromptPackageValidation(array $loadOrder): WorkspaceValidationResult
+{
+    return new WorkspaceValidationResult(
+        valid: true,
+        errors: [],
+        warnings: [],
+        loadOrder: $loadOrder,
+    );
+}
+
 it('assembles behavioral sections from workspace files in load order', function (): void {
     $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     $operatorPath = $this->tempDir.'/operator.md';
     file_put_contents($systemPromptPath, 'You are Lara.');
     file_put_contents($operatorPath, 'Company: Belimbing');
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-            WorkspaceFileEntry::found(WorkspaceFileSlot::Operator, $operatorPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Extension),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Operator],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
+        WorkspaceFileEntry::found(WorkspaceFileSlot::Operator, $operatorPath, 'workspace'),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Operator]);
 
     $factory = new PromptPackageFactory;
     $package = $factory->build($manifest, $validation);
@@ -74,26 +103,11 @@ it('wraps extension content with append-only policy preamble', function (): void
     file_put_contents($systemPromptPath, 'Identity');
     file_put_contents($extensionPath, 'Extra rules here');
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::found(WorkspaceFileSlot::Extension, $extensionPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Extension],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
+        WorkspaceFileEntry::found(WorkspaceFileSlot::Extension, $extensionPath, 'workspace'),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Extension]);
 
     $factory = new PromptPackageFactory;
     $package = $factory->build($manifest, $validation);
@@ -108,26 +122,10 @@ it('appends operational and transient sections after behavioral sections', funct
     $systemPromptPath = $this->tempDir.PROMPT_PACKAGE_TEST_SYSTEM_PROMPT_SUFFIX;
     file_put_contents($systemPromptPath, 'Identity');
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Extension),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt]);
 
     $operational = [new PromptSection(
         label: 'runtime_context',
@@ -160,26 +158,11 @@ it('skips empty workspace files', function (): void {
     file_put_contents($systemPromptPath, 'Identity');
     file_put_contents($operatorPath, '   ');
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-            WorkspaceFileEntry::found(WorkspaceFileSlot::Operator, $operatorPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Extension),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Operator],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
+        WorkspaceFileEntry::found(WorkspaceFileSlot::Operator, $operatorPath, 'workspace'),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt, WorkspaceFileSlot::Operator]);
 
     $factory = new PromptPackageFactory;
     $package = $factory->build($manifest, $validation);
@@ -191,33 +174,17 @@ it('skips empty workspace files', function (): void {
 it('throws when a resolved file cannot be read', function (): void {
     $fakePath = $this->tempDir.'/nonexistent_but_resolved.md';
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            new WorkspaceFileEntry(
-                WorkspaceFileSlot::SystemPrompt,
-                $fakePath,
-                'workspace',
-                true,
-                100,
-                time(),
-            ),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Extension),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        new WorkspaceFileEntry(
+            WorkspaceFileSlot::SystemPrompt,
+            $fakePath,
+            'workspace',
+            true,
+            100,
+            time(),
+        ),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt]);
 
     $factory = new PromptPackageFactory;
 
@@ -229,26 +196,10 @@ it('reports correct total size and section metadata via describe', function (): 
     $systemPromptPath = $this->tempDir.'/system_prompt.md';
     file_put_contents($systemPromptPath, 'Hello world');
 
-    $manifest = new WorkspaceManifest(
-        employeeId: Employee::LARA_ID,
-        workspacePath: $this->tempDir,
-        isSystemAgent: true,
-        frameworkResourcePath: null,
-        files: [
-            WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Operator),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Tools),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Extension),
-            WorkspaceFileEntry::missing(WorkspaceFileSlot::Memory),
-        ],
-    );
-
-    $validation = new WorkspaceValidationResult(
-        valid: true,
-        errors: [],
-        warnings: [],
-        loadOrder: [WorkspaceFileSlot::SystemPrompt],
-    );
+    $manifest = promptPackageManifest($this->tempDir, [
+        WorkspaceFileEntry::found(WorkspaceFileSlot::SystemPrompt, $systemPromptPath, 'workspace'),
+    ]);
+    $validation = validPromptPackageValidation([WorkspaceFileSlot::SystemPrompt]);
 
     $factory = new PromptPackageFactory;
     $package = $factory->build($manifest, $validation);
