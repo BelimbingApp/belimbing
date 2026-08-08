@@ -126,6 +126,10 @@ class DetachedProcessLauncher
 
         $commandLine = implode(' ', array_map($this->quoteWindowsArgument(...), $command));
         $commandLine .= ' '.$this->windowsRedirects($stdoutPath, $stderrPath);
+        // cmd.exe /s /c requires an outer quote pair when the executable itself
+        // is quoted. Without it, a PHP path under Program Files is split at the
+        // first space and detached updates never begin.
+        $commandLine = '"'.$commandLine.'"';
 
         $script = implode(' ', array_filter([
             $this->buildWindowsEnvironmentAssignments($environment),
