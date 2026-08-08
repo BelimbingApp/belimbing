@@ -70,6 +70,28 @@ function bcRequireSodium(): void
     }
 }
 
+/** @return array{root: string, artifact: string, manifest: string, output: string} */
+function bcStageFiles(string $bytes, array $manifestData): array
+{
+    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
+    mkdir($root);
+    $artifact = $root.'/source.bak';
+    $manifest = $root.'/source.manifest.json';
+    $output = $root.'/staged.bak';
+    file_put_contents($artifact, $bytes);
+    file_put_contents($manifest, json_encode($manifestData, JSON_THROW_ON_ERROR));
+
+    return compact('root', 'artifact', 'manifest', 'output');
+}
+
+function bcCleanupStageFiles(array $files): void
+{
+    @unlink($files['artifact']);
+    @unlink($files['manifest']);
+    @unlink($files['output']);
+    @rmdir($files['root']);
+}
+
 it('dry-run validates configuration and writes nothing', function (): void {
     bcRequireSodium();
     $src = bcSetupSqliteEnvironment();
@@ -270,17 +292,12 @@ it('preflight ignores non-app-key manifests on the disk', function (): void {
 });
 
 it('stages a verified plaintext artifact without overwriting output', function (): void {
-    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
-    mkdir($root);
-    $artifact = $root.'/source.bak';
-    $manifest = $root.'/source.manifest.json';
-    $output = $root.'/staged.bak';
-    file_put_contents($artifact, 'verified backup bytes');
-    file_put_contents($manifest, json_encode([
+    $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-test',
         'encryption_mode' => 'none',
         'sha256' => hash_file('sha256', $artifact),
-    ], JSON_THROW_ON_ERROR));
+    ]);
+    extract($files);
 
     $queries = [];
     DB::listen(function ($query) use (&$queries): void {
@@ -300,25 +317,17 @@ it('stages a verified plaintext artifact without overwriting output', function (
             ->assertFailed();
         expect(file_get_contents($output))->toBe('verified backup bytes');
     } finally {
-        @unlink($artifact);
-        @unlink($manifest);
-        @unlink($output);
-        @rmdir($root);
+        bcCleanupStageFiles($files);
     }
 });
 
 it('preserves a destination created while staging is in progress', function (): void {
-    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
-    mkdir($root);
-    $artifact = $root.'/source.bak';
-    $manifest = $root.'/source.manifest.json';
-    $output = $root.'/staged.bak';
-    file_put_contents($artifact, 'verified backup bytes');
-    file_put_contents($manifest, json_encode([
+    $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-race-test',
         'encryption_mode' => 'race-test',
         'sha256' => hash_file('sha256', $artifact),
-    ], JSON_THROW_ON_ERROR));
+    ]);
+    extract($files);
     app(EncryptionModeRegistry::class)->register('race-test', function (array $_config) use ($output): NoneEncryption {
         file_put_contents($output, 'created by another process');
 
@@ -332,25 +341,17 @@ it('preserves a destination created while staging is in progress', function (): 
 
         expect(file_get_contents($output))->toBe('created by another process');
     } finally {
-        @unlink($artifact);
-        @unlink($manifest);
-        @unlink($output);
-        @rmdir($root);
+        bcCleanupStageFiles($files);
     }
 });
 
 it('cleans its private staging directory when decryption fails', function (): void {
-    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
-    mkdir($root);
-    $artifact = $root.'/source.bak';
-    $manifest = $root.'/source.manifest.json';
-    $output = $root.'/staged.bak';
-    file_put_contents($artifact, 'verified backup bytes');
-    file_put_contents($manifest, json_encode([
+    $files = bcStageFiles('verified backup bytes', [
         'backup_id' => 'stage-decrypt-failure-test',
         'encryption_mode' => 'failing-test',
         'sha256' => hash_file('sha256', $artifact),
-    ], JSON_THROW_ON_ERROR));
+    ]);
+    extract($files);
     $mode = Mockery::mock(EncryptionMode::class);
     $mode->shouldReceive('ensureReady')->once();
     $mode->shouldReceive('decryptFile')->once()->andReturnUsing(function (string $_source, string $destination): void {
@@ -369,25 +370,17 @@ it('cleans its private staging directory when decryption fails', function (): vo
         expect($output)->not->toBeFile()
             ->and(glob($root.'/.blb-stage-*'))->toBe([]);
     } finally {
-        @unlink($artifact);
-        @unlink($manifest);
-        @unlink($output);
-        @rmdir($root);
+        bcCleanupStageFiles($files);
     }
 });
 
 it('refuses to stage an artifact whose manifest hash does not match', function (): void {
-    $root = sys_get_temp_dir().'/blb-backup-stage-'.bin2hex(random_bytes(4));
-    mkdir($root);
-    $artifact = $root.'/source.bak';
-    $manifest = $root.'/source.manifest.json';
-    $output = $root.'/staged.bak';
-    file_put_contents($artifact, 'changed backup bytes');
-    file_put_contents($manifest, json_encode([
+    $files = bcStageFiles('changed backup bytes', [
         'backup_id' => 'stage-test',
         'encryption_mode' => 'none',
         'sha256' => str_repeat('0', 64),
-    ], JSON_THROW_ON_ERROR));
+    ]);
+    extract($files);
 
     try {
         $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
@@ -396,9 +389,6 @@ it('refuses to stage an artifact whose manifest hash does not match', function (
 
         expect($output)->not->toBeFile();
     } finally {
-        @unlink($artifact);
-        @unlink($manifest);
-        @unlink($output);
-        @rmdir($root);
+        bcCleanupStageFiles($files);
     }
 });
