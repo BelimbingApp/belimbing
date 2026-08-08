@@ -39,4 +39,8 @@ try {
     Pop-Location
 }
 
-Write-Output 'Reload complete.'
+if (-not (Invoke-BLBOriginCheck -TimeoutSeconds 15)) {
+    throw "Workers were asked to reload, but the local origin did not recover at $(Get-BLBOriginUrl). The host supervisor must restore the runtime."
+}
+
+Write-Output 'Reload complete. Local origin is healthy.'
