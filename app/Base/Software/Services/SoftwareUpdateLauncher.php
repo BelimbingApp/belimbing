@@ -66,6 +66,18 @@ final class SoftwareUpdateLauncher
         return false;
     }
 
+    /**
+     * Recover the reservation left behind when a detached update never began.
+     *
+     * Callers must first prove that the durable run record is an abandoned
+     * scheduling-only update; force-releasing a live update lock would allow
+     * concurrent migrations.
+     */
+    public function releaseStaleUpdateLock(): void
+    {
+        Cache::lock(self::LOCK_KEY)->forceRelease();
+    }
+
     public function maintenanceActionLock(): Lock
     {
         return Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);

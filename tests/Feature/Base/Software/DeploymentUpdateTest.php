@@ -1664,6 +1664,33 @@ test('a pending run is left alone while a detached update holds the lock', funct
     }
 });
 
+test('a stale scheduling-only update releases its leaked launcher lock', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+
+    app(SettingsService::class)->set('system.update.deployment.last_run', [
+        'run_id' => 'never-started-update',
+        'attempted_at' => now()->subHour()->utc()->toIso8601String(),
+        'updated_at' => now()->subHour()->utc()->toIso8601String(),
+        'status' => 'pending',
+        'summary' => DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE,
+        'log' => [DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE],
+    ]);
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, 'never-started-update')->get();
+
+    try {
+        Livewire::test(Index::class)->assertHasNoErrors();
+
+        expect($history->lastDeploymentRun())->toMatchArray(['status' => 'error'])
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
 test('a freshly scheduled run is not mistaken for an abandoned one', function (): void {
     // Between scheduling and the detached process recording its first line there is
     // a gap with no owner signal yet; the staleness window is what protects it.

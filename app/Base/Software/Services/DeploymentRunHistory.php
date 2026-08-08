@@ -313,6 +313,30 @@ class DeploymentRunHistory
     }
 
     /**
+     * Whether a scheduled software update never reached its first worker step.
+     *
+     * A detached process writes its first progress line immediately. When the
+     * durable record still has only the scheduling line after the normal stale
+     * window, the launcher failed before the update process began. Its cache lock
+     * is therefore a leaked reservation, not evidence that work is still running.
+     */
+    public function staleScheduledUpdateNeedsRecovery(): bool
+    {
+        $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+        if (! $this->pendingRunLooksAbandoned(is_array($record) ? $record : null)) {
+            return false;
+        }
+
+        $log = is_array($record['log'] ?? null)
+            ? array_values(array_filter($record['log'], 'is_string'))
+            : [];
+
+        return count($log) === 1
+            && str_starts_with($log[0], 'Software update scheduled in a detached process.');
+    }
+
+    /**
      * @param  array<string, mixed>|null  $record
      */
     private function pendingRunLooksAbandoned(?array $record = null): bool

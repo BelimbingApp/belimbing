@@ -198,7 +198,13 @@ class Index extends Component
         // Reconcile first: a pending record with no live process behind it is never
         // going to close itself, so show it as the failure it is rather than an
         // "in progress" that outlives the run by days.
-        $updateInProgress = $launcher->inProgress();
+        $recoverStaleScheduledUpdate = $history->staleScheduledUpdateNeedsRecovery();
+
+        if ($recoverStaleScheduledUpdate) {
+            $launcher->releaseStaleUpdateLock();
+        }
+
+        $updateInProgress = ! $recoverStaleScheduledUpdate && $launcher->inProgress();
         $history->abandonStalePendingRun($updateInProgress || $history->reloadIsInProgress());
 
         $lastRun = $history->lastDeploymentRun();
