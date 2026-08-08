@@ -5,6 +5,7 @@ namespace App\Base\Audit\DTO;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Support\TraceId;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +26,7 @@ final readonly class RequestContext
         public ?string $actorType = null,
         public ?int $actorId = null,
         public ?int $companyId = null,
+        public ?int $tenantId = null,
         public ?string $actorRole = null,
     ) {}
 
@@ -43,6 +45,7 @@ final readonly class RequestContext
             actorType: $actor?->type->value,
             actorId: $actor?->id,
             companyId: $actor?->companyId,
+            tenantId: self::resolveTenantId($actor),
             actorRole: $actor?->attributes['role'] ?? null,
         );
     }
@@ -64,6 +67,7 @@ final readonly class RequestContext
             actorType: PrincipalType::CONSOLE->value,
             actorId: $actor?->id ?? 0,
             companyId: $actor?->companyId,
+            tenantId: self::resolveTenantId($actor),
             actorRole: $actor?->attributes['role'] ?? null,
         );
     }
@@ -81,6 +85,7 @@ final readonly class RequestContext
             actorType: PrincipalType::SCHEDULER->value,
             actorId: 0,
             companyId: null,
+            tenantId: self::resolveTenantId(null),
             actorRole: null,
         );
     }
@@ -101,8 +106,18 @@ final readonly class RequestContext
             actorType: PrincipalType::QUEUE->value,
             actorId: $actor?->id ?? 0,
             companyId: $actor?->companyId,
+            tenantId: self::resolveTenantId($actor),
             actorRole: $actor?->attributes['role'] ?? null,
         );
+    }
+
+    /**
+     * Resolve the tenant for this context: the actor's tenant wins, then
+     * the ambient tenant context (CLI, queue workers, provisioning).
+     */
+    private static function resolveTenantId(?Actor $actor): ?int
+    {
+        return $actor?->tenantId ?? app(TenantContext::class)->currentTenantId();
     }
 
     private static function clientLabel(?string $userAgent): ?string

@@ -6,6 +6,7 @@ use App\Base\Audit\DTO\RequestContext;
 use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Support\Str as BlbStr;
+use App\Base\Tenancy\Contracts\TenantContext;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -84,6 +85,7 @@ class MutationListener
 
         $entry = [
             'company_id' => $context->companyId,
+            'tenant_id' => $this->resolveTenantId($model, $context),
             'actor_type' => $context->actorType ?? PrincipalType::GUEST->value,
             'actor_id' => $context->actorId ?? 0,
             'actor_role' => $context->actorRole,
@@ -121,6 +123,22 @@ class MutationListener
                 'new_values' => $this->encodeValues($subjectEntry['new_values'] ?? null),
             ]));
         }
+    }
+
+    /**
+     * Resolve the tenant for an audit entry: the mutated row's own tenant
+     * attribute is ground truth; then the request context; then the live
+     * ambient tenant context (CLI runs and jobs set it after boot).
+     */
+    private function resolveTenantId(Model $model, RequestContext $context): ?int
+    {
+        $tenantId = $model->getAttributes()['tenant_id'] ?? null;
+
+        if ($tenantId !== null) {
+            return (int) $tenantId;
+        }
+
+        return $context->tenantId ?? app(TenantContext::class)->currentTenantId();
     }
 
     /**

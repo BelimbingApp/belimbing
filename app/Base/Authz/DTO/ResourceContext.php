@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Base\Authz\DTO;
 
 final readonly class ResourceContext
@@ -11,5 +12,6 @@ final readonly class ResourceContext
         public int|string|null $id,
         public ?int $companyId = null,
         public array $attributes = [],
+        public ?int $tenantId = null,
     ) {}
 }

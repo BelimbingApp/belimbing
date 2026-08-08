@@ -5,5 +5,6 @@ namespace App\Base\Settings\DTO;
 enum ScopeType: string
 {
     case COMPANY = 'company';
+    case TENANT = 'tenant';
     case USER = 'user';
 }

@@ -37,6 +37,7 @@ class AuditSemanticActionRecorder implements SemanticActionRecorder
 
         $this->buffer->bufferAction([
             'company_id' => $actor['company_id'],
+            'tenant_id' => $actor['tenant_id'] ?? null,
             'actor_type' => $actor['type'],
             'actor_id' => $actor['id'],
             'actor_role' => $this->context->actorRole,

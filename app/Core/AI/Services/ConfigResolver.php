@@ -5,6 +5,7 @@ namespace App\Core\AI\Services;
 use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Services\ModelCatalogService;
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Core\AI\Models\AiProvider;
@@ -35,7 +36,44 @@ class ConfigResolver
         $employee = Employee::query()->find($employeeId);
         $companyId = $employee?->company_id ? (int) $employee->company_id : null;
 
-        return $companyId === null ? null : $this->resolveCompanyDefault($companyId);
+        if ($companyId === null) {
+            return null;
+        }
+
+        return $this->resolveCompanyDefault($companyId)
+            ?? $this->resolveTenantDefault($companyId);
+    }
+
+    /**
+     * Tenant-level default: the first other company in the same tenant with
+     * a working provider configuration, oldest company first.
+     *
+     * Lets a tenant configure providers once on its anchor company while
+     * sibling companies inherit the resolution. Providers stay
+     * company-owned; only the lookup cascades.
+     */
+    private function resolveTenantDefault(int $companyId): ?array
+    {
+        $directory = app(TenantDirectory::class);
+        $tenantId = $directory->tenantIdForCompany($companyId);
+
+        if ($tenantId === null) {
+            return null;
+        }
+
+        foreach ($directory->companyIdsInTenant($tenantId) as $candidateId) {
+            if ($candidateId === $companyId) {
+                continue;
+            }
+
+            $config = $this->resolveCompanyDefault($candidateId);
+
+            if ($config !== null) {
+                return $config;
+            }
+        }
+
+        return null;
     }
 
     /**

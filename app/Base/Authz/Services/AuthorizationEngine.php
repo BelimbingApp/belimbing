@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Contracts\AuthorizationPolicy;
 use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\DTO\ResourceContext;
@@ -23,7 +25,10 @@ class AuthorizationEngine implements AuthorizationService
     /**
      * @param  array<int, AuthorizationPolicy>  $policies
      */
-    public function __construct(private readonly array $policies) {}
+    public function __construct(
+        private readonly array $policies,
+        private readonly ?TenantDirectory $tenantDirectory = null,
+    ) {}
 
     /**
      * Evaluate whether actor can perform capability on resource.
@@ -92,7 +97,7 @@ class AuthorizationEngine implements AuthorizationService
         array $context = []
     ): Collection {
         return collect($resources)->filter(function ($resource) use ($actor, $capability, $context): bool {
-            $resourceContext = $this->toResourceContext($resource);
+            $resourceContext = $this->resourceContext($resource);
 
             return $this->can($actor, $capability, $resourceContext, $context)->allowed;
         })->values();
@@ -100,30 +105,63 @@ class AuthorizationEngine implements AuthorizationService
 
     /**
      * Convert resource to ResourceContext using convention-based extraction.
+     *
+     * Resources carrying a company but no explicit tenant are enriched through
+     * the TenantDirectory so the tenant boundary holds even for models that
+     * do not denormalize tenant_id.
+     *
+     * Public so decorators can normalize raw resources before running their
+     * own (e.g. audited) checks — conversion lives in exactly one place.
      */
-    private function toResourceContext(mixed $resource): ?ResourceContext
+    public function resourceContext(mixed $resource): ?ResourceContext
     {
         if ($resource instanceof ResourceContext) {
-            return $resource;
+            return $this->enrichTenant($resource);
         }
 
         if (is_array($resource)) {
-            return new ResourceContext(
+            return $this->enrichTenant(new ResourceContext(
                 type: (string) ($resource['type'] ?? 'resource'),
                 id: $resource['id'] ?? null,
                 companyId: isset($resource['company_id']) ? (int) $resource['company_id'] : null,
                 attributes: $resource,
-            );
+                tenantId: isset($resource['tenant_id']) ? (int) $resource['tenant_id'] : null,
+            ));
         }
 
         if (is_object($resource)) {
             $type = method_exists($resource, 'getTable') ? (string) $resource->getTable() : 'resource';
             $id = $resource->id ?? null;
             $companyId = isset($resource->company_id) ? (int) $resource->company_id : null;
+            $tenantId = isset($resource->tenant_id) ? (int) $resource->tenant_id : null;
 
-            return new ResourceContext($type, $id, $companyId, (array) $resource);
+            return $this->enrichTenant(new ResourceContext($type, $id, $companyId, (array) $resource, $tenantId));
         }
 
         return null;
+    }
+
+    /**
+     * Fill in a missing tenant ID from the resource's company.
+     */
+    private function enrichTenant(ResourceContext $resource): ResourceContext
+    {
+        if ($resource->tenantId !== null || $resource->companyId === null || $this->tenantDirectory === null) {
+            return $resource;
+        }
+
+        $tenantId = $this->tenantDirectory->tenantIdForCompany($resource->companyId);
+
+        if ($tenantId === null) {
+            return $resource;
+        }
+
+        return new ResourceContext(
+            $resource->type,
+            $resource->id,
+            $resource->companyId,
+            $resource->attributes,
+            $tenantId,
+        );
     }
 }

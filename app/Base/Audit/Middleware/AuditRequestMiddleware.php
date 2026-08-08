@@ -55,6 +55,7 @@ class AuditRequestMiddleware
 
         $this->buffer->bufferAction([
             'company_id' => $actor['company_id'],
+            'tenant_id' => $actor['tenant_id'] ?? null,
             'actor_type' => $actor['type'],
             'actor_id' => $actor['id'],
             'actor_role' => $this->context->actorRole,
@@ -76,13 +77,14 @@ class AuditRequestMiddleware
     }
 
     /**
-     * @return array{type: string, id: int, company_id: int|null}
+     * @return array{type: string, id: int, company_id: int|null, tenant_id: int|null}
      */
     private function resolveActor(Authenticatable $user): array
     {
         $actorType = $this->context->actorType;
         $actorId = $this->context->actorId;
         $companyId = $this->context->companyId;
+        $tenantId = $this->context->tenantId;
 
         if ($actorType === null && method_exists($user, 'principalType')) {
             $actorType = $user->principalType()->value;
@@ -100,10 +102,16 @@ class AuditRequestMiddleware
             $companyId = $user->getCompanyId();
         }
 
+        if ($tenantId === null) {
+            $userTenantId = data_get($user, 'tenant_id');
+            $tenantId = $userTenantId !== null ? (int) $userTenantId : null;
+        }
+
         return [
             'type' => $actorType,
             'id' => $actorId,
             'company_id' => $companyId,
+            'tenant_id' => $tenantId,
         ];
     }
 }

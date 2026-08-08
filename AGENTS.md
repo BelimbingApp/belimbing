@@ -40,6 +40,7 @@ Real plans live in `docs/plans/` per `docs/plans/AGENTS.md` — single source of
 - **`require` over `require_once`** for PHP config files returning arrays.
 - **Never `useCurrent()`** on `timestamp` columns — captures DB session TZ, not UTC. Set `now()` from app code.
 - **Throw domain exceptions** at module boundaries, not generic `RuntimeException`/`Exception`, when the failure belongs to a named subsystem.
+- **Tenant-owned tables carry `tenant_id`** — new tables holding tenant-owned data include an indexed `tenant_id`; high-volume tables denormalize it even when derivable via `company_id`. Read the current tenant only through `App\Base\Tenancy\Contracts\TenantContext` and fail closed on null. See `docs/architecture/tenancy.md`.
 
 ## 5. Four-Root Application Placement
 

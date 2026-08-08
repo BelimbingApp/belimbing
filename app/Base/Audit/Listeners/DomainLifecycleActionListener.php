@@ -22,6 +22,7 @@ class DomainLifecycleActionListener
         // persist this retained row before the reload request is issued.
         AuditAction::query()->insert([
             'company_id' => $actor['company_id'],
+            'tenant_id' => $actor['tenant_id'] ?? null,
             'actor_type' => $actor['type'],
             'actor_id' => $actor['id'],
             'actor_role' => $this->context->actorRole,

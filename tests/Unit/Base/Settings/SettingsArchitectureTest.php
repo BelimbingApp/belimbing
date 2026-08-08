@@ -120,9 +120,9 @@ it('does not expose caller-owned defaults or encryption through SettingsService 
     }
 });
 
-it('has user and company scopes without an employee settings scope', function (): void {
+it('has tenant, company, and user scopes without an employee settings scope', function (): void {
     expect(array_map(
         static fn (ScopeType $scope): string => $scope->value,
         ScopeType::cases(),
-    ))->toBe(['company', 'user']);
+    ))->toBe(['company', 'tenant', 'user']);
 });

@@ -12,6 +12,7 @@ Use this file to decide whether a change needs docs and where those docs belong.
 | Tutorials and crash-course docs under `docs/tutorials/` | `docs/tutorials/AGENTS.md` |
 | Database CLI (`migrate`, `--seed`, `--module`, `--seeder`) | `app/Base/Database/AGENTS.md` |
 | Four-root topology and module contribution surfaces | `docs/architecture/module-system.md` |
+| Tenant model, context, and isolation contracts | `docs/architecture/tenancy.md` |
 | Optional Domain authoring | `app/Domains/AGENTS.md` |
 | Extension authoring | `app/Extensions/AGENTS.md` |
 | UI / Blade / Tailwind / Alpine | `resources/core/views/AGENTS.md` |
