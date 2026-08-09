@@ -32,6 +32,8 @@ const DEPLOYMENT_UPDATE_FF_ONLY = '--ff-only';
 const DEPLOYMENT_UPDATE_RELOADED = 'Web workers reloaded.';
 const DEPLOYMENT_UPDATE_CHECKING = 'Checking…';
 const DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE = 'Software update scheduled in a detached process.';
+const DEPLOYMENT_UPDATE_RELOAD_SCHEDULED = 'Runtime reload scheduled in the background.';
+const DEPLOYMENT_UPDATE_RELOAD_RUNNING = 'Runtime reload is running.';
 const DEPLOYMENT_UPDATE_PULLING_PLATFORM = 'Pulling Belimbing (platform)…';
 const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
 const DEPLOYMENT_UPDATE_ADMIN_HOST_ENV = 'CADDY_SERVER_ADMIN_HOST='.DEPLOYMENT_UPDATE_ADMIN_HOST;
@@ -555,7 +557,7 @@ test('software update runtime reload starts in a detached background command wit
     try {
         $log = app(FrankenPhpDomainRuntimeReloader::class)->reloadAfterSoftwareUpdate();
 
-        expect($log)->toContain('Runtime reload scheduled in the background.');
+        expect($log)->toContain(DEPLOYMENT_UPDATE_RELOAD_SCHEDULED);
 
         Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'blb:domain-runtime:reload')
             && deploymentCommandContains($process->command, '--clear-runtime-caches'));
@@ -739,13 +741,13 @@ test('deployment page reports a stale host reload without exposing a browser ret
     app(SettingsService::class)->set('system.update.frankenphp.reload_state', [
         'attempted_at' => now()->subMinutes(6)->utc()->toIso8601String(),
         'status' => 'running',
-        'message' => 'Runtime reload is running.',
+        'message' => DEPLOYMENT_UPDATE_RELOAD_RUNNING,
         'admin_url' => null,
     ]);
 
     Livewire::test(Index::class)
         ->assertSee('Reload stalled')
-        ->assertSee('Runtime reload is running.')
+        ->assertSee(DEPLOYMENT_UPDATE_RELOAD_RUNNING)
         ->assertSee('Worker reloads are run by the host deployment tool. This page records their health and outcome.')
         ->assertDontSee('Retry reload')
         ->assertDontSee('wire:click="reloadOnly"', false);
@@ -1500,7 +1502,7 @@ test('a background reload closes the run box it left in progress', function (): 
             'summary' => 'Runtime reload complete. Web workers are serving the current code.',
         ])
             // The scheduling line survives, so the box reads as one continuous run.
-            ->and($finished['log'])->toContain('Runtime reload scheduled in the background.')
+            ->and($finished['log'])->toContain(DEPLOYMENT_UPDATE_RELOAD_SCHEDULED)
             ->and($finished['log'])->toContain(DEPLOYMENT_UPDATE_RELOADED);
     } finally {
         Cache::forget(FrankenPhpDomainRuntimeReloader::PENDING_CACHE_KEY);
@@ -1550,8 +1552,8 @@ test('a pending run nothing is working on is reported as failed instead of spinn
     app(SettingsService::class)->set('system.update.deployment.last_run', [
         'attempted_at' => now()->subHour()->utc()->toIso8601String(),
         'status' => 'pending',
-        'summary' => 'Runtime reload scheduled in the background.',
-        'log' => ['Runtime reload scheduled in the background.'],
+        'summary' => DEPLOYMENT_UPDATE_RELOAD_SCHEDULED,
+        'log' => [DEPLOYMENT_UPDATE_RELOAD_SCHEDULED],
     ]);
 
     Livewire::test(Index::class)->assertHasNoErrors();
@@ -1569,8 +1571,8 @@ test('the progress feed stops polling an abandoned run', function (): void {
     app(SettingsService::class)->set('system.update.deployment.last_run', [
         'attempted_at' => now()->subHour()->utc()->toIso8601String(),
         'status' => 'pending',
-        'summary' => 'Runtime reload scheduled in the background.',
-        'log' => ['Runtime reload scheduled in the background.'],
+        'summary' => DEPLOYMENT_UPDATE_RELOAD_SCHEDULED,
+        'log' => [DEPLOYMENT_UPDATE_RELOAD_SCHEDULED],
     ]);
 
     $this->actingAs($user)
@@ -1587,12 +1589,12 @@ test('a pending run is left alone while its reload is still working', function (
     fakeDeploymentUpdateProcesses();
     Http::fake();
     $history = app(DeploymentRunHistory::class);
-    $history->rememberReloadRunning('Runtime reload is running.');
+    $history->rememberReloadRunning(DEPLOYMENT_UPDATE_RELOAD_RUNNING);
     app(SettingsService::class)->set('system.update.deployment.last_run', [
         'attempted_at' => now()->subHour()->utc()->toIso8601String(),
         'status' => 'pending',
-        'summary' => 'Runtime reload scheduled in the background.',
-        'log' => ['Runtime reload scheduled in the background.'],
+        'summary' => DEPLOYMENT_UPDATE_RELOAD_SCHEDULED,
+        'log' => [DEPLOYMENT_UPDATE_RELOAD_SCHEDULED],
     ]);
 
     Livewire::test(Index::class)->assertHasNoErrors();
@@ -1665,8 +1667,8 @@ test('a freshly scheduled run is not mistaken for an abandoned one', function ()
     app(SettingsService::class)->set('system.update.deployment.last_run', [
         'attempted_at' => now()->utc()->toIso8601String(),
         'status' => 'pending',
-        'summary' => 'Runtime reload scheduled in the background.',
-        'log' => ['Runtime reload scheduled in the background.'],
+        'summary' => DEPLOYMENT_UPDATE_RELOAD_SCHEDULED,
+        'log' => [DEPLOYMENT_UPDATE_RELOAD_SCHEDULED],
     ]);
 
     Livewire::test(Index::class)->assertHasNoErrors();
