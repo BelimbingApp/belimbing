@@ -73,13 +73,13 @@ jobs:
 
     steps:
       - name: Checkout platform
-        uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
         with:
           repository: ${{ inputs.platform-repo }}
           ref: ${{ inputs.platform-ref }}
 
       - name: Checkout domain under test
-        uses: actions/checkout@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        uses: actions/checkout@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
         with:
           path: source-under-test
           fetch-depth: 0
@@ -128,7 +128,7 @@ jobs:
           printf '%s\t%s\t%s\n' "${{ github.repository }}" "${{ github.sha }}" "$DOMAIN_PATH" >> materialization.tsv
 
       - name: Upload materialization plan
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: domain-materialization
           path: materialization.tsv
@@ -176,7 +176,7 @@ jobs:
         run: ./vendor/bin/pest "$DOMAIN_PATH" --coverage-clover=coverage.xml
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v4 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
+        uses: SonarSource/sonarqube-scan-action@v8 # NOSONAR — official SonarSource scanner action; tag pinning is acceptable for internal projects
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
