@@ -63,7 +63,7 @@ jobs:
 
       - name: Upload Audit Reports
         if: always()
-        uses: actions/upload-artifact@v4 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
+        uses: actions/upload-artifact@v7 # NOSONAR — well-known GitHub-maintained action; tag pinning is acceptable for internal projects
         with:
           name: test-audit-report
           path: build/reports/
