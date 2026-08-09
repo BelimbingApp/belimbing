@@ -7,6 +7,7 @@ use App\Base\Authz\Enums\AuthorizationReasonCode;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Authz\Services\AuthorizationEngine;
 use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\LicenseeTenantDeletionException;
@@ -160,6 +161,33 @@ it('enriches company-owned resources with their tenant during filtering', functi
 
     expect($allowed->all())->toHaveCount(1);
     expect($allowed->first()['company_id'])->toBe($companyA->id);
+});
+
+it('enriches Eloquent models carrying company_id through the tenant directory', function (): void {
+    $tenantB = Tenant::query()->create(['name' => 'Tenant B', 'status' => 'active']);
+    $companyA = Company::factory()->create();
+    $companyB = Company::factory()->create(['tenant_id' => $tenantB->id]);
+    $user = User::factory()->create(['company_id' => $companyA->id]);
+    grantCoreAdmin($user->id, $companyA->id);
+
+    // Real models, not hand-built contexts: the engine must read company_id
+    // off the model and resolve its tenant through the TenantDirectory.
+    $own = User::factory()->create(['company_id' => $companyA->id]);
+    $foreign = User::factory()->create(['company_id' => $companyB->id]);
+
+    $engine = app(AuthorizationEngine::class);
+
+    expect($engine->resourceContext($own)->tenantId)->toBe(Tenant::LICENSEE_TENANT_ID);
+    expect($engine->resourceContext($foreign)->tenantId)->toBe($tenantB->id);
+
+    $allowed = app(AuthorizationService::class)->filterAllowed(
+        Actor::forUser($user),
+        'admin.user.view',
+        [$own, $foreign],
+    );
+
+    expect($allowed->all())->toHaveCount(1);
+    expect($allowed->first()->id)->toBe($own->id);
 });
 
 it('resolves tenant context for authenticated web requests', function (): void {

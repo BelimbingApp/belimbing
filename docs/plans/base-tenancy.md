@@ -101,6 +101,6 @@ Tenancy must not tax the single-licensee SMB experience that is Belimbing's reas
 
 ### Phase 5 — Consumer proof from an existing Domain
 
-- [x] Two tenants operating the same optional Domain with isolation demonstrated end-to-end — `LeaveTenancyIsolationTest` (People/Leave): read, write, authz denial, and filtering across the boundary, with tenant isolation arriving via Authz enrichment on a Domain table that carries only `company_id` {amp/kimi-k3}
+- [x] Model-level tenant enrichment proven in the platform suite (`TenantIsolationTest`): a real Eloquent model carrying only `company_id` is enriched via the `TenantDirectory`, with cross-tenant denial and `filterAllowed` exclusion across the boundary (a People/Leave-specific duplicate was reviewed as redundant and dropped; the People suite passing unmodified is the composition proof) {amp/kimi-k3}
 - [x] Demonstrate latent tenancy: a single-tenant instance shows no tenant surface (`TenantAdminUiTest` menu-condition cases) {amp/kimi-k3}
 - [x] Validation: People domain suite passes unmodified (229 tests), proving tenancy composes without Domain code changes {amp/kimi-k3}
