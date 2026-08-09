@@ -7,7 +7,18 @@ use App\Base\Settings\Livewire\SettingsForm;
 ?>
 
 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+    @php($currentSection = null)
     @foreach ($group['fields'] as $field)
+        @php($section = $field['section'] ?? null)
+        @if ($section !== $currentSection)
+            @php($currentSection = $section)
+            @if ($section !== null)
+                <div @class(['md:col-span-2', 'mt-2 border-t border-border-default pt-4' => ! $loop->first])>
+                    <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __($section) }}</h3>
+                </div>
+            @endif
+        @endif
+
         @php($key = $field['key'])
         @php($formKey = str_replace('.', '__', $key))
         @php($id = 'setting-'.str_replace(['.', '_'], '-', $key))
@@ -63,6 +74,41 @@ use App\Base\Settings\Livewire\SettingsForm;
                     <option value="{{ $optionValue }}">{{ __($optionLabel) }}</option>
                 @endforeach
             </x-ui.select>
+        @elseif (($field['type'] ?? 'text') === 'number')
+            <x-ui.input
+                id="{{ $id }}"
+                wire:model="values.{{ $formKey }}"
+                label="{{ __($field['label']) }}"
+                type="number"
+                inputmode="numeric"
+                placeholder="{{ __($field['placeholder'] ?? '') }}"
+                :help="__($field['help'])"
+                :error="$errors->first('values.' . $formKey)"
+            />
+        @elseif (($field['type'] ?? 'text') === 'segmented')
+            @php($segmentOptions = collect($field['options'] ?? [])->map(static fn ($option, $optionValue): array => [
+                'value' => (string) $optionValue,
+                'label' => is_array($option) ? __($option['label'] ?? (string) $optionValue) : __($option),
+                'title' => is_array($option) && ($option['title'] ?? null) ? __($option['title']) : null,
+            ])->values()->all())
+            <div class="space-y-1">
+                <span class="block text-[11px] uppercase tracking-wider font-semibold text-muted">
+                    {{ __($field['label']) }}
+                </span>
+                <div x-data @segmented-control-change="$wire.set('values.{{ $formKey }}', $event.detail.value)">
+                    <x-ui.segmented-control
+                        :options="$segmentOptions"
+                        :value="(string) ($values[$formKey] ?? '')"
+                        size="md"
+                        :label="__($field['label'])"
+                    />
+                </div>
+                @if ($errors->first('values.' . $formKey))
+                    <p class="text-sm text-status-danger">{{ $errors->first('values.' . $formKey) }}</p>
+                @elseif ($field['help'] ?? null)
+                    <x-ui.field-help :hint="__($field['help'])" />
+                @endif
+            </div>
         @elseif (($field['type'] ?? 'text') === 'textarea')
             <div class="md:col-span-2">
                 <x-ui.textarea
