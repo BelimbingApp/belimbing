@@ -18,7 +18,6 @@ jobs:
     env:
       LICENSEE_COMPANY_NAME: Belimbing CI
       LICENSEE_COMPANY_CODE: belimbing_ci
-      BLB_BOOTSTRAP_ADMIN_FILE: ${{ runner.temp }}/blb-ci-bootstrap-admin.txt
 
     steps:
       - name: Checkout
@@ -58,11 +57,13 @@ jobs:
 
       - name: Configure Framework Primitives for Testing
         run: |
+          bootstrap_admin_file="$RUNNER_TEMP/blb-ci-bootstrap-admin.txt"
           printf '%s\n' \
             'Belimbing CI Administrator' \
             'admin@ci.example.test' \
             'testing-only-password' \
-            > "$BLB_BOOTSTRAP_ADMIN_FILE"
+            > "$bootstrap_admin_file"
+          echo "BLB_BOOTSTRAP_ADMIN_FILE=$bootstrap_admin_file" >> "$GITHUB_ENV"
 
       - name: Generate Application Key
         run: php artisan key:generate
