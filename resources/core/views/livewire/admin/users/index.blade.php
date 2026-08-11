@@ -19,13 +19,24 @@
         <x-ui.session-flash />
 
         <x-ui.card>
-            <div class="mb-2">
-                <x-ui.search-input
-                    wire:key="users-search"
-                    wire:model.live.debounce.300ms="search"
-                    placeholder="{{ __('Search by name or email...') }}"
+            <x-ui.filter-bar class="mb-2">
+                <x-slot name="search">
+                    <x-ui.search-input
+                        wire:key="users-search"
+                        wire:model.live.debounce.300ms="search"
+                        placeholder="{{ __('Search by name or email...') }}"
+                    />
+                </x-slot>
+                <x-ui.multi-select
+                    id="users-role-filter"
+                    wire:model.live="roleIds"
+                    :options="$roleOptions"
+                    :selected="$roleIds"
+                    :placeholder="__('All roles')"
+                    :selection-label="__(':count role selected|:count roles selected')"
+                    :accessible-label="__('Filter by roles')"
                 />
-            </div>
+            </x-ui.filter-bar>
 
             <x-ui.table container="flush" :caption="__('Users')">
 
@@ -52,6 +63,7 @@
                                 action="sort('company_name')"
                                 :label="__('Company')"
                             />
+                            <x-ui.th>{{ __('Roles') }}</x-ui.th>
                             <x-ui.sortable-th
                                 column="created_at"
                                 :sort-by="$sortBy"
@@ -78,6 +90,18 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $user->email }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">
                                     {{ $user->company?->name ?? '—' }}
+                                </td>
+                                <td class="px-table-cell-x py-table-cell-y text-sm text-muted">
+                                    @php($roles = $user->principalRoles->pluck('role.name')->filter()->unique()->sort())
+                                    @if ($roles->isEmpty())
+                                        —
+                                    @else
+                                        <div class="flex flex-wrap gap-1">
+                                            @foreach ($roles as $role)
+                                                <x-ui.badge>{{ $role }}</x-ui.badge>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums"><x-ui.datetime :value="$user->created_at" /></td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
@@ -111,15 +135,20 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No users found.') }}</td>
+                                <td colspan="6" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No users found.') }}</td>
                             </tr>
                         @endforelse
 
 
             </x-ui.table>
 
-            <div class="mt-2">
-                {{ $users->links() }}
+            <div class="mt-3">
+                <x-ui.pagination
+                    :paginator="$users"
+                    :per-page-options="$this->perPageOptions()"
+                    :per-page="$perPage"
+                    id="users-per-page"
+                />
             </div>
         </x-ui.card>
     </div>

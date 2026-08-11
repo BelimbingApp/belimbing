@@ -30,6 +30,9 @@ class Index extends Component
 
     public string $selectValue = 'approved';
 
+    /** @var list<string> */
+    public array $multiSelectValues = ['operations', 'finance'];
+
     public string $comboboxValue = 'review';
 
     public string $editableComboboxValue = 'Custom label';

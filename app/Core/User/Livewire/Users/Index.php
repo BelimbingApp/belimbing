@@ -5,8 +5,10 @@ namespace App\Core\User\Livewire\Users;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Exceptions\AuthorizationDeniedException;
+use App\Base\Authz\Models\Role;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
+use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
@@ -18,14 +20,29 @@ class Index extends Component
 {
     use InteractsWithNotifications;
     use ResetsPaginationOnSearch;
+    use SelectsPerPage;
     use TogglesSort;
     use WithPagination;
 
     public string $search = '';
 
+    /** @var list<int|string> */
+    public array $roleIds = [];
+
     public string $sortBy = 'name';
 
     public string $sortDir = 'asc';
+
+    protected function defaultPerPage(): int
+    {
+        return 10;
+    }
+
+    /** @return list<int> */
+    public function perPageOptions(): array
+    {
+        return [10, 25, 50];
+    }
 
     private const SORTABLE = [
         'name' => 'users.name',
@@ -46,6 +63,11 @@ class Index extends Component
                 'created_at' => 'desc',
             ],
         );
+    }
+
+    public function updatedRoleIds(): void
+    {
+        $this->resetPage();
     }
 
     public function delete(int $userId): void
@@ -85,11 +107,12 @@ class Index extends Component
             ->allowed;
 
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'users.name';
+        $roleIds = array_values(array_unique(array_map('intval', $this->roleIds)));
 
         return view('livewire.admin.users.index', [
             'users' => User::query()
                 ->select('users.*')
-                ->with('company')
+                ->with(['company', 'principalRoles.role'])
                 ->leftJoin('companies', 'users.company_id', '=', 'companies.id')
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function (Builder $q) use ($search): void {
@@ -97,9 +120,18 @@ class Index extends Component
                             ->orWhere('users.email', 'like', '%'.$search.'%');
                     });
                 })
+                ->when($roleIds, fn (Builder $query): Builder => $query->whereHas(
+                    'principalRoles',
+                    fn (Builder $roles): Builder => $roles->whereIn('role_id', $roleIds),
+                ))
                 ->orderBy($sortColumn, $this->sortDir)
                 ->orderByDesc('users.id')
-                ->paginate(10),
+                ->paginate($this->clampedPerPage()),
+            'roleOptions' => Role::query()
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Role $role): array => ['value' => $role->id, 'label' => $role->name])
+                ->all(),
             'canDelete' => $canDelete,
         ]);
     }

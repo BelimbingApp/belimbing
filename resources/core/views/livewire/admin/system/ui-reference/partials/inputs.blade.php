@@ -9,10 +9,14 @@
                     {{ __('Choose the simplest control that still supports the user task. Searchable controls are not automatically better.') }}
                 </x-ui.catalog-section>
 
-                <div class="grid gap-3 md:grid-cols-3">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                     <div class="rounded-2xl border border-border-default bg-surface-card p-4">
                         <div class="text-sm font-medium text-ink">{{ __('Select') }}</div>
                         <p class="mt-1 text-xs text-muted">{{ __('Use for short, stable option lists that can be scanned quickly.') }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-border-default bg-surface-card p-4">
+                        <div class="text-sm font-medium text-ink">{{ __('Multi-select') }}</div>
+                        <p class="mt-1 text-xs text-muted">{{ __('Use for short filters where records may match any checked option.') }}</p>
                     </div>
                     <div class="rounded-2xl border border-border-default bg-surface-card p-4">
                         <div class="text-sm font-medium text-ink">{{ __('Combobox') }}</div>
@@ -47,6 +51,10 @@
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Select') }}</dt>
                         <dd class="text-right text-ink">{{ $selectValue }}</dd>
+                    </div>
+                    <div class="flex items-center justify-between gap-4">
+                        <dt class="text-muted">{{ __('Multi-select') }}</dt>
+                        <dd class="text-right text-ink">{{ implode(', ', $multiSelectValues) }}</dd>
                     </div>
                     <div class="flex items-center justify-between gap-4">
                         <dt class="text-muted">{{ __('Combobox') }}</dt>
@@ -120,9 +128,9 @@
             <div class="space-y-4">
                 <x-ui.catalog-section
                     :title="__('Choice Controls')"
-                    component="<code>x-ui.segmented-control</code>, <code>x-ui.select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
+                    component="<code>x-ui.segmented-control</code>, <code>x-ui.select</code>, <code>x-ui.multi-select</code>, <code>x-ui.combobox</code>, <code>x-ui.checkbox</code>, <code>x-ui.radio</code>"
                 >
-                    {{ __('Use segmented controls for short peer choices, selects and comboboxes for longer lists, and checkbox or radio controls when each option needs more explanation.') }}
+                    {{ __('Use segmented controls for short peer choices, selects for one fixed choice, multi-selects for inclusive OR filters, and checkbox or radio controls when each option needs more explanation.') }}
                 </x-ui.catalog-section>
 
                 <div class="space-y-1" x-data="{ displayMode: 'both' }">
@@ -152,6 +160,21 @@
                         <option value="{{ $option['value'] }}">{{ __($option['label']) }}</option>
                     @endforeach
                 </x-ui.select>
+
+                <x-ui.multi-select
+                    id="ui-reference-multi-select"
+                    wire:model.live="multiSelectValues"
+                    :selected="$multiSelectValues"
+                    :label="__('Multi-select')"
+                    :placeholder="__('All teams')"
+                    :selection-label="__(':count team selected|:count teams selected')"
+                    :options="[
+                        ['value' => 'operations', 'label' => __('Operations')],
+                        ['value' => 'finance', 'label' => __('Finance')],
+                        ['value' => 'people', 'label' => __('People')],
+                    ]"
+                />
+                <x-ui.field-help :hint="__('Checked options are combined with OR: matching any selected option includes the record.')" />
 
                 <x-ui.combobox
                     id="ui-reference-combobox"

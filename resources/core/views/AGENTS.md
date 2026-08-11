@@ -95,7 +95,8 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 |-----------|-----|
 | `x-ui.input` / `x-ui.integer-input` / `x-ui.secret-input` | Text, number, secret fields |
 | `x-ui.textarea` | Multi-line text |
-| `x-ui.select` / `x-ui.segmented-control` | Short option lists |
+| `x-ui.select` / `x-ui.segmented-control` | Short single-choice option lists |
+| `x-ui.multi-select` | Short inclusive OR filters with checkbox options |
 | `x-ui.combobox` | Searchable lookup |
 | `x-ui.country-combobox` / `x-ui.currency-combobox` | GeoNames-backed pickers |
 | `x-ui.checkbox` / `x-ui.radio` | Boolean or single-choice options |

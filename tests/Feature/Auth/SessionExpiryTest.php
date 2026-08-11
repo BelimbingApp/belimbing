@@ -16,6 +16,16 @@ test('login page hides session expired notice by default', function (): void {
         ->assertDontSee(__('Your session expired. Sign in again to continue.'));
 });
 
+test('login page shows honest progress while authentication is running', function (): void {
+    $this->get(route('login'))
+        ->assertOk()
+        ->assertSee('wire:loading.remove wire:target="login"', false)
+        ->assertSee('wire:loading wire:target="login"', false)
+        ->assertSee(__('Signing in…'))
+        ->assertSee(__('Signed in. Opening your workspace…'))
+        ->assertSee(__('Opening workspace…'));
+});
+
 test('login livewire component reads session expired flash on mount', function (): void {
     $this->withSession(['session_expired' => true]);
 

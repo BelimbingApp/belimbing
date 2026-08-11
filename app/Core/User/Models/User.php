@@ -3,6 +3,7 @@
 namespace App\Core\User\Models;
 
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Foundation\Contracts\CompanyScoped;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -239,6 +240,15 @@ class User extends Authenticatable implements CompanyScoped
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class, 'company_id');
+    }
+
+    /**
+     * Get the authorization role assignments attached to this user.
+     */
+    public function principalRoles(): HasMany
+    {
+        return $this->hasMany(PrincipalRole::class, 'principal_id')
+            ->where('principal_type', PrincipalType::USER->value);
     }
 
     /**

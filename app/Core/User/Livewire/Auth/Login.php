@@ -50,10 +50,17 @@ class Login extends Component
         RateLimiter::clear($this->throttleKey());
         Session::regenerate();
 
-        // Full page load (not navigate): we're crossing from the guest auth layout
-        // into the app-shell layout, and a wire:navigate morph cannot bring up the
-        // persisted chrome (sidebar/top/status) that doesn't exist on the login page.
-        $this->redirectIntended(default: app(LandingPageResolver::class)->urlFor(Auth::user()));
+        $destination = session()->pull(
+            'url.intended',
+            app(LandingPageResolver::class)->urlFor(Auth::user()),
+        );
+
+        // The destination can be expensive to render on a high-latency remote
+        // database. Let the login page paint a confirmed-authentication state
+        // before it starts the full navigation; a Livewire redirect begins the
+        // navigation in the same response turn and leaves the old form looking
+        // idle until the destination document arrives.
+        $this->dispatch('login-redirecting', url: $destination);
     }
 
     /**

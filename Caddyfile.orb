@@ -16,6 +16,11 @@
 	frankenphp {
 		php_ini upload_max_filesize 12M
 		php_ini post_max_size 130M
+		# Orb development can use a remote database with materially higher
+		# round-trip latency than a normal deployment. Keep high-query-count
+		# pages from becoming misleading partial-page 500 responses while the
+		# performance log still makes the underlying query cost visible.
+		php_ini max_execution_time 120
 
 		worker {
 			file {$APP_PUBLIC_PATH}/frankenphp-worker.php
