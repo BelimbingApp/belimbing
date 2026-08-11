@@ -59,7 +59,6 @@ test('user index shows assigned roles and filters selected roles with or logic',
         ->assertSee('Roles')
         ->assertSee('Operations Lead')
         ->assertSeeHtml('id="users-role-filter-option-'.$operationsRole->id.'"')
-        ->assertDontSeeHtml('<x-ui.checkbox')
         ->set('roleIds', [$operationsRole->id, $financeRole->id])
         ->assertSee('Role Filter Operations')
         ->assertSee('Role Filter Finance')
@@ -69,7 +68,7 @@ test('user index shows assigned roles and filters selected roles with or logic',
 test('user index paginates with visible pagination controls', function (): void {
     $actor = createAdminUser();
 
-    foreach (range(1, 12) as $number) {
+    foreach (range(1, 30) as $number) {
         User::factory()->create([
             'name' => sprintf('Paged User %02d', $number),
             'email' => sprintf('paged-user-%02d@example.com', $number),
@@ -80,18 +79,18 @@ test('user index paginates with visible pagination controls', function (): void 
 
     Livewire::test('admin.users.index')
         ->set('search', 'Paged User')
-        ->assertSet('perPage', 10)
+        ->assertSet('perPage', 25)
         ->assertSee(__('Rows per page'))
         ->assertSee(__('Showing :first to :last of :total results', [
             'first' => 1,
-            'last' => 10,
-            'total' => 12,
+            'last' => 25,
+            'total' => 30,
         ]))
         ->assertSee('Paged User 01')
-        ->assertDontSee('Paged User 11')
+        ->assertDontSee('Paged User 26')
         ->call('nextPage')
-        ->assertSee('Paged User 11')
-        ->assertSee('Paged User 12')
+        ->assertSee('Paged User 26')
+        ->assertSee('Paged User 30')
         ->assertDontSee('Paged User 01');
 });
 

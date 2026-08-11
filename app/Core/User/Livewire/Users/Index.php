@@ -33,17 +33,6 @@ class Index extends Component
 
     public string $sortDir = 'asc';
 
-    protected function defaultPerPage(): int
-    {
-        return 10;
-    }
-
-    /** @return list<int> */
-    public function perPageOptions(): array
-    {
-        return [10, 25, 50];
-    }
-
     private const SORTABLE = [
         'name' => 'users.name',
         'email' => 'users.email',

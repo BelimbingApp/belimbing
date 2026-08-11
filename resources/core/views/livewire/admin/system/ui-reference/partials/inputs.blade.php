@@ -39,47 +39,27 @@
                     {{ __('The controls on this page are interactive. Compare the resulting values while you type and switch patterns.') }}
                 </x-ui.catalog-section>
 
-                <dl class="space-y-2 text-sm">
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Text input') }}</dt>
-                        <dd class="text-right text-ink">{{ $textValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Search') }}</dt>
-                        <dd class="text-right text-ink">{{ $searchValue !== '' ? $searchValue : __('Empty') }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Select') }}</dt>
-                        <dd class="text-right text-ink">{{ $selectValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Multi-select') }}</dt>
-                        <dd class="text-right text-ink">{{ implode(', ', $multiSelectValues) }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Combobox') }}</dt>
-                        <dd class="text-right text-ink">{{ $comboboxValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Editable combobox') }}</dt>
-                        <dd class="text-right text-ink">{{ $editableComboboxValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Country combobox') }}</dt>
-                        <dd class="text-right text-ink">{{ $countryComboboxValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Checkbox') }}</dt>
-                        <dd class="text-right text-ink">{{ $checkboxValue ? __('Enabled') : __('Disabled') }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Radio') }}</dt>
-                        <dd class="text-right text-ink">{{ $radioValue }}</dd>
-                    </div>
-                    <div class="flex items-center justify-between gap-4">
-                        <dt class="text-muted">{{ __('Datetime') }}</dt>
-                        <dd class="text-right text-ink">{{ $dateValue }}</dd>
-                    </div>
+                <dl class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-sm">
+                    <dt class="text-muted">{{ __('Text input') }}</dt>
+                    <dd class="text-right text-ink">{{ $textValue }}</dd>
+                    <dt class="text-muted">{{ __('Search') }}</dt>
+                    <dd class="text-right text-ink">{{ $searchValue !== '' ? $searchValue : __('Empty') }}</dd>
+                    <dt class="text-muted">{{ __('Select') }}</dt>
+                    <dd class="text-right text-ink">{{ $selectValue }}</dd>
+                    <dt class="text-muted">{{ __('Multi-select') }}</dt>
+                    <dd class="text-right text-ink">{{ $multiSelectValues !== [] ? implode(', ', $multiSelectValues) : __('Empty') }}</dd>
+                    <dt class="text-muted">{{ __('Combobox') }}</dt>
+                    <dd class="text-right text-ink">{{ $comboboxValue }}</dd>
+                    <dt class="text-muted">{{ __('Editable combobox') }}</dt>
+                    <dd class="text-right text-ink">{{ $editableComboboxValue }}</dd>
+                    <dt class="text-muted">{{ __('Country combobox') }}</dt>
+                    <dd class="text-right text-ink">{{ $countryComboboxValue }}</dd>
+                    <dt class="text-muted">{{ __('Checkbox') }}</dt>
+                    <dd class="text-right text-ink">{{ $checkboxValue ? __('Enabled') : __('Disabled') }}</dd>
+                    <dt class="text-muted">{{ __('Radio') }}</dt>
+                    <dd class="text-right text-ink">{{ $radioValue }}</dd>
+                    <dt class="text-muted">{{ __('Datetime') }}</dt>
+                    <dd class="text-right text-ink">{{ $dateValue }}</dd>
                 </dl>
             </div>
         </x-ui.card>
