@@ -13,7 +13,9 @@ it('renders the boot beacon on full app-layout loads', function (): void {
 
     $response->assertOk()
         ->assertSee('id="blb-boot-beacon"', false)
-        ->assertSee('This page could not finish loading.');
+        ->assertSee('This page did not finish starting.')
+        ->assertSee('check System status and recent errors')
+        ->assertDontSee('ask your operator to rebuild the frontend assets');
 });
 
 it('omits the boot beacon on wire:navigate requests', function (): void {

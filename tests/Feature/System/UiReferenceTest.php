@@ -47,5 +47,7 @@ it('keeps the catalog in a mobile drawer so reference content stays primary', fu
 
     $this->get(route('admin.system.ui-reference.show', ['section' => 'inputs']))
         ->assertOk()
-        ->assertSee('Catalog: Inputs');
+        ->assertSee('Catalog: Inputs')
+        ->assertSee('x-ui.multi-select', false)
+        ->assertSee('Checked options are combined with OR');
 });

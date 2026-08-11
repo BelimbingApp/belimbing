@@ -64,11 +64,11 @@
                 @keyframes blb-boot-beacon-reveal { to { opacity: 1; visibility: visible; } }
                 #blb-boot-beacon a { color: #b5622f; font-weight: 500; }
             </style>
-            <strong style="font-weight: 600;">{{ __('This page could not finish loading.') }}</strong>
+            <strong style="font-weight: 600;">{{ __('This page did not finish starting.') }}</strong>
             <span style="color: #6b6057;">
-                {{ __('Refresh to try again. If it keeps happening, ask your operator to rebuild the frontend assets from the Updates page.') }}
+                {{ __('Refresh to try again. If it keeps happening, ask your operator to check System status and recent errors.') }}
                 @if (config('app.debug'))
-                    {{ __('Dev: run `bun run build` or start the Vite dev server.') }}
+                    {{ __('Dev: check the browser console and application log. Rebuild assets only when Updates reports that they are missing or stale.') }}
                 @endif
             </span>
             <a href="">{{ __('Refresh') }}</a>

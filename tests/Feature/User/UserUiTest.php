@@ -34,6 +34,66 @@ test('authenticated users with capability can view user pages', function (): voi
     $this->get(route('admin.users.show', $other))->assertOk();
 });
 
+test('user index shows assigned roles and filters selected roles with or logic', function (): void {
+    $actor = createAdminUser();
+    $company = Company::factory()->create();
+    $operationsRole = Role::query()->create(['name' => 'Operations Lead', 'code' => 'test_operations_lead']);
+    $financeRole = Role::query()->create(['name' => 'Finance Lead', 'code' => 'test_finance_lead']);
+    $peopleRole = Role::query()->create(['name' => 'People Lead', 'code' => 'test_people_lead']);
+    $operationsUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter Operations']);
+    $financeUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter Finance']);
+    $peopleUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter People']);
+
+    foreach ([[$operationsUser, $operationsRole], [$financeUser, $financeRole], [$peopleUser, $peopleRole]] as [$user, $role]) {
+        PrincipalRole::query()->create([
+            'company_id' => $company->id,
+            'principal_type' => PrincipalType::USER->value,
+            'principal_id' => $user->id,
+            'role_id' => $role->id,
+        ]);
+    }
+
+    $this->actingAs($actor);
+
+    Livewire::test('admin.users.index')
+        ->assertSee('Roles')
+        ->assertSee('Operations Lead')
+        ->assertSeeHtml('id="users-role-filter-option-'.$operationsRole->id.'"')
+        ->set('roleIds', [$operationsRole->id, $financeRole->id])
+        ->assertSee('Role Filter Operations')
+        ->assertSee('Role Filter Finance')
+        ->assertDontSee('Role Filter People');
+});
+
+test('user index paginates with visible pagination controls', function (): void {
+    $actor = createAdminUser();
+
+    foreach (range(1, 30) as $number) {
+        User::factory()->create([
+            'name' => sprintf('Paged User %02d', $number),
+            'email' => sprintf('paged-user-%02d@example.com', $number),
+        ]);
+    }
+
+    $this->actingAs($actor);
+
+    Livewire::test('admin.users.index')
+        ->set('search', 'Paged User')
+        ->assertSet('perPage', 25)
+        ->assertSee(__('Rows per page'))
+        ->assertSee(__('Showing :first to :last of :total results', [
+            'first' => 1,
+            'last' => 25,
+            'total' => 30,
+        ]))
+        ->assertSee('Paged User 01')
+        ->assertDontSee('Paged User 26')
+        ->call('nextPage')
+        ->assertSee('Paged User 26')
+        ->assertSee('Paged User 30')
+        ->assertDontSee('Paged User 01');
+});
+
 test('authenticated users without capability are denied', function (): void {
     $company = Company::factory()->create();
     $user = User::factory()->create(['company_id' => $company->id]);
