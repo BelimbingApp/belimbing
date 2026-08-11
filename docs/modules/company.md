@@ -1,5 +1,16 @@
 # BLB Company Module Architecture - High-Level Overview
 
+**Document Type:** Module Architecture
+**Scope:** Core/Company ownership, company relationships, hierarchy, and tenant-primary-company contract
+**Last Updated:** 2026-08-11
+
+## Overview
+
+Core/Company owns organizational entities inside a tenant. Tenant is the outer
+isolation and subscription boundary; Company is the inner organizational boundary.
+Every company has an explicit immutable tenant assignment, and every provisioned
+tenant has one primary company recorded by this module.
+
 ## User Story
 
 > Implement the **Core Company Module** to support SBG's multi-company group structure with international operations. This module is foundational to Belimbing as an ERP system - every deployment represents at least one registered business/company. This module manages:
@@ -103,6 +114,7 @@ erDiagram
 
     Company {
         bigint id PK
+        bigint tenant_id FK
         bigint parent_id FK
         string name
         string slug
@@ -162,6 +174,7 @@ erDiagram
 | Table | Purpose |
 |-------|---------|
 | `companies` | Core company records with hierarchy |
+| `tenant_primary_companies` | One explicit primary company per provisioned tenant |
 | `company_relationships` | Links between companies with temporal validity |
 | `company_relationship_types` | Configurable relationship type definitions |
 | `company_external_accesses` | Portal access permissions per relationship |
@@ -169,6 +182,14 @@ erDiagram
 ### Implementation Notes
 
 - **Primary keys:** All tables use Laravel default `id()` (bigint auto-increment), not UUIDs.
+- **Tenant integrity:** `companies.tenant_id` is required with no default, references
+  `tenants`, and is immutable in normal operations. Unique `(id, tenant_id)` supports
+  the composite parent foreign key, preventing cross-tenant company hierarchies.
+- **Primary company:** `tenant_primary_companies.tenant_id` is both PK and FK;
+  `company_id` is unique; composite `(company_id, tenant_id)` references
+  `companies(id, tenant_id)`. Missing assignment means not yet provisioned. Invalid
+  assignments are invariant violations, and primary deletion is blocked until an
+  explicit safe transfer.
 - **Table names:** Follow Core convention `{module}_{entity}` (e.g. `company_relationship_types`, `company_external_accesses`).
 - **Company registration:** Implemented as normalized columns (`legal_name`, `registration_number`, `tax_id`, `legal_entity_type`, `jurisdiction`) plus contact (`email`, `website`) and JSON (`scope_activities`, `metadata`).
 - **Soft deletes:** Used on `companies`, `company_relationships`, and `company_external_accesses`.
@@ -290,6 +311,17 @@ Project-based organization:
 - Business context informs AI inference
 - Registration details provide compliance context
 - Relationship types help AI understand business interactions
+- Tenant fallback uses the explicitly assigned primary company, never an oldest-company inference
+
+### Tenancy and framework provisioning
+
+- Base/Tenancy owns tenant identity and cannot depend on Core/Company, so the primary
+  relationship and `PrimaryCompanyManager` live here.
+- Base owns the narrow `FrameworkPrimitivesProvisioner` contract; Core/Company
+  implements transactional, sequence-safe, idempotent creation of the platform
+  operator tenant, primary company, relationship, initial admin, and Lara.
+- IDs have no runtime role semantics. Legacy tenant/company ID 1 values are retained
+  only as deterministic migration input for old installations.
 
 ---
 
@@ -364,4 +396,3 @@ The architecture supports unlimited growth:
 - **Advanced Analytics**: Business intelligence, predictive modeling
 
 The foundation remains stable while innovation happens in the vendor layer, providing reliability and unlimited extensibility.
-

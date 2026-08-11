@@ -1,4 +1,5 @@
 <?php
+
 use App\Core\Company\Livewire\Companies\Create;
 use App\Core\Company\Livewire\Companies\Departments;
 use App\Core\Company\Livewire\Companies\DepartmentTypes;
@@ -6,12 +7,14 @@ use App\Core\Company\Livewire\Companies\Index;
 use App\Core\Company\Livewire\Companies\LegalEntityTypes;
 use App\Core\Company\Livewire\Companies\Relationships;
 use App\Core\Company\Livewire\Companies\Show;
-use App\Core\Company\Livewire\Setup\Licensee;
+use App\Core\Company\Livewire\Setup\PlatformOperator;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
     // Setup
-    Route::get('admin/setup/licensee', Licensee::class)->name('admin.setup.licensee');
+    Route::get('admin/setup/platform-operator', PlatformOperator::class)
+        ->middleware('authz:admin.company.update')
+        ->name('admin.setup.platform-operator');
 
     Route::get('admin/companies', Index::class)
         ->middleware('authz:admin.company.list')

@@ -2,7 +2,7 @@
 
 namespace App\Base\Locale\Services;
 
-use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
+use App\Base\Locale\DTO\PlatformOperatorLocaleBootstrap;
 
 class LocaleCatalog
 {
@@ -80,7 +80,7 @@ class LocaleCatalog
         return $this->supports($normalized) ? $normalized : null;
     }
 
-    public function inferFromBootstrap(LicenseeLocaleBootstrap $bootstrap): ?string
+    public function inferFromBootstrap(PlatformOperatorLocaleBootstrap $bootstrap): ?string
     {
         $countryIso = strtoupper($bootstrap->countryIso);
         $override = config("locale.country_locale_overrides.{$countryIso}");
@@ -103,7 +103,7 @@ class LocaleCatalog
     /**
      * @return list<string>
      */
-    private function languageCandidates(LicenseeLocaleBootstrap $bootstrap): array
+    private function languageCandidates(PlatformOperatorLocaleBootstrap $bootstrap): array
     {
         $countryIso = strtoupper($bootstrap->countryIso);
         $languages = collect(explode(',', (string) $bootstrap->languages))

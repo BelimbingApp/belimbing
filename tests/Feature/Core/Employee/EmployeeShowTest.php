@@ -62,3 +62,24 @@ it('does not link a user account from another tenant on the employee detail page
 
     expect($otherUser->refresh()->employee_id)->toBeNull();
 });
+
+it('does not expose users from another tenant in the employee account picker', function (): void {
+    $admin = createAdminUser();
+    $employee = Employee::factory()->create(['company_id' => $admin->company_id]);
+    $localUser = User::factory()->create([
+        'company_id' => $admin->company_id,
+        'name' => 'Visible Local Account',
+        'employee_id' => null,
+    ]);
+    [, $foreignCompany] = createTenantWithCompany(['name' => 'Picker Foreign Tenant']);
+    User::factory()->create([
+        'company_id' => $foreignCompany->id,
+        'name' => 'Hidden Foreign Account',
+        'employee_id' => null,
+    ]);
+
+    Livewire::actingAs($admin)
+        ->test(Show::class, ['employee' => $employee])
+        ->assertSee($localUser->name)
+        ->assertDontSee('Hidden Foreign Account');
+});

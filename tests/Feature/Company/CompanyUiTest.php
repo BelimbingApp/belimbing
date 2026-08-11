@@ -1,41 +1,61 @@
 <?php
 
-use App\Core\Company\Exceptions\LicenseeCompanyDeletionException;
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
 use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
 use Livewire\Livewire;
 
 // ---------------------------------------------------------------------------
-// Licensee company tests
+// Primary company tests
 // ---------------------------------------------------------------------------
 
-test('licensee company cannot be deleted from index', function (): void {
+test('primary company cannot be deleted from index', function (): void {
     $user = User::factory()->create();
-    $licensee = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $primaryCompany = platformOperatorCompany();
+    app(TenantContext::class)->set((int) $user->tenant_id);
 
     $this->actingAs($user);
 
     Livewire::test('admin.companies.index')
-        ->call('delete', $licensee->id);
+        ->call('delete', $primaryCompany->id);
 
-    expect(Company::query()->find($licensee->id))->not()->toBeNull();
+    expect(Company::query()->find($primaryCompany->id))->not()->toBeNull();
 });
 
-test('licensee company model prevents deletion', function (): void {
-    $licensee = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+test('primary company model prevents deletion until its role is transferred', function (): void {
+    platformOperatorCompany()->delete();
+})->throws(PrimaryCompanyDeletionException::class);
 
-    $licensee->delete();
-})->throws(LicenseeCompanyDeletionException::class, 'The licensee company (id=1) cannot be deleted.');
-
-test('company isLicensee returns true for id 1 and false for others', function (): void {
-    $licensee = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+test('primary-company identity follows the explicit relationship', function (): void {
+    $primaryCompany = platformOperatorCompany();
     $other = Company::factory()->create();
 
-    expect($licensee->isLicensee())->toBeTrue()
-        ->and($other->isLicensee())->toBeFalse();
+    expect(app(PrimaryCompanyManager::class)->isPrimary($primaryCompany))->toBeTrue()
+        ->and(app(PrimaryCompanyManager::class)->isPrimary($other))->toBeFalse();
+});
+
+test('company route binding fails closed for a company in another tenant', function (): void {
+    $user = createAdminUser();
+    [, $foreignCompany] = createTenantWithCompany(['name' => 'Foreign Tenant']);
+
+    $this->withoutVite();
+
+    $this->actingAs($user)
+        ->get(route('admin.companies.show', $foreignCompany))
+        ->assertNotFound();
+});
+
+test('platform-operator setup is unavailable from a customer tenant', function (): void {
+    [, $customerCompany] = createTenantWithCompany(['name' => 'Customer Setup Tenant']);
+    $customerOwner = createTenantOwnerUser($customerCompany->id);
+
+    $this->withoutVite();
+
+    $this->actingAs($customerOwner)
+        ->get(route('admin.setup.platform-operator'))
+        ->assertNotFound();
 });
 
 test('company can be created from create page component', function (): void {

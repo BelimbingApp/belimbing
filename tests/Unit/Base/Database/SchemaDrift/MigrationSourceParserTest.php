@@ -180,3 +180,26 @@ it('tracks raw indexes by explicit name without claiming their definition was co
         ->and($index?->compareByName)->toBeTrue()
         ->and($index?->columns)->toBe([]);
 });
+
+it('ignores raw checks and triggers that are outside the compared schema scope', function (): void {
+    $migration = <<<'PHP'
+        <?php
+        return new class {
+            public function up(): void
+            {
+                if (DB::connection()->getDriverName() === 'pgsql') {
+                    DB::statement('ALTER TABLE widgets ADD CONSTRAINT widgets_state_check CHECK (state IS NOT NULL)');
+                }
+
+                if (DB::connection()->getDriverName() === 'sqlite') {
+                    DB::statement("CREATE TRIGGER widgets_state_insert BEFORE INSERT ON widgets WHEN NEW.state IS NULL BEGIN SELECT RAISE(ABORT, 'State required'); END");
+                }
+            }
+        };
+        PHP;
+
+    $parsed = app(MigrationSourceParser::class)->parseContents($migration);
+
+    expect($parsed->unreadable)->toBe([])
+        ->and($parsed->operations)->toBe([]);
+});

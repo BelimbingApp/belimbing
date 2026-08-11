@@ -149,8 +149,8 @@ else
     admin_bootstrap_file=$(mktemp)
     trap 'rm -f "$admin_bootstrap_file"' EXIT
     printf '%s\n' 'Orb Admin' 'admin@example.test' 'password' > "$admin_bootstrap_file"
-    LICENSEE_COMPANY_NAME='Belimbing Orb' \
-    LICENSEE_COMPANY_CODE='BLB' \
+    PLATFORM_OPERATOR_COMPANY_NAME='Belimbing Orb' \
+    PLATFORM_OPERATOR_COMPANY_CODE='BLB' \
     BLB_BOOTSTRAP_ADMIN_FILE="$admin_bootstrap_file" \
         php artisan migrate --seed --no-interaction
     rm -f "$admin_bootstrap_file"

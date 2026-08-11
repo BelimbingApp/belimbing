@@ -84,7 +84,7 @@
                                         <x-ui.badge variant="success">{{ __('Custom') }}</x-ui.badge>
                                     @endif
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $role->company?->name ?? __('Global') }}</td>
+                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $role->company?->name ?? __('System-wide') }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $role->capabilities_count }}</td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $role->principal_roles_count }}</td>
                             </tr>

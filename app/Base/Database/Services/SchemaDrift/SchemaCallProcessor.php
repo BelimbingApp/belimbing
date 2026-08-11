@@ -144,9 +144,19 @@ final class SchemaCallProcessor
             return;
         }
 
+        if (self::isRawSchemaOutsideComparison($normalized)) {
+            return;
+        }
+
         if (preg_match('/^(CREATE|ALTER|DROP)\s/i', $normalized) === 1) {
             $this->context->reportUnreadable($call, 'Raw schema statement is outside the supported CREATE/DROP INDEX forms.');
         }
+    }
+
+    public static function isRawSchemaOutsideComparison(string $sql): bool
+    {
+        return preg_match('/^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\s+\S+\s+CHECK\b/i', $sql) === 1
+            || preg_match('/^\s*CREATE\s+TRIGGER\b/i', $sql) === 1;
     }
 
     /** @param  list<string>  $prefix */

@@ -20,7 +20,7 @@ final readonly class GenericPostgresMirrorProvider implements DataShareMirrorPro
 
     public function description(): string
     {
-        return __('A PostgreSQL database managed by the licensee or another cloud provider.');
+        return __('A PostgreSQL database managed by the platform operator or another cloud provider.');
     }
 
     public function connectionLabel(): string

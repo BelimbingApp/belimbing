@@ -36,7 +36,7 @@ BLB needs a coherent timezone display model so datetimes render consistently acr
 
 BLB should support three timezone display modes:
 
-- **Company**: the configured licensee or company timezone
+- **Company**: the configured current-company timezone
 - **Local**: the browser timezone of the current viewer
 - **UTC**: the canonical reference view
 
@@ -47,13 +47,13 @@ The default mode should be **Company**.
 Why:
 
 - BLB is primarily a shared business application.
-- Most tables and workflows are interpreted relative to the operating timezone of the licensee.
+- Most tables and workflows are interpreted relative to the operating timezone of the current company.
 - Browser-local time is useful, but it is a personal convenience view rather than the best shared default.
 - UTC remains important for diagnostics, support, and auditability, but is less intuitive as the primary UI mode.
 
 ### 4.2 Single HQ Default
 
-The company timezone setting represents the headquarters timezone — one canonical default per licensee. Multi-branch or location-specific timezone rendering is a future concern and out of scope for the initial implementation.
+The company timezone setting represents that company's headquarters timezone. Multi-branch or location-specific timezone rendering is a future concern and out of scope for the initial implementation.
 
 ### 4.3 User Override
 
@@ -75,8 +75,8 @@ The company timezone should be an explicit setting, not a live derivation from a
 
 Recommended policy:
 
-1. derive an initial timezone suggestion from the licensee address when enough geography is available
-2. store that value as a canonical company or licensee timezone setting
+1. derive an initial timezone suggestion from the company's primary address when enough geography is available
+2. store that value as the canonical company timezone setting
 3. use that stored setting as the default display timezone
 4. allow manual correction without requiring address changes
 

@@ -2,6 +2,7 @@
 
 namespace App\Core\User\Livewire\Users;
 
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Core\User\Models\User;
@@ -29,7 +30,10 @@ class Create extends Component
 
     public function mount(): void
     {
-        $companyIds = Company::query()->orderBy('name')->pluck('id');
+        $companyIds = Company::query()
+            ->forTenant(app(TenantContext::class)->requireTenantId())
+            ->orderBy('name')
+            ->pluck('id');
 
         $this->companyId = $this->resolveDefaultCompanyId($companyIds);
     }
@@ -40,7 +44,12 @@ class Create extends Component
     public function store(): void
     {
         $validated = $this->validate([
-            'companyId' => ['nullable', 'integer', Rule::exists(Company::class, 'id')],
+            'companyId' => [
+                'nullable',
+                'integer',
+                Rule::exists(Company::class, 'id')
+                    ->where('tenant_id', app(TenantContext::class)->requireTenantId()),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             ...$this->passwordValidationRules(),
@@ -79,7 +88,10 @@ class Create extends Component
     public function render(): View
     {
         return view('livewire.admin.users.create', [
-            'companies' => Company::query()->orderBy('name')->get(['id', 'name']),
+            'companies' => Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 }

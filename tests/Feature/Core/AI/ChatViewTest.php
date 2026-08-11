@@ -5,6 +5,7 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Integration\Models\OutboundExchange;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Enums\AiRunStatus;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
@@ -18,7 +19,6 @@ use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Services\ControlPlane\WireLogger;
 use App\Core\AI\Services\MessageManager;
 use App\Core\AI\Services\SessionManager;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
@@ -55,10 +55,10 @@ afterEach(function (): void {
 
 function createChatViewFixture(): User
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $company = platformOperatorCompany();
     $employee = Employee::factory()->create([
         'company_id' => $company->id,
         'status' => 'active',
@@ -83,10 +83,14 @@ function createChatViewFixture(): User
         'is_default' => true,
     ]);
 
-    return User::factory()->create([
+    $user = User::factory()->create([
         'company_id' => $company->id,
         'employee_id' => $employee->id,
     ]);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
+    return $user;
 }
 
 it('renders the streaming console as a named alpine controller', function (): void {
@@ -113,6 +117,20 @@ it('renders the streaming console as a named alpine controller', function (): vo
         ->toContain('startSummaryPolling()')
         ->toContain('isActiveSummary(sessionId)')
         ->toContain('clearSummary($event.detail.sessionId, $event.detail?.runId || null)');
+});
+
+it('does not resolve an agent from another tenant', function (): void {
+    $user = createChatViewFixture();
+    [, $otherCompany] = createTenantWithCompany(['name' => 'Other Chat Tenant']);
+    $otherAgent = Employee::factory()->create([
+        'company_id' => $otherCompany->id,
+        'employee_type' => 'agent',
+    ]);
+
+    test()->actingAs($user);
+
+    Livewire::test(Chat::class, ['employeeId' => $otherAgent->id])
+        ->assertStatus(404);
 });
 
 it('renders compact Lara composer controls and uses replay polling for new turns', function (): void {

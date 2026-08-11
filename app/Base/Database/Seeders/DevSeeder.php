@@ -4,6 +4,7 @@ namespace App\Base\Database\Seeders;
 
 use App\Base\Database\Exceptions\DevSeederProductionEnvironmentException;
 use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use Illuminate\Database\Seeder;
 
 abstract class DevSeeder extends Seeder
@@ -37,9 +38,9 @@ abstract class DevSeeder extends Seeder
     /**
      * Resolve the tenant that dev seeders should target by default.
      */
-    protected function licenseeCompany(): ?Company
+    protected function operatorPrimaryCompany(): ?Company
     {
-        return Company::query()->find(Company::LICENSEE_ID);
+        return app(PrimaryCompanyManager::class)->platformOperatorCompany();
     }
 
     /**

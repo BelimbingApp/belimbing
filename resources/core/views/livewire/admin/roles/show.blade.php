@@ -64,11 +64,10 @@
                         save-method="saveScope"
                     >
                         <x-slot name="read">
-                            <span class="text-sm text-ink">{{ $role->company?->name ?? __('Global') }}</span>
+                            <span class="text-sm text-ink">{{ $role->company?->name ?? __('System-wide') }}</span>
                         </x-slot>
 
-                        <option value="">{{ __('Global (all companies)') }}</option>
-                        @foreach ($licenseeCompanies as $company)
+                        @foreach ($tenantCompanies as $company)
                             <option value="{{ $company->id }}">{{ $company->name }}</option>
                         @endforeach
                     </x-ui.edit-in-place.select>
@@ -76,7 +75,7 @@
                     <div>
                         <dt class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Scope') }}</dt>
                         <dd class="mt-0.5 text-sm text-ink">
-                            {{ $role->company?->name ?? __('Global') }}
+                            {{ $role->company?->name ?? __('System-wide') }}
                             @if (! $role->is_system && $canEdit && $hasAssignedUsers)
                                 <span class="text-xs text-muted">({{ __('remove users to change') }})</span>
                             @endif

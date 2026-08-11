@@ -11,7 +11,7 @@ use App\Core\AI\Models\AiProviderModel;
 use App\Core\AI\Services\ConfigResolver;
 use App\Core\AI\Services\LaraTaskRegistry;
 use App\Core\AI\Services\TaskModelRecommendationService;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -200,7 +200,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $provider = AiProvider::query()
             ->llm()
             ->whereKey($providerId)
-            ->forCompany(Company::LICENSEE_ID)
+            ->forCompany($this->operatorCompanyId())
             ->active()
             ->first();
 
@@ -238,7 +238,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
     private function availableProviders(): Collection
     {
         return AiProvider::query()
-            ->forCompany(Company::LICENSEE_ID)
+            ->forCompany($this->operatorCompanyId())
             ->llm()
             ->active()
             ->orderBy('display_name')
@@ -268,7 +268,7 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         $providerExists = AiProvider::query()
             ->llm()
             ->whereKey($providerId)
-            ->forCompany(Company::LICENSEE_ID)
+            ->forCompany($this->operatorCompanyId())
             ->active()
             ->exists();
 
@@ -306,10 +306,15 @@ class TaskModels extends Component implements ProvidesLaraPageContext
         }
 
         return AiProvider::query()
-            ->forCompany(Company::LICENSEE_ID)
+            ->forCompany($this->operatorCompanyId())
             ->llm()
             ->where('name', $providerName)
             ->value('id');
+    }
+
+    private function operatorCompanyId(): int
+    {
+        return (int) app(PrimaryCompanyManager::class)->platformOperatorCompany()->id;
     }
 
     private function clearTaskRecommendationError(string $taskKey): void
@@ -331,7 +336,11 @@ class TaskModels extends Component implements ProvidesLaraPageContext
             return null;
         }
 
-        $resolved = app(ConfigResolver::class)->resolveForProvider($providerId, $modelId);
+        $resolved = app(ConfigResolver::class)->resolveForProvider(
+            $providerId,
+            $modelId,
+            $this->operatorCompanyId(),
+        );
 
         if ($resolved === null) {
             return null;

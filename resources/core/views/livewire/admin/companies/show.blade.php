@@ -28,8 +28,8 @@
             </x-slot>
         </x-ui.page-header>
 
-        @if ($company->isLicensee())
-            <x-ui.alert variant="info">{{ __('This is the licensee company operating this Belimbing instance.') }}</x-ui.alert>
+        @if ($company->isPrimaryCompany())
+            <x-ui.alert variant="info">{{ __('This is the primary company representing its tenant.') }}</x-ui.alert>
         @endif
 
         <x-ui.session-flash />

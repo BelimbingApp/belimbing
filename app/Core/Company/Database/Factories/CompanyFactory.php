@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\Company\Database\Factories;
 
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\LegalEntityType;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -28,6 +30,7 @@ class CompanyFactory extends Factory
         $companyName = fake()->unique()->company();
 
         return [
+            'tenant_id' => fn (): int => (int) Tenant::requirePlatformOperator()->id,
             'name' => $companyName,
             'code' => null, // Will be auto-generated from name
             'status' => 'active',

@@ -1,11 +1,11 @@
 <?php
+
 namespace App\Base\Authz\Database\Seeders\Dev;
 
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Database\Seeders\DevSeeder;
-use App\Core\Company\Models\Company;
 use App\Core\User\Database\Seeders\Dev\DevUserSeeder;
 use App\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -19,7 +19,7 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     /**
      * Seed the database.
      *
-     * 1. Grants the licensee admin user all system roles for full access.
+     * 1. Grants the platform operator's admin user all system roles for full access.
      * 2. Assigns the first user in each remaining company to core_admin for basic testing.
      */
     protected function seed(): void
@@ -38,19 +38,19 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
     }
 
     /**
-     * Grant core_admin (grant_all) role to the licensee admin user.
+     * Grant core_admin (grant_all) role to the platform operator's admin user.
      *
      * @param  Collection<int, Role>  $systemRoles
      */
     private function grantDevAdminFullAccess($systemRoles): void
     {
-        $licensee = $this->licenseeCompany();
+        $operatorCompany = $this->operatorPrimaryCompany();
 
-        if ($licensee === null) {
+        if ($operatorCompany === null) {
             return;
         }
 
-        $adminUser = $licensee->resolveAdminUser();
+        $adminUser = $operatorCompany->resolveAdminUser();
 
         if ($adminUser === null) {
             return;
@@ -83,9 +83,15 @@ class DevAuthzCompanyAssignmentSeeder extends DevSeeder
             return;
         }
 
+        $operatorCompany = $this->operatorPrimaryCompany();
+
+        if ($operatorCompany === null) {
+            return;
+        }
+
         $users = User::query()
             ->whereNotNull('company_id')
-            ->where('company_id', '!=', Company::LICENSEE_ID)
+            ->where('company_id', '!=', $operatorCompany->id)
             ->orderBy('id')
             ->get()
             ->groupBy('company_id')

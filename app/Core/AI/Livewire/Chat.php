@@ -8,6 +8,7 @@ use App\Base\AI\Services\ModelCatalogService;
 use App\Base\AI\Services\ProviderMapping\ProviderCapabilityRegistry;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\DTO\Message;
 use App\Core\AI\DTO\Session;
 use App\Core\AI\Enums\RunPhase;
@@ -101,6 +102,10 @@ class Chat extends Component
     {
         $this->employeeId = $employeeId;
 
+        if ($this->tenantAgent() === null) {
+            abort(404);
+        }
+
         if (! $this->isAgentActivated()) {
             return;
         }
@@ -136,7 +141,9 @@ class Chat extends Component
      */
     public function agentIdentity(): array
     {
-        if ($this->employeeId === Employee::LARA_ID) {
+        $employee = $this->tenantAgent();
+
+        if ($employee?->id === Employee::LARA_ID) {
             return [
                 'name' => 'Lara',
                 'role' => __('System Agent'),
@@ -144,8 +151,6 @@ class Chat extends Component
                 'shortcut' => 'Ctrl+K',
             ];
         }
-
-        $employee = Employee::query()->find($this->employeeId);
 
         return [
             'name' => $employee?->short_name ?? __('Agent'),
@@ -157,7 +162,7 @@ class Chat extends Component
 
     public function render(): View
     {
-        $agentExists = Employee::query()->whereKey($this->employeeId)->exists();
+        $agentExists = $this->tenantAgent() !== null;
         $agentActivated = $this->isAgentActivated();
 
         $state = $this->resolveRenderState($agentActivated);
@@ -430,7 +435,7 @@ class Chat extends Component
      */
     public function availableModels(): array
     {
-        $employee = Employee::query()->find($this->employeeId);
+        $employee = $this->tenantAgent();
         $companyId = $employee?->company_id ? (int) $employee->company_id : null;
 
         if ($companyId === null) {
@@ -491,7 +496,7 @@ class Chat extends Component
             return;
         }
 
-        $employee = Employee::query()->find($this->employeeId);
+        $employee = $this->tenantAgent();
         $companyId = $employee?->company_id ? (int) $employee->company_id : null;
 
         if ($companyId === null) {
@@ -513,6 +518,10 @@ class Chat extends Component
      */
     private function resolveCurrentModelLabel(): string
     {
+        if ($this->tenantAgent() === null) {
+            return __('Default');
+        }
+
         if ($this->selectedModel !== null) {
             return $this->extractModelId($this->selectedModel) ?? $this->selectedModel;
         }
@@ -524,11 +533,21 @@ class Chat extends Component
 
     private function isAgentActivated(): bool
     {
-        if (! Employee::query()->whereKey($this->employeeId)->exists()) {
+        if ($this->tenantAgent() === null) {
             return false;
         }
 
         return app(ConfigResolver::class)->resolveDefault($this->employeeId) !== null;
+    }
+
+    private function tenantAgent(): ?Employee
+    {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+
+        return Employee::query()
+            ->whereKey($this->employeeId)
+            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+            ->first();
     }
 
     private function settingsUrl(): ?string

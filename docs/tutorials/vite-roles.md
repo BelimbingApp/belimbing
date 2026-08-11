@@ -1,7 +1,7 @@
 # Vite Asset Builds And Optional Hot Reload
 
 **Document Type:** Tutorial
-**Purpose:** Explain BLB's Vite workflow and the licensee-controlled reload setting
+**Purpose:** Explain BLB's Vite workflow and the operator-controlled reload setting
 **Last Updated:** 2026-08-05
 
 Vite builds BLB's CSS and JavaScript from `resources/app.css` and
@@ -19,9 +19,9 @@ Refresh the browser when you are ready to see a frontend change. Run
 `bun run build` to generate the static assets used by deployment; the Updates
 page uses that same build path.
 
-## Licensee opt-in
+## Operator opt-in
 
-The licensee can opt in for a specific installation by setting this in its
+The deployment operator can opt in for a specific installation by setting this in its
 `.env` file:
 
 ```dotenv
@@ -40,7 +40,7 @@ setting because Vite reads it when it starts.
 ## Boundaries
 
 - `vite.config.js` owns the opt-in decision and Blade refresh paths.
-- `.env.example` documents the setting; each licensee's untracked `.env`
+- `.env.example` documents the setting; each operator's untracked `.env`
   decides its value.
 - `VITE_PORT` remains the local Vite server port when source serving is used;
   it is not a public application port.

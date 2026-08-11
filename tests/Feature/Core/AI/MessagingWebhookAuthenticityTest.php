@@ -5,8 +5,10 @@ use App\Core\AI\DTO\Messaging\InboundMessage;
 use App\Core\AI\Enums\SignalAuthenticityStatus;
 use App\Core\AI\Exceptions\WebhookAuthenticityException;
 use App\Core\AI\Jobs\ProcessInboundSignalJob;
+use App\Core\AI\Models\ChannelConversation;
 use App\Core\AI\Models\InboundSignal;
 use App\Core\AI\Services\Messaging\ChannelAdapterRegistry;
+use App\Core\AI\Services\Messaging\InboundRoutingService;
 use App\Core\AI\Services\Messaging\InboundSignalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
@@ -129,4 +131,21 @@ test('inbound signal service persists verified requests with verified authentici
         'channel' => 'testchannel',
         'authenticity_status' => SignalAuthenticityStatus::Verified->value,
     ]);
+});
+
+test('inbound routing rejects signals without a company-scoped account', function (): void {
+    $signal = InboundSignal::query()->create([
+        'channel' => 'testchannel',
+        'authenticity_status' => SignalAuthenticityStatus::Verified,
+        'sender_identifier' => 'orphaned-sender',
+        'normalized_content' => 'Do not route this into an arbitrary company.',
+        'received_at' => now(),
+    ]);
+
+    $outcome = app(InboundRoutingService::class)->route($signal);
+
+    expect($outcome->disposition)->toBe('rejected')
+        ->and($outcome->reason)->toBe('Signal has no company-scoped channel account.')
+        ->and($signal->fresh()->routed_at)->not->toBeNull()
+        ->and(ChannelConversation::query()->exists())->toBeFalse();
 });

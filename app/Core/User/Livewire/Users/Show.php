@@ -14,6 +14,7 @@ use App\Base\Authz\Services\EffectivePermissions;
 use App\Base\Foundation\Contracts\SemanticActionRecorder;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Livewire\Concerns\SortsExternalAccesses;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
@@ -85,6 +86,10 @@ class Show extends Component
 
     public function mount(User $user): void
     {
+        if ($user->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
+
         $this->user = $user->load([
             'company',
             'externalAccesses.company',
@@ -190,6 +195,12 @@ class Show extends Component
             return;
         }
 
+        if ($companyId !== null) {
+            Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->findOrFail($companyId);
+        }
+
         $oldCompanyId = $this->user->company_id;
         $this->user->company_id = $companyId ?: null;
         $this->user->save();
@@ -262,12 +273,22 @@ class Show extends Component
             return;
         }
 
-        $roleNames = Role::query()
+        $roles = Role::query()
             ->whereIn('id', $roleIds)
-            ->pluck('name', 'id');
+            ->where(function ($query): void {
+                $query->where(function ($systemRoles): void {
+                    $systemRoles->where('is_system', true)
+                        ->whereNull('company_id');
+                })
+                    ->orWhereHas('company', fn ($companies) => $companies->forTenant(
+                        app(TenantContext::class)->requireTenantId(),
+                    ));
+            })
+            ->get(['id', 'name']);
+        $roleNames = $roles->pluck('name', 'id');
         $createdRoleIds = [];
 
-        foreach ($roleIds as $roleId) {
+        foreach ($roles->modelKeys() as $roleId) {
             $assignment = PrincipalRole::query()->firstOrCreate([
                 'company_id' => $this->user->company_id,
                 'principal_type' => PrincipalType::USER->value,
@@ -469,7 +490,12 @@ class Show extends Component
             return;
         }
 
-        $employee = Employee::query()->find($employeeId);
+        $tenantCompanyIds = Company::query()
+            ->forTenant(app(TenantContext::class)->requireTenantId())
+            ->pluck('id');
+        $employee = Employee::query()
+            ->whereIn('company_id', $tenantCompanyIds)
+            ->find($employeeId);
         if (! $employee) {
             $this->notifyError(__('Employee could not be found.'));
 
@@ -539,7 +565,12 @@ class Show extends Component
         }
 
         $validated = $this->validate([
-            'newEmpCompanyId' => ['required', 'integer', 'exists:companies,id'],
+            'newEmpCompanyId' => [
+                'required',
+                'integer',
+                Rule::exists(Company::class, 'id')
+                    ->where('tenant_id', app(TenantContext::class)->requireTenantId()),
+            ],
             'newEmpEmployeeNumber' => ['required', 'string', 'max:255'],
             'newEmpFullName' => ['required', 'string', 'max:255'],
             'newEmpDesignation' => ['nullable', 'string', 'max:255'],
@@ -598,6 +629,15 @@ class Show extends Component
         $availableRoles = Role::query()
             ->with('company')
             ->whereNotIn('id', $assignedRoleIds)
+            ->where(function ($query): void {
+                $query->where(function ($systemRoles): void {
+                    $systemRoles->where('is_system', true)
+                        ->whereNull('company_id');
+                })
+                    ->orWhereHas('company', fn ($companies) => $companies->forTenant(
+                        app(TenantContext::class)->requireTenantId(),
+                    ));
+            })
             ->orderBy('name')
             ->get();
 
@@ -669,10 +709,17 @@ class Show extends Component
             'company',
         );
 
+        $tenantCompanyIds = Company::query()
+            ->forTenant(app(TenantContext::class)->requireTenantId())
+            ->pluck('id');
+
         return view('livewire.admin.users.show', [
             'sortedEmployees' => $sortedEmployees,
             'sortedExternalAccesses' => $sortedExternalAccesses,
-            'companies' => Company::query()->orderBy('name')->get(['id', 'name']),
+            'companies' => Company::query()
+                ->whereIn('id', $tenantCompanyIds)
+                ->orderBy('name')
+                ->get(['id', 'name']),
             'assignedRoles' => $assignedRoles,
             'availableRoles' => $availableRoles,
             'canManageRoles' => $canManageRoles,
@@ -683,6 +730,7 @@ class Show extends Component
             'availableCapabilities' => $availableCapabilities,
             'effectivePermissions' => $effectivePermissions,
             'unlinkableEmployees' => Employee::query()
+                ->whereIn('company_id', $tenantCompanyIds)
                 ->whereNotIn('id', User::query()->whereNotNull('employee_id')->pluck('employee_id'))
                 ->orderBy('full_name')
                 ->get(['id', 'full_name', 'employee_number', 'company_id']),

@@ -1,5 +1,7 @@
 # Company Module
 
+**Last Updated:** 2026-08-11
+
 The Company Module is a **foundational Core module** for the Belimbing application platform. Every deployment requires at least one company, making this module essential infrastructure rather than optional functionality.
 
 ## Overview
@@ -10,6 +12,12 @@ The Company module manages:
 - **Company Relationships**: External relationships (customers, suppliers, partners, agencies)
 - **External Access Control**: Portal access for external parties
 - **Business Context**: Registration details and metadata for compliance and AI inference
+- **Tenant Company Integrity**: Explicit immutable tenant ownership and same-tenant hierarchy
+- **Primary Company Assignment**: One explicit primary company for each provisioned tenant
+
+Tenant is the outer isolation and subscription boundary; Company is the inner
+organizational boundary. Core/Company owns `tenant_primary_companies` because
+Base/Tenancy cannot depend on Core.
 
 ## Models
 
@@ -29,8 +37,11 @@ The main company model representing business entities.
 ```php
 use App\Core\Company\Models\Company;
 
+$tenantId = app(\App\Base\Tenancy\Contracts\TenantContext::class)->requireTenantId();
+
 // Create a company
 $company = Company::create([
+    'tenant_id' => $tenantId,
     'name' => 'SBG Holdings',
     'legal_name' => 'SBG Holdings Pte Ltd',
     'registration_number' => '123456789',
@@ -43,6 +54,7 @@ $company = Company::create([
 
 // Create a subsidiary
 $subsidiary = Company::create([
+    'tenant_id' => $tenantId,
     'name' => 'SBG Indonesia',
     'parent_id' => $company->id,
     'status' => 'active',
@@ -198,6 +210,7 @@ $access->makeIndefinite();
 | Column | Type | Description |
 |--------|------|-------------|
 | id | integer | Primary key (auto-increment) |
+| tenant_id | unsignedBigInteger | Required immutable tenant; no database default |
 | parent_id | unsignedBigInteger | Parent company (nullable) |
 | name | string | Company name |
 | code | string | Short unique company code |
@@ -212,7 +225,23 @@ $access->makeIndefinite();
 | scope_activities | json | Industry, services, business focus |
 | metadata | json | Additional metadata |
 
-Addresses and phone are provided by the Address module via the `addressables` pivot (morphToMany). Address uses `postcode` (aligned with Geonames).
+Addresses and phone are provided by the Address module via the `addressables` pivot (morphToMany). Address uses `postcode` (aligned with Geonames) and carries its own required, immutable `tenant_id`; attachment rejects addresses from another tenant.
+
+`companies` has a tenant foreign key, unique `(id, tenant_id)`, and a composite
+`(parent_id, tenant_id)` foreign key so company trees cannot cross tenants.
+
+### tenant_primary_companies
+
+| Column | Type | Description |
+|--------|------|-------------|
+| tenant_id | unsignedBigInteger | Primary key and tenant foreign key |
+| company_id | unsignedBigInteger | Unique primary company |
+
+The composite `(company_id, tenant_id)` foreign key references
+`companies(id, tenant_id)`. Missing assignment means not yet provisioned; a missing,
+soft-deleted, or cross-tenant assigned company is an invariant violation. Deleting a
+primary company is blocked until `PrimaryCompanyManager` performs an explicit safe
+transfer.
 
 ### relationship_types
 
@@ -270,9 +299,9 @@ All models include factories for testing:
 
 ```php
 // Create companies
-$company = Company::factory()->create();
-$parent = Company::factory()->parent()->create();
-$subsidiary = Company::factory()->subsidiary($parent->id)->create();
+$company = Company::factory()->create(['tenant_id' => $tenant->id]);
+$parent = Company::factory()->parent()->create(['tenant_id' => $tenant->id]);
+$subsidiary = Company::factory()->subsidiary($parent->id)->create(['tenant_id' => $tenant->id]);
 
 // Create relationship types
 $type = RelationshipType::factory()->customer()->create();
@@ -287,17 +316,20 @@ $type = RelationshipType::factory()->partner()->create();
 ```php
 // Create parent company
 $holdings = Company::create([
+    'tenant_id' => $tenantId,
     'name' => 'SBG Holdings',
     'status' => 'active',
 ]);
 
 // Create subsidiaries
 $indonesia = Company::create([
+    'tenant_id' => $tenantId,
     'name' => 'SBG Indonesia',
     'parent_id' => $holdings->id,
 ]);
 
 $malaysia = Company::create([
+    'tenant_id' => $tenantId,
     'name' => 'SBG Malaysia',
     'parent_id' => $holdings->id,
 ]);
@@ -376,6 +408,18 @@ CompanyRelationship::create([
 ```
 
 ## Architecture Notes
+
+### Tenancy and Provisioning
+
+Exactly one tenant is explicitly marked as the platform operator, and each
+provisioned tenant has one primary company. IDs have no runtime role semantics.
+Historical ID 1 values are used only as deterministic migration input for old
+installations; ambiguous nonoperator backfills fail rather than selecting the oldest
+company.
+
+Base owns the narrow `FrameworkPrimitivesProvisioner` contract. Core/Company
+implements transactional, idempotent and sequence-safe provisioning of the operator
+tenant, primary company, assignment, initial admin, and Lara.
 
 ### Foundation vs Vendor Layer
 

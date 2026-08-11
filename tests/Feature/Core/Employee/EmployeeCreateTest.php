@@ -71,3 +71,31 @@ it('rejects cross-tenant department supervisor and user ids when creating an emp
 
     expect($otherUser->refresh()->employee_id)->toBeNull();
 });
+
+it('does not expose another tenant employee options to platform administrators', function (): void {
+    $admin = createAdminUser();
+    [, $otherCompany] = createTenantWithCompany(['name' => 'Hidden Employee Tenant']);
+    $departmentType = DepartmentType::query()->create([
+        'code' => 'hidden-cross-tenant',
+        'name' => 'Hidden Cross Tenant',
+        'category' => 'test',
+        'is_active' => true,
+    ]);
+    $otherDepartment = Department::query()->create([
+        'company_id' => $otherCompany->id,
+        'department_type_id' => $departmentType->id,
+        'status' => 'active',
+    ]);
+    $otherSupervisor = Employee::factory()->create(['company_id' => $otherCompany->id]);
+    $otherUser = User::factory()->create([
+        'company_id' => $otherCompany->id,
+        'employee_id' => null,
+    ]);
+
+    $component = Livewire::actingAs($admin)->test(Create::class);
+
+    expect($component->viewData('companies')->pluck('id'))->not->toContain($otherCompany->id)
+        ->and($component->viewData('departments')->pluck('id'))->not->toContain($otherDepartment->id)
+        ->and($component->viewData('supervisors')->pluck('id'))->not->toContain($otherSupervisor->id)
+        ->and($component->viewData('users')->pluck('id'))->not->toContain($otherUser->id);
+});

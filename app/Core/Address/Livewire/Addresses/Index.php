@@ -5,9 +5,11 @@ namespace App\Core\Address\Livewire\Addresses;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Models\Address;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -17,6 +19,9 @@ class Index extends Component
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
+
+    #[Locked]
+    public int $tenantId;
 
     public string $search = '';
 
@@ -29,6 +34,11 @@ class Index extends Component
         'country_iso' => 'country_iso',
         'verificationStatus' => 'verificationStatus',
     ];
+
+    public function mount(): void
+    {
+        $this->tenantId = app(TenantContext::class)->requireTenantId();
+    }
 
     public function sort(string $column): void
     {
@@ -44,6 +54,7 @@ class Index extends Component
 
         return [
             'addresses' => Address::query()
+                ->forTenant($this->tenantId)
                 ->when($this->search, function ($query, $search): void {
                     $query
                         ->where('label', 'like', '%'.$search.'%')
@@ -73,7 +84,9 @@ class Index extends Component
             return;
         }
 
-        $address = Address::query()->findOrFail($addressId);
+        $address = Address::query()
+            ->forTenant($this->tenantId)
+            ->findOrFail($addressId);
 
         $linkedCount = DB::table('addressables')
             ->where('address_id', $address->id)

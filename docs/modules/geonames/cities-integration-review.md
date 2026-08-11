@@ -184,11 +184,11 @@ This is more BLB-aligned than treating cities as a shortcut for changing `config
 
 #### Recommended timezone display model
 
-The best UX is to make the licensee or company timezone the default display timezone for shared business UI, while still allowing users to switch views when needed.
+The best UX is to make the current company timezone the default display timezone for shared business UI, while still allowing users to switch views when needed.
 
 Recommended display modes:
 
-- **Company:** the configured licensee or company timezone
+- **Company:** the configured current-company timezone
 - **Local:** the browser timezone of the current viewer
 - **UTC:** the canonical reference view for auditability and support
 
@@ -199,7 +199,7 @@ Recommended default behavior:
 - keep the selected display mode sticky across the UI
 - apply the same display mode to both table datetime columns and piecemeal datetime rendering
 
-This is preferable to defaulting to browser-local time everywhere because BLB is primarily a shared business application, and the most intuitive default is often the timezone the licensee actually operates in.
+This is preferable to defaulting to browser-local time everywhere because BLB is primarily a shared business application, and the most intuitive default is often the timezone the current company actually operates in.
 
 #### Source of truth for the default timezone
 
@@ -207,8 +207,8 @@ The company timezone should be an explicit setting, not a live inference from ad
 
 Recommended policy:
 
-1. resolve an initial timezone suggestion from the licensee address when enough geography is available
-2. store that as a canonical company or licensee timezone setting
+1. resolve an initial timezone suggestion from the company's primary address when enough geography is available
+2. store that as the canonical company timezone setting
 3. use that stored setting as the default display timezone
 4. allow later manual correction without requiring address changes
 

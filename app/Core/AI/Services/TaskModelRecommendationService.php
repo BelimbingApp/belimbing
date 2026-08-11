@@ -13,7 +13,7 @@ use App\Core\AI\Models\AiProviderModel;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Core\AI\Services\Runtime\RuntimeInvocationContext;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use Illuminate\Support\Str;
 
 class TaskModelRecommendationService
@@ -22,6 +22,7 @@ class TaskModelRecommendationService
         private readonly ConfigResolver $configResolver,
         private readonly AgenticRuntime $agenticRuntime,
         private readonly LaraTaskRegistry $taskRegistry,
+        private readonly PrimaryCompanyManager $primaryCompanies,
     ) {}
 
     /**
@@ -125,7 +126,7 @@ class TaskModelRecommendationService
     private function candidateList(): array
     {
         $providers = AiProvider::query()
-            ->forCompany(Company::LICENSEE_ID)
+            ->forCompany((int) $this->primaryCompanies->platformOperatorCompany()->id)
             ->llm()
             ->active()
             ->orderBy('display_name')

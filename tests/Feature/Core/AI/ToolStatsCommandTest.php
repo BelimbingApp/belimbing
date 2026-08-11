@@ -4,13 +4,12 @@ use App\Core\AI\Enums\AiRunStatus;
 use App\Core\AI\Enums\RunPhase;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunEvent;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\Artisan;
 
 function toolStatsSeedRun(): AiRun
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
     return AiRun::query()->create([

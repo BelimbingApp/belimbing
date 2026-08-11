@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Clarify the relationship model between User, Employee, and Company entities
-**Last Updated:** 2026-08-05
+**Last Updated:** 2026-08-11
 
 ---
 
@@ -13,6 +13,11 @@ BLB uses a three-entity model to handle authentication, employment relationships
 - **User** - System authentication and access control
 - **Employee** - Employment relationship within a company
 - **Company** - Organizational entity
+
+These entities operate inside a **Tenant**, the outer isolation and subscription
+boundary. Every company has one explicit, immutable `tenant_id`; company parent-child
+relationships cannot cross tenants. Each provisioned tenant has one explicitly
+assigned primary company.
 
 ---
 
@@ -97,6 +102,7 @@ Employee
 **Purpose:** Organizational entity
 
 **Key Attributes:**
+- `tenant_id` (required) - Immutable owning tenant
 - `parent_id` - Hierarchical company structure
 - `name`, `legal_name`, `registration_number`, `tax_id`
 - `status` - Company status (active, suspended, pending, archived)
@@ -113,6 +119,12 @@ Employee
 
 **Relationship to Employee:**
 - `hasMany(Employee)` - Employment records for this company
+
+**Relationship to Tenant:**
+- `belongsTo(Tenant)` through required `tenant_id`
+- May be the tenant's one primary company through Core/Company's
+  `tenant_primary_companies` relationship
+- A primary company cannot be deleted until an explicit safe transfer is completed
 
 ---
 
@@ -292,24 +304,23 @@ Employee.user_id → User.id (nullOnDelete)
 - Two entities to manage for employees with system access
 - Potential for data inconsistency if not carefully managed
 
-### Licensee Company (id=1)
+### Platform operator and primary company
 
-**Purpose:** Identify the company that is the licensee operating this Belimbing instance.
+Exactly one tenant is explicitly marked as the platform operator. Numeric tenant and
+company IDs do not identify that role. Every provisioned tenant has one primary
+company recorded in `tenant_primary_companies`; a missing assignment means the tenant
+has not completed provisioning, while an invalid referenced assignment is corruption.
 
-**Convention:** The licensee company is always `id=1`, created during installation via `scripts/setup-steps/60-migrations.sh`.
+Installation transactionally provisions the operator tenant, its primary company,
+the relationship, initial admin, and Lara. Base owns only the narrow provisioning
+contract; Core/Company implements this coordination. Historical ID 1 values remain
+only as deterministic migration input for installations created under the retired
+licensee convention.
 
-**Key Points:**
-- Created before the initial admin user during setup
-- Admin user is automatically assigned `company_id=1`
-- Cannot be deleted (enforced at both model and UI level)
-- `Company::LICENSEE_ID` constant and `$company->isLicensee()` method provide programmatic access
-- All other companies (customers, suppliers, partners) exist in relation to the licensee
-
-**Why id=1 Convention:**
-- Simple and deterministic — no config files or flags needed
-- Always available after installation — no risk of misconfiguration
-- No database migration needed — works with existing schema
-- Clear and obvious — first company created is the operator
+User and employee selectors are scoped to companies in the current tenant, and
+employee-to-user linking requires the same company. Configured system roles remain
+company-less; every custom role has an owning company and is available only inside
+that company's tenant.
 
 ---
 

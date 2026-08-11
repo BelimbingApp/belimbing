@@ -8,7 +8,6 @@ use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Models\AiProviderModel;
 use App\Core\AI\Services\ConfigResolver;
 use App\Core\AI\Services\TaskModelRecommendationService;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
@@ -70,7 +69,7 @@ test('recommendation saves a stable recommended task model choice', function ():
     $this->actingAs($user);
 
     $secondaryProvider = AiProvider::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => platformOperatorCompany()->id,
         'name' => 'anthropic',
         'display_name' => 'Anthropic',
         'base_url' => 'https://anthropic.example.test',
@@ -122,7 +121,7 @@ test('manual task model selection auto-picks the provider default model and pers
     $this->actingAs($user);
 
     $codingProvider = AiProvider::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => platformOperatorCompany()->id,
         'name' => 'openrouter',
         'display_name' => 'OpenRouter',
         'base_url' => 'https://openrouter.example.test',
@@ -214,7 +213,7 @@ test('task models switch execution control surfaces when the selected model fami
     $this->actingAs($user);
 
     $anthropicProvider = AiProvider::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => platformOperatorCompany()->id,
         'name' => 'anthropic',
         'display_name' => 'Anthropic',
         'base_url' => 'https://anthropic.example.test',
@@ -226,7 +225,7 @@ test('task models switch execution control surfaces when the selected model fami
     ]);
 
     $moonshotProvider = AiProvider::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => platformOperatorCompany()->id,
         'name' => 'moonshotai',
         'display_name' => 'Moonshot',
         'base_url' => 'https://moonshot.example.test',
@@ -274,8 +273,7 @@ function createTaskModelsTestUser(): User
 {
     setupAuthzRoles();
 
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
 
     $employee = Employee::factory()->create(['company_id' => $company->id]);
 
@@ -301,8 +299,7 @@ function createTaskModelsTestUser(): User
  */
 function activateLaraForTaskModels(): array
 {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
 
     Employee::provisionLara();
 

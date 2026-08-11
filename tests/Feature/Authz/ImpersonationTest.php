@@ -43,6 +43,20 @@ it('denies impersonation without capability', function (): void {
     expect(session('impersonation.original_user_id'))->toBeNull();
 });
 
+it('fails closed when an administrator attempts to impersonate another tenant', function (): void {
+    $admin = createAdminUser();
+    [, $foreignCompany] = createTenantWithCompany(['name' => 'Foreign Tenant']);
+    $target = User::factory()->create(['company_id' => $foreignCompany->id]);
+    $this->withoutVite();
+
+    $this->actingAs($admin)
+        ->post(route('admin.impersonate.start', $target))
+        ->assertNotFound();
+
+    expect(auth()->id())->toBe($admin->id)
+        ->and(session('impersonation.original_user_id'))->toBeNull();
+});
+
 it('stops impersonation and restores original user', function (): void {
     $company = Company::factory()->create();
     $admin = User::factory()->create(['company_id' => $company->id]);

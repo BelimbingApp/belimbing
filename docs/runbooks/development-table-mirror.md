@@ -21,7 +21,7 @@ Native PostgreSQL is selected automatically only when both endpoints are Postgre
 
 ## Providers
 
-**Supabase** is the first hosted provider adapter. **PostgreSQL** is the generic adapter for a licensee-managed server or another PostgreSQL host. Provider identity and database engine are separate: both current providers expose PostgreSQL, while local development may continue using SQLite.
+**Supabase** is the first hosted provider adapter. **PostgreSQL** is the generic adapter for a platform-operator-managed server or another PostgreSQL host. Provider identity and database engine are separate: both current providers expose PostgreSQL, while local development may continue using SQLite.
 
 A future provider belongs in the provider registry and supplies its own credential/preflight behavior. It does not require branches in the table picker or mirror policy.
 

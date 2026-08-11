@@ -1,17 +1,21 @@
 <?php
 
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Exceptions\TenantContextMissingException;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
+use App\Core\Company\Exceptions\CompanyTenantAssignmentException;
+use App\Core\Company\Exceptions\PrimaryCompanyAssignmentException;
+use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
+use App\Core\Company\Exceptions\PrimaryCompanyInvariantViolationException;
+use App\Core\Company\Exceptions\PrimaryCompanyNotProvisionedException;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\CompanyRelationship;
 use App\Core\Company\Models\RelationshipType;
+use App\Core\Company\Models\TenantPrimaryCompany;
+use App\Core\Company\Services\PrimaryCompanyManager;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-
-function removeSeededLicenseeCompany(): void
-{
-    DB::table('employees')->where('company_id', Company::LICENSEE_ID)->delete();
-    DB::table('users')->where('company_id', Company::LICENSEE_ID)->delete();
-    DB::table('companies')->where('id', Company::LICENSEE_ID)->delete();
-}
 
 test('company code is auto-generated from name', function (): void {
     $company = Company::factory()->create([
@@ -21,55 +25,222 @@ test('company code is auto-generated from name', function (): void {
     expect($company->code)->toBe('my_great_company');
 });
 
-test('provision licensee uses preferred company code when provided', function (): void {
-    removeSeededLicenseeCompany();
+test('two customer tenants can each have an explicit primary company', function (): void {
+    $manager = app(PrimaryCompanyManager::class);
+    $tenantA = $manager->provisionTenant(['name' => 'Tenant A', 'status' => 'active'], ['name' => 'Tenant A Primary']);
+    $tenantB = $manager->provisionTenant(['name' => 'Tenant B', 'status' => 'active'], ['name' => 'Tenant B Primary']);
 
-    Company::provisionLicensee('My Company', 'preferred_licensee');
-
-    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
-
-    expect($licensee->code)->toBe('preferred_licensee');
+    expect($manager->requireForTenant($tenantA)->tenant_id)->toBe($tenantA->id)
+        ->and($manager->requireForTenant($tenantB)->tenant_id)->toBe($tenantB->id)
+        ->and($manager->requireForTenant($tenantA)->id)->not->toBe($manager->requireForTenant($tenantB)->id);
 });
 
-test('provision licensee normalizes preferred company code', function (): void {
-    removeSeededLicenseeCompany();
+test('a company cannot become the primary company of a different tenant', function (): void {
+    [$tenantA, $companyA] = createTenantWithCompany(['name' => 'Tenant A']);
+    $tenantB = createTenant(['name' => 'Tenant B']);
 
-    Company::provisionLicensee('My Company', 'Preferred Code 2026');
+    app(PrimaryCompanyManager::class)->assign($tenantB, $companyA);
+})->throws(PrimaryCompanyAssignmentException::class);
 
-    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+test('database constraints prevent a company from becoming primary for two tenants', function (): void {
+    [$tenantA, $companyA] = createTenantWithCompany(['name' => 'Tenant A']);
+    $tenantB = createTenant(['name' => 'Tenant B']);
+    app(PrimaryCompanyManager::class)->assign($tenantA, $companyA);
 
-    expect($licensee->code)->toBe('preferred_code_2026');
-});
-
-test('provision licensee updates the existing id 1 company in place', function (): void {
-    Company::query()->whereKey(Company::LICENSEE_ID)->update([
-        'name' => 'Old Licensee',
-        'code' => 'old_licensee',
-        'status' => 'archived',
+    DB::table('tenant_primary_companies')->insert([
+        'tenant_id' => $tenantB->id,
+        'company_id' => $companyA->id,
     ]);
+})->throws(QueryException::class);
 
-    $wasCreated = Company::provisionLicensee('New Licensee', 'new licensee');
+test('company creation without an explicit tenant or tenant context fails closed', function (): void {
+    app(TenantContext::class)->clear();
 
-    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+    Company::query()->create(['name' => 'Unscoped Company']);
+})->throws(TenantContextMissingException::class);
 
-    expect($wasCreated)->toBeFalse()
-        ->and($licensee->name)->toBe('New Licensee')
-        ->and($licensee->code)->toBe('new_licensee')
-        ->and($licensee->status)->toBe('active');
+test('database has no fallback tenant assignment for companies', function (): void {
+    DB::table('companies')->insert([
+        'name' => 'Database-unscoped Company',
+        'code' => 'database_unscoped_company',
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+})->throws(QueryException::class);
+
+test('a company tenant assignment cannot change after creation', function (): void {
+    [$tenantA, $company] = createTenantWithCompany(['name' => 'Tenant A']);
+    $tenantB = createTenant(['name' => 'Tenant B']);
+
+    $company->tenant_id = $tenantB->id;
+    $company->save();
+})->throws(CompanyTenantAssignmentException::class);
+
+test('a parent company must belong to the same tenant', function (): void {
+    [$tenantA, $parent] = createTenantWithCompany(['name' => 'Tenant A']);
+    $tenantB = createTenant(['name' => 'Tenant B']);
+
+    Company::factory()->create([
+        'tenant_id' => $tenantB->id,
+        'parent_id' => $parent->id,
+    ]);
+})->throws(CompanyTenantAssignmentException::class);
+
+test('a soft-deleted primary company is reported as an invariant violation', function (): void {
+    [$tenant, $company] = createTenantWithCompany();
+    app(PrimaryCompanyManager::class)->assign($tenant, $company);
+    DB::table('companies')->where('id', $company->id)->update(['deleted_at' => now()]);
+
+    app(PrimaryCompanyManager::class)->requireForTenant($tenant);
+})->throws(PrimaryCompanyInvariantViolationException::class);
+
+test('a tenant without a primary company is explicitly not yet provisioned', function (): void {
+    app(PrimaryCompanyManager::class)->requireForTenant(createTenant());
+})->throws(PrimaryCompanyNotProvisionedException::class);
+
+test('legacy operator company id 1 is deterministically backfilled without changing ids', function (): void {
+    TenantPrimaryCompany::query()->delete();
+    DB::table('tenants')->where('is_platform_operator', true)->update(['is_platform_operator' => false]);
+    DB::table('tenants')->insert([
+        'id' => 1,
+        'name' => 'Legacy Operator Tenant',
+        'status' => 'active',
+        'is_platform_operator' => true,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    DB::table('companies')->where('id', 1)->update(['tenant_id' => 1]);
+
+    $operator = Tenant::query()->findOrFail(1);
+    $legacyCompany = Company::query()->findOrFail(1);
+    Company::factory()->create(['tenant_id' => $operator->id]);
+
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+    $migration->up();
+
+    expect($operator->id)->toBe(1)
+        ->and($legacyCompany->id)->toBe(1)
+        ->and(app(PrimaryCompanyManager::class)->requireForTenant($operator)->is($legacyCompany))->toBeTrue();
 });
 
-test('provision licensee preserves existing code when no preferred code is provided', function (): void {
-    Company::query()->whereKey(Company::LICENSEE_ID)->update([
-        'name' => 'Old Licensee',
-        'code' => 'stable_licensee',
+test('primary-company migration preflight rejects ambiguous customer tenants before writing', function (): void {
+    $tenant = createTenant(['name' => 'Ambiguous Tenant']);
+    Company::factory()->count(2)->create(['tenant_id' => $tenant->id]);
+    TenantPrimaryCompany::query()->delete();
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+
+    expect(fn () => $migration->up())->toThrow(
+        RuntimeException::class,
+        "tenant {$tenant->id} has candidates",
+    );
+    expect(TenantPrimaryCompany::query()->exists())->toBeFalse();
+});
+
+test('primary-company migration honors an explicit designation for an ambiguous tenant', function (): void {
+    $tenant = createTenant(['name' => 'Explicitly Designated Tenant']);
+    $designated = Company::factory()->create(['tenant_id' => $tenant->id]);
+    Company::factory()->create(['tenant_id' => $tenant->id]);
+    TenantPrimaryCompany::query()->create([
+        'tenant_id' => $tenant->id,
+        'company_id' => $designated->id,
     ]);
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
 
-    Company::provisionLicensee('Renamed Licensee');
+    $migration->up();
 
-    $licensee = Company::query()->findOrFail(Company::LICENSEE_ID);
+    expect(app(PrimaryCompanyManager::class)->requireForTenant($tenant)->is($designated))->toBeTrue();
+});
 
-    expect($licensee->name)->toBe('Renamed Licensee')
-        ->and($licensee->code)->toBe('stable_licensee');
+test('primary-company migration treats all live companies as candidates regardless of status', function (): void {
+    $tenant = createTenant(['name' => 'Suspended-company Tenant']);
+    $company = Company::factory()->suspended()->create(['tenant_id' => $tenant->id]);
+    TenantPrimaryCompany::query()->delete();
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+
+    $migration->up();
+
+    expect(app(PrimaryCompanyManager::class)->requireForTenant($tenant)->is($company))->toBeTrue();
+});
+
+test('primary-company migration rejects mixed-status ambiguity before writing', function (): void {
+    $tenant = createTenant(['name' => 'Mixed-status Tenant']);
+    Company::factory()->active()->create(['tenant_id' => $tenant->id]);
+    Company::factory()->suspended()->create(['tenant_id' => $tenant->id]);
+    TenantPrimaryCompany::query()->delete();
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+
+    expect(fn () => $migration->up())->toThrow(
+        RuntimeException::class,
+        "tenant {$tenant->id} has candidates",
+    );
+    expect(TenantPrimaryCompany::query()->exists())->toBeFalse();
+});
+
+test('primary-company migration leaves tenants with no live companies unprovisioned', function (): void {
+    $tenant = createTenant(['name' => 'Companyless Tenant']);
+    TenantPrimaryCompany::query()->delete();
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+
+    $migration->up();
+
+    expect(TenantPrimaryCompany::query()->where('tenant_id', $tenant->id)->exists())->toBeFalse();
+});
+
+test('primary-company migration rollback does not erase operational assignments', function (): void {
+    [$tenant, $company] = createTenantWithCompany(['name' => 'Operational Tenant']);
+    app(PrimaryCompanyManager::class)->assign($tenant, $company);
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001006_backfill_tenant_primary_companies.php');
+
+    $migration->down();
+
+    expect(app(PrimaryCompanyManager::class)->requireForTenant($tenant)->is($company))->toBeTrue();
+});
+
+test('a primary company cannot be deleted before an explicit transfer', function (): void {
+    [$tenant, $company] = createTenantWithCompany();
+    app(PrimaryCompanyManager::class)->assign($tenant, $company);
+
+    $company->delete();
+})->throws(PrimaryCompanyDeletionException::class);
+
+test('transferring the primary role allows the former primary company to be deleted', function (): void {
+    [$tenant, $first] = createTenantWithCompany();
+    $second = Company::factory()->create(['tenant_id' => $tenant->id]);
+    $manager = app(PrimaryCompanyManager::class);
+    $manager->assign($tenant, $first);
+    $manager->transfer($tenant, $second);
+
+    $first->delete();
+
+    expect(Company::query()->find($first->id))->toBeNull()
+        ->and(Company::withTrashed()->find($first->id)?->trashed())->toBeTrue()
+        ->and($manager->requireForTenant($tenant)->is($second))->toBeTrue();
+});
+
+test('deletion updates the invoking company instance after a primary transfer', function (): void {
+    [$tenant, $first] = createTenantWithCompany();
+    $second = Company::factory()->create(['tenant_id' => $tenant->id]);
+    $manager = app(PrimaryCompanyManager::class);
+    $manager->assign($tenant, $first);
+    $manager->transfer($tenant, $second);
+
+    $first->delete();
+
+    expect($first->trashed())->toBeTrue();
+});
+
+test('the former primary company can be force deleted after a transfer', function (): void {
+    [$tenant, $first] = createTenantWithCompany();
+    $second = Company::factory()->create(['tenant_id' => $tenant->id]);
+    $manager = app(PrimaryCompanyManager::class);
+    $manager->assign($tenant, $first);
+    $manager->transfer($tenant, $second);
+
+    $first->forceDelete();
+
+    expect(Company::withTrashed()->find($first->id))->toBeNull()
+        ->and($manager->requireForTenant($tenant)->is($second))->toBeTrue();
 });
 
 test('company can have parent company', function (): void {
@@ -142,6 +313,7 @@ test('company full address formats correctly', function (): void {
     $company = Company::factory()->create();
 
     $address = Address::create([
+        'tenant_id' => $company->tenant_id,
         'line1' => '123 Main St',
         'line2' => 'Suite 100',
         'locality' => 'Springfield',

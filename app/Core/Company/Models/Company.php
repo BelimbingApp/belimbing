@@ -3,28 +3,32 @@
 namespace App\Core\Company\Models;
 
 use App\Base\Support\Str as BlbStr;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
 use App\Core\Address\Models\Addressable;
 use App\Core\Company\Database\Factories\CompanyFactory;
-use App\Core\Company\Exceptions\LicenseeCompanyDeletionException;
+use App\Core\Company\Exceptions\CompanyTenantAssignmentException;
+use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class Company extends Model
 {
-    /**
-     * The licensee company is always id=1, created during installation.
-     */
-    public const LICENSEE_ID = 1;
-
-    use HasFactory, SoftDeletes;
+    use HasFactory;
+    use SoftDeletes {
+        forceDelete as private forceDeleteWithoutPrimaryCompanyGuard;
+    }
 
     /**
      * The table associated with the model.
@@ -80,23 +84,116 @@ class Company extends Model
     }
 
     /**
+     * Resolve web route bindings inside the current tenant boundary.
+     *
+     * Cross-tenant company IDs intentionally resolve as not found so route
+     * model binding cannot expose whether another tenant owns that record.
+     */
+    public function resolveRouteBindingQuery($query, $value, $field = null): Builder
+    {
+        return parent::resolveRouteBindingQuery($query, $value, $field)
+            ->forTenant(app(TenantContext::class)->requireTenantId());
+    }
+
+    /**
      * Boot the model.
      */
     protected static function boot(): void
     {
         parent::boot();
 
-        static::creating(function ($company): void {
+        static::creating(function (Company $company): void {
+            if ($company->tenant_id === null) {
+                $company->tenant_id = app(TenantContext::class)->requireTenantId();
+            }
+
+            $tenantId = (int) $company->tenant_id;
+
+            if (! Tenant::query()->whereKey($tenantId)->exists()) {
+                throw CompanyTenantAssignmentException::tenantDoesNotExist($tenantId);
+            }
+
+            static::assertParentBelongsToTenant($company->parent_id, $tenantId);
+
             if (empty($company->code)) {
                 $company->code = BlbStr::code($company->name);
             }
         });
 
-        static::deleting(function ($company): void {
-            if ($company->id === self::LICENSEE_ID) {
-                throw new LicenseeCompanyDeletionException;
+        static::updating(function (Company $company): void {
+            if ($company->isDirty('tenant_id')) {
+                throw CompanyTenantAssignmentException::immutable(
+                    (int) $company->id,
+                    (int) $company->getOriginal('tenant_id'),
+                    (int) $company->tenant_id,
+                );
+            }
+
+            if ($company->isDirty('parent_id')) {
+                static::assertParentBelongsToTenant($company->parent_id, (int) $company->tenant_id);
             }
         });
+    }
+
+    public function delete(): ?bool
+    {
+        if ($this->isForceDeleting()) {
+            return parent::delete();
+        }
+
+        return $this->deleteWithPrimaryCompanyGuard(false);
+    }
+
+    public function forceDelete(): ?bool
+    {
+        return $this->deleteWithPrimaryCompanyGuard(true);
+    }
+
+    private function deleteWithPrimaryCompanyGuard(bool $force): ?bool
+    {
+        if (! $this->exists) {
+            return null;
+        }
+
+        $tenantId = (int) $this->tenant_id;
+        $companyId = (int) $this->id;
+
+        return DB::transaction(function () use ($tenantId, $companyId, $force): ?bool {
+            Tenant::withTrashed()->whereKey($tenantId)->lockForUpdate()->first();
+            $assignment = TenantPrimaryCompany::query()
+                ->whereKey($tenantId)
+                ->lockForUpdate()
+                ->first();
+            $company = static::withTrashed()->whereKey($companyId)->lockForUpdate()->first();
+
+            if ($company === null) {
+                return null;
+            }
+
+            if ((int) $assignment?->company_id === $companyId) {
+                throw new PrimaryCompanyDeletionException($tenantId, $companyId);
+            }
+
+            return $force
+                ? $this->forceDeleteWithoutPrimaryCompanyGuard()
+                : parent::delete();
+        });
+    }
+
+    private static function assertParentBelongsToTenant(mixed $parentId, int $tenantId): void
+    {
+        if ($parentId === null) {
+            return;
+        }
+
+        $parentMatches = static::query()
+            ->whereKey($parentId)
+            ->where('tenant_id', $tenantId)
+            ->exists();
+
+        if (! $parentMatches) {
+            throw CompanyTenantAssignmentException::parentTenantMismatch($tenantId, (int) $parentId);
+        }
     }
 
     /**
@@ -117,6 +214,11 @@ class Company extends Model
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class, 'tenant_id');
+    }
+
+    public function primaryCompanyAssignment(): HasOne
+    {
+        return $this->hasOne(TenantPrimaryCompany::class, 'company_id');
     }
 
     /**
@@ -255,6 +357,12 @@ class Company extends Model
     public function addresses(): MorphToMany
     {
         return $this->morphToMany(Address::class, 'addressable', 'addressables')
+            ->whereExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('companies as address_owner_companies')
+                    ->whereColumn('address_owner_companies.id', 'addressables.addressable_id')
+                    ->whereColumn('address_owner_companies.tenant_id', 'addresses.tenant_id');
+            })
             ->using(Addressable::class)
             ->withPivot('kind', 'is_primary', 'priority', 'valid_from', 'valid_to')
             ->withTimestamps();
@@ -310,12 +418,9 @@ class Company extends Model
         return $this->status === 'archived';
     }
 
-    /**
-     * Check if this is the licensee company (the company operating this Belimbing instance).
-     */
-    public function isLicensee(): bool
+    public function isPrimaryCompany(): bool
     {
-        return $this->id === self::LICENSEE_ID;
+        return app(PrimaryCompanyManager::class)->isPrimary($this);
     }
 
     /**
@@ -378,52 +483,6 @@ class Company extends Model
 
         $this->metadata = $metadata;
         $this->save();
-    }
-
-    /**
-     * Upsert the licensee company at id=1.
-     *
-     * Idempotent — safe to call from migrations, setup scripts, and UI.
-     * When the row already exists, its name/code/status are updated in place so
-     * id=1 remains the canonical licensee company. Resets the PostgreSQL
-     * sequence after explicit-ID insert to avoid auto-increment collisions.
-     *
-     * @param  string  $name  Display name for the licensee company
-     * @param  string|null  $code  Preferred company code (normalized to snake_case)
-     * @return bool Whether the licensee row was created (false if it already existed and was updated).
-     */
-    public static function provisionLicensee(string $name = 'My Company', ?string $code = null): bool
-    {
-        $normalizedCode = null;
-        if (is_string($code) && trim($code) !== '') {
-            $normalizedCode = BlbStr::code($code);
-        }
-
-        $attributes = [
-            'tenant_id' => Tenant::LICENSEE_TENANT_ID,
-            'name' => $name,
-            'status' => 'active',
-        ];
-
-        if ($normalizedCode !== null) {
-            $attributes['code'] = $normalizedCode;
-        }
-
-        $licensee = static::unguarded(fn () => static::query()->updateOrCreate(
-            ['id' => self::LICENSEE_ID],
-            $attributes,
-        ));
-
-        // PostgreSQL sequences don't advance on explicit-ID inserts — reset to
-        // avoid unique-constraint violations when subsequent inserts auto-increment.
-        $connection = static::resolveConnection();
-        if ($licensee->wasRecentlyCreated && $connection->getDriverName() === 'pgsql') {
-            $connection->statement(
-                "SELECT setval(pg_get_serial_sequence('companies', 'id'), (SELECT COALESCE(MAX(id), 0) FROM companies))"
-            );
-        }
-
-        return $licensee->wasRecentlyCreated;
     }
 
     /**
@@ -492,6 +551,11 @@ class Company extends Model
     public function scopeActive($query): void
     {
         $query->where('status', 'active');
+    }
+
+    public function scopeForTenant($query, int $tenantId): void
+    {
+        $query->where($this->qualifyColumn('tenant_id'), $tenantId);
     }
 
     /**

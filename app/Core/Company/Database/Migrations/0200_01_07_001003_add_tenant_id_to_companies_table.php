@@ -10,9 +10,11 @@ return new class extends Migration
     /**
      * Run the migrations.
      *
-     * Every existing company backfills to the licensee tenant (id=1), making
-     * this a no-op for single-licensee instances. The tenants table is created
-     * by Base/Tenancy (0100_01_25), which sorts before the Company block.
+     * Historical behavior only: this released migration backfilled companies
+     * to the then-semantic tenant ID 1. Additive successor migrations mark the
+     * operator explicitly, remove this default, and establish primary-company
+     * ownership without changing retained IDs. Runtime code must not infer a
+     * tenant or company role from ID 1.
      */
     public function up(): void
     {

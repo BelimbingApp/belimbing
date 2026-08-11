@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\AI\Services\Messaging;
 
 use App\Core\AI\Enums\MessageDirection;
@@ -48,6 +49,12 @@ class InboundRoutingService
             return RoutingOutcome::skipped('No parseable content in signal.');
         }
 
+        if ($signal->channelAccount?->company_id === null) {
+            $signal->markRouted();
+
+            return RoutingOutcome::rejected('Signal has no company-scoped channel account.');
+        }
+
         // Resolve or create conversation
         $conversation = $this->resolveConversation($signal);
         $message = $this->persistInboundMessage($conversation, $signal);
@@ -70,14 +77,7 @@ class InboundRoutingService
         $externalId = $signal->conversation_identifier ?? $signal->sender_identifier;
 
         // Resolve company_id from the channel account
-        $companyId = $signal->channelAccount?->company_id;
-
-        if ($companyId === null) {
-            // Fallback: use a sentinel company ID for orphaned signals.
-            // This should not happen in practice — channel accounts should
-            // always be company-scoped.
-            $companyId = 1;
-        }
+        $companyId = (int) $signal->channelAccount->company_id;
 
         return ChannelConversation::query()->firstOrCreate(
             [

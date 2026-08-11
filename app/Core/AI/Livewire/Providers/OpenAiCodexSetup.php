@@ -122,7 +122,11 @@ final class OpenAiCodexSetup extends ProviderSetup
             return;
         }
 
-        $result = app(ProviderTestService::class)->testSelection($provider->id, $model->model_id);
+        $result = app(ProviderTestService::class)->testSelection(
+            $provider->id,
+            $model->model_id,
+            (int) $provider->company_id,
+        );
 
         $this->verificationResult = array_merge($result->toArray(), [
             'checked_at' => now()->toIso8601String(),

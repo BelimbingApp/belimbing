@@ -5,9 +5,8 @@ use App\Core\AI\Enums\RunPhase;
 use App\Core\AI\Livewire\Chat;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Services\MessageManager;
-use App\Core\AI\Services\SessionManager;
 use App\Core\AI\Services\RunEventPublisher;
-use App\Core\Company\Models\Company;
+use App\Core\AI\Services\SessionManager;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
@@ -36,10 +35,10 @@ afterEach(function (): void {
  */
 function createStopStaleFixture(): array
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $company = platformOperatorCompany();
 
     $employee = Employee::factory()->create([
         'company_id' => $company->id,

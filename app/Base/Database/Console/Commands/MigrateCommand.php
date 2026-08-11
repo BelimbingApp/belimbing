@@ -12,8 +12,8 @@ use App\Base\Database\Services\IncubatingSchemaApprovalRepository;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\IncubatingSchemaProductionPolicy;
 use App\Base\Foundation\ApplicationTopology;
+use App\Base\Foundation\Contracts\FrameworkPrimitivesProvisioner;
 use App\Base\Foundation\Services\DomainState;
-use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Support\AppPath;
 use Illuminate\Console\Command;
 use Illuminate\Database\Console\Migrations\MigrateCommand as IlluminateMigrateCommand;
@@ -208,7 +208,7 @@ class MigrateCommand extends IlluminateMigrateCommand
      * Overrides parent to handle module-aware seeding and framework primitives.
      *
      * Ordering: migrations → production seeders → framework primitives → dev seeders.
-     * Framework primitives (Licensee, Lara) run after production seeders so that
+     * Framework primitives (operator tenant, primary company, admin, Lara) run after production seeders so that
      * any seeder-created dependencies exist, and before dev seeders so that dev
      * data can reference them.
      */
@@ -246,7 +246,7 @@ class MigrateCommand extends IlluminateMigrateCommand
                     $this->runModuleSeeders();
                 }
 
-                // Ensure framework primitives exist (Licensee company, admin user, Lara).
+                // Ensure the operator tenant, primary company, admin, and Lara exist.
                 // Runs after production seeders, before dev seeders, in all environments.
                 if (! app()->environment('testing')) {
                     $this->provisionFrameworkPrimitives();
@@ -386,7 +386,7 @@ class MigrateCommand extends IlluminateMigrateCommand
      *
      * Only allowed when APP_ENV=local — DevSeeder base class enforces
      * this guard, but we also check here for a clear early error.
-     * Framework primitives (Licensee, Lara) are already ensured by
+     * Framework primitives (platform operator, primary company, Lara) are already ensured by
      * ensureFrameworkPrimitives() before this method is called.
      */
     protected function runDevSeeders(): void
@@ -414,7 +414,7 @@ class MigrateCommand extends IlluminateMigrateCommand
     }
 
     /**
-     * Provision framework primitives: Licensee company, admin user, and Lara.
+     * Provision the platform operator, its primary company, admin user, and Lara.
      *
      * Delegates to FrameworkPrimitivesProvisioner to keep migration command
      * focused on orchestration rather than domain logic.
@@ -423,15 +423,12 @@ class MigrateCommand extends IlluminateMigrateCommand
     {
         $bootstrapFile = getenv('BLB_BOOTSTRAP_ADMIN_FILE') ?: null;
 
-        $provisioner = new FrameworkPrimitivesProvisioner(
-            fn (string $message) => $this->line("  {$message}"),
-            $bootstrapFile,
+        app(FrameworkPrimitivesProvisioner::class)->provision(
+            companyName: config('app.platform_operator_company_name'),
+            companyCode: config('app.platform_operator_company_code'),
+            bootstrapAdminFile: $bootstrapFile,
+            output: fn (string $message) => $this->line("  {$message}"),
         );
-
-        $companyName = config('app.licensee_company_name');
-        $companyCode = config('app.licensee_company_code');
-
-        $provisioner->provision($companyName, $companyCode);
     }
 
     /**

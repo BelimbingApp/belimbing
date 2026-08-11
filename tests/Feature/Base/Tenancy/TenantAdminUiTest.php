@@ -30,12 +30,13 @@ it('reveals the tenancy surface via the explicit platform setting', function ():
 
 it('lists tenants for admins and blocks users without the capability', function (): void {
     createTenant(['name' => 'Visible Second Tenant']);
+    $operatorName = platformOperatorTenant()->name;
 
     $this->actingAs(createAdminUser())
         ->get(route('admin.tenancy.tenants'))
         ->assertOk()
         ->assertSee('Visible Second Tenant')
-        ->assertSee('Licensee');
+        ->assertSee($operatorName);
 
     $plainUser = User::factory()->create();
     $this->actingAs($plainUser)

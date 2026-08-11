@@ -4,6 +4,7 @@ namespace App\Core\Company\Livewire\Companies;
 
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\Department;
 use App\Core\Company\Models\DepartmentType;
@@ -37,6 +38,10 @@ class Departments extends Component
 
     public function mount(Company $company): void
     {
+        if ((int) $company->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
+
         $this->company = $company;
     }
 

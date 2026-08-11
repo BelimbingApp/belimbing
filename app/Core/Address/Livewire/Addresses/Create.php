@@ -1,13 +1,19 @@
 <?php
+
 namespace App\Core\Address\Livewire\Addresses;
 
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Livewire\AbstractAddressForm;
 use App\Core\Address\Models\Address;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Session;
+use Livewire\Attributes\Locked;
 
 class Create extends AbstractAddressForm
 {
+    #[Locked]
+    public int $tenantId;
+
     public ?string $label = null;
 
     public ?string $phone = null;
@@ -30,12 +36,17 @@ class Create extends AbstractAddressForm
 
     public string $verificationStatus = 'unverified';
 
+    public function mount(): void
+    {
+        $this->tenantId = app(TenantContext::class)->requireTenantId();
+    }
 
     public function store(): void
     {
         $validated = $this->validate($this->rules());
 
         Address::query()->create([
+            'tenant_id' => $this->tenantId,
             'label' => $validated['label'],
             'phone' => $validated['phone'],
             'line1' => $validated['line1'],

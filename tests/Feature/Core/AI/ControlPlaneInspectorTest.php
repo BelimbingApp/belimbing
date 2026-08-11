@@ -6,7 +6,6 @@ use App\Core\AI\Livewire\ControlPlane;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunCall;
 use App\Core\AI\Models\AiRunEvent;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\File;
 use Livewire\Livewire;
@@ -14,7 +13,7 @@ use Livewire\Livewire;
 const CONTROL_PLANE_OVERSIZED_RUN_ID = 'run_control_plane_oversized';
 const CONTROL_PLANE_WINDOWED_RUN_ID = 'run_control_plane_windowed';
 const CONTROL_PLANE_TIMELINE_RUN_ID = 'run_control_plane_timeline';
-const CONTROL_PLANE_LICENSEE_NAME = 'Test Licensee';
+const CONTROL_PLANE_OPERATOR_NAME = 'Test Platform Operator';
 const CONTROL_PLANE_WIRE_LOG_RELATIVE_PATH = 'app/ai/wire-logs';
 const CONTROL_PLANE_WIRE_LOG_EXTENSION = '.jsonl';
 const CONTROL_PLANE_PROVIDER_NAME = 'test-provider';
@@ -63,7 +62,7 @@ function createControlPlaneRun(string $runId): void
 it('renders a bounded wire-log preview for oversized run logs', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -112,7 +111,7 @@ it('renders a bounded wire-log preview for oversized run logs', function (): voi
 it('navigates wire-log windows for large runs', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -203,7 +202,7 @@ it('navigates wire-log windows for large runs', function (): void {
 });
 
 it('tracks manually selected control plane tabs in Livewire state', function (): void {
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -218,7 +217,7 @@ it('tracks manually selected control plane tabs in Livewire state', function ():
 });
 
 it('treats the retired tab=timeline query as the Run Inspector and surfaces lifecycle milestones', function (): void {
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -244,7 +243,7 @@ it('treats the retired tab=timeline query as the Run Inspector and surfaces life
 });
 
 it('focuses the wire-log window on a lifecycle milestone entry', function (): void {
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -262,7 +261,7 @@ const CONTROL_PLANE_READABLE_RUN_ID = 'run_control_plane_readable';
 it('renders the readable view with reassembled artifacts, anomaly chips, attempt summaries, and copy-as-cURL', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -386,7 +385,7 @@ it('renders the readable view with reassembled artifacts, anomaly chips, attempt
 });
 
 it('renders run usage costs and pricing source labels', function (): void {
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();
@@ -439,7 +438,7 @@ it('renders run usage costs and pricing source labels', function (): void {
 it('streams oversized raw wire-log entries without loading them through Livewire', function (): void {
     config()->set('ai.wire_logging.enabled', true);
 
-    Company::provisionLicensee(CONTROL_PLANE_LICENSEE_NAME);
+    provisionPlatformOperatorCompany(CONTROL_PLANE_OPERATOR_NAME);
     Employee::provisionLara();
 
     $user = createAdminUser();

@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\Address\Database\Factories;
 
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Models\Address;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Eloquent\Model;
@@ -25,13 +27,14 @@ class AddressFactory extends Factory
     public function definition(): array
     {
         return [
+            'tenant_id' => fn (): int => Tenant::requirePlatformOperator()->id,
             'label' => fake()->randomElement(['HQ', 'Warehouse', 'Office', 'Billing', 'Shipping']),
             'phone' => fake()->phoneNumber(),
             'line1' => fake()->streetAddress(),
             'line2' => fake()->optional()->secondaryAddress(),
             'locality' => fake()->city(),
             'postcode' => fake()->postcode(),
-            'country_iso' => fake()->countryCode(),
+            'country_iso' => null,
             'verificationStatus' => 'unverified',
             'source' => 'manual',
         ];

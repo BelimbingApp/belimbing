@@ -3,6 +3,7 @@
 namespace App\Core\Company\Livewire\Companies;
 
 use App\Base\Foundation\Livewire\Concerns\DecodesJsonFields;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\LegalEntityType;
 use App\Core\Geonames\Models\Country;
@@ -55,8 +56,10 @@ class Create extends Component
         }
 
         $validated = $this->validate($this->rules());
+        $tenantId = app(TenantContext::class)->requireTenantId();
 
         $payload = [
+            'tenant_id' => $tenantId,
             'parent_id' => $validated['parentId'],
             'name' => $validated['name'],
             'code' => $validated['code'],
@@ -81,8 +84,11 @@ class Create extends Component
 
     public function render(): View
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+
         return view('livewire.admin.companies.create', [
             'parentCompanies' => Company::query()
+                ->forTenant($tenantId)
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'legalEntityTypes' => LegalEntityType::query()
@@ -95,8 +101,10 @@ class Create extends Component
 
     protected function rules(): array
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+
         return [
-            'parentId' => ['nullable', 'integer', Rule::exists(Company::class, 'id')],
+            'parentId' => ['nullable', 'integer', Rule::exists(Company::class, 'id')->where('tenant_id', $tenantId)],
             'name' => ['required', 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:255', Rule::unique(Company::class, 'code')],
             'status' => ['required', 'in:active,suspended,pending,archived'],

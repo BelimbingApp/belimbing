@@ -37,7 +37,7 @@ Recommendation: avoid page banners for global diagnostics unless a specific page
 
 ### Status bar diagnostics
 
-The status bar already owns environment/debug/licensee/locale/Lara state, is persisted across navigation, and is visually designed for compact operational signals. It is the right place for low-intrusion but observable system health messages.
+The status bar already owns environment/debug/operator-company/locale/Lara state, is persisted across navigation, and is visually designed for compact operational signals. It is the right place for low-intrusion but observable system health messages.
 
 Recommendation: add a shared status bar diagnostic surface. Show only compact severity/count in the bar, then reveal details on click. This keeps normal users unblocked while giving operators a reliable place to look.
 

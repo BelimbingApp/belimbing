@@ -7,8 +7,12 @@ own customer sub-tenants (resale).
 
 ## Canonical rules
 
-- Tenant id=1 (`Tenant::LICENSEE_TENANT_ID`) is the licensee tenant, seeded by the
-  create-migration and kept in sync by `FrameworkPrimitivesProvisioner`.
+- Exactly one live tenant is explicitly marked `is_platform_operator`; IDs have no
+  runtime semantics. Legacy ID 1 is deterministic migration input only.
+- Every provisioned tenant has one primary company. Core/Company owns the
+  `tenant_primary_companies` relationship and its manager because Base cannot depend
+  on Core. Missing assignment means not yet provisioned; an invalid assigned company
+  is an invariant violation, and deletion requires an explicit safe transfer first.
 - `TenantContext` (scoped binding) is the only current-tenant carrier. Web requests
   resolve it via `ResolveTenantContext` middleware; queue jobs are stamped with the
   dispatch-time tenant on the payload and rehydrated on `JobProcessing`, then cleared
@@ -18,6 +22,9 @@ own customer sub-tenants (resale).
 - Base cannot depend on Core: `Tenant` has no `companies()` relation. The inverse
   (`Company::tenant()`) and the company→tenant lookup (`CompanyTenantDirectory`,
   bound against Authz's `TenantDirectory` contract) live in Core/Company.
+- Base owns the narrow `FrameworkPrimitivesProvisioner` contract; Core/Company
+  implements transactional, idempotent provisioning of the operator tenant, primary
+  company, relationship, initial admin, and Lara.
 - Authz enforcement is `TenantScopePolicy` (Base/Authz pipeline, ahead of
   `CompanyScopePolicy`). It compares DTO tenant IDs only and abstains when the
   resource carries no tenant — company scope remains the guard there.
@@ -28,8 +35,9 @@ own customer sub-tenants (resale).
 
 - **Settings**: `tenant` scope; cascade user → company → tenant → global. Definitions
   opt in by declaring the `tenant` scope.
-- **AI**: `Core/AI ConfigResolver::resolveDefault()` falls back to the tenant anchor
-  company's provider config when the agent's company has none; never across tenants.
+- **AI**: `Core/AI ConfigResolver::resolveDefault()` falls back to the explicitly
+  assigned tenant primary company's provider config when the agent's company has
+  none; it never infers the oldest company and never crosses tenants.
 - **Audit**: both audit tables carry `tenant_id`; stamped from the row's own
   `tenant_id`, then request context, then ambient tenant context.
 - **Media**: `MediaAssetStore::putUploadedFile()` prefixes directories with

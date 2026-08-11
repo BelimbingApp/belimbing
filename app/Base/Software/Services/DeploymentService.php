@@ -14,7 +14,7 @@ namespace App\Base\Software\Services;
  *
  * GitHub access is **per owner**: a fine-grained token is scoped to one owner,
  * and a deployment may span several (open-source modules under `BelimbingApp`,
- * private licensee extensions under their own accounts/orgs). The owner is read
+ * private operator extensions under their own accounts/orgs). The owner is read
  * live from each source's remote, so an ownership transfer (e.g. a repo
  * moving to a new org) is picked up automatically. Public owners need no token;
  * private owners each store one at `integrations.github.token.{owner}`.

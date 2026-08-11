@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\User\Livewire\Users;
 
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Livewire\Concerns\ValidatesPasswordConfirmation;
 use App\Core\User\Models\User;
@@ -29,6 +31,10 @@ class Edit extends Component
 
     public function mount(User $user): void
     {
+        if ($user->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
+
         $this->user = $user;
         $this->companyId = $user->company_id;
         $this->name = $user->name;
@@ -45,7 +51,12 @@ class Edit extends Component
         }
 
         $rules = [
-            'companyId' => ['nullable', 'integer', Rule::exists(Company::class, 'id')],
+            'companyId' => [
+                'nullable',
+                'integer',
+                Rule::exists(Company::class, 'id')
+                    ->where('tenant_id', app(TenantContext::class)->requireTenantId()),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'email' => [
                 'required',
@@ -85,7 +96,10 @@ class Edit extends Component
     public function render(): View
     {
         return view('livewire.admin.users.edit', [
-            'companies' => Company::query()->orderBy('name')->get(['id', 'name']),
+            'companies' => Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ]);
     }
 }

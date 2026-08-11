@@ -172,7 +172,7 @@ Modes are mutually exclusive (stored in Alpine + `localStorage`):
 - **Surface:** `bg-surface-bar`, top border
 - **Left:** Environment name, debug mode indicator (when `APP_DEBUG`), then contextual warnings (examples):
   - **Impersonation** (`text-status-danger`): Active impersonation with stop action.
-  - **Licensee not set** (`text-status-danger`): Link to licensee setup when missing.
+  - **Operator company not set** (`text-status-danger`): Link to platform-operator setup when its primary company is missing.
   - **Locale** (`text-status-warning`, when authorized): Unconfirmed or inferred locale — link to localization admin.
   - **System diagnostics** (`text-status-danger` / `text-status-warning` / `text-status-info`, when authorized): Aggregated operator diagnostics with count, highest severity icon, and a click-to-view detail surface.
 - **Right:** Lara entry point — if Lara is activated, a button opens chat (`open-agent-chat`) and shows busy pulse when `laraBusy`; otherwise an **Activate Lara** link to setup. App version string.

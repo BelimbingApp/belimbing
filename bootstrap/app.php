@@ -102,8 +102,8 @@ $renderBlbException = static function (BlbException $exception, Request $request
         AuthzErrorCode::AUTHZ_DENIED => 403,
         FoundationErrorCode::BLB_INVARIANT_VIOLATION,
         DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
-        CompanyErrorCode::LICENSEE_COMPANY_DELETION_FORBIDDEN,
-        TenancyErrorCode::LICENSEE_TENANT_DELETION_FORBIDDEN,
+        CompanyErrorCode::PRIMARY_COMPANY_DELETION_FORBIDDEN,
+        TenancyErrorCode::PLATFORM_OPERATOR_TENANT_DELETION_FORBIDDEN,
         EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
         default => 500,
     };

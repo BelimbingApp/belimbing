@@ -167,7 +167,7 @@ The chosen approach: `load_skill` does *not* rebuild the prompt package or bypas
 
 For the intent-classifier path (Phase 5), where skills are pre-loaded *before* the first LLM call, the skill prompt fragments are concatenated into the system prompt during `resolvePromptPackage()` — before `AgenticRuntime` is invoked. This is the only path that modifies the rendered prompt; mid-turn `load_skill` never touches it.
 
-**Layered skill resolution (framework → module → company).** BLB is a framework; each licensee's org structure, user goals, and KPIs are different. Skills follow the same three-tier pattern BLB already uses for authz roles and module discovery: framework defines defaults → modules extend → company customizes via database.
+**Layered skill resolution (framework → module → company).** BLB is a framework; each tenant's organization structure, user goals, and KPIs are different. Skills follow the same three-tier pattern BLB already uses for authz roles and module discovery: framework defines defaults → modules extend → company customizes via database.
 
 *Layer 1 — Framework skills.* BLB ships the 10 default skills above as PHP config (registered in `AiSkillRegistry` via a service provider or config file). These cover universal operational needs (navigation, data, communication, etc.) that every deployment gets. They are the "vocabulary" layer — sensible defaults that work out of the box.
 
@@ -182,9 +182,9 @@ For the intent-classifier path (Phase 5), where skills are pre-loaded *before* t
 
 This mirrors how authz works today: `authz.php` defines the vocabulary (capabilities, roles), the database stores assignments (which user has which role). For skills: PHP config defines the vocabulary (what skills exist, what tools they bundle), the database stores assignments (which company/role/employee has which skills) and overrides.
 
-**What the licensee's admin controls:** which skills are enabled, who gets which skills, custom skills for their business processes, behavioral prompt overrides. **What they don't touch:** tool implementations (code), gate capability wiring (framework), `load_skill` runtime mechanics (framework).
+**What a company admin controls:** which skills are enabled, who gets which skills, custom skills for their business processes, behavioral prompt overrides. **What they don't touch:** tool implementations (code), gate capability wiring (framework), `load_skill` runtime mechanics (framework).
 
-**Implication for Phase 3 implementation:** start with Layer 1 only (PHP config-backed framework skills, no database). Layer 2 (module registration) follows when a second module needs skills. Layer 3 (company customization) follows when there's a licensee who needs it. The `AiSkillRegistry` interface should support all three layers from the start (query by company, accept overrides), but the initial implementation only reads from config.
+**Implication for Phase 3 implementation:** start with Layer 1 only (PHP config-backed framework skills, no database). Layer 2 (module registration) follows when a second module needs skills. Layer 3 (company customization) follows when a tenant company needs it. The `AiSkillRegistry` interface should support all three layers from the start (query by company, accept overrides), but the initial implementation only reads from config.
 
 ## Phases
 

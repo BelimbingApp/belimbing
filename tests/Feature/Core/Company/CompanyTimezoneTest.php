@@ -3,6 +3,7 @@
 use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Models\Address;
 use App\Core\Company\Livewire\Companies\Show;
 use App\Core\Company\Models\Company;
@@ -46,6 +47,7 @@ beforeEach(function (): void {
     $this->settings = app(SettingsService::class);
     $this->company = Company::factory()->minimal()->create();
     $this->user = User::factory()->create(['company_id' => $this->company->id]);
+    app(TenantContext::class)->set((int) $this->company->tenant_id);
 });
 
 it('saves timezone on property change', function (): void {

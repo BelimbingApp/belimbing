@@ -15,7 +15,7 @@ use Livewire\WithPagination;
  *
  * Latent tenancy: the page exists for operators; the menu only surfaces it
  * once a second tenant exists or `tenancy.show_management` is set. The
- * licensee tenant (id=1) is listed but cannot be deleted or re-parented.
+ * explicitly marked platform-operator tenant cannot be deleted.
  */
 class Tenants extends Component
 {

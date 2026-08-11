@@ -8,12 +8,14 @@ use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Base\Authz\Services\AuthorizationEngine;
-use App\Base\Foundation\Services\FrameworkPrimitivesProvisioner;
 use App\Base\Tenancy\Contracts\TenantContext;
-use App\Base\Tenancy\Exceptions\LicenseeTenantDeletionException;
+use App\Base\Tenancy\Exceptions\PlatformOperatorTenantDeletionException;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
+use App\Core\Company\Services\FrameworkPrimitivesProvisioner;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 
 beforeEach(function (): void {
@@ -35,44 +37,61 @@ function grantCoreAdmin(int $userId, int $companyId): void
     ]);
 }
 
-it('seeds the licensee tenant during migration', function (): void {
-    $tenant = Tenant::query()->find(Tenant::LICENSEE_TENANT_ID);
+it('provisions exactly one platform-operator tenant without semantic id 1', function (): void {
+    $tenant = Tenant::requirePlatformOperator();
 
-    expect($tenant)->not->toBeNull();
-    expect($tenant->isLicensee())->toBeTrue();
-    expect($tenant->status)->toBe('active');
+    expect($tenant->id)->not->toBe(1)
+        ->and($tenant->isPlatformOperator())->toBeTrue()
+        ->and($tenant->status)->toBe('active')
+        ->and(Tenant::query()->where('is_platform_operator', true)->count())->toBe(1);
 });
 
-it('assigns new companies to the licensee tenant by default', function (): void {
-    $company = Company::factory()->create();
+it('marks retained tenant id 1 when upgrading a legacy installation', function (): void {
+    $currentOperator = Tenant::requirePlatformOperator();
+    DB::table('tenants')->where('id', $currentOperator->id)->update(['is_platform_operator' => false]);
+    $migration = require app_path('Base/Tenancy/Database/Migrations/0100_01_25_000001_mark_platform_operator_tenant.php');
+    $migration->down();
+    DB::table('tenants')->insert([
+        'id' => 1,
+        'name' => 'Retained Legacy Operator',
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
 
-    // tenant_id arrives via the database default, so re-read the persisted row.
-    expect($company->refresh()->tenant_id)->toBe(Tenant::LICENSEE_TENANT_ID);
-    expect($company->tenant->isLicensee())->toBeTrue();
+    $migration->up();
+
+    expect(Tenant::requirePlatformOperator()->id)->toBe(1)
+        ->and(Tenant::query()->findOrFail($currentOperator->id)->isPlatformOperator())->toBeFalse();
 });
 
-it('provisions the licensee company into the licensee tenant', function (): void {
-    Company::provisionLicensee('Acme Holdings');
+it('requires factories to resolve an explicit tenant assignment', function (): void {
+    $company = Company::factory()->create(['tenant_id' => platformOperatorTenant()->id]);
 
-    expect(Company::query()->find(Company::LICENSEE_ID)->tenant_id)
-        ->toBe(Tenant::LICENSEE_TENANT_ID);
+    expect($company->refresh()->tenant_id)->toBe(platformOperatorTenant()->id);
+    expect($company->tenant->isPlatformOperator())->toBeTrue();
 });
 
-it('provisions and renames the licensee tenant idempotently', function (): void {
-    $provisioner = new FrameworkPrimitivesProvisioner;
+it('provisions the operator primary company into the explicitly marked tenant', function (): void {
+    $company = provisionPlatformOperatorCompany('Acme Holdings');
 
-    $provisioner->provisionLicenseeTenant('Acme Holdings');
-    expect(Tenant::query()->find(Tenant::LICENSEE_TENANT_ID)->name)->toBe('Acme Holdings');
-
-    // Without an explicit name, the tenant name tracks the licensee company.
-    Company::provisionLicensee('Belimbing Test Licensee');
-    $provisioner->provisionLicenseeTenant(null);
-    expect(Tenant::query()->find(Tenant::LICENSEE_TENANT_ID)->name)->toBe('Belimbing Test Licensee');
+    expect($company->tenant_id)->toBe(platformOperatorTenant()->id);
+    expect(app(PrimaryCompanyManager::class)->platformOperatorCompany()->is($company))->toBeTrue();
 });
 
-it('forbids deleting the licensee tenant', function (): void {
-    Tenant::query()->find(Tenant::LICENSEE_TENANT_ID)->delete();
-})->throws(LicenseeTenantDeletionException::class);
+it('provisions and renames the platform-operator tenant idempotently', function (): void {
+    $provisioner = app(FrameworkPrimitivesProvisioner::class);
+
+    expect($provisioner->provisionPlatformOperatorTenant('Acme Holdings'))->toBeFalse();
+    expect(platformOperatorTenant()->fresh()->name)->toBe('Acme Holdings');
+
+    $provisioner->provisionPlatformOperatorTenant(null);
+    expect(platformOperatorTenant()->fresh()->name)->toBe('Acme Holdings');
+});
+
+it('forbids deleting the explicitly marked platform-operator tenant', function (): void {
+    platformOperatorTenant()->delete();
+})->throws(PlatformOperatorTenantDeletionException::class);
 
 it('resolves the actor tenant from the user company', function (): void {
     $tenant = Tenant::query()->create(['name' => 'Second Tenant', 'status' => 'active']);
@@ -137,7 +156,7 @@ it('allows same-tenant access when the capability is granted', function (): void
     $decision = app(AuthorizationService::class)->can(
         Actor::forUser($user),
         'admin.user.view',
-        new ResourceContext('users', 1, $company->id, tenantId: Tenant::LICENSEE_TENANT_ID),
+        new ResourceContext('users', 1, $company->id, tenantId: platformOperatorTenant()->id),
     );
 
     expect($decision->allowed)->toBeTrue();
@@ -177,7 +196,7 @@ it('enriches Eloquent models carrying company_id through the tenant directory', 
 
     $engine = app(AuthorizationEngine::class);
 
-    expect($engine->resourceContext($own)->tenantId)->toBe(Tenant::LICENSEE_TENANT_ID);
+    expect($engine->resourceContext($own)->tenantId)->toBe(platformOperatorTenant()->id);
     expect($engine->resourceContext($foreign)->tenantId)->toBe($tenantB->id);
 
     $allowed = app(AuthorizationService::class)->filterAllowed(
@@ -200,7 +219,7 @@ it('resolves tenant context for authenticated web requests', function (): void {
 
     $this->actingAs($user)->getJson('/_test/tenant-context')
         ->assertOk()
-        ->assertJson(['tenant_id' => Tenant::LICENSEE_TENANT_ID]);
+        ->assertJson(['tenant_id' => platformOperatorTenant()->id]);
 });
 
 it('resolves no tenant context for guests', function (): void {

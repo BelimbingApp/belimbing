@@ -3,6 +3,7 @@
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Hash;
@@ -25,7 +26,7 @@ test('guests are redirected to login from user pages', function (): void {
 
 test('authenticated users with capability can view user pages', function (): void {
     $user = createAdminUser();
-    $other = User::factory()->create();
+    $other = User::factory()->create(['company_id' => $user->company_id]);
 
     $this->actingAs($user);
 
@@ -37,9 +38,9 @@ test('authenticated users with capability can view user pages', function (): voi
 test('user index shows assigned roles and filters selected roles with or logic', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();
-    $operationsRole = Role::query()->create(['name' => 'Operations Lead', 'code' => 'test_operations_lead']);
-    $financeRole = Role::query()->create(['name' => 'Finance Lead', 'code' => 'test_finance_lead']);
-    $peopleRole = Role::query()->create(['name' => 'People Lead', 'code' => 'test_people_lead']);
+    $operationsRole = Role::query()->create(['company_id' => $company->id, 'name' => 'Operations Lead', 'code' => 'test_operations_lead']);
+    $financeRole = Role::query()->create(['company_id' => $company->id, 'name' => 'Finance Lead', 'code' => 'test_finance_lead']);
+    $peopleRole = Role::query()->create(['company_id' => $company->id, 'name' => 'People Lead', 'code' => 'test_people_lead']);
     $operationsUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter Operations']);
     $financeUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter Finance']);
     $peopleUser = User::factory()->create(['company_id' => $company->id, 'name' => 'Role Filter People']);
@@ -70,6 +71,7 @@ test('user index paginates with visible pagination controls', function (): void 
 
     foreach (range(1, 30) as $number) {
         User::factory()->create([
+            'company_id' => $actor->company_id,
             'name' => sprintf('Paged User %02d', $number),
             'email' => sprintf('paged-user-%02d@example.com', $number),
         ]);
@@ -182,7 +184,11 @@ test('user create redirects to show page after creation', function (): void {
 
 test('user fields can be inline edited from show page', function (): void {
     $actor = createAdminUser();
-    $user = User::factory()->create(['name' => 'Old Name', 'email' => 'old@example.com']);
+    $user = User::factory()->create([
+        'company_id' => $actor->company_id,
+        'name' => 'Old Name',
+        'email' => 'old@example.com',
+    ]);
     $this->actingAs($actor);
 
     Livewire::test('admin.users.show', ['user' => $user])
@@ -201,6 +207,7 @@ test('user fields can be inline edited from show page', function (): void {
 test('email change resets email_verified_at', function (): void {
     $actor = createAdminUser();
     $user = User::factory()->create([
+        'company_id' => $actor->company_id,
         'email' => 'verified@example.com',
         'email_verified_at' => now(),
     ]);
@@ -214,20 +221,18 @@ test('email change resets email_verified_at', function (): void {
         ->and($user->email_verified_at)->toBeNull();
 });
 
-test('user without company shows company required notice and hides role assignment', function (): void {
+test('a user without a tenant-bearing company fails closed', function (): void {
     $actor = createAdminUser();
     $user = User::factory()->create(['company_id' => null]);
     $this->actingAs($actor);
 
-    Livewire::test('admin.users.show', ['user' => $user])
-        ->assertSee(__('Assign a company in User Details before roles or capabilities can be managed. Permissions are evaluated in a company scope.'))
-        ->assertDontSeeHtml('id="user-role-search"');
+    $this->get(route('admin.users.show', $user))->assertNotFound();
 });
 
 test('company can be changed from show page', function (): void {
     $actor = createAdminUser();
     $company = Company::factory()->create();
-    $user = User::factory()->create(['company_id' => null]);
+    $user = User::factory()->create(['company_id' => $actor->company_id]);
     $this->actingAs($actor);
 
     Livewire::test('admin.users.show', ['user' => $user])
@@ -245,7 +250,7 @@ test('company can be changed from show page', function (): void {
 
 test('password can be updated from show page', function (): void {
     $actor = createAdminUser();
-    $user = User::factory()->create();
+    $user = User::factory()->create(['company_id' => $actor->company_id]);
     $this->actingAs($actor);
 
     Livewire::test('admin.users.show', ['user' => $user])
@@ -259,7 +264,7 @@ test('password can be updated from show page', function (): void {
 
 test('password update requires confirmation', function (): void {
     $actor = createAdminUser();
-    $user = User::factory()->create();
+    $user = User::factory()->create(['company_id' => $actor->company_id]);
     $this->actingAs($actor);
 
     Livewire::test('admin.users.show', ['user' => $user])
@@ -281,8 +286,9 @@ test('user without delete capability cannot delete users', function (): void {
         'role_id' => $viewerRole->id,
     ]);
 
-    $other = User::factory()->create();
+    $other = User::factory()->create(['company_id' => $company->id]);
     $this->actingAs($viewer);
+    app(TenantContext::class)->set((int) $company->tenant_id);
 
     Livewire::test('admin.users.index')
         ->call('delete', $other->id);
@@ -292,7 +298,7 @@ test('user without delete capability cannot delete users', function (): void {
 
 test('user can be deleted from index and cannot delete self', function (): void {
     $actor = createAdminUser();
-    $other = User::factory()->create();
+    $other = User::factory()->create(['company_id' => $actor->company_id]);
     $this->actingAs($actor);
 
     Livewire::test('admin.users.index')

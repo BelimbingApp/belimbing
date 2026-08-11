@@ -4,7 +4,6 @@ use App\Base\Locale\Contracts\LocaleContext;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Core\Address\Models\Address;
-use App\Core\Company\Models\Company;
 use App\Core\Geonames\Models\Country;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Tests\TestCase;
@@ -14,7 +13,7 @@ uses(TestCase::class, LazilyRefreshDatabase::class);
 const LOCALE_SETTINGS_KEY = 'ui.locale';
 const LOCALE_SOURCE_SETTINGS_KEY = 'ui.locale_source';
 const LOCALE_INFERRED_COUNTRY_SETTINGS_KEY = 'ui.locale_inferred_country';
-const LOCALE_TEST_LICENSEE_NAME = 'Licensee Company';
+const LOCALE_TEST_OPERATOR_NAME = 'Platform Operator Company';
 
 beforeEach(function (): void {
     config(['settings.cache_ttl' => 0]);
@@ -28,7 +27,7 @@ function freshLocaleContext(): LocaleContext
     return app(LocaleContext::class);
 }
 
-function seedLicenseeAddressCountry(
+function seedOperatorAddressCountry(
     string $countryIso,
     string $languages,
     string $currencyCode = 'USD',
@@ -43,18 +42,11 @@ function seedLicenseeAddressCountry(
         'currency_code' => $currencyCode,
     ]);
 
-    Company::unguarded(fn () => Company::query()->firstOrCreate(
-        ['id' => Company::LICENSEE_ID],
-        [
-            'name' => LOCALE_TEST_LICENSEE_NAME,
-            'status' => 'active',
-        ],
-    ));
+    provisionPlatformOperatorCompany(LOCALE_TEST_OPERATOR_NAME);
 
     $address = Address::factory()->create(['country_iso' => $countryIso]);
 
-    Company::query()
-        ->findOrFail(Company::LICENSEE_ID)
+    platformOperatorCompany()
         ->addresses()
         ->attach($address->id, [
             'kind' => json_encode(['headquarters']),
@@ -74,19 +66,19 @@ it('uses a stored manual locale when present', function (): void {
         ->and($context->source())->toBe(LocaleSource::MANUAL->value);
 });
 
-it('infers and persists a locale from the licensee address country', function (): void {
-    seedLicenseeAddressCountry('MY', 'ms-MY,en-MY', 'MYR');
+it('infers and persists a locale from the platform-operator address country', function (): void {
+    seedOperatorAddressCountry('MY', 'ms-MY,en-MY', 'MYR');
 
     $context = freshLocaleContext();
 
     expect($context->currentLocale())->toBe('en-MY')
-        ->and($context->source())->toBe(LocaleSource::LICENSEE_ADDRESS->value)
+        ->and($context->source())->toBe(LocaleSource::PLATFORM_OPERATOR_ADDRESS->value)
         ->and($this->settings->get(LOCALE_SETTINGS_KEY))->toBe('en-MY')
-        ->and($this->settings->get(LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::LICENSEE_ADDRESS->value)
+        ->and($this->settings->get(LOCALE_SOURCE_SETTINGS_KEY))->toBe(LocaleSource::PLATFORM_OPERATOR_ADDRESS->value)
         ->and($this->settings->get(LOCALE_INFERRED_COUNTRY_SETTINGS_KEY))->toBe('MY');
 });
 
-it('uses the declared locale default when no licensee locale can be inferred', function (): void {
+it('uses the declared locale default when no operator locale can be inferred', function (): void {
     config(['app.locale' => 'fr']);
 
     $context = freshLocaleContext();

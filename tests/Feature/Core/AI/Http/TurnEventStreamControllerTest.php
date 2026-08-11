@@ -7,7 +7,6 @@ use App\Core\AI\Jobs\RunChatTurnJob;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Services\ChatTurnRunner;
 use App\Core\AI\Services\RunEventPublisher;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -20,10 +19,10 @@ const REPLAY_TEST_RUN = '01ARZ3NDEKTSV4RRFFQ69G5FAZ';
  */
 function createReplayFixture(): array
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $company = platformOperatorCompany();
     $employee = Employee::factory()->create([
         'company_id' => $company->id,
         'status' => 'active',
@@ -154,7 +153,7 @@ describe('RunEventStreamController', function () {
         $fixture = createReplayFixture();
 
         $otherUser = User::factory()->create([
-            'company_id' => Company::LICENSEE_ID,
+            'company_id' => platformOperatorCompany()->id,
             'employee_id' => $fixture['employee']->id,
         ]);
 

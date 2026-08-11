@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: Testing
     env:
-      LICENSEE_COMPANY_NAME: Belimbing CI
-      LICENSEE_COMPANY_CODE: belimbing_ci
+      PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+      PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
 
     steps:
       - name: Checkout

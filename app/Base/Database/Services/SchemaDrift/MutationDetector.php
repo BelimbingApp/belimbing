@@ -66,7 +66,9 @@ final class MutationDetector
         if ($class === 'db' && in_array($method, ['statement', 'unprepared'], true)) {
             $sql = isset($call->args[0]) ? $this->context->evaluator->evaluate($call->args[0]->value, $environment) : null;
 
-            return ! is_string($sql) || preg_match('/^\s*(CREATE|ALTER|DROP)\s/i', $sql) === 1;
+            return ! is_string($sql)
+                || (preg_match('/^\s*(CREATE|ALTER|DROP)\s/i', $sql) === 1
+                    && ! SchemaCallProcessor::isRawSchemaOutsideComparison($sql));
         }
 
         return $this->containsSelfMethodMutation($call, $class, $method, $environment, $activeMethods);

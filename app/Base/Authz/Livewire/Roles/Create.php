@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Authz\Livewire\Roles;
 
 use App\Base\Authz\Models\Role;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
@@ -23,27 +25,25 @@ class Create extends Component
      */
     public function createRole(): void
     {
-        if ($this->companyId === '') {
-            $this->companyId = null;
-        }
+        $tenantId = app(TenantContext::class)->requireTenantId();
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'code' => [
                 'required', 'string', 'max:255', 'regex:/^[a-z0-9_]+$/',
                 Rule::unique('base_authz_roles', 'code')
-                    ->when(
-                        $this->companyId !== null,
-                        fn ($rule) => $rule->where('company_id', $this->companyId),
-                        fn ($rule) => $rule->whereNull('company_id'),
-                    ),
+                    ->where('company_id', $this->companyId),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
-            'companyId' => ['nullable', 'integer', 'exists:companies,id'],
+            'companyId' => [
+                'required',
+                'integer',
+                Rule::exists(Company::class, 'id')->where('tenant_id', $tenantId),
+            ],
         ]);
 
         $role = Role::query()->create([
-            'company_id' => ($validated['companyId'] ?? null) ? (int) $validated['companyId'] : null,
+            'company_id' => (int) $validated['companyId'],
             'name' => $validated['name'],
             'code' => $validated['code'],
             'description' => ($validated['description'] ?? '') ?: null,
@@ -55,10 +55,11 @@ class Create extends Component
 
     public function render(): View
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+
         return view('livewire.admin.roles.create', [
             'companies' => Company::query()
-                ->where('id', Company::LICENSEE_ID)
-                ->orWhere('parent_id', Company::LICENSEE_ID)
+                ->forTenant($tenantId)
                 ->orderBy('name')
                 ->get(['id', 'name']),
         ]);

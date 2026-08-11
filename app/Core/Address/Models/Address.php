@@ -2,11 +2,15 @@
 
 namespace App\Core\Address\Models;
 
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Database\Factories\AddressFactory;
+use App\Core\Address\Exceptions\AddressTenantAssignmentException;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\Geonames\Models\Admin1;
 use App\Core\Geonames\Models\Country;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +33,7 @@ class Address extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'tenant_id',
         'label',
         'phone',
         'line1',
@@ -66,6 +71,7 @@ class Address extends Model
     protected function casts(): array
     {
         return [
+            'tenant_id' => 'integer',
             'parseConfidence' => 'decimal:4',
             'parsed_at' => 'datetime',
             'normalized_at' => 'datetime',
@@ -75,6 +81,53 @@ class Address extends Model
             'updated_at' => 'datetime',
             'deleted_at' => 'datetime',
         ];
+    }
+
+    public function resolveRouteBindingQuery($query, $value, $field = null): Builder
+    {
+        return parent::resolveRouteBindingQuery($query, $value, $field)
+            ->forTenant(app(TenantContext::class)->requireTenantId());
+    }
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Address $address): void {
+            if ($address->tenant_id === null) {
+                $address->tenant_id = app(TenantContext::class)->requireTenantId();
+            }
+
+            if (! Tenant::query()->whereKey($address->tenant_id)->exists()) {
+                throw new AddressTenantAssignmentException(
+                    'An address must belong to an existing, non-deleted tenant.',
+                    ['tenant_id' => (int) $address->tenant_id],
+                );
+            }
+        });
+
+        static::updating(function (Address $address): void {
+            if ($address->isDirty('tenant_id')) {
+                throw new AddressTenantAssignmentException(
+                    'An address tenant assignment is immutable.',
+                    [
+                        'address_id' => (int) $address->id,
+                        'tenant_id' => (int) $address->tenant_id,
+                        'original_tenant_id' => (int) $address->getOriginal('tenant_id'),
+                    ],
+                );
+            }
+        });
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class, 'tenant_id');
+    }
+
+    public function scopeForTenant(Builder $query, int $tenantId): void
+    {
+        $query->where($this->qualifyColumn('tenant_id'), $tenantId);
     }
 
     /**

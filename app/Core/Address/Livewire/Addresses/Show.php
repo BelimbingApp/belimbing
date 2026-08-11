@@ -6,13 +6,16 @@ use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Support\Json as BlbJson;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Livewire\AbstractAddressForm;
 use App\Core\Address\Models\Address;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Services\CompanyTimezoneResolver;
+use App\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 
 class Show extends AbstractAddressForm
@@ -22,6 +25,9 @@ class Show extends AbstractAddressForm
     use TogglesSort;
 
     public Address $address;
+
+    #[Locked]
+    public int $tenantId;
 
     #[Url(as: 'company')]
     public ?int $companyContextId = null;
@@ -50,11 +56,19 @@ class Show extends AbstractAddressForm
 
     public function mount(Address $address): void
     {
+        $tenantId = app(TenantContext::class)->requireTenantId();
+
+        if ((int) $address->tenant_id !== $tenantId) {
+            abort(404);
+        }
+
+        $this->tenantId = $tenantId;
         $this->address = $address->load(['country', 'admin1']);
         $this->fillLocationDraftFromAddress();
 
         if ($this->companyContextId) {
             $exists = Company::query()
+                ->forTenant($tenantId)
                 ->whereHas('addresses', fn ($q) => $q->where('addresses.id', $address->id))
                 ->where('id', $this->companyContextId)
                 ->exists();
@@ -188,7 +202,9 @@ class Show extends AbstractAddressForm
             return;
         }
 
-        $company = Company::query()->find($this->companyContextId);
+        $company = Company::query()
+            ->forTenant($this->tenantId)
+            ->find($this->companyContextId);
 
         if (! $company) {
             $this->notifyError(__('Company context could not be found.'));
@@ -256,8 +272,10 @@ class Show extends AbstractAddressForm
      */
     protected function resolveCompanyForTimezone(): ?Company
     {
+        $tenantId = $this->tenantId;
+
         if ($this->companyContextId) {
-            return Company::query()->find($this->companyContextId);
+            return Company::query()->forTenant($tenantId)->find($this->companyContextId);
         }
 
         $companyIds = DB::table('addressables')
@@ -266,7 +284,7 @@ class Show extends AbstractAddressForm
             ->pluck('addressable_id');
 
         if ($companyIds->count() === 1) {
-            return Company::query()->find($companyIds->first());
+            return Company::query()->forTenant($tenantId)->find($companyIds->first());
         }
 
         return null;
@@ -274,12 +292,20 @@ class Show extends AbstractAddressForm
 
     public function with(): array
     {
+        $tenantId = $this->tenantId;
         $linkedEntities = DB::table('addressables')
             ->where('address_id', $this->address->id)
             ->get();
 
-        $entities = $linkedEntities->map(function ($row) {
-            $model = $row->addressable_type::find($row->addressable_id);
+        $entities = $linkedEntities->map(function ($row) use ($tenantId) {
+            $model = match ($row->addressable_type) {
+                Company::class => Company::query()->forTenant($tenantId)->find($row->addressable_id),
+                Employee::class => Employee::query()
+                    ->whereKey($row->addressable_id)
+                    ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+                    ->first(),
+                default => null,
+            };
 
             return (object) [
                 'model' => $model,

@@ -24,9 +24,10 @@ return new class extends Migration
             $table->index(['parent_id', 'status']);
         });
 
-        // Seed the licensee tenant in the migration itself: the companies
-        // block (0200_*) runs later and backfills companies.tenant_id onto
-        // this row, while seeders would only run after all migrations.
+        // Historical bootstrap only: this released migration predates the
+        // explicit platform-operator marker and therefore seeded ID 1. The
+        // additive marker migration preserves this row on upgrades but removes
+        // the fresh-replay artifact before sequence-backed provisioning.
         DB::table('tenants')->updateOrInsert(
             ['id' => Tenant::LICENSEE_TENANT_ID],
             [

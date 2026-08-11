@@ -88,7 +88,13 @@ trait ManagesChatSessions
             return;
         }
 
-        $resolved = $this->resolveModelConfigFromComposite($compositeId);
+        $companyId = $user->getCompanyId();
+
+        if ($companyId === null) {
+            return;
+        }
+
+        $resolved = $this->resolveModelConfigFromComposite($compositeId, $companyId);
 
         if (isset($resolved['error'])) {
             return;

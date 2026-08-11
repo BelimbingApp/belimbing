@@ -1,10 +1,12 @@
 <?php
+
 namespace App\Core\User\Console\Commands;
 
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
 use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,13 +26,16 @@ class CreateUserCommand extends Command
                             {email : User email address}
                             {--stdin : Read password from STDIN (for scripts)}
                             {--name= : Display name (default: derived from email)}
-                            {--company=1 : Company ID (default: licensee)}
+                            {--company= : Company ID (default: platform-operator primary company)}
                             {--role= : System role code to assign (e.g. core_admin)}';
 
     public function handle(): int
     {
         $email = $this->argument('email');
-        $companyId = (int) $this->option('company');
+        $companyOption = $this->option('company');
+        $companyId = is_numeric($companyOption)
+            ? (int) $companyOption
+            : (int) app(PrimaryCompanyManager::class)->platformOperatorCompany()->id;
         $password = $this->option('stdin')
             ? trim((string) file_get_contents('php://stdin'))
             : $this->secret('Password (min 8 chars)');

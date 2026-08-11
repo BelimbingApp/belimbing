@@ -27,7 +27,10 @@ final class CompanyTenantDirectory implements TenantDirectory
         }
 
         if (! array_key_exists($companyId, $this->memo)) {
-            $tenantId = DB::table('companies')->where('id', $companyId)->value('tenant_id');
+            $tenantId = DB::table('companies')
+                ->where('id', $companyId)
+                ->whereNull('deleted_at')
+                ->value('tenant_id');
 
             $this->memo[$companyId] = $tenantId !== null ? (int) $tenantId : null;
         }
@@ -39,6 +42,7 @@ final class CompanyTenantDirectory implements TenantDirectory
     {
         return DB::table('companies')
             ->where('tenant_id', $tenantId)
+            ->whereNull('deleted_at')
             ->orderBy('id')
             ->pluck('id')
             ->map(fn (mixed $id): int => (int) $id)

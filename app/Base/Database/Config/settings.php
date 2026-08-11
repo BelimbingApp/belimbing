@@ -145,7 +145,7 @@ return [
                     'scope' => 'global',
                     'default' => 'supabase',
                     'options' => [],
-                    'help' => 'Supabase is the first hosted adapter. Choose PostgreSQL for a licensee-managed server or another PostgreSQL provider.',
+                    'help' => 'Supabase is the first hosted adapter. Choose PostgreSQL for a platform-operator-managed server or another PostgreSQL provider.',
                     'rules' => ['required', 'string', 'max:64'],
                 ],
                 [

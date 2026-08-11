@@ -5,7 +5,6 @@ use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
 use App\Core\AI\Models\ScheduleDefinition;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,10 +40,10 @@ it('previews then neutralizes credentials, framework and AI schedules, and sessi
         'created_at' => now()->timestamp,
     ]);
 
-    Company::provisionLicensee('Sanitizer Company');
+    $operatorCompany = provisionPlatformOperatorCompany('Sanitizer Company');
     Employee::provisionLara();
     $aiSchedule = ScheduleDefinition::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => $operatorCompany->id,
         'employee_id' => null,
         'source' => 'core-ai',
         'source_key' => 'restored-production-task',

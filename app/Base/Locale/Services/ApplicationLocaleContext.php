@@ -2,8 +2,8 @@
 
 namespace App\Base\Locale\Services;
 
-use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
+use App\Base\Locale\Contracts\PlatformOperatorLocaleBootstrapSource;
 use App\Base\Locale\DTO\ResolvedLocale;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Settings\Contracts\SettingsService;
@@ -21,7 +21,7 @@ class ApplicationLocaleContext implements LocaleContext
     public function __construct(
         private readonly SettingsService $settings,
         private readonly LocaleCatalog $catalog,
-        private readonly LicenseeLocaleBootstrapSource $bootstrapSource,
+        private readonly PlatformOperatorLocaleBootstrapSource $bootstrapSource,
         private readonly LocaleSettings $localeSettings,
     ) {}
 
@@ -111,7 +111,7 @@ class ApplicationLocaleContext implements LocaleContext
 
                 return $this->resolved = $this->buildResolvedLocale(
                     locale: $inferredLocale,
-                    source: LocaleSource::LICENSEE_ADDRESS,
+                    source: LocaleSource::PLATFORM_OPERATOR_ADDRESS,
                     inferredCountry: strtoupper($bootstrap->countryIso),
                 );
             }
@@ -143,7 +143,7 @@ class ApplicationLocaleContext implements LocaleContext
     {
         try {
             $this->settings->set(self::SETTINGS_KEY_LOCALE, $locale);
-            $this->settings->set(self::SETTINGS_KEY_SOURCE, LocaleSource::LICENSEE_ADDRESS->value);
+            $this->settings->set(self::SETTINGS_KEY_SOURCE, LocaleSource::PLATFORM_OPERATOR_ADDRESS->value);
             $this->settings->set(self::SETTINGS_KEY_INFERRED_COUNTRY, strtoupper($countryIso));
         } catch (\Throwable) {
             // During early setup the settings table may not be ready yet.

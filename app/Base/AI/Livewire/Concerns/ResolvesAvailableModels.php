@@ -107,7 +107,7 @@ trait ResolvesAvailableModels
      *
      * @return array{api_key: string, base_url: string, model: string, provider_name: string}|array{error: string}
      */
-    protected function resolveModelConfigFromComposite(string $compositeId): array
+    protected function resolveModelConfigFromComposite(string $compositeId, int $companyId): array
     {
         $parts = explode(self::MODEL_ID_SEPARATOR, $compositeId, 2);
 
@@ -118,6 +118,7 @@ trait ResolvesAvailableModels
         [$providerId, $modelId] = $parts;
 
         $provider = AiProvider::query()
+            ->forCompany($companyId)
             ->llm()
             ->where('id', $providerId)
             ->active()

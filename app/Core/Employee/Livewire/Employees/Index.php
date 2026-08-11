@@ -5,6 +5,7 @@ namespace App\Core\Employee\Livewire\Employees;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\DTO\PageContext;
 use App\Core\Employee\Models\Employee;
@@ -77,7 +78,11 @@ class Index extends Component implements ProvidesLaraPageContext
             return;
         }
 
-        $employee = Employee::query()->findOrFail($employeeId);
+        $employee = Employee::query()
+            ->whereHas('company', fn (Builder $query): Builder => $query->forTenant(
+                app(TenantContext::class)->requireTenantId(),
+            ))
+            ->findOrFail($employeeId);
 
         $employee->delete();
 
@@ -97,6 +102,7 @@ class Index extends Component implements ProvidesLaraPageContext
                 ->with('company', 'department.type', 'employeeType')
                 ->leftJoin('companies', 'employees.company_id', '=', 'companies.id')
                 ->leftJoin('employee_types', 'employees.employee_type', '=', 'employee_types.code')
+                ->where('companies.tenant_id', app(TenantContext::class)->requireTenantId())
                 ->when(! $user->isPlatformAdmin(), fn (Builder $q) => $q->where('employees.company_id', $user->getCompanyId()))
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function (Builder $q) use ($search): void {

@@ -44,14 +44,15 @@
                     id="role-company-scope"
                     wire:model="companyId"
                     label="{{ __('Company Scope') }}"
+                    required
                     :error="$errors->first('companyId')"
                 >
-                    <option value="">{{ __('Global (all companies)') }}</option>
+                    <option value="">{{ __('Select a company') }}</option>
                     @foreach($companies as $company)
                         <option value="{{ $company->id }}">{{ $company->name }}</option>
                     @endforeach
                 </x-ui.select>
-                <p class="text-xs text-muted -mt-2">{{ __('Leave as global to make this role available to all companies, or scope it to a specific company.') }}</p>
+                <p class="text-xs text-muted -mt-2">{{ __('The owning company keeps this custom role inside the current tenant.') }}</p>
 
                 <div class="pt-2">
                     <x-ui.button type="submit" variant="primary">
