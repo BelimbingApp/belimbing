@@ -1,8 +1,10 @@
 <?php
+
 namespace App\Core\Employee\Concerns;
 
 use App\Core\AI\Services\ConfigResolver;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
+use App\Core\Employee\Exceptions\SystemAgentInvariantViolationException;
 
 trait ManagesSystemAgents
 {
@@ -44,24 +46,31 @@ trait ManagesSystemAgents
      * Ensure Lara (the system Agent) exists.
      *
      * Idempotent — safe to call from migrations, setup scripts, and UI.
-     * Requires the Licensee company to exist first. Resets the PostgreSQL
+     * Requires the platform-operator primary company to exist first. Resets the PostgreSQL
      * sequence after explicit-ID insert to avoid auto-increment collisions.
      *
-     * @return bool Whether Lara was created (false if already existed or Licensee missing).
+     * @return bool Whether Lara was created (false if it already existed).
      */
     public static function provisionLara(): bool
     {
-        if (static::query()->where('id', self::LARA_ID)->exists()) {
-            return false;
-        }
+        $operatorCompany = app(PrimaryCompanyManager::class)->platformOperatorCompany();
+        $lara = static::query()->whereKey(self::LARA_ID)->first();
 
-        if (! Company::query()->where('id', Company::LICENSEE_ID)->exists()) {
+        if ($lara !== null) {
+            if ((int) $lara->company_id !== (int) $operatorCompany->id) {
+                throw new SystemAgentInvariantViolationException(
+                    employeeId: (int) $lara->id,
+                    companyId: (int) $lara->company_id,
+                    expectedCompanyId: (int) $operatorCompany->id,
+                );
+            }
+
             return false;
         }
 
         static::unguarded(fn () => static::query()->create([
             'id' => self::LARA_ID,
-            'company_id' => Company::LICENSEE_ID,
+            'company_id' => $operatorCompany->id,
             'employee_type' => 'agent',
             'employee_number' => 'SYS-001',
             'full_name' => 'Lara Belimbing',

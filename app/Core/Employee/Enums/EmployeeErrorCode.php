@@ -7,4 +7,5 @@ use App\Base\Foundation\Enums\BlbErrorCode;
 enum EmployeeErrorCode: string implements BlbErrorCode
 {
     case SYSTEM_EMPLOYEE_DELETION_FORBIDDEN = 'system_employee_deletion_forbidden';
+    case SYSTEM_EMPLOYEE_INVALID = 'system_employee_invalid';
 }

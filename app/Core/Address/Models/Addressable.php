@@ -2,6 +2,7 @@
 
 namespace App\Core\Address\Models;
 
+use App\Core\Address\Exceptions\AddressTenantAssignmentException;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
@@ -31,6 +32,21 @@ class Addressable extends MorphPivot
         'valid_from',
         'valid_to',
     ];
+
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function (Addressable $addressable): void {
+            $addressable->assertSameTenantOwnership();
+        });
+
+        static::updating(function (Addressable $addressable): void {
+            if ($addressable->isDirty(['address_id', 'addressable_type', 'addressable_id'])) {
+                $addressable->assertSameTenantOwnership();
+            }
+        });
+    }
 
     /**
      * The attributes that should be cast.
@@ -132,5 +148,61 @@ class Addressable extends MorphPivot
         return $subjectName !== null
             ? ['name' => $subjectName, 'id' => (int) $id]
             : null;
+    }
+
+    private function assertSameTenantOwnership(): void
+    {
+        $address = Address::query()->find($this->address_id);
+        $ownerTenantId = $this->ownerTenantId();
+
+        if ($address === null || $ownerTenantId === null) {
+            throw new AddressTenantAssignmentException(
+                'An address attachment requires an existing live address and a supported live owner.',
+                [
+                    'address_id' => $this->address_id !== null ? (int) $this->address_id : null,
+                    'addressable_type' => $this->addressable_type,
+                    'addressable_id' => $this->addressable_id !== null ? (int) $this->addressable_id : null,
+                ],
+            );
+        }
+
+        if ((int) $address->tenant_id !== $ownerTenantId) {
+            throw new AddressTenantAssignmentException(
+                'An address cannot be attached to an owner from another tenant.',
+                [
+                    'address_id' => (int) $address->id,
+                    'address_tenant_id' => (int) $address->tenant_id,
+                    'addressable_type' => $this->addressable_type,
+                    'addressable_id' => (int) $this->addressable_id,
+                    'owner_tenant_id' => $ownerTenantId,
+                ],
+            );
+        }
+    }
+
+    private function ownerTenantId(): ?int
+    {
+        $type = (string) $this->addressable_type;
+        $id = (int) $this->addressable_id;
+
+        if (in_array($type, [Company::class, (new Company)->getMorphClass()], true)) {
+            $tenantId = Company::query()->whereKey($id)->value('tenant_id');
+
+            return $tenantId !== null ? (int) $tenantId : null;
+        }
+
+        if (in_array($type, [Employee::class, (new Employee)->getMorphClass()], true)) {
+            $tenantId = Employee::query()
+                ->whereKey($id)
+                ->whereHas('company')
+                ->with('company:id,tenant_id')
+                ->first()
+                ?->company
+                ?->tenant_id;
+
+            return $tenantId !== null ? (int) $tenantId : null;
+        }
+
+        return null;
     }
 }

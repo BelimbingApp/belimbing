@@ -7,7 +7,6 @@ use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Services\DispatchTranscriptBridge;
 use App\Core\AI\Services\MessageManager;
 use App\Core\AI\Services\SessionManager;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
@@ -31,16 +30,18 @@ afterEach(function (): void {
 
 function createDispatchTranscriptFixture(): array
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
+    $company = platformOperatorCompany();
+
     $employee = Employee::factory()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => $company->id,
         'status' => 'active',
     ]);
 
     $user = User::factory()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => $company->id,
         'employee_id' => $employee->id,
     ]);
 

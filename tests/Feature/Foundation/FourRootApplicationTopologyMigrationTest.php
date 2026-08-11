@@ -1,5 +1,6 @@
 <?php
 
+use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -87,7 +88,8 @@ function fourRootLegacySerializedCommand(): string
 it('normalizes persisted topology identities without rerunning completed seeders', function (): void {
     ensureFourRootKiatReferenceTables();
 
-    $user = User::factory()->create();
+    $company = Company::factory()->create();
+    $user = User::factory()->create(['company_id' => $company->id]);
     $now = now();
     $ranAt = '2026-08-05 01:02:03';
     $sourceHash = str_repeat('a', 64);
@@ -264,7 +266,7 @@ it('normalizes persisted topology identities without rerunning completed seeders
     ]);
 
     $roleId = DB::table('base_authz_roles')->insertGetId([
-        'company_id' => null,
+        'company_id' => $user->company_id,
         'name' => 'Topology probe',
         'code' => 'topology-probe',
         'is_system' => false,

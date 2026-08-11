@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Status:** Implemented
-**Last Updated:** 2026-08-05
+**Last Updated:** 2026-08-11
 **Related:** `docs/architecture/user-employee-company.md`, `docs/architecture/ai/agent-model.md`, `docs/architecture/database.md`
 
 ---
@@ -149,6 +149,20 @@ Reason codes (`App\Base\Authz\Enums\AuthorizationReasonCode`):
   │     Permissions   │    (pre-loaded, in-memory evaluation)
   └──────────────────┘
 ```
+
+### 4.0 Tenant boundary
+
+`TenantScopePolicy` runs before `CompanyScopePolicy`. Actors carry the tenant derived
+from their company, while resources with only a `company_id` are enriched through
+Base/Authz's `TenantDirectory` contract and Core/Company's implementation. A tenant
+mismatch denies before grants are evaluated; unresolved actor tenancy fails closed
+for tenant-owned resources.
+
+Company-less role rows are reserved for configured system roles. Custom roles must
+have an owning company, which anchors the role to that company's tenant while still
+allowing assignment across sibling companies in the same tenant. Role list, edit,
+and assignment queries admit only system roles or custom roles owned inside the
+current tenant.
 
 ### 4.1 Engine / Decorator Split
 

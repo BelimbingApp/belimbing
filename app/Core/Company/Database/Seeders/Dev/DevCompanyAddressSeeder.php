@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Company\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
@@ -21,7 +22,7 @@ class DevCompanyAddressSeeder extends DevSeeder
         $subsidiaries = $this->seedSubsidiaries($rootCompanies[0]);
         $allCompanies = array_merge($rootCompanies, $subsidiaries);
 
-        $addresses = $this->seedAddresses();
+        $addresses = $this->seedAddresses((int) $rootCompanies[0]->tenant_id);
         $this->linkAddressesToCompanies($allCompanies, $addresses);
         $this->seedCompanyRelationships($rootCompanies, $subsidiaries);
     }
@@ -160,7 +161,7 @@ class DevCompanyAddressSeeder extends DevSeeder
      *
      * @return array<int, Address>
      */
-    protected function seedAddresses(): array
+    protected function seedAddresses(int $tenantId): array
     {
         $definitions = [
             [
@@ -251,6 +252,7 @@ class DevCompanyAddressSeeder extends DevSeeder
         foreach ($definitions as $definition) {
             $addresses[] = Address::query()->firstOrCreate(
                 [
+                    'tenant_id' => $tenantId,
                     'label' => $definition['label'],
                     'country_iso' => $definition['country_iso'],
                 ],

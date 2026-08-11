@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Employee\Database\Seeders;
 
 use App\Core\Employee\Models\EmployeeType;
@@ -9,7 +10,7 @@ class EmployeeTypeSeeder extends Seeder
     /**
      * Run the database seeds.
      *
-     * Seeds system types; licensees add custom types via UI.
+     * Seeds system types; tenant administrators add custom types via UI.
      */
     public function run(): void
     {

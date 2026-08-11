@@ -31,7 +31,7 @@ Both patterns share the same config shape (mode + provider/model per task) and t
   - `recommended` — administrator asks Lara's default model to recommend a model, then saves that recommendation as the task's current stable choice
   - `manual` — administrator picks provider/model explicitly
 - When a task has no saved provider/model (or the saved selection is no longer active), the task falls through to the same default-resolution path as chat (user last-used → priority #1).
-- Recommendation never creates or persists an unknown provider/model pair. BLB only accepts a recommendation that resolves to an active connected model for the licensee company.
+- Recommendation never creates or persists an unknown provider/model pair. BLB only accepts a recommendation that resolves to an active connected model owned by the platform operator's primary company.
 - Recommendation is on-demand, not re-evaluated automatically at task runtime. Once saved, the task keeps using the stored choice until the user refreshes or changes it.
 - Task config is persisted in Lara's workspace `config.json` under `llm.tasks.*`. Each task entry carries `mode` (`recommended` or `manual`), and a stable saved `provider`/`model` pair plus an optional `reason` string for UI display.
 - The initial shipped UI exposes `Titling`, `Research`, and `Coding` together on the dedicated Task Models page. `titling` is fully wired as a simple task, and both `coding` and `research` are wired as Lara agentic execution profiles for delegated background work.
@@ -150,7 +150,7 @@ Sub-agents spawned for agentic tasks do not have employee records, separate pers
 
 ### Phase 3 — Implement recommendation flow
 
-- [x] Add a task-model recommendation service that gathers active connected candidates for the licensee company
+- [x] Add a task-model recommendation service that gathers active connected candidates for the platform operator's primary company
 - [x] Build a constrained recommendation prompt for Lara's current primary model that includes task intent, required output shape, and exact candidate IDs
 - [x] Make the recommendation input task-specific so `titling`, `research`, and `coding` can describe different workload needs
 - [x] Validate and normalize the returned provider/model pair before saving

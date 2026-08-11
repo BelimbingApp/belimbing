@@ -112,7 +112,7 @@ That is the minimum-diff path. Development is not a special architecture; it is 
 
 ### Development
 
-Development usually keeps the same shared-ingress shape, with local domains and development-oriented TLS trust. Setup may provision or reuse a local system Caddy daemon. Vite may serve local source assets, but browser reloads are disabled by default; a licensee may opt into Vite hot reload with `VITE_HOT_RELOAD=true` in its `.env`.
+Development usually keeps the same shared-ingress shape, with local domains and development-oriented TLS trust. Setup may provision or reuse a local system Caddy daemon. Vite may serve local source assets, but browser reloads are disabled by default; the deployment operator may opt into Vite hot reload with `VITE_HOT_RELOAD=true` in its `.env`.
 
 ### Staging
 

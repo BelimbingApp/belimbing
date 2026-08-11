@@ -24,8 +24,7 @@ afterEach(function (): void {
 });
 
 test('resolve task uses the saved task model when it is valid', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
     Employee::provisionLara();
 
     AiProvider::query()->create([
@@ -84,8 +83,7 @@ test('resolve task uses the saved task model when it is valid', function (): voi
 });
 
 test('resolve task falls back to lara primary when the saved task model is incomplete', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
     Employee::provisionLara();
 
     $primaryProvider = AiProvider::query()->create([
@@ -130,8 +128,7 @@ test('resolve task falls back to lara primary when the saved task model is incom
 });
 
 test('resolve task falls back to lara primary when the saved recommended model is invalid', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
     Employee::provisionLara();
 
     $primaryProvider = AiProvider::query()->create([
@@ -178,8 +175,7 @@ test('resolve task falls back to lara primary when the saved recommended model i
 });
 
 test('resolve task uses lara primary when the task mode is primary', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
     Employee::provisionLara();
 
     $primaryProvider = AiProvider::query()->create([
@@ -218,8 +214,7 @@ test('resolve task uses lara primary when the task mode is primary', function ()
 });
 
 test('resolve task overlays task execution controls onto the fallback default model', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
     Employee::provisionLara();
 
     $primaryProvider = AiProvider::query()->create([
@@ -270,8 +265,7 @@ test('resolve task overlays task execution controls onto the fallback default mo
 });
 
 test('resolve company default ignores vision providers when they sort first alphabetically', function (): void {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
 
     AiProvider::query()->create([
         'company_id' => $company->id,
@@ -329,5 +323,34 @@ test('resolve for provider rejects vision provider ids', function (): void {
         'priority' => 0,
     ]);
 
-    expect(app(ConfigResolver::class)->resolveForProvider($imageProvider->id, 'any-model'))->toBeNull();
+    expect(app(ConfigResolver::class)->resolveForProvider($imageProvider->id, 'any-model', $company->id))->toBeNull();
+});
+
+test('resolve for provider rejects a provider owned by another tenant', function (): void {
+    [, $ownerCompany] = createTenantWithCompany(['name' => 'Provider Owner Tenant']);
+    [, $foreignCompany] = createTenantWithCompany(['name' => 'Foreign Tenant']);
+    $provider = AiProvider::query()->create([
+        'company_id' => $ownerCompany->id,
+        'name' => 'tenant-private-openai',
+        'family' => AiProvider::FAMILY_LLM,
+        'display_name' => 'Tenant-private OpenAI',
+        'base_url' => TASK_MODEL_RESOLVER_OPENAI_BASE_URL,
+        'auth_type' => 'api_key',
+        'credentials' => ['api_key' => 'tenant-private-key'],
+        'connection_config' => [],
+        'is_active' => true,
+        'priority' => 1,
+    ]);
+    AiProviderModel::query()->create([
+        'ai_provider_id' => $provider->id,
+        'model_id' => 'tenant-private-model',
+        'is_active' => true,
+        'is_default' => true,
+    ]);
+
+    expect(app(ConfigResolver::class)->resolveForProvider(
+        $provider->id,
+        'tenant-private-model',
+        $foreignCompany->id,
+    ))->toBeNull();
 });

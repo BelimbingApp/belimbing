@@ -77,10 +77,10 @@ function createSessionGuardFixture(): array
  */
 function createLaraFixture(): array
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    $company = Company::query()->find(Company::LICENSEE_ID);
+    $company = platformOperatorCompany();
 
     $employeeA = Employee::factory()->create([
         'company_id' => $company->id,

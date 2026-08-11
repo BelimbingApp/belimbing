@@ -5,7 +5,6 @@ use App\Core\AI\Jobs\RunHeadlessCliTaskJob;
 use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Models\ScheduleDefinition;
 use App\Core\AI\Services\Scheduling\SchedulePlanner;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -15,11 +14,11 @@ uses(RefreshDatabase::class);
 it('dispatches headless schedules as Lara when no target agent is set', function (): void {
     Queue::fake();
 
-    Company::provisionLicensee('Planner Test Company');
+    $operatorCompany = provisionPlatformOperatorCompany('Planner Test Company');
     Employee::provisionLara();
 
     $schedule = ScheduleDefinition::query()->create([
-        'company_id' => Company::LICENSEE_ID,
+        'company_id' => $operatorCompany->id,
         'employee_id' => null,
         'source' => 'core-ai',
         'source_key' => 'headless-regression',

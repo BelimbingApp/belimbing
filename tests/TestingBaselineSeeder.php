@@ -5,7 +5,7 @@ namespace Tests;
 use App\Base\Database\Models\SeederRegistry;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\FrameworkPrimitivesProvisioner;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Seeder;
 
@@ -52,7 +52,12 @@ class TestingBaselineSeeder extends Seeder
             }
         }
 
-        Company::provisionLicensee('Belimbing Test Licensee', 'belimbing_test_licensee');
+        $provisioner = app(FrameworkPrimitivesProvisioner::class);
+        $provisioner->provisionPlatformOperatorTenant('Belimbing Test Platform Operator');
+        $provisioner->provisionPlatformOperatorCompany(
+            'Belimbing Test Platform Operator',
+            'belimbing_test_operator',
+        );
         Employee::provisionLara();
     }
 

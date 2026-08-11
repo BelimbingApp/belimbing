@@ -1,7 +1,9 @@
 <?php
+
 namespace App\Base\Authz\Services;
 
 use App\Base\Authz\Capability\CapabilityRegistry;
+use App\Base\Authz\Contracts\TenantDirectory;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\DTO\AuthorizationDecision;
 use App\Base\Authz\Enums\AuthorizationReasonCode;
@@ -60,13 +62,27 @@ final class EffectivePermissions
             }
         }
 
+        $tenantCompanyIds = $actor->tenantId !== null
+            ? app(TenantDirectory::class)->companyIdsInTenant($actor->tenantId)
+            : [];
+
         $actorRoles = PrincipalRole::query()
             ->join('base_authz_roles', 'base_authz_roles.id', '=', 'base_authz_principal_roles.role_id')
             ->where('base_authz_principal_roles.principal_type', $actor->type->value)
             ->where('base_authz_principal_roles.principal_id', $actor->id)
-            ->where(static function ($query) use ($actor): void {
-                $query->where('base_authz_principal_roles.company_id', $actor->companyId)
-                    ->orWhereNull('base_authz_principal_roles.company_id');
+            ->where(static function ($query) use ($actor, $tenantCompanyIds): void {
+                $query->where(static function ($systemRole) use ($actor): void {
+                    $systemRole->where('base_authz_roles.is_system', true)
+                        ->whereNull('base_authz_roles.company_id')
+                        ->where(static function ($assignment) use ($actor): void {
+                            $assignment->where('base_authz_principal_roles.company_id', $actor->companyId)
+                                ->orWhereNull('base_authz_principal_roles.company_id');
+                        });
+                })->orWhere(static function ($customRole) use ($actor, $tenantCompanyIds): void {
+                    $customRole->where('base_authz_roles.is_system', false)
+                        ->whereIn('base_authz_roles.company_id', $tenantCompanyIds)
+                        ->where('base_authz_principal_roles.company_id', $actor->companyId);
+                });
             })
             ->select('base_authz_roles.id', 'base_authz_roles.grant_all')
             ->get();

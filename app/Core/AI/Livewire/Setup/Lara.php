@@ -3,6 +3,7 @@
 namespace App\Core\AI\Livewire\Setup;
 
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\AI\Enums\WorkspaceFileSlot;
 use App\Core\AI\Livewire\Concerns\DispatchesLaraActivationState;
 use App\Core\AI\Services\ConfigResolver;
@@ -12,7 +13,7 @@ use App\Core\AI\Services\LaraWorkspaceSlotManager;
 use App\Core\AI\Services\ToolMetadataRegistry;
 use App\Core\AI\Services\ToolReadinessService;
 use App\Core\AI\Services\Workspace\WorkspaceResolver;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Contracts\View\View;
 use Livewire\Component;
@@ -41,9 +42,9 @@ class Lara extends Component
 
     public function mount(): void
     {
-        // Idempotent — only provisions when both Licensee company exists and
+        // Idempotent — only provisions when the operator primary company exists and
         // Lara employee record is missing. Safe to call on every mount.
-        if (Company::query()->whereKey(Company::LICENSEE_ID)->exists()) {
+        if ($this->operatorCompanyExists()) {
             Employee::provisionLara();
         }
     }
@@ -172,7 +173,7 @@ class Lara extends Component
 
     public function render(): View
     {
-        $licenseeExists = Company::query()->whereKey(Company::LICENSEE_ID)->exists();
+        $operatorCompanyExists = $this->operatorCompanyExists();
         $activationState = Employee::laraActivationState();
         $laraExists = $activationState !== null;
         $laraActivated = $activationState === true;
@@ -192,7 +193,7 @@ class Lara extends Component
         $toolRows = $laraExists ? $this->buildInteractiveToolRows() : ['enabled' => [], 'available' => []];
 
         return view('livewire.admin.setup.lara', [
-            'licenseeExists' => $licenseeExists,
+            'operatorCompanyExists' => $operatorCompanyExists,
             'laraExists' => $laraExists,
             'laraActivated' => $laraActivated,
             'defaultConfig' => $defaultConfig,
@@ -202,6 +203,14 @@ class Lara extends Component
             'enabledToolRows' => $toolRows['enabled'],
             'availableToolRows' => $toolRows['available'],
         ]);
+    }
+
+    private function operatorCompanyExists(): bool
+    {
+        $operator = Tenant::platformOperator();
+
+        return $operator !== null
+            && app(PrimaryCompanyManager::class)->findForTenant($operator) !== null;
     }
 
     private function openSlotEditor(string $slot): void

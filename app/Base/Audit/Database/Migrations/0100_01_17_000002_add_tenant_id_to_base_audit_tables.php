@@ -15,11 +15,11 @@ return new class extends Migration
                 $table->unsignedBigInteger('tenant_id')->nullable()->index()->after('company_id');
             });
 
-            // Every historic row predates tenancy, so it belongs to the
-            // licensee tenant. Stays truthful when later tenants arrive and
-            // audit history is filtered per tenant. Runs before Base/Tenancy
-            // creates the tenants table, hence no FK — the licensee tenant
-            // provisioner guarantees id=1 exists.
+            // Historical backfill only: every row here predates tenancy. This
+            // released migration used the then-semantic ID 1 before the
+            // tenants table existed. The later additive migration converts
+            // that legacy identity into the explicit platform-operator marker;
+            // runtime audit behavior must not infer any role from this value.
             DB::table($tableName)->whereNull('tenant_id')->update(['tenant_id' => Tenant::LICENSEE_TENANT_ID]);
         }
     }

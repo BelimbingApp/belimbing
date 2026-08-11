@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Employee\Database\Seeders\Dev;
 
 use App\Base\Database\Seeders\DevSeeder;
@@ -19,13 +20,13 @@ class DevEmployeeSeeder extends DevSeeder
      *
      * Creates realistic employee records for existing companies with
      * department placements and supervisor hierarchies. Also seeds a
-     * licensee employee from the admin user created by platform primitives.
+     * platform-operator employee from the admin user created by platform primitives.
      */
     protected function seed(): void
     {
-        $licensee = $this->licenseeCompany();
-        if ($licensee) {
-            $this->seedLicenseeEmployee($licensee);
+        $operatorCompany = $this->operatorPrimaryCompany();
+        if ($operatorCompany) {
+            $this->seedOperatorEmployee($operatorCompany);
         }
 
         $stellar = Company::query()->where('name', 'Stellar Industries Sdn Bhd')->first();
@@ -46,14 +47,14 @@ class DevEmployeeSeeder extends DevSeeder
     }
 
     /**
-     * Seed licensee company employee and agents (tech company building Belimbing).
+     * Seed platform-operator company employee and agents (tech company building Belimbing).
      *
-     * @param  Company  $company  The licensee company (Company::LICENSEE_ID)
+     * @param  Company  $company  The platform operator's primary company
      */
-    protected function seedLicenseeEmployee(Company $company): void
+    protected function seedOperatorEmployee(Company $company): void
     {
         $admin = User::query()
-            ->where('company_id', Company::LICENSEE_ID)
+            ->where('company_id', $company->id)
             ->first();
 
         if ($admin === null) {
@@ -82,7 +83,7 @@ class DevEmployeeSeeder extends DevSeeder
 
         // Link admin user to their employee record. This lives in the dev
         // seeder — not in platform primitives — because production admins
-        // are not necessarily employees of the licensee company (e.g. an
+        // are not necessarily employees of the operator company (e.g. an
         // indie developer who is the sole admin but has no employee record).
         if ($employee) {
             $admin->update(['employee_id' => $employee->id]);

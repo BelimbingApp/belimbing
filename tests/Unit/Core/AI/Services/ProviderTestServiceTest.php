@@ -17,6 +17,7 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 const PROVIDER_TEST_SERVICE_PROVIDER_ID = 101;
+const PROVIDER_TEST_SERVICE_COMPANY_ID = 202;
 const PROVIDER_TEST_SERVICE_MODEL_ID = 'gpt-5.4-nano';
 const PROVIDER_TEST_SERVICE_BASE_URL = 'https://api.example.test/v1';
 
@@ -26,7 +27,7 @@ function makeProviderTestService(array $config): ProviderTestService
     $configResolver
         ->shouldReceive('resolveForProvider')
         ->once()
-        ->with(PROVIDER_TEST_SERVICE_PROVIDER_ID, PROVIDER_TEST_SERVICE_MODEL_ID)
+        ->with(PROVIDER_TEST_SERVICE_PROVIDER_ID, PROVIDER_TEST_SERVICE_MODEL_ID, PROVIDER_TEST_SERVICE_COMPANY_ID)
         ->andReturn($config);
 
     $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
@@ -67,6 +68,7 @@ it('tests provider connectivity successfully across supported protocol clients',
     $result = $service->testSelection(
         PROVIDER_TEST_SERVICE_PROVIDER_ID,
         PROVIDER_TEST_SERVICE_MODEL_ID,
+        PROVIDER_TEST_SERVICE_COMPANY_ID,
     );
 
     expect($result->connected)->toBeTrue()
@@ -141,6 +143,7 @@ it('surfaces structured provider errors across supported protocol clients', func
     $result = $service->testSelection(
         PROVIDER_TEST_SERVICE_PROVIDER_ID,
         PROVIDER_TEST_SERVICE_MODEL_ID,
+        PROVIDER_TEST_SERVICE_COMPANY_ID,
     );
 
     expect($result->connected)->toBeFalse()
@@ -179,7 +182,7 @@ it('attaches trace context to provider test chat requests', function (): void {
     $configResolver
         ->shouldReceive('resolveForProvider')
         ->once()
-        ->with(PROVIDER_TEST_SERVICE_PROVIDER_ID, PROVIDER_TEST_SERVICE_MODEL_ID)
+        ->with(PROVIDER_TEST_SERVICE_PROVIDER_ID, PROVIDER_TEST_SERVICE_MODEL_ID, PROVIDER_TEST_SERVICE_COMPANY_ID)
         ->andReturn($config);
 
     $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
@@ -228,6 +231,7 @@ it('attaches trace context to provider test chat requests', function (): void {
     $result = $service->testSelection(
         PROVIDER_TEST_SERVICE_PROVIDER_ID,
         PROVIDER_TEST_SERVICE_MODEL_ID,
+        PROVIDER_TEST_SERVICE_COMPANY_ID,
     );
 
     expect($result->connected)->toBeTrue()

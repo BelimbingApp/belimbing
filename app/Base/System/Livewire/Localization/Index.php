@@ -5,9 +5,9 @@ namespace App\Base\System\Livewire\Localization;
 use App\Base\DateTime\Contracts\DateTimeDisplayService;
 use App\Base\DateTime\Enums\TimezoneMode;
 use App\Base\DateTime\Services\TimezoneSettings;
-use App\Base\Locale\Contracts\LicenseeLocaleBootstrapSource;
 use App\Base\Locale\Contracts\LocaleContext;
-use App\Base\Locale\DTO\LicenseeLocaleBootstrap;
+use App\Base\Locale\Contracts\PlatformOperatorLocaleBootstrapSource;
+use App\Base\Locale\DTO\PlatformOperatorLocaleBootstrap;
 use App\Base\Locale\Enums\LocaleSource;
 use App\Base\Locale\Services\LocaleCatalog;
 use App\Base\Settings\Contracts\SettingsService;
@@ -120,7 +120,7 @@ class Index extends Component
     public function render(
         LocaleCatalog $catalog,
         LocaleContext $localeContext,
-        LicenseeLocaleBootstrapSource $bootstrapSource,
+        PlatformOperatorLocaleBootstrapSource $bootstrapSource,
         DateTimeDisplayService $dateTimeDisplay,
     ): View {
         $state = $localeContext->state();
@@ -232,25 +232,25 @@ class Index extends Component
     /**
      * Build the help text for the locale edit-in-place combobox.
      */
-    private function localeHelpText(LocaleCatalog $catalog, ?LicenseeLocaleBootstrap $bootstrap): string
+    private function localeHelpText(LocaleCatalog $catalog, ?PlatformOperatorLocaleBootstrap $bootstrap): string
     {
         if ($bootstrap?->countryIso) {
             $suggested = $catalog->inferFromBootstrap($bootstrap);
             $countryName = $bootstrap->countryName ?: $bootstrap->countryIso;
 
             if ($suggested) {
-                return __('Locale :locale was inferred from the licensee address (:country). Choose another locale to override it.', [
+                return __('Locale :locale was inferred from the platform-operator company address (:country). Choose another locale to override it.', [
                     'locale' => $suggested,
                     'country' => $countryName,
                 ]);
             }
 
-            return __('The licensee address country :country is available, but Belimbing does not have a supported default locale mapping for it yet.', [
+            return __('The platform-operator company address country :country is available, but Belimbing does not have a supported default locale mapping for it yet.', [
                 'country' => $countryName,
             ]);
         }
 
-        return __('No licensee address country is available yet, so Belimbing cannot infer a default locale automatically.');
+        return __('No platform-operator company address country is available yet, so Belimbing cannot infer a default locale automatically.');
     }
 
     /**
@@ -273,7 +273,7 @@ class Index extends Component
     {
         return match ($source) {
             LocaleSource::MANUAL => __('Selected manually'),
-            LocaleSource::LICENSEE_ADDRESS => __('Inferred from licensee address'),
+            LocaleSource::PLATFORM_OPERATOR_ADDRESS => __('Inferred from platform-operator company address'),
             LocaleSource::DECLARED_DEFAULT => __('Using declared default'),
         };
     }

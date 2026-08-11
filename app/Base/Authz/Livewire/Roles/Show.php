@@ -12,6 +12,7 @@ use App\Base\Authz\Models\Role;
 use App\Base\Authz\Models\RoleCapability;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\DTO\PageContext;
 use App\Core\Company\Models\Company;
@@ -45,6 +46,14 @@ class Show extends Component implements ProvidesLaraPageContext
 
     public function mount(Role $role): void
     {
+        if (($role->company_id === null && ! $role->is_system)
+            || ($role->company_id !== null && ! Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->whereKey($role->company_id)
+                ->exists())) {
+            abort(404);
+        }
+
         $this->role = $role->load('capabilities');
     }
 
@@ -115,28 +124,25 @@ class Show extends Component implements ProvidesLaraPageContext
     private function isInvalidScopeCompany(?int $newCompanyId): bool
     {
         if ($newCompanyId === null) {
-            return false;
+            return true;
         }
 
         return ! Company::query()
             ->where('id', $newCompanyId)
-            ->where(function ($query): void {
-                $query->where('id', Company::LICENSEE_ID)
-                    ->orWhere('parent_id', Company::LICENSEE_ID);
-            })
+            ->forTenant(app(TenantContext::class)->requireTenantId())
             ->exists();
     }
 
     private function scopeConflictExists(?int $newCompanyId): bool
     {
+        if ($newCompanyId === null) {
+            return false;
+        }
+
         return Role::query()
             ->where('code', $this->role->code)
             ->where('id', '!=', $this->role->id)
-            ->when(
-                $newCompanyId !== null,
-                fn ($q) => $q->where('company_id', $newCompanyId),
-                fn ($q) => $q->whereNull('company_id'),
-            )
+            ->where('company_id', $newCompanyId)
             ->exists();
     }
 
@@ -246,9 +252,14 @@ class Show extends Component implements ProvidesLaraPageContext
         }
 
         $assigned = 0;
+        $tenantCompanyIds = Company::query()
+            ->forTenant(app(TenantContext::class)->requireTenantId())
+            ->pluck('id');
 
         foreach ($this->selectedUserIds as $userId) {
-            $user = User::query()->find((int) $userId);
+            $user = User::query()
+                ->whereIn('company_id', $tenantCompanyIds)
+                ->find((int) $userId);
 
             if ($user === null) {
                 continue;
@@ -285,6 +296,9 @@ class Show extends Component implements ProvidesLaraPageContext
         $principalRole = PrincipalRole::query()
             ->where('id', $principalRoleId)
             ->where('role_id', $this->role->id)
+            ->whereIn('company_id', Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->pluck('id'))
             ->first();
 
         if ($principalRole?->delete()) {
@@ -328,6 +342,9 @@ class Show extends Component implements ProvidesLaraPageContext
             ->with('role')
             ->where('role_id', $this->role->id)
             ->where('principal_type', PrincipalType::USER->value)
+            ->whereIn('company_id', Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
+                ->pluck('id'))
             ->get();
 
         $assignedUserIds = $assignedPrincipalRoles->pluck('principal_id')->all();
@@ -350,15 +367,17 @@ class Show extends Component implements ProvidesLaraPageContext
         $availableUsers = $canEdit
             ? User::query()
                 ->whereNotIn('id', $assignedUserIds)
+                ->whereIn('company_id', Company::query()
+                    ->forTenant(app(TenantContext::class)->requireTenantId())
+                    ->pluck('id'))
                 ->with('company')
                 ->orderBy('name')
                 ->limit(200)
                 ->get(['id', 'name', 'email', 'company_id'])
             : collect();
 
-        $licenseeCompanies = Company::query()
-            ->where('id', Company::LICENSEE_ID)
-            ->orWhere('parent_id', Company::LICENSEE_ID)
+        $tenantCompanies = Company::query()
+            ->forTenant(app(TenantContext::class)->requireTenantId())
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -372,7 +391,7 @@ class Show extends Component implements ProvidesLaraPageContext
             'assignedCount' => $this->role->capabilities->count(),
             'assignedUsers' => $assignedUsers,
             'availableUsers' => $availableUsers,
-            'licenseeCompanies' => $licenseeCompanies,
+            'tenantCompanies' => $tenantCompanies,
             'hasAssignedUsers' => $hasAssignedUsers,
         ]);
     }

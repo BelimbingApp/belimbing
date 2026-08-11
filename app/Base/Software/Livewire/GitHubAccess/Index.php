@@ -14,7 +14,7 @@ use Livewire\Component;
 /**
  * Guided setup for the GitHub tokens Belimbing uses to pull updates. A deployment
  * can span several owners (public open-source modules under BelimbingApp, private
- * licensee extensions under their own accounts/orgs), and a fine-grained token is
+ * operator extensions under their own accounts/orgs), and a fine-grained token is
  * scoped to one owner — so this lists each owner and stores a token per owner
  * (encrypted, `integrations.github.token.{owner}`). Public owners need none.
  */

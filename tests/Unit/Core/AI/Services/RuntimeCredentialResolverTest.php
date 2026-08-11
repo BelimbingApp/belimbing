@@ -9,7 +9,6 @@ use App\Core\AI\Definitions\OpenAiCodexDefinition;
 use App\Core\AI\Enums\AuthType;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Services\Runtime\RuntimeCredentialResolver;
-use App\Core\Company\Models\Company;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -36,8 +35,7 @@ function makeResolver(): RuntimeCredentialResolver
 
 function createRcrProvider(string $name, string $baseUrl, string $apiKey = '', AuthType $authType = AuthType::ApiKey): AiProvider
 {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
 
     return AiProvider::query()->create([
         'company_id' => $company->id,

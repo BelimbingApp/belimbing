@@ -31,6 +31,7 @@ php artisan migrate --dev
 1. **Explicit Synchronization**: The system does not automatically sync database roles with config on every request for performance reasons. Manual seeding is required after config edits.
 2. **Capability Grammar**: All capability keys must follow the `<domain>.<resource>.<action>` format (e.g., `admin.system.log.list`).
 3. **Effective Permissions**: The `EffectivePermissions` service combines role grants, direct allows, and explicit denies. Direct denies always win.
+4. **Tenant-safe roles**: `company_id = null` is reserved for configured system roles. Every custom role requires an owning company; list, mutation, and assignment paths must admit only system roles or custom roles whose owning company belongs to the current tenant.
 
 ## Reference Files
 

@@ -83,8 +83,8 @@
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right">
                                     <div class="flex items-center justify-end gap-2">
-                                        @if ($company->isLicensee())
-                                            <x-ui.badge variant="default">{{ __('Licensee') }}</x-ui.badge>
+                                        @if ($company->isPrimaryCompany())
+                                            <x-ui.badge variant="default">{{ __('Primary') }}</x-ui.badge>
                                         @else
                                             @can('admin.company.delete')
                                                 <x-ui.button

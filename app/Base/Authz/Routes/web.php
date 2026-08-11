@@ -1,4 +1,5 @@
 <?php
+
 use App\Base\Authz\Livewire\Capabilities\Index as CapabilitiesIndex;
 use App\Base\Authz\Livewire\DecisionLogs\Index as DecisionLogsIndex;
 use App\Base\Authz\Livewire\PrincipalCapabilities\Index as PrincipalCapabilitiesIndex;
@@ -7,6 +8,7 @@ use App\Base\Authz\Livewire\Roles\Create as RolesCreate;
 use App\Base\Authz\Livewire\Roles\Index as RolesIndex;
 use App\Base\Authz\Livewire\Roles\Show as RolesShow;
 use App\Base\Authz\Services\ImpersonationManager;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +20,11 @@ Route::middleware('auth')->group(function () {
     })->name('admin.impersonate.stop');
 
     Route::post('admin/impersonate/{user}', function (User $user, ImpersonationManager $manager) {
+        abort_unless(
+            $user->tenant_id === app(TenantContext::class)->requireTenantId(),
+            404,
+        );
+
         $manager->start(auth()->user(), $user);
 
         return redirect()->route('dashboard');

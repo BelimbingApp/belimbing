@@ -1,7 +1,8 @@
 <?php
+
 namespace App\Base\Locale\DTO;
 
-final readonly class LicenseeLocaleBootstrap
+final readonly class PlatformOperatorLocaleBootstrap
 {
     public function __construct(
         public string $countryIso,

@@ -5,6 +5,7 @@ namespace App\Core\Company\Livewire\Companies;
 use App\Base\DateTime\Services\TimezoneSettings;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Livewire\AbstractAddressForm;
 use App\Core\Address\Models\Address;
 use App\Core\Company\Livewire\Concerns\ManagesCompanyTimezone;
@@ -83,6 +84,10 @@ class Show extends AbstractAddressForm
 
     public function mount(Company $company): void
     {
+        if ((int) $company->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
+
         /** @var User $user */
         $user = auth()->user();
 
@@ -263,7 +268,17 @@ class Show extends AbstractAddressForm
             return;
         }
 
-        $this->company->addresses()->attach($this->attachAddressId, [
+        $address = Address::query()
+            ->forTenant((int) $this->company->tenant_id)
+            ->find($this->attachAddressId);
+
+        if ($address === null) {
+            $this->notifyError(__('The selected address is not available for this company.'));
+
+            return;
+        }
+
+        $this->company->addresses()->attach($address->id, [
             'kind' => $this->attachKind,
             'is_primary' => $this->attachIsPrimary,
             'priority' => $this->attachPriority,
@@ -282,7 +297,9 @@ class Show extends AbstractAddressForm
         if ($addressId === null) {
             $this->resetAddressForm();
         } else {
-            $address = Address::query()->findOrFail($addressId);
+            $address = Address::query()
+                ->forTenant((int) $this->company->tenant_id)
+                ->findOrFail($addressId);
             $this->label = $address->label ?? '';
             $this->phone = $address->phone;
             $this->line1 = $address->line1;
@@ -357,10 +374,12 @@ class Show extends AbstractAddressForm
             ),
             'addresses' => $addresses,
             'availableAddresses' => Address::query()
+                ->forTenant((int) $this->company->tenant_id)
                 ->whereNotIn('id', $linkedIds)
                 ->orderBy('label')
                 ->get(['id', 'label', 'line1', 'locality', 'country_iso']),
             'parentCompanies' => Company::query()
+                ->forTenant((int) $this->company->tenant_id)
                 ->where('id', '!=', $this->company->id)
                 ->orderBy('name')
                 ->get(['id', 'name']),
@@ -406,6 +425,7 @@ class Show extends AbstractAddressForm
         ]);
 
         $address = Address::query()->create([
+            'tenant_id' => $this->company->tenant_id,
             'label' => $validated['label'],
             'phone' => $validated['phone'],
             'line1' => $validated['line1'],
@@ -446,7 +466,9 @@ class Show extends AbstractAddressForm
             'admin1Code' => ['nullable', 'string', 'max:20'],
         ]);
 
-        $address = Address::query()->findOrFail($this->addressFormId);
+        $address = Address::query()
+            ->forTenant((int) $this->company->tenant_id)
+            ->findOrFail($this->addressFormId);
         $address->update([
             'label' => $validated['label'],
             'phone' => $validated['phone'],

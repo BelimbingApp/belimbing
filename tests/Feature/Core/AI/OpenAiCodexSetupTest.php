@@ -423,7 +423,7 @@ function makeCodexProviderTestService(int $providerId, ProviderTestResult $resul
     $configResolver = Mockery::mock(ConfigResolver::class);
     $configResolver->shouldReceive('resolveForProvider')
         ->once()
-        ->with($providerId, $modelId)
+        ->with($providerId, $modelId, Mockery::type('int'))
         ->andReturn([
             'api_key' => '',
             'base_url' => OAI_CODEX_BACKEND_BASE_URL,

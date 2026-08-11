@@ -10,6 +10,7 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -73,7 +74,11 @@ class Index extends Component
             return;
         }
 
-        $user = User::findOrFail($userId);
+        $user = User::query()
+            ->whereHas('company', fn (Builder $query): Builder => $query->forTenant(
+                app(TenantContext::class)->requireTenantId(),
+            ))
+            ->findOrFail($userId);
 
         if ($user->id === $authUser->getAuthIdentifier()) {
             $this->notifyError(__('You cannot delete your own account.'));
@@ -103,6 +108,7 @@ class Index extends Component
                 ->select('users.*')
                 ->with(['company', 'principalRoles.role'])
                 ->leftJoin('companies', 'users.company_id', '=', 'companies.id')
+                ->where('companies.tenant_id', app(TenantContext::class)->requireTenantId())
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function (Builder $q) use ($search): void {
                         $q->where('users.name', 'like', '%'.$search.'%')

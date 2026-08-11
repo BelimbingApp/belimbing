@@ -15,6 +15,7 @@ use Tests\TestCase;
 uses(TestCase::class);
 
 const PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID = 101;
+const PROVIDER_TEST_SERVICE_CODEX_COMPANY_ID = 202;
 const PROVIDER_TEST_SERVICE_CODEX_PROVIDER_NAME = 'openai-codex';
 const PROVIDER_TEST_SERVICE_CODEX_MODEL_ID = 'gpt-5.4-nano';
 const PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID = 'gpt-5.1-codex-mini';
@@ -34,7 +35,7 @@ function makeProviderTestServiceCodexFailure(string $model, string $providerMess
     $configResolver
         ->shouldReceive('resolveForProvider')
         ->once()
-        ->with(PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID, $model)
+        ->with(PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID, $model, PROVIDER_TEST_SERVICE_CODEX_COMPANY_ID)
         ->andReturn($config);
 
     $credentialResolver = Mockery::mock(RuntimeCredentialResolver::class);
@@ -73,6 +74,7 @@ test('ProviderTestService preserves Codex transport provider messages and adds s
     $result = $service->testSelection(
         PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID,
         PROVIDER_TEST_SERVICE_CODEX_MODEL_ID,
+        PROVIDER_TEST_SERVICE_CODEX_COMPANY_ID,
     );
 
     expect($result->connected)->toBeFalse()
@@ -104,6 +106,7 @@ test('ProviderTestService preserves unsupported Codex model provider messages', 
     $result = $service->testSelection(
         PROVIDER_TEST_SERVICE_CODEX_PROVIDER_ID,
         PROVIDER_TEST_SERVICE_CODEX_UNSUPPORTED_MODEL_ID,
+        PROVIDER_TEST_SERVICE_CODEX_COMPANY_ID,
     );
 
     expect($result->connected)->toBeFalse()

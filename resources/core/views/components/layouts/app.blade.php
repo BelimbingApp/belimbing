@@ -1,7 +1,14 @@
 @props(['title' => null])
 
 @php
-    $laraActivated = auth()->check()
+    $tenantId = app(\App\Base\Tenancy\Contracts\TenantContext::class)->currentTenantId();
+    $laraAvailable = auth()->check()
+        && $tenantId !== null
+        && \App\Core\Employee\Models\Employee::query()
+            ->whereKey(\App\Core\Employee\Models\Employee::LARA_ID)
+            ->whereHas('company', fn ($query) => $query->forTenant($tenantId))
+            ->exists();
+    $laraActivated = $laraAvailable
         && \App\Core\Employee\Models\Employee::laraActivationState() === true;
 
     // On wire:navigate the persisted chrome is kept client-side and the freshly
@@ -275,7 +282,9 @@
         @unless($skipShellRender)
             <div id="lara-chat-home" style="display: contents;">
                 <div id="lara-chat-instance" class="h-full" style="display: none;">
-                    <livewire:ai.chat />
+                    @if ($laraAvailable)
+                        <livewire:ai.chat />
+                    @endif
                 </div>
             </div>
         @endunless

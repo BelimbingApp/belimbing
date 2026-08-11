@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Core\Employee\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -56,7 +57,7 @@ class EmployeeType extends Model
     }
 
     /**
-     * Scope to system types (non-deletable by licensee).
+     * Scope to system types (non-deletable by tenant administrators).
      */
     public function scopeSystem($query): void
     {
@@ -64,7 +65,7 @@ class EmployeeType extends Model
     }
 
     /**
-     * Scope to custom types (licensee-managed).
+     * Scope to custom types (tenant-managed).
      */
     public function scopeCustom($query): void
     {

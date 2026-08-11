@@ -45,10 +45,11 @@ final readonly class ProviderTestService
      *
      * @param  int  $providerId  Provider database ID
      * @param  string  $modelId  Model identifier
+     * @param  int  $companyId  Company permitted to use the provider credentials
      */
-    public function testSelection(int $providerId, string $modelId): ProviderTestResult
+    public function testSelection(int $providerId, string $modelId, int $companyId): ProviderTestResult
     {
-        $config = $this->configResolver->resolveForProvider($providerId, $modelId);
+        $config = $this->configResolver->resolveForProvider($providerId, $modelId, $companyId);
 
         if ($config === null) {
             return $this->configFailure($modelId);

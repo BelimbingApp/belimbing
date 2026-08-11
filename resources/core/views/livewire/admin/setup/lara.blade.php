@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Core\AI\Livewire\Setup\Lara $this */
+
+use App\Core\AI\Livewire\Setup\Lara;
+
+/** @var Lara $this */
 ?>
 <div>
     <x-slot name="title">{{ $laraActivated ? __('Lara') : __('Set Up Lara') }}</x-slot>
@@ -10,17 +13,17 @@
             :subtitle="__('Inspect and override Lara\'s harness — system prompt, operator context, and tool notes. Model selection lives on the providers page.')"
         />
 
-        @if (! $licenseeExists)
+        @if (! $operatorCompanyExists)
             <x-ui.alert variant="warning">
-                {{ __('The Licensee company must be set up before Lara can be provisioned.') }}
-                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-accent hover:underline">
-                    {{ __('Set up Licensee') }}
+                {{ __('The platform-operator primary company must be set up before Lara can be provisioned.') }}
+                <a href="{{ route('admin.setup.platform-operator') }}" wire:navigate class="text-accent hover:underline">
+                    {{ __('Set up platform operator') }}
                 </a>
             </x-ui.alert>
         @elseif (! $laraExists)
             <x-ui.card>
                 <h3 class="text-[11px] uppercase tracking-wider font-semibold text-muted mb-4">{{ __('Provision Lara') }}</h3>
-                <p class="text-xs text-muted mb-4">{{ __('Lara\'s employee record does not exist yet. Provision her to create the system Agent record for the Licensee company.') }}</p>
+                <p class="text-xs text-muted mb-4">{{ __('Lara\'s employee record does not exist yet. Provision her for the platform-operator primary company.') }}</p>
                 <form wire:submit="provisionLara">
                     <x-ui.button type="submit" variant="primary">{{ __('Provision Lara') }}</x-ui.button>
                 </form>

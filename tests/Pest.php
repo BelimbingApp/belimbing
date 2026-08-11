@@ -12,9 +12,12 @@ use App\Base\Media\Models\MediaAsset;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore;
 use App\Base\Media\PhotoCleanup\PhotoRoomConfiguration;
 use App\Base\Media\Services\MediaAssetStore;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\RelationshipType;
+use App\Core\Company\Services\FrameworkPrimitivesProvisioner;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -78,6 +81,8 @@ function createAdminUser(): User
         'role_id' => $role->id,
     ]);
 
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
     return $user;
 }
 
@@ -99,11 +104,13 @@ function createTenantOwnerUser(?int $companyId = null): User
         'role_id' => $role->id,
     ]);
 
+    app(TenantContext::class)->set((int) $user->tenant_id);
+
     return $user;
 }
 
 /**
- * Create a non-licensee tenant for tenancy tests.
+ * Create a non-operator tenant for tenancy tests.
  */
 function createTenant(array $attributes = []): Tenant
 {
@@ -126,6 +133,35 @@ function createTenantWithCompany(array $tenantAttributes = [], array $companyAtt
         $tenant,
         Company::factory()->create(array_merge(['tenant_id' => $tenant->id], $companyAttributes)),
     ];
+}
+
+/**
+ * Resolve the explicitly marked platform-operator tenant.
+ */
+function platformOperatorTenant(): Tenant
+{
+    return Tenant::requirePlatformOperator();
+}
+
+/**
+ * Resolve the platform operator's explicitly assigned primary company.
+ */
+function platformOperatorCompany(): Company
+{
+    return app(PrimaryCompanyManager::class)->platformOperatorCompany();
+}
+
+/**
+ * Idempotently provision or update the platform operator's primary company.
+ */
+function provisionPlatformOperatorCompany(?string $name = null, ?string $code = null): Company
+{
+    $company = app(FrameworkPrimitivesProvisioner::class)
+        ->provisionPlatformOperatorCompany($name, $code);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
+    return $company;
 }
 
 /**

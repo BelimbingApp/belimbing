@@ -3,6 +3,7 @@
 namespace App\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\DecodesJsonFields;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\Department;
 use App\Core\Employee\Models\Employee;
@@ -92,12 +93,13 @@ class Create extends Component
     {
         /** @var User $user */
         $user = auth()->user();
+        $tenantId = app(TenantContext::class)->requireTenantId();
 
         return [
             'companyId' => [
                 'required',
                 'integer',
-                Rule::exists(Company::class, 'id'),
+                Rule::exists(Company::class, 'id')->where('tenant_id', $tenantId),
                 function (string $attribute, mixed $value, \Closure $fail) use ($user): void {
                     if (! $user->isPlatformAdmin() && (int) $value !== $user->getCompanyId()) {
                         $fail(__('The selected company is not available for this tenant.'));
@@ -148,28 +150,30 @@ class Create extends Component
     {
         /** @var User $user */
         $user = auth()->user();
-
-        $companyScope = fn ($query) => $user->isPlatformAdmin()
-            ? $query
-            : $query->where('company_id', $user->getCompanyId());
+        $tenantId = app(TenantContext::class)->requireTenantId();
+        $tenantCompanyIds = Company::query()->forTenant($tenantId)->pluck('id');
 
         return view('livewire.admin.employees.create', [
             'companies' => Company::query()
+                ->forTenant($tenantId)
                 ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('id', $user->getCompanyId()))
                 ->orderBy('name')
                 ->get(['id', 'name']),
             'departments' => Department::query()
                 ->with('type')
-                ->when(! $user->isPlatformAdmin(), $companyScope)
+                ->whereIn('company_id', $tenantCompanyIds)
+                ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('company_id', $user->getCompanyId()))
                 ->orderBy('department_type_id')
                 ->get(['id', 'company_id', 'department_type_id']),
             'supervisors' => Employee::query()
-                ->when(! $user->isPlatformAdmin(), $companyScope)
+                ->whereIn('company_id', $tenantCompanyIds)
+                ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('company_id', $user->getCompanyId()))
                 ->orderBy('full_name')
                 ->get(['id', 'full_name', 'company_id']),
             'employeeTypes' => EmployeeType::query()->global()->orderBy('code')->get(['id', 'code', 'label', 'is_system']),
             'users' => User::query()
                 ->whereNull('employee_id')
+                ->whereIn('company_id', $tenantCompanyIds)
                 ->when(! $user->isPlatformAdmin(), fn ($q) => $q->where('company_id', $user->getCompanyId()))
                 ->orderBy('name')
                 ->get(['id', 'name', 'company_id', 'employee_id']),

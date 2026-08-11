@@ -1,7 +1,7 @@
 <?php
 
-use App\Core\AI\Enums\RunPhase;
 use App\Core\AI\Enums\AiRunStatus;
+use App\Core\AI\Enums\RunPhase;
 use App\Core\AI\Jobs\RunChatTurnJob;
 use App\Core\AI\Livewire\Chat;
 use App\Core\AI\Models\AiProvider;
@@ -37,10 +37,10 @@ afterEach(function (): void {
  */
 function createChatConcurrencyFixture(): array
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    $company = Company::query()->findOrFail(Company::LICENSEE_ID);
+    $company = platformOperatorCompany();
 
     $provider = AiProvider::query()->create([
         'company_id' => $company->id,

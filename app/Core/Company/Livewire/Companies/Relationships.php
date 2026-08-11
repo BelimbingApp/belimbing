@@ -4,6 +4,7 @@ namespace App\Core\Company\Livewire\Companies;
 
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Models\CompanyRelationship;
 use App\Core\Company\Models\RelationshipType;
@@ -51,6 +52,10 @@ class Relationships extends Component
 
     public function mount(Company $company): void
     {
+        if ((int) $company->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
+
         $this->company = $company;
     }
 
@@ -81,9 +86,13 @@ class Relationships extends Component
             return;
         }
 
+        $relatedCompany = Company::query()
+            ->forTenant((int) $this->company->tenant_id)
+            ->findOrFail($this->createRelatedCompanyId);
+
         CompanyRelationship::query()->create([
             'company_id' => $this->company->id,
-            'related_company_id' => $this->createRelatedCompanyId,
+            'related_company_id' => $relatedCompany->id,
             'relationship_type_id' => $this->createRelationshipTypeId,
             'effective_from' => $this->createEffectiveFrom,
             'effective_to' => $this->createEffectiveTo,
@@ -174,6 +183,7 @@ class Relationships extends Component
         return view('livewire.admin.companies.relationships', [
             'allRelationships' => $sorted,
             'availableCompanies' => Company::query()
+                ->forTenant((int) $this->company->tenant_id)
                 ->where('id', '!=', $this->company->id)
                 ->orderBy('name')
                 ->get(['id', 'name']),

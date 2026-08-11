@@ -6,16 +6,15 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Support\ExecutableLocator;
 use App\Core\AI\Livewire\ControlPlane;
 use App\Core\AI\Livewire\Tools\Workspace;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
-const AI_RUNTIME_SETTINGS_LICENSEE = 'AI Runtime Settings Licensee';
+const AI_RUNTIME_SETTINGS_OPERATOR = 'AI Runtime Settings Operator';
 const AI_RUNTIME_SETTINGS_PDFTOTEXT_PATH = 'C:\\Runtime Settings\\pdftotext.exe';
 
 beforeEach(function (): void {
-    Company::provisionLicensee(AI_RUNTIME_SETTINGS_LICENSEE);
+    provisionPlatformOperatorCompany(AI_RUNTIME_SETTINGS_OPERATOR);
     Employee::provisionLara();
 });
 

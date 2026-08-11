@@ -17,7 +17,7 @@ beforeEach(function (): void {
 });
 
 it('sets timezone mode to each valid value', function (string $mode): void {
-    $user = User::factory()->create(['company_id' => 1]);
+    $user = User::factory()->create(['company_id' => platformOperatorCompany()->id]);
 
     $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => $mode])
@@ -26,9 +26,10 @@ it('sets timezone mode to each valid value', function (string $mode): void {
 })->with(['company', 'local', 'utc']);
 
 it('returns timezone identifier for company and utc modes', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
+    $companyId = platformOperatorCompany()->id;
+    $user = User::factory()->create(['company_id' => $companyId]);
     $settings = app(SettingsService::class);
-    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
+    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company($companyId));
 
     $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'utc'])
@@ -40,9 +41,10 @@ it('returns timezone identifier for company and utc modes', function (): void {
 });
 
 it('returns null timezone for local mode', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
+    $companyId = platformOperatorCompany()->id;
+    $user = User::factory()->create(['company_id' => $companyId]);
     $settings = app(SettingsService::class);
-    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company(1));
+    $settings->set(TimezoneSettings::LOCALIZATION_TIMEZONE_KEY, TZ_SET_COMPANY_TIMEZONE_KL, Scope::company($companyId));
 
     $response = $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'local'])
@@ -53,7 +55,8 @@ it('returns null timezone for local mode', function (): void {
 });
 
 it('persists mode in settings at user scope', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
+    $companyId = platformOperatorCompany()->id;
+    $user = User::factory()->create(['company_id' => $companyId]);
     $settings = app(SettingsService::class);
 
     $this->actingAs($user)
@@ -62,7 +65,7 @@ it('persists mode in settings at user scope', function (): void {
 
     expect($settings->get(
         TimezoneSettings::MODE_KEY,
-        scope: Scope::user($user->id, 1),
+        scope: Scope::user($user->id, $companyId),
     ))->toBe(TimezoneMode::LOCAL->value)
         ->and(Setting::query()
             ->where('key', TimezoneSettings::MODE_KEY)
@@ -72,9 +75,10 @@ it('persists mode in settings at user scope', function (): void {
 });
 
 it('persists mode against the user even when the account has an employee id', function (): void {
-    $employee = Employee::factory()->create(['company_id' => 1]);
+    $companyId = platformOperatorCompany()->id;
+    $employee = Employee::factory()->create(['company_id' => $companyId]);
     $user = User::factory()->create([
-        'company_id' => 1,
+        'company_id' => $companyId,
         'employee_id' => $employee->id,
     ]);
     $settings = app(SettingsService::class);
@@ -83,7 +87,7 @@ it('persists mode against the user even when the account has an employee id', fu
         ->postJson(route('timezone.set'), ['mode' => 'utc'])
         ->assertOk();
 
-    expect($settings->get(TimezoneSettings::MODE_KEY, scope: Scope::user($user->id, 1)))
+    expect($settings->get(TimezoneSettings::MODE_KEY, scope: Scope::user($user->id, $companyId)))
         ->toBe(TimezoneMode::UTC->value)
         ->and(Setting::query()
             ->where('key', TimezoneSettings::MODE_KEY)
@@ -101,11 +105,11 @@ it('routes an unset company timezone to the authenticated users company settings
         ->assertOk()
         ->assertSee('aria-label="Select timezone display mode"', false)
         ->assertSee((string) Js::from(route('admin.companies.show', $company)), false)
-        ->assertDontSee((string) Js::from(route('admin.companies.show', Company::LICENSEE_ID)), false);
+        ->assertDontSee((string) Js::from(route('admin.companies.show', platformOperatorCompany()->id)), false);
 });
 
 it('rejects invalid mode values', function (): void {
-    $user = User::factory()->create(['company_id' => 1]);
+    $user = User::factory()->create(['company_id' => platformOperatorCompany()->id]);
 
     $this->actingAs($user)
         ->postJson(route('timezone.set'), ['mode' => 'invalid'])

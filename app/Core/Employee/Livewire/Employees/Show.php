@@ -4,6 +4,7 @@ namespace App\Core\Employee\Livewire\Employees;
 
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Models\Address;
 use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\Contracts\ProvidesLaraPageSnapshot;
@@ -63,6 +64,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
     {
         /** @var User $user */
         $user = auth()->user();
+
+        if ((int) $employee->company?->tenant_id !== app(TenantContext::class)->requireTenantId()) {
+            abort(404);
+        }
 
         if (! $user->isPlatformAdmin() && $employee->company_id !== $user->getCompanyId()) {
             abort(403);
@@ -280,7 +285,17 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
             return;
         }
 
-        $this->employee->addresses()->attach($this->attachAddressId, [
+        $address = Address::query()
+            ->forTenant((int) $this->employee->company->tenant_id)
+            ->find($this->attachAddressId);
+
+        if ($address === null) {
+            $this->notifyError(__('The selected address is not available for this employee.'));
+
+            return;
+        }
+
+        $this->employee->addresses()->attach($address->id, [
             'kind' => $this->attachKind,
             'is_primary' => $this->attachIsPrimary,
             'priority' => $this->attachPriority,
@@ -348,6 +363,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
                 ->get(['id', 'full_name']),
             'employeeTypes' => EmployeeType::query()->global()->orderBy('code')->get(['id', 'code', 'label']),
             'users' => User::query()
+                ->where('company_id', $this->employee->company_id)
                 ->where(function ($query): void {
                     $query->whereNull('employee_id')
                         ->orWhere('employee_id', $this->employee->id);
@@ -364,6 +380,7 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
                 ->orderBy('full_name')
                 ->get(['id', 'full_name']),
             'availableAddresses' => Address::query()
+                ->forTenant((int) $this->employee->company->tenant_id)
                 ->whereNotIn('id', $this->employee->addresses->pluck('id')->toArray())
                 ->orderBy('label')
                 ->get(['id', 'label', 'line1', 'locality', 'country_iso']),

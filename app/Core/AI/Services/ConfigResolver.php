@@ -10,6 +10,7 @@ use App\Base\Support\File as BlbFile;
 use App\Base\Support\Json as BlbJson;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Models\AiProviderModel;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\Employee\Models\Employee;
 
 /**
@@ -45,10 +46,9 @@ class ConfigResolver
     }
 
     /**
-     * Tenant-level default: the first other company in the same tenant with
-     * a working provider configuration, oldest company first.
+     * Tenant-level default: the tenant's explicit primary company.
      *
-     * Lets a tenant configure providers once on its anchor company while
+     * Lets a tenant configure providers once on its primary company while
      * sibling companies inherit the resolution. Providers stay
      * company-owned; only the lookup cascades.
      */
@@ -61,19 +61,13 @@ class ConfigResolver
             return null;
         }
 
-        foreach ($directory->companyIdsInTenant($tenantId) as $candidateId) {
-            if ($candidateId === $companyId) {
-                continue;
-            }
+        $primaryCompany = app(PrimaryCompanyManager::class)->findForTenant($tenantId);
 
-            $config = $this->resolveCompanyDefault($candidateId);
-
-            if ($config !== null) {
-                return $config;
-            }
+        if ($primaryCompany === null || (int) $primaryCompany->id === $companyId) {
+            return null;
         }
 
-        return null;
+        return $this->resolveCompanyDefault((int) $primaryCompany->id);
     }
 
     /**
@@ -361,18 +355,20 @@ class ConfigResolver
     }
 
     /**
-     * Resolve LLM config for a specific provider and model by provider ID.
+     * Resolve LLM config for a company-owned provider and active model.
      *
      * Used when a model selector provides a composite "providerId:::modelId"
      * override that should target a different provider than the primary config.
      *
      * @param  int  $providerId  Provider database ID
      * @param  string  $modelId  Model identifier
+     * @param  int  $companyId  Company permitted to use the provider credentials
      * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null, provider_id: int|null, credentials: array<string, mixed>, connection_config: array<string, mixed>, api_type: AiApiType}|null
      */
-    public function resolveForProvider(int $providerId, string $modelId): ?array
+    public function resolveForProvider(int $providerId, string $modelId, int $companyId): ?array
     {
         $provider = AiProvider::query()
+            ->forCompany($companyId)
             ->llm()
             ->where('id', $providerId)
             ->active()
@@ -388,9 +384,14 @@ class ConfigResolver
         $modelRow = AiProviderModel::query()
             ->where('ai_provider_id', $provider->id)
             ->where('model_id', $modelId)
+            ->active()
             ->first();
 
-        if ($modelRow !== null && is_array($modelRow->execution_controls) && $modelRow->execution_controls !== []) {
+        if ($modelRow === null) {
+            return null;
+        }
+
+        if (is_array($modelRow->execution_controls) && $modelRow->execution_controls !== []) {
             $controls = ExecutionControls::fromConfig($modelRow->execution_controls, $controls);
         }
 

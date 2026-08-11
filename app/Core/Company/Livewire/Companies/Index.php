@@ -5,6 +5,7 @@ namespace App\Core\Company\Livewire\Companies;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
@@ -67,14 +68,18 @@ class Index extends Component
             abort(403);
         }
 
-        $company = Company::query()->withCount('children')->findOrFail($companyId);
+        $tenantId = app(TenantContext::class)->requireTenantId();
+        $company = Company::query()
+            ->forTenant($tenantId)
+            ->withCount('children')
+            ->findOrFail($companyId);
 
         if (! auth()->user()?->isPlatformAdmin() && $company->id !== auth()->user()?->getCompanyId()) {
             abort(403);
         }
 
-        if ($company->id === Company::LICENSEE_ID) {
-            $this->notifyError(__('The licensee company cannot be deleted.'));
+        if ($company->isPrimaryCompany()) {
+            $this->notifyError(__('A tenant primary company cannot be deleted before its role is transferred.'));
 
             return;
         }
@@ -99,6 +104,7 @@ class Index extends Component
 
         return view('livewire.admin.companies.index', [
             'companies' => Company::query()
+                ->forTenant(app(TenantContext::class)->requireTenantId())
                 ->with('parent')
                 ->when(! $user->isPlatformAdmin(), fn (Builder $q) => $q->where('companies.id', $user->getCompanyId()))
                 ->when($this->statusFilter !== 'all', fn (Builder $q) => $q->where('companies.status', $this->statusFilter))

@@ -6,11 +6,11 @@ use App\Core\AI\DTO\LaraTaskDefinition;
 use App\Core\AI\Enums\LaraTaskType;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Models\AiProviderModel;
-use App\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Core\AI\Services\ConfigResolver;
 use App\Core\AI\Services\LaraTaskRegistry;
+use App\Core\AI\Services\Runtime\AgenticRuntime;
 use App\Core\AI\Services\TaskModelRecommendationService;
-use App\Core\Company\Models\Company;
+use App\Core\Company\Services\PrimaryCompanyManager;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,6 +59,7 @@ function makeTaskRecommendationService(string $responseContent): TaskModelRecomm
         $configResolver,
         $runtime,
         $taskRegistry,
+        app(PrimaryCompanyManager::class),
     );
 }
 
@@ -104,13 +105,13 @@ function makeTaskRecommendationServiceWithRuntimeError(AiRuntimeError $runtimeEr
         $configResolver,
         $runtime,
         $taskRegistry,
+        app(PrimaryCompanyManager::class),
     );
 }
 
 function seedRecommendationCandidates(): void
 {
-    $company = Company::query()->find(Company::LICENSEE_ID)
-        ?? Company::factory()->create(['id' => Company::LICENSEE_ID]);
+    $company = platformOperatorCompany();
 
     $openai = AiProvider::query()->create([
         'company_id' => $company->id,

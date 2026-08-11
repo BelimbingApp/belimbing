@@ -26,7 +26,7 @@ class Employee extends Model
      * The well-known ID for Lara, Belimbing's system orchestrator Agent.
      *
      * Lara is provisioned at install time and cannot be deleted.
-     * Mirrors the Licensee pattern (Company::LICENSEE_ID).
+     * This employee identity is independent of tenant and company identities.
      */
     public const LARA_ID = 1;
 
@@ -154,6 +154,18 @@ class Employee extends Model
     public function addresses(): MorphToMany
     {
         return $this->morphToMany(Address::class, 'addressable', 'addressables')
+            ->whereExists(function ($query): void {
+                $query->selectRaw('1')
+                    ->from('employees as address_owner_employees')
+                    ->join(
+                        'companies as address_owner_companies',
+                        'address_owner_companies.id',
+                        '=',
+                        'address_owner_employees.company_id',
+                    )
+                    ->whereColumn('address_owner_employees.id', 'addressables.addressable_id')
+                    ->whereColumn('address_owner_companies.tenant_id', 'addresses.tenant_id');
+            })
             ->using(Addressable::class)
             ->withPivot('kind', 'is_primary', 'priority', 'valid_from', 'valid_to')
             ->withTimestamps();

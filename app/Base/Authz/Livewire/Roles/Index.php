@@ -7,6 +7,7 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Models\Role;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\DTO\PageContext;
 use Illuminate\Contracts\View\View;
@@ -61,6 +62,17 @@ class Index extends Component implements ProvidesLaraPageContext
                 ->with('company')
                 ->leftJoin('companies', 'base_authz_roles.company_id', '=', 'companies.id')
                 ->withCount('capabilities', 'principalRoles')
+                ->where(function ($query): void {
+                    $query->where(function ($systemRoles): void {
+                        $systemRoles->where('base_authz_roles.is_system', true)
+                            ->whereNull('base_authz_roles.company_id');
+                    })
+                        ->orWhere(function ($customRoles): void {
+                            $customRoles
+                                ->where('companies.tenant_id', app(TenantContext::class)->requireTenantId())
+                                ->whereNull('companies.deleted_at');
+                        });
+                })
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function ($q) use ($search): void {
                         $q->where('base_authz_roles.name', 'like', '%'.$search.'%')

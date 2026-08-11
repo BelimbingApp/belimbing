@@ -32,8 +32,10 @@ param(
     [int] $CaddyAdminPort = 0,
     [string] $InstanceName = '',
 
-    [string] $LicenseeCompanyName = 'My Company',
-    [string] $LicenseeCompanyCode = '',
+    [Alias('LicenseeCompanyName')]
+    [string] $PlatformOperatorCompanyName = 'My Company',
+    [Alias('LicenseeCompanyCode')]
+    [string] $PlatformOperatorCompanyCode = '',
     [string] $AdminName = 'Administrator',
     [string] $AdminEmail = 'admin@local.blb.lara',
     [string] $AdminPassword = 'password',
@@ -305,13 +307,15 @@ function New-AdminBootstrapFile {
     return $path
 }
 
-# Returns $true when at least one user with company_id=1 exists in the SQLite
-# database. Returns $false on any error (table absent, db missing, etc.).
+# Returns $true when the platform operator's primary company has a user in the
+# SQLite database. The inner query retains the old company-id-1 check only for
+# databases that have not applied explicit-tenancy migrations yet.
 function Test-AdminExists {
     param([string] $DatabasePath)
     if (-not (Test-Path $DatabasePath)) { return $false }
     try {
-        $result = & $script:PhpExe -r 'try{$p=new PDO("sqlite:".$argv[1]);$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();echo $n>0?"yes":"no";}catch(Exception $e){echo "no";}' -- $DatabasePath 2>$null
+        $probe = 'try{$p=new PDO("sqlite:".$argv[1]);$p->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);try{$n=$p->query("SELECT COUNT(*) FROM users u JOIN tenant_primary_companies tpc ON tpc.company_id=u.company_id JOIN companies c ON c.id=tpc.company_id JOIN tenants t ON t.id=tpc.tenant_id WHERE t.is_platform_operator=1 AND t.deleted_at IS NULL AND c.deleted_at IS NULL")->fetchColumn();}catch(Throwable $legacy){$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();}echo $n>0?"yes":"no";}catch(Throwable $e){echo "no";}'
+        $result = & $script:PhpExe -r $probe -- $DatabasePath 2>$null
         return ($result -eq 'yes')
     } catch {
         return $false
@@ -404,14 +408,14 @@ function Test-ManagedDatabaseConnection {
     }
 }
 
-# Managed-database equivalent of Test-AdminExists: does a company_id=1 user
-# already exist in the Postgres database? Returns $false on any error.
+# Managed-database equivalent of Test-AdminExists. Resolves the explicit
+# operator-primary relationship, with a bounded pre-migration ID-1 fallback.
 function Test-AdminExistsManaged {
     param([object] $Connection)
 
     if (-not $Connection) { return $false }
     try {
-        $probe = 'try{$dsn=sprintf("pgsql:host=%s;port=%s;dbname=%s",$argv[1],$argv[2],$argv[3]);$p=new PDO($dsn,$argv[4],$argv[5],[PDO::ATTR_TIMEOUT=>10,PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();echo $n>0?"yes":"no";}catch(Throwable $e){echo "no";}'
+        $probe = 'try{$dsn=sprintf("pgsql:host=%s;port=%s;dbname=%s",$argv[1],$argv[2],$argv[3]);$p=new PDO($dsn,$argv[4],$argv[5],[PDO::ATTR_TIMEOUT=>10,PDO::ERRMODE=>PDO::ERRMODE_EXCEPTION]);try{$n=$p->query("SELECT COUNT(*) FROM users u JOIN tenant_primary_companies tpc ON tpc.company_id=u.company_id JOIN companies c ON c.id=tpc.company_id JOIN tenants t ON t.id=tpc.tenant_id WHERE t.is_platform_operator=TRUE AND t.deleted_at IS NULL AND c.deleted_at IS NULL")->fetchColumn();}catch(Throwable $legacy){$n=$p->query("SELECT COUNT(*) FROM users WHERE company_id=1")->fetchColumn();}echo $n>0?"yes":"no";}catch(Throwable $e){echo "no";}'
         $result = & $script:PhpExe -r $probe -- $Connection.Host $Connection.Port $Connection.Database $Connection.Username $Connection.Password 2>$null
         return ($result -eq 'yes')
     } catch {
@@ -574,8 +578,8 @@ $explicitIngressMode    = $PSBoundParameters.ContainsKey('IngressMode')
 $explicitHttpsPort      = $PSBoundParameters.ContainsKey('HttpsPort')
 $explicitCaddyAdminPort = $PSBoundParameters.ContainsKey('CaddyAdminPort')
 $explicitInstanceName   = $PSBoundParameters.ContainsKey('InstanceName')
-$explicitCompanyName    = $PSBoundParameters.ContainsKey('LicenseeCompanyName')
-$explicitCompanyCode    = $PSBoundParameters.ContainsKey('LicenseeCompanyCode')
+$explicitCompanyName    = $PSBoundParameters.ContainsKey('PlatformOperatorCompanyName')
+$explicitCompanyCode    = $PSBoundParameters.ContainsKey('PlatformOperatorCompanyCode')
 
 Push-Location $ProjectRootPath
 try {
@@ -825,8 +829,8 @@ variables_order=EGPCS
 
     # User-configurable values - written only when absent unless the param was
     # explicitly provided on this invocation.
-    if (-not $LicenseeCompanyCode) {
-        $LicenseeCompanyCode = Get-DefaultCompanyCode $LicenseeCompanyName
+    if (-not $PlatformOperatorCompanyCode) {
+        $PlatformOperatorCompanyCode = Get-DefaultCompanyCode $PlatformOperatorCompanyName
     }
     Set-EnvValueBatch -Path $envPath -Entries @(
         [pscustomobject]@{ Key = 'APP_ENV';               Value = $Environment;            OnlyIfAbsent = (-not $explicitEnvironment) },
@@ -836,8 +840,8 @@ variables_order=EGPCS
         [pscustomobject]@{ Key = 'APP_PORT';              Value = "$AppPort";              OnlyIfAbsent = (-not $explicitAppPort) },
         [pscustomobject]@{ Key = 'VITE_PORT';             Value = "$VitePort";             OnlyIfAbsent = (-not $explicitVitePort) },
         [pscustomobject]@{ Key = 'BLB_INSTANCE_NAME';     Value = $resolvedInstanceName;   OnlyIfAbsent = (-not $explicitInstanceName) },
-        [pscustomobject]@{ Key = 'LICENSEE_COMPANY_NAME'; Value = $LicenseeCompanyName;    OnlyIfAbsent = (-not $explicitCompanyName) },
-        [pscustomobject]@{ Key = 'LICENSEE_COMPANY_CODE'; Value = $LicenseeCompanyCode;    OnlyIfAbsent = (-not $explicitCompanyCode) }
+        [pscustomobject]@{ Key = 'PLATFORM_OPERATOR_COMPANY_NAME'; Value = $PlatformOperatorCompanyName; OnlyIfAbsent = (-not $explicitCompanyName) },
+        [pscustomobject]@{ Key = 'PLATFORM_OPERATOR_COMPANY_CODE'; Value = $PlatformOperatorCompanyCode; OnlyIfAbsent = (-not $explicitCompanyCode) }
     )
     if ($Environment -in @('staging', 'production') -or $explicitHttpsPort) {
         if ($explicitHttpsPort) {
@@ -974,7 +978,7 @@ variables_order=EGPCS
         if (-not $SkipMigrate) {
             # Only bootstrap admin credentials on first run or when explicitly requested.
             # Skipping the bootstrap file lets FrameworkPrimitivesProvisioner use the
-            # canonical anchor path - re-asserts roles without touching the password.
+            # canonical primary-company path — re-asserts roles without touching the password.
             $adminExists = if ($useManagedDatabase) {
                 Test-AdminExistsManaged -Connection $managedConnection
             } else {
@@ -993,12 +997,12 @@ variables_order=EGPCS
                 $adminBootstrapFile = New-AdminBootstrapFile -Name $AdminName -Email $AdminEmail -Password $AdminPassword
             }
 
-            $previousCompanyName = $env:LICENSEE_COMPANY_NAME
-            $previousCompanyCode = $env:LICENSEE_COMPANY_CODE
+            $previousCompanyName = $env:PLATFORM_OPERATOR_COMPANY_NAME
+            $previousCompanyCode = $env:PLATFORM_OPERATOR_COMPANY_CODE
             $previousBootstrapFile = $env:BLB_BOOTSTRAP_ADMIN_FILE
 
-            $env:LICENSEE_COMPANY_NAME = $LicenseeCompanyName
-            $env:LICENSEE_COMPANY_CODE = $LicenseeCompanyCode
+            $env:PLATFORM_OPERATOR_COMPANY_NAME = $PlatformOperatorCompanyName
+            $env:PLATFORM_OPERATOR_COMPANY_CODE = $PlatformOperatorCompanyCode
             if ($adminBootstrapFile) {
                 $env:BLB_BOOTSTRAP_ADMIN_FILE = $adminBootstrapFile
             }
@@ -1013,15 +1017,15 @@ variables_order=EGPCS
                 throw
             } finally {
                 if ($null -eq $previousCompanyName) {
-                    Remove-Item Env:\LICENSEE_COMPANY_NAME -ErrorAction SilentlyContinue
+                    Remove-Item Env:\PLATFORM_OPERATOR_COMPANY_NAME -ErrorAction SilentlyContinue
                 } else {
-                    $env:LICENSEE_COMPANY_NAME = $previousCompanyName
+                    $env:PLATFORM_OPERATOR_COMPANY_NAME = $previousCompanyName
                 }
 
                 if ($null -eq $previousCompanyCode) {
-                    Remove-Item Env:\LICENSEE_COMPANY_CODE -ErrorAction SilentlyContinue
+                    Remove-Item Env:\PLATFORM_OPERATOR_COMPANY_CODE -ErrorAction SilentlyContinue
                 } else {
-                    $env:LICENSEE_COMPANY_CODE = $previousCompanyCode
+                    $env:PLATFORM_OPERATOR_COMPANY_CODE = $previousCompanyCode
                 }
 
                 if ($null -eq $previousBootstrapFile) {

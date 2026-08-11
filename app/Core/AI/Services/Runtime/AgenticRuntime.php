@@ -24,6 +24,7 @@ use App\Core\AI\Services\ControlPlane\RunRecorderStartInput;
 use App\Core\AI\Services\ControlPlane\WireLogger;
 use App\Core\AI\Services\ControlPlane\WireLoggingTransportTap;
 use App\Core\AI\Values\CallUsage;
+use App\Core\Employee\Models\Employee;
 use Closure;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -120,7 +121,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             }
 
             if ($modelOverride !== null) {
-                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride, $employeeId);
             }
 
             $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
@@ -233,7 +234,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
             }
 
             if ($modelOverride !== null) {
-                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride);
+                $config = $this->applyCompositeOrSimpleOverride($config, $modelOverride, $employeeId);
             }
 
             $config = $this->applyExecutionControlsOverlay($config, $executionControlsOverride);
@@ -361,7 +362,7 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
      * @param  array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}  $config
      * @return array{api_key: string, base_url: string, model: string, execution_controls: ExecutionControls, timeout: int, provider_name: string|null}
      */
-    private function applyCompositeOrSimpleOverride(array $config, string $modelOverride): array
+    private function applyCompositeOrSimpleOverride(array $config, string $modelOverride, int $employeeId): array
     {
         if (! str_contains($modelOverride, ':::')) {
             $config['model'] = $modelOverride;
@@ -370,16 +371,16 @@ class AgenticRuntime // NOSONAR (S1448): orchestrator kept cohesive; extracted c
         }
 
         [$providerId, $modelId] = explode(':::', $modelOverride, 2);
-        $providerConfig = $this->configResolver->resolveForProvider((int) $providerId, $modelId);
+        $companyId = Employee::query()->whereKey($employeeId)->value('company_id');
+        $providerConfig = $companyId !== null
+            ? $this->configResolver->resolveForProvider((int) $providerId, $modelId, (int) $companyId)
+            : null;
 
         if ($providerConfig !== null) {
             return $providerConfig;
         }
 
-        // Fallback: use the model ID only if provider resolution fails
-        $config['model'] = $modelId;
-
-        return $config;
+        throw new \DomainException('The selected AI provider or model is not available to this agent company.');
     }
 
     /**

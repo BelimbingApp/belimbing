@@ -9,6 +9,8 @@ use App\Base\Authz\Exceptions\AuthorizationDeniedException;
 use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Core\User\Models\User;
+use Illuminate\Support\Facades\DB;
 
 beforeEach(function (): void {
     setupAuthzRoles();
@@ -80,6 +82,36 @@ it('allows when user has capability via role', function (): void {
     expect($decision->allowed)->toBeTrue();
     expect($decision->reasonCode)->toBe(AuthorizationReasonCode::ALLOWED);
     expect($decision->appliedPolicies)->toContain('grant_all');
+});
+
+it('denies custom roles assigned across tenant boundaries', function (): void {
+    [, $roleCompany] = createTenantWithCompany(['name' => 'Role Owner Tenant']);
+    [, $actorCompany] = createTenantWithCompany(['name' => 'Role Assignment Tenant']);
+    $actorUser = User::factory()->create(['company_id' => $actorCompany->id]);
+    $role = Role::query()->create([
+        'company_id' => $roleCompany->id,
+        'name' => 'Foreign Grant All',
+        'code' => 'foreign_grant_all',
+        'is_system' => false,
+        'grant_all' => true,
+    ]);
+
+    DB::table('base_authz_principal_roles')->insert([
+        'company_id' => $actorCompany->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $actorUser->id,
+        'role_id' => $role->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $decision = app(AuthorizationService::class)->can(
+        Actor::forUser($actorUser),
+        'admin.user.view',
+    );
+
+    expect($decision->allowed)->toBeFalse()
+        ->and($decision->reasonCode)->toBe(AuthorizationReasonCode::DENIED_MISSING_CAPABILITY);
 });
 
 it('allows when user has explicit direct capability grant', function (): void {

@@ -535,7 +535,10 @@ class Show extends Component
      */
     private function resolveModelConfig(): ?array
     {
-        $result = $this->resolveModelConfigFromComposite($this->selectedModelId);
+        $result = $this->resolveModelConfigFromComposite(
+            $this->selectedModelId,
+            (int) auth()->user()?->getCompanyId(),
+        );
 
         if (isset($result['error'])) {
             $this->aiError = $result['error'];

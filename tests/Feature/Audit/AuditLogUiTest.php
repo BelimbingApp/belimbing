@@ -252,7 +252,11 @@ it('opens the same trace timeline from mutations', function (): void {
 it('shows user record history from direct mutations and redacts protected values', function (): void {
     $actor = createAdminUser();
     $target = MutationListener::withoutAuditing(
-        fn (): User => User::factory()->create(['name' => 'History Target', 'email' => 'history-old@example.com'])
+        fn (): User => User::factory()->create([
+            'company_id' => $actor->company_id,
+            'name' => 'History Target',
+            'email' => 'history-old@example.com',
+        ])
     );
 
     $this->actingAs($actor);
@@ -412,7 +416,7 @@ it('includes user role and direct capability mutations in user record history', 
         $company = Company::factory()->create();
         $target = User::factory()->create(['company_id' => $company->id, 'name' => 'Authz Target']);
         $role = Role::query()->create([
-            'company_id' => null,
+            'company_id' => $company->id,
             'name' => AUDIT_LOG_UI_HISTORY_ROLE,
             'code' => 'history_role',
             'is_system' => false,

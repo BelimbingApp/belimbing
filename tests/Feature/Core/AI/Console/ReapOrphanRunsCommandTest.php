@@ -5,7 +5,6 @@ use App\Core\AI\Enums\RunEventType;
 use App\Core\AI\Enums\RunPhase;
 use App\Core\AI\Models\AiRun;
 use App\Core\AI\Models\AiRunEvent;
-use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 
@@ -13,10 +12,10 @@ const REAP_ORPHAN_SESSION = 'sess_reap_orphan_test';
 
 function createReapOrphanFixture(): int
 {
-    Company::provisionLicensee('Test Company');
+    provisionPlatformOperatorCompany('Test Company');
     Employee::provisionLara();
 
-    return User::factory()->create(['company_id' => Company::LICENSEE_ID])->id;
+    return User::factory()->create(['company_id' => platformOperatorCompany()->id])->id;
 }
 
 describe('ReapOrphanRunsCommand', function () {

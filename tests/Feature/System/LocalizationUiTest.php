@@ -8,7 +8,6 @@ use App\Base\Settings\DTO\Scope;
 use App\Base\System\Livewire\Localization\Index as LocalizationIndex;
 use App\Base\System\Services\StatusBarDiagnostics;
 use App\Core\Address\Models\Address;
-use App\Core\Company\Models\Company;
 use App\Core\Geonames\Models\Country;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Foundation\Application;
@@ -37,7 +36,7 @@ beforeEach(function (): void {
     $this->settings = app(SettingsService::class);
 });
 
-function seedFeatureLicenseeLocale(string $countryIso = 'MY', string $languages = 'ms-MY,en-MY'): void
+function seedFeatureOperatorLocale(string $countryIso = 'MY', string $languages = 'ms-MY,en-MY'): void
 {
     Country::query()->create([
         'iso' => $countryIso,
@@ -49,18 +48,9 @@ function seedFeatureLicenseeLocale(string $countryIso = 'MY', string $languages 
         'currency_code' => 'MYR',
     ]);
 
-    Company::unguarded(fn () => Company::query()->firstOrCreate(
-        ['id' => Company::LICENSEE_ID],
-        [
-            'name' => 'Licensee',
-            'status' => 'active',
-        ],
-    ));
-
     $address = Address::factory()->create(['country_iso' => $countryIso]);
 
-    Company::query()
-        ->findOrFail(Company::LICENSEE_ID)
+    platformOperatorCompany()
         ->addresses()
         ->attach($address->id, [
             'kind' => json_encode(['headquarters']),
@@ -78,7 +68,7 @@ it('renders the localization page for admins', function (): void {
 });
 
 it('saves the selected locale from the localization page', function (): void {
-    seedFeatureLicenseeLocale();
+    seedFeatureOperatorLocale();
     app()->forgetInstance(LocaleContext::class);
     app(LocaleContext::class)->state();
 
@@ -92,7 +82,7 @@ it('saves the selected locale from the localization page', function (): void {
 });
 
 it('binds the locale combobox to the selectedLocale property', function (): void {
-    seedFeatureLicenseeLocale();
+    seedFeatureOperatorLocale();
     app()->forgetInstance(LocaleContext::class);
 
     $html = Livewire::test(LocalizationIndex::class)->html();
@@ -154,7 +144,7 @@ it('renders browser-side preview hooks when timezone mode is local', function ()
 });
 
 it('derives the currency code from the locale region instead of falling back to USD', function (): void {
-    seedFeatureLicenseeLocale();
+    seedFeatureOperatorLocale();
 
     $html = Livewire::test(LocalizationIndex::class)
         ->set('selectedLocale', 'en-MY')

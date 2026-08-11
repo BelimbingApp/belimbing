@@ -130,7 +130,7 @@ The setup script will:
 - install frontend dependencies with Bun or npm
 - generate `APP_KEY` only when empty
 - run migrations and local dev seeders
-- bootstrap the licensee company and first admin user
+- provision the platform-operator tenant, its primary company, and the first admin user
 
 The default local admin account is:
 
@@ -162,8 +162,8 @@ Use setup parameters to override bootstrap values:
 
 ```powershell
 .\scripts\setup.ps1 `
-  -LicenseeCompanyName "Acme Sdn Bhd" `
-  -LicenseeCompanyCode "acme" `
+  -PlatformOperatorCompanyName "Acme Sdn Bhd" `
+  -PlatformOperatorCompanyCode "acme" `
   -AdminName "Admin" `
   -AdminEmail "admin@example.test" `
   -AdminPassword "change-me-now"
@@ -498,7 +498,7 @@ $env:FRANKENPHP_INSTALL = 'C:\frankenphp'
 ### `Failed to parse dotenv file`
 
 Values containing spaces must be quoted in `.env`. The setup script handles this
-for values it writes, including `LICENSEE_COMPANY_NAME`.
+for values it writes, including `PLATFORM_OPERATOR_COMPANY_NAME`.
 
 ### `cURL error 60`
 

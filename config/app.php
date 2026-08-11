@@ -77,9 +77,17 @@ return [
 
     'caddy_server_admin_port' => env('CADDY_SERVER_ADMIN_PORT'),
 
-    'licensee_company_name' => env('LICENSEE_COMPANY_NAME'),
+    // Legacy LICENSEE_* fallbacks are migration compatibility only. New setup
+    // writes PLATFORM_OPERATOR_*; remove these fallbacks with the next baseline.
+    'platform_operator_company_name' => env(
+        'PLATFORM_OPERATOR_COMPANY_NAME',
+        env('LICENSEE_COMPANY_NAME'),
+    ),
 
-    'licensee_company_code' => env('LICENSEE_COMPANY_CODE'),
+    'platform_operator_company_code' => env(
+        'PLATFORM_OPERATOR_COMPANY_CODE',
+        env('LICENSEE_COMPANY_CODE'),
+    ),
 
     /*
     |--------------------------------------------------------------------------

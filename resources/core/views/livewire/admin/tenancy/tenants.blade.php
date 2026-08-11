@@ -48,8 +48,8 @@
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">{{ $tenant->id }}</td>
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">
                             {{ $tenant->name }}
-                            @if($tenant->isLicensee())
-                                <x-ui.badge variant="info">{{ __('Licensee') }}</x-ui.badge>
+                            @if($tenant->isPlatformOperator())
+                                <x-ui.badge variant="info">{{ __('Platform operator') }}</x-ui.badge>
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted">{{ $tenant->parent?->name ?? '—' }}</td>

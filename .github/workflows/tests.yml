@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: Testing
     env:
-      LICENSEE_COMPANY_NAME: Belimbing CI
-      LICENSEE_COMPANY_CODE: belimbing_ci
+      PLATFORM_OPERATOR_COMPANY_NAME: Belimbing CI
+      PLATFORM_OPERATOR_COMPANY_CODE: belimbing_ci
 
     steps:
       - name: Checkout
@@ -151,6 +151,9 @@ jobs:
 
       - name: Generate Application Key
         run: php artisan key:generate
+
+      - name: Prove migrations on PostgreSQL
+        run: php artisan migrate --force --no-interaction
 
       - name: Create isolated mirror target
         run: psql --host=127.0.0.1 --username=postgres --dbname=postgres --command='CREATE DATABASE blb_mirror_target'

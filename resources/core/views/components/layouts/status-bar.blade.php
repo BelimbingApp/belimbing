@@ -1,7 +1,10 @@
 @php
     $isImpersonating = session('impersonation.original_user_id') !== null;
 
-    $licenseeExists = \App\Core\Company\Models\Company::query()->where('id', \App\Core\Company\Models\Company::LICENSEE_ID)->exists();
+    $platformOperator = \App\Base\Tenancy\Models\Tenant::platformOperator();
+    $operatorCompanyExists = $platformOperator !== null
+        && app(\App\Core\Company\Services\PrimaryCompanyManager::class)->findForTenant($platformOperator) !== null;
+    $isOperatorTenant = auth()->user()?->tenant_id === $platformOperator?->id;
 
     $laraActivated = \App\Core\Employee\Models\Employee::laraActivationState() === true;
 
@@ -35,10 +38,10 @@
                     </button>
                 </form>
             @endif
-            @if (!$licenseeExists)
-                <a href="{{ route('admin.setup.licensee') }}" wire:navigate class="text-status-danger hover:underline flex items-center gap-1">
+            @if ($isOperatorTenant && !$operatorCompanyExists)
+                <a href="{{ route('admin.setup.platform-operator') }}" wire:navigate class="text-status-danger hover:underline flex items-center gap-1">
                     <x-icon name="heroicon-o-exclamation-triangle" class="w-3.5 h-3.5" />
-                    {{ __('Licensee not set') }}
+                    {{ __('Operator company not set') }}
                 </a>
             @endif
             @if ($statusDiagnosticCount > 0)
