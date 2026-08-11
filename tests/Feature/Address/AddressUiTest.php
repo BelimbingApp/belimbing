@@ -43,18 +43,24 @@ test('address pages and company attachment fail closed across tenants', function
     $company = Company::query()->findOrFail($user->company_id);
     $ownAddress = Address::factory()->create([
         'tenant_id' => $company->tenant_id,
-        'label' => 'Visible Tenant Address',
+        'label' => 'Warehouse Alpha Visible',
         'country_iso' => null,
     ]);
     [$otherTenant] = createTenantWithCompany(['name' => 'Other Address Tenant']);
     $foreignAddress = Address::factory()->create([
         'tenant_id' => $otherTenant->id,
-        'label' => 'Hidden Foreign Address',
+        'label' => 'Warehouse Beta Hidden',
         'country_iso' => null,
     ]);
 
     $this->actingAs($user)
         ->get(route('admin.addresses.index'))
+        ->assertOk()
+        ->assertSee($ownAddress->label)
+        ->assertDontSee($foreignAddress->label);
+
+    Livewire::test('admin.addresses.index')
+        ->set('search', 'Warehouse')
         ->assertOk()
         ->assertSee($ownAddress->label)
         ->assertDontSee($foreignAddress->label);

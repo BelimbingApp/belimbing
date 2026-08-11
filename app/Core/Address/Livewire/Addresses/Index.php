@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Address\Models\Address;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -56,12 +57,13 @@ class Index extends Component
             'addresses' => Address::query()
                 ->forTenant($this->tenantId)
                 ->when($this->search, function ($query, $search): void {
-                    $query
-                        ->where('label', 'like', '%'.$search.'%')
-                        ->orWhere('line1', 'like', '%'.$search.'%')
-                        ->orWhere('locality', 'like', '%'.$search.'%')
-                        ->orWhere('postcode', 'like', '%'.$search.'%')
-                        ->orWhere('country_iso', 'like', '%'.$search.'%');
+                    $query->where(function (Builder $q) use ($search): void {
+                        $q->where('label', 'like', '%'.$search.'%')
+                            ->orWhere('line1', 'like', '%'.$search.'%')
+                            ->orWhere('locality', 'like', '%'.$search.'%')
+                            ->orWhere('postcode', 'like', '%'.$search.'%')
+                            ->orWhere('country_iso', 'like', '%'.$search.'%');
+                    });
                 })
                 ->orderBy($sortColumn, $this->sortDir)
                 ->orderByDesc('created_at')

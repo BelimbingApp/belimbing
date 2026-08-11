@@ -55,7 +55,11 @@ return new class extends Migration
             return [];
         }
 
-        $tenantIds = DB::table('tenants')->orderBy('id')->pluck('id')->map(fn (mixed $id): int => (int) $id);
+        $tenantIds = DB::table('tenants')
+            ->whereNull('deleted_at')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id);
         $assignments = [];
         $ambiguous = [];
 
