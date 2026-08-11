@@ -24,7 +24,8 @@ This doc describes implemented behavior. The owning module is `app/Base/Tenancy`
 - `addresses.tenant_id`: required, indexed, explicit, immutable, and foreign-keyed to `tenants`. Address lists, route binding, company/employee attachment, linked-entity rendering, and timezone updates enforce the same tenant boundary; unattached addresses remain owned by the tenant that created them rather than becoming global records.
 - `base_authz_roles`: company-less rows are reserved for configured system roles.
   Every custom role has an owning company and is exposed only inside that company's
-  tenant; PostgreSQL enforces this with
+  tenant. The owning company is foreign-keyed, and PostgreSQL enforces the exact
+  system/company ownership shape with
   `base_authz_roles_custom_company_check` (SQLite uses equivalent write triggers).
 - Audit tables (`base_audit_mutations`, `base_audit_actions`) carry an indexed nullable `tenant_id` stamped at capture time; rows captured without a resolvable tenant (for example anonymous requests) remain null.
 
@@ -87,35 +88,3 @@ Admin tenant management (list, create with optional parent) lives at `admin/tena
 ## Boundaries deliberately not built
 
 Per-tenant module entitlements, quotas, metering, billing, provisioning UX, branding, and cross-tenant support impersonation remain operator/product scope built on these primitives. See the plan of record for the exclusions and their seams.
-
-## Bilimbi compatibility baseline
-
-Bilimbi's independent Ecto baseline must model the post-migration schema rather than replay the retired ID-1 convention:
-
-- `tenants.is_platform_operator`: PostgreSQL `boolean NOT NULL DEFAULT false`; unique partial index `tenants_one_platform_operator` where true. `tenants.id` remains a generated bigint primary key; no particular value identifies the operator.
-- `companies.tenant_id`: `bigint NOT NULL`, no default, indexed, FK `companies_tenant_foreign` to `tenants(id)` with restricted delete. Unique `companies_id_tenant_unique (id, tenant_id)` is the composite-FK parent key; `companies_parent_tenant_foreign (parent_id, tenant_id)` references it with restricted delete.
-- `tenant_primary_companies`: no timestamps; `tenant_id bigint` is primary key and FK `tenant_primary_companies_tenant_foreign` to `tenants(id)`; `company_id bigint` is unique; composite FK `tenant_primary_companies_company_tenant_foreign (company_id, tenant_id)` references `companies(id, tenant_id)`. Both deletes are restricted.
-- `addresses.tenant_id`: `bigint NOT NULL`, no default, index `addresses_tenant_index`, FK `addresses_tenant_foreign` to `tenants(id)` with restricted delete.
-- `base_authz_roles`: retain nullable `company_id` for system roles, but add check
-  `base_authz_roles_custom_company_check (is_system OR company_id IS NOT NULL)`.
-
-Migration order is:
-
-1. `0100_01_13_000005_rename_platform_operator_locale_source`
-2. `0100_01_25_000001_mark_platform_operator_tenant`
-3. `0200_01_05_000002_add_tenant_to_addresses`
-4. `0200_01_07_001004_enforce_company_tenant_integrity`
-5. `0200_01_07_001005_create_tenant_primary_companies_table`
-6. `0200_01_07_001006_backfill_tenant_primary_companies`
-7. `0200_01_07_001007_scope_custom_authz_roles`
-
-Upgrade IDs remain unchanged; fresh replay removes only the unowned pre-company
-tenant bootstrap artifact before normal provisioning. Backfills use IDs 1 only where
-the historical released schema made that legacy role unambiguous. Runtime APIs are
-`Tenant::platformOperator()` / `requirePlatformOperator()`,
-`Tenant::isPlatformOperator()`, and `PrimaryCompanyManager` resolution, assignment,
-transfer, and provisioning. `ConfigResolver::resolveForProvider()` also requires the
-owning company ID, preventing a persisted or tampered model override from resolving
-another tenant's credentials. The only temporary compatibility behavior is
-setup/config acceptance of legacy `LICENSEE_COMPANY_*` environment names and
-migration-only constants in released historical migrations.

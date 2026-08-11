@@ -1,12 +1,15 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     private const string CHECK_CONSTRAINT = 'base_authz_roles_custom_company_check';
+
+    private const string COMPANY_FOREIGN_KEY = 'base_authz_roles_company_foreign';
 
     private const string INSERT_TRIGGER = 'base_authz_roles_custom_company_insert';
 
@@ -101,6 +104,8 @@ return new class extends Migration
                 ->update(['company_id' => $primaryCompany->id]);
         }
 
+        $this->assertRoleOwnershipIntegrity();
+        $this->createCompanyForeignKey();
         $this->createCustomRoleCompanyConstraint();
     }
 
@@ -112,14 +117,17 @@ return new class extends Migration
 
         if (DB::connection()->getDriverName() === 'pgsql') {
             DB::statement('ALTER TABLE base_authz_roles DROP CONSTRAINT IF EXISTS '.self::CHECK_CONSTRAINT);
-
-            return;
-        }
-
-        if (DB::connection()->getDriverName() === 'sqlite') {
+        } elseif (DB::connection()->getDriverName() === 'sqlite') {
             DB::statement('DROP TRIGGER IF EXISTS '.self::INSERT_TRIGGER);
             DB::statement('DROP TRIGGER IF EXISTS '.self::UPDATE_TRIGGER);
         }
+
+        $driver = DB::connection()->getDriverName();
+        Schema::table('base_authz_roles', function (Blueprint $table) use ($driver): void {
+            $driver === 'sqlite'
+                ? $table->dropForeign(['company_id'])
+                : $table->dropForeign(self::COMPANY_FOREIGN_KEY);
+        });
 
         // Backfilled role ownership remains explicit on rollback. Reverting it
         // to a deployment-global null would reintroduce cross-tenant access.
@@ -143,7 +151,7 @@ return new class extends Migration
         if ($driver === 'pgsql') {
             DB::statement(
                 'ALTER TABLE base_authz_roles ADD CONSTRAINT '.self::CHECK_CONSTRAINT
-                .' CHECK (is_system OR company_id IS NOT NULL)'
+                .' CHECK (is_system = (company_id IS NULL))'
             );
 
             return;
@@ -156,14 +164,56 @@ return new class extends Migration
         DB::statement(
             'CREATE TRIGGER '.self::INSERT_TRIGGER
             .' BEFORE INSERT ON base_authz_roles'
-            .' WHEN NEW.is_system = 0 AND NEW.company_id IS NULL'
-            ." BEGIN SELECT RAISE(ABORT, 'Custom roles require an owning company'); END"
+            .' WHEN (NEW.is_system = 0 AND NEW.company_id IS NULL)'
+            .' OR (NEW.is_system = 1 AND NEW.company_id IS NOT NULL)'
+            ." BEGIN SELECT RAISE(ABORT, 'Role ownership does not match its system flag'); END"
         );
         DB::statement(
             'CREATE TRIGGER '.self::UPDATE_TRIGGER
             .' BEFORE UPDATE ON base_authz_roles'
-            .' WHEN NEW.is_system = 0 AND NEW.company_id IS NULL'
-            ." BEGIN SELECT RAISE(ABORT, 'Custom roles require an owning company'); END"
+            .' WHEN (NEW.is_system = 0 AND NEW.company_id IS NULL)'
+            .' OR (NEW.is_system = 1 AND NEW.company_id IS NOT NULL)'
+            ." BEGIN SELECT RAISE(ABORT, 'Role ownership does not match its system flag'); END"
         );
+    }
+
+    private function assertRoleOwnershipIntegrity(): void
+    {
+        $invalidSystemRoleIds = DB::table('base_authz_roles')
+            ->where('is_system', true)
+            ->whereNotNull('company_id')
+            ->orderBy('id')
+            ->pluck('id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $missingCompanyRoleIds = DB::table('base_authz_roles as role')
+            ->leftJoin('companies', 'companies.id', '=', 'role.company_id')
+            ->where('role.is_system', false)
+            ->whereNull('companies.id')
+            ->orderBy('role.id')
+            ->pluck('role.id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if ($invalidSystemRoleIds !== [] || $missingCompanyRoleIds !== []) {
+            throw new RuntimeException(
+                'Cannot enforce role ownership integrity. System roles with a company: '
+                .($invalidSystemRoleIds === [] ? 'none' : implode(', ', $invalidSystemRoleIds))
+                .'; custom roles without an existing company: '
+                .($missingCompanyRoleIds === [] ? 'none' : implode(', ', $missingCompanyRoleIds))
+                .'. Repair these roles before retrying.'
+            );
+        }
+    }
+
+    private function createCompanyForeignKey(): void
+    {
+        Schema::table('base_authz_roles', function (Blueprint $table): void {
+            $table->foreign('company_id', self::COMPANY_FOREIGN_KEY)
+                ->references('id')
+                ->on('companies')
+                ->restrictOnDelete();
+        });
     }
 };

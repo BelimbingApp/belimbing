@@ -67,7 +67,11 @@ class Index extends Component implements ProvidesLaraPageContext
                         $systemRoles->where('base_authz_roles.is_system', true)
                             ->whereNull('base_authz_roles.company_id');
                     })
-                        ->orWhere('companies.tenant_id', app(TenantContext::class)->requireTenantId());
+                        ->orWhere(function ($customRoles): void {
+                            $customRoles
+                                ->where('companies.tenant_id', app(TenantContext::class)->requireTenantId())
+                                ->whereNull('companies.deleted_at');
+                        });
                 })
                 ->when($this->search, function ($query, $search): void {
                     $query->where(function ($q) use ($search): void {

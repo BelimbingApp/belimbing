@@ -16,6 +16,8 @@ use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
 {
+    private const string MENU_VISIBILITY_ATTRIBUTE = 'blb.tenancy.menu_visible';
+
     /**
      * Register services.
      *
@@ -50,16 +52,23 @@ class ServiceProvider extends BaseServiceProvider
 
     private static function tenancySurfaceVisible(): bool
     {
-        try {
-            if (Tenant::query()->count() > 1) {
-                return true;
-            }
+        $request = request();
 
-            return (bool) app(SettingsService::class)->get('tenancy.show_management');
+        if ($request->attributes->has(self::MENU_VISIBILITY_ATTRIBUTE)) {
+            return (bool) $request->attributes->get(self::MENU_VISIBILITY_ATTRIBUTE);
+        }
+
+        try {
+            $visible = Tenant::query()->count() > 1
+                || (bool) app(SettingsService::class)->get('tenancy.show_management');
         } catch (\Throwable) {
             // Pre-migration or pre-seed: keep the surface hidden.
-            return false;
+            $visible = false;
         }
+
+        $request->attributes->set(self::MENU_VISIBILITY_ATTRIBUTE, $visible);
+
+        return $visible;
     }
 
     /**

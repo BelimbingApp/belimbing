@@ -11,6 +11,7 @@ use App\Base\Authz\Models\RoleCapability;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
@@ -480,6 +481,47 @@ test('custom role creation requires an owning company', function (): void {
     expect(Role::query()->where('code', 'unowned_custom')->exists())->toBeFalse();
 });
 
+test('role ownership integrity rejects company-scoped system roles', function (): void {
+    $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001007_scope_custom_authz_roles.php');
+    $migration->down();
+    $company = Company::factory()->create();
+    $roleId = DB::table('base_authz_roles')->insertGetId([
+        'company_id' => $company->id,
+        'name' => 'Invalid Scoped System Role',
+        'code' => 'invalid_scoped_system_role',
+        'description' => null,
+        'is_system' => true,
+        'grant_all' => false,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    try {
+        expect(fn () => $migration->up())->toThrow(
+            RuntimeException::class,
+            "System roles with a company: {$roleId}",
+        );
+    } finally {
+        DB::table('base_authz_roles')->where('id', $roleId)->delete();
+        $migration->up();
+    }
+});
+
+test('custom role ownership references an existing company', function (): void {
+    $missingCompanyId = (int) Company::query()->max('id') + 1_000_000;
+
+    expect(fn () => DB::table('base_authz_roles')->insert([
+        'company_id' => $missingCompanyId,
+        'name' => 'Missing Company Role',
+        'code' => 'missing_company_role',
+        'description' => null,
+        'is_system' => false,
+        'grant_all' => false,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]))->toThrow(QueryException::class);
+});
+
 test('legacy custom global roles are anchored to the operator tenant during migration', function (): void {
     $migration = require app_path('Core/Company/Database/Migrations/0200_01_07_001007_scope_custom_authz_roles.php');
     $migration->down();
@@ -552,6 +594,22 @@ test('custom roles from another tenant do not appear in user role assignment lis
 
     Livewire::test('admin.users.show', ['user' => $targetUser])
         ->assertDontSee('Custom Global Role');
+});
+
+test('roles owned by a deleted company do not appear in the role index', function (): void {
+    $admin = createRoleTestAdmin();
+    $this->actingAs($admin);
+    $company = Company::factory()->create();
+    Role::query()->create([
+        'company_id' => $company->id,
+        'name' => 'Deleted Company Role',
+        'code' => 'deleted_company_role',
+        'is_system' => false,
+    ]);
+    $company->delete();
+
+    Livewire::test('admin.roles.index')
+        ->assertDontSee('Deleted Company Role');
 });
 
 test('cross-company roles appear in user role assignment list', function (): void {
