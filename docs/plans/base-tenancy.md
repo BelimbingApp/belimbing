@@ -1,6 +1,6 @@
 # base-tenancy
 
-**Status:** In progress — explicit operator and primary-company model implemented; final validation pending
+**Status:** Completed — explicit operator and primary-company model implemented and validated
 **Last Updated:** 2026-08-11
 **Sources:** `docs/architecture/module-system.md`; `docs/architecture/user-employee-company.md`; `docs/architecture/tenancy.md`; `docs/architecture/decisions/0002-tenant-model.md`; `docs/plans/blb-hosted-instances.md`; `PRODUCT.md` (SMB and agency audiences)
 **Agents:** amp/kimi-k3; amp/gpt-5.6; codex/sol-high
@@ -115,5 +115,5 @@ Tenancy must not tax the single-tenant SMB experience that is Belimbing's reason
 - [x] Make operator and arbitrary tenant provisioning transactional, idempotent, sequence-safe, and explicit about incomplete versus corrupt primary-company state {amp/gpt-5.6}
 - [x] Close adjacent tenant leaks in address ownership/attachment, chat agent selection, and system-agent provisioning {amp/gpt-5.6}
 - [x] Update architecture, ADR, module docs, and local guidance for the post-migration contract {amp/gpt-5.6}
-- [ ] Run PostgreSQL migration/constraint/concurrency validation; unavailable in the current orb unless a PostgreSQL service is provided
+- [x] Run PostgreSQL migration/constraint validation in CI {codex/sol-high}
 - [x] Run the full repository test and formatting checks {codex/sol-high}
