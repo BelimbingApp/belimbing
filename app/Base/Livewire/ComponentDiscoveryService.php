@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Livewire\Component;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use ReflectionClass;
 use SplFileInfo;
 
 class ComponentDiscoveryService
@@ -112,6 +113,15 @@ class ComponentDiscoveryService
                 if (! class_exists($class) || ! is_subclass_of($class, Component::class)) {
                     continue;
                 }
+
+                // An abstract base (SettingsForm, SearchablePaginatedList)
+                // carries the family's view() call but can never be mounted.
+                // Registering it hands Livewire a name that fatals with
+                // "cannot instantiate abstract class" the moment anything
+                // renders it.
+                if ((new ReflectionClass($class))->isAbstract()) {
+                    continue;
+                }
             } catch (\Throwable $exception) {
                 $this->reportBrokenClass($class, $exception);
 
@@ -187,7 +197,9 @@ class ComponentDiscoveryService
      * view('core-user::livewire.admin.companies.index') gets the name
      * 'admin.companies.index'.
      *
-     * Falls back to VIEW_NAME constant if no view() call is found.
+     * Falls back to VIEW_NAME constant if no view() call is found. A component
+     * that inherits render() from a family base has neither, and is named
+     * after its class by fallbackComponentName().
      *
      * @param  string  $filePath  Absolute path to the PHP class file
      */

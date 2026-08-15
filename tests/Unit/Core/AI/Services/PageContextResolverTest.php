@@ -4,11 +4,12 @@ use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\DTO\PageContext;
 use App\Core\AI\Services\PageContextResolver;
 use App\Core\Employee\Models\Employee;
+use Livewire\Component;
 use Tests\TestCase;
 
 uses(TestCase::class);
 
-class PageContextResolverTestComponent implements ProvidesLaraPageContext
+class PageContextResolverTestComponent extends Component implements ProvidesLaraPageContext
 {
     public static ?string $fixedTab = null;
 
@@ -30,13 +31,14 @@ class PageContextResolverTestComponent implements ProvidesLaraPageContext
 beforeEach(function (): void {
     PageContextResolverTestComponent::$fixedTab = null;
 
-    $route = app('router')
-        ->get('page-context-resolver-test/{owner}/{slug}', fn (): string => '')
+    // Register the route the way every BLB route registers a page component:
+    // Route::get($uri, Component::class). Stamping 'livewire_component' by hand
+    // — as this test used to — produces a route shape the application never
+    // creates, which is how the resolver stayed green while finding nothing on
+    // a real request.
+    app('router')
+        ->get('page-context-resolver-test/{owner}/{slug}', PageContextResolverTestComponent::class)
         ->name('page-context-resolver-test.show');
-
-    $route->setAction(array_merge($route->getAction(), [
-        'livewire_component' => PageContextResolverTestComponent::class,
-    ]));
 
     app('router')->getRoutes()->refreshNameLookups();
 

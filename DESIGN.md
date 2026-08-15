@@ -70,6 +70,22 @@ Same thing, same look, same place — reuse established patterns, placement, and
 
 Users always know what's happening and what happened. Show work in flight — loading, waiting, blocked; give every action visible, timely response; outcomes stay honest and transparent; never fail silently.
 
+## Fail well
+
+Never render a bare 500 if we can help it. A failed action should leave the user where they were, not replace their screen with an error page — `App\Base\Livewire\RecoverFromActionFailure` does this for every Livewire action, so do not hand-roll a `try/catch` to say the same thing. Reserve a full error page for failures that genuinely end the request; those live in `resources/core/views/errors/`.
+
+Every failure message answers three things, in this order:
+
+- **What happened**, in the user's terms — the screen, the action, the thing they were trying to do; never the exception class.
+- **Whose fault it was and what it cost.** Usually neither theirs nor anything: say so plainly. Silence here is what makes users assume the worst.
+- **What to do next** — one concrete action, plus who to ask when the fix is not theirs to make.
+
+- **Recover before you report.** If the system can complete the request, complete it and log the defect where a developer will see it. Users are not an error-reporting channel.
+- **Name the one thing that unblocks the next step.** An identifier a user can read aloud to their administrator earns its place; a stack trace does not. Everything else belongs in the log and the diagnostics buffer.
+- **Write for every role at once.** One honest message for whoever is looking, and an operator's next step alongside it when there is one — not a technical page and a friendly page.
+- **One failure, one page.** No second empty card, no action that just replays the error.
+- **Promise only what you can verify.** An action that failed partway did not necessarily leave the data untouched — say it did not finish, not that nothing changed.
+
 ## Reduce anxiety
 
 Calm software reduces anxiety; it does not manufacture urgency or FOMO. No nagging, badge spam, false scarcity, or engagement dark patterns — trust comes from steady, honest state, not stimulation.
