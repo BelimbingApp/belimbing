@@ -241,7 +241,7 @@ abstract class SettingsForm extends Component
         return is_scalar($value) ? (string) $value : '';
     }
 
-    private function authorizeManage(): void
+    protected function authorizeManage(): void
     {
         $actor = Actor::forUser(Auth::user());
         $authorization = app(AuthorizationService::class);

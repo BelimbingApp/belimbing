@@ -43,7 +43,7 @@ return [
             'encrypted' => false,
             'rules' => ['nullable', 'string', 'max:32'],
             'label' => 'SMTP scheme',
-            'help' => 'Optional transport scheme such as smtp or smtps.',
+            'help' => 'Optional transport scheme such as smtp or smtps. Follow your SMTP provider\'s TLS guidance.',
         ],
         MailRuntimeSettings::HOST_KEY => [
             'type' => 'string',
@@ -73,7 +73,7 @@ return [
             'encrypted' => true,
             'rules' => ['nullable', 'string', 'max:255'],
             'label' => 'SMTP username',
-            'help' => 'Encrypted username used to authenticate with the SMTP server.',
+            'help' => 'Encrypted username used to authenticate with the SMTP server, when required.',
         ],
         MailRuntimeSettings::PASSWORD_KEY => [
             'type' => 'string',
@@ -83,7 +83,7 @@ return [
             'encrypted' => true,
             'rules' => ['nullable', 'string', 'max:4096'],
             'label' => 'SMTP password',
-            'help' => 'Encrypted password used to authenticate with the SMTP server.',
+            'help' => 'Encrypted password, token, or app password used to authenticate with the SMTP server.',
         ],
         MailRuntimeSettings::FROM_ADDRESS_KEY => [
             'type' => 'string',
@@ -164,7 +164,7 @@ return [
                 [
                     'key' => MailRuntimeSettings::SCHEME_KEY,
                     'type' => 'text',
-                    'placeholder' => 'smtp',
+                    'placeholder' => 'smtp or smtps',
                 ],
                 [
                     'key' => MailRuntimeSettings::HOST_KEY,
@@ -177,14 +177,19 @@ return [
                 [
                     'key' => MailRuntimeSettings::USERNAME_KEY,
                     'type' => 'password',
+                    'placeholder' => 'SMTP username',
+                    'show_reveal_button' => true,
                 ],
                 [
                     'key' => MailRuntimeSettings::PASSWORD_KEY,
                     'type' => 'password',
+                    'placeholder' => 'SMTP password or token',
+                    'show_reveal_button' => true,
                 ],
                 [
                     'key' => MailRuntimeSettings::FROM_ADDRESS_KEY,
                     'type' => 'email',
+                    'placeholder' => 'noreply@example.com',
                 ],
                 [
                     'key' => MailRuntimeSettings::FROM_NAME_KEY,

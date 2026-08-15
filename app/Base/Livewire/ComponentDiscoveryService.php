@@ -7,6 +7,7 @@ use App\Base\Foundation\Services\DomainState;
 use App\Base\Support\AppPath;
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
@@ -121,8 +122,32 @@ class ComponentDiscoveryService
 
             if ($name !== null) {
                 $components[$name] = $class;
+            } else {
+                // Page components may inherit render() from a shared base
+                // component. Their concrete class still needs an explicit
+                // registry entry because Livewire routes receive the class
+                // name and resolve it through the component registry.
+                $components[$this->fallbackComponentName($class)] = $class;
             }
         }
+    }
+
+    /**
+     * Derive the same stable kebab/dot shape Livewire uses for an unregistered
+     * class, while retaining the full namespace so sibling modules cannot
+     * collide.
+     */
+    private function fallbackComponentName(string $class): string
+    {
+        $segments = array_map(
+            static fn (string $segment): string => Str::kebab($segment),
+            explode('\\', trim($class, '\\')),
+        );
+        $name = implode('.', $segments);
+
+        return str_ends_with($name, '.index')
+            ? substr($name, 0, -strlen('.index'))
+            : $name;
     }
 
     /**

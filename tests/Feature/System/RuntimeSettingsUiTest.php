@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Livewire\ComponentDiscoveryService;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Support\SettingsFieldValue;
 use App\Base\System\Livewire\Email\Index as EmailSettings;
@@ -42,7 +43,23 @@ it('enforces the settings group capability at the page boundary', function (): v
     $this->get(route('admin.system.settings.index'))->assertForbidden();
 });
 
-it('stores mail credentials encrypted and keeps saved secrets write-only', function (): void {
+it('renders the email settings page through its registered route', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $this->get(route('admin.system.email.index'))
+        ->assertOk()
+        ->assertSee('SMTP host')
+        ->assertSee('SMTP port')
+        ->assertSee('SMTP username')
+        ->assertSee('SMTP password')
+        ->assertDontSee('Use Gmail SMTP')
+        ->assertDontSee('Use Cloudflare SMTP');
+
+    expect(app(ComponentDiscoveryService::class)->discover())
+        ->toHaveKey('app.base.system.livewire.email', EmailSettings::class);
+});
+
+it('stores mail credentials encrypted and offers reveal controls for saved secrets', function (): void {
     $username = SettingsFieldValue::formKey(MailRuntimeSettings::USERNAME_KEY);
     $password = SettingsFieldValue::formKey(MailRuntimeSettings::PASSWORD_KEY);
 
@@ -66,8 +83,9 @@ it('stores mail credentials encrypted and keeps saved secrets write-only', funct
     }
 
     Livewire::test(EmailSettings::class)
-        ->assertSet("values.{$username}", '******')
-        ->assertSet("values.{$password}", '******');
+        ->assertSet("values.{$username}", 'smtp-user')
+        ->assertSet("values.{$password}", 'smtp-password')
+        ->assertSee('Show secret');
 });
 
 it('projects declared system and mail settings into framework runtime config', function (): void {
