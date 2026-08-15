@@ -2,6 +2,7 @@
 
 namespace App\Core\AI\Services;
 
+use App\Base\Livewire\RouteComponent;
 use App\Core\AI\Contracts\ProvidesLaraPageContext;
 use App\Core\AI\Contracts\ProvidesLaraPageSnapshot;
 use App\Core\AI\DTO\PageContext;
@@ -59,12 +60,9 @@ class PageContextResolver
             return null;
         }
 
-        $componentClass = $route->getAction('livewire_component');
+        $componentClass = RouteComponent::classFor($route);
 
-        if (is_string($componentClass)
-            && class_exists($componentClass)
-            && is_subclass_of($componentClass, ProvidesLaraPageContext::class)
-        ) {
+        if ($componentClass !== null && is_subclass_of($componentClass, ProvidesLaraPageContext::class)) {
             return $this->resolveFromComponent($componentClass, $route, $url);
         }
 
@@ -82,12 +80,9 @@ class PageContextResolver
             return null;
         }
 
-        $componentClass = $route->getAction('livewire_component');
+        $componentClass = RouteComponent::classFor($route);
 
-        if (! is_string($componentClass)
-            || ! class_exists($componentClass)
-            || ! is_subclass_of($componentClass, ProvidesLaraPageSnapshot::class)
-        ) {
+        if ($componentClass === null || ! is_subclass_of($componentClass, ProvidesLaraPageSnapshot::class)) {
             return null;
         }
 
