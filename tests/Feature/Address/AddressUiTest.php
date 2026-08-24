@@ -5,6 +5,7 @@ use App\Core\Address\Exceptions\AddressTenantAssignmentException;
 use App\Core\Address\Models\Address;
 use App\Core\Address\Models\Addressable;
 use App\Core\Company\Models\Company;
+use App\Core\Employee\Models\Employee;
 use App\Core\Geonames\Models\Admin1;
 use App\Core\Geonames\Models\Country;
 use App\Core\Geonames\Models\Postcode;
@@ -234,5 +235,58 @@ test('address tenancy migration preflight rejects unowned addresses when multipl
     } finally {
         DB::table('addresses')->where('id', $addressId)->delete();
         $migration->up();
+    }
+});
+
+test('address tenancy migration backfills links recorded under pre-topology morph names', function (): void {
+    $company = Company::factory()->create();
+    $employee = Employee::factory()->create(['company_id' => $company->id]);
+    $migration = require app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php');
+    $migration->down();
+
+    $companyAddressId = DB::table('addresses')->insertGetId([
+        'label' => 'Legacy Company Morph Address',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $employeeAddressId = DB::table('addresses')->insertGetId([
+        'label' => 'Legacy Employee Morph Address',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    // Morph names as written before the four-root topology normalization,
+    // which sorts after this migration and so has not rewritten them yet
+    // when a catch-up migrate run reaches the tenancy backfill.
+    DB::table('addressables')->insert([
+        [
+            'address_id' => $companyAddressId,
+            'addressable_type' => 'App\\Modules\\Core\\Company\\Models\\Company',
+            'addressable_id' => $company->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+        [
+            'address_id' => $employeeAddressId,
+            'addressable_type' => 'App\\Modules\\Core\\Employee\\Models\\Employee',
+            'addressable_id' => $employee->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ],
+    ]);
+
+    try {
+        $migration->up();
+
+        expect((int) DB::table('addresses')->where('id', $companyAddressId)->value('tenant_id'))
+            ->toBe((int) $company->tenant_id)
+            ->and((int) DB::table('addresses')->where('id', $employeeAddressId)->value('tenant_id'))
+            ->toBe((int) $company->tenant_id);
+    } finally {
+        DB::table('addressables')->whereIn('address_id', [$companyAddressId, $employeeAddressId])->delete();
+        DB::table('addresses')->whereIn('id', [$companyAddressId, $employeeAddressId])->delete();
+
+        if (! Schema::hasColumn('addresses', 'tenant_id')) {
+            $migration->up();
+        }
     }
 });

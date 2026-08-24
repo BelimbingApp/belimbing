@@ -65,6 +65,77 @@ it('marks retained tenant id 1 when upgrading a legacy installation', function (
         ->and(Tenant::query()->findOrFail($currentOperator->id)->isPlatformOperator())->toBeFalse();
 });
 
+it('retains bootstrap tenant id 1 when one migrate run catches up across releases', function (): void {
+    $currentOperator = Tenant::requirePlatformOperator();
+    DB::table('tenants')->where('id', $currentOperator->id)->update(['is_platform_operator' => false]);
+    $migration = require app_path('Base/Tenancy/Database/Migrations/0100_01_25_000001_mark_platform_operator_tenant.php');
+    $migration->down();
+    DB::table('tenants')->insert([
+        'id' => 1,
+        'name' => 'Retained Legacy Operator',
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    $primaryAssignments = DB::table('tenant_primary_companies')
+        ->where('tenant_id', $currentOperator->id)
+        ->get();
+    DB::table('tenant_primary_companies')->where('tenant_id', $currentOperator->id)->delete();
+    DB::table('companies')->where('tenant_id', $currentOperator->id)->update(['tenant_id' => 1]);
+    DB::table('addresses')->where('tenant_id', $currentOperator->id)->update(['tenant_id' => 1]);
+    foreach ($primaryAssignments as $assignment) {
+        DB::table('tenant_primary_companies')->insert([
+            ...(array) $assignment,
+            'tenant_id' => 1,
+        ]);
+    }
+    DB::table('tenants')->where('id', $currentOperator->id)->delete();
+
+    // Catch-up signature: the tenants migration is the most recently recorded
+    // row while a row from an earlier batch proves a previous migrate run, so
+    // the sole ID-1 row is retained legacy data, not a bootstrap artifact.
+    $tenantsLedgerRow = DB::table('migrations')
+        ->where('migration', '0100_01_25_000000_create_tenants_table')
+        ->first();
+    DB::table('migrations')->where('id', '>', $tenantsLedgerRow->id)->delete();
+    DB::table('migrations')
+        ->where('id', $tenantsLedgerRow->id)
+        ->update(['batch' => $tenantsLedgerRow->batch + 1]);
+
+    $migration->up();
+
+    expect(DB::table('tenants')->where('id', 1)->exists())->toBeTrue()
+        ->and(Tenant::requirePlatformOperator()->id)->toBe(1);
+});
+
+it('still removes the bootstrap artifact on a fresh replay', function (): void {
+    $currentOperator = Tenant::requirePlatformOperator();
+    DB::table('tenants')->where('id', $currentOperator->id)->update(['is_platform_operator' => false]);
+    $migration = require app_path('Base/Tenancy/Database/Migrations/0100_01_25_000001_mark_platform_operator_tenant.php');
+    $migration->down();
+    DB::table('tenant_primary_companies')->where('tenant_id', $currentOperator->id)->delete();
+    DB::table('companies')->where('tenant_id', $currentOperator->id)->delete();
+    DB::table('tenants')->where('id', $currentOperator->id)->delete();
+    DB::table('tenants')->insert([
+        'id' => 1,
+        'name' => 'Bootstrap Artifact',
+        'status' => 'active',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    // Fresh-replay signature: the tenants migration is the most recently
+    // recorded row and the whole ledger belongs to one batch.
+    $tenantsLedgerRow = DB::table('migrations')
+        ->where('migration', '0100_01_25_000000_create_tenants_table')
+        ->first();
+    DB::table('migrations')->where('id', '>', $tenantsLedgerRow->id)->delete();
+
+    $migration->up();
+
+    expect(DB::table('tenants')->where('id', 1)->exists())->toBeFalse();
+});
+
 it('requires factories to resolve an explicit tenant assignment', function (): void {
     $company = Company::factory()->create(['tenant_id' => platformOperatorTenant()->id]);
 

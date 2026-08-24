@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use Illuminate\Database\Migrations\Migration;
@@ -120,12 +121,9 @@ return new class extends Migration
         $tenantIds = [];
 
         foreach ($links as $link) {
-            $tenantId = match ($link->addressable_type) {
-                Company::class => DB::table('companies')->where('id', $link->addressable_id)->value('tenant_id'),
-                Employee::class => DB::table('employees')
-                    ->join('companies', 'companies.id', '=', 'employees.company_id')
-                    ->where('employees.id', $link->addressable_id)
-                    ->value('companies.tenant_id'),
+            $tenantId = match ($this->normalizeMorphClass($link->addressable_type)) {
+                Company::class => $this->companyTenantId((int) $link->addressable_id),
+                Employee::class => $this->employeeTenantId((int) $link->addressable_id),
                 default => throw new RuntimeException(
                     'Cannot backfill address '.$addressId.' because addressable type '
                     .$link->addressable_type.' has no tenant ownership mapping.'
@@ -140,6 +138,53 @@ return new class extends Migration
         sort($tenantIds);
 
         return array_values(array_unique($tenantIds));
+    }
+
+    /**
+     * Morph rows written before 2026_08_05_000000_normalize_four_root_application_topology
+     * still carry pre-topology class names. That normalization migration sorts
+     * after this file, so a database catching up across both releases in one
+     * migrate run reads the legacy names here first.
+     */
+    private function normalizeMorphClass(string $type): string
+    {
+        return str_replace('App\\Modules\\Core\\', 'App\\Core\\', $type);
+    }
+
+    private function companyTenantId(int $companyId): mixed
+    {
+        if ($this->companiesCarryTenantId()) {
+            return DB::table('companies')->where('id', $companyId)->value('tenant_id');
+        }
+
+        return DB::table('companies')->where('id', $companyId)->exists()
+            ? Tenant::LICENSEE_TENANT_ID
+            : null;
+    }
+
+    private function employeeTenantId(int $employeeId): mixed
+    {
+        $employeeCompany = DB::table('employees')
+            ->join('companies', 'companies.id', '=', 'employees.company_id')
+            ->where('employees.id', $employeeId);
+
+        if ($this->companiesCarryTenantId()) {
+            return $employeeCompany->value('companies.tenant_id');
+        }
+
+        return $employeeCompany->exists() ? Tenant::LICENSEE_TENANT_ID : null;
+    }
+
+    /**
+     * companies.tenant_id is added by 0200_01_07_001003, which sorts after this
+     * file. A database upgrading across both releases in one migrate run has no
+     * column to read yet; on that schema every company still belongs to the
+     * legacy licensee tenant — the same value 0200_01_07_001003 subsequently
+     * backfills as its column default.
+     */
+    private function companiesCarryTenantId(): bool
+    {
+        return Schema::hasColumn('companies', 'tenant_id');
     }
 
     private function lockBackfillInputs(): void
