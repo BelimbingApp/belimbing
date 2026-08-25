@@ -2,6 +2,7 @@
 
 namespace App\Core\Employee\Livewire\Employees;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Base\Tenancy\Contracts\TenantContext;
@@ -19,6 +20,7 @@ use Livewire\Component;
 
 class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPageSnapshot
 {
+    use ChecksCapabilityAuthorization;
     use ProvidesEmployeeShowLaraContext;
     use SavesValidatedFields;
     use TogglesSort;
@@ -122,6 +124,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveField(string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $rules = [
             'full_name' => ['required', 'string', 'max:255'],
             'short_name' => ['nullable', 'string', 'max:255'],
@@ -137,6 +143,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveStatus(string $status): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         if (! in_array($status, ['pending', 'probation', 'active', 'inactive', 'terminated'])) {
             $this->notifyError(__('The selected employee status is not valid.'));
 
@@ -150,6 +160,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveEmployeeType(string $type): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $exists = EmployeeType::query()->where('code', $type)->exists();
         if (! $exists) {
             $this->notifyError(__('The selected employee type is not valid.'));
@@ -171,6 +185,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveDepartment(?int $departmentId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         if ($departmentId !== null && ! $this->belongsToSameCompany(Department::class, $departmentId)) {
             $this->notifyError(__('The selected department is not available for this tenant.'));
 
@@ -185,6 +203,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveSupervisor(?int $supervisorId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         if ($supervisorId !== null && ! $this->belongsToSameCompany(Employee::class, $supervisorId)) {
             $this->notifyError(__('The selected supervisor is not available for this tenant.'));
 
@@ -216,6 +238,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveUser(?int $userId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         User::query()
             ->where('employee_id', $this->employee->id)
             ->when($userId !== null, fn ($query) => $query->whereKeyNot($userId))
@@ -247,6 +273,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function addSubordinate(int $employeeId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $target = Employee::query()->find($employeeId);
         if (! $target || $target->company_id !== $this->employee->company_id) {
             $this->notifyError(__('The selected subordinate is not valid for this employee.'));
@@ -262,6 +292,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function removeSubordinate(int $employeeId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $target = Employee::query()
             ->where('id', $employeeId)
             ->where('supervisor_id', $this->employee->id)
@@ -279,6 +313,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function attachAddress(): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         if ($this->attachAddressId === 0) {
             $this->notifyError(__('Choose an address before attaching.'));
 
@@ -310,6 +348,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function unlinkAddress(int $addressId): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $this->employee->addresses()->detach($addressId);
         $this->employee->load('addresses');
         $this->notify(__('Address unlinked.'));
@@ -317,6 +359,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function updateAddressPivot(int $addressId, string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $allowed = ['is_primary', 'priority'];
         if (! in_array($field, $allowed)) {
             $this->notifyError(__('The selected address setting is not valid.'));
@@ -337,6 +383,10 @@ class Show extends Component implements ProvidesLaraPageContext, ProvidesLaraPag
 
     public function saveAddressKinds(int $addressId, array $kinds): void
     {
+        if (! $this->checkCapability('admin.employee.update')) {
+            return;
+        }
+
         $valid = ['headquarters', 'billing', 'shipping', 'branch', 'other'];
         $kinds = array_values(array_intersect($kinds, $valid));
 
