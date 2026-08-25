@@ -23,6 +23,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\TrustProxies;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
@@ -182,6 +183,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ResolveTenantContext::class,
             SecurityHeaders::class,
         ]);
+
+        // Tenant-aware implicit bindings call TenantContext::requireTenantId().
+        // Keep tenant resolution after authentication (so the user's company
+        // is available) but before SubstituteBindings invokes those models.
+        $middleware->prependToPriorityList(
+            SubstituteBindings::class,
+            ResolveTenantContext::class,
+        );
 
         $middleware->redirectGuestsTo(fn () => route('login'));
     })
