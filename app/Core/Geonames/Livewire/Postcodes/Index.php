@@ -2,7 +2,7 @@
 
 namespace App\Core\Geonames\Livewire\Postcodes;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -17,7 +17,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use SelectsPerPage;
     use TogglesSort;
@@ -154,43 +154,47 @@ class Index extends Component
 
     public function import(): void
     {
-        if (empty($this->selectedCountries)) {
-            $this->notifyError(__('Please select at least one country to import.'));
+        $this->runIfCapable('admin.geonames.manage', function (): void {
+            if (empty($this->selectedCountries)) {
+                $this->notifyError(__('Please select at least one country to import.'));
 
-            return;
-        }
+                return;
+            }
 
-        $countryCodes = array_values(array_unique(array_map('strtoupper', $this->selectedCountries)));
-        sort($countryCodes);
+            $countryCodes = array_values(array_unique(array_map('strtoupper', $this->selectedCountries)));
+            sort($countryCodes);
 
-        $this->selectedCountries = [];
-        $this->showCountryPicker = false;
+            $this->selectedCountries = [];
+            $this->showCountryPicker = false;
 
-        try {
-            app(PostcodeSeeder::class)->run($countryCodes);
-            $this->notify(__('Import completed for :count country(s).', ['count' => count($countryCodes)]));
-        } catch (\Throwable $e) {
-            $this->notifyError(__('Import failed: :message', ['message' => $e->getMessage()]));
-        }
+            try {
+                app(PostcodeSeeder::class)->run($countryCodes);
+                $this->notify(__('Import completed for :count country(s).', ['count' => count($countryCodes)]));
+            } catch (\Throwable $e) {
+                $this->notifyError(__('Import failed: :message', ['message' => $e->getMessage()]));
+            }
+        });
     }
 
     public function update(): void
     {
-        $importedIsos = DB::table('geonames_postcodes')
-            ->distinct()
-            ->pluck('country_iso')
-            ->all();
+        $this->runIfCapable('admin.geonames.manage', function (): void {
+            $importedIsos = DB::table('geonames_postcodes')
+                ->distinct()
+                ->pluck('country_iso')
+                ->all();
 
-        if (empty($importedIsos)) {
-            return;
-        }
+            if (empty($importedIsos)) {
+                return;
+            }
 
-        try {
-            app(PostcodeSeeder::class)->run($importedIsos);
-            $this->notify(__('Update completed for :count country(s).', ['count' => count($importedIsos)]));
-        } catch (\Throwable $e) {
-            $this->notifyError(__('Update failed: :message', ['message' => $e->getMessage()]));
-        }
+            try {
+                app(PostcodeSeeder::class)->run($importedIsos);
+                $this->notify(__('Update completed for :count country(s).', ['count' => count($importedIsos)]));
+            } catch (\Throwable $e) {
+                $this->notifyError(__('Update failed: :message', ['message' => $e->getMessage()]));
+            }
+        });
     }
 
     public function toggleCountryPicker(): void

@@ -1,4 +1,5 @@
 <?php
+
 return [
     'domains' => [
         'core' => 'Core platform modules',
@@ -7,5 +8,6 @@ return [
     'capabilities' => [
         'admin.geonames.view',
         'admin.geonames.list',
+        'admin.geonames.manage',
     ],
 ];
