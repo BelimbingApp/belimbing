@@ -8,10 +8,12 @@ use App\Base\AI\DTO\ExecutionControls;
 use App\Base\AI\Enums\AiApiType;
 use App\Base\AI\Livewire\Concerns\ResolvesAvailableModels;
 use App\Base\AI\Services\LlmClient;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\User\Models\Query;
 use App\Core\User\Models\User;
@@ -33,7 +35,7 @@ use Livewire\WithPagination;
  */
 class Show extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResolvesAvailableModels;
     use TogglesSort;
     use WithPagination;
@@ -91,6 +93,8 @@ class Show extends Component
     public function mount(string $slug): void
     {
         if ($slug === '_new') {
+            abort_unless($this->canEditQueries(), 403);
+
             $this->isNew = true;
             $this->editName = __('Untitled Query');
             $this->editSql = '';
@@ -108,9 +112,11 @@ class Show extends Component
             $this->editPrompt = $this->query->prompt ?? '';
         }
 
-        $this->selectedModelId = $this->resolveDefaultCompositeModelId(
-            (int) auth()->user()?->getCompanyId()
-        );
+        if ($this->canEditQueries()) {
+            $this->selectedModelId = $this->resolveDefaultCompositeModelId(
+                (int) auth()->user()?->getCompanyId()
+            );
+        }
     }
 
     /**
@@ -121,6 +127,10 @@ class Show extends Component
      */
     public function save(): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         try {
             $validated = validator([
                 'name' => $this->editName,
@@ -179,6 +189,10 @@ class Show extends Component
      */
     public function delete(): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         if ($this->isNew || $this->query === null) {
             session()->flash('success', __('Query discarded.'));
             $this->redirect(route('admin.system.database-queries.index'), navigate: true);
@@ -210,6 +224,10 @@ class Show extends Component
      */
     public function runQuery(): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         if (trim($this->editSql) === '') {
             $this->error = __('Please enter or generate a SQL query first.');
 
@@ -229,6 +247,10 @@ class Show extends Component
      */
     public function generateSql(): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         $error = $this->validateGenerateSqlInput();
 
         if ($error !== null) {
@@ -359,6 +381,10 @@ class Show extends Component
      */
     public function shareWith(int $userId): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         if ($this->isNew || $this->query === null) {
             return;
         }
@@ -417,7 +443,7 @@ class Show extends Component
      */
     public function shareableUsers(): array
     {
-        if ($this->shareSearch === '') {
+        if (! $this->canEditQueries() || $this->shareSearch === '') {
             return [];
         }
 
@@ -442,6 +468,7 @@ class Show extends Component
 
     public function render(): View
     {
+        $canEdit = $this->canEditQueries();
         $columns = [];
         $rows = [];
         $total = 0;
@@ -491,6 +518,7 @@ class Show extends Component
         $savedPrompt = $this->query?->prompt ?? '';
 
         return view('livewire.admin.system.database-queries.show', [
+            'canEdit' => $canEdit,
             'columns' => $columns,
             'rows' => $rows,
             'total' => $total,
@@ -498,14 +526,24 @@ class Show extends Component
             'currentPage' => $currentPage,
             'lastPage' => $lastPage,
             'error' => $this->error,
-            'availableModels' => $this->loadAvailableModels(
-                (int) auth()->user()?->getCompanyId()
-            ),
+            'availableModels' => $canEdit
+                ? $this->loadAvailableModels((int) auth()->user()?->getCompanyId())
+                : [],
             'savedName' => $savedName,
             'savedSql' => $savedSql,
             'savedDescription' => $savedDescription,
             'savedPrompt' => $savedPrompt,
         ]);
+    }
+
+    private function canEditQueries(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.system.database-table.edit')
+                ->allowed;
     }
 
     /**

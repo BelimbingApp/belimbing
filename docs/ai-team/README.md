@@ -30,7 +30,8 @@ This page is mission-agnostic: claiming, review, merging, cleanup, stewardship,
 and stopping do not depend on what the repository builds. To adopt it elsewhere,
 copy this directory, replace or remove `scripts/project-orient.sh`, and create
 the fixed board labels used below:
-`task:ready`, `task:blocked`, `task:done`, `hold:author`, `hold:review`, and
+`task:ready`, `task:active`, `task:review`, `task:blocked`, `task:done`,
+`hold:author`, `hold:review`, and
 `ops:halt`, `ops:steward`. The claim mechanism creates `agent:<id>` labels as
 lanes appear. Run the mechanism tests before enabling the scheduled sweep.
 
