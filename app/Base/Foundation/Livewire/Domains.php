@@ -3,6 +3,7 @@
 namespace App\Base\Foundation\Livewire;
 
 use App\Base\Foundation\ApplicationTopology;
+use App\Base\Foundation\Exceptions\SourceRepositoryInstallException;
 use App\Base\Foundation\Livewire\Concerns\AuthorizesDomainManagement;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\ModuleManifest\BelimbingAppCatalogService;
@@ -10,10 +11,12 @@ use App\Base\Foundation\ModuleManifest\ModuleManifest;
 use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\ExtensionInstaller;
+use App\Base\Foundation\Services\SourceRepositoryInstaller;
 use App\Base\Software\Inventory\InstalledSource;
 use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Defer;
 use Livewire\Component;
 
@@ -57,6 +60,14 @@ class Domains extends Component
      */
     public string $uninstallKind = 'domain';
 
+    public string $repositoryUrl = '';
+
+    public string $repositoryKind = InstalledSource::KIND_EXTENSION;
+
+    public string $repositoryFolder = '';
+
+    public string $repositoryCredentialOwner = '';
+
     public function mount(?string $tab = null): void
     {
         $resolved = $tab ?? request()->query('tab') ?? $this->tabFromReferer();
@@ -88,6 +99,53 @@ class Domains extends Component
     public function setTab(string $tab): void
     {
         $this->tab = in_array($tab, ['installed', 'available'], true) ? $tab : 'installed';
+    }
+
+    public function installRepository(SourceRepositoryInstaller $installer): void
+    {
+        $this->authorizeManage();
+
+        $this->validate([
+            'repositoryUrl' => ['required', 'string', 'max:2048'],
+            'repositoryKind' => ['required', Rule::in([InstalledSource::KIND_DOMAIN, InstalledSource::KIND_EXTENSION])],
+            'repositoryFolder' => ['required', 'string', 'max:80', 'regex:/^[A-Z][A-Za-z0-9]*$/'],
+            'repositoryCredentialOwner' => ['nullable', 'string', Rule::in(array_merge([''], $installer->credentialOwners()))],
+        ], [], [
+            'repositoryUrl' => __('repository URL'),
+            'repositoryKind' => __('placement'),
+            'repositoryFolder' => __('source name'),
+            'repositoryCredentialOwner' => __('GitHub credential'),
+        ]);
+
+        set_time_limit(0);
+
+        try {
+            $result = $installer->install(
+                $this->repositoryUrl,
+                $this->repositoryKind,
+                $this->repositoryFolder,
+                $this->repositoryCredentialOwner,
+            );
+        } catch (SourceRepositoryInstallException $exception) {
+            $this->addError('repositoryUrl', $exception->getMessage());
+
+            return;
+        }
+
+        if ($result['ok']) {
+            session()->flash('success', __(':name installed as a :kind. Its modules are live from the next page load.', [
+                'name' => $result['folder'],
+                'kind' => $result['kind'],
+            ]));
+        } else {
+            session()->flash('error', $result['cleaned_up']
+                ? __('Installation did not finish. BLB cleaned up the failed source; review the run log, correct the repository, and retry.')
+                : __('Installation did not finish cleanly. The source checkout remains; review the run log and resolve the recorded recovery action before taking another action.'));
+        }
+
+        session()->flash('command-log', $result['log']);
+
+        $this->redirectRoute('admin.system.software.domains.index', $result['ok'] ? [] : ['tab' => 'available']);
     }
 
     public function install(string $domain, DomainInstaller $installer): void
@@ -210,8 +268,12 @@ class Domains extends Component
         $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
-    public function render(DomainInstaller $installer, ExtensionInstaller $extensions, SoftwareInventoryService $inventory): View
-    {
+    public function render(
+        DomainInstaller $installer,
+        ExtensionInstaller $extensions,
+        SoftwareInventoryService $inventory,
+        SourceRepositoryInstaller $repositoryInstaller,
+    ): View {
         $reader = $this->reader();
         $enabledManifests = $reader->all();
         $installedManifests = $reader->allIncludingDisabledDomains();
@@ -260,6 +322,7 @@ class Domains extends Component
             ->map(fn (ModuleManifest $manifest): string => $manifest->module)
             ->filter()
             ->all();
+        $canManage = $this->canManage();
 
         return view('livewire.base.foundation.domains', [
             'installed' => $installed,
@@ -274,7 +337,8 @@ class Domains extends Component
             'catalogEntries' => $catalog->available(),
             'installedModuleIds' => $installedModuleIds,
             'catalogLastFetchedAt' => $catalog->lastFetchedAt(),
-            'canManage' => $this->canManage(),
+            'repositoryCredentialOwners' => $canManage ? $repositoryInstaller->credentialOwners() : [],
+            'canManage' => $canManage,
         ]);
     }
 

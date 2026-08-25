@@ -12,9 +12,10 @@ return [
     | (System → Software → GitHub Access); the GitHub owner is parsed from the
     | repo URL, so the folder name may differ from the GitHub account.
     |
-    | This is a per-deployment, curated list on purpose: there is no
-    | "install from arbitrary URL" path, which would reopen a supply-chain
-    | attack surface. See docs/guides/extensions/private-extension-repositories.md.
+    | This optional per-deployment catalog pins familiar sources and copy. A
+    | platform operator may also install a GitHub repository URL through
+    | System → Software, where BLB validates placement, namespace, and every
+    | Module manifest before migrations run. See the private-source guide.
     |
     */
     'catalog' => [
