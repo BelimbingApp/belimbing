@@ -1,7 +1,7 @@
 # Private Extension Repositories
 
 **Purpose:** Keep deployment-owned Extension code out of the public Belimbing platform repository while developing both in one composed working tree.
-**Last Updated:** 2026-08-05
+**Last Updated:** 2026-08-25
 **Related:** `docs/architecture/module-system.md`, `docs/guides/extensions/database-migrations.md`, `.agents/skills/blb-repo-sync/SKILL.md`
 
 Use this workflow when the platform checkout pushes to a public or shared `origin/main`, while customer-, operator-, or organization-specific capabilities must remain in a separate private repository.
@@ -29,16 +29,12 @@ belimbing/                              # Public Belimbing platform repository
 │       │   │   ├── Tests/
 │       │   │   └── ServiceProvider.php
 │       │   └── <FutureModule>/
-│       └── SbGroup/                    # Separate private Extension source
-│           ├── .git/
-│           ├── Qac/
-│           ├── Ibp/
-│           └── <FutureModule>/
+│       └── <AnotherExtension>/         # Another private Extension checkout
 └── resources/
     └── core/                           # Shared framework presentation
 ```
 
-Application ownership segments use PascalCase: `SbGroup`, `AutoParts`, `Qac`. Stable logical IDs remain lowercase and path-independent: `sb-group/qac`, `ham/auto-parts`.
+Application ownership segments use PascalCase: `Ham`, `AutoParts`. Stable logical IDs remain lowercase and path-independent: `ham/auto-parts`.
 
 Each Extension source has its own `.git`, `origin`, commits, and release history. The platform repository sees only the tracked `app/Extensions/AGENTS.md`; it never stages private source contents.
 
@@ -70,17 +66,6 @@ git remote add origin <private-blb-ham-repo-url>
 git push -u origin main
 ```
 
-SB Group example:
-
-```bash
-mkdir -p app/Extensions/SbGroup
-cd app/Extensions/SbGroup
-
-git init -b main
-git remote add origin https://github.com/kiatng/blb-sbg
-git push -u origin main
-```
-
 The nested repository's `origin` must point to the private Extension source, not to the parent Belimbing repository.
 
 ## Install From Software Administration
@@ -90,15 +75,23 @@ Production deployments may expose a curated Extension catalog through the softwa
 ```php
 return [
     'catalog' => [
-        'SbGroup' => [
-            'repo' => 'https://github.com/kiatng/blb-sbg',
-            'description' => 'Private SB Group Extension.',
+        'Ham' => [
+            'repo' => '<private-blb-ham-repository-url>',
+            'description' => 'Private Ham Extension.',
         ],
     ],
 ];
 ```
 
 The catalog key is the PascalCase `{Extension}` directory below `app/Extensions`. The repository URL is delivery provenance and does not define Module identity. Keep the committed default catalog empty unless that deployment is intentionally composed with a specific private source.
+
+Automated development setup follows the same boundary. Supply optional private sources at runtime through newline-delimited `repository|destination` entries instead of committing them to `.agents/setup`:
+
+```bash
+BLB_EXTENSION_SOURCES='<private-blb-ham-repository-url>|app/Extensions/Ham' .agents/setup
+```
+
+Authentication belongs in the deployment's Git credential configuration or authorized secret environment, never in the repository URL.
 
 For a private GitHub repository, store a token for its GitHub owner under **Administration → System → Software → GitHub Access** before installing. The installer:
 
@@ -128,8 +121,8 @@ BLB discovers Extension Modules at `app/Extensions/{Extension}/{Module}` after B
 The provider namespace follows normal `App\` PSR-4 mapping. For example:
 
 ```text
-app/Extensions/SbGroup/Qac/ServiceProvider.php
-App\Extensions\SbGroup\Qac\ServiceProvider
+app/Extensions/Ham/AutoParts/ServiceProvider.php
+App\Extensions\Ham\AutoParts\ServiceProvider
 ```
 
 No bespoke Extension autoloader or kebab-to-Pascal path conversion exists. A lowercase physical source or Module directory is invalid even when its logical ID is kebab-case.
@@ -159,15 +152,6 @@ Ham Extension work:
 cd app/Extensions/Ham
 git status
 git commit -m "Ham Extension change"
-git push origin main
-```
-
-SB Group Extension work:
-
-```bash
-cd app/Extensions/SbGroup
-git status
-git commit -m "SB Group Extension change"
 git push origin main
 ```
 

@@ -198,8 +198,8 @@ gh pr view <PR> -R BelimbingApp/belimbing --json headRefName,headRefOid,headRepo
 Push to the repository that owns the PR head branch:
 
 ```bash
-# Example: PR head lives in SB-Tape/belimbing
-git remote add pr-head https://github.com/SB-Tape/belimbing.git  # if missing
+# Use the actual head owner and repository reported by `gh`.
+git remote add pr-head https://github.com/<head-owner>/<head-repository>.git  # if missing
 git push pr-head HEAD:refs/heads/<headRefName>
 ```
 

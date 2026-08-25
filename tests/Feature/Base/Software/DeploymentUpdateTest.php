@@ -1282,21 +1282,21 @@ test('a diverged source reports an actionable message instead of raw git hints',
     Process::fake(function ($process) {
         if (in_array(DEPLOYMENT_UPDATE_FF_ONLY, $process->command, true)) {
             return Process::result(
-                errorOutput: "From https://github.com/kiatng/blb-sbg\n   024bd2e..d45cbe4  main -> origin/main\n".
+                errorOutput: "From https://example.invalid/private/blb-ham\n   024bd2e..d45cbe4  main -> origin/main\n".
                     "hint: Diverging branches can't be fast-forwarded, you need to either:\nhint:\n".
                     'fatal: Not possible to fast-forward, aborting.',
                 exitCode: 128,
             );
         }
 
-        return Process::result('https://github.com/kiatng/blb-sbg.git');
+        return Process::result('https://example.invalid/private/blb-ham.git');
     });
 
-    $message = app(SoftwareSourceRepository::class)->pull(['label' => 'blb-sbg', 'path' => '/srv/blb-sbg']);
+    $message = app(SoftwareSourceRepository::class)->pull(['label' => 'blb-ham', 'path' => '/srv/blb-ham']);
 
     expect($message)
-        ->toContain('blb-sbg has diverged from its remote')
-        ->toContain('git -C /srv/blb-sbg log --oneline @{u}..HEAD')
+        ->toContain('blb-ham has diverged from its remote')
+        ->toContain('git -C /srv/blb-ham log --oneline @{u}..HEAD')
         ->not->toContain('hint:')
         ->not->toContain('fatal:');
 });

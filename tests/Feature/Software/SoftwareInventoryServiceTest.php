@@ -14,7 +14,9 @@ const SOFTWARE_INVENTORY_PAYROLL_PATH = 'app/Domains/People/Payroll';
 const SOFTWARE_INVENTORY_LEAVE_PACKAGE = 'blb/people-leave';
 const SOFTWARE_INVENTORY_LEAVE_MODULE = 'people/leave';
 const SOFTWARE_INVENTORY_LEAVE_PATH = 'app/Domains/People/Leave';
-const SOFTWARE_INVENTORY_SAMPLE_PACKAGE = 'kiat/sample';
+const SOFTWARE_INVENTORY_HAM_REPO = 'exampleowner/blb-ham';
+const SOFTWARE_INVENTORY_HAM_PATH = 'app/Extensions/Ham';
+const SOFTWARE_INVENTORY_SAMPLE_PACKAGE = 'ham/sample';
 
 /**
  * @param  array{dirty?: int, ahead?: int, behind?: int}  $workingTree
@@ -62,14 +64,14 @@ it('groups modules under their nearest source source and falls Base/Core back to
         [
             inventorySourceStatus('platform', '.', SOFTWARE_INVENTORY_PLATFORM_REPO),
             inventorySourceStatus('domain-people', SOFTWARE_INVENTORY_PEOPLE_PATH, SOFTWARE_INVENTORY_PEOPLE_REPO),
-            inventorySourceStatus('extension-kiat', 'app/Extensions/Kiat', 'kiatng/blb-kiat'),
+            inventorySourceStatus('extension-ham', SOFTWARE_INVENTORY_HAM_PATH, SOFTWARE_INVENTORY_HAM_REPO),
         ],
         [
             inventoryManifest('base/database', 'app/Base/Database', 'blb/base-database'),
             inventoryManifest('core/company', 'app/Core/Company', 'blb/core-company'),
             inventoryManifest(SOFTWARE_INVENTORY_PAYROLL_MODULE, SOFTWARE_INVENTORY_PAYROLL_PATH, SOFTWARE_INVENTORY_PAYROLL_PACKAGE),
             inventoryManifest(SOFTWARE_INVENTORY_LEAVE_MODULE, SOFTWARE_INVENTORY_LEAVE_PATH, SOFTWARE_INVENTORY_LEAVE_PACKAGE),
-            inventoryManifest(SOFTWARE_INVENTORY_SAMPLE_PACKAGE, 'app/Extensions/Kiat/Sample', SOFTWARE_INVENTORY_SAMPLE_PACKAGE),
+            inventoryManifest(SOFTWARE_INVENTORY_SAMPLE_PACKAGE, SOFTWARE_INVENTORY_HAM_PATH.'/Sample', SOFTWARE_INVENTORY_SAMPLE_PACKAGE),
         ],
     );
 
@@ -80,8 +82,8 @@ it('groups modules under their nearest source source and falls Base/Core back to
         ->and(collect($byKey['platform']->modules)->pluck('module')->all())
         ->toContain('base/database', 'core/company')
         ->and($byKey['platform']->kind)->toBe(InstalledSource::KIND_PLATFORM)
-        ->and(collect($byKey['extension-kiat']->modules)->pluck('module')->all())->toBe([SOFTWARE_INVENTORY_SAMPLE_PACKAGE])
-        ->and($byKey['extension-kiat']->kind)->toBe(InstalledSource::KIND_EXTENSION);
+        ->and(collect($byKey['extension-ham']->modules)->pluck('module')->all())->toBe([SOFTWARE_INVENTORY_SAMPLE_PACKAGE])
+        ->and($byKey['extension-ham']->kind)->toBe(InstalledSource::KIND_EXTENSION);
 });
 
 it('recognizes a module-level git root as its own slot-implementation source', function (): void {

@@ -15,15 +15,15 @@ beforeEach(function (): void {
         public function owners(): array
         {
             return [
-                ['owner' => 'kiatng', 'repos' => ['kiatng/blb-ham'], 'has_token' => false],
+                ['owner' => 'exampleowner', 'repos' => ['exampleowner/blb-ham'], 'has_token' => false],
                 ['owner' => 'BelimbingApp', 'repos' => ['BelimbingApp/belimbing'], 'has_token' => false],
             ];
         }
 
         public function testOwner(string $owner, ?string $token = null): array
         {
-            return $owner === 'kiatng'
-                ? [['repo' => 'kiatng/blb-ham', 'ok' => true, 'status' => 200, 'message' => 'Reachable (private).']]
+            return $owner === 'exampleowner'
+                ? [['repo' => 'exampleowner/blb-ham', 'ok' => true, 'status' => 200, 'message' => 'Reachable (private).']]
                 : [];
         }
     });
@@ -36,7 +36,7 @@ test('github access page lists the deployment owners for admins', function (): v
         ->get(route('admin.system.software.github-access.index'))
         ->assertOk()
         ->assertSee('GitHub Access')
-        ->assertSee('kiatng')         // private extension owner (blb-ham)
+        ->assertSee('exampleowner')   // private extension owner (blb-ham)
         ->assertSee('BelimbingApp');  // public platform + module owner
 });
 
@@ -45,11 +45,11 @@ test('saving stores a per-owner token in settings', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Index::class)
-        ->set('tokens.kiatng', 'github_pat_0123456789abcdef')
-        ->call('save', 'kiatng')
+        ->set('tokens.exampleowner', 'github_pat_0123456789abcdef')
+        ->call('save', 'exampleowner')
         ->assertHasNoErrors();
 
-    expect(app(SettingsService::class)->get('integrations.github.token.kiatng'))->toBe('github_pat_0123456789abcdef');
+    expect(app(SettingsService::class)->get('integrations.github.token.exampleowner'))->toBe('github_pat_0123456789abcdef');
 });
 
 test('save rejects a too-short token for an owner', function (): void {
@@ -57,9 +57,9 @@ test('save rejects a too-short token for an owner', function (): void {
     $this->actingAs($user);
 
     Livewire::test(Index::class)
-        ->set('tokens.kiatng', 'short')
-        ->call('save', 'kiatng')
-        ->assertHasErrors('tokens.kiatng');
+        ->set('tokens.exampleowner', 'short')
+        ->call('save', 'exampleowner')
+        ->assertHasErrors('tokens.exampleowner');
 });
 
 test('test connection probes an owner repos with its token', function (): void {
@@ -67,11 +67,11 @@ test('test connection probes an owner repos with its token', function (): void {
     $this->actingAs($user);
 
     $component = Livewire::test(Index::class)
-        ->set('tokens.kiatng', 'github_pat_0123456789abcdef')
-        ->call('test', 'kiatng')
+        ->set('tokens.exampleowner', 'github_pat_0123456789abcdef')
+        ->call('test', 'exampleowner')
         ->assertHasNoErrors();
 
-    $results = $component->get('testResults')['kiatng'] ?? [];
+    $results = $component->get('testResults')['exampleowner'] ?? [];
 
     expect($results)->not->toBeEmpty()
         ->and(collect($results)->every(fn (array $r): bool => $r['ok'] === true))->toBeTrue();

@@ -18,9 +18,9 @@ return [
     |
     */
     'catalog' => [
-        'Kiat' => [
-            'repo' => 'https://github.com/kiatng/blb-kiat',
-            'description' => 'Private tenant extension for Kiat.',
-        ],
+        // 'Ham' => [
+        //     'repo' => '<private-blb-ham-repository-url>',
+        //     'description' => 'Private Ham Extension.',
+        // ],
     ],
 ];
