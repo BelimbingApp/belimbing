@@ -13,6 +13,7 @@ use App\Base\Perf\Http\Middleware\RecordRequestPerformance;
 use App\Base\System\Http\Middleware\ApplyRuntimeConfiguration;
 use App\Base\System\Services\ReportedErrorRecorder;
 use App\Base\Tenancy\Enums\TenancyErrorCode;
+use App\Base\Tenancy\Middleware\RequirePlatformOperatorTenant;
 use App\Base\Tenancy\Middleware\ResolveTenantContext;
 use App\Core\AI\Enums\AIErrorCode;
 use App\Core\Company\Enums\CompanyErrorCode;
@@ -149,6 +150,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'authz' => AuthorizeCapability::class,
+            'platform-operator' => RequirePlatformOperatorTenant::class,
         ]);
 
         // Marketplace webhooks are called by external servers (eBay) that

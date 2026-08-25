@@ -5,6 +5,7 @@ namespace App\Base\Database\Livewire\DatabaseTables;
 use App\Base\Database\Contracts\IncubatingSchemaInspector;
 use App\Base\Database\Exceptions\DataShareCaptureException;
 use App\Base\Database\Livewire\Concerns\AuthorizesDataShareOperations;
+use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\DataShare\DiagnosticRowCapture;
 use App\Base\Database\Services\TableInspector;
@@ -28,6 +29,7 @@ use Throwable;
 class Show extends Component
 {
     use AuthorizesDataShareOperations;
+    use RequiresPlatformOperatorTenant;
 
     private const MAX_CELL_LENGTH = 120;
 

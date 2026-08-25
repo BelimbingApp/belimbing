@@ -20,10 +20,10 @@ Route::get('data-share/offers/{offerId}', DownloadDataShareTransferOfferControll
 
 Route::middleware('auth')->group(function () {
     Route::get('admin/system/database', DatabaseTablesIndex::class)
-        ->middleware('authz:admin.system.database-table.list')
+        ->middleware(['authz:admin.system.database-table.list', 'platform-operator'])
         ->name('admin.system.database.index');
     Route::get('admin/system/database-tables', DatabaseTablesIndex::class)
-        ->middleware('authz:admin.system.database-table.list')
+        ->middleware(['authz:admin.system.database-table.list', 'platform-operator'])
         ->name('admin.system.database-tables.index');
     Route::get('admin/system/database-incubation', SchemaIncubationIndex::class)
         ->middleware('authz:admin.system.database-incubation.manage')
@@ -33,14 +33,14 @@ Route::middleware('auth')->group(function () {
         ->middleware('authz:admin.system.data-operations.view')
         ->name('admin.system.data-operations.index');
     Route::get('admin/system/database-tables/{tableName}', DatabaseTablesShow::class)
-        ->middleware('authz:admin.system.database-table.view')
+        ->middleware(['authz:admin.system.database-table.view', 'platform-operator'])
         ->name('admin.system.database-tables.show');
 
     Route::get('admin/system/database-queries', QueriesIndex::class)
-        ->middleware('authz:admin.system.database-table.list')
+        ->middleware(['authz:admin.system.database-table.list', 'platform-operator'])
         ->name('admin.system.database-queries.index');
     Route::get('admin/system/database-queries/{slug}', QueriesShow::class)
-        ->middleware('authz:admin.system.database-table.list')
+        ->middleware(['authz:admin.system.database-table.list', 'platform-operator'])
         ->name('admin.system.database-queries.show');
 
     Route::get('admin/system/database-backups', BackupsIndex::class)

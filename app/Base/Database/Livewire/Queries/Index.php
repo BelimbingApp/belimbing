@@ -5,6 +5,7 @@ namespace App\Base\Database\Livewire\Queries;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
+use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\User\Models\Query;
@@ -17,6 +18,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use ChecksCapabilityAuthorization;
+    use RequiresPlatformOperatorTenant;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;

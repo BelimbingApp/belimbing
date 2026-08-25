@@ -10,6 +10,14 @@ use App\Base\Foundation\Exceptions\BlbDataContractException;
  */
 final class BlbQueryException extends BlbDataContractException
 {
+    public static function platformOperatorRequired(): self
+    {
+        return new self(
+            'Database query execution requires the platform-operator tenant.',
+            DatabaseErrorCode::DATABASE_QUERY_PLATFORM_OPERATOR_REQUIRED,
+        );
+    }
+
     /**
      * Create an exception for an invalid query.
      *
