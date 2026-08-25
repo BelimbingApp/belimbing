@@ -7,6 +7,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Models\Tenant;
 use App\Base\Tenancy\Services\ApplicationTenantContext;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
@@ -36,17 +37,22 @@ class ServiceProvider extends BaseServiceProvider
     public function boot(): void
     {
         $this->propagateTenantContextThroughQueue();
-        $this->registerMenuVisibilityCondition();
+        $this->registerMenuVisibilityConditions();
     }
 
     /**
      * Latent tenancy: tenant management surfaces only when a second tenant
      * exists or the operator explicitly enables it via tenancy.show_management.
      */
-    private function registerMenuVisibilityCondition(): void
+    private function registerMenuVisibilityConditions(): void
     {
         $this->app->afterResolving(MenuConditionRegistry::class, function (MenuConditionRegistry $registry): void {
             $registry->register('tenancy.visible', static fn (mixed $user): bool => self::tenancySurfaceVisible());
+            $registry->register(
+                'tenancy.platform_operator',
+                static fn (mixed $user): bool => $user !== null
+                    && app(PlatformOperatorTenantAccess::class)->allows(),
+            );
         });
     }
 

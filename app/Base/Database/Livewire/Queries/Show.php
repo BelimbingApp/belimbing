@@ -12,6 +12,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Database\Exceptions\BlbQueryException;
+use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\QueryExecutor;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -36,6 +37,7 @@ use Livewire\WithPagination;
 class Show extends Component
 {
     use ChecksCapabilityAuthorization;
+    use RequiresPlatformOperatorTenant;
     use ResolvesAvailableModels;
     use TogglesSort;
     use WithPagination;
