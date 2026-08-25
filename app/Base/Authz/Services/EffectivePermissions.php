@@ -123,7 +123,7 @@ final class EffectivePermissions
             ));
         }
 
-        $allowed = array_keys($this->directAllows) + array_keys($this->roleGrants);
+        $allowed = array_merge(array_keys($this->directAllows), array_keys($this->roleGrants));
 
         return array_values(array_unique(array_diff($allowed, array_keys($this->directDenies))));
     }

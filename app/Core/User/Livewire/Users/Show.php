@@ -274,6 +274,7 @@ class Show extends Component
         }
 
         $roles = Role::query()
+            ->with('capabilities')
             ->whereIn('id', $roleIds)
             ->where(function ($query): void {
                 $query->where(function ($systemRoles): void {
@@ -284,7 +285,18 @@ class Show extends Component
                         app(TenantContext::class)->requireTenantId(),
                     ));
             })
-            ->get(['id', 'name']);
+            ->get(['id', 'name', 'grant_all']);
+
+        $delegation = $this->delegationState();
+
+        if ($roles->count() !== count($roleIds)
+            || $roles->contains(fn (Role $role): bool => ! $this->canDelegateRole($role, $delegation))) {
+            $this->selectedRoleIds = [];
+            $this->notifyError(__('You can only assign roles that you hold and may delegate.'));
+
+            return;
+        }
+
         $roleNames = $roles->pluck('name', 'id');
         $createdRoleIds = [];
 
@@ -373,6 +385,15 @@ class Show extends Component
         )));
 
         if ($capabilityKeys === []) {
+            return;
+        }
+
+        $delegation = $this->delegationState();
+
+        if (array_diff($capabilityKeys, array_keys($delegation['allowed_capability_keys'])) !== []) {
+            $this->selectedCapabilityKeys = [];
+            $this->notifyError(__('You can only grant capabilities that you hold.'));
+
             return;
         }
 
@@ -616,6 +637,7 @@ class Show extends Component
         $canManageRoles = app(AuthorizationService::class)
             ->can($authActor, 'admin.user.update')
             ->allowed;
+        $delegation = $this->delegationState();
 
         $assignedRoles = PrincipalRole::query()
             ->with('role')
@@ -627,7 +649,7 @@ class Show extends Component
         $hasGrantAll = $assignedRoles->contains(fn ($pr) => $pr->role->grant_all);
 
         $availableRoles = Role::query()
-            ->with('company')
+            ->with(['capabilities', 'company'])
             ->whereNotIn('id', $assignedRoleIds)
             ->where(function ($query): void {
                 $query->where(function ($systemRoles): void {
@@ -639,7 +661,9 @@ class Show extends Component
                     ));
             })
             ->orderBy('name')
-            ->get();
+            ->get()
+            ->filter(fn (Role $role): bool => $this->canDelegateRole($role, $delegation))
+            ->values();
 
         // Direct capabilities — keyed by capability_key → id
         $directEntries = PrincipalCapability::query()
@@ -691,7 +715,8 @@ class Show extends Component
 
         $availableCapabilities = [];
         foreach ($allCapabilities as $cap) {
-            if (in_array($cap, $excludedKeys, true)) {
+            if (in_array($cap, $excludedKeys, true)
+                || ! isset($delegation['allowed_capability_keys'][$cap])) {
                 continue;
             }
             $domain = explode('.', $cap, 2)[0];
@@ -824,5 +849,68 @@ class Show extends Component
             'email' => __('Email inline editor'),
             default => __(':field inline editor', ['field' => Str::headline($field)]),
         };
+    }
+
+    /**
+     * Resolve the acting user's delegation boundary.
+     *
+     * @return array{
+     *     permissions: EffectivePermissions,
+     *     held_role_ids: array<int, true>,
+     *     allowed_capability_keys: array<string, true>
+     * }
+     */
+    private function delegationState(): array
+    {
+        $actor = Actor::forUser(auth()->user());
+        $permissions = EffectivePermissions::forActor($actor);
+        $knownCapabilityKeys = array_fill_keys(app(CapabilityRegistry::class)->all(), true);
+        $allowedCapabilityKeys = array_intersect_key(
+            array_fill_keys($permissions->allowed(), true),
+            $knownCapabilityKeys,
+        );
+
+        $heldRoleIds = PrincipalRole::query()
+            ->where('principal_type', PrincipalType::USER->value)
+            ->where('principal_id', $actor->id)
+            ->where(function ($query) use ($actor): void {
+                $query->where('company_id', $actor->companyId)
+                    ->orWhereNull('company_id');
+            })
+            ->pluck('role_id')
+            ->mapWithKeys(fn ($roleId): array => [(int) $roleId => true])
+            ->all();
+
+        return [
+            'permissions' => $permissions,
+            'held_role_ids' => $heldRoleIds,
+            'allowed_capability_keys' => $allowedCapabilityKeys,
+        ];
+    }
+
+    /**
+     * @param  array{
+     *     permissions: EffectivePermissions,
+     *     held_role_ids: array<int, true>,
+     *     allowed_capability_keys: array<string, true>
+     * }  $delegation
+     */
+    private function canDelegateRole(Role $role, array $delegation): bool
+    {
+        $permissions = $delegation['permissions'];
+
+        if ($role->grant_all) {
+            return $permissions->hasGrantAll() && $permissions->denied() === [];
+        }
+
+        $grantsOnlyHeldCapabilities = $role->capabilities->every(
+            fn ($capability): bool => isset($delegation['allowed_capability_keys'][$capability->capability_key]),
+        );
+
+        if (! $grantsOnlyHeldCapabilities) {
+            return false;
+        }
+
+        return $permissions->hasGrantAll() || isset($delegation['held_role_ids'][$role->id]);
     }
 }

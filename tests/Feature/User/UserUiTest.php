@@ -1,8 +1,10 @@
 <?php
 
 use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Authz\Models\PrincipalRole;
 use App\Base\Authz\Models\Role;
+use App\Base\Authz\Models\RoleCapability;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
@@ -272,6 +274,78 @@ test('password update requires confirmation', function (): void {
         ->set('passwordConfirmation', 'WrongConfirmation!')
         ->call('updatePassword')
         ->assertHasErrors(['passwordConfirmation']);
+});
+
+test('user managers can delegate only roles and capabilities they hold', function (): void {
+    $company = Company::factory()->create();
+    $actor = User::factory()->create(['company_id' => $company->id]);
+    $target = User::factory()->create(['company_id' => $company->id]);
+    $userManagerRole = Role::query()->create([
+        'company_id' => $company->id,
+        'name' => 'User Manager',
+        'code' => 'test_user_manager',
+    ]);
+    RoleCapability::query()->create([
+        'role_id' => $userManagerRole->id,
+        'capability_key' => 'admin.user.update',
+    ]);
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $actor->id,
+        'role_id' => $userManagerRole->id,
+    ]);
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $actor->id,
+        'capability_key' => 'admin.company.view',
+        'is_allowed' => true,
+    ]);
+    $coreAdminRole = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+
+    $this->actingAs($actor);
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
+    Livewire::test('admin.users.show', ['user' => $target])
+        ->set('selectedRoleIds', [$userManagerRole->id, $coreAdminRole->id])
+        ->call('assignRoles')
+        ->set('selectedCapabilityKeys', ['admin.company.view', 'admin.authz.role.update'])
+        ->call('addCapabilities');
+
+    expect(PrincipalRole::query()
+        ->where('principal_id', $target->id)
+        ->whereIn('role_id', [$userManagerRole->id, $coreAdminRole->id])
+        ->exists())->toBeFalse()
+        ->and(PrincipalCapability::query()
+            ->where('principal_id', $target->id)
+            ->whereIn('capability_key', ['admin.company.view', 'admin.authz.role.update'])
+            ->exists())->toBeFalse();
+
+    $component = Livewire::test('admin.users.show', ['user' => $target]);
+
+    expect($component->viewData('availableRoles')->modelKeys())
+        ->toContain($userManagerRole->id)
+        ->not->toContain($coreAdminRole->id)
+        ->and(collect($component->viewData('availableCapabilities'))->flatten()->all())
+        ->toContain('admin.company.view')
+        ->not->toContain('admin.authz.role.update');
+
+    $component
+        ->set('selectedRoleIds', [$userManagerRole->id])
+        ->call('assignRoles')
+        ->set('selectedCapabilityKeys', ['admin.company.view'])
+        ->call('addCapabilities');
+
+    expect(PrincipalRole::query()
+        ->where('principal_id', $target->id)
+        ->where('role_id', $userManagerRole->id)
+        ->exists())->toBeTrue()
+        ->and(PrincipalCapability::query()
+            ->where('principal_id', $target->id)
+            ->where('capability_key', 'admin.company.view')
+            ->where('is_allowed', true)
+            ->exists())->toBeTrue();
 });
 
 test('user without delete capability cannot delete users', function (): void {
