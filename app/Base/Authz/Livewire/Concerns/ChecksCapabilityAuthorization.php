@@ -5,6 +5,7 @@ namespace App\Base\Authz\Livewire\Concerns;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use Closure;
 
 trait ChecksCapabilityAuthorization
 {
@@ -30,5 +31,19 @@ trait ChecksCapabilityAuthorization
         }
 
         return true;
+    }
+
+    /**
+     * Run a Livewire action only when the current actor holds its capability.
+     *
+     * @param  Closure(): void  $action
+     */
+    protected function runIfCapable(string $capability, Closure $action): void
+    {
+        if (! $this->checkCapability($capability)) {
+            return;
+        }
+
+        $action();
     }
 }
