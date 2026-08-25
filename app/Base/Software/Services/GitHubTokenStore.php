@@ -3,6 +3,7 @@
 namespace App\Base\Software\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Models\Setting;
 
 /**
  * Per-owner GitHub personal access tokens, keyed by lowercase owner login.
@@ -12,6 +13,21 @@ final class GitHubTokenStore
     private const TOKEN_PREFIX = 'integrations.github.token.';
 
     public function __construct(private readonly SettingsService $settings) {}
+
+    /** @return list<string> */
+    public function owners(): array
+    {
+        return Setting::query()
+            ->whereNull('scope_type')
+            ->whereNull('scope_id')
+            ->where('key', 'like', self::TOKEN_PREFIX.'%')
+            ->pluck('key')
+            ->map(fn (string $key): string => substr($key, strlen(self::TOKEN_PREFIX)))
+            ->filter(fn (string $owner): bool => $owner !== '' && $this->tokenFor($owner) !== null)
+            ->sort()
+            ->values()
+            ->all();
+    }
 
     public function tokenFor(string $owner): ?string
     {
