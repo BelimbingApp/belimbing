@@ -11,6 +11,7 @@ use App\Base\Authz\Services\AuthorizationEngine;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Base\Tenancy\Exceptions\PlatformOperatorTenantDeletionException;
 use App\Base\Tenancy\Models\Tenant;
+use App\Core\Address\Models\Address;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Services\FrameworkPrimitivesProvisioner;
 use App\Core\Company\Services\PrimaryCompanyManager;
@@ -310,6 +311,73 @@ it('resolves no tenant context for guests', function (): void {
     ]));
 
     $this->getJson('/_test/tenant-context-guest')
+        ->assertOk()
+        ->assertJson(['tenant_id' => null]);
+});
+
+it('resolves tenant-aware implicit bindings before substitution with no ambient context', function (): void {
+    $user = createAdminUser();
+    $company = Company::query()->findOrFail($user->company_id);
+    $address = Address::query()->create([
+        'tenant_id' => $company->tenant_id,
+        'label' => 'Same Tenant Address',
+        'line1' => '1 Same Tenant Road',
+        'locality' => 'Same Tenant City',
+        'country_iso' => null,
+        'verificationStatus' => 'unverified',
+    ]);
+    [, $foreignCompany] = createTenantWithCompany(['name' => 'Binding Foreign Tenant']);
+    $foreignAddress = Address::query()->create([
+        'tenant_id' => $foreignCompany->tenant_id,
+        'label' => 'Foreign Tenant Address',
+        'line1' => '1 Foreign Tenant Road',
+        'locality' => 'Foreign Tenant City',
+        'country_iso' => null,
+        'verificationStatus' => 'unverified',
+    ]);
+
+    $this->withoutVite()->actingAs($user);
+
+    // The request must establish this context itself; the factory helper set
+    // it only to support fixture creation and is deliberately cleared here.
+    app(TenantContext::class)->clear();
+    $this->get(route('admin.companies.show', $company))->assertOk();
+
+    app(TenantContext::class)->clear();
+    $this->get(route('admin.addresses.show', $address))->assertOk();
+
+    app(TenantContext::class)->clear();
+    $this->get(route('admin.companies.show', $foreignCompany))->assertNotFound();
+
+    app(TenantContext::class)->clear();
+    $this->get(route('admin.addresses.show', $foreignAddress))->assertNotFound();
+});
+
+it('refreshes the request-scoped tenant context across sequential worker requests', function (): void {
+    $companyA = Company::factory()->create();
+    $userA = User::factory()->create(['company_id' => $companyA->id]);
+    [$tenantB, $companyB] = createTenantWithCompany(['name' => 'Sequential Worker Tenant']);
+    $userB = User::factory()->create(['company_id' => $companyB->id]);
+
+    Route::middleware('web')->get('/_test/tenant-context-sequence', fn () => response()->json([
+        'tenant_id' => app(TenantContext::class)->currentTenantId(),
+    ]));
+
+    // Reuse this application instance as a long-lived worker would: a stale
+    // value must be replaced for the next request, including a guest request.
+    app(TenantContext::class)->set((int) $tenantB->id);
+
+    $this->actingAs($userA)->getJson('/_test/tenant-context-sequence')
+        ->assertOk()
+        ->assertJson(['tenant_id' => $companyA->tenant_id]);
+
+    $this->actingAs($userB)->getJson('/_test/tenant-context-sequence')
+        ->assertOk()
+        ->assertJson(['tenant_id' => $tenantB->id]);
+
+    auth()->logout();
+
+    $this->getJson('/_test/tenant-context-sequence')
         ->assertOk()
         ->assertJson(['tenant_id' => null]);
 });
