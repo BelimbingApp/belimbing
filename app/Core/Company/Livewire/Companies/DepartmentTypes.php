@@ -2,6 +2,7 @@
 
 namespace App\Core\Company\Livewire\Companies;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\Company\Models\DepartmentType;
@@ -12,6 +13,7 @@ use Livewire\WithPagination;
 
 class DepartmentTypes extends Component
 {
+    use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
     use TogglesSort;
     use WithPagination;
@@ -65,61 +67,69 @@ class DepartmentTypes extends Component
 
     public function createType(): void
     {
-        $validated = $this->validate([
-            'createCode' => ['required', 'string', 'max:255', Rule::unique('company_department_types', 'code')],
-            'createName' => ['required', 'string', 'max:255'],
-            'createCategory' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
-            'createDescription' => ['nullable', 'string'],
-            'createIsActive' => ['boolean'],
-        ]);
+        $this->runIfCapable('admin.company.create', function (): void {
+            $validated = $this->validate([
+                'createCode' => ['required', 'string', 'max:255', Rule::unique('company_department_types', 'code')],
+                'createName' => ['required', 'string', 'max:255'],
+                'createCategory' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
+                'createDescription' => ['nullable', 'string'],
+                'createIsActive' => ['boolean'],
+            ]);
 
-        DepartmentType::query()->create([
-            'code' => $validated['createCode'],
-            'name' => $validated['createName'],
-            'category' => $validated['createCategory'],
-            'description' => $validated['createDescription'],
-            'is_active' => $validated['createIsActive'],
-        ]);
+            DepartmentType::query()->create([
+                'code' => $validated['createCode'],
+                'name' => $validated['createName'],
+                'category' => $validated['createCategory'],
+                'description' => $validated['createDescription'],
+                'is_active' => $validated['createIsActive'],
+            ]);
 
-        $this->showCreateModal = false;
-        $this->reset(['createCode', 'createName', 'createCategory', 'createDescription', 'createIsActive']);
-        $this->createCategory = 'operational';
-        $this->createIsActive = true;
-        $this->notify(__('Department type created.'));
+            $this->showCreateModal = false;
+            $this->reset(['createCode', 'createName', 'createCategory', 'createDescription', 'createIsActive']);
+            $this->createCategory = 'operational';
+            $this->createIsActive = true;
+            $this->notify(__('Department type created.'));
+        });
     }
 
     public function saveField(int $typeId, string $field, mixed $value): void
     {
-        $rules = [
-            'name' => ['required', 'string', 'max:255'],
-            'category' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
-            'description' => ['nullable', 'string'],
-        ];
+        $this->runIfCapable('admin.company.update', function () use ($typeId, $field, $value): void {
+            $rules = [
+                'name' => ['required', 'string', 'max:255'],
+                'category' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
+                'description' => ['nullable', 'string'],
+            ];
 
-        $type = DepartmentType::query()->findOrFail($typeId);
-        $this->saveValidatedField($type, $field, $value, $rules);
+            $type = DepartmentType::query()->findOrFail($typeId);
+            $this->saveValidatedField($type, $field, $value, $rules);
+        });
     }
 
     public function toggleActive(int $typeId): void
     {
-        $type = DepartmentType::query()->findOrFail($typeId);
-        $type->is_active = ! $type->is_active;
-        $type->save();
-        $this->notify(__('Department type status updated.'));
+        $this->runIfCapable('admin.company.update', function () use ($typeId): void {
+            $type = DepartmentType::query()->findOrFail($typeId);
+            $type->is_active = ! $type->is_active;
+            $type->save();
+            $this->notify(__('Department type status updated.'));
+        });
     }
 
     public function deleteType(int $typeId): void
     {
-        $type = DepartmentType::query()->withCount('departments')->findOrFail($typeId);
+        $this->runIfCapable('admin.company.delete', function () use ($typeId): void {
+            $type = DepartmentType::query()->withCount('departments')->findOrFail($typeId);
 
-        if ($type->departments_count > 0) {
-            $this->notifyError(__('Cannot delete a department type that is in use by departments.'));
+            if ($type->departments_count > 0) {
+                $this->notifyError(__('Cannot delete a department type that is in use by departments.'));
 
-            return;
-        }
+                return;
+            }
 
-        $type->delete();
-        $this->notify(__('Department type deleted.'));
+            $type->delete();
+            $this->notify(__('Department type deleted.'));
+        });
     }
 
     public function render(): View
