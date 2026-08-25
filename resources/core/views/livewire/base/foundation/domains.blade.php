@@ -1,6 +1,6 @@
 @php
     $lifecycleTargets = 'install,disable,enable,uninstall';
-    $actionTargets = $lifecycleTargets.',installExtension,openUninstall,cancelUninstall,refreshCatalog';
+    $actionTargets = $lifecycleTargets.',installExtension,installRepository,openUninstall,cancelUninstall,refreshCatalog';
 @endphp
 
 <div
@@ -501,6 +501,87 @@
         </div></x-ui.tab>
 
         <x-ui.tab id="available"><div class="space-y-6">
+        @if ($canManage)
+            @php
+                $repositoryInstallConfirm = __('Install this repository with the selected placement and credential? BLB will validate its Module manifests and namespace before running its migrations.');
+                $repositoryInstallTitle = __('Installing repository');
+                $repositoryInstallDescription = __('BLB is cloning the source, validating every Module, running only its migrations, reloading runtime, and refreshing this page.');
+            @endphp
+            <section class="space-y-2" aria-labelledby="repository-install-heading">
+                <div>
+                    <h2 id="repository-install-heading" class="text-lg font-medium tracking-tight text-ink">{{ __('Install from repository') }}</h2>
+                    <p class="mt-1 max-w-3xl text-sm text-muted">{{ __('Use an HTTPS GitHub URL, choose where the source belongs, and select a stored credential only for a private repository. BLB rejects invalid Module manifests before migrations run.') }}</p>
+                </div>
+
+                <x-ui.card>
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <div class="lg:col-span-2">
+                            <x-ui.input
+                                id="repository-install-url"
+                                wire:model.blur="repositoryUrl"
+                                :label="__('Repository URL')"
+                                placeholder="https://github.com/owner/repository"
+                                :error="$errors->first('repositoryUrl')"
+                                :required="true"
+                                autocomplete="url"
+                            />
+                        </div>
+
+                        <x-ui.select
+                            id="repository-install-kind"
+                            wire:model="repositoryKind"
+                            :label="__('Install as')"
+                            :error="$errors->first('repositoryKind')"
+                            :required="true"
+                            :help="__('Choose Domain for a coherent business capability, or Extension for operator-chosen adaptation and composition.')"
+                        >
+                            <option value="extension">{{ __('Extension') }}</option>
+                            <option value="domain">{{ __('Domain') }}</option>
+                        </x-ui.select>
+
+                        <x-ui.input
+                            id="repository-install-folder"
+                            wire:model="repositoryFolder"
+                            :label="__('Source name')"
+                            placeholder="PayrollMalaysia"
+                            :error="$errors->first('repositoryFolder')"
+                            :required="true"
+                            :help="__('PascalCase directory name. Each Module namespace must match this name and the selected placement.')"
+                            autocomplete="off"
+                        />
+
+                        <div class="lg:col-span-2">
+                            <x-ui.select
+                                id="repository-install-credential"
+                                wire:model="repositoryCredentialOwner"
+                                :label="__('GitHub credential')"
+                                :error="$errors->first('repositoryCredentialOwner')"
+                                :help="__('Public repositories need no credential. Private repositories use the selected stored token without putting it in the URL or run log.')"
+                            >
+                                <option value="">{{ __('Public repository — no credential') }}</option>
+                                @foreach ($repositoryCredentialOwners as $owner)
+                                    <option value="{{ $owner }}">{{ __('Stored token for :owner', ['owner' => $owner]) }}</option>
+                                @endforeach
+                            </x-ui.select>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border-default pt-4">
+                        <p class="max-w-2xl text-xs text-muted">{{ __('If installation fails before database changes, the checkout is removed. If migration rollback cannot be verified, BLB keeps the checkout and explains the recovery action in the run log.') }}</p>
+                        <x-ui.button
+                            type="button"
+                            x-on:click="confirmLifecycle({{ \Illuminate\Support\Js::from($repositoryInstallConfirm) }}, {{ \Illuminate\Support\Js::from($repositoryInstallTitle) }}, {{ \Illuminate\Support\Js::from($repositoryInstallDescription) }}, () => $wire.installRepository())"
+                            wire:loading.attr="disabled"
+                            wire:target="{{ $actionTargets }}"
+                            x-bind:disabled="lifecycleOpen"
+                        >
+                            {{ __('Review and install') }}
+                        </x-ui.button>
+                    </div>
+                </x-ui.card>
+            </section>
+        @endif
+
         @if (count($available) > 0)
             <section class="space-y-2">
                 <h2 class="text-lg font-semibold text-ink">{{ __('Available Domains') }}</h2>
