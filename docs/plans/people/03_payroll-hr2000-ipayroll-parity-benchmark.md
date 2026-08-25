@@ -77,7 +77,7 @@ Payroll alone is not enough. HR2000's perceived value comes from adjacent workfl
 
 - **Architecture:** HR2000 appears Malaysia-centric; BLB should keep a country-neutral Payroll Core plus country-pack extensions.
 - **Deployment:** HR2000 is vendor-hosted/managed; BLB should remain self-hosted and licensee-owned.
-- **Customization:** HR2000 offers reports/plugins/custom services; BLB should make customization git-native through private licensee repos such as `kiatng/blb-sbg` and public first-party packs such as `BelimbingApp/blb-payroll-my`.
+- **Customization:** HR2000 offers reports/plugins/custom services; BLB should make customization git-native through deployment-owned private Extension repositories and public first-party packs such as `BelimbingApp/blb-payroll-my`.
 - **Auditability:** BLB should make statutory calculation explanations and effective-dated rule versions first-class, not just computed results.
 - **AI assistance:** BLB can eventually exceed parity with guided setup, anomaly detection, payroll-run review, and change explanations, but these should come after deterministic payroll correctness.
 - **Compliance claims:** HR2000's LHDN-endorsed PCB claim sets a market expectation, but BLB should distinguish “implements official formulas/tables and validates against fixtures” from “formally verified/endorsed” until the verification path is confirmed.
@@ -104,7 +104,7 @@ Current People/Payroll plans already cover the broad module map and country-pack
 
 ## Phases
 
-- [x] **Phase 0 — Boundary parity:** keep HR2000 benchmarking at the operational-job level and preserve BLB's repo boundaries: Payroll Core in `belimbingapp/belimbing`, Malaysia statutory behavior in `BelimbingApp/blb-payroll-my`, and SBG customization in `kiatng/blb-sbg`. {amp/gpt-5.1-codex}
+- [x] **Phase 0 — Boundary parity:** keep HR2000 benchmarking at the operational-job level and preserve BLB's repo boundaries: Payroll Core in `belimbingapp/belimbing`, Malaysia statutory behavior in `BelimbingApp/blb-payroll-my`, and SBG customization in its deployment-owned private Extension repository. {amp/gpt-5.1-codex}
 - [x] **Phase 1 — Core payroll parity:** ensure `02` Phase 1 covers HR2000's basic payroll-cycle expectations: pay periods, multiple pay inputs, historical run retention, run approval/locking, result lines, and basic payslips. {amp/gpt-5.1-codex}
 - [x] **Phase 2 — Classification parity:** ensure `02` Phase 2 covers the HR2000 gap hidden behind “auto statutory calculation”: every pay item must have inspectable statutory treatment before final calculation. {amp/gpt-5.1-codex}
 - [x] **Phase 3 — Profile parity:** ensure `02` Phase 3 captures employer and employee statutory setup needed before Malaysia statutory calculations can be credible. {amp/gpt-5.1-codex}

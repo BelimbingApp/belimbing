@@ -118,15 +118,38 @@ install_source() {
     git clone --branch main --single-branch "$repository" "$destination"
 }
 
+install_configured_extensions() {
+    local specification repository destination extra
+
+    if [[ -z "${BLB_EXTENSION_SOURCES:-}" ]]; then
+        echo '    None configured'
+        return 0
+    fi
+
+    while IFS= read -r specification; do
+        [[ -z "$specification" ]] && continue
+
+        IFS='|' read -r repository destination extra <<< "$specification"
+
+        if [[ -z "$repository" || -z "$destination" || -n "$extra" || ! "$destination" =~ ^app/Extensions/[A-Z][A-Za-z0-9]*$ ]]; then
+            echo "Invalid BLB_EXTENSION_SOURCES entry: ${specification}" >&2
+            echo 'Expected one repository|app/Extensions/PascalCase entry per line.' >&2
+            return 1
+        fi
+
+        install_source "$repository" "$destination"
+    done <<< "$BLB_EXTENSION_SOURCES"
+}
+
 echo '==> Installing Domains'
 install_source https://github.com/BelimbingApp/blb-commerce.git app/Domains/Commerce
 install_source https://github.com/BelimbingApp/blb-operation.git app/Domains/Operation
 install_source https://github.com/BelimbingApp/blb-people.git app/Domains/People
 
-echo '==> Installing private blb-* extensions'
-install_source https://github.com/kiatng/blb-ham.git app/Extensions/Ham
-install_source https://github.com/kiatng/blb-kiat.git app/Extensions/Kiat
-install_source https://github.com/kiatng/blb-sbg.git app/Extensions/SbGroup
+echo '==> Installing configured Extensions'
+# Optional, deployment-owned input. Example:
+# BLB_EXTENSION_SOURCES='<private-blb-ham-repository-url>|app/Extensions/Ham'
+install_configured_extensions
 
 echo '==> Installing locked PHP and JavaScript dependencies'
 composer install --no-interaction --prefer-dist --optimize-autoloader

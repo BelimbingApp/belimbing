@@ -22,7 +22,7 @@ BLB does not yet have a Claim module. Payroll can already accept neutral reimbur
 
 ## Desired Outcome
 
-A Claim Module under `app/Domains/People/Claim/` that supports employee and on-behalf claim submission, entitlement and limit policies, receipt/document attachments, multi-tier approval with approver amount limits, cancellation/withdrawal, payroll reimbursement handoff, and operational reports. The user-facing menu label should remain “Claims”, but the Module directory and code namespace should follow BLB’s singular Module naming convention. The Module should be country-neutral in the People Domain, consume People Settings for employees, organization, provider, and payment references, reuse shared attachment/PDF infrastructure, and feed Payroll through existing `PayrollInput` reimbursement rows. Malaysia tax/statutory treatment of reimbursed items belongs in the Malaysia payroll country pack; SBG-specific claim types, limits, labels, and accounting mappings belong in `kiatng/blb-sbg`. Claim advances are schema-ready but become a go-live workflow only if SBG confirms active use.
+A Claim Module under `app/Domains/People/Claim/` that supports employee and on-behalf claim submission, entitlement and limit policies, receipt/document attachments, multi-tier approval with approver amount limits, cancellation/withdrawal, payroll reimbursement handoff, and operational reports. The user-facing menu label should remain “Claims”, but the Module directory and code namespace should follow BLB’s singular Module naming convention. The Module should be country-neutral in the People Domain, consume People Settings for employees, organization, provider, and payment references, reuse shared attachment/PDF infrastructure, and feed Payroll through existing `PayrollInput` reimbursement rows. Malaysia tax/statutory treatment of reimbursed items belongs in the Malaysia payroll country pack; SBG-specific claim types, limits, labels, and accounting mappings belong in its deployment-owned private Extension repository. Claim advances are schema-ready but become a go-live workflow only if SBG confirms active use.
 
 ## Top-Level Components
 
@@ -84,7 +84,7 @@ A Claim Module under `app/Domains/People/Claim/` that supports employee and on-b
 
 **Self-service uses the People shell.** Employees submit claims and managers approve claims inside the Claim module’s `people.claim.index` tabs scoped by authz and employee mapping. The URI and menu label may still be `people/claims` and “Claims”. Do not create a separate ESS module just because iPayroll names employee-facing flows ESS/MSS.
 
-**SBG-specific accounting and policy mapping stays private.** Claim labels, cost-account mappings, provider lists, mileage rates, annual caps, and exception policies that are specific to SBG belong in `kiatng/blb-sbg`; Core provides the schema and import/seed hooks.
+**SBG-specific accounting and policy mapping stays private.** Claim labels, cost-account mappings, provider lists, mileage rates, annual caps, and exception policies that are specific to SBG belong in its private Extension repository; Core provides the schema and import/seed hooks.
 
 ## Public Contract
 
@@ -219,7 +219,7 @@ A Claim Module under `app/Domains/People/Claim/` that supports employee and on-b
 
 - [x] Review SBG's current iPayroll claim setup exports/screenshots for claim categories, claim types, claim groups, entitlement tables, client/max-limit setup, payroll/accounting mappings, and setup flags. {amp/gpt-5.1-codex}
 - [ ] Confirm SBG's remaining iPayroll e-Claim workflow setup not present in `sbg_claim_ref`: approval thresholds, advance-claim usage, receipt requirements, claim application/export columns, and current open claim data.
-- [ ] Decide which claim policy defaults belong in Core seeders, Malaysia payroll pack metadata, and `kiatng/blb-sbg` private configuration.
+- [ ] Decide which claim policy defaults belong in Core seeders, Malaysia payroll pack metadata, and deployment-owned private Extension configuration.
 - [ ] Confirm Workflow can execute claim approval profiles selected from amount, type, supervisor chain, employment group, alternative-route key, and delegated approver limit; file a Workflow gap if not.
 - [ ] Lock the v1 mixed-line routing rule: one request resolves to one strictest-line route; incompatible routes force request splitting.
 - [ ] Decide whether claim advances and multi-currency receipts are day-one SBG scope or schema-ready deferred workflows.
@@ -283,7 +283,7 @@ The IA reshape (Library / Builder / Simulate as first-class menu under People �
 
 - [ ] Add Claim Application List export with HR2000-parity columns after Phase 0 confirms the exact SBG column set.
 - [~] Add reimbursement statement, entitlement utilization, outstanding advance, approval aging, duplicate-risk, and payroll handoff reconciliation reports in CSV and PDF where useful: Claim Operations exports a filtered request-level CSV with duplicate-risk and payroll handoff fields; per-employee reimbursement statement, per-(employee, claim type, year) utilization, and approval aging (0-3d / 4-7d / 8-14d / 15-30d / 30d+ buckets) ship as CSV. Outstanding advance, payroll handoff reconciliation, and PDF reports remain open. {amp/gpt-5.1-codex,claude-code/claude-opus-4-7}
-- [ ] Seed SBG private claim categories, claim types, claim assignments, policy limits, claim context/client limits, mileage rates if any, provider/account mappings, and approver amount limits in `kiatng/blb-sbg`.
+- [ ] Seed SBG private claim categories, claim types, claim assignments, policy limits, claim context/client limits, mileage rates if any, provider/account mappings, and approver amount limits in its private Extension repository.
 - [ ] Run dry-run import or side-by-side validation against SBG's current claim data, reconciling opening entitlement usage, in-flight claims, outstanding advances if any, and reimbursement totals.
 - [ ] Confirm one complete monthly workflow: employee submission → manager approval → payroll handoff → payroll lock → reimbursement report.
 

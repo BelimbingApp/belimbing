@@ -9,46 +9,55 @@ description: >-
 
 # BLB Repo Sync
 
-Belimbing is a composed deployment: the **platform repo** (`BelimbingApp/belimbing`) plus **nested git checkouts** that are gitignored in the parent. Sync every nested checkout installed under the platform root.
+Belimbing is a composed deployment: the **platform repo** (`BelimbingApp/belimbing`) plus **nested git checkouts** that are gitignored in the parent. Sync every nested checkout installed under the platform root. Treat repository identity as runtime data from each checkout; never infer a private owner or remote from its filesystem path.
 
 **`main` only.** If any checkout is not on `main`, skip that checkout and report it — do not pull, push, rebase, or migrate for it. Do not switch branches.
 
 ## Discover Checkouts
 
 ```bash
-find <platform-root> -name .git -type d 2>/dev/null
+find <platform-root> -name .git \( -type d -o -type f \) 2>/dev/null
 ```
 
 Typical paths (skip anything not cloned):
 
-| Path | Example remote |
-|------|----------------|
+| Path | Repository example |
+|------|--------------------|
 | `<platform-root>` | `BelimbingApp/belimbing` |
 | `app/Domains/Commerce` | `BelimbingApp/blb-commerce` |
 | `app/Domains/Operation` | `BelimbingApp/blb-operation` |
 | `app/Domains/People` | `BelimbingApp/blb-people` |
-| `app/Extensions/Ham` | `kiatng/blb-ham` |
-| `app/Extensions/Kiat` | `kiatng/blb-kiat` |
-| `app/Extensions/SbGroup` | `kiatng/blb-sbg` |
+| `app/Extensions/Ham` | `blb-ham` (example name; discover its configured remote) |
 
-`app/Core` lives in the platform repo. Before acting: `git -C <path> status -sb`.
+`app/Core` lives in the platform repo. Before acting:
+
+```bash
+git -C <path> status -sb
+branch=$(git -C <path> rev-parse --abbrev-ref HEAD)
+remote=$(git -C <path> config --get "branch.${branch}.remote")
+merge_ref=$(git -C <path> config --get "branch.${branch}.merge")
+upstream_branch=${merge_ref#refs/heads/}
+git -C <path> remote get-url "$remote"
+```
+
+If a checkout has no configured remote/merge ref, its local or upstream branch is not `main`, or its remote URL cannot be read, skip and report it. Never add, rename, or rewrite a remote during sync.
 
 ## Sync Workflow
 
-Confirm each checkout is on `main` (`git -C <path> rev-parse --abbrev-ref HEAD`). Sync in application discovery order: platform first (Base and Core), then optional Domains, then Extensions. Finish conflicts in one checkout before the next.
+Confirm each checkout and its upstream are on `main` (`git -C <path> rev-parse --abbrev-ref HEAD`). Sync in application discovery order: platform first (Base and Core), then optional Domains, then Extensions. Finish conflicts in one checkout before the next.
 
 ### Pull (default)
 
 ```bash
-git -C <path> fetch origin
-git -C <path> pull --ff-only origin main
+git -C <path> fetch <remote>
+git -C <path> pull --ff-only <remote> <upstream-branch>
 ```
 
 ### Rebase
 
 ```bash
-git -C <path> fetch origin
-git -C <path> rebase origin/main
+git -C <path> fetch <remote>
+git -C <path> rebase <remote>/<upstream-branch>
 ```
 
 ### Push
@@ -56,7 +65,7 @@ git -C <path> rebase origin/main
 Commit and push **per nested repo** — platform commits never include gitignored domain/extension trees.
 
 ```bash
-git -C <path> push origin main
+git -C <path> push <remote> HEAD:<upstream-branch>
 ```
 
 ### Conflicts

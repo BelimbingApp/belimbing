@@ -137,7 +137,7 @@ Repository ownership should follow the same boundary:
 
 - `belimbingapp/belimbing` owns Payroll Core and the public country-pack contract. It should stay country-neutral.
 - `BelimbingApp/blb-payroll-my` owns reusable Malaysia statutory behavior: EPF, SOCSO, EIS, PCB, zakat handling, HRD Corp levy, statutory exports, statutory data imports, and Malaysia validation fixtures.
-- `kiatng/blb-sbg` owns private SBG licensee customization while BLB is being developed for SBG: company policies, approval variants, payroll-accounting mappings, cost centers, private reports, bank/payment preferences, custom allowances/deductions, and any business-specific rules that should not be generalized.
+- A deployment-owned private Extension repository owns SBG licensee customization while BLB is being developed for SBG: company policies, approval variants, payroll-accounting mappings, cost centers, private reports, bank/payment preferences, custom allowances/deductions, and any business-specific rules that should not be generalized.
 
 The SBG private repo should layer on top of `BelimbingApp/blb-payroll-my`, not fork or copy Malaysia statutory calculators. If SBG needs a custom allowance or deduction treatment, the preferred path is configuration or a narrow extension hook exposed by the Malaysia pack. If the need is truly statutory and reusable across Malaysian employers, it belongs upstream in `BelimbingApp/blb-payroll-my`.
 
@@ -214,7 +214,7 @@ The contract explicitly forbids these shortcuts:
 
 - Payroll Core must not contain EPF, SOCSO, EIS, PCB, zakat, HRD Corp, or other country-specific columns or concrete service dependencies.
 - Country packs must not write directly into closed payroll results; they return proposed result lines for Payroll Core to persist.
-- SBG-specific rules in `kiatng/blb-sbg` must not fork or copy Malaysia statutory calculators from `BelimbingApp/blb-payroll-my`; they must use configuration or narrow extension hooks unless the rule belongs upstream for all Malaysian employers.
+- SBG-specific rules in the private Extension repository must not fork or copy Malaysia statutory calculators from `BelimbingApp/blb-payroll-my`; they must use configuration or narrow extension hooks unless the rule belongs upstream for all Malaysian employers.
 - Formal compliance claims such as LHDN endorsement must not be implied by the contract. The contract supports official formulas, effective-dated statutory data, and validation fixtures; endorsement/verification is a separate operational status.
 
 ## Future-Country Accommodation
@@ -247,7 +247,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 ### Phase 0 — Boundary and contract lock
 
-- [x] Confirm the ownership boundary: `belimbingapp/belimbing` owns Payroll Core, `BelimbingApp/blb-payroll-my` owns Malaysia statutory behavior, and `kiatng/blb-sbg` owns private SBG customization. {amp/gpt-5.1-codex}
+- [x] Confirm the ownership boundary: `belimbingapp/belimbing` owns Payroll Core, `BelimbingApp/blb-payroll-my` owns Malaysia statutory behavior, and a deployment-owned private Extension repository owns SBG customization. {amp/gpt-5.1-codex}
 - [x] Define the first country-pack contract in prose: statutory profiles, pay-item classification, calculators, statutory data, exports, validation fixtures, and explanation/audit output. {amp/gpt-5.1-codex}
 - [x] Codify the Payroll Country Pack v0 extension contract and singleton registry in Payroll Core so country packs expose manifest, profile-schema, pay-item-classifier, calculator, and export facets without concrete country dependencies. {amp/gpt-5.1-codex}
 - [x] State the no-leak rule before implementation: Payroll Core must not depend on EPF/SOCSO/PCB classes, Malaysia table names, or Malaysia-specific columns. {amp/gpt-5.1-codex}
@@ -329,7 +329,7 @@ This mirrors proven global-payroll systems: a country-neutral core payroll appli
 
 - [ ] Decide when to physically maintain Malaysia in the public `BelimbingApp/blb-payroll-my` repository and install it as `app/Extensions/Belimbing/PayrollMy`.
 - [ ] Validate the country-pack contract with a thin second-country spike before building another full statutory pack.
-- [ ] Confirm which SBG-specific payroll rules belong in `kiatng/blb-sbg` versus upstream in `BelimbingApp/blb-payroll-my`.
+- [ ] Confirm which SBG-specific payroll rules belong in its private Extension repository versus upstream in `BelimbingApp/blb-payroll-my`.
 
 ## Open Research Before Implementation
 

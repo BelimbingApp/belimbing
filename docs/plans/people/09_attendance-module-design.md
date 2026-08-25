@@ -39,7 +39,7 @@ BLB has a substantial Attendance module, but the remaining work is the operator-
 
 ## Desired Outcome
 
-An Attendance Module under `app/Domains/People/Attendance/` that records and explains daily attendance from schedules, clock events, manual adjustments, and approved exceptions; supports shift and roster patterns including 24-hour and rotating shifts; publishes payroll-facing events that Payroll materializes into neutral contributions; and exposes employee, supervisor, HR, and payroll surfaces through the People workbench. The Attendance Module should remain country-neutral. Malaysia statutory or wage-classification behavior belongs in the Malaysia payroll country pack, while SBG-specific shift rules, allowance formulas, import mappings, and device/geofence policy belong in `kiatng/blb-sbg`.
+An Attendance Module under `app/Domains/People/Attendance/` that records and explains daily attendance from schedules, clock events, manual adjustments, and approved exceptions; supports shift and roster patterns including 24-hour and rotating shifts; publishes payroll-facing events that Payroll materializes into neutral contributions; and exposes employee, supervisor, HR, and payroll surfaces through the People workbench. The Attendance Module should remain country-neutral. Malaysia statutory or wage-classification behavior belongs in the Malaysia payroll country pack, while SBG-specific shift rules, allowance formulas, import mappings, and device/geofence policy belong in its deployment-owned private Extension repository.
 
 The immediate build slice is the setup-activation and payroll-facing surface work: source-evidence, version activation, roster-change notifications, payroll tabs, reconciliation reports, CSV exports, and saved filters. Device/geofence and SBG import stay later phases.
 
@@ -280,7 +280,7 @@ The immediate build slice is the setup-activation and payroll-facing surface wor
 - [ ] Confirm SBG's day-one Attendance scope: manual/imported attendance only, web/PWA clocking, overtime approval, rotating shifts, conditional allowances, GPS/geofence, device binding, and current HR2000 export/report requirements.
 - [x] Review current SBG Time Management setup exports/screenshots in `docs/plans/people/sbg_attendance_ref/`: TMS Group, conditional allowance, overtime export, lateness export, absenteeism batch, clock transaction, geofence, and geogroup surfaces. {codex/gpt-5}
 - [ ] Collect missing SBG exports/screenshots not present in `sbg_attendance_ref`: rounding table, export setup, report output, actual populated timecards, populated absenteeism batches, and device/geofence assignment details.
-- [ ] Decide which attendance defaults belong in Core seeders, Malaysia payroll pack metadata, and `kiatng/blb-sbg` private configuration.
+- [ ] Decide which attendance defaults belong in Core seeders, Malaysia payroll pack metadata, and deployment-owned private Extension configuration.
 - [ ] Confirm Workflow can execute overtime and attendance-exception approval profiles selected from employee, supervisor chain, hours/amount threshold, cost center, shift/day type, and delegated approver limit; file a Workflow gap if not.
 - [ ] Confirm the first payroll integration target: approved overtime only, or overtime plus lateness/absence/allowances.
 
@@ -362,4 +362,4 @@ The immediate build slice is the setup-activation and payroll-facing surface wor
 - [ ] Support SBG policy import as draft structured input with collapsed-pattern explanations, unmapped-field warnings, source screenshot/export references, and human review before activation; AI may help transform screenshots/docs into draft input but is not required migration infrastructure.
 - [ ] Import historical or opening attendance summaries, approved overtime, and already-paid attendance adjustments needed for payroll cutover.
 - [ ] Reconcile BLB attendance/overtime/payroll handoff against HR2000 reports for a selected historical pay period.
-- [ ] Document remaining HR2000 gaps, explicitly separating Core gaps, Malaysia pack gaps, and `kiatng/blb-sbg` private-policy gaps.
+- [ ] Document remaining HR2000 gaps, explicitly separating Core gaps, Malaysia pack gaps, and deployment-owned private Extension policy gaps.

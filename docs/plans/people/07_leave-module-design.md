@@ -23,7 +23,7 @@ BLB's People suite currently has no Leave capability. Without it, the Payroll mo
 
 ## Desired Outcome
 
-A Leave Module under `app/Domains/People/Leave/` that gives a small-to-mid-size Malaysian employer a credible end-to-end leave operation — entitlement configuration, accrual and balances, employee/manager request and approval workflow, calendar visibility, attachments, cancellations, replacement and carry-forward rules, and clean handoff to Payroll for unpaid leave and any encashment — while preserving the same architectural shape Payroll established: a country-neutral Leave Module in `belimbingapp/belimbing`, Malaysia statutory leave behaviour in `BelimbingApp/blb-payroll-my` (or a sibling `blb-people-my` if the boundary proves separate), and SBG-specific leave policies and templates in `kiatng/blb-sbg`. Done means HR can run a normal monthly leave cycle for SBG, the figures match HR2000 within the parity scope, and no Malaysia-specific column or class lives in the Leave Module.
+A Leave Module under `app/Domains/People/Leave/` that gives a small-to-mid-size Malaysian employer a credible end-to-end leave operation — entitlement configuration, accrual and balances, employee/manager request and approval workflow, calendar visibility, attachments, cancellations, replacement and carry-forward rules, and clean handoff to Payroll for unpaid leave and any encashment — while preserving the same architectural shape Payroll established: a country-neutral Leave Module in `belimbingapp/belimbing`, Malaysia statutory leave behaviour in `BelimbingApp/blb-payroll-my` (or a sibling `blb-people-my` if the boundary proves separate), and SBG-specific leave policies and templates in its deployment-owned private Extension repository. Done means HR can run a normal monthly leave cycle for SBG, the figures match HR2000 within the parity scope, and no Malaysia-specific column or class lives in the Leave Module.
 
 ## Top-Level Components
 
@@ -110,7 +110,7 @@ A Leave Module under `app/Domains/People/Leave/` that gives a small-to-mid-size 
 **The contract explicitly forbids:**
 - Leave Core depending on Malaysia-specific classes, columns, or labels (no `is_employment_act_subject`, no `state_holiday_code` on core tables).
 - Country packs writing into closed leave periods or mutating prior-year ledger entries directly; corrections happen as new ledger facts.
-- SBG private code in `kiatng/blb-sbg` forking Malaysia statutory leave types or holiday calendars; SBG layers configuration and narrow extension hooks on top of the Malaysia pack.
+- SBG private code forking Malaysia statutory leave types or holiday calendars; SBG layers configuration and narrow extension hooks on top of the Malaysia pack.
 - Implying compliance certification. The contract supports Employment-Act minima and validation; formal advisory or labour-court reliance is the licensee's responsibility.
 
 ## Naming Judgement
@@ -223,11 +223,11 @@ The HR2000/iPayroll exports are evidence, not vocabulary. BLB should use names t
 ### Phase 7 — Migration and SBG validation
 
 - [ ] Define HR2000 e-Leave import contract: leave types mapping, opening balances per employee/type/year, historical request log (optional, scoped), pending requests in flight. Translate HR2000 sentinels (`99`/`99.00`) to `NULL` on ingest.
-- [x] Seed the SBG private pack (`kiatng/blb-sbg`) with the non-statutory SBG types observed in the reference export: marriage (MRL), compassionate (CL), exam (EXAM), time-slip (T/S, hourly), replacement variants (RL and RPL), and SBG's higher-than-floor AL service bands (AL-LOCAL 12/14/16/21) plus the FW band (AL-FW 8/12/16). {copilot/gpt-5.4}
+- [x] Seed the deployment-owned SBG private Extension with the non-statutory SBG types observed in the reference export: marriage (MRL), compassionate (CL), exam (EXAM), time-slip (T/S, hourly), replacement variants (RL and RPL), and SBG's higher-than-floor AL service bands (AL-LOCAL 12/14/16/21) plus the FW band (AL-FW 8/12/16). {copilot/gpt-5.4}
 - [x] Seed the SBG `LeaveAssignment` cohorts equivalent to HR2000 groups (FM / FW / MM / SINGLE) using demographic predicates (gender, marital status, citizenship). {copilot/gpt-5.4}
 - [ ] Run dry-run import against SBG export with reconciliation report.
 - [ ] Validate Malaysia pack against SBG's actual leave operation for one full year cycle (entitlement, accrual, year-end carry-forward, expiry, encashment, payroll handoff).
-- [ ] Confirm which SBG-specific rules belong in `kiatng/blb-sbg` versus upstream in the Malaysia pack.
+- [ ] Confirm which SBG-specific rules belong in its private Extension repository versus upstream in the Malaysia pack.
 
 ## Open Research Before Implementation
 

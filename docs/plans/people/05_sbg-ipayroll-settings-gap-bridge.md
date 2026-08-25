@@ -16,13 +16,13 @@ The existing People and Payroll plans cover module architecture, statutory calcu
 
 ## Desired Outcome
 
-BLB provides a coherent People Settings foundation that can absorb SBG's current iPayroll setup without scattering one-off dropdowns across Payroll, Employees, employee self-service workflows, Leave, Claims, Attendance, and Training. The reusable framework belongs in `belimbingapp/belimbing`; Malaysia statutory settings stay in `BelimbingApp/blb-payroll-my`; SBG-specific code lists, labels, payroll-accounting mappings, and private policies belong in `kiatng/blb-sbg`.
+BLB provides a coherent People Settings foundation that can absorb SBG's current iPayroll setup without scattering one-off dropdowns across Payroll, Employees, employee self-service workflows, Leave, Claims, Attendance, and Training. The reusable framework belongs in `belimbingapp/belimbing`; Malaysia statutory settings stay in `BelimbingApp/blb-payroll-my`; SBG-specific code lists, labels, payroll-accounting mappings, and private policies belong in its deployment-owned private Extension repository.
 
 ## Top-Level Components
 
 | Component | SBG iPayroll evidence | BLB gap | Target ownership |
 |-----------|------------------------|---------|------------------|
-| Organization reference data | Cost Center, Department, Section, Category, Division, Unit, Occupation, Job Grade exports/screens | Current plans mention company hierarchy and employee placement, but not the operational code tables needed to filter, import, report, and map payroll cost. iPayroll's labels are not clean enough to copy directly. | Core People Settings, with SBG seed data in `kiatng/blb-sbg` |
+| Organization reference data | Cost Center, Department, Section, Category, Division, Unit, Occupation, Job Grade exports/screens | Current plans mention company hierarchy and employee placement, but not the operational code tables needed to filter, import, report, and map payroll cost. iPayroll's labels are not clean enough to copy directly. | Core People Settings, with SBG seed data in its private Extension repository |
 | Employee classification dictionaries | Qualification, Race, Religion, Nationality, job/occupation lists | Employee statutory profiles cover payroll tax/contribution fields, but HR profile dictionaries are not planned as configurable settings. | Core People Settings; country pack may add statutory semantics where legally required |
 | Payroll/payment dictionaries | Bank, Income Tax Branch, Foreign Currency, government address list | Payroll plan mentions bank/payment settings and statutory profiles, but not admin-maintained dictionaries and source imports. | Core Payroll/People Settings; Malaysia pack owns statutory branch semantics |
 | Time/calendar setup | Calendar Group, Custom Days, Department calendar column | Attendance/Leave plans mention holidays and calendars, but no shared settings model for work calendars and custom days. | Core People Settings consumed by Leave/Attendance/Payroll |
@@ -43,7 +43,7 @@ BLB provides a coherent People Settings foundation that can absorb SBG's current
 
 **Do not inherit iPayroll's names when they obscure the domain.** iPayroll names such as `Table Of Code`, `Category`, `Employee Master`, `ESS`, `ESS Access`, `e-Letter`, `Save To Query`, `BlackList`, and `GovAddress` are migration clues, not BLB vocabulary. BLB names should state the business object: reference data, employment group, employee workbench, employee account access, employment documents, saved employee views, restricted-person register, and statutory agency offices.
 
-**Keep SBG seed data private and importable.** The exported SBG lists are useful migration evidence, but they include customer-specific structure and, in screenshots, employee/person data. BLB should ship import contracts and validation; `kiatng/blb-sbg` should own the actual SBG seed files and any cleanup mapping.
+**Keep SBG seed data private and importable.** The exported SBG lists are useful migration evidence, but they include customer-specific structure and, in screenshots, employee/person data. BLB should ship import contracts and validation; the deployment-owned private Extension repository should own the actual SBG seed files and any cleanup mapping.
 
 **Treat code cleanup as migration work, not product behavior.** The SBG exports show duplicate or near-duplicate codes/descriptions in categories, banks, departments, and sections. BLB should preserve source codes during import for audit, then allow explicit aliases/merges so historical references remain explainable.
 
@@ -130,7 +130,7 @@ BLB should keep the imported iPayroll label only as `source_label` or migration 
 
 - [x] Define CSV/XLSX import contracts matching the exported SBG lists, mapped into BLB names: organization units, employment groups, job titles, workforce classes, employee segment/qualification groups, demographic attributes, banks, statutory agency offices, and training providers. `PeopleReferenceImportService` parses CSV and XLSX content into row contracts. {GitHub Copilot/gpt-5.5}
 - [x] Build dry-run validation that reports missing required fields, duplicate codes, near-duplicate labels, unsupported characters, and references to calendars or parents that do not exist yet. The delivered dry-run path reports missing code/name, duplicate import codes/names, and similar existing names; parent/calendar reference checks are represented by typed dictionary references for follow-on imports. {GitHub Copilot/gpt-5.5}
-- [x] Provide an alias/merge mapping file shape for `kiatng/blb-sbg` so SBG can clean duplicates without losing the original iPayroll code. `people_reference_aliases` preserves source system/type/code/label against the canonical entry. {GitHub Copilot/gpt-5.5}
+- [x] Provide an alias/merge mapping file shape for the deployment-owned private Extension repository so SBG can clean duplicates without losing the original iPayroll code. `people_reference_aliases` preserves source system/type/code/label against the canonical entry. {GitHub Copilot/gpt-5.5}
 - [x] Generate a migration report after import showing accepted rows, skipped rows, merged aliases, inactive records, and unresolved follow-ups. `people_import_jobs.summary` and `row_results` persist row-level outcomes. {GitHub Copilot/gpt-5.5}
 
 ### Phase 4 — Payroll/payment and statutory settings
