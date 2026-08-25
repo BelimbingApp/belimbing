@@ -8,20 +8,19 @@ use Composer\CaBundle\CaBundle;
 use GuzzleHttp\Promise\Create;
 use GuzzleHttp\Psr7\Response as Psr7Response;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
-use Psr\Http\Message\RequestInterface;
 
 const INTEGRATION_REDACTED_VALUE = '[redacted]';
 
 it('uses a portable CA bundle for verified outbound TLS', function (): void {
     $optionsSeen = [];
-    Http::globalOptions([
-        'handler' => function (RequestInterface $request, array $options) use (&$optionsSeen) {
-            $optionsSeen = $options;
+    Http::fake(function (Request $request, array $options) use (&$optionsSeen) {
+        expect($request->url())->toBe('https://api.example.test/tls');
+        $optionsSeen = $options;
 
-            return Create::promiseFor(new Psr7Response(200, [], '{"ok":true}'));
-        },
-    ]);
+        return Create::promiseFor(new Psr7Response(200, [], '{"ok":true}'));
+    });
 
     $response = app(IntegrationGateway::class)->send(new IntegrationRequest(
         system: 'example',
