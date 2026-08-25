@@ -1,54 +1,47 @@
 #!/usr/bin/env bash
-# Bilimbi-specific orientation. Keep repository-local project facts here so the
-# shared operating guide and its generic mechanisms can move to another repo.
+# Belimbing-specific orientation. Keep repository-local project facts here so
+# the shared operating guide and its generic mechanisms can move elsewhere.
 
 set -u
 
-BLB=${BLB_PATH:-/home/kiat/repo/laravel/blb}
-BLB_COMMIT=769bc31ddb632f5d2c5acb0fd05b777197df87cc
-
-echo "== Bilimbi project: canonical Belimbing checkout =="
-if [ ! -d "$BLB/app" ]; then
-  echo "  MISSING $BLB has no app/ tree — do not cite \"Belimbing\" from anywhere else"
-elif ! git -C "$BLB" cat-file -e "${BLB_COMMIT}^{commit}" 2>/dev/null; then
-  echo "  WARNING $BLB does not contain ${BLB_COMMIT:0:8} at all — this is not the tree we ported from"
+echo "== Belimbing project: runtime contract =="
+php_constraint=$(jq -r '.require.php' composer.json 2>/dev/null)
+octane_constraint=$(jq -r '.require["laravel/octane"]' composer.json 2>/dev/null)
+echo "  source  PHP ${php_constraint:-unknown}; Laravel Octane ${octane_constraint:-unknown} with FrankenPHP"
+if command -v php >/dev/null 2>&1; then
+  echo "  local   $(php -r 'echo "PHP ".PHP_VERSION;' 2>/dev/null)"
 else
-  at=$(git -C "$BLB" rev-parse HEAD)
-  ahead=$(git -C "$BLB" rev-list --count "${BLB_COMMIT}..HEAD" 2>/dev/null)
-  if [ "$at" = "$BLB_COMMIT" ]; then
-    echo "  ok      $BLB at ${at:0:8}, the operational citation pin"
-  elif git -C "$BLB" merge-base --is-ancestor "$BLB_COMMIT" HEAD 2>/dev/null; then
-    echo "  MOVED   $BLB is ${ahead} commit(s) ahead of the pinned ${BLB_COMMIT:0:8} (now ${at:0:8})."
-    echo "          Fast-forward, so nothing already cited was rewritten — but these"
-    echo "          app/ files changed after the pin, and a port of one of them may"
-    echo "          now disagree with its source:"
-    git -C "$BLB" diff --name-only "${BLB_COMMIT}..HEAD" -- app/ | sed 's/^/            /'
-  else
-    echo "  DIVERGED $BLB is at ${at:0:8}; the pinned ${BLB_COMMIT:0:8} is not an ancestor."
-    echo "          Citations from it are against a history we did not port."
-  fi
+  echo "  MISSING php is not available on PATH"
 fi
 
 echo
-echo "== Bilimbi project: installed modules on origin/main =="
-descriptors=$(git ls-tree -r --name-only origin/main 2>/dev/null | grep '/bilimbi\.module\.exs$')
-
-for descriptor in $descriptors; do
-  git show "origin/main:$descriptor" 2>/dev/null | grep -m1 'id:' | sed 's/^ */  /'
+echo "== Belimbing project: application topology on origin/main =="
+for root in Base Core Domains Extensions; do
+  count=$(git ls-tree -r --name-only origin/main -- "app/$root" 2>/dev/null | awk 'NF {seen=1} END {print seen+0}')
+  if [ "$count" -eq 1 ]; then
+    entries=$(git ls-tree -d --name-only "origin/main:app/$root" 2>/dev/null | paste -sd, -)
+    echo "  app/$root  ${entries:-tracked files present}"
+  else
+    echo "  app/$root  absent"
+  fi
 done
 
-if [ -n "$descriptors" ] && ! git diff --quiet origin/main -- $descriptors 2>/dev/null; then
+if [ ! -d vendor ]; then
   echo
-  echo "  NOTE  your working tree's module descriptors differ from origin/main."
+  echo "  NOTE  vendor/ is absent; run composer install before PHP validation."
+fi
+if [ ! -d node_modules ]; then
+  echo "  NOTE  node_modules/ is absent; run bun install before frontend validation."
 fi
 
 cat <<'TXT'
 
-== Bilimbi project: commands worth knowing ==
-  cd apps/core/user && mix test           one module's suite; works without root deps
-  cd apps/core/compatibility && mix test  the real gate: migrate + verify against PostgreSQL
-  cd apps/web && PORT=4002 mix phx.server serve YOUR branch, then look at it
+== Belimbing project: commands worth knowing ==
+  composer test                 clear config and run the Pest suite
+  vendor/bin/pint --dirty       format changed PHP files
+  bun run build                 build the Vite/Tailwind frontend
+  composer dev                  start FrankenPHP, queues, scheduler, and Vite
 
-Never judge a screen from the long-lived dev server on :4000. It belongs to
-another checkout and its contribution snapshot is built once at boot.
+Use a server started from your own branch when judging UI. FrankenPHP keeps
+workers warm, so restart it when testing bootstrap, middleware, or discovery.
 TXT
