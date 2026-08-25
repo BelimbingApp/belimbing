@@ -17,10 +17,12 @@ return new class extends Migration
         // inserted a sole ID-1 bootstrap row and is still the most recently
         // recorded migration. It is not retained application data yet. Remove
         // that artifact so normal sequence-backed provisioning creates the
-        // operator without a forced numeric identity. Upgrade databases have
-        // later recorded migrations, so ID 1 remains deterministic legacy
-        // input that must be preserved. This provenance check deliberately
-        // avoids making Base/Tenancy inspect a Core/Company table.
+        // operator without a forced numeric identity. Upgrade databases carry
+        // migration rows from earlier batches — even when they catch up across
+        // multiple releases in one migrate run — so ID 1 remains deterministic
+        // legacy input that must be preserved. This provenance check
+        // deliberately avoids making Base/Tenancy inspect a Core/Company
+        // table.
         if ($this->isFreshBootstrapReplay()
             && DB::table('tenants')->count() === 1
             && DB::table('tenants')->where('id', 1)->exists()) {
@@ -97,9 +99,24 @@ return new class extends Migration
             return false;
         }
 
-        return DB::table('migrations')
-            ->orderByDesc('id')
-            ->value('migration') === '0100_01_25_000000_create_tenants_table';
+        $latest = DB::table('migrations')->orderByDesc('id')->first(['migration', 'batch']);
+
+        if ($latest?->migration !== '0100_01_25_000000_create_tenants_table') {
+            return false;
+        }
+
+        // Recency alone cannot distinguish a fresh replay from an upgrade
+        // database catching up across multiple releases in a single migrate
+        // run: in both cases the predecessor migration is the most recently
+        // recorded row while this migration executes. A fresh replay records
+        // its entire history in one batch; any row from an earlier batch
+        // proves a previous migrate run and therefore an upgrade database
+        // whose ID-1 bootstrap row is retained legacy input. When in doubt,
+        // keeping the row is the safe outcome — deleting is what destroys
+        // an upgrade database's operator identity.
+        return ! DB::table('migrations')
+            ->where('batch', '<', $latest->batch)
+            ->exists();
     }
 
     private function lockTenants(): void
