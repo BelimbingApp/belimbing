@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Foundation\Compatibility\LegacyApplicationClassMap;
 use App\Base\Tenancy\Models\Tenant;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
@@ -121,7 +122,13 @@ return new class extends Migration
         $tenantIds = [];
 
         foreach ($links as $link) {
-            $tenantId = match ($this->normalizeMorphClass($link->addressable_type)) {
+            // Morph rows written before the four-root topology normalization
+            // still carry pre-cutover class names. That normalization migration
+            // sorts after this file, so a database catching up across both
+            // releases in one migrate run reads the legacy names here first.
+            $addressableType = LegacyApplicationClassMap::canonical($link->addressable_type);
+
+            $tenantId = match ($addressableType) {
                 Company::class => $this->companyTenantId((int) $link->addressable_id),
                 Employee::class => $this->employeeTenantId((int) $link->addressable_id),
                 default => throw new RuntimeException(
@@ -138,17 +145,6 @@ return new class extends Migration
         sort($tenantIds);
 
         return array_values(array_unique($tenantIds));
-    }
-
-    /**
-     * Morph rows written before 2026_08_05_000000_normalize_four_root_application_topology
-     * still carry pre-topology class names. That normalization migration sorts
-     * after this file, so a database catching up across both releases in one
-     * migrate run reads the legacy names here first.
-     */
-    private function normalizeMorphClass(string $type): string
-    {
-        return str_replace('App\\Modules\\Core\\', 'App\\Core\\', $type);
     }
 
     private function companyTenantId(int $companyId): mixed

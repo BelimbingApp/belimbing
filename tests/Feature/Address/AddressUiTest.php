@@ -1,6 +1,8 @@
 <?php
 
+use App\Base\Foundation\Compatibility\LegacyApplicationClassMap;
 use App\Base\Tenancy\Contracts\TenantContext;
+use App\Base\Tenancy\Models\Tenant;
 use App\Core\Address\Exceptions\AddressTenantAssignmentException;
 use App\Core\Address\Models\Address;
 use App\Core\Address\Models\Addressable;
@@ -9,6 +11,7 @@ use App\Core\Employee\Models\Employee;
 use App\Core\Geonames\Models\Admin1;
 use App\Core\Geonames\Models\Country;
 use App\Core\Geonames\Models\Postcode;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -17,6 +20,28 @@ const ADDRESS_UI_WAREHOUSE_LINE = '88 River Road';
 const ADDRESS_UI_BOSTON_POSTCODE = '02110';
 const ADDRESS_UI_KUALA_LUMPUR = 'Kuala Lumpur';
 const ADDRESS_UI_KUALA_LUMPUR_POSTCODE = '50450';
+
+/**
+ * The address tenancy backfill migration, loaded as an executable instance so
+ * tests can drive its up/down halves directly.
+ */
+function addressTenancyMigration(): object
+{
+    return require app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php');
+}
+
+/**
+ * The pre-cutover morph name for a model class, as rows written before the
+ * four-root topology normalization still record it.
+ */
+function legacyAddressableType(string $class): string
+{
+    $equivalents = LegacyApplicationClassMap::equivalents($class);
+
+    expect($equivalents)->toHaveCount(2);
+
+    return $equivalents[1];
+}
 
 test('guests are redirected to login from addresses pages', function (): void {
     $this->get(route('admin.addresses.index'))->assertRedirect(route('login'));
@@ -217,7 +242,7 @@ test('address detail saves location as a grouped edit', function (): void {
 
 test('address tenancy migration preflight rejects unowned addresses when multiple tenants exist', function (): void {
     createTenant(['name' => 'Second Tenant']);
-    $migration = require app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php');
+    $migration = addressTenancyMigration();
     $migration->down();
 
     $addressId = DB::table('addresses')->insertGetId([
@@ -241,7 +266,7 @@ test('address tenancy migration preflight rejects unowned addresses when multipl
 test('address tenancy migration backfills links recorded under pre-topology morph names', function (): void {
     $company = Company::factory()->create();
     $employee = Employee::factory()->create(['company_id' => $company->id]);
-    $migration = require app_path('Core/Address/Database/Migrations/0200_01_05_000002_add_tenant_to_addresses.php');
+    $migration = addressTenancyMigration();
     $migration->down();
 
     $companyAddressId = DB::table('addresses')->insertGetId([
@@ -260,14 +285,14 @@ test('address tenancy migration backfills links recorded under pre-topology morp
     DB::table('addressables')->insert([
         [
             'address_id' => $companyAddressId,
-            'addressable_type' => 'App\\Modules\\Core\\Company\\Models\\Company',
+            'addressable_type' => legacyAddressableType(Company::class),
             'addressable_id' => $company->id,
             'created_at' => now(),
             'updated_at' => now(),
         ],
         [
             'address_id' => $employeeAddressId,
-            'addressable_type' => 'App\\Modules\\Core\\Employee\\Models\\Employee',
+            'addressable_type' => legacyAddressableType(Employee::class),
             'addressable_id' => $employee->id,
             'created_at' => now(),
             'updated_at' => now(),
@@ -288,5 +313,97 @@ test('address tenancy migration backfills links recorded under pre-topology morp
         if (! Schema::hasColumn('addresses', 'tenant_id')) {
             $migration->up();
         }
+    }
+});
+
+test('address tenancy migration resolves companies on a pre-tenancy schema', function (): void {
+    // 0200_01_07_001003 adds companies.tenant_id and sorts after this
+    // migration, so a database catching up across both releases in one migrate
+    // run has no column to read. Reproducing that means a schema without the
+    // column at all, which the suite's own database cannot offer: it is fully
+    // migrated, and dropping the column there would mean tearing down the
+    // foreign-key web around companies. A throwaway connection carrying only
+    // the tables the backfill touches reproduces it exactly and cheaply.
+    $originalConnection = DB::getDefaultConnection();
+    config(['database.connections.address_pre_tenancy' => [
+        'driver' => 'sqlite',
+        'database' => ':memory:',
+        'prefix' => '',
+        'foreign_key_constraints' => true,
+    ]]);
+    DB::setDefaultConnection('address_pre_tenancy');
+
+    try {
+        Schema::create('tenants', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+            $table->softDeletes();
+        });
+        Schema::create('companies', function (Blueprint $table): void {
+            $table->id();
+            $table->string('name');
+        });
+        Schema::create('employees', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('company_id');
+        });
+        Schema::create('addresses', function (Blueprint $table): void {
+            $table->id();
+            $table->string('label');
+            $table->timestamps();
+        });
+        Schema::create('addressables', function (Blueprint $table): void {
+            $table->unsignedBigInteger('address_id');
+            $table->string('addressable_type');
+            $table->unsignedBigInteger('addressable_id');
+            $table->timestamps();
+        });
+
+        // A second tenant rules out the migration's single-tenant fallback, so
+        // the assignments below can only come from resolving the company.
+        DB::table('tenants')->insert([
+            ['id' => Tenant::LICENSEE_TENANT_ID, 'name' => 'Legacy Licensee'],
+            ['id' => Tenant::LICENSEE_TENANT_ID + 6, 'name' => 'Later Tenant'],
+        ]);
+        $companyId = DB::table('companies')->insertGetId(['name' => 'Pre-Tenancy Company']);
+        $employeeId = DB::table('employees')->insertGetId(['company_id' => $companyId]);
+        $companyAddressId = DB::table('addresses')->insertGetId([
+            'label' => 'Pre-Tenancy Company Address',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $employeeAddressId = DB::table('addresses')->insertGetId([
+            'label' => 'Pre-Tenancy Employee Address',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('addressables')->insert([
+            [
+                'address_id' => $companyAddressId,
+                'addressable_type' => Company::class,
+                'addressable_id' => $companyId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'address_id' => $employeeAddressId,
+                'addressable_type' => Employee::class,
+                'addressable_id' => $employeeId,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        expect(Schema::hasColumn('companies', 'tenant_id'))->toBeFalse();
+
+        addressTenancyMigration()->up();
+
+        expect((int) DB::table('addresses')->where('id', $companyAddressId)->value('tenant_id'))
+            ->toBe(Tenant::LICENSEE_TENANT_ID)
+            ->and((int) DB::table('addresses')->where('id', $employeeAddressId)->value('tenant_id'))
+            ->toBe(Tenant::LICENSEE_TENANT_ID);
+    } finally {
+        DB::setDefaultConnection($originalConnection);
+        DB::purge('address_pre_tenancy');
     }
 });
