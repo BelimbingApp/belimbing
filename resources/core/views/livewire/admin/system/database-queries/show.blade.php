@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Base\Database\Livewire\Queries\Show $this */
+
+use App\Base\Database\Livewire\Queries\Show;
+
+/** @var Show $this */
 ?>
 
 @php

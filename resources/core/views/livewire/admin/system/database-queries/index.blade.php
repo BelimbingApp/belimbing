@@ -1,5 +1,8 @@
 <?php
-/** @var \App\Base\Database\Livewire\Queries\Index $this */
+
+use App\Base\Database\Livewire\Queries\Index;
+
+/** @var Index $this */
 ?>
 
 <div>
