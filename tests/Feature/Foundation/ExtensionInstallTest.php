@@ -8,6 +8,7 @@ use App\Base\Settings\Models\Setting;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
@@ -26,6 +27,9 @@ const EXTENSION_INSTALL_BASE_PATH = 'app/Extensions/';
 beforeEach(function (): void {
     app()->instance(DomainRuntimeReloader::class, new FakeDomainRuntimeReloader);
     setupAuthzRoles();
+    // Rendering Domains runs extension discovery for token-holding owners;
+    // never let it reach the real GitHub API.
+    Http::fake();
     config(['extensions.catalog' => [
         EXTENSION_INSTALL_FOLDER => ['repo' => EXTENSION_INSTALL_REPO, 'description' => 'Test extension.'],
     ]]);

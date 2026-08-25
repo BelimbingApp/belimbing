@@ -11,6 +11,7 @@ use App\Base\Foundation\ModuleManifest\ModuleManifestReader;
 use App\Base\Foundation\Services\DomainInstaller;
 use App\Base\Foundation\Services\ExtensionInstaller;
 use App\Base\Software\Inventory\InstalledSource;
+use App\Base\Software\Services\ExtensionCatalogDiscovery;
 use App\Base\Software\Services\SoftwareInventoryService;
 use App\Base\Support\Str;
 use Illuminate\Contracts\View\View;
@@ -107,14 +108,21 @@ class Domains extends Component
         $this->redirectRoute('admin.system.software.domains.index');
     }
 
-    public function installExtension(string $folder, ExtensionInstaller $installer): void
+    public function installExtension(string $folder, ExtensionInstaller $installer, ExtensionCatalogDiscovery $discovery): void
     {
         $this->authorizeManage();
 
         // Clone + migrate outlive a default PHP execution window.
         set_time_limit(0);
 
-        $result = $installer->install($folder);
+        // The wire call only ever carries the folder key; the repo URL resolves
+        // server-side — config catalog first (inside install()), else a discovered
+        // candidate from a token-holding owner. No free-text URL path.
+        $repo = is_array(config('extensions.catalog.'.$folder))
+            ? null
+            : ($discovery->candidate($folder)['repo'] ?? null);
+
+        $result = $installer->install($folder, $repo);
 
         session()->flash($result['ok'] ? 'success' : 'error', $result['ok']
             ? __('Extension :folder installed. Its modules are live from the next page load.', ['folder' => $folder])
@@ -210,7 +218,7 @@ class Domains extends Component
         $this->notify(__('Catalog refreshed from GitHub.'));
     }
 
-    public function render(DomainInstaller $installer, ExtensionInstaller $extensions, SoftwareInventoryService $inventory): View
+    public function render(DomainInstaller $installer, ExtensionInstaller $extensions, SoftwareInventoryService $inventory, ExtensionCatalogDiscovery $discovery): View
     {
         $reader = $this->reader();
         $enabledManifests = $reader->all();
@@ -255,6 +263,7 @@ class Domains extends Component
             );
         }
 
+        $discovered = $discovery->discover();
         $catalog = app(BelimbingAppCatalogService::class);
         $installedModuleIds = collect($installedManifests)
             ->map(fn (ModuleManifest $manifest): string => $manifest->module)
@@ -269,13 +278,40 @@ class Domains extends Component
             'sourcesByLifecycle' => $sourcesByLifecycle,
             'driftedAddInSources' => $driftedAddInSources,
             'available' => $installer->available(),
-            'availableExtensions' => $extensions->available(),
+            'availableExtensions' => $this->mergeAvailableExtensions($extensions, $discovered),
+            'extensionDiscoveryErrors' => $discovered['errors'],
             'dependencyIssues' => $dependencyIssues,
             'catalogEntries' => $catalog->available(),
             'installedModuleIds' => $installedModuleIds,
             'catalogLastFetchedAt' => $catalog->lastFetchedAt(),
             'canManage' => $this->canManage(),
         ]);
+    }
+
+    /**
+     * Curated catalog entries plus discovered candidates, each tagged with its
+     * source. A config catalog key always wins over a discovered candidate
+     * (pin/override), and installed extensions never reappear.
+     *
+     * @param  array{candidates: array<string, array{repo: string, description: string, owner: string, has_token: bool}>, errors: array<string, string>}  $discovered
+     * @return array<string, array{repo: string, description: string, owner: string|null, has_token: bool, source: string}>
+     */
+    private function mergeAvailableExtensions(ExtensionInstaller $extensions, array $discovered): array
+    {
+        $availableExtensions = array_map(
+            fn (array $entry): array => $entry + ['source' => 'curated'],
+            $extensions->available(),
+        );
+
+        foreach ($discovered['candidates'] as $folder => $candidate) {
+            if (is_array(config('extensions.catalog.'.$folder)) || $extensions->isInstalled($folder)) {
+                continue;
+            }
+
+            $availableExtensions[$folder] = $candidate + ['source' => 'discovered'];
+        }
+
+        return $availableExtensions;
     }
 
     /**

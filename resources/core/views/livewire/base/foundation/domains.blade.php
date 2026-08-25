@@ -531,9 +531,19 @@
             </section>
         @endif
 
-        @if (count($availableExtensions) > 0)
+        @if (count($availableExtensions) > 0 || count($extensionDiscoveryErrors) > 0)
             <section class="space-y-2">
                 <h2 class="text-lg font-semibold text-ink">{{ __('Available Extensions') }}</h2>
+                @if (count($extensionDiscoveryErrors) > 0)
+                    <x-ui.card>
+                        <p class="text-sm font-medium text-status-warning">{{ __('Discovery could not list every trusted owner:') }}</p>
+                        <ul class="mt-1 space-y-0.5 text-xs text-muted">
+                            @foreach ($extensionDiscoveryErrors as $owner => $message)
+                                <li wire:key="extension-discovery-error-{{ $owner }}"><span class="font-mono">{{ $owner }}</span> — {{ $message }}</li>
+                            @endforeach
+                        </ul>
+                    </x-ui.card>
+                @endif
                 <div class="grid gap-4 md:grid-cols-3">
                     @foreach ($availableExtensions as $folder => $entry)
                         @php
@@ -544,11 +554,18 @@
                         <x-ui.card wire:key="available-extension-{{ $folder }}">
                             <div class="flex items-start justify-between gap-2">
                                 <div class="font-medium text-ink">{{ $folder }}</div>
-                                @if ($entry['has_token'])
-                                    <x-ui.badge variant="success">{{ __('token ready') }}</x-ui.badge>
-                                @else
-                                    <x-ui.badge variant="warning" tooltip="{{ __('No GitHub token stored for this owner — save one under GitHub Access if the repo is private.') }}">{{ __('no token') }}</x-ui.badge>
-                                @endif
+                                <div class="flex items-center gap-1">
+                                    @if (($entry['source'] ?? 'curated') === 'discovered')
+                                        <x-ui.badge variant="info" tooltip="{{ __('Offered by discovery: this owner holds a stored GitHub token and marked the repository with the belimbing-extension topic.') }}">{{ __('discovered') }}</x-ui.badge>
+                                    @else
+                                        <x-ui.badge tooltip="{{ __('Pinned in this deployment\'s config/extensions.php catalog.') }}">{{ __('curated') }}</x-ui.badge>
+                                    @endif
+                                    @if ($entry['has_token'])
+                                        <x-ui.badge variant="success">{{ __('token ready') }}</x-ui.badge>
+                                    @else
+                                        <x-ui.badge variant="warning" tooltip="{{ __('No GitHub token stored for this owner — save one under GitHub Access if the repo is private.') }}">{{ __('no token') }}</x-ui.badge>
+                                    @endif
+                                </div>
                             </div>
                             <p class="mt-1 text-sm text-muted">{{ $entry['description'] }}</p>
                             <p class="mt-2 text-xs text-muted"><code class="select-all">{{ $entry['repo'] }}</code></p>

@@ -15,7 +15,8 @@ use InvalidArgumentException;
 /**
  * Installs and uninstalls private Extensions under `app/Extensions/{Extension}`.
  *
- * Each catalog entry (config: extensions.catalog) is a nested Git repository
+ * Each entry — pinned in config (extensions.catalog) or discovered from a
+ * trusted owner (ExtensionCatalogDiscovery) — is a nested Git repository
  * cloned into `app/Extensions/{Extension}`; one repository may contain several modules. Private
  * repos are cloned with the GitHub token stored per owner by GitHub Access
  * (`integrations.github.token.{github-owner}`) — the owner is parsed from the
@@ -100,16 +101,25 @@ class ExtensionInstaller
     }
 
     /**
-     * Clone the catalog repo into `app/Extensions/{Extension}` (token-authenticated for
+     * Clone the repo into `app/Extensions/{Extension}` (token-authenticated for
      * private repos) and run its pending migrations in a fresh subprocess.
+     *
+     * The repo resolves from the config catalog first; `$repo` is the
+     * server-resolved fallback for discovered candidates (see
+     * ExtensionCatalogDiscovery) — never operator free-text. A catalog entry
+     * with the same folder always wins, so config stays a pin/override layer.
      *
      * @return array{ok: bool, log: string}
      */
-    public function install(string $folder): array
+    public function install(string $folder, ?string $repo = null): array
     {
         $entry = config('extensions.catalog.'.$folder);
 
-        if (! is_array($entry) || ! is_string($entry['repo'] ?? null) || $entry['repo'] === '') {
+        if (is_array($entry) && is_string($entry['repo'] ?? null) && $entry['repo'] !== '') {
+            $repo = $entry['repo'];
+        }
+
+        if (! is_string($repo) || $repo === '') {
             throw new InvalidArgumentException("Extension [$folder] is not in the catalog.");
         }
 
@@ -119,7 +129,6 @@ class ExtensionInstaller
 
         $this->assertFolderName($folder);
 
-        $repo = $entry['repo'];
         $path = $this->extensionPath($folder);
 
         if (is_dir($path)) {

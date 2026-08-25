@@ -70,7 +70,10 @@ The nested repository's `origin` must point to the private Extension source, not
 
 ## Install From Software Administration
 
-Production deployments may expose a curated Extension catalog through the software composition interface. Add approved private repositories to `config/extensions.php`:
+The software composition interface offers installable Extensions from two sources, both marked in the UI:
+
+- **Discovered** — for every GitHub owner with a token stored under **Administration → System → Software → GitHub Access**, the screen lists that owner's repositories carrying the `belimbing-extension` topic. The topic is an opt-in published by the repository owner; unmarked repositories never appear, and there is no free-text URL entry. The install key is the PascalCase form of the repository name (`blb-ham` → `BlbHam`); pin the entry in `config/extensions.php` to install under a different directory name.
+- **Curated** — entries pinned in `config/extensions.php`. A catalog entry always wins over a discovered candidate with the same key, so the catalog doubles as a pin/override layer (fixed repo URL, deployment-specific description):
 
 ```php
 return [
