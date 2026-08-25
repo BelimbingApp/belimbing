@@ -16,6 +16,7 @@ const INTEGRATION_REDACTED_VALUE = '[redacted]';
 it('uses a portable CA bundle for verified outbound TLS', function (): void {
     $optionsSeen = [];
     Http::fake(function (Request $request, array $options) use (&$optionsSeen) {
+        expect($request->url())->toBe('https://api.example.test/tls');
         $optionsSeen = $options;
 
         return Create::promiseFor(new Psr7Response(200, [], '{"ok":true}'));
