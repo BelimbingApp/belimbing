@@ -6,12 +6,16 @@ use App\Base\AI\DTO\ChatRequest;
 use App\Base\AI\Services\LlmClient;
 use App\Base\AI\Services\Tracing\LlmTraceContext;
 use App\Base\AI\Services\UrlSafetyGuard;
+use App\Base\Authz\Enums\PrincipalType;
+use App\Base\Authz\Models\PrincipalCapability;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Livewire\Queries\Index;
 use App\Base\Database\Livewire\Queries\Show;
 use App\Base\Database\Services\QueryExecutor;
+use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Models\AiProviderModel;
+use App\Core\Company\Models\Company;
 use App\Core\User\Models\Query;
 use App\Core\User\Models\User;
 use App\Core\User\Models\UserPin;
@@ -20,6 +24,24 @@ use Tests\Support\PermissiveUrlSafetyGuard;
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';
 const QUERY_TEST_ACTIVE_USERS = 'Active Users';
 const QUERY_TEST_VIEW_NAME = 'Test View';
+
+function createDatabaseQueryReadOnlyUser(): User
+{
+    $company = Company::factory()->create();
+    $user = User::factory()->create(['company_id' => $company->id]);
+
+    PrincipalCapability::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'capability_key' => 'admin.system.database-table.list',
+        'is_allowed' => true,
+    ]);
+
+    app(TenantContext::class)->set((int) $company->tenant_id);
+
+    return $user;
+}
 
 // ─── Slug generation ────────────────────────────────────────────────
 
@@ -147,6 +169,67 @@ test('query CRUD operations and sharing', function (): void {
 
     expect(Query::query()->find($view->id))->toBeNull();
     expect(Query::query()->find($sharedView->id))->not->toBeNull();
+});
+
+test('read-only query users cannot reach mutation paths', function (): void {
+    $user = createDatabaseQueryReadOnlyUser();
+    $recipient = User::factory()->create(['company_id' => $user->company_id]);
+    $query = Query::query()->create([
+        'user_id' => $user->id,
+        'name' => QUERY_TEST_VIEW_NAME,
+        'slug' => Query::generateSlug(QUERY_TEST_VIEW_NAME, $user->id),
+        'prompt' => 'Show one row',
+        'sql_query' => QUERY_TEST_SQL,
+        'description' => 'Original description',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('admin.system.database-queries.index'))
+        ->assertOk()
+        ->assertSee('Read-only')
+        ->assertDontSee('wire:click="createView"', false)
+        ->assertDontSee('wire:click="duplicateView', false)
+        ->assertDontSee('wire:click="deleteView', false);
+
+    $this->actingAs($user)
+        ->get(route('admin.system.database-queries.show', $query->slug))
+        ->assertOk()
+        ->assertSee('Read-only')
+        ->assertDontSee('wire:click="save"', false)
+        ->assertDontSee('wire:click="delete"', false)
+        ->assertDontSee('wire:click="runQuery"', false)
+        ->assertDontSee('wire:click="generateSql"', false)
+        ->assertDontSee('wire:click="shareWith', false);
+
+    $this->actingAs($user)
+        ->get(route('admin.system.database-queries.show', '_new'))
+        ->assertForbidden();
+
+    $index = Livewire\Livewire::actingAs($user)->test(Index::class);
+    $index->call('createView')->assertNoRedirect();
+    $index->call('duplicateView', $query->id);
+    $index->call('deleteView', $query->id);
+
+    expect(Query::query()->where('user_id', $user->id)->count())->toBe(1)
+        ->and($query->fresh())->not->toBeNull();
+
+    $show = Livewire\Livewire::actingAs($user)
+        ->test(Show::class, ['slug' => $query->slug])
+        ->set('editName', 'Unauthorized name')
+        ->set('editSql', 'SELECT 2 AS id')
+        ->call('save')
+        ->call('runQuery')
+        ->call('generateSql')
+        ->call('shareWith', $recipient->id)
+        ->call('delete');
+
+    $show->set('shareSearch', $recipient->email);
+
+    expect($query->fresh()?->name)->toBe(QUERY_TEST_VIEW_NAME)
+        ->and($query->fresh()?->sql_query)->toBe(QUERY_TEST_SQL)
+        ->and($show->instance()->shareableUsers())->toBe([])
+        ->and(Query::query()->where('user_id', $recipient->id)->exists())->toBeFalse()
+        ->and(UserPin::query()->where('user_id', $recipient->id)->exists())->toBeFalse();
 });
 
 // ─── Query execution ────────────────────────────────────────────────

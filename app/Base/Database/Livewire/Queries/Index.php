@@ -2,7 +2,9 @@
 
 namespace App\Base\Database\Livewire\Queries;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Contracts\AuthorizationService;
+use App\Base\Authz\DTO\Actor;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\User\Models\Query;
@@ -14,7 +16,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;
@@ -53,6 +55,10 @@ class Index extends Component
      */
     public function createView(): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         $this->redirect(route('admin.system.database-queries.show', '_new'), navigate: true);
     }
 
@@ -65,6 +71,10 @@ class Index extends Component
      */
     public function deleteView(int $id): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         $query = Query::query()
             ->where('id', $id)
             ->where('user_id', auth()->id())
@@ -88,6 +98,10 @@ class Index extends Component
      */
     public function duplicateView(int $id): void
     {
+        if (! $this->checkCapability('admin.system.database-table.edit')) {
+            return;
+        }
+
         $source = Query::query()
             ->where('id', $id)
             ->where('user_id', auth()->id())
@@ -111,6 +125,7 @@ class Index extends Component
         $sortColumn = self::SORTABLE[$this->sortBy] ?? 'user_database_queries.updated_at';
 
         return view('livewire.admin.system.database-queries.index', [
+            'canEdit' => $this->canEditQueries(),
             'views' => Query::query()
                 ->where('user_id', auth()->id())
                 ->when($this->search, function (Builder $q, $search): void {
@@ -123,5 +138,15 @@ class Index extends Component
                 ->orderByDesc('user_database_queries.id')
                 ->paginate(25),
         ]);
+    }
+
+    private function canEditQueries(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null
+            && app(AuthorizationService::class)
+                ->can(Actor::forUser($user), 'admin.system.database-table.edit')
+                ->allowed;
     }
 }

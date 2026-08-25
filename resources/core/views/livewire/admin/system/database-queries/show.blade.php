@@ -60,33 +60,39 @@
             ] : null"
         >
             <x-slot name="title">
-                <span x-data="{ editing: false }">
-                    <span
-                        x-show="!editing"
-                        x-text="$wire.editName"
-                        x-on:click="editing = true; $nextTick(() => { $refs.titleInput.focus(); $refs.titleInput.select(); })"
-                        class="cursor-text"
-                    ></span>
-                    <input
-                        x-show="editing"
-                        x-cloak
-                        x-ref="titleInput"
-                        x-on:blur="editing = false"
-                        x-on:keydown.enter.prevent="editing = false"
-                        x-on:keydown.escape="editing = false"
-                        wire:model="editName"
-                        type="text"
-                        class="bg-transparent border-0 border-b border-accent focus:ring-0 px-0 py-0 outline-none transition-colors min-w-[200px]"
-                        :size="Math.max(($wire.editName || '').length, 10)"
-                        aria-label="{{ __('Query name') }}"
-                    />
-                </span>
+                @if($canEdit)
+                    <span x-data="{ editing: false }">
+                        <span
+                            x-show="!editing"
+                            x-text="$wire.editName"
+                            x-on:click="editing = true; $nextTick(() => { $refs.titleInput.focus(); $refs.titleInput.select(); })"
+                            class="cursor-text"
+                        ></span>
+                        <input
+                            x-show="editing"
+                            x-cloak
+                            x-ref="titleInput"
+                            x-on:blur="editing = false"
+                            x-on:keydown.enter.prevent="editing = false"
+                            x-on:keydown.escape="editing = false"
+                            wire:model="editName"
+                            type="text"
+                            class="bg-transparent border-0 border-b border-accent focus:ring-0 px-0 py-0 outline-none transition-colors min-w-[200px]"
+                            :size="Math.max(($wire.editName || '').length, 10)"
+                            aria-label="{{ __('Query name') }}"
+                        />
+                    </span>
+                @else
+                    <span>{{ $editName }}</span>
+                @endif
             </x-slot>
             <x-slot name="actions">
                 <x-ui.link href="{{ route('admin.system.database-queries.index') }}">
                     {{ __('Back') }}
                 </x-ui.link>
-                @if(! $isNew)
+                @if(! $canEdit)
+                    <x-ui.badge variant="default">{{ __('Read-only') }}</x-ui.badge>
+                @elseif(! $isNew)
                     {{-- Share --}}
                     <div x-data="{ open: false }" class="relative">
                         <x-ui.button
@@ -169,29 +175,34 @@
                         {{ __('Discard') }}
                     </x-ui.button>
                 @endif
-                <x-ui.button variant="primary" wire:click="save" @click="$dispatch('allow-next-navigate')">
-                    @if($this->isDirty)
-                        <span class="relative flex h-2 w-2">
-                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-on opacity-75"></span>
-                            <span class="relative inline-flex rounded-full h-2 w-2 bg-accent-on"></span>
-                        </span>
-                    @endif
-                    <x-icon name="heroicon-o-save" class="w-4 h-4" />
-                    {{ __('Save') }}
-                </x-ui.button>
+                @if($canEdit)
+                    <x-ui.button variant="primary" wire:click="save" @click="$dispatch('allow-next-navigate')">
+                        @if($this->isDirty)
+                            <span class="relative flex h-2 w-2">
+                                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-on opacity-75"></span>
+                                <span class="relative inline-flex rounded-full h-2 w-2 bg-accent-on"></span>
+                            </span>
+                        @endif
+                        <x-icon name="heroicon-o-save" class="w-4 h-4" />
+                        {{ __('Save') }}
+                    </x-ui.button>
+                @endif
             </x-slot>
         </x-ui.page-header>
 
         <x-ui.session-flash />
 
-        {{-- Inline-editable description --}}
-        <input
-            type="text"
-            wire:model="editDescription"
-            placeholder="{{ __('Add a description...') }}"
-            class="w-full bg-transparent border-0 border-b border-transparent hover:border-border-input focus:border-accent focus:ring-0 text-sm text-muted px-0 py-0.5 transition-colors placeholder:text-muted/50"
-            aria-label="{{ __('Query description') }}"
-        />
+        @if($canEdit)
+            <input
+                type="text"
+                wire:model="editDescription"
+                placeholder="{{ __('Add a description...') }}"
+                class="w-full bg-transparent border-0 border-b border-transparent hover:border-border-input focus:border-accent focus:ring-0 text-sm text-muted px-0 py-0.5 transition-colors placeholder:text-muted/50"
+                aria-label="{{ __('Query description') }}"
+            />
+        @else
+            <p class="text-sm text-muted">{{ $editDescription !== '' ? $editDescription : __('No description saved.') }}</p>
+        @endif
 
         {{-- Prompt (hero input) --}}
         <x-ui.card>
@@ -199,85 +210,95 @@
                 <x-icon name="heroicon-o-chat-bubble-left-ellipsis" class="w-4 h-4 text-muted shrink-0" />
                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('Prompt') }}</span>
             </div>
-            <x-ui.textarea
-                id="db-query-prompt"
-                wire:model="editPrompt"
-                rows="3"
-                placeholder="{{ __('Describe the data you would like to view...') }}"
-                class="text-sm"
-                aria-label="{{ __('Natural language prompt') }}"
-            />
+            @if($canEdit)
+                <x-ui.textarea
+                    id="db-query-prompt"
+                    wire:model="editPrompt"
+                    rows="3"
+                    placeholder="{{ __('Describe the data you would like to view...') }}"
+                    class="text-sm"
+                    aria-label="{{ __('Natural language prompt') }}"
+                />
 
-            @if(count($availableModels) > 0)
-                <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <x-ai.model-selector
-                        :models="$availableModels"
-                        wire:model.live="selectedModelId"
-                        class="max-w-xs"
-                        aria-label="{{ __('AI model') }}"
-                    />
-                    <x-ui.button
-                        variant="primary"
-                        size="sm"
-                        wire:click="generateSql"
-                        wire:loading.attr="disabled"
-                        wire:target="generateSql"
-                        :disabled="$isGenerating"
-                        class="whitespace-nowrap"
-                    >
-                        <x-icon name="heroicon-o-paper-airplane" class="w-4 h-4" wire:loading.remove wire:target="generateSql" />
-                        <x-icon name="heroicon-o-arrow-path" class="w-4 h-4 animate-spin" wire:loading wire:target="generateSql" />
-                        {{ __('Generate') }}
-                    </x-ui.button>
-                </div>
+                @if(count($availableModels) > 0)
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <x-ai.model-selector
+                            :models="$availableModels"
+                            wire:model.live="selectedModelId"
+                            class="max-w-xs"
+                            aria-label="{{ __('AI model') }}"
+                        />
+                        <x-ui.button
+                            variant="primary"
+                            size="sm"
+                            wire:click="generateSql"
+                            wire:loading.attr="disabled"
+                            wire:target="generateSql"
+                            :disabled="$isGenerating"
+                            class="whitespace-nowrap"
+                        >
+                            <x-icon name="heroicon-o-paper-airplane" class="w-4 h-4" wire:loading.remove wire:target="generateSql" />
+                            <x-icon name="heroicon-o-arrow-path" class="w-4 h-4 animate-spin" wire:loading wire:target="generateSql" />
+                            {{ __('Generate') }}
+                        </x-ui.button>
+                    </div>
 
-                @if($aiError)
-                    <x-ui.alert variant="danger" class="mt-2">{{ $aiError }}</x-ui.alert>
+                    @if($aiError)
+                        <x-ui.alert variant="danger" class="mt-2">{{ $aiError }}</x-ui.alert>
+                    @endif
                 @endif
+            @else
+                <p class="whitespace-pre-wrap text-sm text-ink">{{ $editPrompt !== '' ? $editPrompt : __('No prompt saved.') }}</p>
             @endif
         </x-ui.card>
 
-        {{-- SQL Query (click-to-edit) --}}
-        <div x-data="{ editingSql: false }">
+        <div @if($canEdit) x-data="{ editingSql: false }" @endif>
             <div class="flex items-center gap-1.5 mb-1">
                 <span class="text-[11px] uppercase tracking-wider font-semibold text-muted">{{ __('SQL Query') }}</span>
-                <button
-                    type="button"
-                    x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
-                    class="text-muted hover:text-ink transition-colors"
-                    title="{{ __('Edit SQL') }}"
-                    aria-label="{{ __('Edit SQL') }}"
-                >
-                    <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5" />
-                </button>
+                @if($canEdit)
+                    <button
+                        type="button"
+                        x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
+                        class="text-muted hover:text-ink transition-colors"
+                        title="{{ __('Edit SQL') }}"
+                        aria-label="{{ __('Edit SQL') }}"
+                    >
+                        <x-icon name="heroicon-o-pencil" class="w-3.5 h-3.5" />
+                    </button>
+                @endif
             </div>
-            <span
-                x-show="!editingSql"
-                x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
-                x-text="$wire.editSql || '{{ __('No SQL yet — generate from prompt or click to write') }}'"
-                class="font-mono text-xs cursor-text"
-                :class="$wire.editSql ? 'text-ink' : 'text-muted'"
-            ></span>
-            <textarea
-                x-ref="sqlInput"
-                x-show="editingSql"
-                x-cloak
-                x-on:blur="editingSql = false"
-                x-on:keydown.escape="editingSql = false"
-                wire:model="editSql"
-                rows="6"
-                class="w-full font-mono text-xs border rounded-lg border-border-input bg-surface-card text-ink px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors"
-                aria-label="{{ __('SQL Query') }}"
-            ></textarea>
+            @if($canEdit)
+                <span
+                    x-show="!editingSql"
+                    x-on:click="editingSql = true; $nextTick(() => $refs.sqlInput.focus())"
+                    x-text="$wire.editSql || '{{ __('No SQL yet — generate from prompt or click to write') }}'"
+                    class="font-mono text-xs cursor-text"
+                    :class="$wire.editSql ? 'text-ink' : 'text-muted'"
+                ></span>
+                <textarea
+                    x-ref="sqlInput"
+                    x-show="editingSql"
+                    x-cloak
+                    x-on:blur="editingSql = false"
+                    x-on:keydown.escape="editingSql = false"
+                    wire:model="editSql"
+                    rows="6"
+                    class="w-full font-mono text-xs border rounded-lg border-border-input bg-surface-card text-ink px-input-x py-input-y focus:border-accent focus:ring-0 transition-colors"
+                    aria-label="{{ __('SQL Query') }}"
+                ></textarea>
+            @else
+                <pre class="overflow-x-auto whitespace-pre-wrap font-mono text-xs text-ink">{{ $editSql }}</pre>
+            @endif
         </div>
 
-        {{-- Action row: Run --}}
-        <div class="flex flex-wrap items-center gap-2">
-            <x-ui.button variant="primary" size="sm" wire:click="runQuery" @click="$dispatch('allow-next-navigate')">
-                <x-icon name="heroicon-o-play" class="w-4 h-4" />
-                {{ __('Run') }}
-            </x-ui.button>
-        </div>
+        @if($canEdit)
+            <div class="flex flex-wrap items-center gap-2">
+                <x-ui.button variant="primary" size="sm" wire:click="runQuery" @click="$dispatch('allow-next-navigate')">
+                    <x-icon name="heroicon-o-play" class="w-4 h-4" />
+                    {{ __('Run') }}
+                </x-ui.button>
+            </div>
+        @endif
 
         {{-- Query Error --}}
         @if($error)

@@ -8,10 +8,14 @@
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Database Queries')" :subtitle="__('User-defined SQL queries rendered as browsable pages')">
             <x-slot name="actions">
-                <x-ui.button variant="primary" wire:click="createView">
-                    <x-icon name="heroicon-o-plus" class="w-4 h-4" />
-                    {{ __('Create Query') }}
-                </x-ui.button>
+                @if($canEdit)
+                    <x-ui.button variant="primary" wire:click="createView">
+                        <x-icon name="heroicon-o-plus" class="w-4 h-4" />
+                        {{ __('Create Query') }}
+                    </x-ui.button>
+                @else
+                    <x-ui.badge variant="default">{{ __('Read-only') }}</x-ui.badge>
+                @endif
             </x-slot>
             <x-slot name="help">
                 <p>{{ __('Database queries are user-defined SQL queries saved as named, pinnable pages. Each query stores a SELECT statement and displays the results in a table you can browse, sort, and search. Use them for custom reports, filtered datasets, or quick-access joins that the standard table browser doesn\'t cover.') }}</p>
@@ -62,7 +66,9 @@
                                 action="sort('updated_at')"
                                 :label="__('Updated')"
                             />
-                            <x-ui.th>{{ __('Actions') }}</x-ui.th>
+                            @if($canEdit)
+                                <x-ui.th>{{ __('Actions') }}</x-ui.th>
+                            @endif
                         </tr>
                     </x-slot>
 
@@ -79,27 +85,29 @@
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-muted tabular-nums">
                                     <x-ui.datetime :value="$view->updated_at" />
                                 </td>
-                                <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
-                                    <x-ui.icon-action-group>
-                                        <x-ui.icon-action
-                                            icon="heroicon-o-document-duplicate"
-                                            :label="__('Duplicate query')"
-                                            :title="__('Duplicate')"
-                                            wire:click="duplicateView({{ $view->id }})"
-                                        />
-                                        <x-ui.icon-action
-                                            icon="heroicon-o-trash"
-                                            :label="__('Delete query')"
-                                            :title="__('Delete')"
-                                            wire:click="deleteView({{ $view->id }})"
-                                            wire:confirm="{{ __('Are you sure you want to delete this query?') }}"
-                                        />
-                                    </x-ui.icon-action-group>
-                                </td>
+                                @if($canEdit)
+                                    <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-right text-sm" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()">
+                                        <x-ui.icon-action-group>
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-document-duplicate"
+                                                :label="__('Duplicate query')"
+                                                :title="__('Duplicate')"
+                                                wire:click="duplicateView({{ $view->id }})"
+                                            />
+                                            <x-ui.icon-action
+                                                icon="heroicon-o-trash"
+                                                :label="__('Delete query')"
+                                                :title="__('Delete')"
+                                                wire:click="deleteView({{ $view->id }})"
+                                                wire:confirm="{{ __('Are you sure you want to delete this query?') }}"
+                                            />
+                                        </x-ui.icon-action-group>
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No queries found.') }}</td>
+                                <td colspan="{{ $canEdit ? 5 : 4 }}" class="px-table-cell-x py-8 text-center text-sm text-muted">{{ __('No queries found.') }}</td>
                             </tr>
                         @endforelse
 
