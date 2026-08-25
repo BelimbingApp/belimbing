@@ -2,6 +2,7 @@
 
 namespace App\Base\Database\Livewire\DatabaseTables;
 
+use App\Base\Database\Livewire\Concerns\RequiresPlatformOperatorTenant;
 use App\Base\Database\Models\TableRegistry;
 use App\Base\Database\Services\IncubatingSchemaPreflight;
 use App\Base\Database\Services\TableInspector;
@@ -14,6 +15,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RequiresPlatformOperatorTenant;
     use ResetsPaginationOnSearch;
     use TogglesSort;
     use WithPagination;

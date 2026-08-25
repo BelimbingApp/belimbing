@@ -3,6 +3,7 @@
 namespace App\Base\Database\Services;
 
 use App\Base\Database\Exceptions\BlbQueryException;
+use App\Base\Tenancy\Services\PlatformOperatorTenantAccess;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\DB;
  */
 class QueryExecutor
 {
+    public function __construct(private readonly PlatformOperatorTenantAccess $platformOperatorAccess) {}
+
     /**
      * Maximum number of rows that can be returned.
      */
@@ -63,6 +66,10 @@ class QueryExecutor
      */
     public function execute(string $sql, int $page = 1, int $perPage = 25, ?string $orderBy = null, string $orderDir = 'asc'): array
     {
+        if (! $this->platformOperatorAccess->allows()) {
+            throw BlbQueryException::platformOperatorRequired();
+        }
+
         $this->validate($sql);
 
         $perPage = min(max($perPage, 1), self::MAX_ROWS);

@@ -8,10 +8,14 @@ use App\Base\AI\Services\Tracing\LlmTraceContext;
 use App\Base\AI\Services\UrlSafetyGuard;
 use App\Base\Authz\Enums\PrincipalType;
 use App\Base\Authz\Models\PrincipalCapability;
+use App\Base\Authz\Models\PrincipalRole;
+use App\Base\Authz\Models\Role;
+use App\Base\Database\Enums\DatabaseErrorCode;
 use App\Base\Database\Exceptions\BlbQueryException;
 use App\Base\Database\Livewire\Queries\Index;
 use App\Base\Database\Livewire\Queries\Show;
 use App\Base\Database\Services\QueryExecutor;
+use App\Base\Menu\Services\MenuConditionRegistry;
 use App\Base\Tenancy\Contracts\TenantContext;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Models\AiProviderModel;
@@ -24,6 +28,10 @@ use Tests\Support\PermissiveUrlSafetyGuard;
 const QUERY_TEST_SQL = 'SELECT 1 AS id, \'hello\' AS name';
 const QUERY_TEST_ACTIVE_USERS = 'Active Users';
 const QUERY_TEST_VIEW_NAME = 'Test View';
+
+beforeEach(function (): void {
+    app(TenantContext::class)->set((int) platformOperatorTenant()->id);
+});
 
 function createDatabaseQueryReadOnlyUser(): User
 {
@@ -39,6 +47,24 @@ function createDatabaseQueryReadOnlyUser(): User
     ]);
 
     app(TenantContext::class)->set((int) $company->tenant_id);
+
+    return $user;
+}
+
+function createNonOperatorDatabaseConsoleAdmin(): User
+{
+    [$tenant, $company] = createTenantWithCompany();
+    $user = User::factory()->create(['company_id' => $company->id]);
+    $role = Role::query()->where('code', 'core_admin')->whereNull('company_id')->firstOrFail();
+
+    PrincipalRole::query()->create([
+        'company_id' => $company->id,
+        'principal_type' => PrincipalType::USER->value,
+        'principal_id' => $user->id,
+        'role_id' => $role->id,
+    ]);
+
+    app(TenantContext::class)->set((int) $tenant->id);
 
     return $user;
 }
@@ -232,6 +258,50 @@ test('read-only query users cannot reach mutation paths', function (): void {
         ->and(UserPin::query()->where('user_id', $recipient->id)->exists())->toBeFalse();
 });
 
+test('fully capable non-operator tenants cannot reach the database console', function (): void {
+    $user = createNonOperatorDatabaseConsoleAdmin();
+
+    $routes = [
+        route('admin.system.database.index'),
+        route('admin.system.database-tables.index'),
+        route('admin.system.database-tables.show', 'users'),
+        route('admin.system.database-queries.index'),
+        route('admin.system.database-queries.show', '_new'),
+    ];
+
+    foreach ($routes as $route) {
+        $this->actingAs($user)->get($route)->assertForbidden();
+    }
+});
+
+test('database console menu entries are visible only to the operator tenant', function (): void {
+    $operator = createAdminUser();
+
+    expect(app(MenuConditionRegistry::class)->allows('tenancy.platform_operator', $operator))->toBeTrue();
+
+    $nonOperator = createNonOperatorDatabaseConsoleAdmin();
+
+    expect(app(MenuConditionRegistry::class)->allows('tenancy.platform_operator', $nonOperator))->toBeFalse();
+});
+
+test('live database console actions re-check the operator tenant before mutation', function (): void {
+    $operator = createAdminUser();
+    $query = Query::query()->create([
+        'user_id' => $operator->id,
+        'name' => QUERY_TEST_VIEW_NAME,
+        'slug' => Query::generateSlug(QUERY_TEST_VIEW_NAME, $operator->id),
+        'sql_query' => QUERY_TEST_SQL,
+    ]);
+    $component = Livewire\Livewire::actingAs($operator)->test(Index::class);
+    $nonOperator = createTenant();
+
+    app(TenantContext::class)->set((int) $nonOperator->id);
+
+    $component->call('deleteView', $query->id)->assertForbidden();
+
+    expect($query->fresh())->not->toBeNull();
+});
+
 // ─── Query execution ────────────────────────────────────────────────
 
 test('executor returns structured result for valid query', function (): void {
@@ -245,6 +315,21 @@ test('executor returns structured result for valid query', function (): void {
     expect($result['total'])->toBe(1);
     expect($result['current_page'])->toBe(1);
     expect($result['last_page'])->toBe(1);
+});
+
+test('executor rejects a non-operator tenant before touching the database', function (): void {
+    createNonOperatorDatabaseConsoleAdmin();
+
+    try {
+        app(QueryExecutor::class)->execute('SELECT * FROM definitely_missing_operator_gate_table');
+    } catch (BlbQueryException $exception) {
+        expect($exception->reasonCode)->toBe(DatabaseErrorCode::DATABASE_QUERY_PLATFORM_OPERATOR_REQUIRED)
+            ->and($exception->getMessage())->toContain('platform-operator tenant');
+
+        return;
+    }
+
+    $this->fail('Expected the database query engine to refuse a non-operator tenant.');
 });
 
 test('database query SQL generation attaches trace tap from the trace context factory', function (): void {

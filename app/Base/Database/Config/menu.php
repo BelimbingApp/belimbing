@@ -7,12 +7,14 @@ $databaseMenuItem = static fn (
     string $icon,
     string $route,
     string $permission,
+    ?string $condition = null,
 ): array => [
     'id' => $id,
     'label' => $label,
     'icon' => $icon,
     'route' => $route,
     'permission' => $permission,
+    'condition' => $condition,
     'parent' => $databaseParent,
 ];
 
@@ -24,6 +26,7 @@ return [
             'heroicon-o-table-cells',
             'admin.system.database-tables.index',
             'admin.system.database-table.list',
+            condition: 'tenancy.platform_operator',
         ),
         $databaseMenuItem(
             'admin.system.database-incubation',
@@ -38,6 +41,7 @@ return [
             'heroicon-o-circle-stack',
             'admin.system.database-queries.index',
             'admin.system.database-table.list',
+            condition: 'tenancy.platform_operator',
         ),
         $databaseMenuItem(
             'admin.system.database-backup',
