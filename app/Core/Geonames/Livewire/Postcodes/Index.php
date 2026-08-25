@@ -2,7 +2,7 @@
 
 namespace App\Core\Geonames\Livewire\Postcodes;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -17,7 +17,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use SelectsPerPage;
     use TogglesSort;
@@ -154,6 +154,10 @@ class Index extends Component
 
     public function import(): void
     {
+        if (! $this->checkCapability('admin.geonames.manage')) {
+            return;
+        }
+
         if (empty($this->selectedCountries)) {
             $this->notifyError(__('Please select at least one country to import.'));
 
@@ -176,6 +180,10 @@ class Index extends Component
 
     public function update(): void
     {
+        if (! $this->checkCapability('admin.geonames.manage')) {
+            return;
+        }
+
         $importedIsos = DB::table('geonames_postcodes')
             ->distinct()
             ->pluck('country_iso')

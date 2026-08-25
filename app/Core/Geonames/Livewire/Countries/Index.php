@@ -2,7 +2,7 @@
 
 namespace App\Core\Geonames\Livewire\Countries;
 
-use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
@@ -14,7 +14,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use InteractsWithNotifications;
+    use ChecksCapabilityAuthorization;
     use ResetsPaginationOnSearch;
     use SelectsPerPage;
     use TogglesSort;
@@ -90,6 +90,10 @@ class Index extends Component
 
     public function saveName(int $id, string $name): void
     {
+        if (! $this->checkCapability('admin.geonames.manage')) {
+            return;
+        }
+
         $country = Country::query()->findOrFail($id);
         $country->country = trim($name);
         $country->save();
@@ -98,6 +102,10 @@ class Index extends Component
 
     public function update(): void
     {
+        if (! $this->checkCapability('admin.geonames.manage')) {
+            return;
+        }
+
         app(CountrySeeder::class)->run();
         $this->notify(__('Countries updated from Geonames.'));
     }
