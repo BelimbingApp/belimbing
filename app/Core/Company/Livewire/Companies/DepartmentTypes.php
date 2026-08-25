@@ -2,6 +2,7 @@
 
 namespace App\Core\Company\Livewire\Companies;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\Company\Models\DepartmentType;
@@ -12,6 +13,7 @@ use Livewire\WithPagination;
 
 class DepartmentTypes extends Component
 {
+    use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
     use TogglesSort;
     use WithPagination;
@@ -65,6 +67,10 @@ class DepartmentTypes extends Component
 
     public function createType(): void
     {
+        if (! $this->checkCapability('admin.company.create')) {
+            return;
+        }
+
         $validated = $this->validate([
             'createCode' => ['required', 'string', 'max:255', Rule::unique('company_department_types', 'code')],
             'createName' => ['required', 'string', 'max:255'],
@@ -90,6 +96,10 @@ class DepartmentTypes extends Component
 
     public function saveField(int $typeId, string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'category' => ['required', 'string', Rule::in(self::CATEGORY_OPTIONS)],
@@ -102,6 +112,10 @@ class DepartmentTypes extends Component
 
     public function toggleActive(int $typeId): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $type = DepartmentType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
@@ -110,6 +124,10 @@ class DepartmentTypes extends Component
 
     public function deleteType(int $typeId): void
     {
+        if (! $this->checkCapability('admin.company.delete')) {
+            return;
+        }
+
         $type = DepartmentType::query()->withCount('departments')->findOrFail($typeId);
 
         if ($type->departments_count > 0) {

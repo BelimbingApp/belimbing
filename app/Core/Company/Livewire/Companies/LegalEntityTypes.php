@@ -2,6 +2,7 @@
 
 namespace App\Core\Company\Livewire\Companies;
 
+use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Core\Company\Models\LegalEntityType;
@@ -12,6 +13,7 @@ use Livewire\WithPagination;
 
 class LegalEntityTypes extends Component
 {
+    use ChecksCapabilityAuthorization;
     use SavesValidatedFields;
     use TogglesSort;
     use WithPagination;
@@ -51,6 +53,10 @@ class LegalEntityTypes extends Component
 
     public function createType(): void
     {
+        if (! $this->checkCapability('admin.company.create')) {
+            return;
+        }
+
         $validated = $this->validate([
             'createCode' => ['required', 'string', 'max:255', Rule::unique('company_legal_entity_types', 'code')],
             'createName' => ['required', 'string', 'max:255'],
@@ -73,6 +79,10 @@ class LegalEntityTypes extends Component
 
     public function saveField(int $typeId, string $field, mixed $value): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -84,6 +94,10 @@ class LegalEntityTypes extends Component
 
     public function toggleActive(int $typeId): void
     {
+        if (! $this->checkCapability('admin.company.update')) {
+            return;
+        }
+
         $type = LegalEntityType::query()->findOrFail($typeId);
         $type->is_active = ! $type->is_active;
         $type->save();
@@ -92,6 +106,10 @@ class LegalEntityTypes extends Component
 
     public function deleteType(int $typeId): void
     {
+        if (! $this->checkCapability('admin.company.delete')) {
+            return;
+        }
+
         $type = LegalEntityType::query()->withCount('companies')->findOrFail($typeId);
 
         if ($type->companies_count > 0) {
