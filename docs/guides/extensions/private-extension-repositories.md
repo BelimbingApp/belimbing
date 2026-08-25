@@ -70,7 +70,11 @@ The nested repository's `origin` must point to the private Extension source, not
 
 ## Install From Software Administration
 
-Production deployments may expose a curated Extension catalog through the software composition interface. Add approved private repositories to `config/extensions.php`:
+An authenticated platform operator can install a repository from **Administration → System → Software → Available**. The operator provides an HTTPS GitHub repository URL, chooses **Domain** or **Extension** placement, enters the PascalCase source name, and selects a stored GitHub credential when the repository is private.
+
+Before migrations run, BLB verifies that every Module has a `ServiceProvider.php`, a readable `composer.json` with a stable `extra.blb.module` identity, and a namespace matching the chosen placement. It also verifies declared Module dependencies. A rejected or failed clone is removed. When migrations fail, BLB rolls back that source's migration batch and removes the checkout only after rollback succeeds; otherwise it keeps the checkout so its code continues to describe the database state and records the recovery action in the run log.
+
+Deployments may also expose familiar sources through the optional curated Extension catalog in `config/extensions.php`:
 
 ```php
 return [
@@ -83,7 +87,7 @@ return [
 ];
 ```
 
-The catalog key is the PascalCase `{Extension}` directory below `app/Extensions`. The repository URL is delivery provenance and does not define Module identity. Keep the committed default catalog empty unless that deployment is intentionally composed with a specific private source.
+The catalog key is the PascalCase `{Extension}` directory below `app/Extensions`. The repository URL is delivery provenance and does not define Module identity. Keep the committed default catalog empty unless that deployment intentionally pins a specific private source. The catalog is a convenience, not the only installation path.
 
 Automated development setup follows the same boundary. Supply optional private sources at runtime through newline-delimited `repository|destination` entries instead of committing them to `.agents/setup`:
 
