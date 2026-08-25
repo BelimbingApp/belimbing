@@ -119,6 +119,9 @@ it('rejects non-GitHub and credential-bearing URLs before git runs', function (s
     'local file' => 'file:///tmp/source',
     'other host' => 'https://example.com/owner/repo',
     'embedded credential' => 'https://token@github.com/owner/repo',
+    'custom port' => 'https://github.com:8443/owner/repo',
+    'query string' => 'https://github.com/owner/repo?ref=main',
+    'fragment' => 'https://github.com/owner/repo#readme',
     'repository subpath' => 'https://github.com/owner/repo/tree/main',
 ]);
 

@@ -203,7 +203,9 @@ final class SourceRepositoryInstaller
             || strtolower((string) ($parts['host'] ?? '')) !== 'github.com'
             || isset($parts['user'])
             || isset($parts['pass'])
-            || isset($parts['port'], $parts['query'], $parts['fragment'])) {
+            || isset($parts['port'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])) {
             throw new SourceRepositoryInstallException((string) __('Use an HTTPS GitHub repository URL without embedded credentials, query parameters, or fragments.'));
         }
 
