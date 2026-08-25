@@ -18,7 +18,7 @@ echo
 echo "== Belimbing project: application topology on origin/main =="
 for root in Base Core Domains Extensions; do
   count=$(git ls-tree -r --name-only origin/main -- "app/$root" 2>/dev/null | awk 'NF {seen=1} END {print seen+0}')
-  if [ "$count" -eq 1 ]; then
+  if [[ "$count" -eq 1 ]]; then
     entries=$(git ls-tree -d --name-only "origin/main:app/$root" 2>/dev/null | paste -sd, -)
     echo "  app/$root  ${entries:-tracked files present}"
   else
@@ -26,11 +26,11 @@ for root in Base Core Domains Extensions; do
   fi
 done
 
-if [ ! -d vendor ]; then
+if [[ ! -d vendor ]]; then
   echo
   echo "  NOTE  vendor/ is absent; run composer install before PHP validation."
 fi
-if [ ! -d node_modules ]; then
+if [[ ! -d node_modules ]]; then
   echo "  NOTE  node_modules/ is absent; run bun install before frontend validation."
 fi
 
