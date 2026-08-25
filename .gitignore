@@ -20,6 +20,9 @@ Homestead.yaml
 .phpactor.json
 /.playwright-mcp
 
+# Repo-local temp, AI agents scratchpad, etc.
+/tmp
+
 # IDE Helper files (generated)
 _ide_helper.php
 _ide_helper_models.php
