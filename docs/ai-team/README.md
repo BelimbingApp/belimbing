@@ -312,7 +312,10 @@ authorship identifies you.**
 GitHub may refuse a native approval when author and reviewer share an account.
 That must not erase agent identity: the `**From:**` marker and PR lane remain the
 load-bearing independence evidence, while a distinct-account approval is only
-corroboration.
+corroboration. In that shared-account case, submit a PR review with an exact
+`**Verdict:** accept` or `**Verdict:** accept with follow-up` line; `gate.sh`
+recognises that structured verdict even when GitHub records the review as
+`COMMENTED`.
 
 This repository's optional reviewer account is `faith-tohmm`. Its credential may
 only record a review on work the agent did not author — never use it to author,
@@ -373,7 +376,22 @@ in a Mix task.
 - **Withdraw findings that turn out to be wrong**, in writing.
 - Do not review your own work — including work you specified in detail.
 
-Verdicts: `accept`, `accept with follow-up`, `changes required`.
+Verdicts: `accept`, `accept with follow-up`, `changes required`. Record the
+verdict on the exact final head as a GitHub PR review whose body contains these
+machine-readable lines:
+
+```markdown
+**From:** <your-stable-agent-id>
+
+**Verdict:** accept
+```
+
+A native `APPROVED` review may omit the verdict line, but never the `From`
+marker. A `COMMENTED` review needs the exact verdict line because shared GitHub
+accounts cannot approve their own account's PR. `gate.sh` requires
+`task:review`, exactly one PR `agent:<id>` author lane, and a latest exact-head
+acceptance from a different stable id; a later exact-head `changes required`
+verdict from that reviewer supersedes their earlier acceptance.
 
 **`accept with follow-up` is not the default.** Use it when the finding is
 genuinely separable — a different module, a decision someone else owns, or a

@@ -143,7 +143,76 @@ for h in hold:author hold:review; do
   esac
 done
 
-# 5. The head has not moved since the review. GitHub's PR head also lags a push
+# 5. Ready state and independent exact-head review. GitHub accounts are shared,
+# so account identity is only corroboration: the stable **From:** marker must
+# differ from the PR's one agent:<id> lane. Native APPROVED reviews count; a
+# shared-account COMMENTED review carries an explicit **Verdict:** accept marker.
+case ",$labels," in
+  *",task:review,"*) say_ok "task:review is set" ;;
+  *)                 say_bad "task:review is not set — the author has not handed off a final head" ;;
+esac
+
+author_agents=$(printf '%s' "$pr" | jq -c \
+  '[.labels[].name | select(startswith("agent:")) | ltrimstr("agent:")] | unique' \
+  2>/dev/null || echo '[]')
+author_count=$(printf '%s' "$author_agents" | jq -r 'length' 2>/dev/null || echo 0)
+author_agent=$(printf '%s' "$author_agents" | jq -r '.[0] // ""' 2>/dev/null)
+if [ "$author_count" = "1" ]; then
+  say_ok "author lane is agent:$author_agent"
+else
+  say_bad "expected exactly one agent:<id> author lane, found $author_count"
+fi
+
+# `gh api --paginate` prints one JSON array per page. Slurp and flatten those
+# pages before deriving the latest machine verdict for each stable reviewer.
+reviews=$(gh api "repos/$REPO/pulls/$PR/reviews" --paginate 2>/dev/null \
+  | jq -s 'add // []' 2>/dev/null)
+[ -n "$reviews" ] || reviews='[]'
+
+latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
+  def from_agent:
+    ([((.body // "") | split("\n")[]
+       | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
+       | ascii_downcase)][0] // "");
+  def explicit_verdict:
+    ([((.body // "") | split("\n")[]
+       | capture("^\\*\\*Verdict:\\*\\*[[:space:]]*(?<verdict>accept(?: with follow-up)?|changes required)[[:space:]]*$"; "i").verdict
+       | ascii_downcase)][0] // "");
+  [.[]
+   | select(.commit_id == $sha)
+   | . + {agent: from_agent, explicit_verdict: explicit_verdict}
+   | . + {verdict:
+       (if .state == "CHANGES_REQUESTED" or .explicit_verdict == "changes required"
+        then "changes required"
+        elif .state == "APPROVED"
+             or .explicit_verdict == "accept"
+             or .explicit_verdict == "accept with follow-up"
+        then "accept"
+        else ""
+        end)}
+   | select(.agent != "" and .verdict != "")]
+  | sort_by(.agent, .submitted_at, .id)
+  | group_by(.agent)
+  | map(last)
+' 2>/dev/null || echo '[]')
+
+accepted_agents=$(printf '%s' "$latest_reviews" | jq -r --arg author "$author_agent" \
+  '[.[] | select(.agent != $author and .verdict == "accept") | .agent] | unique | join(",")' \
+  2>/dev/null)
+blocking_agents=$(printf '%s' "$latest_reviews" | jq -r --arg author "$author_agent" \
+  '[.[] | select(.agent != $author and .verdict == "changes required") | .agent] | unique | join(",")' \
+  2>/dev/null)
+
+if [ -n "$accepted_agents" ]; then
+  say_ok "independent exact-head acceptance from $accepted_agents"
+else
+  say_bad "no independent exact-head acceptance; require **From:** <reviewer> plus APPROVED or **Verdict:** accept"
+fi
+[ -z "$blocking_agents" ] \
+  && say_ok "no independent exact-head changes-required verdict" \
+  || say_bad "independent exact-head changes required by $blocking_agents"
+
+# 6. The head has not moved since the review. GitHub's PR head also lags a push
 #    by minutes, so compare the branch ref too.
 if [ "$remote_head" = "$REVIEWED" ]; then
   say_ok "PR head is the reviewed SHA"
@@ -165,7 +234,7 @@ if [ "$state" = "OPEN" ]; then
   esac
 fi
 
-# 6. Something to merge at all. Our claim protocol is an empty draft PR, so every
+# 7. Something to merge at all. Our claim protocol is an empty draft PR, so every
 #    claim starts as exactly this shape; #450 was taken out of draft and labelled
 #    task:review, and every other check passed it (#453). Zero changed files is
 #    the unambiguous case -- a mode-only or rename change still reports files.
@@ -180,12 +249,12 @@ else
   say_ok "$files changed file(s)"
 fi
 
-# 6. Conflicts. mergeStateStatus is permanently BLOCKED for us and carries no
+# 8. Conflicts. mergeStateStatus is permanently BLOCKED for us and carries no
 #    information; mergeable does.
 mergeable=$(printf '%s' "$pr" | jq -r .mergeable)
 [ "$mergeable" = "CONFLICTING" ] && say_bad "CONFLICTING with the base branch" || say_ok "mergeable: $mergeable"
 
-# 7. Not a check — the last word on the PR, so a hold written as prose by
+# 9. Not a check — the last word on the PR, so a hold written as prose by
 #    somebody who did not know about the label is still in front of you.
 echo "  --- last 3 comments ---"
 gh pr view "$PR" --repo "$REPO" --json comments \
