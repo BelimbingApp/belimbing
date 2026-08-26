@@ -39,10 +39,11 @@ REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)
 # against the canonical repository while containment is proven against the
 # fork's stale main — a false PASS for a head behind canonical main. So origin
 # must BE the canonical repository, verified before any verdict is printed.
-# The *configured* URL is the remote's identity as the operator set it;
-# get-url would return the insteadOf-resolved transport instead, which
-# hermetic test harnesses legitimately rewrite to a local repository.
-origin_url=$(git config --get remote.origin.url 2>/dev/null)
+# The *resolved* URL is what git will actually fetch from — insteadOf
+# rewrites included — and the containment proof is only as canonical as
+# that transport. Tests get hermeticity by shimming git on PATH, never by
+# weakening this invariant.
+origin_url=$(git remote get-url origin 2>/dev/null)
 origin_repo=$(printf '%s' "$origin_url" | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##')
 [ "$origin_repo" = "$REPO" ] || {
   echo "origin is '$origin_url' but gh resolves the repository as '$REPO'." >&2

@@ -15,10 +15,15 @@ with the board contract they enforce.
 ## Running the mechanism tests
 
 ```bash
+# Linux / macOS
 python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
+
+# Windows (from Git Bash — the harness invokes the scripts through bash, and
+# here the installed interpreter is `python`; `python3` is the Store alias
+# that exits without running anything)
+python -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 ```
 
-They are hermetic — stubbed `gh`, local bare repositories instead of the
-network — and run in CI as part of the `quality` job, so a gate or sweep
-regression fails a required check. On Windows, run them from Git Bash (or any
-shell where `bash` is on PATH); the harness invokes the scripts through `bash`.
+They are hermetic — stubbed `gh`, a `git` shim for the origin-identity answer,
+and local bare repositories instead of the network — and run in CI as part of
+the `quality` job, so a gate or sweep regression fails a required check.

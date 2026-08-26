@@ -1,4 +1,5 @@
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -34,6 +35,20 @@ GH_STUB = textwrap.dedent(
         ;;
       *) exit 0 ;;
     esac
+    """
+)
+
+GIT_SHIM = textwrap.dedent(
+    """\
+    #!/usr/bin/env bash
+    # Answers `remote get-url origin` with the URL under test so the preflight
+    # sees exactly what production would resolve; everything else runs real
+    # git against the local bare remote. gate.sh itself carries no test seam.
+    if [ "$1 $2 $3" = "remote get-url origin" ]; then
+      printf '%s\\n' "$GATE_TEST_ORIGIN_URL"
+      exit 0
+    fi
+    exec "$GATE_TEST_REAL_GIT" "$@"
     """
 )
 
@@ -100,15 +115,23 @@ class GateMechanismTest(unittest.TestCase):
         base = Path(self.dir.name)
         checkout = base / "checkout"
         env = self.git_env()
+        real_git = shutil.which("git")
+        assert real_git is not None
         subprocess.run(["git", "init", "-q", str(checkout)], check=True, env=env)
-        subprocess.run(["git", "remote", "add", "origin", origin], cwd=checkout, check=True, env=env)
-        # The URL stays canonical-looking for the preflight; fetches rewrite to
-        # the local bare repo, so nothing ever touches the network.
-        for url in (CANONICAL_HTTPS, CANONICAL_SSH):
-            subprocess.run(
-                ["git", "config", "--add", f"url.{self.bare.as_uri()}.insteadOf", url],
-                cwd=checkout, check=True, env=env,
-            )
+        # Fetches go straight to the local bare repo — hermetic by construction.
+        # The git shim (on PATH below) answers only `remote get-url origin` with
+        # the URL under test, so the preflight exercises the same
+        # resolved-transport check production runs, without any network.
+        subprocess.run(
+            ["git", "remote", "add", "origin", self.bare.as_uri()],
+            cwd=checkout, check=True, env=env,
+        )
+        shim = base / "git"
+        if not shim.exists():
+            shim.write_text(GIT_SHIM, encoding="utf-8")
+            shim.chmod(shim.stat().st_mode | stat.S_IXUSR)
+        env["GATE_TEST_ORIGIN_URL"] = origin
+        env["GATE_TEST_REAL_GIT"] = real_git
 
         env["PATH"] = f"{self.dir.name}{os.pathsep}{env['PATH']}"
         env["GATE_TEST_CANONICAL"] = "example/canonical"
@@ -126,6 +149,16 @@ class GateMechanismTest(unittest.TestCase):
         )
         subprocess.run(["rm", "-rf", str(checkout)], check=True)
         return result
+
+    def test_rewritten_transport_refused_despite_canonical_label(self):
+        # The insteadOf threat: the configured URL can look canonical while an
+        # url.*.insteadOf rule redirects the actual fetch. Production reads the
+        # *resolved* transport, so what matters is what get-url returns — here
+        # the local bare path — and the gate must refuse it pre-verdict.
+        result = self.run_gate(origin=self.bare.as_uri(), reviewed=self.head_sha)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("origin must be the", result.stderr)
+        self.assertNotIn("gate:", result.stdout)
 
     def test_fork_origin_fails_before_any_verdict(self):
         result = self.run_gate(origin="https://github.com/example/fork", reviewed=self.head_sha)
