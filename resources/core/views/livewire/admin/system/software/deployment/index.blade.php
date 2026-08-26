@@ -452,7 +452,7 @@
 
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
-                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response.', ['sources' => implode(', ', $checkFailures)]) }}
+                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Remote column for the Git response.', ['sources' => implode(', ', $checkFailures)]) }}
             </x-ui.alert>
         @endif
 
@@ -558,8 +558,8 @@
                     <tr>
                         <x-ui.th>{{ __('Software source') }}</x-ui.th>
                         <x-ui.th>{{ __('Branch') }}</x-ui.th>
-                        <x-ui.th>{{ __('Current') }}</x-ui.th>
-                        <x-ui.th>{{ __('Latest') }}</x-ui.th>
+                        <x-ui.th>{{ __('Local') }}</x-ui.th>
+                        <x-ui.th>{{ __('Remote') }}</x-ui.th>
                         <x-ui.th align="right">{{ __('Status') }}</x-ui.th>
                     </tr>
                 </x-slot>
@@ -624,17 +624,19 @@
                                 <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
-                            @elseif ($s['up_to_date'] === true)
+                            @elseif ($s['update_state'] === 'up_to_date')
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
-                            @elseif ($s['up_to_date'] === false && $s['working_tree']['ahead'] > 0)
+                            @elseif ($s['update_state'] === 'ahead')
+                                <x-ui.badge variant="info" :title="__('Local HEAD already contains the remote branch head.')">{{ __('Ahead of remote') }}</x-ui.badge>
+                            @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)
                                 <x-ui.badge variant="danger" :title="__('Push or reconcile this source\'s local commits before updating.')">{{ __('Update blocked') }}</x-ui.badge>
-                            @elseif ($s['up_to_date'] === false)
+                            @elseif ($s['update_state'] === 'behind')
                                 <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
                             @else
-                                <x-ui.badge variant="warning">{{ __('Unknown') }}</x-ui.badge>
+                                <x-ui.badge variant="warning" :title="$s['error'] ?? __('Status could not be determined.')">{{ __('Unknown') }}</x-ui.badge>
                             @endif
                         </td>
                     </tr>

@@ -51,6 +51,18 @@ final class SoftwareSourceGitReader
     }
 
     /**
+     * How far the local checkout at $path is ahead of / behind an arbitrary
+     * remote SHA — unlike workingTree(), not limited to the (possibly stale)
+     * upstream tracking ref. Null when that SHA's object isn't present locally.
+     *
+     * @return array{ahead: int, behind: int}|null
+     */
+    public function liveAheadBehind(string $path, string $sha, int $timeout = 30): ?array
+    {
+        return (new GitRepository($path))->aheadBehindFrom($sha, timeout: $timeout);
+    }
+
+    /**
      * @return array{sha: string, short: string, date: string|null, ago: string|null, author: string, subject: string}|null
      */
     public function localCommit(string $path, int $timeout = 60): ?array

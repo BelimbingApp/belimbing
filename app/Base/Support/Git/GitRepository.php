@@ -134,6 +134,25 @@ final class GitRepository
     }
 
     /**
+     * How far HEAD is ahead of / behind an arbitrary commit — unlike aheadBehind(),
+     * not limited to the configured upstream. Null when $sha's object isn't present
+     * locally (rev-list can't diff against a commit it doesn't have): the caller
+     * falls back to a tracking-ref-based estimate in that case.
+     *
+     * @return array{ahead: int, behind: int}|null
+     */
+    public function aheadBehindFrom(string $sha, int $timeout = 30): ?array
+    {
+        $counts = $this->output(['rev-list', '--left-right', '--count', $sha.'...HEAD'], timeout: $timeout);
+
+        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+            return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
+        }
+
+        return null;
+    }
+
+    /**
      * Build a scoped git command for callers that need to run it through a pool.
      *
      * @param  list<string>  $args

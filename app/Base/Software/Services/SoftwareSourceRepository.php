@@ -46,11 +46,12 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null, error_detail: string|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}>
      */
     public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
         $entries = [];
+        $absolutePaths = [];
         $latestRequests = [];
         $latestRequestAliases = [];
         $requestKeyByCacheKey = [];
@@ -60,6 +61,7 @@ class SoftwareSourceRepository
             $snapshot = $this->gitReader->localSnapshot($source['path']);
             $branch = $snapshot['branch'] ?? 'main';
 
+            $absolutePaths[$source['key']] = $source['path'];
             $entries[$source['key']] = [
                 'key' => $source['key'],
                 'label' => $source['label'],
@@ -70,7 +72,7 @@ class SoftwareSourceRepository
                 'working_tree' => $snapshot['working_tree'],
                 'current' => $snapshot['current'],
                 'latest' => null,
-                'up_to_date' => null,
+                'update_state' => null,
                 'error' => null,
                 'error_detail' => null,
             ];
@@ -102,7 +104,7 @@ class SoftwareSourceRepository
 
         $latestResults = $this->commitFetcher->fetchLatestCommits($latestRequests);
 
-        $this->applyLatestCommitResults($entries, $latestRequests, $latestRequestAliases, $latestResults);
+        $this->applyLatestCommitResults($entries, $absolutePaths, $latestRequests, $latestRequestAliases, $latestResults);
 
         return array_values($entries);
     }
@@ -255,7 +257,7 @@ class SoftwareSourceRepository
                 continue;
             }
 
-            if ($entry['up_to_date'] === true) {
+            if ($entry['update_state'] === 'up_to_date') {
                 $lines[] = (string) __('Verified: :label is at :current and matches :branch.', [
                     'label' => $target['label'],
                     'current' => $entry['current']['short'] ?? __('unknown'),
@@ -265,7 +267,18 @@ class SoftwareSourceRepository
                 continue;
             }
 
-            if ($entry['up_to_date'] === false) {
+            if ($entry['update_state'] === 'ahead') {
+                $lines[] = (string) __('Ahead of remote: :label is at :current, which already contains :branch (:latest). No update was needed.', [
+                    'label' => $target['label'],
+                    'current' => $entry['current']['short'] ?? __('unknown'),
+                    'branch' => $entry['branch'] ?? __('the selected branch'),
+                    'latest' => $entry['latest']['short'] ?? __('unknown'),
+                ]);
+
+                continue;
+            }
+
+            if ($entry['update_state'] === 'behind') {
                 $lines[] = (string) __('Still behind: :label is at :current, latest is :latest. The Update button remains because this checkout did not reach the GitHub branch head.', [
                     'label' => $target['label'],
                     'current' => $entry['current']['short'] ?? __('unknown'),
@@ -402,7 +415,7 @@ class SoftwareSourceRepository
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
      * @param  array<string, string>  $latestRequestAliases
      * @param  array<string, string>  $requestKeyByCacheKey
-     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null, error_detail: string|null}  $entry
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}  $entry
      * @param  array{source: array{key: string, label: string, path: string, relative: string}, owner: string, name: string, branch: string, use_cache: bool}  $request
      */
     private function queueLatestCommitRequest(
@@ -419,7 +432,7 @@ class SoftwareSourceRepository
             : null;
 
         if (is_array($cached)) {
-            $this->applyLatestCommit($entry, $cached[0] ?? null, $cached[1] ?? null, $cached[2] ?? null);
+            $this->applyLatestCommit($entry, $cached[0] ?? null, $cached[1] ?? null, $cached[2] ?? null, $source['path']);
 
             return;
         }
@@ -442,12 +455,13 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null, error_detail: string|null}>  $entries
+     * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}>  $entries
+     * @param  array<string, string>  $absolutePaths  keyed by source key, same universe as $entries
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
      * @param  array<string, string>  $latestRequestAliases
      * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latestResults
      */
-    private function applyLatestCommitResults(array &$entries, array $latestRequests, array $latestRequestAliases, array $latestResults): void
+    private function applyLatestCommitResults(array &$entries, array $absolutePaths, array $latestRequests, array $latestRequestAliases, array $latestResults): void
     {
         foreach ($latestResults as $key => $latestResult) {
             if (! isset($entries[$key])) {
@@ -455,7 +469,7 @@ class SoftwareSourceRepository
             }
 
             [$latest, $error, $detail] = array_pad($latestResult, 3, null);
-            $this->applyLatestCommit($entries[$key], $latest, $error, $detail);
+            $this->applyLatestCommit($entries[$key], $latest, $error, $detail, $absolutePaths[$key] ?? null);
 
             if (($latestRequests[$key]['use_cache'] ?? false) === true) {
                 $cacheKey = (string) $latestRequests[$key]['cache_key'];
@@ -472,15 +486,15 @@ class SoftwareSourceRepository
             }
 
             [$latest, $error, $detail] = array_pad($latestResults[$sourceKey], 3, null);
-            $this->applyLatestCommit($entries[$key], $latest, $error, $detail);
+            $this->applyLatestCommit($entries[$key], $latest, $error, $detail, $absolutePaths[$key] ?? null);
         }
     }
 
     /**
-     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, up_to_date: bool|null, error: string|null, error_detail: string|null}  $entry
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}  $entry
      * @param  array<string, mixed>|null  $latest
      */
-    private function applyLatestCommit(array &$entry, ?array $latest, ?string $error, ?string $errorDetail = null): void
+    private function applyLatestCommit(array &$entry, ?array $latest, ?string $error, ?string $errorDetail, ?string $path): void
     {
         $entry['error_detail'] = $errorDetail;
 
@@ -491,7 +505,42 @@ class SoftwareSourceRepository
         }
 
         $entry['latest'] = $latest;
-        $entry['up_to_date'] = $entry['current'] !== null && $entry['current']['sha'] === $latest['sha'];
+        $entry['update_state'] = $this->updateState($entry, $latest, $path);
+    }
+
+    /**
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}  $entry
+     * @param  array<string, mixed>  $latest
+     * @return 'up_to_date'|'ahead'|'behind'
+     */
+    private function updateState(array &$entry, array $latest, ?string $path): string
+    {
+        $current = $entry['current'];
+
+        if ($current !== null && $current['sha'] === $latest['sha']) {
+            $entry['working_tree']['ahead'] = 0;
+            $entry['working_tree']['behind'] = 0;
+
+            return 'up_to_date';
+        }
+
+        // The remote SHA's object is local in exactly two cases: the checkout is
+        // ahead (its own history contains that object), or it was already fetched
+        // for other reasons. Either way, derive the true counts from it rather than
+        // the tracking ref working_tree already carries, which is only as fresh as
+        // the last fetch and can disagree with this live ls-remote result. A
+        // checkout genuinely behind has never fetched the newer remote commit, so
+        // the object is absent and we fall back to that tracking-ref estimate.
+        $live = $path !== null ? $this->gitReader->liveAheadBehind($path, (string) $latest['sha']) : null;
+
+        if ($live === null) {
+            return 'behind';
+        }
+
+        $entry['working_tree']['ahead'] = $live['ahead'];
+        $entry['working_tree']['behind'] = $live['behind'];
+
+        return $live['behind'] === 0 ? 'ahead' : 'behind';
     }
 
     private function githubGet(string $owner, string $name, string $path, ?string $token): Response

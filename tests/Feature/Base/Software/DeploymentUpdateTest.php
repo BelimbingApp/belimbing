@@ -49,19 +49,22 @@ beforeEach(function (): void {
     app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });
 
-function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): void
+function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null, ?bool $aheadOfRemote = null): void
 {
-    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha, $pullError) {
-        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha, $pullError) ?? Process::result();
+    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha, $pullError, $aheadOfRemote) {
+        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha, $pullError, $aheadOfRemote) ?? Process::result();
     });
 }
 
-function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): mixed
+function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null, ?bool $aheadOfRemote = null): mixed
 {
     // When $remoteSha is null, the remote HEAD matches the local SHA so sources
-    // report up_to_date. Pass a distinct $remoteSha to simulate a source that
-    // is behind its remote (up_to_date === false after loadLatestStatus).
+    // report up to date. Pass a distinct $remoteSha to simulate a source whose
+    // remote SHA differs: $aheadOfRemote (default false when SHAs differ) picks
+    // whether that shows as ahead (local HEAD already contains the remote SHA,
+    // update_state === 'ahead') or behind (update_state === 'behind').
     $remoteSha ??= $sha;
+    $aheadOfRemote ??= false;
 
     return match (gitCommandWithoutConfig($command)) {
         ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
@@ -72,6 +75,11 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
             ? Process::result($remoteSha."\trefs/heads/main")
             : Process::result(errorOutput: $remoteError, exitCode: 1),
         ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $remoteSha] => Process::result($remoteSha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+        ['git', 'rev-list', '--left-right', '--count', $remoteSha.'...HEAD'] => $aheadOfRemote
+            // 3 unpushed local commits, remote fully reachable from HEAD.
+            ? Process::result('0'."\t".'3')
+            // The remote's newer commit was never fetched, so git can't diff against it.
+            : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
         ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => $pullError === null
             ? Process::result('Already up to date.')
             : Process::result(errorOutput: $pullError, exitCode: 1),
@@ -1234,6 +1242,77 @@ test('behind is a Livewire public property so Alpine can react to it via $wire a
         ->assertDontSee('updateAllUnavailable');
 });
 
+test('a checkout ahead of its remote reports ahead, not behind, and offers no Update button', function (): void {
+    // Local HEAD has 3 unpushed commits; the remote SHA is an ancestor of HEAD,
+    // not the other way round. Before this fix, plain SHA equality had only two
+    // states, so this fell into "behind" and offered an Update button forever.
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: true);
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('ahead')
+        // Derived from the live remote SHA (git rev-list against it), not the
+        // possibly-stale @{u} tracking ref — the second half of #299's fix.
+        ->and($platform['working_tree']['ahead'])->toBe(3)
+        ->and($platform['working_tree']['behind'])->toBe(0);
+
+    $component = Livewire::test(Index::class)->call('loadLatestStatus');
+
+    $component->assertSee('Ahead of remote')
+        ->assertDontSee('wire:click="updateRepo(\'platform\')"', false)
+        ->assertSet('behind', false);
+});
+
+test('a checkout genuinely behind its remote still reports behind and offers Update', function (): void {
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: false);
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('behind');
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('wire:click="updateRepo(\'platform\')"', false)
+        ->assertSet('behind', true);
+});
+
+test('a checkout with matching local and remote SHAs reports up to date', function (): void {
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('up_to_date');
+});
+
+test('verifyTargets reports an ahead checkout truthfully instead of Still behind', function (): void {
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: true);
+
+    $lines = app(SoftwareSourceRepository::class)->verifyTargets([
+        ['key' => 'platform', 'label' => 'Belimbing (platform)'],
+    ]);
+
+    expect($lines[0])->toContain('Ahead of remote')
+        ->and($lines[0])->not->toContain('Still behind');
+});
+
+test('the deployment sources table labels commit columns Local and Remote', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.index'))
+        ->assertOk()
+        ->assertSee(__('Local'))
+        ->assertSee(__('Remote'));
+});
+
 test('maintenance cleanup is fenced to the detached update that owns it', function (): void {
     $maintenance = app(DeploymentMaintenanceGuard::class);
     $writeLease = new ReflectionMethod($maintenance, 'writeLease');
@@ -1466,11 +1545,18 @@ function fakeSourceGit(string $porcelain, string $leftRightCount): Closure
         return match (true) {
             $command === ['git', 'status', '--porcelain=v1', '--branch'] => Process::result($statusOutput),
             $command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
-            in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
+            // The @{u}...HEAD rev-list (workingTree()'s own fallback) never actually
+            // runs here — statusSummary() above already parses ahead/behind from the
+            // porcelain branch line. Only the live remote-SHA rev-list (updateState())
+            // reaches this, and its object is deliberately never fetched (DEPLOYMENT_UPDATE_REMOTE_SHA
+            // below), so it fails exactly as an unfetched remote commit would — these
+            // tests are about the local working-tree parse, not the live-remote override.
+            in_array('rev-list', $process->command, true) => Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
             $command === ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
             $command === ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
-            in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
-            in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_REMOTE_SHA."\trefs/heads/main"),
+            $command === ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, DEPLOYMENT_UPDATE_REMOTE_SHA] => Process::result(DEPLOYMENT_UPDATE_REMOTE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            in_array('log', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
             default => Process::result(),
         };
     };

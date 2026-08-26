@@ -223,7 +223,7 @@ class Index extends Component
         // actually read, and the page prints it so a stale tab admits its age.
         $statusCollectedAt = CarbonImmutable::now();
 
-        $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
+        $this->behind = collect($status)->contains(fn (array $s): bool => $s['update_state'] === 'behind');
         $unpushedSources = collect($status)
             ->filter(fn (array $source): bool => (int) ($source['working_tree']['ahead'] ?? 0) > 0)
             ->values();
