@@ -479,8 +479,12 @@ test('failed remote checks name the repos instead of assuming they are private',
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
         ->assertSee('Could not check latest commits for these software sources: BelimbingApp/belimbing')
+        // A non-auth failure keeps the general guidance...
         ->assertSee('Public repositories do not need a token')
-        ->assertSee('Could not read latest commit for BelimbingApp/belimbing@main via git ls-remote (fatal: unable to access repository)')
+        ->assertSee('Could not read latest commit for BelimbingApp/belimbing@main')
+        // ...and git's own words move behind a disclosure instead of filling the cell.
+        ->assertSee('Git response')
+        ->assertSee('fatal: unable to access repository')
         ->assertDontSee('A private repository could not be checked');
 
     Http::assertSentCount(0);
@@ -509,7 +513,9 @@ test('deployment status reports remote process pool failures as row errors', fun
     $status = app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
 
     expect(collect($status)->pluck('error')->filter()->first())
-        ->toContain('Could not start Git remote status checks: process pool unavailable');
+        ->toContain('Could not start Git remote status checks')
+        ->and(collect($status)->pluck('error_detail')->filter()->first())
+        ->toContain('process pool unavailable');
 });
 
 test('deployment status caches a remote failure so it does not re-run on every render or round-trip', function (): void {
@@ -1871,4 +1877,96 @@ test('deployment sources card says how old its data is and offers a refresh', fu
         ->assertSee('wire:click="refreshStatus"', false)
         ->call('refreshStatus')
         ->assertSee('Belimbing (platform)');
+});
+
+test('a remote that asks for credentials says so instead of leading with the public-repo advice', function (): void {
+    $user = createAdminUser();
+    // The exact fatal a deployed install produced: an HTTPS remote for a private
+    // repo with no stored token, in a web worker with no tty to prompt on.
+    fakeDeploymentUpdateProcesses(
+        remoteError: "fatal: could not read Username for 'https://github.com': No such device or address",
+    );
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('BelimbingApp/belimbing needs credentials — add a token for BelimbingApp in GitHub Access.', false)
+        ->assertDontSee('Public repositories do not need a token')
+        ->assertSee('could not read Username', false);
+
+    Http::assertSentCount(0);
+});
+
+test('an unresolvable remote commit date says why it is unavailable', function (): void {
+    Process::fake(function ($process) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, DEPLOYMENT_UPDATE_REMOTE_SHA]) {
+            return Process::result(errorOutput: 'fatal: bad object '.DEPLOYMENT_UPDATE_REMOTE_SHA, exitCode: 128);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command, remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA) ?? Process::result();
+    });
+    // No token is stored for this owner, so the anonymous call 404s and no
+    // authenticated retry happens — the case that produced a bare "Time unavailable".
+    Http::fake(['api.github.com/repos/*/commits/*' => Http::response([], 404)]);
+
+    $status = app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
+    $latest = collect($status)->pluck('latest')->filter()->first();
+
+    // `?? ` would coalesce the very null being asserted, so check the key directly.
+    expect(array_key_exists('date', $latest))->toBeTrue()
+        ->and($latest['date'])->toBeNull()
+        ->and($latest['date_error'] ?? null)->toBeString()
+        ->toContain('404')
+        ->toContain('GitHub Access');
+});
+
+test('an HTTP 403 from the remote is classified as a credentials failure', function (): void {
+    $user = createAdminUser();
+    // The other common shape of "your credentials do not open this repo": a token
+    // that exists but cannot see it. Reported on #323 review — the first cut of
+    // the classifier matched the Username prompt but let this fall through to the
+    // generic summary that leads with the public-repo advice.
+    fakeDeploymentUpdateProcesses(
+        remoteError: "fatal: unable to access 'https://github.com/BelimbingApp/belimbing.git/': The requested URL returned error: 403",
+    );
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('BelimbingApp/belimbing needs credentials — add a token for BelimbingApp in GitHub Access.', false)
+        ->assertDontSee('Public repositories do not need a token');
+
+    Http::assertSentCount(0);
+});
+
+test('the failure banner leads with credentials when that is the cause', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses(
+        remoteError: "fatal: could not read Username for 'https://github.com': No such device or address",
+    );
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('These software sources need credentials')
+        ->assertDontSee('Public GitHub repositories do not need a token');
+});
+
+test('the failure banner keeps the general guidance for non-auth failures', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses(remoteError: 'fatal: unable to access repository');
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Public GitHub repositories do not need a token')
+        ->assertDontSee('These software sources need credentials');
 });

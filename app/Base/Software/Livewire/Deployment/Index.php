@@ -9,6 +9,7 @@ use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
+use App\Base\Software\Services\SoftwareSourceGitReader;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -185,6 +186,25 @@ class Index extends Component
         }
     }
 
+    /**
+     * Repos whose remote check failed, split by whether git was asking for
+     * credentials.
+     *
+     * @param  list<array<string, mixed>>  $status
+     * @return list<string>
+     */
+    private function failedRepos(array $status, bool $credentials): array
+    {
+        $reader = app(SoftwareSourceGitReader::class);
+
+        return collect($status)
+            ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
+            ->filter(fn (array $s): bool => $reader->isAuthFailure($s['error_detail'] ?? null) === $credentials)
+            ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
+            ->values()
+            ->all();
+    }
+
     public function render(
         DeploymentService $deployment,
         DeploymentRunHistory $history,
@@ -235,11 +255,12 @@ class Index extends Component
             'status' => $status,
             'statusCollectedAt' => $statusCollectedAt,
             'latestStatusLoaded' => $this->latestStatusLoaded,
-            'checkFailures' => collect($status)
-                ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
-                ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
-                ->values()
-                ->all(),
+            // Split so the banner can lead with the right advice. Telling an
+            // operator that public repositories do not need a token, when the
+            // failure was git asking for a username, sends them to check the repo
+            // name and the network before the actual cause.
+            'checkFailures' => $this->failedRepos($status, credentials: false),
+            'credentialFailures' => $this->failedRepos($status, credentials: true),
             'maintenanceActive' => app()->isDownForMaintenance(),
             'runStatus' => $runStatus,
             'runLabel' => $this->statusLabel($runStatus),

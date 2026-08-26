@@ -1,6 +1,7 @@
 @props([
     'value' => null,
     'fallback' => null,
+    'fallbackTitle' => null,
 ])
 
 {{--
@@ -21,7 +22,7 @@
 @endphp
 
 @if ($carbon === null)
-    <span {{ $attributes }}>{{ $fallback ?? __('Time unavailable') }}</span>
+    <span {{ $attributes->merge($fallbackTitle !== null ? ['title' => $fallbackTitle] : []) }}>{{ $fallback ?? __('Time unavailable') }}</span>
 @else
     <time
         {{ $attributes->merge([
