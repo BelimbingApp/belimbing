@@ -59,12 +59,18 @@ as issue comments collided three times in one evening, including once where the
 claimant followed the rule: a PR opening is the *end* of the work, so a comment
 written at claim time cannot reach someone already building.
 
-**Never act on an issue you have not claimed** — not trivially, not as steward,
-not after stand-down. Every collision check we have hangs off the claim, so work
-done outside one bypasses all of them. A steward filed a cleanup issue, decided
-it was too small to bother claiming, and deleted five branches out from under the
-agent who had claimed it properly. The exception you will be tempted by is
-"this is too small to claim"; that is the exception that defeats the rule.
+**Never implement, mutate, or destroy on an issue you have not claimed** — not
+trivially, not as steward, not after stand-down. Every collision check we have
+hangs off the claim, so task-owned work done outside one bypasses all of them. A
+steward filed a cleanup issue, decided it was too small to bother claiming, and
+deleted five branches out from under the agent who had claimed it properly. The
+exception you will be tempted by is "this is too small to claim"; that is the
+exception that defeats the rule.
+
+The boundary is mutation, not attention. **Reviewing, triage, read-only
+inspection, coordination, and the gated merge of a peer's PR need no claim** and
+never did — claiming a task in order to review it would destroy the independence
+the review exists for.
 
 **Coordinate with each other, not through the user.** Blocked by a teammate's
 path, a missing token, a permission gap? Message the relevant agent directly
@@ -318,11 +324,17 @@ five times in one session; the label has never been.
 | `hold:author` | the author | the author | mid-fix — do not merge yet |
 | `hold:review` | a reviewer | that reviewer | an open finding — do not merge yet |
 
-When two reviewers hold the same label, **any one of them may clear it, and only
-by naming the others in the clearing comment** so the absent holder can re-set it.
-The burden sits on whoever clears, not on whoever is away. An author never clears
-a reviewer's hold: one agent believed they had, having actually cleared their own
-`hold:author`, and only the label timeline showed the difference.
+When two reviewers hold the same label, **every holder with an open finding must
+clear before the label comes off.** `hold:review` is binary and the gate cannot
+tell one holder's satisfaction from another's, so a single removal opens a real
+merge window while a finding is still open — and "I named the absent holder in a
+comment" is prose the gate does not read. If a holder has gone unresponsive, that
+is a stale lane and the steward resolves it under **Stale-lane recovery** below,
+on the record, rather than by one reviewer speaking for another.
+
+An author never clears a reviewer's hold: one agent believed they had, having
+actually cleared their own `hold:author`, and only the label timeline showed the
+difference.
 
 Add it the moment you have something you intend to fix — that means when you
 *begin* the fix, not when you push it — and remove it when the fix is pushed.
@@ -452,9 +464,13 @@ git diff <reviewed-sha> <new-head> -- <the paths this PR owns>
 ```
 
 Empty means the artifact you accepted is byte-identical to the artifact being
-merged, and your verdict stands — say so at the new head so the gate can read it.
-Non-empty means incoming work touched this PR's scope and the verdict must be
-redone. Both cases occurred in a single afternoon; guessing optimistically is a
+merged, so you need not reread it. **It does not mean the behaviour is unchanged.**
+Incoming `main` can move a caller, a shared trait, a config default, a dependency
+or another enforcement layer *outside* those paths and invalidate the code you
+approved while this command stays empty. Before carrying a verdict to the new head,
+read the incoming-main delta and ask the blast-radius question of it. Non-empty
+means incoming work touched this PR's own scope and the verdict must be redone
+outright. Both cases occurred in a single afternoon; guessing optimistically is a
 false green.
 
 **A hand-resolved content conflict takes a stricter bar than original code.** The
