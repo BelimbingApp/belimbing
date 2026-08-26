@@ -9,6 +9,7 @@ use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
+use App\Base\Software\Services\SoftwareSourceGitReader;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
@@ -45,6 +46,10 @@ class Index extends Component
     // is a one-time snapshot that Livewire morph never re-evaluates, leaving
     // "Update all" stuck disabled after wire:init loads remote status.
     public bool $behind = false;
+
+    // Keep Alpine's update-all gate reactive across Livewire status refreshes.
+    // A Blade-only @js snapshot can remain stale after the source table morphs.
+    public bool $hasUnpushedSources = false;
 
     public function loadLatestStatus(): void
     {
@@ -185,6 +190,25 @@ class Index extends Component
         }
     }
 
+    /**
+     * Repos whose remote check failed, split by whether git was asking for
+     * credentials.
+     *
+     * @param  list<array<string, mixed>>  $status
+     * @return list<string>
+     */
+    private function failedRepos(array $status, bool $credentials): array
+    {
+        $reader = app(SoftwareSourceGitReader::class);
+
+        return collect($status)
+            ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
+            ->filter(fn (array $s): bool => $reader->isAuthFailure($s['error_detail'] ?? null) === $credentials)
+            ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
+            ->values()
+            ->all();
+    }
+
     public function render(
         DeploymentService $deployment,
         DeploymentRunHistory $history,
@@ -200,6 +224,10 @@ class Index extends Component
         $statusCollectedAt = CarbonImmutable::now();
 
         $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
+        $unpushedSources = collect($status)
+            ->filter(fn (array $source): bool => (int) ($source['working_tree']['ahead'] ?? 0) > 0)
+            ->values();
+        $this->hasUnpushedSources = $unpushedSources->isNotEmpty();
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
@@ -235,10 +263,15 @@ class Index extends Component
             'status' => $status,
             'statusCollectedAt' => $statusCollectedAt,
             'latestStatusLoaded' => $this->latestStatusLoaded,
-            'checkFailures' => collect($status)
-                ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
-                ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
-                ->values()
+            // Split so the banner can lead with the right advice. Telling an
+            // operator that public repositories do not need a token, when the
+            // failure was git asking for a username, sends them to check the repo
+            // name and the network before the actual cause.
+            'checkFailures' => $this->failedRepos($status, credentials: false),
+            'credentialFailures' => $this->failedRepos($status, credentials: true),
+            'hasUnpushedSources' => $this->hasUnpushedSources,
+            'unpushedSourceLabels' => $unpushedSources
+                ->map(fn (array $source): string => (string) $source['label'])
                 ->all(),
             'maintenanceActive' => app()->isDownForMaintenance(),
             'runStatus' => $runStatus,

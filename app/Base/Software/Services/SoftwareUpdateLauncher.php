@@ -17,6 +17,7 @@ final class SoftwareUpdateLauncher
     public function __construct(
         private readonly DetachedProcessLauncher $launcher,
         private readonly DeploymentRunHistory $history,
+        private readonly DeploymentService $deployment,
     ) {}
 
     /**
@@ -25,6 +26,14 @@ final class SoftwareUpdateLauncher
      */
     public function launch(array $keys): array
     {
+        $unpushedSources = $this->unpushedSources($keys);
+
+        if ($unpushedSources !== []) {
+            return [(string) __('FAILED: software update was not started because these sources have local commits that are not on their remotes: :sources. Push or reconcile those commits outside Belimbing, refresh source status, then retry.', [
+                'sources' => implode(', ', $unpushedSources),
+            ])];
+        }
+
         $runId = (string) Str::uuid();
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS, $runId);
 
@@ -81,5 +90,34 @@ final class SoftwareUpdateLauncher
     public function maintenanceActionLock(): Lock
     {
         return Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS);
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return list<string>
+     */
+    private function unpushedSources(array $keys): array
+    {
+        $selectedKeys = array_fill_keys($keys, true);
+        $sources = [];
+
+        foreach ($this->deployment->localStatus() as $source) {
+            if ($selectedKeys !== [] && ! isset($selectedKeys[$source['key']])) {
+                continue;
+            }
+
+            $ahead = (int) ($source['working_tree']['ahead'] ?? 0);
+
+            if ($ahead < 1) {
+                continue;
+            }
+
+            $sources[] = (string) __(':label (:count unpushed)', [
+                'label' => $source['label'],
+                'count' => $ahead,
+            ]);
+        }
+
+        return $sources;
     }
 }

@@ -36,6 +36,10 @@ final class MigrationIncubationManager
      */
     private function updateTables(array $tableNames, bool $incubating): array
     {
+        if (! app()->environment('local')) {
+            throw IncubatingSchemaMutationException::localEnvironmentRequired(app()->environment());
+        }
+
         $rows = TableRegistry::query()
             ->whereIn('table_name', $tableNames)
             ->get(['table_name', 'migration_file']);

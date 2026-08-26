@@ -440,10 +440,26 @@
             </x-ui.alert>
         @endif
 
+        {{-- Two banners, because one lead-in cannot be right for both causes. The
+             single message this replaced opened with "public repositories do not
+             need a token" even when git had just asked for a username. --}}
+        @if ($credentialFailures !== [])
+            <x-ui.alert variant="warning">
+                {{ __('These software sources need credentials: :sources. Git asked for a username or was refused. Add the owner token in', ['sources' => implode(', ', $credentialFailures)]) }}
+                <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
+            </x-ui.alert>
+        @endif
+
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
-                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['sources' => implode(', ', $checkFailures)]) }}
-                <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
+                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response.', ['sources' => implode(', ', $checkFailures)]) }}
+            </x-ui.alert>
+        @endif
+
+        @if ($hasUnpushedSources)
+            <x-ui.alert variant="danger">
+                <p class="font-medium">{{ __('Software updates are blocked by local-only commits.') }}</p>
+                <p class="mt-1 text-sm">{{ __('These sources have commits that are not on their configured remotes: :sources. Push or reconcile them outside Belimbing, then refresh this status. Starting an update cannot fast-forward these checkouts and would otherwise fail after maintenance begins.', ['sources' => implode(', ', $unpushedSourceLabels)]) }}</p>
             </x-ui.alert>
         @endif
 
@@ -510,7 +526,7 @@
                         </p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || $wire.hasUnpushedSources || ! $wire.behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -577,7 +593,12 @@
                         <td class="px-table-cell-x py-table-cell-y align-top">
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
-                                <div class="text-xs text-muted"><x-ui.relative-time :value="$s['latest']['date']" /></div>
+                                <div class="text-xs text-muted">
+                                    <x-ui.relative-time
+                                        :value="$s['latest']['date']"
+                                        :fallback-title="$s['latest']['date_error'] ?? null"
+                                    />
+                                </div>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <span class="inline-flex items-center gap-1.5 text-xs text-muted">
                                     <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
@@ -586,7 +607,16 @@
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
                             @else
+                                {{-- One actionable line, with git's own words behind a disclosure.
+                                     A three-line `fatal:` printed straight into this cell blew up
+                                     the row height and buried the cause at the end of it. --}}
                                 <span class="text-xs text-muted">{{ $s['error'] }}</span>
+                                @if ($s['error_detail'] ?? null)
+                                    <details class="mt-1">
+                                        <summary class="cursor-pointer text-xs text-muted underline">{{ __('Git response') }}</summary>
+                                        <pre class="mt-1 max-w-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{{ $s['error_detail'] }}</pre>
+                                    </details>
+                                @endif
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-right">
@@ -596,6 +626,8 @@
                                 <span class="text-xs text-muted">—</span>
                             @elseif ($s['up_to_date'] === true)
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
+                            @elseif ($s['up_to_date'] === false && $s['working_tree']['ahead'] > 0)
+                                <x-ui.badge variant="danger" :title="__('Push or reconcile this source\'s local commits before updating.')">{{ __('Update blocked') }}</x-ui.badge>
                             @elseif ($s['up_to_date'] === false)
                                 <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
