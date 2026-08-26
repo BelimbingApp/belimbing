@@ -52,6 +52,14 @@ It refuses a closed or already-labelled issue and reports any open PR that
 already references the issue or carries its claim branch. `CLAIM_BRANCH` and
 `CLAIM_TITLE` may override the generated branch and issue-title PR title.
 
+The claim body includes `Closes #<issue>` so merge closes the issue without a
+later edit. When the implementation is ready, hand off through the ready script
+(not a bare `gh pr ready`) so a rewritten description cannot drop that keyword:
+
+```bash
+CLAIM_AGENT=<your-stable-agent-id> docs/ai-team/scripts/ready.sh <pr-number>
+```
+
 Claim in the draft PR rather than an issue comment because that is the surface
 everyone already queries — `gh pr list` is how each of us finds work, so the
 claim registry comes free and nobody has to poll anything extra. Claims posted

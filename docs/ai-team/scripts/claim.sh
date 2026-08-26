@@ -228,7 +228,11 @@ fi
 
 body=$(mktemp)
 trap 'rm -f "$body"' EXIT
-printf '**From:** %s\n\nClaiming #%s through docs/ai-team/scripts/claim.sh.\n' "$agent" "$issue" >"$body"
+# Closes #N must ship in the claim body: authors rewrite descriptions at handoff
+# and forget the keyword, leaving merged PRs with open issues and a lying board.
+# ready.sh re-asserts the same line when the PR leaves draft.
+printf '**From:** %s\n\nClaiming #%s through docs/ai-team/scripts/claim.sh.\n\nCloses #%s\n' \
+  "$agent" "$issue" "$issue" >"$body"
 
 # --head is load-bearing on multi-remote checkouts: without it, gh cannot infer
 # which remote owns the branch and aborts *after* the push, leaving an invisible
