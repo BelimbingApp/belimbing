@@ -144,8 +144,9 @@ class GateMechanismTest(unittest.TestCase):
         effective_head = head or self.head_sha
         env["GATE_TEST_HEAD"] = effective_head
         env["GATE_TEST_RESOLVE"] = resolve
+        effective_labels = labels if labels is not None else ["task:review", "agent:author"]
         env["GATE_TEST_LABELS"] = json.dumps([
-            {"name": label} for label in (labels or ["task:review", "agent:author"])
+            {"name": label} for label in effective_labels
         ])
         if reviews is None:
             reviews = [{
@@ -246,6 +247,21 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
         self.assertIn("GATE: PASS", result.stdout)
 
+    def test_literal_backslash_n_does_not_create_marker_lines(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": r"**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
     def test_latest_changes_required_verdict_blocks_an_earlier_acceptance(self):
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
@@ -278,6 +294,20 @@ class GateMechanismTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("task:review is not set", result.stdout)
+
+    def test_missing_or_multiple_author_lanes_fail_the_gate(self):
+        for labels in (
+            ["task:review"],
+            ["task:review", "agent:author", "agent:second-author"],
+        ):
+            with self.subTest(labels=labels):
+                result = self.run_gate(
+                    origin=CANONICAL_HTTPS,
+                    reviewed=self.head_sha,
+                    labels=labels,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("expected exactly one agent:<id> author lane", result.stdout)
 
     def test_short_abbreviation_refused(self):
         result = self.run_gate(origin=CANONICAL_HTTPS, reviewed=self.head_sha[:8])
