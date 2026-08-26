@@ -151,17 +151,29 @@ class ReadyHandoffTest(unittest.TestCase):
 
 
 class LaneIssueHelperTest(unittest.TestCase):
+    """Source-level probes for _lane_issue.sh via the shared Windows Bash resolver."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.stub = Path(self.dir.name)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
     def derive(self, title: str, branch: str, body: str = "", override: str = "") -> str:
-        script = textwrap.dedent(
-            f"""\
-            source "{LANE}"
-            ai_team_derive_lane_issue {title!r} {branch!r} {body!r} {override!r}
-            """
-        )
-        # Use bash -c with proper quoting via env
-        env = os.environ.copy()
-        result = subprocess.run(
-            ["bash", "-c", f'source "{LANE}"; ai_team_derive_lane_issue "$1" "$2" "$3" "$4"', "_", title, branch, body, override],
+        result = run_with_bash_path(
+            [
+                "bash",
+                "-c",
+                f'source "{bash_path(LANE)}"; ai_team_derive_lane_issue "$1" "$2" "$3" "$4"',
+                "_",
+                title,
+                branch,
+                body,
+                override,
+            ],
+            stub_directory=self.stub,
+            env=os.environ.copy(),
             capture_output=True,
             text=True,
             check=False,
