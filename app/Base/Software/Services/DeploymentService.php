@@ -134,6 +134,13 @@ class DeploymentService
         $composerBefore = $this->buildRunner->composerLockHash();
 
         $this->pullTargets($targets, $record);
+
+        if (DeploymentLogClassifier::hasError($log)) {
+            $record((string) __('FAILED: source pull did not complete; deployment halted before dependency refresh, migrations and reload.'));
+
+            return $log;
+        }
+
         $this->refreshPhpDependencies($composerBefore, $record);
 
         if (DeploymentLogClassifier::hasError($log)) {
