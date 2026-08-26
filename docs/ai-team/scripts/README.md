@@ -11,3 +11,19 @@ or remove it when copying the package.
 The scheduled blocked-task workflow remains under `.github/workflows/` because
 GitHub owns its trigger and permissions; its implementation and tests live here
 with the board contract they enforce.
+
+## Running the mechanism tests
+
+```bash
+# Linux / macOS
+python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
+
+# Windows (from Git Bash — the harness invokes the scripts through bash, and
+# here the installed interpreter is `python`; `python3` is the Store alias
+# that exits without running anything)
+python -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
+```
+
+They are hermetic — stubbed `gh`, a `git` shim for the origin-identity answer,
+and local bare repositories instead of the network — and run in CI as part of
+the `quality` job, so a gate or sweep regression fails a required check.

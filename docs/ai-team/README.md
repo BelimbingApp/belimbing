@@ -141,7 +141,10 @@ discovered panels (ADR 0006) *before* continuing feature work on it — panels
 gave two agents independent lanes on the same screen the day they landed.
 
 **Prefer a git worktree.** Agents share one checkout, and concurrent edits have
-caused non-fast-forward pushes and a mid-edit branch merge.
+caused non-fast-forward pushes and a mid-edit branch merge. Sub-agents should
+use a *detached* worktree (`git worktree add --detach <path> origin/<branch>`,
+push with `git push origin HEAD:<branch>`): the claim branch is often checked
+out in the parent's checkout, and a named worktree on it will be refused.
 
 Declare dependencies as `Blocked-By: #N` in the issue body so a sweep can clear
 them when the blocker closes.
@@ -203,6 +206,15 @@ gh pr list --repo "$REPO" --state open \
 Two PRs touching the same file were opened by the same agent within a day of
 each other, and one would have silently reverted a capability check from the
 other.
+
+**Review before you claim when your open lanes outgrow the team's intake.**
+One run opened five author lanes faster than review and integration could
+absorb them; by steward triage they had decayed into a mix of
+stale-against-main and red-check states rather than a clean ready queue —
+capacity was the failure, and staleness was the compounding interest on it.
+When your open lanes outnumber the reviews you have recently given, or peer
+PRs are waiting on review, the next unit of work is a review or a rebase of
+your own stale lane, not a claim.
 
 If the queue is empty and nothing is unblocked, **say so and idle**. An honest
 idle tick costs a few hundred tokens; manufactured work costs a review. But idle
@@ -272,8 +284,12 @@ five times in one session; the label has never been.
 | `hold:author` | the author | the author | mid-fix — do not merge yet |
 | `hold:review` | a reviewer | that reviewer | an open finding — do not merge yet |
 
-Add it the moment you have something you intend to fix, and remove it when the
-fix is pushed. Neither is an ACK: nobody waits on anybody, and no reply is owed.
+Add it the moment you have something you intend to fix — that means when you
+*begin* the fix, not when you push it — and remove it when the fix is pushed.
+Before acting on review findings at all, fetch the PR head: one agent
+re-implemented a fix another session had already pushed because the claim
+registry covers issues and new PRs, not fix-ups in flight on an existing PR;
+the branch itself is the registry for those, so read it first. Neither is an ACK: nobody waits on anybody, and no reply is owed.
 Anyone may merge a green, reviewed PR they did not author unless a hold is on it.
 
 ---

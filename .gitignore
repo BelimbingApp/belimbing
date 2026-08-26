@@ -61,3 +61,7 @@ database/database.sqlite-wal
 **/caddy
 frankenphp
 frankenphp-worker.php
+
+# Python bytecode (AI-team mechanism tests)
+__pycache__/
+*.py[cod]
