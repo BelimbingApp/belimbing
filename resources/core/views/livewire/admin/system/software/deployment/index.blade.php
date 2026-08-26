@@ -619,6 +619,42 @@
                                     @endif
                                 </div>
                             @endif
+                            @if ($s['upstream'] ?? null)
+                                <div class="mt-1.5 text-xs text-muted">
+                                    <span class="font-medium">{{ __('Upstream') }}</span>
+                                    <span class="font-mono">{{ ($s['upstream']['repo'] ?? $s['upstream']['remote']).'@'.($s['upstream']['branch'] ?? '—') }}</span>
+                                    @if ($s['upstream']['head'])
+                                        <span class="font-mono">{{ $s['upstream']['head']['short'] }}</span>
+                                    @endif
+                                </div>
+                                <div class="mt-1 flex flex-wrap items-center gap-1.5">
+                                    @if ($s['upstream']['relationship'] === 'contained')
+                                        <x-ui.badge variant="success" :title="__('Every upstream commit is already in the deployment fork.')">{{ __('Upstream contained') }}</x-ui.badge>
+                                    @elseif ($s['upstream']['relationship'] === 'fast_forwardable')
+                                        <x-ui.badge variant="warning" :title="__('The upstream has commits this fork does not; the fork has none of its own, so it can fast-forward.')">{{ trans_choice('{1} Upstream ahead by :count commit — fast-forwardable|[2,*] Upstream ahead by :count commits — fast-forwardable', (int) $s['upstream']['behind'], ['count' => $s['upstream']['behind']]) }}</x-ui.badge>
+                                    @elseif ($s['upstream']['relationship'] === 'divergent')
+                                        <x-ui.badge variant="warning" :title="__('Both the fork and the upstream have commits the other lacks; reconciling them is a manual decision.')">{{ __('Diverged — fork +:ahead / upstream +:behind', ['ahead' => $s['upstream']['ahead'], 'behind' => $s['upstream']['behind']]) }}</x-ui.badge>
+                                    @elseif ($s['upstream']['reason'])
+                                        <span class="text-xs text-muted">{{ $s['upstream']['reason'] }}</span>
+                                    @elseif ($s['upstream']['error'])
+                                        <span class="text-xs text-muted">{{ $s['upstream']['error'] }}</span>
+                                        @if ($s['upstream']['error_detail'])
+                                            <details class="mt-1">
+                                                <summary class="cursor-pointer text-xs text-muted underline">{{ __('Git response') }}</summary>
+                                                <pre class="mt-1 max-w-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{{ $s['upstream']['error_detail'] }}</pre>
+                                            </details>
+                                        @endif
+                                    @endif
+                                </div>
+                                {{-- The sync gate's state, stated plainly (#345): a closed gate is an
+                                     explanation on the page, never a hidden concept or a 500 at the
+                                     point of use. Visibility above never depends on this gate. --}}
+                                @if ($upstreamSyncState['available'])
+                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available on this deployment.') }}</div>
+                                @else
+                                    <div class="mt-1 text-xs text-muted">{{ $upstreamSyncState['reason'] }}</div>
+                                @endif
+                            @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-sm text-muted">{{ $s['branch'] ?? '—' }}</td>
                         <td class="px-table-cell-x py-table-cell-y align-top">
@@ -663,8 +699,12 @@
                                 <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
-                            @elseif ($s['update_state'] === 'up_to_date')
+                            @elseif ($s['update_state'] === 'up_to_date' && (($s['upstream'] ?? null) === null || $s['upstream']['relationship'] === 'contained'))
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
+                            @elseif ($s['update_state'] === 'up_to_date')
+                                {{-- Matching origin alone must not read as plainly current when a
+                                     framework upstream exists and is not contained in the fork (#344). --}}
+                                <x-ui.badge variant="warning" :title="__('The deployment fork matches its remote, but the framework upstream has commits this fork does not include yet.')">{{ __('Fork up to date') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'ahead')
                                 <x-ui.badge variant="info" :title="__('Local HEAD already contains the remote branch head.')">{{ __('Ahead of remote') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)

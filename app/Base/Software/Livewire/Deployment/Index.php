@@ -11,6 +11,7 @@ use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\SoftwareSourceGitReader;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
+use App\Base\Software\Services\UpstreamSyncGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -268,6 +269,10 @@ class Index extends Component
 
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
+            // Stated availability of upstream synchronization (#345). Rendered on
+            // the upstream line so a closed gate is an explanation, not a silent
+            // absence; the server-side boundary is UpstreamSyncGate::authorize().
+            'upstreamSyncState' => app(UpstreamSyncGate::class)->state(Auth::user()),
             'statusCollectedAt' => $statusCollectedAt,
             'latestStatusLoaded' => $this->latestStatusLoaded,
             // Split so the banner can lead with the right advice. Telling an
