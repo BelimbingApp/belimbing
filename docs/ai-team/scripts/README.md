@@ -22,9 +22,8 @@ required `GITHUB_REPOSITORY` and `GITHUB_TOKEN` environment variables).
 # Linux / macOS
 python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 
-# Windows (from Git Bash — the harness invokes the scripts through bash, and
-# here the installed interpreter is `python`; `python3` is the Store alias
-# that exits without running anything)
+# Windows (PowerShell or Git Bash — the harness resolves Git for Windows' Bash;
+# use `python` because `python3` may be the Store alias that exits immediately)
 python -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 ```
 

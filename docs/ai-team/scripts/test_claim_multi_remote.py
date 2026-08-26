@@ -6,6 +6,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from _test_support import bash_path, run_with_bash_path
+
 SCRIPT = Path(__file__).with_name("claim.sh")
 CLAIM_BRANCH = "agent/composer-issue-42"
 
@@ -53,7 +55,7 @@ class ClaimMultiRemoteTest(unittest.TestCase):
                 f"""\
                 #!/usr/bin/env bash
                 set -euo pipefail
-                log={self.gh_log!s}
+                log="$CLAIM_TEST_GH_LOG"
                 printf '%s\\n' "$*" >>"$log"
                 case "$1 $2" in
                   "repo view")
@@ -134,13 +136,14 @@ class ClaimMultiRemoteTest(unittest.TestCase):
 
     def run_claim(self, *, worktree: Path, resume_branch: str | None = None) -> subprocess.CompletedProcess[str]:
         env = self.git_env()
-        env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
+        env["CLAIM_TEST_GH_LOG"] = bash_path(self.gh_log)
         env["CLAIM_AGENT"] = "composer"
         env["CLAIM_WORKTREE"] = str(worktree)
         if resume_branch:
             env["CLAIM_BRANCH"] = resume_branch
-        return subprocess.run(
+        return run_with_bash_path(
             ["bash", str(SCRIPT), "42"],
+            stub_directory=self.bin,
             cwd=self.clone,
             env=env,
             capture_output=True,
@@ -180,9 +183,10 @@ class ClaimMultiRemoteTest(unittest.TestCase):
 
     def test_claim_without_head_would_have_failed_is_covered_by_stub(self):
         env = self.git_env()
-        env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
-        bad = subprocess.run(
+        env["CLAIM_TEST_GH_LOG"] = bash_path(self.gh_log)
+        bad = run_with_bash_path(
             ["gh", "pr", "create", "--repo", "example/canonical", "--draft", "--title", "x", "--body", "y"],
+            stub_directory=self.bin,
             cwd=self.clone,
             env=env,
             capture_output=True,

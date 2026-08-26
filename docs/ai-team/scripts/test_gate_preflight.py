@@ -8,6 +8,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from _test_support import run_with_bash_path
+
 SCRIPT = Path(__file__).with_name("gate.sh")
 
 CANONICAL_HTTPS = "https://github.com/example/canonical"
@@ -139,7 +141,6 @@ class GateMechanismTest(unittest.TestCase):
         env["GATE_TEST_ORIGIN_URL"] = origin
         env["GATE_TEST_REAL_GIT"] = real_git
 
-        env["PATH"] = f"{self.dir.name}{os.pathsep}{env['PATH']}"
         env["GATE_TEST_CANONICAL"] = "example/canonical"
         effective_head = head or self.head_sha
         env["GATE_TEST_HEAD"] = effective_head
@@ -163,11 +164,16 @@ class GateMechanismTest(unittest.TestCase):
         if reviewed is not None:
             args.append(reviewed)
 
-        result = subprocess.run(
+        result = run_with_bash_path(
             args, cwd=checkout, env=env, text=True,
+            stub_directory=base,
             capture_output=True, check=False, timeout=60,
         )
-        subprocess.run(["rm", "-rf", str(checkout)], check=True)
+        def remove_readonly(function, path, _exc_info):
+            os.chmod(path, os.stat(path).st_mode | stat.S_IWRITE)
+            function(path)
+
+        shutil.rmtree(checkout, onerror=remove_readonly)
         return result
 
     def test_rewritten_transport_refused_despite_canonical_label(self):
