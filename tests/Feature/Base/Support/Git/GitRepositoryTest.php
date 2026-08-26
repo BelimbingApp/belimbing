@@ -10,12 +10,23 @@ const GIT_REPOSITORY_MIGRATION_B = 'ibp/Database/Migrations/b.php';
 const GIT_SAFE_DIRECTORY_OPTION = 'safe.directory=';
 const GIT_NON_INTERACTIVE_OPTIONS = ['-c', 'core.askPass=', '-c', 'credential.helper='];
 const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0'];
+const GIT_REPOSITORY_TOKEN = 'ghp_git_repository_token_0123456789';
 
 final class GitRepositoryLaunchException extends RuntimeException {}
 
 function gitRepositoryCommand(string $path, string ...$args): array
 {
     return ['git', '-c', GIT_SAFE_DIRECTORY_OPTION.str_replace('\\', '/', $path), ...GIT_NON_INTERACTIVE_OPTIONS, ...$args];
+}
+
+function gitRepositoryAuthenticatedEnvironment(string $token): array
+{
+    return [
+        ...GIT_NON_INTERACTIVE_ENVIRONMENT,
+        'GIT_CONFIG_COUNT' => '1',
+        'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+        'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.$token),
+    ];
 }
 
 test('commit stages and commits only the given paths, never a blanket add', function (): void {
@@ -165,6 +176,24 @@ test('commands disable interactive credential prompts', function (): void {
         && $process->environment === GIT_NON_INTERACTIVE_ENVIRONMENT);
 });
 
+test('authenticated commands pass the token through Git config environment, not argv', function (): void {
+    Process::fake();
+
+    $repository = new GitRepository(GIT_REPOSITORY_BUNDLE_PATH, GIT_REPOSITORY_TOKEN);
+
+    $repository->lsRemoteHead('main');
+    $repository->pull();
+
+    $expectedEnvironment = gitRepositoryAuthenticatedEnvironment(GIT_REPOSITORY_TOKEN);
+
+    Process::assertRan(fn ($process): bool => $process->command === gitRepositoryCommand(GIT_REPOSITORY_BUNDLE_PATH, 'ls-remote', '--exit-code', 'origin', 'refs/heads/main')
+        && $process->environment === $expectedEnvironment);
+    Process::assertRan(fn ($process): bool => $process->command === gitRepositoryCommand(GIT_REPOSITORY_BUNDLE_PATH, 'pull', '--ff-only')
+        && $process->environment === $expectedEnvironment);
+    Process::assertDidntRun(fn ($process): bool => collect($process->command)
+        ->contains(fn (string $argument): bool => str_contains($argument, GIT_REPOSITORY_TOKEN)));
+});
+
 test('command launch failures are reported separately from git failures', function (): void {
     Process::fake(fn () => throw new GitRepositoryLaunchException('git executable was not found'));
 
@@ -178,6 +207,15 @@ test('command launch failures are reported separately from git failures', functi
         ->and($failure->couldNotStart())->toBeTrue()
         ->and($failure->message())->toContain('Could not run git')
         ->and($failure->message())->toContain('git executable was not found');
+});
+
+test('authenticated command launch failures cannot expose the token through the command', function (): void {
+    Process::fake(fn ($process) => throw new GitRepositoryLaunchException(implode(' ', $process->command)));
+
+    $failure = (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH, GIT_REPOSITORY_TOKEN))->lsRemoteHead('main');
+
+    expect($failure->ok)->toBeFalse()
+        ->and($failure->message())->not->toContain(GIT_REPOSITORY_TOKEN);
 });
 
 test('aheadBehind parses the upstream left-right count', function (): void {
