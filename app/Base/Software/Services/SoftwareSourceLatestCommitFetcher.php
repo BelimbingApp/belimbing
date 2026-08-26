@@ -40,6 +40,7 @@ final class SoftwareSourceLatestCommitFetcher
 
                     $pool->as($key)
                         ->path($request['path'])
+                        ->env(['GIT_TERMINAL_PROMPT' => '0'])
                         ->timeout(30)
                         ->command($repo->command([
                             'ls-remote',

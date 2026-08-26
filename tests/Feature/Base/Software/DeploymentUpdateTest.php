@@ -407,6 +407,15 @@ test('deployment page defers remote latest checks until livewire init', function
     expect($lsRemoteCount)->toBeGreaterThan(0);
 });
 
+test('deployment remote checks disable interactive credential prompts', function (): void {
+    fakeDeploymentUpdateProcesses();
+
+    app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
+
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']
+        && $process->environment === ['GIT_TERMINAL_PROMPT' => '0']);
+});
+
 test('deployment latest column shows the remote commit time when the commit is not available locally', function (): void {
     $remoteDate = now()->subHours(4)->toIso8601String();
 

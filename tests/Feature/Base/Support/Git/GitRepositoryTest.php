@@ -8,12 +8,14 @@ const GIT_REPOSITORY_BUNDLE_PATH = '/srv/bundle';
 const GIT_REPOSITORY_MIGRATION_A = 'ibp/Database/Migrations/a.php';
 const GIT_REPOSITORY_MIGRATION_B = 'ibp/Database/Migrations/b.php';
 const GIT_SAFE_DIRECTORY_OPTION = 'safe.directory=';
+const GIT_NON_INTERACTIVE_OPTIONS = ['-c', 'core.askPass=', '-c', 'credential.helper='];
+const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0'];
 
 final class GitRepositoryLaunchException extends RuntimeException {}
 
 function gitRepositoryCommand(string $path, string ...$args): array
 {
-    return ['git', '-c', GIT_SAFE_DIRECTORY_OPTION.str_replace('\\', '/', $path), ...$args];
+    return ['git', '-c', GIT_SAFE_DIRECTORY_OPTION.str_replace('\\', '/', $path), ...GIT_NON_INTERACTIVE_OPTIONS, ...$args];
 }
 
 test('commit stages and commits only the given paths, never a blanket add', function (): void {
@@ -120,7 +122,7 @@ test('commands can use an explicit git executable', function (): void {
 
     (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH, executable: '/opt/git/bin/git'))->remoteUrl();
 
-    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
+    Process::assertRan(fn ($p): bool => $p->command === ['/opt/git/bin/git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, ...GIT_NON_INTERACTIVE_OPTIONS, 'remote', 'get-url', 'origin']);
 });
 
 test('commands use the configured git executable', function (): void {
@@ -132,7 +134,7 @@ test('commands use the configured git executable', function (): void {
     try {
         (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH))->remoteUrl();
 
-        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin']);
+        Process::assertRan(fn ($p): bool => $p->command === ['/usr/local/bin/blb-git', '-c', GIT_SAFE_DIRECTORY_OPTION.GIT_REPOSITORY_BUNDLE_PATH, ...GIT_NON_INTERACTIVE_OPTIONS, 'remote', 'get-url', 'origin']);
     } finally {
         config(['app.git_executable' => $original]);
     }
@@ -147,10 +149,20 @@ test('commands scope git safe-directory to the checkout path', function (): void
         'git',
         '-c',
         'safe.directory=D:/Repo/BelimbingApp/production',
+        ...GIT_NON_INTERACTIVE_OPTIONS,
         'remote',
         'get-url',
         'origin',
     ]);
+});
+
+test('commands disable interactive credential prompts', function (): void {
+    Process::fake();
+
+    (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH))->remoteUrl();
+
+    Process::assertRan(fn ($process): bool => $process->command === gitRepositoryCommand(GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin')
+        && $process->environment === GIT_NON_INTERACTIVE_ENVIRONMENT);
 });
 
 test('command launch failures are reported separately from git failures', function (): void {
