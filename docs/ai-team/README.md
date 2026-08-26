@@ -59,6 +59,19 @@ as issue comments collided three times in one evening, including once where the
 claimant followed the rule: a PR opening is the *end* of the work, so a comment
 written at claim time cannot reach someone already building.
 
+**Never implement, mutate, or destroy on an issue you have not claimed** — not
+trivially, not as steward, not after stand-down. Every collision check we have
+hangs off the claim, so task-owned work done outside one bypasses all of them. A
+steward filed a cleanup issue, decided it was too small to bother claiming, and
+deleted five branches out from under the agent who had claimed it properly. The
+exception you will be tempted by is "this is too small to claim"; that is the
+exception that defeats the rule.
+
+The boundary is mutation, not attention. **Reviewing, triage, read-only
+inspection, coordination, and the gated merge of a peer's PR need no claim** and
+never did — claiming a task in order to review it would destroy the independence
+the review exists for.
+
 **Coordinate with each other, not through the user.** Blocked by a teammate's
 path, a missing token, a permission gap? Message the relevant agent directly
 when cross-session messaging is available. Record the resulting handoff,
@@ -164,8 +177,17 @@ exact tip and record one durable outcome before the lane is considered recovered
    then delete the stale ref; the new lane, not the old branch, carries the work.
 
 Archive tags may preserve an investigated tip where recovery needs to be
-reversible, but they are evidence, not a live lane. Never bulk-delete stale refs
-or leave a preserved branch without its disposition owner and recorded outcome.
+reversible, but they are evidence, not a live lane. **Give each one a named
+retention owner and one outcome** — delete after a stated date, retain for a
+stated reason, or promote to a durable audit tag — or `archive/*` simply becomes
+the next orphaned namespace, which is the debt this section exists to drain.
+Never bulk-delete stale refs or leave a preserved branch without its disposition
+owner and recorded outcome.
+
+The audit that declares a mission finished must inspect **remote** refs, not only
+local ones. One mission reported completion twice while five unmerged
+`agent/*` branches sat on the remote, because `cleanup.sh` only accounts for local
+branches and worktrees, and the finish check queried issues and PRs.
 
 ---
 
@@ -302,6 +324,18 @@ five times in one session; the label has never been.
 | `hold:author` | the author | the author | mid-fix — do not merge yet |
 | `hold:review` | a reviewer | that reviewer | an open finding — do not merge yet |
 
+When two reviewers hold the same label, **every holder with an open finding must
+clear before the label comes off.** `hold:review` is binary and the gate cannot
+tell one holder's satisfaction from another's, so a single removal opens a real
+merge window while a finding is still open — and "I named the absent holder in a
+comment" is prose the gate does not read. If a holder has gone unresponsive, that
+is a stale lane and the steward resolves it under **Stale-lane recovery** below,
+on the record, rather than by one reviewer speaking for another.
+
+An author never clears a reviewer's hold: one agent believed they had, having
+actually cleared their own `hold:author`, and only the label timeline showed the
+difference.
+
 Add it the moment you have something you intend to fix — that means when you
 *begin* the fix, not when you push it — and remove it when the fix is pushed.
 Before acting on review findings at all, fetch the PR head: one agent
@@ -334,6 +368,17 @@ corroboration. In that shared-account case, submit a PR review with an exact
 `**Verdict:** accept` or `**Verdict:** accept with follow-up` line; `gate.sh`
 recognises that structured verdict even when GitHub records the review as
 `COMMENTED`.
+
+**Branch protection cannot count agents, but a status check can.** Requiring "two
+approvals" is unreachable on a shared account: GitHub counts distinct accounts, and
+a lineage of six agents may hold one between them. The way through is not more
+accounts — it is to stop asking GitHub to judge identity. `gate.sh` already decides
+independence from the `**From:**` marker and the PR's `agent:<id>` lane; run that
+same logic in a workflow that publishes a check-run, require *that* check in branch
+protection, and a merge queue can then serialise merges without any of it depending
+on who the commit is attributed to. (A design this team has not yet built or run —
+port and verify before relying on it.) Note the limit honestly: a workflow is a
+correctness mechanism, not a security boundary — anyone who can push can edit it.
 
 This repository's optional reviewer account is `faith-tohmm`. Its credential may
 only record a review on work the agent did not author — never use it to author,
@@ -391,8 +436,48 @@ in a Mix task.
 - **Verify the claim yourself** rather than accepting the description.
 - **Name the exact path and line**, and say what observably breaks.
 - **Say what you did not check.**
+- **Ask what a wrong answer costs.** "If this hunk is wrong, what is the first
+  observable failure, and what stands between it and the worst outcome?" List the
+  enforcement points of any safety behaviour the diff touches and mark which ones
+  it actually passes through — untouched layers bound the damage, and a diff that
+  touches all of them is where review effort should spike.
 - **Withdraw findings that turn out to be wrong**, in writing.
-- Do not review your own work — including work you specified in detail.
+- **Do not review your own work.** The bar is on the **PR author**, not the issue
+  author: if you filed the issue and someone else wrote the PR, you may review it.
+  Writing a detailed Required Resolution does not recuse you. One steward read it
+  the other way, recused himself from thirteen of sixteen PRs, and the mission
+  starved for reviewers all shift. When you do review an implementation of your
+  own spec, verify it against **reality, not against the spec** — the failure that
+  slips through is the one where the code matches what you wrote and both are
+  wrong about the system.
+
+**Refresh before you review**, when a PR is both behind `main` and unreviewed at
+its head. Reviewing first and refreshing second invalidates the verdict every
+time: in one mission that cost three exact-head verdicts on one unchanged PR and
+four on another, on a day when review was the binding constraint.
+
+**A verdict carries across a refresh that changed nothing you reviewed.** The
+test is two commands, not a judgement call:
+
+```bash
+git diff <reviewed-sha> <new-head> -- <the paths this PR owns>
+```
+
+Empty means the artifact you accepted is byte-identical to the artifact being
+merged, so you need not reread it. **It does not mean the behaviour is unchanged.**
+Incoming `main` can move a caller, a shared trait, a config default, a dependency
+or another enforcement layer *outside* those paths and invalidate the code you
+approved while this command stays empty. Before carrying a verdict to the new head,
+read the incoming-main delta and ask the blast-radius question of it. Non-empty
+means incoming work touched this PR's own scope and the verdict must be redone
+outright. Both cases occurred in a single afternoon; guessing optimistically is a
+false green.
+
+**A hand-resolved content conflict takes a stricter bar than original code.** The
+agent resolving it is reasoning about intent they did not originate, often with
+its author absent. The accepting review must name the specific translated
+condition — "I checked that X now means Y" — not only the SHA, so the record shows
+someone read the semantic diff and not the textual one.
 
 Verdicts: `accept`, `accept with follow-up`, `changes required`. Record the
 verdict on the exact final head as a GitHub PR review whose body contains these
@@ -458,6 +543,13 @@ exist. **Cite the function that produces a fact, never prose near it**; a
 comment block listing five examples sat beside a function returning six
 patterns.
 
+**A worktree's ambient git state is untrusted input.** Any test that shells out
+for real can read the checkout it runs in — one read the working tree's unpushed
+commit count and so passed in CI and failed in every agent's lane, while quietly
+not testing its own subject. Re-run a post-merge failure against a disposable
+clone of the same SHA before believing it is a regression: pass there and fail in
+your worktree means environment, not code. Same class as a symlinked `vendor/`.
+
 **Green CI is not evidence that a component participates in the assembled
 system.** A component-local suite can pass while its migrations, routes,
 registration, or startup path remain undiscovered. Add an integration proof for
@@ -467,9 +559,14 @@ the mechanism that actually assembles production behavior.
 the exact production constraint names, types, status values, and payload shapes
 when behavior depends on them.
 
-**Never pipe a command whose exit code you are about to read.** A formatter or
-compiler piped into `tail` reports the final command's status, not necessarily
-the gate's. Capture output to a file or variable and check the gate directly.
+**Never pipe a command whose exit code you are about to read, and never write a
+check and the action it guards as two statements.** A formatter or compiler piped
+into `tail` reports the pipeline's last status, not the gate's — capture to a file
+or variable and check the gate directly. And chain the merge to the gate with
+`&&`: in one mission `gate.sh <pr> <sha> && gh api ... merge` refused five times —
+twice on containment, three times because a teammate had landed the PR seconds
+earlier — and the merge never once fired. Written as two statements, all five
+would have.
 
 **A capture is truthful only about its own branch.** Audit-environment
 screenshots composite whatever fixes that worktree carries — one showed an
@@ -501,10 +598,6 @@ than a flattering 95% no one can reproduce.
 wearing a test's clothes.** It catches no more than the source it mirrors and
 makes every addition edit a shared registry. Assert **invariants derived from
 discovery**, never a second copy of discovered values.
-
-**Never pipe a gate command.** The last process in a pipeline may print success
-over a failed formatter, compiler, or test. Preserve and inspect the actual
-gate's status.
 
 Keep dependency-cache remedies, build commands, architectural ownership rules,
 and source-system compatibility notes in the repository's ordinary instructions.
