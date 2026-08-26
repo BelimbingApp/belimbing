@@ -67,45 +67,25 @@ final class SoftwareSourceGitReader
     }
 
     /**
-     * @return array{0: array<string, mixed>|null, 1: string|null}
-     */
-    public function latestCommit(string $path, string $owner, string $name, string $branch, ?string $token): array
-    {
-        $repo = "{$owner}/{$name}";
-        $result = (new GitRepository($path, $token))->lsRemoteHead($branch);
-
-        if (! $result->ok) {
-            return [null, $this->remoteCommitError($repo, $branch, $result)];
-        }
-
-        $line = $result->output;
-        $sha = (string) strtok($line, " \t");
-
-        if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
-            return [null, (string) __('Git remote response for :repo@:branch did not include a commit SHA.', ['repo' => $repo, 'branch' => $branch])];
-        }
-
-        return [$this->remoteCommit($path, $sha), null];
-    }
-
-    /**
-     * @return array{0: array<string, mixed>|null, 1: string|null}
+     * @return array{0: array<string, mixed>|null, 1: string|null, 2: string|null} [commit, operator summary, raw git detail]
      */
     public function parseLatestCommitResult(string $path, string $owner, string $name, string $branch, GitResult $result): array
     {
         $repo = "{$owner}/{$name}";
 
         if (! $result->ok) {
-            return [null, $this->remoteCommitError($repo, $branch, $result)];
+            [$summary, $detail] = $this->remoteCommitFailure($owner, $repo, $branch, $result);
+
+            return [null, $summary, $detail];
         }
 
         $sha = (string) strtok($result->output, " \t");
 
         if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
-            return [null, (string) __('Git remote response for :repo@:branch did not include a commit SHA.', ['repo' => $repo, 'branch' => $branch])];
+            return [null, (string) __('Git remote response for :repo@:branch did not include a commit SHA.', ['repo' => $repo, 'branch' => $branch]), $result->output];
         }
 
-        return [$this->remoteCommit($path, $sha), null];
+        return [$this->remoteCommit($path, $sha), null, null];
     }
 
     /**
@@ -214,13 +194,83 @@ final class SoftwareSourceGitReader
         return $this->commit($sha, '', '', (string) __('Remote branch head'));
     }
 
-    private function remoteCommitError(string $repo, string $branch, GitResult $result): string
+    /**
+     * Git's own words, matched case-insensitively. Every one of these means the
+     * same thing to an operator — the remote wanted credentials and did not get
+     * usable ones — and none of them is helped by being told that public
+     * repositories do not need a token.
+     */
+    private const AUTH_FAILURE_SIGNATURES = [
+        'could not read username',
+        'could not read password',
+        'authentication failed',
+        'terminal prompts disabled',
+        'invalid username or token',
+        'http basic: access denied',
+        'permission denied (publickey',
+        // git surfaces a bare HTTP status for a token that exists but cannot see
+        // the repo: `fatal: unable to access '...': The requested URL returned
+        // error: 403`. Matched narrowly so an unrelated 403 in a URL or a repo
+        // name cannot be read as an auth failure.
+        'returned error: 403',
+        'error 403',
+    ];
+
+    /**
+     * Whether a git failure means "the remote wanted credentials".
+     *
+     * Public because the page banner has to make the same call the table cell
+     * does: it used to lead every failure with "public repositories do not need
+     * a token", which is the opposite of the truth for exactly these cases.
+     */
+    public function isAuthFailure(?string $detail): bool
     {
-        return (string) __('Could not read latest commit for :repo@:branch via git ls-remote (:detail). Public repositories do not need a token; check the repo name, branch, or network access. If this repo is private, add a token in GitHub Access.', [
-            'repo' => $repo,
-            'branch' => $branch,
-            'detail' => $result->message(),
-        ]);
+        if ($detail === null || $detail === '') {
+            return false;
+        }
+
+        $haystack = strtolower($detail);
+
+        foreach (self::AUTH_FAILURE_SIGNATURES as $signature) {
+            if (str_contains($haystack, $signature)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Split a failed remote read into one actionable line and the raw git output.
+     *
+     * The single generic message this replaced opened with "Public repositories do
+     * not need a token" for *every* failure, including `could not read Username for
+     * 'https://github.com'` — which says the opposite. A deployed install showed
+     * that text, three lines wide, in a table cell, with the real cause last.
+     *
+     * @return array{0: string, 1: string} [operator summary, raw git detail]
+     */
+    private function remoteCommitFailure(string $owner, string $repo, string $branch, GitResult $result): array
+    {
+        $detail = $result->message();
+
+        if ($this->isAuthFailure($detail)) {
+            return [
+                (string) __(':repo needs credentials — add a token for :owner in GitHub Access.', [
+                    'repo' => $repo,
+                    'owner' => $owner,
+                ]),
+                $detail,
+            ];
+        }
+
+        return [
+            (string) __('Could not read latest commit for :repo@:branch. Public repositories do not need a token; check the repo name, branch, or network access.', [
+                'repo' => $repo,
+                'branch' => $branch,
+            ]),
+            $detail,
+        ];
     }
 
     /**
