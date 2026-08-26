@@ -25,14 +25,42 @@
                 <div class="flex items-center justify-between">
                     <div class="min-w-0">
                         <h2 class="text-base font-medium text-ink">{{ $name }}</h2>
-                        <p class="mt-0.5 truncate text-xs text-muted">{{ implode(', ', $owner['repos']) }}</p>
+                        <p class="mt-0.5 truncate text-xs text-muted">{{ implode(', ', array_column($owner['repos'], 'repo')) }}</p>
                     </div>
-                    <x-ui.badge :variant="$owner['has_token'] ? 'success' : 'warning'">
-                        {{ $owner['has_token'] ? __('Token set') : __('No token') }}
-                    </x-ui.badge>
+                    @if ($owner['all_public'])
+                        <x-ui.badge variant="success">{{ __('Public — no token required') }}</x-ui.badge>
+                    @else
+                        <x-ui.badge :variant="$owner['has_token'] ? 'success' : 'warning'">
+                            {{ $owner['has_token'] ? __('Token set') : __('No token') }}
+                        </x-ui.badge>
+                    @endif
                 </div>
 
+                @if (! $owner['all_public'] && collect($owner['repos'])->contains('visibility', 'public'))
+                    {{-- Mixed owner: some repos are public, but the token still applies
+                         to the ones that are not — name which are which rather than
+                         implying the whole owner needs credentials. A repo GitHub could
+                         not be reached about (rate limit, outage) is named separately —
+                         it is not confirmed to need a token, only unconfirmed either way. --}}
+                    @php($publicRepos = collect($owner['repos'])->where('visibility', 'public')->pluck('repo')->all())
+                    @php($privateRepos = collect($owner['repos'])->where('visibility', 'private')->pluck('repo')->all())
+                    @php($unknownRepos = collect($owner['repos'])->where('visibility', 'unknown')->pluck('repo')->all())
+                    <p class="mt-2 text-xs text-muted">
+                        {{ __('Public, no token needed: :repos.', ['repos' => implode(', ', $publicRepos)]) }}
+                        @if ($privateRepos !== [])
+                            {{ __('Needs a token: :repos.', ['repos' => implode(', ', $privateRepos)]) }}
+                        @endif
+                        @if ($unknownRepos !== [])
+                            {{ __('Could not confirm right now (GitHub unreachable or rate-limited): :repos.', ['repos' => implode(', ', $unknownRepos)]) }}
+                        @endif
+                    </p>
+                @endif
+
                 <div class="mt-4 space-y-3">
+                    @if ($owner['all_public'])
+                        <p class="text-xs text-muted">{{ __('Every repository under :owner resolved anonymously. A token is optional here — add one only to raise your GitHub API rate limit.', ['owner' => $name]) }}</p>
+                    @endif
+
                     <x-ui.link kind="external" href="https://github.com/settings/personal-access-tokens/new" class="text-xs">
                         {{ __('Create a fine-grained token for :owner — Resource owner: :owner, Contents: Read-only', ['owner' => $name]) }}
                     </x-ui.link>
@@ -40,8 +68,10 @@
                     <x-ui.secret-input
                         id="github-token-{{ $name }}"
                         wire:model="tokens.{{ $name }}"
-                        :label="__('Token for :owner', ['owner' => $name])"
+                        :label="$owner['all_public'] ? __('Optional token for :owner', ['owner' => $name]) : __('Token for :owner', ['owner' => $name])"
                         :has-value="$owner['has_token']"
+                        :show-reveal-button="true"
+                        :reveal-subject="__('token')"
                         :error="$errors->first('tokens.'.$name)"
                     />
 
