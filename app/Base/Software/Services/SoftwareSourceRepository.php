@@ -23,6 +23,11 @@ class SoftwareSourceRepository
     // that quickly, but it must still not re-run on every render/round-trip.
     private const REMOTE_STATUS_FAILURE_CACHE_SECONDS = 20;
 
+    // Repo visibility (public/private) changes far less often than a commit
+    // SHA; a longer TTL keeps GitHub Access from making a live GitHub call on
+    // every render and every Livewire round-trip.
+    private const OWNER_VISIBILITY_CACHE_SECONDS = 300;
+
     /**
      * @var array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
@@ -138,7 +143,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{owner: string, repos: list<string>, has_token: bool}>
+     * @return list<array{owner: string, repos: list<array{repo: string, public: bool}>, has_token: bool, all_public: bool}>
      */
     public function owners(): array
     {
@@ -152,14 +157,38 @@ class SoftwareSourceRepository
             }
 
             $byOwner[$owner]['owner'] = $owner;
-            $byOwner[$owner]['repos'][] = $owner.'/'.$name;
+            $byOwner[$owner]['repos'][] = [
+                'repo' => $owner.'/'.$name,
+                'public' => $this->isAnonymouslyReachable($owner, $name),
+            ];
         }
 
         return array_values(array_map(function (array $entry): array {
             $entry['has_token'] = $this->tokenFor($entry['owner']) !== null;
+            $entry['all_public'] = ! collect($entry['repos'])->contains(fn (array $repo): bool => ! $repo['public']);
 
             return $entry;
         }, $byOwner));
+    }
+
+    /**
+     * Whether GitHub reports this repo as public and reachable without a token —
+     * the same anonymous-vs-authenticated distinction testOwner() already probes
+     * on demand, run automatically here so the page can tell a healthy public
+     * source from one that actually needs credentials. Cached: this runs on every
+     * render (owners() backs a #[Defer] component that re-renders on each
+     * interaction), and visibility changes rarely enough that a few minutes of
+     * staleness is a good trade against calling GitHub on every click.
+     */
+    private function isAnonymouslyReachable(string $owner, string $name): bool
+    {
+        $cacheKey = 'software.owner.visibility.'.hash('sha256', strtolower($owner.'/'.$name));
+
+        return (bool) Cache::remember($cacheKey, self::OWNER_VISIBILITY_CACHE_SECONDS, function () use ($owner, $name): bool {
+            $response = $this->githubGet($owner, $name, '', null);
+
+            return $response->successful() && $response->json('private') === false;
+        });
     }
 
     /**

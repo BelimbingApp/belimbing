@@ -7,16 +7,26 @@ use App\Base\Software\Services\DeploymentBuildRunner;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\SoftwareSourceRepository;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Livewire\Livewire;
 
+const GITHUB_ACCESS_REMOTE = 'https://github.com/BelimbingApp/belimbing.git';
+
 beforeEach(function (): void {
+    // Repo visibility is cached (SoftwareSourceRepository::OWNER_VISIBILITY_CACHE_SECONDS);
+    // several tests below probe BelimbingApp/belimbing with different Http fakes, so a
+    // cache carried over from a prior test would make them read each other's answers.
+    Cache::flush();
+
     app()->instance(DeploymentService::class, new class(app(SoftwareSourceRepository::class), app(DeploymentBuildRunner::class), app(DeploymentAdminEndpointResolver::class), app(DeploymentRunHistory::class)) extends DeploymentService
     {
         public function owners(): array
         {
             return [
-                ['owner' => 'exampleowner', 'repos' => ['exampleowner/blb-ham'], 'has_token' => false],
-                ['owner' => 'BelimbingApp', 'repos' => ['BelimbingApp/belimbing'], 'has_token' => false],
+                ['owner' => 'exampleowner', 'repos' => [['repo' => 'exampleowner/blb-ham', 'public' => false]], 'has_token' => false, 'all_public' => false],
+                ['owner' => 'BelimbingApp', 'repos' => [['repo' => 'BelimbingApp/belimbing', 'public' => true]], 'has_token' => false, 'all_public' => true],
             ];
         }
 
@@ -75,4 +85,120 @@ test('test connection probes an owner repos with its token', function (): void {
 
     expect($results)->not->toBeEmpty()
         ->and(collect($results)->every(fn (array $r): bool => $r['ok'] === true))->toBeTrue();
+});
+
+test('a public-only owner is labelled public with no token workflow implied', function (): void {
+    $user = createAdminUser();
+
+    $response = $this->actingAs($user)
+        ->get(route('admin.system.software.github-access.index'));
+
+    $response->assertOk()
+        ->assertSee('Public — no token required')
+        ->assertSee('Optional token for BelimbingApp');
+
+    // The public owner's card must not carry the warning "No token" state —
+    // that string belongs only to exampleowner (private, no token stored).
+    $body = $response->getContent();
+    expect(substr_count($body, 'No token'))->toBe(1);
+});
+
+test('a mixed owner names which repos are public and which need a token', function (): void {
+    app()->instance(DeploymentService::class, new class(app(SoftwareSourceRepository::class), app(DeploymentBuildRunner::class), app(DeploymentAdminEndpointResolver::class), app(DeploymentRunHistory::class)) extends DeploymentService
+    {
+        public function owners(): array
+        {
+            return [
+                [
+                    'owner' => 'mixedowner',
+                    'repos' => [
+                        ['repo' => 'mixedowner/open-module', 'public' => true],
+                        ['repo' => 'mixedowner/private-extension', 'public' => false],
+                    ],
+                    'has_token' => false,
+                    'all_public' => false,
+                ],
+            ];
+        }
+    });
+
+    $user = createAdminUser();
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.github-access.index'))
+        ->assertOk()
+        // Mixed owner still gets the ordinary token workflow (not the public badge)...
+        ->assertSee('No token')
+        ->assertDontSee('Public — no token required')
+        // ...but names which repo is which rather than implying both need credentials.
+        ->assertSee('Public, no token needed: mixedowner/open-module.')
+        ->assertSee('Needs a token: mixedowner/private-extension.');
+});
+
+test('the token field offers a reveal toggle labelled for the token', function (): void {
+    $user = createAdminUser();
+
+    $response = $this->actingAs($user)
+        ->get(route('admin.system.software.github-access.index'));
+
+    $response->assertOk()->assertSee('Show token', false);
+
+    // showRevealButton must actually be on, not just the label text incidentally
+    // present — the component only renders the toggle button when it is true.
+    expect($response->getContent())->toContain('showRevealButton: true');
+});
+
+test('SoftwareSourceRepository::owners reports a repo GitHub confirms public as public with no token required', function (): void {
+    Process::fake(function ($process) {
+        return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
+            ? Process::result(GITHUB_ACCESS_REMOTE)
+            : Process::result();
+    });
+    Http::fake([
+        'api.github.com/repos/BelimbingApp/belimbing' => Http::response(['private' => false], 200),
+    ]);
+
+    $owners = collect(app(SoftwareSourceRepository::class)->owners());
+    $platformOwner = $owners->firstWhere('owner', 'BelimbingApp');
+
+    expect($platformOwner)->not->toBeNull()
+        ->and($platformOwner['all_public'])->toBeTrue()
+        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['public'])->toBeTrue();
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'https://api.github.com/repos/BelimbingApp/belimbing'
+        && ! $request->hasHeader('Authorization'));
+});
+
+test('SoftwareSourceRepository::owners treats a private or anonymously unreachable repo as needing a token', function (): void {
+    Process::fake(function ($process) {
+        return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
+            ? Process::result(GITHUB_ACCESS_REMOTE)
+            : Process::result();
+    });
+    Http::fake([
+        'api.github.com/repos/BelimbingApp/belimbing' => Http::response(null, 404),
+    ]);
+
+    $owners = collect(app(SoftwareSourceRepository::class)->owners());
+    $platformOwner = $owners->firstWhere('owner', 'BelimbingApp');
+
+    expect($platformOwner['all_public'])->toBeFalse()
+        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['public'])->toBeFalse();
+});
+
+test('SoftwareSourceRepository::owners caches repo visibility instead of checking GitHub on every call', function (): void {
+    Process::fake(function ($process) {
+        return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
+            ? Process::result(GITHUB_ACCESS_REMOTE)
+            : Process::result();
+    });
+    Http::fake([
+        'api.github.com/repos/BelimbingApp/belimbing' => Http::response(['private' => false], 200),
+    ]);
+
+    $repository = app(SoftwareSourceRepository::class);
+    $repository->owners();
+    $repository->owners();
+
+    Http::assertSentCount(1);
 });

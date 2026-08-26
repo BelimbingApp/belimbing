@@ -56,10 +56,12 @@ class DeploymentService
 
     /**
      * The distinct GitHub owners across the deployment's software sources, with the
-     * repos under each and whether a token is stored — drives GitHub Access.
-     * Local-only (no network); reachability is checked on demand via testOwner().
+     * repos under each, whether each is publicly reachable without a token, and
+     * whether a token is stored — drives GitHub Access. Per-repo visibility is a
+     * live (cached) anonymous GitHub check; testOwner() remains the on-demand,
+     * fully authenticated probe.
      *
-     * @return list<array{owner: string, repos: list<string>, has_token: bool}>
+     * @return list<array{owner: string, repos: list<array{repo: string, public: bool}>, has_token: bool, all_public: bool}>
      */
     public function owners(): array
     {
