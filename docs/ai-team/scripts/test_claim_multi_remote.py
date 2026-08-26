@@ -79,9 +79,25 @@ class ClaimMultiRemoteTest(unittest.TestCase):
                       echo 'missing --repo' >&2
                       exit 1
                     fi
+                    body_file=""
+                    prev=""
+                    for arg in "$@"; do
+                      if [ "$prev" = "--body-file" ]; then
+                        body_file="$arg"
+                      fi
+                      prev="$arg"
+                    done
+                    if [ -z "$body_file" ] || [ ! -f "$body_file" ]; then
+                      echo 'pr create missing --body-file' >&2
+                      exit 1
+                    fi
+                    if ! grep -qE '(^|[^A-Za-z])Closes[[:space:]]+#42([^0-9]|$)' "$body_file"; then
+                      echo 'claim body missing Closes #42' >&2
+                      exit 1
+                    fi
                     printf 'https://github.com/example/canonical/pull/99\\n'
                     ;;
-                  "pr edit"|"issue edit"|"label create")
+                  "pr edit"|"issue edit"|"label create"|"pr view"|"pr ready")
                     ;;
                   *)
                     echo "unexpected gh: $*" >&2
@@ -180,6 +196,19 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         self.assertIn("root checkout left on main", result.stdout)
         self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), "main")
         self.assertRegex(self.gh_log.read_text(encoding="utf-8"), r"pr create .*--head agent/composer-issue-42")
+        self.assertRegex(
+            self.gh_log.read_text(encoding="utf-8"),
+            r"pr create .*--body-file",
+        )
+
+    def test_claim_body_requires_closes_keyword(self):
+        """Stub rejects claim bodies without Closes #N — the mechanism under test."""
+        worktree = Path(self.dir.name) / "wt-closes"
+        result = self.run_claim(worktree=worktree)
+        self.assert_claim_success(result)
+        # The stub already failed the run if Closes #42 was missing; log proves
+        # the body-file path was used rather than an inline --body that could drift.
+        self.assertRegex(self.gh_log.read_text(encoding="utf-8"), r"pr create .*--body-file")
 
     def test_claim_without_head_would_have_failed_is_covered_by_stub(self):
         env = self.git_env()
