@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Livewire\Livewire;
 
 const DATABASE_RESIDUE_ORPHAN_MIGRATION = '2099_01_01_000000_create_zz_orphan_residue_table';
-const DATABASE_RESIDUE_CONFIRMATION = 'THIS CANNOT BE UNDONE';
+const DATABASE_RESIDUE_CONFIRMATION = ResidueIndex::CONFIRM_PHRASE;
 const DATABASE_RESIDUE_DROP_LABEL = 'Permanently drop';
 
 function createDatabaseResidueFixture(): void
