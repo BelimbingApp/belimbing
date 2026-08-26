@@ -34,6 +34,11 @@ class SoftwareSourceRepository
      */
     private array $latestCommitRuntimeCache = [];
 
+    /**
+     * @var array<string, array{0: string|null, 1: string|null, 2: string|null, 3: string|null}>
+     */
+    private array $upstreamRuntimeCache = [];
+
     private readonly SoftwareSourceGitReader $gitReader;
 
     private readonly GitHubTokenStore $tokens;
@@ -52,7 +57,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null, upstream: array{remote: string, repo: string|null, branch: string|null, head: array<string, mixed>|null, relationship: 'contained'|'fast_forwardable'|'divergent'|null, ahead: int|null, behind: int|null, reason: string|null, error: string|null, error_detail: string|null}|null}>
      */
     public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
@@ -81,6 +86,7 @@ class SoftwareSourceRepository
                 'update_state' => null,
                 'error' => null,
                 'error_detail' => null,
+                'upstream' => null,
             ];
 
             if ($owner === null) {
@@ -112,7 +118,137 @@ class SoftwareSourceRepository
 
         $this->applyLatestCommitResults($entries, $absolutePaths, $latestRequests, $latestRequestAliases, $latestResults);
 
+        if ($includeRemote) {
+            $this->applyUpstreamStatus($entries, $absolutePaths, $useRemoteCache);
+        }
+
         return array_values($entries);
+    }
+
+    /**
+     * Read-only framework-upstream visibility for the platform source (#344).
+     *
+     * A fork-based deployment carries the framework as a second remote; matching
+     * `origin` alone then says nothing about the framework. Resolve the upstream
+     * head (anonymously — public upstreams need no token) and state the fork's
+     * relationship to it from git ancestry, never from dates or SHA inequality.
+     * No upstream remote is a normal state: the entry stays null and the page
+     * renders exactly as before.
+     *
+     * @param  array<string, array<string, mixed>>  $entries
+     * @param  array<string, string>  $absolutePaths
+     */
+    private function applyUpstreamStatus(array &$entries, array $absolutePaths, bool $useRemoteCache): void
+    {
+        if (! isset($entries['platform'], $absolutePaths['platform'])) {
+            return;
+        }
+
+        $path = $absolutePaths['platform'];
+        $identity = $this->gitReader->upstreamIdentity($path);
+
+        if ($identity === null) {
+            return;
+        }
+
+        [$branch, $head, $error, $detail] = $this->upstreamHead($path, $identity, $useRemoteCache);
+
+        $upstream = [
+            'remote' => $identity['remote'],
+            'repo' => $identity['repo'],
+            'branch' => $branch,
+            'head' => $head,
+            'relationship' => null,
+            'ahead' => null,
+            'behind' => null,
+            'reason' => null,
+            'error' => $error,
+            'error_detail' => $detail,
+        ];
+
+        if ($head !== null) {
+            // The fork head only — never the installed HEAD. `latest` (origin) and
+            // `current` (local checkout) are distinct roles in #344's model, and the
+            // UI labels every relationship statement "fork". On the deployment this
+            // feature targets, origin can be unreadable (lapsed credentials, #300)
+            // while local commits sit unpushed, so substituting `current` would
+            // silently report the installed checkout's relationship as the fork's.
+            $forkSha = $entries['platform']['latest']['sha'] ?? null;
+
+            if ($forkSha === null) {
+                $upstream['reason'] = (string) __('The fork head could not be read from origin, so the fork-to-upstream relationship is unknown.');
+            } else {
+                // base = upstream head, tip = fork head: `behind` counts commits only
+                // upstream has, `ahead` commits only the fork has. Contained means the
+                // fork already carries every upstream commit; a fork with nothing of
+                // its own that lacks upstream commits can fast-forward; both sides
+                // holding unique commits is a divergence only a human reconciles.
+                $counts = (new GitRepository($path))->aheadBehindBetween((string) $head['sha'], $forkSha);
+
+                if ($counts !== null) {
+                    $upstream['ahead'] = $counts['ahead'];
+                    $upstream['behind'] = $counts['behind'];
+                    $upstream['relationship'] = match (true) {
+                        $counts['behind'] === 0 => 'contained',
+                        $counts['ahead'] === 0 => 'fast_forwardable',
+                        default => 'divergent',
+                    };
+                } else {
+                    $upstream['reason'] = (string) __('Upstream commits are not in this checkout yet — fetch :remote to compare histories.', ['remote' => $identity['remote']]);
+                }
+            }
+        }
+
+        $entries['platform']['upstream'] = $upstream;
+    }
+
+    /**
+     * Resolve the upstream branch and head SHA, cached like origin checks: the
+     * network call is one `ls-remote` (with `--symref HEAD` when no branch is
+     * configured, answering branch and head together), never a fetch.
+     *
+     * @param  array{remote: string, branch: string|null, repo: string|null, url: string}  $identity
+     * @return array{0: string|null, 1: array<string, mixed>|null, 2: string|null, 3: string|null} [branch, head commit, error, detail]
+     */
+    private function upstreamHead(string $path, array $identity, bool $useRemoteCache): array
+    {
+        $cacheKey = 'software.source.upstream.'.hash('sha256', strtolower($identity['url']).'|'.($identity['branch'] ?? ''));
+        $cached = $useRemoteCache
+            ? ($this->upstreamRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
+            : null;
+
+        if (is_array($cached)) {
+            [$branch, $sha, $error, $detail] = $cached;
+
+            return [$branch, $sha !== null ? $this->gitReader->localObjectCommit($path, $sha) : null, $error, $detail];
+        }
+
+        $owner = $this->gitReader->upstreamOwner($identity['repo']);
+        $repo = new GitRepository($path, $owner !== null ? $this->tokenFor($owner) : null);
+        $label = $identity['repo'] ?? $identity['url'];
+
+        if ($identity['branch'] !== null) {
+            $branch = $identity['branch'];
+            [$head, $error, $detail] = $this->gitReader->parseUpstreamHeadResult($path, $label, $branch, $repo->lsRemoteHead($branch, $identity['remote']));
+            $sha = $head['sha'] ?? null;
+        } else {
+            $default = $repo->lsRemoteDefaultBranch($identity['remote']);
+            $branch = $default['branch'] ?? null;
+            $sha = $default['sha'] ?? null;
+            $head = $sha !== null ? $this->gitReader->localObjectCommit($path, $sha) : null;
+            $error = $default === null ? (string) __('Could not read the upstream head for :label.', ['label' => $label]) : null;
+            $detail = null;
+        }
+
+        if ($useRemoteCache) {
+            $tuple = [$branch, $sha, $error, $detail];
+            $ttl = $sha !== null ? self::REMOTE_STATUS_CACHE_SECONDS : self::REMOTE_STATUS_FAILURE_CACHE_SECONDS;
+
+            $this->upstreamRuntimeCache[$cacheKey] = $tuple;
+            Cache::put($cacheKey, $tuple, $ttl);
+        }
+
+        return [$branch, $head, $error, $detail];
     }
 
     /**
