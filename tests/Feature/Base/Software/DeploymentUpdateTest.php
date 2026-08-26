@@ -1462,7 +1462,9 @@ test('the deployment page replaces update with a blocker for a behind source tha
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
         ->assertSee('Update blocked')
-        ->assertSee('Software updates are blocked by local-only commits.');
+        ->assertSee('Software updates are blocked by local-only commits.')
+        ->assertSet('hasUnpushedSources', true)
+        ->assertSeeHtml('$wire.hasUnpushedSources');
 });
 
 test('a failed migration halts the deployment before reloading workers', function (): void {

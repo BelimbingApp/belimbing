@@ -46,6 +46,10 @@ class Index extends Component
     // "Update all" stuck disabled after wire:init loads remote status.
     public bool $behind = false;
 
+    // Keep Alpine's update-all gate reactive across Livewire status refreshes.
+    // A Blade-only @js snapshot can remain stale after the source table morphs.
+    public bool $hasUnpushedSources = false;
+
     public function loadLatestStatus(): void
     {
         $this->latestStatusLoaded = true;
@@ -203,6 +207,7 @@ class Index extends Component
         $unpushedSources = collect($status)
             ->filter(fn (array $source): bool => (int) ($source['working_tree']['ahead'] ?? 0) > 0)
             ->values();
+        $this->hasUnpushedSources = $unpushedSources->isNotEmpty();
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
@@ -243,7 +248,7 @@ class Index extends Component
                 ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
                 ->values()
                 ->all(),
-            'hasUnpushedSources' => $unpushedSources->isNotEmpty(),
+            'hasUnpushedSources' => $this->hasUnpushedSources,
             'unpushedSourceLabels' => $unpushedSources
                 ->map(fn (array $source): string => (string) $source['label'])
                 ->all(),

@@ -100,7 +100,7 @@ $addHelp = __('Incubating a selected table edits its owning migration file to ad
                                 <div class="flex flex-wrap gap-2">
                                     <x-ui.button
                                         wire:click="removeSelectedFromIncubation"
-                                        wire:bind:disabled="selectedIncubatingTables.length === 0"
+                                        wire:bind:disabled="selectedIncubatingTables.length === 0 || {{ app()->environment('local') ? 'false' : 'true' }}"
                                         :disabled="! app()->environment('local')"
                                         variant="primary"
                                         size="md"
@@ -202,7 +202,7 @@ $addHelp = __('Incubating a selected table edits its owning migration file to ad
                             <div class="flex flex-wrap gap-2">
                                 <x-ui.button
                                     wire:click="moveSelectedToIncubation"
-                                    wire:bind:disabled="selectedSearchTables.length === 0"
+                                    wire:bind:disabled="selectedSearchTables.length === 0 || {{ app()->environment('local') ? 'false' : 'true' }}"
                                     :disabled="! app()->environment('local')"
                                     variant="primary"
                                     size="md"

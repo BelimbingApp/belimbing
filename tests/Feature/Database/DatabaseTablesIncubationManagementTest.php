@@ -50,8 +50,8 @@ test('schema incubation table pickers render client-reactive selection controls 
         ->assertSeeHtml('data-selection-row')
         ->assertSeeHtml('wire:text="selectedIncubatingTables.length"')
         ->assertSeeHtml('wire:text="selectedSearchTables.length"')
-        ->assertSeeHtml('wire:bind:disabled="selectedIncubatingTables.length === 0"')
-        ->assertSeeHtml('wire:bind:disabled="selectedSearchTables.length === 0"')
+        ->assertSeeHtml('wire:bind:disabled="selectedIncubatingTables.length === 0 || false"')
+        ->assertSeeHtml('wire:bind:disabled="selectedSearchTables.length === 0 || false"')
         ->assertDontSee('Move Selected To Incubation');
 });
 

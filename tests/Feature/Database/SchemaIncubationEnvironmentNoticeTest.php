@@ -17,7 +17,9 @@ test('schema incubation warns when the environment is not local', function (): v
     Livewire::test(Index::class)
         ->assertSee('Schema incubation is a local development workflow.')
         ->assertSee('This environment is production, not local.')
-        ->assertSee('Source-editing actions are disabled here');
+        ->assertSee('Source-editing actions are disabled here')
+        ->assertSeeHtml('wire:bind:disabled="selectedIncubatingTables.length === 0 || true"')
+        ->assertSeeHtml('wire:bind:disabled="selectedSearchTables.length === 0 || true"');
 });
 
 test('schema incubation hides the environment warning when local', function (): void {
