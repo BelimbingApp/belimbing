@@ -607,6 +607,14 @@
                                         @endif
                                     @endif
                                 </div>
+                                {{-- The sync gate's state, stated plainly (#345): a closed gate is an
+                                     explanation on the page, never a hidden concept or a 500 at the
+                                     point of use. Visibility above never depends on this gate. --}}
+                                @if ($upstreamSyncState['available'])
+                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available on this deployment.') }}</div>
+                                @else
+                                    <div class="mt-1 text-xs text-muted">{{ $upstreamSyncState['reason'] }}</div>
+                                @endif
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-sm text-muted">{{ $s['branch'] ?? '—' }}</td>
