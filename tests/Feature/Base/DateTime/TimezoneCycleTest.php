@@ -96,16 +96,23 @@ it('persists mode against the user even when the account has an employee id', fu
         ->toBeFalse();
 });
 
-it('routes an unset company timezone to the authenticated users company settings', function (): void {
+it('keeps an unset company timezone in the dropdown with a settings link', function (): void {
     $company = Company::factory()->create();
     $user = User::factory()->create(['company_id' => $company->id]);
 
-    $this->actingAs($user)
+    $this->withoutVite()->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
         ->assertSee('aria-label="Select timezone display mode"', false)
         ->assertSee((string) Js::from(route('admin.companies.show', $company)), false)
-        ->assertDontSee((string) Js::from(route('admin.companies.show', platformOperatorCompany()->id)), false);
+        ->assertDontSee((string) Js::from(route('admin.companies.show', platformOperatorCompany()->id)), false)
+        ->assertSee('@click="tzOpen = !tzOpen"', false)
+        ->assertSee('href="'.route('admin.companies.show', $company).'"', false)
+        ->assertSee('No company timezone set', false)
+        ->assertSee('Choose one in company settings.', false)
+        ->assertSee('Local (browser)', false)
+        ->assertSee('Stored (raw)', false)
+        ->assertDontSee('goToCompanyTimezoneSettings', false);
 });
 
 it('rejects invalid mode values', function (): void {
