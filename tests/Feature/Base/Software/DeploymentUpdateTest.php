@@ -1827,3 +1827,52 @@ test('an unresolvable remote commit date says why it is unavailable', function (
         ->toContain('404')
         ->toContain('GitHub Access');
 });
+
+test('an HTTP 403 from the remote is classified as a credentials failure', function (): void {
+    $user = createAdminUser();
+    // The other common shape of "your credentials do not open this repo": a token
+    // that exists but cannot see it. Reported on #323 review — the first cut of
+    // the classifier matched the Username prompt but let this fall through to the
+    // generic summary that leads with the public-repo advice.
+    fakeDeploymentUpdateProcesses(
+        remoteError: "fatal: unable to access 'https://github.com/BelimbingApp/belimbing.git/': The requested URL returned error: 403",
+    );
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('BelimbingApp/belimbing needs credentials — add a token for BelimbingApp in GitHub Access.', false)
+        ->assertDontSee('Public repositories do not need a token');
+
+    Http::assertSentCount(0);
+});
+
+test('the failure banner leads with credentials when that is the cause', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses(
+        remoteError: "fatal: could not read Username for 'https://github.com': No such device or address",
+    );
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('These software sources need credentials')
+        ->assertDontSee('Public GitHub repositories do not need a token');
+});
+
+test('the failure banner keeps the general guidance for non-auth failures', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses(remoteError: 'fatal: unable to access repository');
+    Http::fake();
+
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Public GitHub repositories do not need a token')
+        ->assertDontSee('These software sources need credentials');
+});

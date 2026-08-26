@@ -440,10 +440,19 @@
             </x-ui.alert>
         @endif
 
+        {{-- Two banners, because one lead-in cannot be right for both causes. The
+             single message this replaced opened with "public repositories do not
+             need a token" even when git had just asked for a username. --}}
+        @if ($credentialFailures !== [])
+            <x-ui.alert variant="warning">
+                {{ __('These software sources need credentials: :sources. Git asked for a username or was refused. Add the owner token in', ['sources' => implode(', ', $credentialFailures)]) }}
+                <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
+            </x-ui.alert>
+        @endif
+
         @if ($checkFailures !== [])
             <x-ui.alert variant="warning">
-                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response. If one of these repositories is private, add its owner token in', ['sources' => implode(', ', $checkFailures)]) }}
-                <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.
+                {{ __('Could not check latest commits for these software sources: :sources. Public GitHub repositories do not need a token; see the Latest column for the Git response.', ['sources' => implode(', ', $checkFailures)]) }}
             </x-ui.alert>
         @endif
 

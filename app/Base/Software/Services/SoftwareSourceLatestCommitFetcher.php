@@ -86,9 +86,9 @@ final class SoftwareSourceLatestCommitFetcher
      * Preserve that fast check, then ask GitHub only for metadata that is not already
      * available from the local object database.
      *
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     private function resolveLatestCommitMetadata(array $latest, array $requests): array
     {
@@ -104,7 +104,7 @@ final class SoftwareSourceLatestCommitFetcher
     }
 
     /**
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
      * @return array<string, array{owner: string, name: string, sha: string, token: string|null}>
      */
@@ -160,10 +160,10 @@ final class SoftwareSourceLatestCommitFetcher
     }
 
     /**
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, Response|Throwable>  $responses
      * @param  array<string, array{owner: string, name: string, sha: string, token: string|null}>  $metadataRequests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     private function applyLatestCommitMetadataResponses(array $latest, array $responses, array $metadataRequests): array
     {

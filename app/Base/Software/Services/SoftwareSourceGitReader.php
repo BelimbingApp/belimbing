@@ -208,7 +208,37 @@ final class SoftwareSourceGitReader
         'invalid username or token',
         'http basic: access denied',
         'permission denied (publickey',
+        // git surfaces a bare HTTP status for a token that exists but cannot see
+        // the repo: `fatal: unable to access '...': The requested URL returned
+        // error: 403`. Matched narrowly so an unrelated 403 in a URL or a repo
+        // name cannot be read as an auth failure.
+        'returned error: 403',
+        'error 403',
     ];
+
+    /**
+     * Whether a git failure means "the remote wanted credentials".
+     *
+     * Public because the page banner has to make the same call the table cell
+     * does: it used to lead every failure with "public repositories do not need
+     * a token", which is the opposite of the truth for exactly these cases.
+     */
+    public function isAuthFailure(?string $detail): bool
+    {
+        if ($detail === null || $detail === '') {
+            return false;
+        }
+
+        $haystack = strtolower($detail);
+
+        foreach (self::AUTH_FAILURE_SIGNATURES as $signature) {
+            if (str_contains($haystack, $signature)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * Split a failed remote read into one actionable line and the raw git output.
@@ -223,18 +253,15 @@ final class SoftwareSourceGitReader
     private function remoteCommitFailure(string $owner, string $repo, string $branch, GitResult $result): array
     {
         $detail = $result->message();
-        $haystack = strtolower($detail);
 
-        foreach (self::AUTH_FAILURE_SIGNATURES as $signature) {
-            if (str_contains($haystack, $signature)) {
-                return [
-                    (string) __(':repo needs credentials — add a token for :owner in GitHub Access.', [
-                        'repo' => $repo,
-                        'owner' => $owner,
-                    ]),
-                    $detail,
-                ];
-            }
+        if ($this->isAuthFailure($detail)) {
+            return [
+                (string) __(':repo needs credentials — add a token for :owner in GitHub Access.', [
+                    'repo' => $repo,
+                    'owner' => $owner,
+                ]),
+                $detail,
+            ];
         }
 
         return [
