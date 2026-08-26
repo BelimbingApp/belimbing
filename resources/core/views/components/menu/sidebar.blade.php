@@ -95,9 +95,14 @@
             x-cloak
             class="flex items-center gap-2 w-full px-1 py-0.5 rounded-none text-sm transition text-link font-normal hover:bg-surface-subtle"
         >
-            <div class="w-7 h-7 rounded-full bg-accent text-accent-on flex items-center justify-center text-xs font-medium shrink-0">
-                {{ auth()->user()->initials() }}
-            </div>
+            <a
+                href="{{ route('profile.edit') }}"
+                wire:navigate
+                class="w-7 h-7 rounded-full bg-accent text-accent-on flex items-center justify-center text-xs font-medium shrink-0 hover:opacity-90 transition"
+                aria-label="{{ __('Profile settings') }}"
+            >
+                <span aria-hidden="true">{{ auth()->user()->initials() }}</span>
+            </a>
             <div class="min-w-0 flex-1 text-left relative pr-7">
                 <a href="{{ route('profile.edit') }}" wire:navigate class="block truncate text-ink hover:underline">
                     {{ auth()->user()->name }}
@@ -134,9 +139,15 @@
             x-cloak
             class="flex items-center justify-center w-full px-1 py-0.5 rounded-none text-sm transition text-link font-normal hover:bg-surface-subtle"
         >
-            <div class="w-7 h-7 rounded-full bg-accent text-accent-on flex items-center justify-center text-xs font-medium shrink-0" title="{{ auth()->user()->name }}">
-                {{ auth()->user()->initials() }}
-            </div>
+            <a
+                href="{{ route('profile.edit') }}"
+                wire:navigate
+                class="w-7 h-7 rounded-full bg-accent text-accent-on flex items-center justify-center text-xs font-medium shrink-0 hover:opacity-90 transition"
+                title="{{ auth()->user()->name }}"
+                aria-label="{{ __('Profile settings') }}"
+            >
+                <span aria-hidden="true">{{ auth()->user()->initials() }}</span>
+            </a>
         </div>
     </div>
 </aside>

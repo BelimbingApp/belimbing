@@ -13,7 +13,7 @@ class DeleteUserForm extends Component
      * Typed acknowledgment that reveals the delete button. The password
      * below re-authenticates; this phrase makes the permanence explicit.
      */
-    public const CONFIRM_PHRASE = 'THIS CANNOT BE UNDONE';
+    public const CONFIRM_PHRASE = 'Delete my account';
 
     public string $password = '';
 
