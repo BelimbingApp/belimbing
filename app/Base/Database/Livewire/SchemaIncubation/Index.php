@@ -99,6 +99,10 @@ class Index extends Component
 
     public function moveSelectedToIncubation(): void
     {
+        if (! $this->sourceEditsAreAllowed()) {
+            return;
+        }
+
         if ($this->selectedSearchTables === []) {
             $this->notifyWarning(__('Select at least one table first.'));
 
@@ -142,6 +146,10 @@ class Index extends Component
 
     public function removeSelectedFromIncubation(): void
     {
+        if (! $this->sourceEditsAreAllowed()) {
+            return;
+        }
+
         if ($this->selectedIncubatingTables === []) {
             $this->notifyWarning(__('Select at least one table first.'));
 
@@ -289,6 +297,17 @@ class Index extends Component
         $pattern = str_replace(['*', '?'], ['%', '_'], $pattern);
 
         return $pattern;
+    }
+
+    private function sourceEditsAreAllowed(): bool
+    {
+        if (app()->environment('local')) {
+            return true;
+        }
+
+        $this->notifyWarning(__('Schema incubation source edits are disabled outside the local environment. Make and push migration-source changes from a development checkout.'));
+
+        return false;
     }
 
     /**

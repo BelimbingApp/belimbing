@@ -31,7 +31,10 @@ test('schema incubation index can add selected tables to source incubation', fun
             ->toContain('use IncubatingSchema;');
 
         // The rewritten file is staged + committed scoped to that file — never `add -A`.
-        Process::assertRan(fn ($p): bool => in_array('commit', $p->command, true) && in_array($migrationPath, $p->command, true));
+        Process::assertRan(fn ($p): bool => in_array('commit', $p->command, true)
+            && collect($p->command)->contains(
+                fn (string $argument): bool => str_replace('\\', '/', $argument) === str_replace('\\', '/', $migrationPath),
+            ));
         Process::assertDidntRun(fn ($p): bool => in_array('-A', $p->command, true));
     } finally {
         file_put_contents($migrationPath, $original);

@@ -200,6 +200,9 @@ class Index extends Component
         $statusCollectedAt = CarbonImmutable::now();
 
         $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
+        $unpushedSources = collect($status)
+            ->filter(fn (array $source): bool => (int) ($source['working_tree']['ahead'] ?? 0) > 0)
+            ->values();
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
@@ -239,6 +242,10 @@ class Index extends Component
                 ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
                 ->map(fn (array $s): string => $s['repo'] ?? $s['path'])
                 ->values()
+                ->all(),
+            'hasUnpushedSources' => $unpushedSources->isNotEmpty(),
+            'unpushedSourceLabels' => $unpushedSources
+                ->map(fn (array $source): string => (string) $source['label'])
                 ->all(),
             'maintenanceActive' => app()->isDownForMaintenance(),
             'runStatus' => $runStatus,
