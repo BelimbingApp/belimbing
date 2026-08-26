@@ -806,6 +806,12 @@ test('maintenance actions are fenced while a detached update owns the execution 
 });
 
 test('an update cannot launch while a maintenance action holds the execution lock', function (): void {
+    // Hermetic: the unpushed-sources guard runs before the lock and shells out
+    // to real git against base_path() unless Process is faked. Without a fake,
+    // an agent worktree that is ahead of origin fails this test before the lock
+    // path is exercised (and CI stays green on a clean checkout).
+    fakeDeploymentUpdateProcesses();
+
     $detached = Mockery::mock(DetachedProcessLauncher::class);
     $detached->shouldNotReceive('launch');
     app()->instance(DetachedProcessLauncher::class, $detached);
