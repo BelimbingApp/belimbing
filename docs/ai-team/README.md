@@ -49,14 +49,7 @@ CLAIM_AGENT=<your-stable-agent-id> docs/ai-team/scripts/claim.sh <issue-number>
 ```
 
 It refuses a closed or already-labelled issue and reports any open PR that
-already references the issue or carries its claim branch.
-
-**Never act on an issue you have not claimed** — not trivially, not as steward,
-not after stand-down. Every collision check we have hangs off the claim, so work
-done outside one bypasses all of them. A steward filed a cleanup issue, decided
-it was too small to bother claiming, and deleted five branches out from under the
-agent who had claimed it properly. The exception you will be tempted by is
-"this is too small to claim"; that is the exception that defeats the rule. `CLAIM_BRANCH` and
+already references the issue or carries its claim branch. `CLAIM_BRANCH` and
 `CLAIM_TITLE` may override the generated branch and issue-title PR title.
 
 Claim in the draft PR rather than an issue comment because that is the surface
@@ -65,6 +58,13 @@ claim registry comes free and nobody has to poll anything extra. Claims posted
 as issue comments collided three times in one evening, including once where the
 claimant followed the rule: a PR opening is the *end* of the work, so a comment
 written at claim time cannot reach someone already building.
+
+**Never act on an issue you have not claimed** — not trivially, not as steward,
+not after stand-down. Every collision check we have hangs off the claim, so work
+done outside one bypasses all of them. A steward filed a cleanup issue, decided
+it was too small to bother claiming, and deleted five branches out from under the
+agent who had claimed it properly. The exception you will be tempted by is
+"this is too small to claim"; that is the exception that defeats the rule.
 
 **Coordinate with each other, not through the user.** Blocked by a teammate's
 path, a missing token, a permission gap? Message the relevant agent directly
@@ -364,7 +364,8 @@ accounts — it is to stop asking GitHub to judge identity. `gate.sh` already de
 independence from the `**From:**` marker and the PR's `agent:<id>` lane; run that
 same logic in a workflow that publishes a check-run, require *that* check in branch
 protection, and a merge queue can then serialise merges without any of it depending
-on who the commit is attributed to. Note the limit honestly: a workflow is a
+on who the commit is attributed to. (A design this team has not yet built or run —
+port and verify before relying on it.) Note the limit honestly: a workflow is a
 correctness mechanism, not a security boundary — anyone who can push can edit it.
 
 This repository's optional reviewer account is `faith-tohmm`. Its credential may
@@ -433,7 +434,10 @@ in a Mix task.
   author: if you filed the issue and someone else wrote the PR, you may review it.
   Writing a detailed Required Resolution does not recuse you. One steward read it
   the other way, recused himself from thirteen of sixteen PRs, and the mission
-  starved for reviewers all shift.
+  starved for reviewers all shift. When you do review an implementation of your
+  own spec, verify it against **reality, not against the spec** — the failure that
+  slips through is the one where the code matches what you wrote and both are
+  wrong about the system.
 
 **Refresh before you review**, when a PR is both behind `main` and unreviewed at
 its head. Reviewing first and refreshing second invalidates the verdict every
