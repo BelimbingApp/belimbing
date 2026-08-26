@@ -175,16 +175,22 @@ latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
        | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
        | ascii_downcase)] | unique) as $agents
     | if ($agents | length) == 1 then $agents[0] else "" end;
-  def explicit_verdict:
-    ([((.body // "") | split("\n")[]
+  def explicit_verdicts:
+    [((.body // "") | split("\n")[]
        | capture("^\\*\\*Verdict:\\*\\*[[:space:]]*(?<verdict>accept(?: with follow-up)?|changes required)[[:space:]]*$"; "i").verdict
-       | ascii_downcase)] | unique) as $verdicts
-    | if ($verdicts | length) == 1 then $verdicts[0] else "" end;
+       | ascii_downcase)] | unique;
   [.[]
    | select(.commit_id == $sha)
-   | . + {agent: from_agent, explicit_verdict: explicit_verdict}
+   | . + {agent: from_agent, explicit_verdicts: explicit_verdicts}
+   | . + {explicit_verdict:
+       (if (.explicit_verdicts | length) == 1
+        then .explicit_verdicts[0]
+        else ""
+        end)}
    | . + {verdict:
-       (if .state == "CHANGES_REQUESTED" or .explicit_verdict == "changes required"
+       (if (.explicit_verdicts | length) > 1
+        then ""
+        elif .state == "CHANGES_REQUESTED" or .explicit_verdict == "changes required"
         then "changes required"
         elif .state == "APPROVED"
              or .explicit_verdict == "accept"
