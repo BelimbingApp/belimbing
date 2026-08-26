@@ -51,6 +51,15 @@ final class SoftwareSourceGitReader
     }
 
     /**
+     * Whether the given remote SHA is already reachable from the local checkout's
+     * HEAD — the local checkout is ahead of (or equal to) that remote commit.
+     */
+    public function isAncestor(string $path, string $sha, int $timeout = 30): bool
+    {
+        return (new GitRepository($path))->isAncestor($sha, timeout: $timeout);
+    }
+
+    /**
      * @return array{sha: string, short: string, date: string|null, ago: string|null, author: string, subject: string}|null
      */
     public function localCommit(string $path, int $timeout = 60): ?array

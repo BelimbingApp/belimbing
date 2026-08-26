@@ -134,6 +134,16 @@ final class GitRepository
     }
 
     /**
+     * Whether $sha is an ancestor of HEAD — i.e. HEAD already contains it. False
+     * (not just "not an ancestor") when the object isn't present locally to check,
+     * since ancestry can't be proven either way in that case.
+     */
+    public function isAncestor(string $sha, int $timeout = 30): bool
+    {
+        return $this->run(['merge-base', '--is-ancestor', $sha, 'HEAD'], timeout: $timeout)->ok;
+    }
+
+    /**
      * Build a scoped git command for callers that need to run it through a pool.
      *
      * @param  list<string>  $args

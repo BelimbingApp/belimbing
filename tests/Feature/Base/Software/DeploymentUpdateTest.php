@@ -49,19 +49,22 @@ beforeEach(function (): void {
     app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });
 
-function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): void
+function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null, ?bool $aheadOfRemote = null): void
 {
-    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha, $pullError) {
-        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha, $pullError) ?? Process::result();
+    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha, $pullError, $aheadOfRemote) {
+        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha, $pullError, $aheadOfRemote) ?? Process::result();
     });
 }
 
-function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): mixed
+function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null, ?bool $aheadOfRemote = null): mixed
 {
     // When $remoteSha is null, the remote HEAD matches the local SHA so sources
-    // report up_to_date. Pass a distinct $remoteSha to simulate a source that
-    // is behind its remote (up_to_date === false after loadLatestStatus).
+    // report up to date. Pass a distinct $remoteSha to simulate a source whose
+    // remote SHA differs: $aheadOfRemote (default false when SHAs differ) picks
+    // whether that shows as ahead (local HEAD already contains the remote SHA,
+    // update_state === 'ahead') or behind (update_state === 'behind').
     $remoteSha ??= $sha;
+    $aheadOfRemote ??= false;
 
     return match (gitCommandWithoutConfig($command)) {
         ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
@@ -72,6 +75,9 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
             ? Process::result($remoteSha."\trefs/heads/main")
             : Process::result(errorOutput: $remoteError, exitCode: 1),
         ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $remoteSha] => Process::result($remoteSha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+        ['git', 'merge-base', '--is-ancestor', $remoteSha, 'HEAD'] => $aheadOfRemote
+            ? Process::result(exitCode: 0)
+            : Process::result(exitCode: 1),
         ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => $pullError === null
             ? Process::result('Already up to date.')
             : Process::result(errorOutput: $pullError, exitCode: 1),
@@ -1152,6 +1158,73 @@ test('behind is a Livewire public property so Alpine can react to it via $wire a
         ->assertOk()
         ->assertSee('$wire.behind')
         ->assertDontSee('updateAllUnavailable');
+});
+
+test('a checkout ahead of its remote reports ahead, not behind, and offers no Update button', function (): void {
+    // Local HEAD has 3 unpushed commits; the remote SHA is an ancestor of HEAD,
+    // not the other way round. Before this fix, plain SHA equality had only two
+    // states, so this fell into "behind" and offered an Update button forever.
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: true);
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('ahead');
+
+    $component = Livewire::test(Index::class)->call('loadLatestStatus');
+
+    $component->assertSee('Ahead of remote')
+        ->assertDontSee('wire:click="updateRepo(\'platform\')"', false)
+        ->assertSet('behind', false);
+});
+
+test('a checkout genuinely behind its remote still reports behind and offers Update', function (): void {
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: false);
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('behind');
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('wire:click="updateRepo(\'platform\')"', false)
+        ->assertSet('behind', true);
+});
+
+test('a checkout with matching local and remote SHAs reports up to date', function (): void {
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $status = app(SoftwareSourceRepository::class)->status();
+    $platform = collect($status)->firstWhere('key', 'platform');
+
+    expect($platform['update_state'])->toBe('up_to_date');
+});
+
+test('verifyTargets reports an ahead checkout truthfully instead of Still behind', function (): void {
+    fakeDeploymentUpdateProcesses(remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA, aheadOfRemote: true);
+
+    $lines = app(SoftwareSourceRepository::class)->verifyTargets([
+        ['key' => 'platform', 'label' => 'Belimbing (platform)'],
+    ]);
+
+    expect($lines[0])->toContain('Ahead of remote')
+        ->and($lines[0])->not->toContain('Still behind');
+});
+
+test('the deployment sources table labels commit columns Local and Remote', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.index'))
+        ->assertOk()
+        ->assertSee(__('Local'))
+        ->assertSee(__('Remote'));
 });
 
 test('maintenance cleanup is fenced to the detached update that owns it', function (): void {

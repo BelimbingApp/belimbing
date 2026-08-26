@@ -199,7 +199,7 @@ class Index extends Component
         // actually read, and the page prints it so a stale tab admits its age.
         $statusCollectedAt = CarbonImmutable::now();
 
-        $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
+        $this->behind = collect($status)->contains(fn (array $s): bool => $s['update_state'] === 'behind');
 
         // The run box shows this session's live log while one is running/just ran,
         // and otherwise falls back to the durable last-run record so its outcome and
