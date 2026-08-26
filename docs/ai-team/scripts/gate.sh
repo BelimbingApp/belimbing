@@ -188,9 +188,11 @@ latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
         else ""
         end)}
    | . + {verdict:
-       (if (.explicit_verdicts | length) > 1
+       (if .state == "CHANGES_REQUESTED"
+        then "changes required"
+        elif (.explicit_verdicts | length) > 1
         then ""
-        elif .state == "CHANGES_REQUESTED" or .explicit_verdict == "changes required"
+        elif .explicit_verdict == "changes required"
         then "changes required"
         elif .state == "APPROVED"
              or .explicit_verdict == "accept"
