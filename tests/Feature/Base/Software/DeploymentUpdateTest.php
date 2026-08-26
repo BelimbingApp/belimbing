@@ -35,6 +35,7 @@ const DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE = 'Software update scheduled in a deta
 const DEPLOYMENT_UPDATE_RELOAD_SCHEDULED = 'Runtime reload scheduled in the background.';
 const DEPLOYMENT_UPDATE_RELOAD_RUNNING = 'Runtime reload is running.';
 const DEPLOYMENT_UPDATE_PULLING_PLATFORM = 'Pulling Belimbing (platform)…';
+const DEPLOYMENT_UPDATE_GITHUB_TOKEN = 'ghp_deployment_update_token_0123456789';
 const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
 const DEPLOYMENT_UPDATE_ADMIN_HOST_ENV = 'CADDY_SERVER_ADMIN_HOST='.DEPLOYMENT_UPDATE_ADMIN_HOST;
 const DEPLOYMENT_UPDATE_ADMIN_BASE_URL = 'http://127.0.0.1:2643';
@@ -414,6 +415,25 @@ test('deployment remote checks disable interactive credential prompts', function
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']
         && $process->environment === ['GIT_TERMINAL_PROMPT' => '0']);
+});
+
+test('deployment remote checks keep stored GitHub tokens out of command arguments', function (): void {
+    app(SettingsService::class)->set('integrations.github.token.belimbingapp', DEPLOYMENT_UPDATE_GITHUB_TOKEN);
+    fakeDeploymentUpdateProcesses();
+
+    app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
+
+    $expectedEnvironment = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_CONFIG_COUNT' => '1',
+        'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+        'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.DEPLOYMENT_UPDATE_GITHUB_TOKEN),
+    ];
+
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']
+        && $process->environment === $expectedEnvironment);
+    Process::assertDidntRun(fn ($process): bool => collect($process->command)
+        ->contains(fn (string $argument): bool => str_contains($argument, DEPLOYMENT_UPDATE_GITHUB_TOKEN)));
 });
 
 test('deployment latest column shows the remote commit time when the commit is not available locally', function (): void {

@@ -40,14 +40,14 @@ final class SoftwareSourceLatestCommitFetcher
 
                     $pool->as($key)
                         ->path($request['path'])
-                        ->env(['GIT_TERMINAL_PROMPT' => '0'])
+                        ->env($repo->environment(authenticated: true))
                         ->timeout(30)
                         ->command($repo->command([
                             'ls-remote',
                             '--exit-code',
                             'origin',
                             'refs/heads/'.$request['branch'],
-                        ], authenticated: true));
+                        ]));
                 }
             });
         } catch (Throwable $exception) {

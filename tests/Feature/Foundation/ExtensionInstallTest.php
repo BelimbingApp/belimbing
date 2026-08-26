@@ -128,12 +128,19 @@ it('clones an extension with the stored github token and redirects', function ()
         ->call('installExtension', EXTENSION_INSTALL_FOLDER)
         ->assertRedirect(route('admin.system.software.domains.index'));
 
-    $expectedAuthHeader = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.EXTENSION_INSTALL_TOKEN);
+    $expectedAuthEnvironment = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_CONFIG_COUNT' => '1',
+        'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+        'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.EXTENSION_INSTALL_TOKEN),
+    ];
 
     Process::assertRan(fn ($process): bool => in_array('clone', $process->command, true)
         && in_array(EXTENSION_INSTALL_REPO, $process->command, true)
         && in_array(base_path(EXTENSION_INSTALL_BASE_PATH.EXTENSION_INSTALL_FOLDER), $process->command, true)
-        && in_array($expectedAuthHeader, $process->command, true));
+        && $process->environment === $expectedAuthEnvironment);
+    Process::assertDidntRun(fn ($process): bool => collect($process->command)
+        ->contains(fn (string $argument): bool => str_contains($argument, EXTENSION_INSTALL_TOKEN)));
 });
 
 it('does not reload runtime after an extension migration fails', function (): void {
