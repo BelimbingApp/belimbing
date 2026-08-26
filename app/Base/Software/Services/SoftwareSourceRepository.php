@@ -18,6 +18,11 @@ class SoftwareSourceRepository
 {
     private const REMOTE_STATUS_CACHE_SECONDS = 60;
 
+    // Deliberately shorter than the success TTL: a failure is often transient
+    // (network blip, expired token) and the operator may fix it and want to see
+    // that quickly, but it must still not re-run on every render/round-trip.
+    private const REMOTE_STATUS_FAILURE_CACHE_SECONDS = 20;
+
     /**
      * @var array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
@@ -452,11 +457,12 @@ class SoftwareSourceRepository
             [$latest, $error, $detail] = array_pad($latestResult, 3, null);
             $this->applyLatestCommit($entries[$key], $latest, $error, $detail);
 
-            if ($latest !== null && ($latestRequests[$key]['use_cache'] ?? false) === true) {
+            if (($latestRequests[$key]['use_cache'] ?? false) === true) {
                 $cacheKey = (string) $latestRequests[$key]['cache_key'];
+                $ttl = $latest !== null ? self::REMOTE_STATUS_CACHE_SECONDS : self::REMOTE_STATUS_FAILURE_CACHE_SECONDS;
 
                 $this->latestCommitRuntimeCache[$cacheKey] = [$latest, $error, $detail];
-                Cache::put($cacheKey, [$latest, $error, $detail], self::REMOTE_STATUS_CACHE_SECONDS);
+                Cache::put($cacheKey, [$latest, $error, $detail], $ttl);
             }
         }
 
