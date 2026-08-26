@@ -773,6 +773,29 @@ test('a child startup acknowledgement wins against expired-schedule reconciliati
     Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
 });
 
+test('a duplicate same-run child cannot release the acknowledged child reservation', function (): void {
+    $runId = 'duplicate-child-owner-token';
+    $history = beginDeploymentCommandRun($runId);
+
+    expect($history->acknowledgeDeploymentRunStart($runId))->toBeTrue();
+
+    try {
+        expect(Artisan::call('blb:software:update', [
+            'keys' => ['platform'],
+            '--run-id' => $runId,
+        ]))->toBe(1)
+            ->and($history->lastDeploymentRun())->toMatchArray([
+                'run_id' => $runId,
+                'status' => 'pending',
+                'phase' => 'starting',
+            ])
+            ->and(Cache::restoreLock(SoftwareUpdateLauncher::LOCK_KEY, $runId)->isOwnedByCurrentProcess())->toBeTrue()
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue();
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
 test('a detached command that cannot restore its reservation closes the matching durable run', function (): void {
     $runId = 'reservation-restore-failed';
     $history = app(DeploymentRunHistory::class);

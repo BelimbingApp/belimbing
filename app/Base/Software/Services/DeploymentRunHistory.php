@@ -253,6 +253,25 @@ class DeploymentRunHistory
         );
     }
 
+    /**
+     * Atomically prove that an exact run no longer needs its launch reservation.
+     *
+     * A rejected phase transition alone is insufficient: another child with the
+     * same transferable lock token may already be running. The reservation is
+     * releasable only after durable state proves this run is gone, finished, or
+     * superseded by a different run id.
+     */
+    public function deploymentRunReservationIsObsolete(string $runId): bool
+    {
+        return $this->withDeploymentRunLock(function () use ($runId): bool {
+            $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+
+            return ! is_array($record)
+                || ($record['run_id'] ?? null) !== $runId
+                || $this->deploymentRunIsTerminal($record);
+        });
+    }
+
     public function appendDeploymentLine(string $runId, string $line): void
     {
         $this->withDeploymentRunLock(function () use ($runId, $line): void {

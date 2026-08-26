@@ -42,7 +42,15 @@ final class SoftwareUpdateCommand extends Command
         }
 
         if (! $history->acknowledgeDeploymentRunStart($runId)) {
-            $lock->release();
+            // Lock owner tokens are transferable, so a duplicate child carrying
+            // this run id can also restore the first child's live reservation.
+            // Losing the durable scheduled -> starting transition proves only
+            // that this child must stop; it does not prove the shared fence is
+            // stale or safe for this child to release.
+            if ($history->deploymentRunReservationIsObsolete($runId)) {
+                $lock->release();
+            }
+
             $this->error('This software update no longer owns an active scheduled run.');
 
             return self::FAILURE;
