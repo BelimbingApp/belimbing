@@ -22,6 +22,12 @@ class DeploymentProgressController
 
     public function __invoke(DeploymentRunHistory $history, SoftwareUpdateLauncher $launcher): JsonResponse
     {
+        $failedStartupRunId = $history->failExpiredScheduledUpdate();
+
+        if ($failedStartupRunId !== null) {
+            $launcher->releaseStaleUpdateLock();
+        }
+
         // The poller stops on a terminal status, so an abandoned pending run would
         // keep it polling forever. Reconcile here too, not just on render.
         $history->abandonStalePendingRun($launcher->inProgress() || $history->reloadIsInProgress());
@@ -30,7 +36,9 @@ class DeploymentProgressController
 
         if ($run === null) {
             return response()->json([
+                'run_id' => null,
                 'status' => 'idle',
+                'phase' => null,
                 'summary' => '',
                 'attempted_at' => null,
                 'lines' => [],
@@ -38,7 +46,9 @@ class DeploymentProgressController
         }
 
         return response()->json([
+            'run_id' => $run['run_id'],
             'status' => $run['status'],
+            'phase' => $run['phase'],
             'summary' => $run['summary'],
             'attempted_at' => $run['attempted_at'],
             'lines' => array_map(fn (string $line): array => [

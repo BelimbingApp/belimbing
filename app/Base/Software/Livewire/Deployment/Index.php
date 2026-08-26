@@ -138,20 +138,25 @@ class Index extends Component
             $this->startRunLog();
             $this->log = $work();
             $outcome = $this->runOutcome();
+            $runId = $outcome === 'pending' ? $runtimeReloader?->scheduledRunId() : null;
             $history->rememberDeploymentRun(
                 $this->log,
                 $outcome,
-                $outcome === 'pending' ? $runtimeReloader?->scheduledRunId() : null,
+                $runId,
             );
-            $this->streamRunRecordedMarker($outcome);
-            $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending');
+
+            if ($outcome !== 'pending') {
+                $this->streamRunRecordedMarker($outcome);
+            }
+
+            $this->dispatch('run-finished', status: $outcome, refresh: $outcome !== 'pending', runId: $runId);
 
             // The work moved to a detached process, so this response cannot know how
             // it ends. Hand the browser to the progress poller — otherwise the box
             // keeps saying "in progress" until someone reloads the page by hand,
             // which is the promise the pending copy makes and used to break.
             if ($outcome === 'pending') {
-                $this->dispatch('follow-update-progress');
+                $this->dispatch('follow-update-progress', runId: $runId);
             }
         } finally {
             $lock->release();
@@ -166,7 +171,9 @@ class Index extends Component
     ): void {
         $this->authorizeManage();
         $this->startRunLog();
-        $lines = $launcher->launch($keys);
+        $launch = $launcher->launchTracked($keys);
+        $lines = $launch['lines'];
+        $runId = $launch['run_id'];
 
         foreach ($lines as $line) {
             $this->streamRunLine($line);
@@ -179,14 +186,14 @@ class Index extends Component
         }
 
         $this->log = [];
-        $this->dispatch('run-finished', status: $outcome, refresh: false);
+        $this->dispatch('run-finished', status: $outcome, refresh: false, runId: $runId);
 
         // The run now lives in a detached process; hand the browser over to
         // the progress poller so this session watches it live instead of
         // sitting frozen on the launch line. (Dispatched after run-finished
         // so finishRun's running=false doesn't clobber the poller's state.)
         if ($outcome === 'pending') {
-            $this->dispatch('follow-update-progress');
+            $this->dispatch('follow-update-progress', runId: $runId);
         }
     }
 
@@ -236,13 +243,13 @@ class Index extends Component
         // Reconcile first: a pending record with no live process behind it is never
         // going to close itself, so show it as the failure it is rather than an
         // "in progress" that outlives the run by days.
-        $recoverStaleScheduledUpdate = $history->staleScheduledUpdateNeedsRecovery();
+        $failedStartupRunId = $history->failExpiredScheduledUpdate();
 
-        if ($recoverStaleScheduledUpdate) {
+        if ($failedStartupRunId !== null) {
             $launcher->releaseStaleUpdateLock();
         }
 
-        $updateInProgress = ! $recoverStaleScheduledUpdate && $launcher->inProgress();
+        $updateInProgress = $failedStartupRunId === null && $launcher->inProgress();
         $history->abandonStalePendingRun($updateInProgress || $history->reloadIsInProgress());
 
         $lastRun = $history->lastDeploymentRun();
@@ -275,6 +282,8 @@ class Index extends Component
                 ->all(),
             'maintenanceActive' => app()->isDownForMaintenance(),
             'runStatus' => $runStatus,
+            'runId' => $lastRun['run_id'] ?? null,
+            'runPhase' => $lastRun['phase'] ?? null,
             'runLabel' => $this->statusLabel($runStatus),
             'runVariant' => $this->statusVariant($runStatus),
             'runSummary' => $hasSessionLog ? $sessionRunSummary : ($lastRun['summary'] ?? ''),

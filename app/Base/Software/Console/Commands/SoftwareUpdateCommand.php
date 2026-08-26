@@ -28,7 +28,22 @@ final class SoftwareUpdateCommand extends Command
         $lock = cache()->restoreLock(SoftwareUpdateLauncher::LOCK_KEY, $runId);
 
         if ($runId === '' || ! $lock->isOwnedByCurrentProcess()) {
-            $this->error('This software update does not own the active reservation.');
+            $failure = (string) __('FAILED: detached update run :run could not restore its active reservation.', [
+                'run' => $runId !== '' ? $runId : __('unknown'),
+            ]);
+
+            if ($runId !== '') {
+                $history->interruptDeploymentRun($runId, $failure);
+            }
+
+            $this->error($failure);
+
+            return self::FAILURE;
+        }
+
+        if (! $history->acknowledgeDeploymentRunStart($runId)) {
+            $lock->release();
+            $this->error('This software update no longer owns an active scheduled run.');
 
             return self::FAILURE;
         }
@@ -55,7 +70,10 @@ final class SoftwareUpdateCommand extends Command
             $maintenance->arm($runId);
             $maintenance->enter($runId);
             $maintenanceState->owned = true;
-            $record((string) __('Detached update process started; automatic maintenance recovery is armed.'));
+
+            if (! $history->markDeploymentRunRunning($runId)) {
+                throw new DeploymentMaintenanceException('The update lost its durable run before startup completed.');
+            }
 
             $log = $deployment->update(
                 array_values(array_filter($this->argument('keys'), 'is_string')),

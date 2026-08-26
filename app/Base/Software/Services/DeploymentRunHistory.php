@@ -13,6 +13,8 @@ class DeploymentRunHistory
 {
     public const RELOAD_STALE_AFTER_MINUTES = 5;
 
+    public const UPDATE_STARTUP_TIMEOUT_SECONDS = 15;
+
     private const LAST_RELOAD_KEY = 'system.update.frankenphp.last_reload';
 
     private const RELOAD_STATE_KEY = 'system.update.frankenphp.reload_state';
@@ -174,6 +176,7 @@ class DeploymentRunHistory
 
             if ($runId !== null) {
                 $record['run_id'] = $runId;
+                $record['phase'] = 'running';
             }
 
             $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
@@ -222,10 +225,32 @@ class DeploymentRunHistory
                 'attempted_at' => $now,
                 'updated_at' => $now,
                 'status' => 'pending',
+                'phase' => 'scheduled',
+                'startup_deadline_at' => now()->utc()->addSeconds(self::UPDATE_STARTUP_TIMEOUT_SECONDS)->toIso8601String(),
                 'summary' => $message,
                 'log' => [$message],
             ]);
         });
+    }
+
+    public function acknowledgeDeploymentRunStart(string $runId): bool
+    {
+        return $this->transitionDeploymentRunPhase(
+            $runId,
+            'scheduled',
+            'starting',
+            (string) __('Detached update process acknowledged startup.'),
+        );
+    }
+
+    public function markDeploymentRunRunning(string $runId): bool
+    {
+        return $this->transitionDeploymentRunPhase(
+            $runId,
+            'starting',
+            'running',
+            (string) __('Detached update process started; automatic maintenance recovery is armed.'),
+        );
     }
 
     public function appendDeploymentLine(string $runId, string $line): void
@@ -252,18 +277,61 @@ class DeploymentRunHistory
         $this->withDeploymentRunLock(fn () => $this->finishDeploymentRunUnlocked($runId, $status, $log));
     }
 
-    public function interruptDeploymentRun(string $runId, string $message): void
+    public function interruptDeploymentRun(string $runId, string $message): bool
     {
-        $this->withDeploymentRunLock(function () use ($runId, $message): void {
+        return $this->withDeploymentRunLock(function () use ($runId, $message): bool {
             $record = $this->deploymentRunRecord($runId);
 
             if ($record === null || $this->deploymentRunIsTerminal($record)) {
-                return;
+                return false;
             }
 
             $log = is_array($record['log'] ?? null) ? array_values(array_filter($record['log'], 'is_string')) : [];
             $log[] = $message;
             $this->finishDeploymentRunUnlocked($runId, 'error', $log);
+
+            return true;
+        });
+    }
+
+    /**
+     * Atomically fail a child that never acknowledged startup.
+     *
+     * Returning the exact run id is the caller's proof that it may release the
+     * launch reservation. A concurrent child acknowledgement uses the same lock,
+     * so only one of the two transitions can win.
+     */
+    public function failExpiredScheduledUpdate(): ?string
+    {
+        return $this->withDeploymentRunLock(function (): ?string {
+            $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
+            $legacyScheduled = is_array($record) && $this->isLegacySchedulingOnlyUpdate($record);
+
+            if (! is_array($record)
+                || ($record['status'] ?? null) !== 'pending'
+                || (($record['phase'] ?? null) !== 'scheduled' && ! $legacyScheduled)
+                || ($legacyScheduled
+                    ? ! $this->pendingRunLooksAbandoned($record)
+                    : ! $this->startupDeadlineExpired($record['startup_deadline_at'] ?? null))) {
+                return null;
+            }
+
+            $runId = $record['run_id'] ?? null;
+
+            if (! is_string($runId) || $runId === '') {
+                return null;
+            }
+
+            $failure = (string) __('FAILED: detached update run :run did not acknowledge startup. See storage/logs/software-update-:run.log for the child diagnostic.', [
+                'run' => $runId,
+            ]);
+            $log = is_array($record['log'] ?? null)
+                ? array_values(array_filter($record['log'], 'is_string'))
+                : [];
+            $log[] = $failure;
+            $this->finishDeploymentRunUnlocked($runId, 'error', $log);
+
+            return $runId;
         });
     }
 
@@ -313,30 +381,6 @@ class DeploymentRunHistory
     }
 
     /**
-     * Whether a scheduled software update never reached its first worker step.
-     *
-     * A detached process writes its first progress line immediately. When the
-     * durable record still has only the scheduling line after the normal stale
-     * window, the launcher failed before the update process began. Its cache lock
-     * is therefore a leaked reservation, not evidence that work is still running.
-     */
-    public function staleScheduledUpdateNeedsRecovery(): bool
-    {
-        $record = $this->settings->get(self::DEPLOYMENT_RUN_KEY);
-
-        if (! $this->pendingRunLooksAbandoned(is_array($record) ? $record : null)) {
-            return false;
-        }
-
-        $log = is_array($record['log'] ?? null)
-            ? array_values(array_filter($record['log'], 'is_string'))
-            : [];
-
-        return count($log) === 1
-            && str_starts_with($log[0], 'Software update scheduled in a detached process.');
-    }
-
-    /**
      * @param  array<string, mixed>|null  $record
      */
     private function pendingRunLooksAbandoned(?array $record = null): bool
@@ -353,7 +397,7 @@ class DeploymentRunHistory
     }
 
     /**
-     * @return array{attempted_at: string, status: string, summary: string, log: list<string>}|null
+     * @return array{run_id: string|null, attempted_at: string, status: string, phase: string|null, summary: string, log: list<string>}|null
      */
     public function lastDeploymentRun(): ?array
     {
@@ -371,8 +415,10 @@ class DeploymentRunHistory
         }
 
         return [
+            'run_id' => is_string($record['run_id'] ?? null) ? $record['run_id'] : null,
             'attempted_at' => $attemptedAt,
             'status' => $status,
+            'phase' => is_string($record['phase'] ?? null) ? $record['phase'] : null,
             'summary' => is_string($record['summary'] ?? null) ? $record['summary'] : '',
             'log' => array_values(array_filter(
                 is_array($record['log'] ?? null) ? $record['log'] : [],
@@ -395,6 +441,59 @@ class DeploymentRunHistory
         return in_array($record['status'] ?? null, ['success', 'warning', 'error'], true);
     }
 
+    private function transitionDeploymentRunPhase(string $runId, string $from, string $to, string $line): bool
+    {
+        return $this->withDeploymentRunLock(function () use ($runId, $from, $to, $line): bool {
+            $record = $this->deploymentRunRecord($runId);
+
+            if ($record === null
+                || $this->deploymentRunIsTerminal($record)
+                || ($record['phase'] ?? null) !== $from) {
+                return false;
+            }
+
+            $log = is_array($record['log'] ?? null)
+                ? array_values(array_filter($record['log'], 'is_string'))
+                : [];
+            $log[] = $line;
+            $record['phase'] = $to;
+            $record['updated_at'] = now()->utc()->toIso8601String();
+            $record['summary'] = $line;
+            $record['log'] = array_slice($log, -300);
+            $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);
+
+            return true;
+        });
+    }
+
+    private function startupDeadlineExpired(mixed $deadline): bool
+    {
+        if (! is_string($deadline) || $deadline === '') {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($deadline)->lessThanOrEqualTo(now());
+        } catch (\Throwable) {
+            return true;
+        }
+    }
+
+    /** @param array<string, mixed> $record */
+    private function isLegacySchedulingOnlyUpdate(array $record): bool
+    {
+        if (isset($record['phase'])) {
+            return false;
+        }
+
+        $log = is_array($record['log'] ?? null)
+            ? array_values(array_filter($record['log'], 'is_string'))
+            : [];
+
+        return count($log) === 1
+            && str_starts_with($log[0], 'Software update scheduled in a detached process.');
+    }
+
     /** @param list<string> $log */
     private function finishDeploymentRunUnlocked(string $runId, string $status, array $log): void
     {
@@ -409,6 +508,7 @@ class DeploymentRunHistory
         $record['updated_at'] = $now;
         $record['finished_at'] = $now;
         $record['status'] = $status;
+        $record['phase'] = 'finished';
         $record['summary'] = $log === [] ? '' : $log[array_key_last($log)];
         $record['log'] = $log;
         $this->settings->set(self::DEPLOYMENT_RUN_KEY, $record);

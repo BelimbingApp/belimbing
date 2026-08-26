@@ -26,19 +26,34 @@ final class SoftwareUpdateLauncher
      */
     public function launch(array $keys): array
     {
+        return $this->launchTracked($keys)['lines'];
+    }
+
+    /**
+     * @param  list<string>  $keys
+     * @return array{run_id: string|null, lines: list<string>}
+     */
+    public function launchTracked(array $keys): array
+    {
         $unpushedSources = $this->unpushedSources($keys);
 
         if ($unpushedSources !== []) {
-            return [(string) __('FAILED: software update was not started because these sources have local commits that are not on their remotes: :sources. Push or reconcile those commits outside Belimbing, refresh source status, then retry.', [
-                'sources' => implode(', ', $unpushedSources),
-            ])];
+            return [
+                'run_id' => null,
+                'lines' => [(string) __('FAILED: software update was not started because these sources have local commits that are not on their remotes: :sources. Push or reconcile those commits outside Belimbing, refresh source status, then retry.', [
+                    'sources' => implode(', ', $unpushedSources),
+                ])],
+            ];
         }
 
         $runId = (string) Str::uuid();
         $lock = Cache::lock(self::LOCK_KEY, self::LOCK_SECONDS, $runId);
 
         if (! $lock->get()) {
-            return [(string) __('Warning: another software update is already running.')];
+            return [
+                'run_id' => null,
+                'lines' => [(string) __('Warning: another software update is already running.')],
+            ];
         }
 
         $line = (string) __('Software update scheduled in a detached process. This page will keep showing its durable progress if web workers restart.');
@@ -52,14 +67,14 @@ final class SoftwareUpdateLauncher
         $log = storage_path('logs/software-update-'.$runId.'.log');
 
         if ($this->launcher->launch($command, base_path(), [], $log, $log)) {
-            return [$line];
+            return ['run_id' => $runId, 'lines' => [$line]];
         }
 
         $lock->release();
         $failure = (string) __('FAILED: software update process could not be started.');
         $this->history->finishDeploymentRun($runId, 'error', [$failure]);
 
-        return [$failure];
+        return ['run_id' => null, 'lines' => [$failure]];
     }
 
     public function inProgress(): bool

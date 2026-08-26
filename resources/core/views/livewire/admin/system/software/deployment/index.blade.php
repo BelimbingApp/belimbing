@@ -36,6 +36,9 @@
             progressStallBadge: @js(__('Lost contact')),
             progressStallMessage: @js(__('The server stopped answering for :seconds seconds while the run was still going. The detached process may well have carried on without us — reload to read the recorded result.', ['seconds' => $progressStallSeconds])),
             finishedStatus: @js(($runStatus ?? 'idle') !== 'idle' ? $runStatus : null),
+            activeRunId: @js($runId),
+            activeRunPhase: @js($runPhase),
+            completedRunId: null,
             justRefreshed: false,
             reloadInProgress: @js($reloadInProgress),
             updateInProgress: @js($updateInProgress),
@@ -70,7 +73,7 @@
                 });
 
                 if (this.updateInProgress && ! ['success', 'warning', 'error'].includes(this.finishedStatus)) {
-                    this.followDetachedRun();
+                    this.followDetachedRun({ runId: this.activeRunId });
                 }
             },
             destroy() {
@@ -87,12 +90,22 @@
                  the update holds the site in maintenance mode, so we follow the
                  run through the maintenance-excepted progress route instead of
                  wire:poll — and instead of the old flickering 5s full reload. --}}
-            followDetachedRun() {
+            followDetachedRun(detail = {}) {
+                if (detail.runId) {
+                    this.activeRunId = detail.runId;
+                }
+
+                if (! this.activeRunId) {
+                    return;
+                }
+
                 if (this._pollTimer !== null) {
                     return;
                 }
 
-                this.openRunLog();
+                this.running = true;
+                this.runLogOpen = true;
+                this.dismissed = false;
                 this.pollProgressSoon(0);
             },
             pollProgressSoon(delay = 2000) {
@@ -122,9 +135,9 @@
                         return;
                     }
                     this._pollFailingSince = null;
-                    this.renderRunProgress(run);
+                    const accepted = this.renderRunProgress(run);
 
-                    if (['success', 'warning', 'error'].includes(run.status)) {
+                    if (accepted && ['success', 'warning', 'error'].includes(run.status)) {
                         this._pollTimer = null;
 
                         return; {{-- the recorded-run marker takes over from here --}}
@@ -156,9 +169,11 @@
             renderRunProgress(run) {
                 const target = this.$root.querySelector('[data-run-log-lines]');
 
-                if (! target || ! Array.isArray(run.lines)) {
-                    return;
+                if (! target || ! Array.isArray(run.lines) || ! run.run_id || run.run_id !== this.activeRunId) {
+                    return false;
                 }
+
+                this.activeRunPhase = run.phase || this.activeRunPhase;
 
                 const fragment = document.createDocumentFragment();
 
@@ -182,10 +197,13 @@
                     marker.setAttribute('aria-hidden', 'true');
                     marker.dataset.deploymentRunRecorded = 'true';
                     marker.dataset.runOutcome = run.status;
+                    marker.dataset.runId = run.run_id;
                     fragment.appendChild(marker);
                 }
 
                 target.replaceChildren(fragment);
+
+                return true;
             },
             isFloating() {
                 return this.runLogOpen && ! this.dismissed;
@@ -200,14 +218,35 @@
                 this.clearContactLost();
                 this._pollFailingSince = null;
                 this.finishedStatus = null;
+                this.activeRunId = null;
+                this.activeRunPhase = 'scheduled';
+                this.completedRunId = null;
                 this.justRefreshed = false;
                 this.runLogOpen = true;
                 this.dismissed = false;
                 this.forgetAfterRefresh();
             },
             finishRun(detail = {}) {
+                const allowedStatuses = ['pending', 'success', 'warning', 'error'];
+
+                if (! allowedStatuses.includes(detail.status)) {
+                    return;
+                }
+
+                if (detail.runId && this.activeRunId && detail.runId !== this.activeRunId) {
+                    return;
+                }
+
+                if (detail.runId) {
+                    this.activeRunId = detail.runId;
+                }
+
                 this.running = false;
-                this.finishedStatus = detail.status || this.finishedStatus || 'success';
+                this.finishedStatus = detail.status;
+
+                if (['success', 'warning', 'error'].includes(detail.status)) {
+                    this.completedRunId = detail.runId || this.activeRunId;
+                }
 
                 if (detail.refresh !== false) {
                     this.scheduleStatusRefresh();
@@ -405,7 +444,7 @@
             },
         }"
         @run-finished.window="finishRun($event.detail || {})"
-        @follow-update-progress.window="followDetachedRun()"
+        @follow-update-progress.window="followDetachedRun($event.detail || {})"
         @deployment-run-recorded="finishRun($event.detail || {})"
         @keydown.escape.window="closeRunLog()"
     >
@@ -526,7 +565,7 @@
                         </p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || $wire.hasUnpushedSources || ! $wire.behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || $wire.hasUnpushedSources || ! $wire.behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -631,7 +670,7 @@
                             @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)
                                 <x-ui.badge variant="danger" :title="__('Push or reconcile this source\'s local commits before updating.')">{{ __('Update blocked') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'behind')
-                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
+                                <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
                                     <span wire:loading wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Updating…') }}</span>
                                 </x-ui.button>
@@ -764,7 +803,15 @@
                                         <span x-show="! running && ! refreshing && ! contactLost && ! justRefreshed && ! statusIs('pending')">{{ __('Last run') }}</span>
                                     </h2>
 
-                                    <x-ui.badge variant="info" x-show="running" x-cloak>
+                                    <x-ui.badge variant="info" x-show="running && activeRunPhase === 'scheduled'" x-cloak>
+                                        <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
+                                        {{ __('Scheduled') }}
+                                    </x-ui.badge>
+                                    <x-ui.badge variant="info" x-show="running && activeRunPhase === 'starting'" x-cloak>
+                                        <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
+                                        {{ __('Starting') }}
+                                    </x-ui.badge>
+                                    <x-ui.badge variant="info" x-show="running && activeRunPhase === 'running'" x-cloak>
                                         <x-icon name="heroicon-o-arrow-path" class="mr-1 h-3.5 w-3.5 animate-spin" />
                                         {{ __('Running') }}
                                     </x-ui.badge>
@@ -834,23 +881,26 @@
 
                         <div
                             x-data="{
-                                markerSeen: false,
                                 scrollToEnd() {
                                     this.$nextTick(() => { this.$el.scrollTop = this.$el.scrollHeight });
                                 },
                                 detectRecordedRun() {
-                                    if (! this.running || this.markerSeen) {
+                                    if (! this.running) {
                                         return;
                                     }
 
                                     const marker = this.$el.querySelector('[data-deployment-run-recorded]');
 
-                                    if (! marker) {
+                                    if (! marker
+                                        || ! marker.dataset.runId
+                                        || marker.dataset.runId !== this.activeRunId
+                                        || this.completedRunId === marker.dataset.runId
+                                        || ! ['success', 'warning', 'error'].includes(marker.dataset.runOutcome)) {
                                         return;
                                     }
 
-                                    this.markerSeen = true;
-                                    this.$dispatch('deployment-run-recorded', { status: marker.dataset.runOutcome || null, refresh: true });
+                                    this.completedRunId = marker.dataset.runId;
+                                    this.$dispatch('deployment-run-recorded', { status: marker.dataset.runOutcome, runId: marker.dataset.runId, refresh: true });
                                 },
                                 init() {
                                     this.scrollToEnd();
@@ -881,7 +931,7 @@
                                     terminal marker arrives — so finishRun never fires and the
                                     "Running" badge sticks on a completed run. --}}
                                 @if (in_array($runStatus, ['success', 'warning', 'error'], true) && $displayLog !== [])
-                                    <span class="hidden" aria-hidden="true" data-deployment-run-recorded="true" data-run-outcome="{{ $runStatus }}"></span>
+                                    <span class="hidden" aria-hidden="true" data-deployment-run-recorded="true" data-run-id="{{ $runId }}" data-run-outcome="{{ $runStatus }}"></span>
                                 @endif
                             </div>
                         </div>
