@@ -35,6 +35,7 @@ const DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE = 'Software update scheduled in a deta
 const DEPLOYMENT_UPDATE_RELOAD_SCHEDULED = 'Runtime reload scheduled in the background.';
 const DEPLOYMENT_UPDATE_RELOAD_RUNNING = 'Runtime reload is running.';
 const DEPLOYMENT_UPDATE_PULLING_PLATFORM = 'Pulling Belimbing (platform)…';
+const DEPLOYMENT_UPDATE_GITHUB_TOKEN = 'ghp_deployment_update_token_0123456789';
 const DEPLOYMENT_UPDATE_ADMIN_HOST = '127.0.0.1';
 const DEPLOYMENT_UPDATE_ADMIN_HOST_ENV = 'CADDY_SERVER_ADMIN_HOST='.DEPLOYMENT_UPDATE_ADMIN_HOST;
 const DEPLOYMENT_UPDATE_ADMIN_BASE_URL = 'http://127.0.0.1:2643';
@@ -418,6 +419,25 @@ test('deployment remote checks disable interactive credential prompts', function
         && $process->environment === ['GIT_TERMINAL_PROMPT' => '0']);
 });
 
+test('deployment remote checks keep stored GitHub tokens out of command arguments', function (): void {
+    app(SettingsService::class)->set('integrations.github.token.belimbingapp', DEPLOYMENT_UPDATE_GITHUB_TOKEN);
+    fakeDeploymentUpdateProcesses();
+
+    app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
+
+    $expectedEnvironment = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_CONFIG_COUNT' => '1',
+        'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+        'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.DEPLOYMENT_UPDATE_GITHUB_TOKEN),
+    ];
+
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']
+        && $process->environment === $expectedEnvironment);
+    Process::assertDidntRun(fn ($process): bool => collect($process->command)
+        ->contains(fn (string $argument): bool => str_contains($argument, DEPLOYMENT_UPDATE_GITHUB_TOKEN)));
+});
+
 test('deployment latest column shows the remote commit time when the commit is not available locally', function (): void {
     $remoteDate = now()->subHours(4)->toIso8601String();
 
@@ -441,7 +461,7 @@ test('deployment latest column shows the remote commit time when the commit is n
     $component = Livewire::test(Index::class)
         ->call('loadLatestStatus');
 
-    preg_match('/feedfac.*?<div class="text-xs text-muted">([^<]+)<\/div>/s', $component->html(), $latestTime);
+    preg_match('/feedfac.*?<div class="text-xs text-muted">.*?<time[^>]*>([^<]+)<\/time>/s', $component->html(), $latestTime);
 
     expect($latestTime[1] ?? null)->toBeString()
         ->not->toBe('')
@@ -1761,4 +1781,40 @@ test('startup heal does not touch maintenance mode it did not put there', functi
     } finally {
         Artisan::call('up');
     }
+});
+
+test('deployment commit times carry a machine-readable timestamp so the browser can keep them current', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    $html = Livewire::actingAs($user)->test(Index::class)
+        ->call('loadLatestStatus')
+        ->html();
+
+    // A server-rendered "3 minutes ago" is correct for one instant and then rots:
+    // a page left open reported a commit as 25 minutes old fourteen hours later.
+    // The age has to be derivable from the markup, not baked into it.
+    expect($html)->toContain('data-blb-relative');
+
+    preg_match_all('/<time[^>]*datetime="([^"]+)"[^>]*data-blb-relative/s', $html, $stamps);
+
+    expect($stamps[1] ?? [])->not->toBeEmpty();
+
+    foreach ($stamps[1] as $stamp) {
+        expect(strtotime($stamp))->not->toBeFalse();
+    }
+});
+
+test('deployment sources card says how old its data is and offers a refresh', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    Livewire::actingAs($user)->test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Status collected')
+        ->assertSee('wire:click="refreshStatus"', false)
+        ->call('refreshStatus')
+        ->assertSee('Belimbing (platform)');
 });
