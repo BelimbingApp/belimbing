@@ -21,7 +21,7 @@ $addHelp = __('Incubating a selected table edits its owning migration file to ad
         @unless (app()->environment('local'))
             <x-ui.alert variant="warning">
                 <p class="font-semibold">{{ __('Schema incubation is a local development workflow.') }}</p>
-                <p class="mt-1">{{ __('This environment is :env, not local. Incubating schema is blocked from migrating outside local/testing, so changes made here will not apply on deploy and migration files should not be edited in this environment. Graduate a migration (remove its incubating marker) before it ships.', ['env' => app()->environment()]) }}</p>
+                <p class="mt-1">{{ __('This environment is :env, not local. Source-editing actions are disabled here because server-local commits cannot be shared with the rest of the fleet and will block a future fast-forward update. Make, test, and push incubation changes from a local development checkout; graduate a migration before it ships.', ['env' => app()->environment()]) }}</p>
             </x-ui.alert>
         @endunless
 
@@ -100,7 +100,8 @@ $addHelp = __('Incubating a selected table edits its owning migration file to ad
                                 <div class="flex flex-wrap gap-2">
                                     <x-ui.button
                                         wire:click="removeSelectedFromIncubation"
-                                        wire:bind:disabled="selectedIncubatingTables.length === 0"
+                                        wire:bind:disabled="selectedIncubatingTables.length === 0 || {{ app()->environment('local') ? 'false' : 'true' }}"
+                                        :disabled="! app()->environment('local')"
                                         variant="primary"
                                         size="md"
                                         class="whitespace-nowrap"
@@ -201,7 +202,8 @@ $addHelp = __('Incubating a selected table edits its owning migration file to ad
                             <div class="flex flex-wrap gap-2">
                                 <x-ui.button
                                     wire:click="moveSelectedToIncubation"
-                                    wire:bind:disabled="selectedSearchTables.length === 0"
+                                    wire:bind:disabled="selectedSearchTables.length === 0 || {{ app()->environment('local') ? 'false' : 'true' }}"
+                                    :disabled="! app()->environment('local')"
                                     variant="primary"
                                     size="md"
                                 >

@@ -526,7 +526,9 @@ test('deployment status reports remote process pool failures as row errors', fun
         ->toContain('process pool unavailable');
 });
 
-test('deployment status does not cache transient remote failures', function (): void {
+test('deployment status caches a remote failure so it does not re-run on every render or round-trip', function (): void {
+    // Before this fix, a failing check was never cached, so a source with no
+    // working credentials re-ran ls-remote on every single Livewire round-trip.
     $lsRemoteCount = 0;
 
     Process::fake(function ($process) use (&$lsRemoteCount) {
@@ -546,7 +548,59 @@ test('deployment status does not cache transient remote failures', function (): 
 
     $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
 
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
+});
+
+test('a cached remote failure expires and is retried after its shorter TTL', function (): void {
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+
+            return Process::result(errorOutput: 'temporary network failure', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    // A fresh instance each call, as a new request/Livewire round-trip gets: the
+    // in-process memo (SoftwareSourceRepository::$latestCommitRuntimeCache) is
+    // scoped to one instance and never itself expires — persistence across
+    // round-trips is Cache::get()/put()'s job, which is what this test is for.
+    $first = app(SoftwareSourceRepository::class)->status();
+    $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
+
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
+
+    $this->travel(21)->seconds();
+
+    app(SoftwareSourceRepository::class)->status();
+
     expect($lsRemoteCount)->toBe($uniqueRemoteChecks * 2);
+});
+
+test('post-update verification bypasses the remote-failure cache and reads live state', function (): void {
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+
+            return Process::result(errorOutput: 'temporary network failure', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    $repository = app(SoftwareSourceRepository::class);
+    $repository->status();
+
+    $checksAfterFirstStatus = $lsRemoteCount;
+
+    $repository->verifyTargets([['key' => 'platform', 'label' => 'Belimbing (platform)']]);
+
+    expect($lsRemoteCount)->toBeGreaterThan($checksAfterFirstStatus);
 });
 
 test('deployment status deduplicates remote latest checks in each render', function (): void {
@@ -652,6 +706,20 @@ test('component updates launch a durable process instead of updating inside the 
         Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
         Artisan::call('up');
     }
+});
+
+test('an update with unpushed commits is refused before reserving or launching a detached process', function (): void {
+    Process::fake(fakeSourceGit('', "0\t2"));
+    $detached = Mockery::mock(DetachedProcessLauncher::class);
+    $detached->shouldNotReceive('launch');
+    app()->instance(DetachedProcessLauncher::class, $detached);
+
+    $log = app(SoftwareUpdateLauncher::class)->launch(['platform']);
+
+    expect($log)->toHaveCount(1)
+        ->and($log[0])->toStartWith('FAILED: software update was not started')
+        ->and($log[0])->toContain('Belimbing (platform) (2 unpushed)')
+        ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
 });
 
 test('detached update command owns cleanup and records a terminal result', function (): void {
@@ -1515,7 +1583,34 @@ test('the deployment page flags a source with uncommitted and unpushed changes',
 
     Livewire::test(Index::class)
         ->assertSee('2 uncommitted changes')
-        ->assertSee('2 unpushed commits');
+        ->assertSee('2 unpushed commits')
+        ->assertSee('Software updates are blocked by local-only commits.')
+        ->assertSee('Starting an update cannot fast-forward these checkouts');
+});
+
+test('the deployment page replaces update with a blocker for a behind source that is also locally ahead', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    Process::fake(function ($process) {
+        $command = gitCommandWithoutConfig($process->command);
+
+        if ($command === ['git', 'status', '--porcelain=v1', '--branch']) {
+            return Process::result('## main...origin/main [ahead 2, behind 1]');
+        }
+
+        return fakeDeploymentUpdateGitResult(
+            $process->command,
+            remoteSha: DEPLOYMENT_UPDATE_REMOTE_SHA,
+        ) ?? Process::result();
+    });
+    Http::fake();
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Update blocked')
+        ->assertSee('Software updates are blocked by local-only commits.')
+        ->assertSet('hasUnpushedSources', true)
+        ->assertSeeHtml('$wire.hasUnpushedSources');
 });
 
 test('a failed migration halts the deployment before reloading workers', function (): void {

@@ -456,6 +456,13 @@
             </x-ui.alert>
         @endif
 
+        @if ($hasUnpushedSources)
+            <x-ui.alert variant="danger">
+                <p class="font-medium">{{ __('Software updates are blocked by local-only commits.') }}</p>
+                <p class="mt-1 text-sm">{{ __('These sources have commits that are not on their configured remotes: :sources. Push or reconcile them outside Belimbing, then refresh this status. Starting an update cannot fast-forward these checkouts and would otherwise fail after maintenance begins.', ['sources' => implode(', ', $unpushedSourceLabels)]) }}</p>
+            </x-ui.alert>
+        @endif
+
         {{-- FrankenPHP loads PHP extensions once, at OS-process startup. If php.ini
              was edited after this process started, "Reload FrankenPHP" below cannot
              pick up the change — it only re-executes the worker script, not PHP's
@@ -519,7 +526,7 @@
                         </p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
-                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
+                        <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || $wire.hasUnpushedSources || ! $wire.behind">
                             <span wire:loading.remove wire:target="updateAll">{{ __('Update all') }}</span>
                             <span wire:loading wire:target="updateAll">{{ __('Updating…') }}</span>
                         </x-ui.button>
@@ -621,6 +628,8 @@
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'ahead')
                                 <x-ui.badge variant="info" :title="__('Local HEAD already contains the remote branch head.')">{{ __('Ahead of remote') }}</x-ui.badge>
+                            @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)
+                                <x-ui.badge variant="danger" :title="__('Push or reconcile this source\'s local commits before updating.')">{{ __('Update blocked') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'behind')
                                 <x-ui.button type="button" size="sm" variant="primary" wire:click="updateRepo('{{ $s['key'] }}')" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive" wire:target="updateRepo('{{ $s['key'] }}')">
                                     <span wire:loading.remove wire:target="updateRepo('{{ $s['key'] }}')">{{ __('Update') }}</span>
