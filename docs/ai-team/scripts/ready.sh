@@ -6,13 +6,17 @@
 #
 #   CLAIM_AGENT=<stable-agent-id> docs/ai-team/scripts/ready.sh <pr-number>
 #
-# Optional: READY_ISSUE=<n> when the PR title/branch does not carry (#n) /
-# issue-<n>. The agent label on the PR must match CLAIM_AGENT.
+# Optional: READY_ISSUE=<n> when the PR title/branch do not carry a trailing
+# (#n) / issue-<n>, or to confirm an identity that must agree with them.
+# The agent label on the PR must match CLAIM_AGENT.
 
 set -euo pipefail
 
 pr="${1:-}"
 agent="${CLAIM_AGENT:-}"
+here=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=docs/ai-team/scripts/_lane_issue.sh
+source "$here/_lane_issue.sh"
 
 if [[ $# -ne 1 || ! "$pr" =~ ^[0-9]+$ ]]; then
   echo "usage: CLAIM_AGENT=<stable-agent-id> $0 <pr-number>" >&2
@@ -47,23 +51,23 @@ if [[ "$holders" != "agent:$agent" ]]; then
   exit 1
 fi
 
-issue="${READY_ISSUE:-}"
-if [[ -z "$issue" ]]; then
-  title=$(jq -r '.title // ""' <<<"$pr_json")
-  branch=$(jq -r '.headRefName // ""' <<<"$pr_json")
-  if [[ "$title" =~ \(#([0-9]+)\) ]]; then
-    issue="${BASH_REMATCH[1]}"
-  elif [[ "$branch" =~ (^|[-_/])issue-?([0-9]+)($|[-_/]) ]]; then
-    issue="${BASH_REMATCH[2]}"
-  fi
-fi
+title=$(jq -r '.title // ""' <<<"$pr_json")
+branch=$(jq -r '.headRefName // ""' <<<"$pr_json")
+body=$(jq -r '.body // ""' <<<"$pr_json")
+derived=$(ai_team_derive_lane_issue "$title" "$branch" "$body" "${READY_ISSUE:-}")
 
-if [[ -z "$issue" || ! "$issue" =~ ^[0-9]+$ ]]; then
-  echo "refusing #$pr: cannot derive issue number; pass READY_ISSUE=<n>" >&2
+if [[ "$derived" == error:* ]]; then
+  echo "refusing #$pr: ${derived#error:}" >&2
   exit 1
 fi
 
-body=$(jq -r '.body // ""' <<<"$pr_json")
+if [[ "$derived" == "none" ]]; then
+  echo "refusing #$pr: AI-Team-Lane-Issue: none is a gate path, not a ready.sh handoff" >&2
+  exit 1
+fi
+
+issue="$derived"
+
 # GitHub closing keywords are case-insensitive; keep Closes for consistency with claim.sh.
 if ! grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${issue}([^0-9]|$)" <<<"$body"; then
   if [[ -n "$body" && "$body" != *$'\n' ]]; then
