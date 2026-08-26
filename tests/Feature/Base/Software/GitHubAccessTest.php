@@ -227,6 +227,29 @@ test('GitHub Access does not throw when GitHub is unreachable, and shows the ord
     $response->assertDontSee('Needs a token');
 });
 
+test('a connection failure caches as unknown too, and does not re-probe within the failure TTL', function (): void {
+    fakeGitHubAccessRemote();
+    $requestCount = 0;
+    Http::fake(function () use (&$requestCount) {
+        $requestCount++;
+
+        throw new ConnectionException('cURL error 7: Failed to connect');
+    });
+
+    app(SoftwareSourceRepository::class)->owners();
+    expect($requestCount)->toBe(1);
+
+    // If the exception path returns 'unknown' without caching it (the actual
+    // bug this test was written for), every render retries GitHub — during a
+    // real outage, that is itself enough traffic to burn the rate limit.
+    app(SoftwareSourceRepository::class)->owners();
+    expect($requestCount)->toBe(1);
+
+    $this->travel(21)->seconds();
+    app(SoftwareSourceRepository::class)->owners();
+    expect($requestCount)->toBe(2);
+});
+
 test('a rate-limited (403) probe is not cached as, or presented as, a private repo', function (): void {
     fakeGitHubAccessRemote();
     $requestCount = 0;

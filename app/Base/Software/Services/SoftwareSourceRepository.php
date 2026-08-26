@@ -206,19 +206,19 @@ class SoftwareSourceRepository
 
         try {
             $response = $this->githubGet($owner, $name, '', null);
-        } catch (ConnectionException) {
-            return 'unknown';
-        }
 
-        $visibility = match (true) {
-            $response->successful() && $response->json('private') === false => 'public',
-            // Anonymous access to a private (or nonexistent) repo is a 404 —
-            // GitHub does not distinguish the two to an unauthenticated caller.
-            $response->status() === 404 => 'private',
-            // Anything else (403 rate-limited, 5xx, ...) is a request failure,
-            // not a fact about the repo's visibility.
-            default => 'unknown',
-        };
+            $visibility = match (true) {
+                $response->successful() && $response->json('private') === false => 'public',
+                // Anonymous access to a private (or nonexistent) repo is a 404 —
+                // GitHub does not distinguish the two to an unauthenticated caller.
+                $response->status() === 404 => 'private',
+                // Anything else (403 rate-limited, 5xx, ...) is a request failure,
+                // not a fact about the repo's visibility.
+                default => 'unknown',
+            };
+        } catch (ConnectionException) {
+            $visibility = 'unknown';
+        }
 
         $ttl = $visibility === 'unknown' ? self::REMOTE_STATUS_FAILURE_CACHE_SECONDS : self::OWNER_VISIBILITY_CACHE_SECONDS;
         Cache::put($cacheKey, $visibility, $ttl);
