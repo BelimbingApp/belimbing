@@ -75,9 +75,11 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
             ? Process::result($remoteSha."\trefs/heads/main")
             : Process::result(errorOutput: $remoteError, exitCode: 1),
         ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $remoteSha] => Process::result($remoteSha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-        ['git', 'merge-base', '--is-ancestor', $remoteSha, 'HEAD'] => $aheadOfRemote
-            ? Process::result(exitCode: 0)
-            : Process::result(exitCode: 1),
+        ['git', 'rev-list', '--left-right', '--count', $remoteSha.'...HEAD'] => $aheadOfRemote
+            // 3 unpushed local commits, remote fully reachable from HEAD.
+            ? Process::result('0'."\t".'3')
+            // The remote's newer commit was never fetched, so git can't diff against it.
+            : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
         ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => $pullError === null
             ? Process::result('Already up to date.')
             : Process::result(errorOutput: $pullError, exitCode: 1),
@@ -1170,7 +1172,11 @@ test('a checkout ahead of its remote reports ahead, not behind, and offers no Up
     $status = app(SoftwareSourceRepository::class)->status();
     $platform = collect($status)->firstWhere('key', 'platform');
 
-    expect($platform['update_state'])->toBe('ahead');
+    expect($platform['update_state'])->toBe('ahead')
+        // Derived from the live remote SHA (git rev-list against it), not the
+        // possibly-stale @{u} tracking ref — the second half of #299's fix.
+        ->and($platform['working_tree']['ahead'])->toBe(3)
+        ->and($platform['working_tree']['behind'])->toBe(0);
 
     $component = Livewire::test(Index::class)->call('loadLatestStatus');
 
@@ -1459,11 +1465,18 @@ function fakeSourceGit(string $porcelain, string $leftRightCount): Closure
         return match (true) {
             $command === ['git', 'status', '--porcelain=v1', '--branch'] => Process::result($statusOutput),
             $command === ['git', 'status', '--porcelain'] => Process::result($porcelain),
-            in_array('rev-list', $process->command, true) => Process::result($leftRightCount),
+            // The @{u}...HEAD rev-list (workingTree()'s own fallback) never actually
+            // runs here — statusSummary() above already parses ahead/behind from the
+            // porcelain branch line. Only the live remote-SHA rev-list (updateState())
+            // reaches this, and its object is deliberately never fetched (DEPLOYMENT_UPDATE_REMOTE_SHA
+            // below), so it fails exactly as an unfetched remote commit would — these
+            // tests are about the local working-tree parse, not the live-remote override.
+            in_array('rev-list', $process->command, true) => Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
             $command === ['git', 'remote', 'get-url', 'origin'] => Process::result(DEPLOYMENT_UPDATE_REMOTE),
             $command === ['git', 'rev-parse', DEPLOYMENT_UPDATE_BRANCH_ARG, 'HEAD'] => Process::result('main'),
-            in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\trefs/heads/main"),
-            in_array('log', $process->command, true), in_array('show', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            in_array('ls-remote', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_REMOTE_SHA."\trefs/heads/main"),
+            $command === ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, DEPLOYMENT_UPDATE_REMOTE_SHA] => Process::result(DEPLOYMENT_UPDATE_REMOTE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
+            in_array('log', $process->command, true) => Process::result(DEPLOYMENT_UPDATE_SHA."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
             default => Process::result(),
         };
     };

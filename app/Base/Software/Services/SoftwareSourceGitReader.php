@@ -51,12 +51,15 @@ final class SoftwareSourceGitReader
     }
 
     /**
-     * Whether the given remote SHA is already reachable from the local checkout's
-     * HEAD — the local checkout is ahead of (or equal to) that remote commit.
+     * How far the local checkout at $path is ahead of / behind an arbitrary
+     * remote SHA — unlike workingTree(), not limited to the (possibly stale)
+     * upstream tracking ref. Null when that SHA's object isn't present locally.
+     *
+     * @return array{ahead: int, behind: int}|null
      */
-    public function isAncestor(string $path, string $sha, int $timeout = 30): bool
+    public function liveAheadBehind(string $path, string $sha, int $timeout = 30): ?array
     {
-        return (new GitRepository($path))->isAncestor($sha, timeout: $timeout);
+        return (new GitRepository($path))->aheadBehindFrom($sha, timeout: $timeout);
     }
 
     /**

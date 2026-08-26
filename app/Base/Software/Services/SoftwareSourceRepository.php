@@ -496,33 +496,42 @@ class SoftwareSourceRepository
         }
 
         $entry['latest'] = $latest;
-        $entry['update_state'] = $this->updateState($entry['current'], $latest, $path);
+        $entry['update_state'] = $this->updateState($entry, $latest, $path);
     }
 
     /**
-     * @param  array<string, mixed>|null  $current
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}  $entry
      * @param  array<string, mixed>  $latest
      * @return 'up_to_date'|'ahead'|'behind'
      */
-    private function updateState(?array $current, array $latest, ?string $path): string
+    private function updateState(array &$entry, array $latest, ?string $path): string
     {
-        if ($current === null) {
-            return 'behind';
-        }
+        $current = $entry['current'];
 
-        if ($current['sha'] === $latest['sha']) {
+        if ($current !== null && $current['sha'] === $latest['sha']) {
+            $entry['working_tree']['ahead'] = 0;
+            $entry['working_tree']['behind'] = 0;
+
             return 'up_to_date';
         }
 
-        // The remote SHA is already local in exactly this case: it's an ancestor
-        // of HEAD, so HEAD's own history contains that object. A checkout genuinely
-        // behind has never fetched the remote's newer commit and correctly reports
-        // "behind" when the ancestry check can't be made (no local git error here).
-        if ($path !== null && $this->gitReader->isAncestor($path, (string) $latest['sha'])) {
-            return 'ahead';
+        // The remote SHA's object is local in exactly two cases: the checkout is
+        // ahead (its own history contains that object), or it was already fetched
+        // for other reasons. Either way, derive the true counts from it rather than
+        // the tracking ref working_tree already carries, which is only as fresh as
+        // the last fetch and can disagree with this live ls-remote result. A
+        // checkout genuinely behind has never fetched the newer remote commit, so
+        // the object is absent and we fall back to that tracking-ref estimate.
+        $live = $path !== null ? $this->gitReader->liveAheadBehind($path, (string) $latest['sha']) : null;
+
+        if ($live === null) {
+            return 'behind';
         }
 
-        return 'behind';
+        $entry['working_tree']['ahead'] = $live['ahead'];
+        $entry['working_tree']['behind'] = $live['behind'];
+
+        return $live['behind'] === 0 ? 'ahead' : 'behind';
     }
 
     private function githubGet(string $owner, string $name, string $path, ?string $token): Response

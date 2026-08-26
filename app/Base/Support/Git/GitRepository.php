@@ -134,13 +134,22 @@ final class GitRepository
     }
 
     /**
-     * Whether $sha is an ancestor of HEAD — i.e. HEAD already contains it. False
-     * (not just "not an ancestor") when the object isn't present locally to check,
-     * since ancestry can't be proven either way in that case.
+     * How far HEAD is ahead of / behind an arbitrary commit — unlike aheadBehind(),
+     * not limited to the configured upstream. Null when $sha's object isn't present
+     * locally (rev-list can't diff against a commit it doesn't have): the caller
+     * falls back to a tracking-ref-based estimate in that case.
+     *
+     * @return array{ahead: int, behind: int}|null
      */
-    public function isAncestor(string $sha, int $timeout = 30): bool
+    public function aheadBehindFrom(string $sha, int $timeout = 30): ?array
     {
-        return $this->run(['merge-base', '--is-ancestor', $sha, 'HEAD'], timeout: $timeout)->ok;
+        $counts = $this->output(['rev-list', '--left-right', '--count', $sha.'...HEAD'], timeout: $timeout);
+
+        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+            return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
+        }
+
+        return null;
     }
 
     /**
