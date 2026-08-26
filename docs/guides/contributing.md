@@ -69,6 +69,15 @@ bun run build
 > setup command never rewrites dependency state). A test that does not need the layout can
 > call `$this->withoutVite()` instead. CI builds assets before testing, so
 > this bites only local runs.
+>
+> **Git worktree?** A worktree starts without `vendor/`, `public/build/`, and
+> `.env`. **Copy** them from the main checkout — never symlink `vendor/`: the
+> Composer autoloader computes `$baseDir` from `dirname(__DIR__)`, and PHP
+> resolves `__DIR__` through symlinks (realpath semantics), so it lands on the
+> symlink *target* — the main checkout — no matter what path you traversed.
+> The PSR-4 map then points `App\` at the main checkout's `app/`, and the
+> suite passes while silently testing that checkout's branch instead of the
+> worktree's. A relative symlink resolves the same way; copy for real.
 
 5. Commit with a clear message.
 
