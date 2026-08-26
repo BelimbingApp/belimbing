@@ -54,7 +54,7 @@ origin_repo=$(printf '%s' "$origin_url" | sed -E 's#^(https://github\.com/|git@g
 
 # One fetch of PR state; every check below reads from it.
 pr=$(gh pr view "$PR" --repo "$REPO" \
-       --json headRefOid,headRefName,isDraft,state,mergeable,labels 2>/dev/null)
+       --json headRefOid,headRefName,title,body,isDraft,state,mergeable,labels 2>/dev/null)
 [ -n "$pr" ] || { echo "cannot read PR #$PR from $REPO" >&2; exit 2; }
 
 remote_head=$(printf '%s' "$pr" | jq -r .headRefOid)
@@ -161,6 +161,27 @@ if [ "$author_count" = "1" ]; then
   say_ok "author lane is agent:$author_agent"
 else
   say_bad "expected exactly one agent:<id> author lane, found $author_count"
+fi
+
+# 5b. Issue-closing reference (#354). claim.sh / ready.sh write Closes #N; the
+# gate refuses a handoff that dropped it so merge cannot leave the board lying.
+# Derive N from the claim title "(#N)" or branch "issue-N" (claim.sh convention).
+# AI-team gated PRs always have an agent lane and that naming — there is no
+# silent opt-out; a PR that cannot name its issue cannot pass.
+lane_issue=$(printf '%s' "$pr" | jq -r '
+  (.title // "") as $t
+  | (.headRefName // "") as $b
+  | if ($t | test("\\(#[0-9]+\\)")) then ($t | capture("\\(#(?<n>[0-9]+)\\)").n)
+    elif ($b | test("(^|[-_/])issue-?[0-9]+($|[-_/])")) then ($b | capture("(^|[-_/])issue-?(?<n>[0-9]+)($|[-_/])").n)
+    else "" end
+')
+pr_body=$(printf '%s' "$pr" | jq -r '.body // ""')
+if [[ -z "$lane_issue" ]]; then
+  say_bad "cannot derive issue number from title (#N) or branch issue-N — agent lanes must name their issue"
+elif printf '%s' "$pr_body" | grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${lane_issue}([^0-9]|$)"; then
+  say_ok "body closes #$lane_issue"
+else
+  say_bad "body has no closing reference to #$lane_issue — run ready.sh or add Closes #$lane_issue"
 fi
 
 # `gh api --paginate` prints one JSON array per page. Slurp and flatten those
