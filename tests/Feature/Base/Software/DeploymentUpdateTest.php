@@ -512,7 +512,9 @@ test('deployment status reports remote process pool failures as row errors', fun
         ->toContain('Could not start Git remote status checks: process pool unavailable');
 });
 
-test('deployment status does not cache transient remote failures', function (): void {
+test('deployment status caches a remote failure so it does not re-run on every render or round-trip', function (): void {
+    // Before this fix, a failing check was never cached, so a source with no
+    // working credentials re-ran ls-remote on every single Livewire round-trip.
     $lsRemoteCount = 0;
 
     Process::fake(function ($process) use (&$lsRemoteCount) {
@@ -532,7 +534,59 @@ test('deployment status does not cache transient remote failures', function (): 
 
     $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
 
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
+});
+
+test('a cached remote failure expires and is retried after its shorter TTL', function (): void {
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+
+            return Process::result(errorOutput: 'temporary network failure', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    // A fresh instance each call, as a new request/Livewire round-trip gets: the
+    // in-process memo (SoftwareSourceRepository::$latestCommitRuntimeCache) is
+    // scoped to one instance and never itself expires — persistence across
+    // round-trips is Cache::get()/put()'s job, which is what this test is for.
+    $first = app(SoftwareSourceRepository::class)->status();
+    $uniqueRemoteChecks = deploymentUniqueRemoteCheckCount($first);
+
+    expect($lsRemoteCount)->toBe($uniqueRemoteChecks);
+
+    $this->travel(21)->seconds();
+
+    app(SoftwareSourceRepository::class)->status();
+
     expect($lsRemoteCount)->toBe($uniqueRemoteChecks * 2);
+});
+
+test('post-update verification bypasses the remote-failure cache and reads live state', function (): void {
+    $lsRemoteCount = 0;
+
+    Process::fake(function ($process) use (&$lsRemoteCount) {
+        if (gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            $lsRemoteCount++;
+
+            return Process::result(errorOutput: 'temporary network failure', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+
+    $repository = app(SoftwareSourceRepository::class);
+    $repository->status();
+
+    $checksAfterFirstStatus = $lsRemoteCount;
+
+    $repository->verifyTargets([['key' => 'platform', 'label' => 'Belimbing (platform)']]);
+
+    expect($lsRemoteCount)->toBeGreaterThan($checksAfterFirstStatus);
 });
 
 test('deployment status deduplicates remote latest checks in each render', function (): void {
