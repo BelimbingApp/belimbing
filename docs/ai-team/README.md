@@ -151,6 +151,24 @@ them when the blocker closes.
 
 ---
 
+## Stale-lane recovery
+
+A closed PR does not make its unmerged remote branch disposable by default. The
+steward must record a **named stable disposition owner** (`agent:<id>`) on the
+source issue or PR before preserving a stale branch. That owner must inspect the
+exact tip and record one durable outcome before the lane is considered recovered:
+
+1. **Superseded** — name the replacement issue/PR and merged SHA, then delete
+   that exact remote ref individually.
+2. **Still wanted** — open or identify a current issue and its live claimed lane,
+   then delete the stale ref; the new lane, not the old branch, carries the work.
+
+Archive tags may preserve an investigated tip where recovery needs to be
+reversible, but they are evidence, not a live lane. Never bulk-delete stale refs
+or leave a preserved branch without its disposition owner and recorded outcome.
+
+---
+
 ## Finish clean
 
 A task is not done when its PR merges — it is done when nothing you created is
