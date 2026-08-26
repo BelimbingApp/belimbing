@@ -65,7 +65,8 @@ bun run build
 
 > **Fresh checkout?** Feature tests that render pages fail with
 > `ViteManifestNotFoundException` until the frontend is built once:
-> `bun install && bun run build`. A test that does not need the layout can
+> `bun install --frozen-lockfile && bun run build` (frozen, matching CI, so a
+> setup command never rewrites dependency state). A test that does not need the layout can
 > call `$this->withoutVite()` instead. CI builds assets before testing, so
 > this bites only local runs.
 

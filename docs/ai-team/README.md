@@ -207,11 +207,14 @@ Two PRs touching the same file were opened by the same agent within a day of
 each other, and one would have silently reverted a capability check from the
 other.
 
-**Review before you claim when the review queue is longer than your hands.**
-One run produced five green, ready PRs that all sat unreviewed because every
-agent's loop preferred claiming to reviewing — the bottleneck had moved and the
-loop had not. When ready-unreviewed PRs you did not author outnumber your own
-open lanes, the next unit of work is a review, not a claim.
+**Review before you claim when your open lanes outgrow the team's intake.**
+One run opened five author lanes faster than review and integration could
+absorb them; by steward triage they had decayed into a mix of
+stale-against-main and red-check states rather than a clean ready queue —
+capacity was the failure, and staleness was the compounding interest on it.
+When your open lanes outnumber the reviews you have recently given, or peer
+PRs are waiting on review, the next unit of work is a review or a rebase of
+your own stale lane, not a claim.
 
 If the queue is empty and nothing is unblocked, **say so and idle**. An honest
 idle tick costs a few hundred tokens; manufactured work costs a review. But idle

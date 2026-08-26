@@ -34,16 +34,24 @@ cd "$ROOT" || exit 2
 REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)
 [ -n "$REPO" ] || { echo "cannot resolve the repository from gh" >&2; exit 2; }
 
+# The gate fetches and proves branch containment against *origin*, while gh
+# resolves $REPO independently. If origin is a fork, PR lookup can succeed
+# against the canonical repository while containment is proven against the
+# fork's stale main — a false PASS for a head behind canonical main. So origin
+# must BE the canonical repository, verified before any verdict is printed.
+origin_url=$(git remote get-url origin 2>/dev/null)
+origin_repo=$(printf '%s' "$origin_url" | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##')
+[ "$origin_repo" = "$REPO" ] || {
+  echo "origin is '$origin_url' but gh resolves the repository as '$REPO'." >&2
+  echo "The gate proves containment against origin/main, so origin must be the" >&2
+  echo "canonical repository. Run from a clone whose origin is $REPO." >&2
+  exit 2
+}
+
 # One fetch of PR state; every check below reads from it.
 pr=$(gh pr view "$PR" --repo "$REPO" \
        --json headRefOid,headRefName,isDraft,state,mergeable,labels 2>/dev/null)
-[ -n "$pr" ] || {
-  echo "cannot read PR #$PR from $REPO" >&2
-  echo "note: this script resolves the repository from this checkout's git remotes —" >&2
-  echo "      'origin' must be the canonical repository (fork layouts resolve wrong)." >&2
-  echo "      Fix with: gh repo set-default <canonical-owner/repo>, or run from a canonical clone." >&2
-  exit 2
-}
+[ -n "$pr" ] || { echo "cannot read PR #$PR from $REPO" >&2; exit 2; }
 
 remote_head=$(printf '%s' "$pr" | jq -r .headRefOid)
 
@@ -52,6 +60,21 @@ if [ -z "$REVIEWED" ]; then
   REVIEWED="$remote_head"
   echo "note: no reviewed SHA given — gating the current head $REVIEWED."
   echo "      Pass the SHA you actually reviewed, so a push after your review fails this gate."
+elif [ "${#REVIEWED}" -lt 40 ]; then
+  # An abbreviation is only usable once the canonical repository resolves it
+  # to exactly one commit; every later comparison and check-run query then
+  # uses that full SHA, so the merged-is-verified contract stays exact.
+  if [ "${#REVIEWED}" -lt 12 ]; then
+    echo "reviewed SHA '$REVIEWED' is too short (<12 chars) to identify a commit safely — pass at least 12, ideally all 40." >&2
+    exit 2
+  fi
+  resolved=$(gh api "repos/$REPO/commits/$REVIEWED" --jq .sha 2>/dev/null)
+  if [ "${#resolved}" -ne 40 ] || printf '%s' "$resolved" | grep -q '[^0-9a-f]'; then
+    echo "reviewed SHA '$REVIEWED' does not resolve to a single commit in $REPO (unknown or ambiguous)." >&2
+    exit 2
+  fi
+  echo "note: resolved abbreviated $REVIEWED to $resolved via $REPO."
+  REVIEWED="$resolved"
 fi
 
 git fetch -q origin main 2>/dev/null
@@ -120,17 +143,9 @@ done
 #    by minutes, so compare the branch ref too.
 if [ "$remote_head" = "$REVIEWED" ]; then
   say_ok "PR head is the reviewed SHA"
-elif [ -n "$REVIEWED" ] && [ "${#REVIEWED}" -ge 12 ] && [ "${remote_head#"$REVIEWED"}" != "$remote_head" ]; then
-  # A long (>=12 char) prefix of the live head names that head and nothing
-  # else, so "what merges is exactly what was verified" still holds. Accept
-  # it and say what it expanded to.
-  say_ok "reviewed SHA $REVIEWED is an unambiguous prefix of head $remote_head"
-elif [ -n "$REVIEWED" ] && [ "${remote_head#"$REVIEWED"}" != "$remote_head" ]; then
-  # A short abbreviated SHA. The comparison is deliberately strict — what
-  # merges must be exactly what was verified — so say what to pass rather
-  # than advising a re-review that would change nothing.
-  say_bad "you passed a short abbreviated SHA ($REVIEWED); pass at least 12 characters of the head $remote_head"
 else
+  # Abbreviations were resolved to a full SHA up front, so this comparison is
+  # deliberately exact: what merges must be exactly what was verified.
   say_bad "PR head is $remote_head but you reviewed $REVIEWED — re-review the new head"
 fi
 # Only meaningful while the PR is open: the branch is normally deleted on merge,
