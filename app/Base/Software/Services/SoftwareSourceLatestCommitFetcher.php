@@ -25,7 +25,7 @@ final class SoftwareSourceLatestCommitFetcher
 
     /**
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     public function fetchLatestCommits(array $requests): array
     {
@@ -52,7 +52,7 @@ final class SoftwareSourceLatestCommitFetcher
             });
         } catch (Throwable $exception) {
             return array_map(
-                fn (array $request): array => [null, (string) __('Could not start Git remote status checks: :error', ['error' => $exception->getMessage()])],
+                fn (array $request): array => [null, (string) __('Could not start Git remote status checks.'), $exception->getMessage()],
                 $requests,
             );
         }
@@ -86,9 +86,9 @@ final class SoftwareSourceLatestCommitFetcher
      * Preserve that fast check, then ask GitHub only for metadata that is not already
      * available from the local object database.
      *
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     private function resolveLatestCommitMetadata(array $latest, array $requests): array
     {
@@ -104,7 +104,7 @@ final class SoftwareSourceLatestCommitFetcher
     }
 
     /**
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $requests
      * @return array<string, array{owner: string, name: string, sha: string, token: string|null}>
      */
@@ -160,29 +160,93 @@ final class SoftwareSourceLatestCommitFetcher
     }
 
     /**
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latest
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latest
      * @param  array<string, Response|Throwable>  $responses
      * @param  array<string, array{owner: string, name: string, sha: string, token: string|null}>  $metadataRequests
-     * @return array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @return array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     private function applyLatestCommitMetadataResponses(array $latest, array $responses, array $metadataRequests): array
     {
         foreach ($responses as $key => $response) {
-            if (! $response instanceof Response || ! $response->successful() || ! isset($metadataRequests[$key])) {
+            if (! isset($metadataRequests[$key])) {
                 continue;
             }
 
-            $payload = $response->json();
-            $commit = is_array($payload)
-                ? $this->gitReader->githubCommit($metadataRequests[$key]['sha'], $payload)
-                : null;
+            $commit = null;
+
+            if ($response instanceof Response && $response->successful()) {
+                $payload = $response->json();
+                $commit = is_array($payload)
+                    ? $this->gitReader->githubCommit($metadataRequests[$key]['sha'], $payload)
+                    : null;
+            }
 
             if ($commit !== null) {
-                $latest[$key] = [$commit, null];
+                $latest[$key] = [$commit, null, null];
+
+                continue;
             }
+
+            // The row is about to say the date is unavailable. Say why: this used
+            // to drop the status code silently and leave the operator with two
+            // words and no lead, on a row that is otherwise telling them to update.
+            $latest[$key] = $this->withDateError(
+                $latest[$key] ?? [null, null, null],
+                $this->dateErrorFor($metadataRequests[$key], $response),
+            );
         }
 
         return $latest;
+    }
+
+    /**
+     * @param  array{0: array<string, mixed>|null, 1: string|null, 2: string|null}  $entry
+     * @return array{0: array<string, mixed>|null, 1: string|null, 2: string|null}
+     */
+    private function withDateError(array $entry, string $reason): array
+    {
+        if (! is_array($entry[0])) {
+            return $entry;
+        }
+
+        $entry[0]['date_error'] = $reason;
+
+        return $entry;
+    }
+
+    /**
+     * @param  array{owner: string, name: string, sha: string, token: string|null}  $request
+     */
+    private function dateErrorFor(array $request, Response|Throwable|null $response): string
+    {
+        $repo = $request['owner'].'/'.$request['name'];
+        $hasToken = is_string($request['token']) && $request['token'] !== '';
+
+        if ($response instanceof Response
+            && in_array($response->status(), [401, 403, 404], true)
+            && ! $hasToken) {
+            return (string) __('GitHub returned :status for :repo and no token is stored for :owner — add one in GitHub Access.', [
+                'status' => $response->status(),
+                'repo' => $repo,
+                'owner' => $request['owner'],
+            ]);
+        }
+
+        if ($response instanceof Response) {
+            return (string) __('GitHub returned :status for the commit metadata of :repo.', [
+                'status' => $response->status(),
+                'repo' => $repo,
+            ]);
+        }
+
+        if ($response instanceof Throwable) {
+            return (string) __('Could not reach GitHub for the commit metadata of :repo: :error.', [
+                'repo' => $repo,
+                'error' => $response->getMessage(),
+            ]);
+        }
+
+        return (string) __('The commit is not in this checkout and GitHub returned no metadata for :repo.', ['repo' => $repo]);
     }
 
     /**

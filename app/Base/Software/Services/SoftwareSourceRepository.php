@@ -19,7 +19,7 @@ class SoftwareSourceRepository
     private const REMOTE_STATUS_CACHE_SECONDS = 60;
 
     /**
-     * @var array<string, array{0: array<string, mixed>|null, 1: string|null}>
+     * @var array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>
      */
     private array $latestCommitRuntimeCache = [];
 
@@ -41,7 +41,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}>
      */
     public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
@@ -69,6 +69,7 @@ class SoftwareSourceRepository
                 'latest' => null,
                 'update_state' => null,
                 'error' => null,
+                'error_detail' => null,
             ];
 
             if ($owner === null) {
@@ -409,7 +410,7 @@ class SoftwareSourceRepository
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
      * @param  array<string, string>  $latestRequestAliases
      * @param  array<string, string>  $requestKeyByCacheKey
-     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}  $entry
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}  $entry
      * @param  array{source: array{key: string, label: string, path: string, relative: string}, owner: string, name: string, branch: string, use_cache: bool}  $request
      */
     private function queueLatestCommitRequest(
@@ -426,7 +427,7 @@ class SoftwareSourceRepository
             : null;
 
         if (is_array($cached)) {
-            $this->applyLatestCommit($entry, $cached[0] ?? null, $cached[1] ?? null, $source['path']);
+            $this->applyLatestCommit($entry, $cached[0] ?? null, $cached[1] ?? null, $cached[2] ?? null, $source['path']);
 
             return;
         }
@@ -449,11 +450,11 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}>  $entries
+     * @param  array<string, array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}>  $entries
      * @param  array<string, string>  $absolutePaths  keyed by source key, same universe as $entries
      * @param  array<string, array{path: string, owner: string, name: string, branch: string, cache_key: string, use_cache: bool}>  $latestRequests
      * @param  array<string, string>  $latestRequestAliases
-     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null}>  $latestResults
+     * @param  array<string, array{0: array<string, mixed>|null, 1: string|null, 2: string|null}>  $latestResults
      */
     private function applyLatestCommitResults(array &$entries, array $absolutePaths, array $latestRequests, array $latestRequestAliases, array $latestResults): void
     {
@@ -462,14 +463,14 @@ class SoftwareSourceRepository
                 continue;
             }
 
-            [$latest, $error] = $latestResult;
-            $this->applyLatestCommit($entries[$key], $latest, $error, $absolutePaths[$key] ?? null);
+            [$latest, $error, $detail] = array_pad($latestResult, 3, null);
+            $this->applyLatestCommit($entries[$key], $latest, $error, $detail, $absolutePaths[$key] ?? null);
 
             if ($latest !== null && ($latestRequests[$key]['use_cache'] ?? false) === true) {
                 $cacheKey = (string) $latestRequests[$key]['cache_key'];
 
-                $this->latestCommitRuntimeCache[$cacheKey] = [$latest, $error];
-                Cache::put($cacheKey, [$latest, $error], self::REMOTE_STATUS_CACHE_SECONDS);
+                $this->latestCommitRuntimeCache[$cacheKey] = [$latest, $error, $detail];
+                Cache::put($cacheKey, [$latest, $error, $detail], self::REMOTE_STATUS_CACHE_SECONDS);
             }
         }
 
@@ -478,17 +479,19 @@ class SoftwareSourceRepository
                 continue;
             }
 
-            [$latest, $error] = $latestResults[$sourceKey];
-            $this->applyLatestCommit($entries[$key], $latest, $error, $absolutePaths[$key] ?? null);
+            [$latest, $error, $detail] = array_pad($latestResults[$sourceKey], 3, null);
+            $this->applyLatestCommit($entries[$key], $latest, $error, $detail, $absolutePaths[$key] ?? null);
         }
     }
 
     /**
-     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null}  $entry
+     * @param  array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null}  $entry
      * @param  array<string, mixed>|null  $latest
      */
-    private function applyLatestCommit(array &$entry, ?array $latest, ?string $error, ?string $path): void
+    private function applyLatestCommit(array &$entry, ?array $latest, ?string $error, ?string $errorDetail, ?string $path): void
     {
+        $entry['error_detail'] = $errorDetail;
+
         if ($latest === null) {
             $entry['error'] = $error;
 
