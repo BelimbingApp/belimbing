@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 SCRIPT = Path(__file__).with_name("claim.sh")
+CLAIM_BRANCH = "agent/composer-issue-42"
 
 
 class ClaimMultiRemoteTest(unittest.TestCase):
@@ -27,15 +28,10 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         seed = base / "seed"
         subprocess.run(["git", "init", "-q", "-b", "main", str(seed)], check=True, env=env)
         (seed / "README").write_text("base\n", encoding="utf-8")
-        subprocess.run(["git", "add", "."], cwd=seed, check=True, env=env)
-        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=seed, check=True, env=env)
-        subprocess.run(
-            ["git", "remote", "add", "origin", str(self.bare)],
-            cwd=seed,
-            check=True,
-            env=env,
-        )
-        subprocess.run(["git", "push", "-q", "-u", "origin", "main"], cwd=seed, check=True, env=env)
+        self.git(["add", "."], cwd=seed)
+        self.git(["commit", "-q", "-m", "base"], cwd=seed)
+        self.git(["remote", "add", "origin", str(self.bare)], cwd=seed)
+        self.git(["push", "-q", "-u", "origin", "main"], cwd=seed)
 
         self.clone = base / "checkout"
         subprocess.run(
@@ -43,30 +39,16 @@ class ClaimMultiRemoteTest(unittest.TestCase):
             check=True,
             env=env,
         )
-        # Prove the root checkout is a real branch before claiming.
-        head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(head, "main")
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), "main")
 
         # Second remote recreates the multi-remote layout that broke gh inference.
-        subprocess.run(
-            ["git", "remote", "add", "fork", str(self.bare)],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
+        self.git(["remote", "add", "fork", str(self.bare)])
 
         self.bin = base / "bin"
         self.bin.mkdir()
-        self.gh = self.bin / "gh"
         self.gh_log = base / "gh.log"
-        self.gh.write_text(
+        gh = self.bin / "gh"
+        gh.write_text(
             textwrap.dedent(
                 f"""\
                 #!/usr/bin/env bash
@@ -108,7 +90,7 @@ class ClaimMultiRemoteTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
-        self.gh.chmod(self.gh.stat().st_mode | stat.S_IXUSR)
+        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
 
     def tearDown(self):
         if self.clone.exists():
@@ -132,6 +114,24 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         )
         return env
 
+    def git(self, args: list[str], *, cwd: Path | None = None) -> None:
+        subprocess.run(
+            ["git", *args],
+            cwd=cwd or self.clone,
+            check=True,
+            env=self.git_env(),
+        )
+
+    def git_out(self, args: list[str], *, cwd: Path | None = None) -> str:
+        return subprocess.run(
+            ["git", *args],
+            cwd=cwd or self.clone,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=self.git_env(),
+        ).stdout.strip()
+
     def run_claim(self, *, worktree: Path, resume_branch: str | None = None) -> subprocess.CompletedProcess[str]:
         env = self.git_env()
         env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
@@ -147,24 +147,36 @@ class ClaimMultiRemoteTest(unittest.TestCase):
             text=True,
         )
 
+    def create_pushed_claim_branch(self, *, checkout: bool) -> str:
+        """Create CLAIM_BRANCH from origin/main, empty claim commit, push. Optionally stay checked out."""
+        self.git(["fetch", "-q", "origin", "main"])
+        if checkout:
+            self.git(["switch", "-c", CLAIM_BRANCH, "origin/main"])
+        else:
+            self.git(["branch", CLAIM_BRANCH, "origin/main"])
+            self.git(["switch", CLAIM_BRANCH])
+        self.git(["commit", "--allow-empty", "-q", "-m", "claim: #42"])
+        self.git(["push", "-q", "-u", "origin", CLAIM_BRANCH])
+        return CLAIM_BRANCH
+
+    def assert_claim_success(self, result: subprocess.CompletedProcess[str], *, resumed: bool = False) -> None:
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("claimed #42 in draft PR #99", result.stdout)
+        if resumed:
+            self.assertIn("resuming #42", result.stdout)
+
+    def assert_root_main_worktree_on_claim(self, worktree: Path) -> None:
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), "main")
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"], cwd=worktree), CLAIM_BRANCH)
+
     def test_claim_passes_head_on_multi_remote_checkout(self):
         worktree = Path(self.dir.name) / "wt-fresh"
         result = self.run_claim(worktree=worktree)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("claimed #42 in draft PR #99", result.stdout)
+        self.assert_claim_success(result)
         self.assertIn(f"worktree: {worktree}", result.stdout)
         self.assertIn("root checkout left on main", result.stdout)
-        head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=self.git_env(),
-        ).stdout.strip()
-        self.assertEqual(head, "main")
-        log = self.gh_log.read_text(encoding="utf-8")
-        self.assertRegex(log, r"pr create .*--head agent/composer-issue-42")
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), "main")
+        self.assertRegex(self.gh_log.read_text(encoding="utf-8"), r"pr create .*--head agent/composer-issue-42")
 
     def test_claim_without_head_would_have_failed_is_covered_by_stub(self):
         env = self.git_env()
@@ -180,211 +192,49 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         self.assertIn("--head flag", bad.stderr)
 
     def test_resume_opens_pr_when_branch_already_pushed(self):
-        branch = "agent/composer-issue-42"
-        env = self.git_env()
-        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
-        subprocess.run(["git", "branch", branch, "origin/main"], cwd=self.clone, check=True, env=env)
-        subprocess.run(["git", "push", "-q", "origin", branch], cwd=self.clone, check=True, env=env)
+        self.create_pushed_claim_branch(checkout=False)
+        self.git(["switch", "main"])
         worktree = Path(self.dir.name) / "wt-resume"
-        result = self.run_claim(worktree=worktree, resume_branch=branch)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("resuming #42", result.stdout)
-        self.assertIn("claimed #42 in draft PR #99", result.stdout)
+        result = self.run_claim(worktree=worktree, resume_branch=CLAIM_BRANCH)
+        self.assert_claim_success(result, resumed=True)
 
     def test_resume_from_root_on_abandoned_claim_branch_restores_main(self):
         """Exact post-failure state from old claim.sh: root still on claim branch."""
-        branch = "agent/composer-issue-42"
-        env = self.git_env()
-        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
-        subprocess.run(
-            ["git", "switch", "-c", branch, "origin/main"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-q", "-m", "claim: #42"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(["git", "push", "-q", "-u", "origin", branch], cwd=self.clone, check=True, env=env)
-        # Root is still on the claim branch — the failure mode under fix.
-        head_before = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(head_before, branch)
+        self.create_pushed_claim_branch(checkout=True)
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), CLAIM_BRANCH)
 
         worktree = Path(self.dir.name) / "wt-abandoned-root"
-        result = self.run_claim(worktree=worktree, resume_branch=branch)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("resuming #42", result.stdout)
-
-        root_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        worktree_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(root_head, "main")
-        self.assertEqual(worktree_head, branch)
+        result = self.run_claim(worktree=worktree, resume_branch=CLAIM_BRANCH)
+        self.assert_claim_success(result, resumed=True)
+        self.assert_root_main_worktree_on_claim(worktree)
         self.assertIn("root checkout left on main", result.stdout)
 
     def test_resume_repairs_existing_detached_worktree_and_root_on_claim(self):
         """Legacy half-claim: root on claim branch AND detached worktree already present."""
-        branch = "agent/composer-issue-42"
-        env = self.git_env()
-        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
-        subprocess.run(
-            ["git", "switch", "-c", branch, "origin/main"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-q", "-m", "claim: #42"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(["git", "push", "-q", "-u", "origin", branch], cwd=self.clone, check=True, env=env)
-
+        self.create_pushed_claim_branch(checkout=True)
         worktree = Path(self.dir.name) / "wt-detached-existing"
-        # Detached worktree at the claim tip while root still owns the branch.
-        subprocess.run(
-            ["git", "worktree", "add", "--detach", str(worktree), "HEAD"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        detached = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(detached, "HEAD")
+        self.git(["worktree", "add", "--detach", str(worktree), "HEAD"])
+        self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"], cwd=worktree), "HEAD")
 
-        result = self.run_claim(worktree=worktree, resume_branch=branch)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-        root_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        worktree_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(root_head, "main")
-        self.assertEqual(worktree_head, branch)
+        result = self.run_claim(worktree=worktree, resume_branch=CLAIM_BRANCH)
+        self.assert_claim_success(result, resumed=True)
+        self.assert_root_main_worktree_on_claim(worktree)
 
     def test_resume_preserves_unpushed_local_commits_on_existing_worktree(self):
         """Do not force-reset local half-claim commits onto origin when repairing."""
-        branch = "agent/composer-issue-42"
-        env = self.git_env()
-        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
-        subprocess.run(
-            ["git", "switch", "-c", branch, "origin/main"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-q", "-m", "claim: #42"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        subprocess.run(["git", "push", "-q", "-u", "origin", branch], cwd=self.clone, check=True, env=env)
-        # Local-only sentinel beyond the pushed tip.
-        subprocess.run(
-            ["git", "commit", "--allow-empty", "-q", "-m", "local-only sentinel"],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
-        sentinel = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        pushed = subprocess.run(
-            ["git", "rev-parse", f"origin/{branch}"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
+        self.create_pushed_claim_branch(checkout=True)
+        self.git(["commit", "--allow-empty", "-q", "-m", "local-only sentinel"])
+        sentinel = self.git_out(["rev-parse", "HEAD"])
+        pushed = self.git_out(["rev-parse", f"origin/{CLAIM_BRANCH}"])
         self.assertNotEqual(sentinel, pushed)
 
         worktree = Path(self.dir.name) / "wt-unpushed-local"
-        subprocess.run(
-            ["git", "worktree", "add", "--detach", str(worktree), pushed],
-            cwd=self.clone,
-            check=True,
-            env=env,
-        )
+        self.git(["worktree", "add", "--detach", str(worktree), pushed])
 
-        result = self.run_claim(worktree=worktree, resume_branch=branch)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-
-        root_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=self.clone,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        worktree_head = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        worktree_sha = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=worktree,
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-        ).stdout.strip()
-        self.assertEqual(root_head, "main")
-        self.assertEqual(worktree_head, branch)
-        self.assertEqual(worktree_sha, sentinel)
+        result = self.run_claim(worktree=worktree, resume_branch=CLAIM_BRANCH)
+        self.assert_claim_success(result, resumed=True)
+        self.assert_root_main_worktree_on_claim(worktree)
+        self.assertEqual(self.git_out(["rev-parse", "HEAD"], cwd=worktree), sentinel)
 
 
 if __name__ == "__main__":
