@@ -7,10 +7,12 @@
     'hasValue' => false,
     'showRevealButton' => false,
     'savedMask' => '******',
+    'revealSubject' => null,
 ])
 
 @php
-    $componentProps = ['label', 'error', 'required', 'id', 'help', 'hasValue', 'showRevealButton', 'savedMask', 'savedPlaceholder'];
+    $revealSubject = $revealSubject ?? __('secret');
+    $componentProps = ['label', 'error', 'required', 'id', 'help', 'hasValue', 'showRevealButton', 'savedMask', 'savedPlaceholder', 'revealSubject'];
     $inputAttributes = $attributes->except($componentProps);
     $savedMask = is_string($savedMask) && $savedMask !== '' ? $savedMask : '******';
     $maskCharacter = mb_substr($savedMask, 0, 1) ?: '*';
@@ -245,7 +247,7 @@
                 x-cloak
                 x-bind:disabled="! hasRealSecret()"
                 x-bind:class="reveal ? 'text-accent' : 'text-muted'"
-                x-bind:aria-label="reveal ? @js(__('Hide secret')) : @js(__('Show secret'))"
+                x-bind:aria-label="reveal ? @js(__('Hide :subject', ['subject' => $revealSubject])) : @js(__('Show :subject', ['subject' => $revealSubject]))"
                 x-bind:aria-pressed="reveal.toString()"
                 x-on:mousedown.prevent
                 x-on:click="toggleReveal()"
