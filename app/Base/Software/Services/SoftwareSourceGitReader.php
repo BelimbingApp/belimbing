@@ -158,6 +158,96 @@ final class SoftwareSourceGitReader
     }
 
     /**
+     * The platform checkout's framework-upstream remote, when one exists.
+     *
+     * Discovery order: the checkout's own `belimbing.upstream-remote` git config
+     * (an operator statement, so it wins), then a remote literally named
+     * `upstream` (the fork convention GitHub itself creates). The branch comes
+     * from `belimbing.upstream-branch` when set; otherwise it is resolved later
+     * from the remote's HEAD symref, so a non-default branch never has to be
+     * guessed. Null — not an error — when the checkout has no upstream remote:
+     * a non-fork deployment must render exactly as it does today.
+     *
+     * @return array{remote: string, branch: string|null, repo: string|null, url: string}|null
+     */
+    public function upstreamIdentity(string $path, int $timeout = 30): ?array
+    {
+        $repo = new GitRepository($path);
+        $remotes = $repo->remotes(timeout: $timeout);
+
+        if ($remotes === []) {
+            return null;
+        }
+
+        $configured = $repo->configValue('belimbing.upstream-remote', timeout: $timeout);
+        $remote = $configured !== null && in_array($configured, $remotes, true)
+            ? $configured
+            : (in_array('upstream', $remotes, true) ? 'upstream' : null);
+
+        if ($remote === null) {
+            return null;
+        }
+
+        $url = $repo->remoteUrl($remote, timeout: $timeout) ?? $repo->configuredRemoteUrl($remote);
+
+        if ($url === null) {
+            return null;
+        }
+
+        $identity = $this->githubRemoteIdentity($url);
+
+        return [
+            'remote' => $remote,
+            'branch' => $repo->configValue('belimbing.upstream-branch', timeout: $timeout),
+            'repo' => $identity !== null ? $identity[0].'/'.$identity[1] : null,
+            'url' => $url,
+        ];
+    }
+
+    /**
+     * Owner half of a GitHub upstream identity, for token lookup only.
+     */
+    public function upstreamOwner(?string $repo): ?string
+    {
+        return $repo !== null ? explode('/', $repo, 2)[0] : null;
+    }
+
+    /**
+     * Commit metadata for a SHA whose object may already be local; falls back to
+     * a metadata-less entry naming only the SHA when it is not.
+     *
+     * @return array{sha: string, short: string, date: string|null, ago: string|null, author: string, subject: string}
+     */
+    public function localObjectCommit(string $path, string $sha): array
+    {
+        return $this->remoteCommit($path, $sha);
+    }
+
+    /**
+     * @return array{0: array<string, mixed>|null, 1: string|null, 2: string|null} [commit, operator summary, raw git detail]
+     */
+    public function parseUpstreamHeadResult(string $path, string $label, string $branch, GitResult $result): array
+    {
+        if (! $result->ok) {
+            $detail = $result->message();
+
+            if ($this->isAuthFailure($detail)) {
+                return [null, (string) __('Upstream :label needs credentials to read.', ['label' => $label]), $detail];
+            }
+
+            return [null, (string) __('Could not read the upstream head for :label@:branch.', ['label' => $label, 'branch' => $branch]), $detail];
+        }
+
+        $sha = (string) strtok($result->output, " \t");
+
+        if ($sha === '' || preg_match('/^[a-f0-9]{40}$/i', $sha) !== 1) {
+            return [null, (string) __('Upstream response for :label@:branch did not include a commit SHA.', ['label' => $label, 'branch' => $branch]), $result->output];
+        }
+
+        return [$this->remoteCommit($path, $sha), null, null];
+    }
+
+    /**
      * @param  list<string>  $args
      */
     public function output(string $path, array $args, int $timeout = 60): ?string
