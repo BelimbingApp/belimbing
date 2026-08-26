@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Database\Livewire\Residue\Index;
 use App\Core\User\Livewire\Settings\DeleteUserForm;
 use App\Core\User\Livewire\Settings\Profile;
 use App\Core\User\Models\User;
@@ -86,4 +87,13 @@ test('correct password must be provided to delete account', function () {
     $response->assertHasErrors(['password']);
 
     expect($user->fresh())->not->toBeNull();
+});
+
+test('destructive acknowledgment phrases stay on the irreversibility convention', function () {
+    expect(DeleteUserForm::CONFIRM_PHRASE)
+        ->toBe('THIS CANNOT BE UNDONE')
+        ->and(Index::CONFIRM_PHRASE)
+        ->toBe('THIS CANNOT BE UNDONE')
+        ->and(DeleteUserForm::CONFIRM_PHRASE)
+        ->toBe(Index::CONFIRM_PHRASE);
 });

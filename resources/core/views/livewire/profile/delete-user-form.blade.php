@@ -14,7 +14,7 @@
                 <h3 class="text-xl font-semibold">{{ __('Are you sure you want to delete your account?') }}</h3>
 
                 <p class="text-muted mt-2">
-                    {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Enter your password and type :phrase to confirm.', ['phrase' => \App\Core\User\Livewire\Settings\DeleteUserForm::CONFIRM_PHRASE]) }}
+                    {{ __('Once your account is deleted, all of its resources and data will be permanently deleted. Please enter your password to confirm you would like to permanently delete your account.') }}
                 </p>
             </div>
 
