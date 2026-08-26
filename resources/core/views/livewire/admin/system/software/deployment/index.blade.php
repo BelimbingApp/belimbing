@@ -608,6 +608,21 @@
                                     @endif
                                 </div>
                             @endif
+                            @if (($s['key'] ?? null) === 'platform')
+                                <div class="mt-1.5 text-xs text-muted" wire:key="upstream-sync-gate">
+                                    <span class="font-medium">{{ __('Upstream sync') }}</span>
+                                    @if ($upstreamSync['allowed'] ?? false)
+                                        <span>{{ __('Available for this installation.') }}</span>
+                                        <button
+                                            type="button"
+                                            wire:click="prepareUpstreamSync"
+                                            class="ml-1 underline"
+                                        >{{ __('Prepare…') }}</button>
+                                    @else
+                                        <span>{{ $upstreamSync['reason'] ?? __('Unavailable.') }}</span>
+                                    @endif
+                                </div>
+                            @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-sm text-muted">{{ $s['branch'] ?? '—' }}</td>
                         <td class="px-table-cell-x py-table-cell-y align-top">

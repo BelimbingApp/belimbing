@@ -4,6 +4,7 @@ namespace App\Base\Software\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Software\Exceptions\UpstreamSyncUnavailableException;
 use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
@@ -11,6 +12,7 @@ use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\SoftwareSourceGitReader;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
+use App\Base\Software\Services\UpstreamSyncGate;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -209,11 +211,30 @@ class Index extends Component
             ->all();
     }
 
+    /**
+     * Server-side proof of the upstream-sync gate (lane 2). No synchronization
+     * work happens here — lane 3 will replace this stub with real preparation.
+     */
+    public function prepareUpstreamSync(UpstreamSyncGate $gate): void
+    {
+        try {
+            $gate->assertCanSync(Actor::forUser(Auth::user()));
+        } catch (UpstreamSyncUnavailableException $exception) {
+            abort(403, $exception->getMessage());
+        }
+
+        $this->dispatch('notify', [
+            'type' => 'info',
+            'message' => __('Upstream synchronization is enabled for this installation, but preparation is not implemented yet.'),
+        ]);
+    }
+
     public function render(
         DeploymentService $deployment,
         DeploymentRunHistory $history,
         SoftwareUpdateLauncher $launcher,
         PhpExtensionDriftProbe $extensionDrift,
+        UpstreamSyncGate $upstreamSyncGate,
     ): View {
         $status = $this->latestStatusLoaded
             ? $deployment->status()
@@ -259,10 +280,19 @@ class Index extends Component
             ? (string) $this->log[$lastLogKey]
             : (string) __('No update has run in this session.');
 
+        $actor = Actor::forUser(Auth::user());
+        $upstreamSync = $upstreamSyncGate->availability($actor);
+        if ($upstreamSync['reason_code'] !== null) {
+            $upstreamSync['reason'] = $upstreamSyncGate->reasonMessage($upstreamSync['reason_code']);
+        } else {
+            $upstreamSync['reason'] = null;
+        }
+
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
             'statusCollectedAt' => $statusCollectedAt,
             'latestStatusLoaded' => $this->latestStatusLoaded,
+            'upstreamSync' => $upstreamSync,
             // Split so the banner can lead with the right advice. Telling an
             // operator that public repositories do not need a token, when the
             // failure was git asking for a username, sends them to check the repo
