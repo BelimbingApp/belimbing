@@ -91,8 +91,14 @@ class Company extends Model
      */
     public function resolveRouteBindingQuery($query, $value, $field = null): Builder
     {
-        return parent::resolveRouteBindingQuery($query, $value, $field)
-            ->forTenant(app(TenantContext::class)->requireTenantId());
+        $query = parent::resolveRouteBindingQuery($query, $value, $field);
+        $tenantId = app(TenantContext::class)->currentTenantId();
+
+        if ($tenantId === null) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->forTenant($tenantId);
     }
 
     /**
