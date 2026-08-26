@@ -5,6 +5,9 @@
         tabsId   — Stable, page-unique ID shared by this tab set and its panels
         tabs     — Array of tab definitions: [['id' => 'general', 'label' => 'General'], ...]
                    Each item must have 'id' and 'label'; optional 'icon' for a Heroicon name.
+                   Optional 'href' turns that tab into an in-app link (`wire:navigate`). Use when
+                   each tab is a distinct route (deep links / back-forward stay honest). Prefer
+                   `persistence="none"` and a server-driven `default` for href tabs.
         default  — ID of the initially active tab (falls back to first tab)
         size     — Density: 'md' (default) or 'sm'
         persistence — 'hash' (default), 'query', or 'none'
@@ -48,6 +51,14 @@
 
     $defaultTab = $default ?? ($tabs[0]['id'] ?? null);
 
+    $tabHrefs = collect($tabs)
+        ->mapWithKeys(fn (array $tab): array => [
+            (string) $tab['id'] => isset($tab['href']) && is_string($tab['href']) && $tab['href'] !== ''
+                ? $tab['href']
+                : null,
+        ])
+        ->all();
+
     $sizeClasses = match($size) {
         'sm' => [
             'tab' => 'px-3.5 py-1 text-sm',
@@ -75,6 +86,7 @@
     x-data="{
         activeTab: null,
         tabs: @js(collect($tabs)->pluck('id')->values()->all()),
+        tabHrefs: @js($tabHrefs),
         defaultTab: @js($defaultTab),
         persistence: @js($persistence),
         queryKey: @js($queryKey),
@@ -123,7 +135,22 @@
             }
         },
 
+        navigateHref(href) {
+            if (typeof window.Livewire !== 'undefined' && typeof window.Livewire.navigate === 'function') {
+                window.Livewire.navigate(href)
+                return
+            }
+
+            window.location.assign(href)
+        },
+
         select(tabId) {
+            const href = this.tabHrefs[tabId] ?? null
+            if (href) {
+                this.navigateHref(href)
+                return
+            }
+
             this.activeTab = tabId
 
             if (this.wireAction && typeof this.$wire !== 'undefined') {
@@ -167,7 +194,7 @@
 
             this.select(this.tabs[newIdx])
 
-            {{-- Move focus to the newly activated tab button --}}
+            {{-- Move focus to the newly activated tab trigger --}}
             this.$nextTick(() => {
                 const tabEl = this.$refs.tablist?.querySelector('[data-tab-id=\'' + this.tabs[newIdx] + '\']')
                 tabEl?.focus()
@@ -183,33 +210,67 @@
         class="{{ $variantClasses['list'] }}"
     >
         @foreach($tabs as $tab)
-            <button
-                type="button"
-                role="tab"
-                data-tab-id="{{ $tab['id'] }}"
-                id="{{ $tabsId }}-tab-{{ $tab['id'] }}"
-                :aria-selected="isActive('{{ $tab['id'] }}') ? 'true' : 'false'"
-                aria-controls="{{ $tabsId }}-panel-{{ $tab['id'] }}"
-                :tabindex="isActive('{{ $tab['id'] }}') ? '0' : '-1'"
-                @click="select('{{ $tab['id'] }}')"
-                class="{{ $variantClasses['tab'] }}"
-                :class="isActive('{{ $tab['id'] }}') ? '{{ $variantClasses['active'] }}' : '{{ $variantClasses['inactive'] }}'"
-            >
-                @if(isset($tab['icon']))
-                    <span class="inline-flex items-center gap-1.5">
-                        <x-icon :name="$tab['icon']" class="{{ $sizeClasses['icon'] }}" />
-                        <span>{{ $tab['label'] }}</span>
-                    </span>
-                @else
-                    {{ $tab['label'] }}
-                @endif
+            @php
+                $tabId = (string) $tab['id'];
+                $tabHref = $tabHrefs[$tabId] ?? null;
+            @endphp
+            @if ($tabHref !== null)
+                <a
+                    href="{{ $tabHref }}"
+                    wire:navigate
+                    role="tab"
+                    data-tab-id="{{ $tabId }}"
+                    id="{{ $tabsId }}-tab-{{ $tabId }}"
+                    :aria-selected="isActive('{{ $tabId }}') ? 'true' : 'false'"
+                    aria-controls="{{ $tabsId }}-panel-{{ $tabId }}"
+                    :tabindex="isActive('{{ $tabId }}') ? '0' : '-1'"
+                    @click.prevent="select('{{ $tabId }}')"
+                    class="{{ $variantClasses['tab'] }}"
+                    :class="isActive('{{ $tabId }}') ? '{{ $variantClasses['active'] }}' : '{{ $variantClasses['inactive'] }}'"
+                >
+                    @if(isset($tab['icon']))
+                        <span class="inline-flex items-center gap-1.5">
+                            <x-icon :name="$tab['icon']" class="{{ $sizeClasses['icon'] }}" />
+                            <span>{{ $tab['label'] }}</span>
+                        </span>
+                    @else
+                        {{ $tab['label'] }}
+                    @endif
 
-                {{-- Active underline indicator --}}
-                <span
-                    x-show="isActive('{{ $tab['id'] }}')"
-                    class="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full"
-                ></span>
-            </button>
+                    <span
+                        x-show="isActive('{{ $tabId }}')"
+                        class="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full"
+                    ></span>
+                </a>
+            @else
+                <button
+                    type="button"
+                    role="tab"
+                    data-tab-id="{{ $tabId }}"
+                    id="{{ $tabsId }}-tab-{{ $tabId }}"
+                    :aria-selected="isActive('{{ $tabId }}') ? 'true' : 'false'"
+                    aria-controls="{{ $tabsId }}-panel-{{ $tabId }}"
+                    :tabindex="isActive('{{ $tabId }}') ? '0' : '-1'"
+                    @click="select('{{ $tabId }}')"
+                    class="{{ $variantClasses['tab'] }}"
+                    :class="isActive('{{ $tabId }}') ? '{{ $variantClasses['active'] }}' : '{{ $variantClasses['inactive'] }}'"
+                >
+                    @if(isset($tab['icon']))
+                        <span class="inline-flex items-center gap-1.5">
+                            <x-icon :name="$tab['icon']" class="{{ $sizeClasses['icon'] }}" />
+                            <span>{{ $tab['label'] }}</span>
+                        </span>
+                    @else
+                        {{ $tab['label'] }}
+                    @endif
+
+                    {{-- Active underline indicator --}}
+                    <span
+                        x-show="isActive('{{ $tabId }}')"
+                        class="absolute bottom-0 inset-x-0 h-0.5 bg-accent rounded-full"
+                    ></span>
+                </button>
+            @endif
         @endforeach
     </div>
 
