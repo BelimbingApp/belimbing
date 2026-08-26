@@ -163,14 +163,16 @@ ensure_worktree() {
   if [[ -d "$worktree" ]]; then
     # Old claim.sh often left a detached worktree at the claim tip. Accepting
     # the directory alone exits "success" while the author lane stays detached;
-    # repair by attaching (or recreating) the claim branch here.
+    # repair by attaching the claim branch without discarding local commits.
     (
       cd "$worktree"
-      if [[ $remote_branch -eq 1 ]]; then
+      if [[ $local_branch -eq 1 ]]; then
+        # Preserve any unpushed local tip — do not -C reset onto origin.
+        git switch "$branch"
+      elif [[ $remote_branch -eq 1 ]]; then
         git fetch -q origin "$branch"
-        git switch -C "$branch" "origin/$branch"
-      elif [[ $local_branch -eq 1 ]]; then
-        git switch -C "$branch"
+        git switch -c "$branch" --track "origin/$branch" 2>/dev/null \
+          || git switch -c "$branch" "origin/$branch"
       else
         echo "cannot attach worktree for missing branch $branch" >&2
         exit 2

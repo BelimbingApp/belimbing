@@ -304,6 +304,88 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         self.assertEqual(root_head, "main")
         self.assertEqual(worktree_head, branch)
 
+    def test_resume_preserves_unpushed_local_commits_on_existing_worktree(self):
+        """Do not force-reset local half-claim commits onto origin when repairing."""
+        branch = "agent/composer-issue-42"
+        env = self.git_env()
+        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
+        subprocess.run(
+            ["git", "switch", "-c", branch, "origin/main"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-q", "-m", "claim: #42"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        subprocess.run(["git", "push", "-q", "-u", "origin", branch], cwd=self.clone, check=True, env=env)
+        # Local-only sentinel beyond the pushed tip.
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-q", "-m", "local-only sentinel"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        sentinel = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=self.clone,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        pushed = subprocess.run(
+            ["git", "rev-parse", f"origin/{branch}"],
+            cwd=self.clone,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        self.assertNotEqual(sentinel, pushed)
+
+        worktree = Path(self.dir.name) / "wt-unpushed-local"
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(worktree), pushed],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+
+        result = self.run_claim(worktree=worktree, resume_branch=branch)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        root_head = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=self.clone,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        worktree_head = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        worktree_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        self.assertEqual(root_head, "main")
+        self.assertEqual(worktree_head, branch)
+        self.assertEqual(worktree_sha, sentinel)
+
 
 if __name__ == "__main__":
     unittest.main()
