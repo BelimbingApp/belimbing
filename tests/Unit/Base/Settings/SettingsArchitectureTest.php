@@ -5,6 +5,8 @@ use App\Base\Settings\Services\SettingDefinitionRegistry;
 use Illuminate\Support\Facades\File;
 use Tests\TestCase;
 
+const GLOBAL_ENV_FUNCTION_PATTERN = '/(?<!->)(?<!::)\benv\s*\(/';
+
 uses(TestCase::class);
 
 it('derives editable field semantics from the canonical definition', function (): void {
@@ -95,13 +97,19 @@ it('allows env reads only in configuration files', function (): void {
 
             $contents = File::get($file->getPathname());
 
-            if (! preg_match('/\benv\s*\(/', $contents)) {
+            if (! preg_match(GLOBAL_ENV_FUNCTION_PATTERN, $contents)) {
                 continue;
             }
 
             expect(str_replace('\\', '/', $file->getPathname()))->toContain('/Config/');
         }
     }
+});
+
+it('distinguishes global env helpers from object and static env methods', function (): void {
+    expect('env(\'APP_ENV\')')->toMatch(GLOBAL_ENV_FUNCTION_PATTERN)
+        ->and('$process->env([\'GIT_TERMINAL_PROMPT\' => \'0\'])')->not->toMatch(GLOBAL_ENV_FUNCTION_PATTERN)
+        ->and('Process::env([\'GIT_TERMINAL_PROMPT\' => \'0\'])')->not->toMatch(GLOBAL_ENV_FUNCTION_PATTERN);
 });
 
 it('does not expose caller-owned defaults or encryption through SettingsService calls', function (): void {
