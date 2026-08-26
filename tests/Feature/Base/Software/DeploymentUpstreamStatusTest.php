@@ -180,6 +180,33 @@ test('an unreachable upstream is a stated failure on the upstream line, not an e
         ->and($upstream['error'])->not->toBeNull();
 });
 
+test('an unreadable origin never substitutes the installed HEAD for the fork head', function (): void {
+    // The SBG shape: origin (the fork) is unreadable — lapsed credentials — while
+    // the checkout carries unpushed local commits, so installed HEAD and fork head
+    // genuinely differ. The relationship must become unknown with a stated reason,
+    // not the installed checkout's relationship presented as the fork's.
+    fakeUpstreamGit(counts: [0, 3]);
+
+    Process::fake(function ($process) {
+        $command = gitCommandWithoutConfig($process->command);
+
+        if ($command === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master']) {
+            return Process::result(errorOutput: 'fatal: could not read Username for https://github.com', exitCode: 128);
+        }
+
+        return fakeUpstreamGitResultForAnonymous($command) ?? Process::result();
+    });
+
+    $upstream = platformUpstream();
+
+    expect($upstream)->not->toBeNull()
+        ->and($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA)
+        ->and($upstream['relationship'])->toBeNull()
+        ->and($upstream['ahead'])->toBeNull()
+        ->and($upstream['behind'])->toBeNull()
+        ->and($upstream['reason'])->toContain('fork head could not be read');
+});
+
 test('non-default upstream remote and branch names configured in git config are honoured', function (): void {
     fakeUpstreamGit(remote: 'framework', configuredRemote: 'framework', configuredBranch: 'stable', counts: [1, 0]);
 
@@ -230,6 +257,7 @@ function fakeUpstreamGitResultForAnonymous(array $command): mixed
         ['git', 'config', '--get', 'belimbing.upstream-branch'] => Process::result('', exitCode: 1),
         ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
         ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
+        ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD"),
         ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## master...origin/master'),
         ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('master'),
         ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(UPSTREAM_LOCAL_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),

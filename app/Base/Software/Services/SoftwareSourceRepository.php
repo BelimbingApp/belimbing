@@ -161,9 +161,17 @@ class SoftwareSourceRepository
         ];
 
         if ($head !== null) {
-            $forkSha = $entries['platform']['latest']['sha'] ?? $entries['platform']['current']['sha'] ?? null;
+            // The fork head only — never the installed HEAD. `latest` (origin) and
+            // `current` (local checkout) are distinct roles in #344's model, and the
+            // UI labels every relationship statement "fork". On the deployment this
+            // feature targets, origin can be unreadable (lapsed credentials, #300)
+            // while local commits sit unpushed, so substituting `current` would
+            // silently report the installed checkout's relationship as the fork's.
+            $forkSha = $entries['platform']['latest']['sha'] ?? null;
 
-            if ($forkSha !== null) {
+            if ($forkSha === null) {
+                $upstream['reason'] = (string) __('The fork head could not be read from origin, so the fork-to-upstream relationship is unknown.');
+            } else {
                 // base = upstream head, tip = fork head: `behind` counts commits only
                 // upstream has, `ahead` commits only the fork has. Contained means the
                 // fork already carries every upstream commit; a fork with nothing of
