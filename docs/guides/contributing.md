@@ -69,6 +69,12 @@ bun run build
 > setup command never rewrites dependency state). A test that does not need the layout can
 > call `$this->withoutVite()` instead. CI builds assets before testing, so
 > this bites only local runs.
+>
+> **Git worktree?** A worktree starts without `vendor/`, `public/build/`, and
+> `.env`. **Copy** them from the main checkout — never symlink `vendor/`: the
+> Composer autoloader computes `$baseDir` from `dirname(__DIR__)`, which
+> resolves through the symlink back to the main checkout, so the suite passes
+> while silently testing that checkout's branch instead of the worktree's.
 
 5. Commit with a clear message.
 
