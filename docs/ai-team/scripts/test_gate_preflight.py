@@ -525,7 +525,7 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("body closes #42", result.stdout)
         self.assertIn("GATE: PASS", result.stdout)
 
-    def test_underviable_lane_issue_fails_the_gate(self):
+    def test_underivable_lane_issue_fails_the_gate(self):
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
             reviewed=self.head_sha,
