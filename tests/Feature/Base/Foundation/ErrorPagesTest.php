@@ -1,6 +1,8 @@
 <?php
 
 use App\Base\Software\Services\DeploymentMaintenanceGuard;
+use App\Base\Tenancy\Contracts\TenantContext;
+use App\Core\User\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -79,6 +81,29 @@ it('returns a JSON 404 for unmatched URLs when the client expects JSON', functio
     $this->getJson('/definitely-not-a-real-api-endpoint')
         ->assertNotFound()
         ->assertExactJson(['message' => __('Not Found.')]);
+});
+
+it('renders a tenantless boundary failure as a standalone 404 page', function (): void {
+    Route::get('/tenant-context-required', fn () => app(TenantContext::class)->requireTenantId())
+        ->middleware(['web', 'auth']);
+    $user = User::factory()->create(['company_id' => null]);
+
+    $this->actingAs($user)
+        ->get('/tenant-context-required')
+        ->assertNotFound()
+        ->assertSee(__('Page not found'), false)
+        ->assertDontSee(__('Toggle sidebar'), false);
+});
+
+it('returns a JSON 404 for a tenantless boundary failure', function (): void {
+    Route::get('/tenant-context-required-json', fn () => app(TenantContext::class)->requireTenantId())
+        ->middleware(['web', 'auth']);
+    $user = User::factory()->create(['company_id' => null]);
+
+    $this->actingAs($user)
+        ->getJson('/tenant-context-required-json')
+        ->assertNotFound()
+        ->assertJson(['reason_code' => 'tenant_context_missing']);
 });
 
 it('renders a self-retrying maintenance page for manual downtime', function (): void {

@@ -111,9 +111,6 @@
             if (mode === 'utc') return 'UTC';
             return this.companyTzExplicit ? this.tzCity(this.companyTz) : '{{ __('(not set)') }}';
         },
-        goToCompanyTimezoneSettings() {
-            window.location.href = this.companyTimezoneSettingsUrl;
-        },
         setTz(mode) {
             if (this.tzSaving || mode === this.tzMode) { this.tzOpen = false; return; }
             this.tzSaving = true;
@@ -143,7 +140,7 @@
             <div class="relative" @click.outside="tzOpen = false" @keydown.escape.window="tzOpen = false">
                 <button
                     type="button"
-                    @click="(tzMode === 'company' && !companyTzExplicit && companyTimezoneSettingsUrl) ? goToCompanyTimezoneSettings() : tzOpen = !tzOpen"
+                    @click="tzOpen = !tzOpen"
                     :disabled="tzSaving"
                     class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded hover:bg-surface-subtle transition-colors"
                     :class="[
@@ -172,6 +169,20 @@
                     class="absolute right-0 top-full mt-0 w-64 bg-surface-card border border-border-default rounded-lg shadow-lg py-1 z-50"
                     role="menu"
                 >
+                    @if (! $companyTzExplicit && $companyTimezoneSettingsUrl !== null)
+                        <x-ui.link
+                            :href="$companyTimezoneSettingsUrl"
+                            :navigate="false"
+                            role="menuitem"
+                            class="w-full justify-start border-b border-border-default px-3 py-2 text-left no-underline hover:bg-surface-subtle"
+                        >
+                            <span class="flex flex-col leading-tight">
+                                <span>{{ __('No company timezone set') }}</span>
+                                <span class="text-muted text-[10px]">{{ __('Choose one in company settings.') }}</span>
+                            </span>
+                        </x-ui.link>
+                    @endif
+
                     @foreach (\App\Base\DateTime\Enums\TimezoneMode::cases() as $mode)
                         <button
                             type="button"
