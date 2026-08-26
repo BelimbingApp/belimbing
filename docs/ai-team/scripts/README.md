@@ -12,6 +12,10 @@ The scheduled blocked-task workflow remains under `.github/workflows/` because
 GitHub owns its trigger and permissions; its implementation and tests live here
 with the board contract they enforce.
 
+`blocked_by_sweep.py` is a Python entry point, not a shell command. Run it as
+`python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
+required `GITHUB_REPOSITORY` and `GITHUB_TOKEN` environment variables).
+
 ## Running the mechanism tests
 
 ```bash
