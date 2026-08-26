@@ -48,14 +48,14 @@ beforeEach(function (): void {
     app(SettingsService::class)->forget('system.update.frankenphp.reload_state');
 });
 
-function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null): void
+function fakeDeploymentUpdateProcesses(string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): void
 {
-    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha) {
-        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha) ?? Process::result();
+    Process::fake(function ($process) use ($sha, $remoteError, $remoteSha, $pullError) {
+        return fakeDeploymentUpdateGitResult($process->command, $sha, $remoteError, $remoteSha, $pullError) ?? Process::result();
     });
 }
 
-function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null): mixed
+function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_UPDATE_SHA, ?string $remoteError = null, ?string $remoteSha = null, ?string $pullError = null): mixed
 {
     // When $remoteSha is null, the remote HEAD matches the local SHA so sources
     // report up_to_date. Pass a distinct $remoteSha to simulate a source that
@@ -71,7 +71,9 @@ function fakeDeploymentUpdateGitResult(array $command, string $sha = DEPLOYMENT_
             ? Process::result($remoteSha."\trefs/heads/main")
             : Process::result(errorOutput: $remoteError, exitCode: 1),
         ['git', 'show', '-s', DEPLOYMENT_UPDATE_LOG_FORMAT, $remoteSha] => Process::result($remoteSha."\x1f".now()->toIso8601String().DEPLOYMENT_UPDATE_COMMIT_TRAILER),
-        ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => Process::result('Already up to date.'),
+        ['git', 'pull', DEPLOYMENT_UPDATE_FF_ONLY] => $pullError === null
+            ? Process::result('Already up to date.')
+            : Process::result(errorOutput: $pullError, exitCode: 1),
         default => null,
     };
 }
@@ -942,6 +944,44 @@ test('updating the platform pulls, refreshes runtime artifacts, migrates, and re
     Process::assertRan(fn ($process): bool => deploymentCommandContains($process->command, 'migrate')
         && deploymentCommandContains($process->command, '--force')
         && deploymentCommandContains($process->command, '--no-interaction'));
+});
+
+test('a failed source pull halts before refreshing PHP dependencies', function (): void {
+    fakeDeploymentUpdateProcesses(pullError: 'fatal: authentication failed');
+    Http::fake();
+
+    $log = app(DeploymentService::class)->update(['platform']);
+
+    expect($log)->toContain('FAILED: fatal: authentication failed')
+        ->and($log)->toContain('FAILED: source pull did not complete; deployment halted before dependency refresh, migrations and reload.')
+        ->and($log)->not->toContain('Refreshing autoloader…')
+        ->and($log)->not->toContain('Building frontend assets…')
+        ->and($log)->not->toContain('Running migrations…');
+
+    Process::assertNotRan(fn ($process): bool => deploymentCommandContains($process->command, 'composer')
+        || deploymentCommandContains($process->command, 'dump-autoload'));
+    Http::assertNothingSent();
+});
+
+test('a failed Composer refresh keeps its dependency failure wording', function (): void {
+    Process::fake(function ($process) {
+        if (deploymentCommandContains($process->command, 'dump-autoload')) {
+            return Process::result(errorOutput: 'composer: autoload refresh failed', exitCode: 1);
+        }
+
+        return fakeDeploymentUpdateGitResult($process->command) ?? Process::result();
+    });
+    Http::fake();
+
+    $log = app(DeploymentService::class)->update(['platform']);
+
+    expect($log)->toContain('Autoload refresh failed: composer: autoload refresh failed')
+        ->and($log)->toContain('FAILED: dependency refresh did not complete; deployment halted before migrations and reload.')
+        ->and($log)->not->toContain('FAILED: source pull did not complete; deployment halted before dependency refresh, migrations and reload.')
+        ->and($log)->not->toContain('Building frontend assets…')
+        ->and($log)->not->toContain('Running migrations…');
+
+    Http::assertNothingSent();
 });
 
 test('a failed frontend rebuild halts the deployment before migrations and reload', function (): void {
