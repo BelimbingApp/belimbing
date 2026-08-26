@@ -139,14 +139,33 @@ rollback_partial_claim() {
   git branch -D "$branch" >/dev/null 2>&1 || true
 }
 
+# Old claim.sh left the shared root on the claim branch after a failed
+# gh pr create. Resume must free that checkout before attaching the branch
+# to the lane worktree, then leave root on main.
+restore_root_off_claim() {
+  local current
+  current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+  if [[ "$current" != "$branch" ]]; then
+    return 0
+  fi
+  if git show-ref --verify --quiet refs/heads/main; then
+    git switch -q main
+  else
+    git switch -q -c main origin/main
+  fi
+}
+
 ensure_worktree() {
   if [[ -d "$worktree" ]]; then
     return 0
   fi
-  if [[ $remote_branch -eq 1 ]]; then
-    git worktree add "$worktree" "origin/$branch"
-  elif [[ $local_branch -eq 1 ]]; then
+  restore_root_off_claim
+  if [[ $local_branch -eq 1 ]]; then
+    # Prefer the local branch ref so the worktree is not detached.
     git worktree add "$worktree" "$branch"
+  elif [[ $remote_branch -eq 1 ]]; then
+    git worktree add -b "$branch" "$worktree" "origin/$branch"
+    local_branch=1
   else
     echo "cannot attach worktree for missing branch $branch" >&2
     exit 2
@@ -156,6 +175,7 @@ ensure_worktree() {
 git fetch -q origin main
 
 if [[ $resume -eq 0 ]]; then
+  restore_root_off_claim
   git worktree add -b "$branch" "$worktree" origin/main
   (
     cd "$worktree"
@@ -167,6 +187,7 @@ if [[ $resume -eq 0 ]]; then
     exit 1
   }
   remote_branch=1
+  local_branch=1
 else
   ensure_worktree
   # Ensure the remote tip exists for --head (local-only half claims).
@@ -207,6 +228,8 @@ pr=${pr_url##*/}
 
 gh pr edit "$pr" --repo "$repo" --add-label "agent:$agent" --add-label task:active
 gh issue edit "$issue" --repo "$repo" --add-label "agent:$agent" --remove-label task:ready --add-label task:active
+
+restore_root_off_claim
 
 echo "claimed #$issue in draft PR #$pr ($pr_url) as agent:$agent"
 echo "worktree: $worktree"
