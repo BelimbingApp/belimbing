@@ -188,7 +188,9 @@ latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
         else ""
         end)}
    | . + {verdict:
-       (if .state == "CHANGES_REQUESTED"
+       (if .state == "DISMISSED"
+        then ""
+        elif .state == "CHANGES_REQUESTED"
         then "changes required"
         elif (.explicit_verdicts | length) > 1
         then ""
@@ -200,7 +202,7 @@ latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
         then "accept"
         else ""
         end)}
-   | select(.agent != "" and .verdict != "")]
+   | select(.agent != "")]
   | sort_by(.agent, .submitted_at, .id)
   | group_by(.agent)
   | map(last)

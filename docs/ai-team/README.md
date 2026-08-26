@@ -391,9 +391,11 @@ marker. A `COMMENTED` review needs the exact verdict line because shared GitHub
 accounts cannot approve their own account's PR. `gate.sh` requires
 `task:review`, exactly one PR `agent:<id>` author lane, and a latest exact-head
 acceptance from a different stable id; a later exact-head `changes required`
-verdict from that reviewer supersedes their earlier acceptance. A review body
-with conflicting `From` identities or verdicts is ambiguous and ignored by the
-gate; repeat a marker only when it names the same identity or verdict.
+verdict from that reviewer supersedes their earlier acceptance. The latest
+attributable exact-head review also revokes an older acceptance when its verdict
+is missing, conflicting, or dismissed. A review body with conflicting `From`
+identities is unattributable; conflicting verdicts are invalid. Repeat a marker
+only when it names the same identity or verdict.
 
 **`accept with follow-up` is not the default.** Use it when the finding is
 genuinely separable — a different module, a decision someone else owns, or a

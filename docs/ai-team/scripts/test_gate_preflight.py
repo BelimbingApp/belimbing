@@ -381,6 +381,50 @@ class GateMechanismTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("independent exact-head changes required by reviewer", result.stdout)
 
+    def test_latest_ambiguous_verdict_revokes_an_earlier_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[
+                {
+                    "id": 1,
+                    "state": "COMMENTED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                },
+                {
+                    "id": 2,
+                    "state": "COMMENTED",
+                    "body": (
+                        "**From:** reviewer\n\n"
+                        "**Verdict:** accept\n"
+                        "**Verdict:** changes required"
+                    ),
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:01:00Z",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("no independent exact-head changes-required verdict", result.stdout)
+
+    def test_dismissed_review_cannot_authorize_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "DISMISSED",
+                "body": "**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
     def test_task_active_is_not_a_ready_handoff(self):
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
