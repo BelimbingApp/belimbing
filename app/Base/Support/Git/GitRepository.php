@@ -128,9 +128,79 @@ final class GitRepository
         return $this->run(['pull', '--ff-only'], authenticated: true, timeout: 180);
     }
 
-    public function lsRemoteHead(string $branch): GitResult
+    public function lsRemoteHead(string $branch, string $remote = 'origin'): GitResult
     {
-        return $this->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$branch], authenticated: true, timeout: 30);
+        return $this->run(['ls-remote', '--exit-code', $remote, 'refs/heads/'.$branch], authenticated: true, timeout: 30);
+    }
+
+    /**
+     * The remote's default branch and its head SHA in one network call.
+     * `ls-remote --symref <remote> HEAD` answers both anonymously for a public
+     * remote; null when the remote is unreachable or the output is unexpected.
+     *
+     * @return array{branch: string, sha: string}|null
+     */
+    public function lsRemoteDefaultBranch(string $remote, int $timeout = 30): ?array
+    {
+        $result = $this->run(['ls-remote', '--symref', $remote, 'HEAD'], authenticated: true, timeout: $timeout);
+
+        if (! $result->ok) {
+            return null;
+        }
+
+        $branch = null;
+        $sha = null;
+
+        foreach (preg_split('/\R/', $result->output) ?: [] as $line) {
+            if (preg_match('#^ref:\s+refs/heads/(\S+)\s+HEAD$#', $line, $matches) === 1) {
+                $branch = $matches[1];
+            } elseif (preg_match('/^([a-f0-9]{40})\s+HEAD$/i', $line, $matches) === 1) {
+                $sha = $matches[1];
+            }
+        }
+
+        return $branch !== null && $sha !== null ? ['branch' => $branch, 'sha' => $sha] : null;
+    }
+
+    /**
+     * @return list<string> configured remote names
+     */
+    public function remotes(int $timeout = 30): array
+    {
+        $output = $this->output(['remote'], timeout: $timeout);
+
+        if ($output === null || $output === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/\R/', $output) ?: [])));
+    }
+
+    /**
+     * A single `git config --get` value from this checkout, or null when unset.
+     */
+    public function configValue(string $key, int $timeout = 30): ?string
+    {
+        $value = $this->output(['config', '--get', $key], timeout: $timeout);
+
+        return $value !== null && $value !== '' ? $value : null;
+    }
+
+    /**
+     * How far $tip is ahead of / behind $base — two arbitrary commits, neither
+     * required to be HEAD. Null when either object isn't present locally.
+     *
+     * @return array{ahead: int, behind: int}|null
+     */
+    public function aheadBehindBetween(string $base, string $tip, int $timeout = 30): ?array
+    {
+        $counts = $this->output(['rev-list', '--left-right', '--count', $base.'...'.$tip], timeout: $timeout);
+
+        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+            return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
+        }
+
+        return null;
     }
 
     /**
