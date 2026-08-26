@@ -22,7 +22,16 @@ GH_STUB = textwrap.dedent(
     case "$1 $2" in
       "repo view") printf '%s\\n' "$GATE_TEST_CANONICAL" ;;
       "pr view")
-        printf '{"headRefOid":"%s","headRefName":"tb","isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","labels":%s}\\n' "$GATE_TEST_HEAD" "$GATE_TEST_LABELS"
+        body="${GATE_TEST_BODY:-Closes #42}"
+        branch="${GATE_TEST_BRANCH:-agent/author-issue-42}"
+        title="${GATE_TEST_TITLE:-Fix (#42)}"
+        jq -n \
+          --arg head "$GATE_TEST_HEAD" \
+          --arg branch "$branch" \
+          --arg title "$title" \
+          --arg body "$body" \
+          --argjson labels "$GATE_TEST_LABELS" \
+          '{headRefOid:$head,headRefName:$branch,title:$title,body:$body,isDraft:false,state:"OPEN",mergeable:"MERGEABLE",labels:$labels}'
         ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*check-runs*)
         printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
@@ -30,7 +39,7 @@ GH_STUB = textwrap.dedent(
       "api repos/$GATE_TEST_CANONICAL/commits/"*)
         [ -n "$GATE_TEST_RESOLVE" ] && printf '%s\\n' "$GATE_TEST_RESOLVE"
         ;;
-      "api repos/$GATE_TEST_CANONICAL/git/refs/heads/tb")
+      "api repos/$GATE_TEST_CANONICAL/git/refs/heads/"*)
         printf '%s\\n' "$GATE_TEST_HEAD"
         ;;
       "api repos/$GATE_TEST_CANONICAL/pulls/1/reviews")
@@ -119,6 +128,9 @@ class GateMechanismTest(unittest.TestCase):
         head: str | None = None,
         labels: list[str] | None = None,
         reviews: list[dict[str, object]] | None = None,
+        body: str | None = None,
+        branch: str | None = None,
+        title: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         base = Path(self.dir.name)
         checkout = base / "checkout"
@@ -145,6 +157,12 @@ class GateMechanismTest(unittest.TestCase):
         effective_head = head or self.head_sha
         env["GATE_TEST_HEAD"] = effective_head
         env["GATE_TEST_RESOLVE"] = resolve
+        if body is not None:
+            env["GATE_TEST_BODY"] = body
+        if branch is not None:
+            env["GATE_TEST_BRANCH"] = branch
+        if title is not None:
+            env["GATE_TEST_TITLE"] = title
         effective_labels = labels if labels is not None else ["task:review", "agent:author"]
         env["GATE_TEST_LABELS"] = json.dumps([
             {"name": label} for label in effective_labels
@@ -481,6 +499,78 @@ class GateMechanismTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("re-review the new head", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_missing_closes_keyword_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="**From:** author\n\nImplementation notes only.\n",
+            title="Deployment gate (#42)",
+            branch="agent/author-issue-42",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no closing reference to #42", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_closes_keyword_for_lane_issue_passes(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="**From:** author\n\nCloses #42\n",
+            title="Deployment gate (#42)",
+            branch="agent/author-issue-42",
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("body closes #42", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_conflicting_title_and_branch_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="Closes #99\n",
+            title="Backport context (#99) for lane (#42)",
+            branch="agent/author-issue-42",
+        )
+        # Trailing title (#42) agrees with branch — passes identity; body must close #42.
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no closing reference to #42", result.stdout)
+
+    def test_title_branch_number_conflict_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="Closes #999\n",
+            title="renamed lane (#999)",
+            branch="agent/author-issue-42",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("disagrees", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_issue_less_lane_with_marker_passes(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="AI-Team-Lane-Issue: none\n\nNo tracker issue.\n",
+            title="Ad-hoc mechanism tweak",
+            branch="agent/author-misc",
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("issue-less lane", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_underivable_lane_without_marker_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="Closes #99\n",
+            title="Ad-hoc change",
+            branch="agent/author-misc",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot derive issue", result.stdout)
         self.assertIn("GATE: FAIL", result.stdout)
 
 

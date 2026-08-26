@@ -28,6 +28,11 @@ if [ -z "$PR" ]; then
   exit 2
 fi
 
+here=$(cd "$(dirname "$0")" && pwd)
+# shellcheck source=docs/ai-team/scripts/_lane_issue.sh
+# shellcheck disable=SC1091
+source "$here/_lane_issue.sh"
+
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git checkout" >&2; exit 2; }
 cd "$ROOT" || exit 2
 
@@ -54,7 +59,7 @@ origin_repo=$(printf '%s' "$origin_url" | sed -E 's#^(https://github\.com/|git@g
 
 # One fetch of PR state; every check below reads from it.
 pr=$(gh pr view "$PR" --repo "$REPO" \
-       --json headRefOid,headRefName,isDraft,state,mergeable,labels 2>/dev/null)
+       --json headRefOid,headRefName,title,body,isDraft,state,mergeable,labels 2>/dev/null)
 [ -n "$pr" ] || { echo "cannot read PR #$PR from $REPO" >&2; exit 2; }
 
 remote_head=$(printf '%s' "$pr" | jq -r .headRefOid)
@@ -162,6 +167,31 @@ if [ "$author_count" = "1" ]; then
 else
   say_bad "expected exactly one agent:<id> author lane, found $author_count"
 fi
+
+# 5b. Issue-closing reference (#354). claim.sh / ready.sh write Closes #N; the
+# gate refuses a handoff that dropped it so merge cannot leave the board lying.
+# Identity rules live in _lane_issue.sh (shared with ready.sh): trailing (#N),
+# branch issue-N, fail closed on conflict. Deliberate issue-less path: exact
+# body line `AI-Team-Lane-Issue: none` when neither title nor branch names an issue.
+title=$(printf '%s' "$pr" | jq -r '.title // ""')
+branch=$(printf '%s' "$pr" | jq -r '.headRefName // ""')
+pr_body=$(printf '%s' "$pr" | jq -r '.body // ""')
+lane_issue=$(ai_team_derive_lane_issue "$title" "$branch" "$pr_body" "")
+case "$lane_issue" in
+  error:*)
+    say_bad "${lane_issue#error:}"
+    ;;
+  none)
+    say_ok "issue-less lane (AI-Team-Lane-Issue: none)"
+    ;;
+  *)
+    if printf '%s' "$pr_body" | grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${lane_issue}([^0-9]|$)"; then
+      say_ok "body closes #$lane_issue"
+    else
+      say_bad "body has no closing reference to #$lane_issue — run ready.sh or add Closes #$lane_issue"
+    fi
+    ;;
+esac
 
 # `gh api --paginate` prints one JSON array per page. Slurp and flatten those
 # pages before deriving the latest machine verdict for each stable reviewer.

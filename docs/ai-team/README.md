@@ -314,7 +314,12 @@ and you are gating whatever was pushed since.
 
 Never write the checks and the merge as one command where the merge can still
 run after a failed check. A warning followed by an unconditional merge is not a
-gate.
+gate. The gate also refuses a PR whose body lacks a closing reference
+(`Closes #N` / `Fixes #N` / `Resolves #N`) to the issue named by a trailing
+claim title `(#N)` or branch `issue-N` — so a rewritten description that dropped
+what `claim.sh` / `ready.sh` wrote cannot land and leave the board lying.
+Issue-less agent lanes must opt in with an exact body line
+`AI-Team-Lane-Issue: none`.
 
 **`gh pr merge` is not the gate.** It may apply different client-side policy and
 does not prove that the reviewed SHA passed this team's checks. Use the explicit
