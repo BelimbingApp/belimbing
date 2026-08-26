@@ -173,11 +173,13 @@ latest_reviews=$(printf '%s' "$reviews" | jq -c --arg sha "$REVIEWED" '
   def from_agent:
     ([((.body // "") | split("\n")[]
        | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
-       | ascii_downcase)][0] // "");
+       | ascii_downcase)] | unique) as $agents
+    | if ($agents | length) == 1 then $agents[0] else "" end;
   def explicit_verdict:
     ([((.body // "") | split("\n")[]
        | capture("^\\*\\*Verdict:\\*\\*[[:space:]]*(?<verdict>accept(?: with follow-up)?|changes required)[[:space:]]*$"; "i").verdict
-       | ascii_downcase)][0] // "");
+       | ascii_downcase)] | unique) as $verdicts
+    | if ($verdicts | length) == 1 then $verdicts[0] else "" end;
   [.[]
    | select(.commit_id == $sha)
    | . + {agent: from_agent, explicit_verdict: explicit_verdict}
@@ -208,9 +210,11 @@ if [ -n "$accepted_agents" ]; then
 else
   say_bad "no independent exact-head acceptance; require **From:** <reviewer> plus APPROVED or **Verdict:** accept"
 fi
-[ -z "$blocking_agents" ] \
-  && say_ok "no independent exact-head changes-required verdict" \
-  || say_bad "independent exact-head changes required by $blocking_agents"
+if [ -z "$blocking_agents" ]; then
+  say_ok "no independent exact-head changes-required verdict"
+else
+  say_bad "independent exact-head changes required by $blocking_agents"
+fi
 
 # 6. The head has not moved since the review. GitHub's PR head also lags a push
 #    by minutes, so compare the branch ref too.

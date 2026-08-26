@@ -262,6 +262,63 @@ class GateMechanismTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("no independent exact-head acceptance", result.stdout)
 
+    def test_ambiguous_reviewer_identity_does_not_create_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** author\n"
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_repeated_identical_reviewer_marker_is_unambiguous(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** reviewer\n"
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
+
+    def test_conflicting_verdict_markers_do_not_create_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept\n"
+                    "**Verdict:** changes required"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
     def test_latest_changes_required_verdict_blocks_an_earlier_acceptance(self):
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
