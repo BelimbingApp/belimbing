@@ -577,7 +577,12 @@
                         <td class="px-table-cell-x py-table-cell-y align-top">
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
-                                <div class="text-xs text-muted"><x-ui.relative-time :value="$s['latest']['date']" /></div>
+                                <div class="text-xs text-muted">
+                                    <x-ui.relative-time
+                                        :value="$s['latest']['date']"
+                                        :fallback-title="$s['latest']['date_error'] ?? null"
+                                    />
+                                </div>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <span class="inline-flex items-center gap-1.5 text-xs text-muted">
                                     <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
@@ -586,7 +591,16 @@
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
                             @else
+                                {{-- One actionable line, with git's own words behind a disclosure.
+                                     A three-line `fatal:` printed straight into this cell blew up
+                                     the row height and buried the cause at the end of it. --}}
                                 <span class="text-xs text-muted">{{ $s['error'] }}</span>
+                                @if ($s['error_detail'] ?? null)
+                                    <details class="mt-1">
+                                        <summary class="cursor-pointer text-xs text-muted underline">{{ __('Git response') }}</summary>
+                                        <pre class="mt-1 max-w-xs overflow-x-auto whitespace-pre-wrap break-words font-mono text-[11px] text-muted">{{ $s['error_detail'] }}</pre>
+                                    </details>
+                                @endif
                             @endif
                         </td>
                         <td class="px-table-cell-x py-table-cell-y align-top text-right">
