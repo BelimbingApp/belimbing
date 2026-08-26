@@ -71,7 +71,12 @@ it('installs a private repository as a domain with the explicitly selected crede
         SOURCE_REPOSITORY_INSTALL_TOKEN_OWNER,
     );
 
-    $expectedAuthHeader = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.SOURCE_REPOSITORY_INSTALL_TOKEN);
+    $expectedAuthEnvironment = [
+        'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_CONFIG_COUNT' => '1',
+        'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+        'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.SOURCE_REPOSITORY_INSTALL_TOKEN),
+    ];
 
     expect($result['ok'])->toBeTrue()
         ->and(is_dir(app_path('Domains/'.SOURCE_REPOSITORY_INSTALL_FOLDER)))->toBeTrue()
@@ -79,7 +84,9 @@ it('installs a private repository as a domain with the explicitly selected crede
 
     Process::assertRan(fn ($process): bool => in_array('clone', $process->command, true)
         && in_array('https://github.com/zz-private/blb-payroll-malaysia', $process->command, true)
-        && in_array($expectedAuthHeader, $process->command, true));
+        && $process->environment === $expectedAuthEnvironment);
+    Process::assertDidntRun(fn ($process): bool => collect($process->command)
+        ->contains(fn (string $argument): bool => str_contains($argument, SOURCE_REPOSITORY_INSTALL_TOKEN)));
     Process::assertRan(fn ($process): bool => in_array('migrate', $process->command, true)
         && in_array('--path=app/Domains/'.SOURCE_REPOSITORY_INSTALL_FOLDER.'/'.SOURCE_REPOSITORY_INSTALL_MODULE.'/Database/Migrations', $process->command, true));
 });

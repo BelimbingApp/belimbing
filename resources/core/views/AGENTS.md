@@ -134,7 +134,7 @@ Canonical primitives in `resources/core/views/components/ui/`. **Always use thes
 
 | Component | Use |
 |-----------|-----|
-| `x-ui.tabs` / `x-ui.tab` | Page-level tabs |
+| `x-ui.tabs` / `x-ui.tab` | Page-level tabs. Optional tab `href` renders an in-app `wire:navigate` link for route-backed tabs; use `persistence="none"` and a server-driven `default` in that case. |
 | `x-ui.navigation-menu` | Menu tree rendering |
 
 Every `x-ui.tabs` instance requires a page-unique, render-stable `tabs-id`. The component server-renders trigger and panel IDs from it so Livewire morphs preserve the active panel, focus, and Alpine state.

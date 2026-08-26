@@ -139,21 +139,42 @@ final class GitRepository
      * @param  list<string>  $args
      * @return list<string>
      */
-    public function command(array $args, bool $authenticated = false): array
+    public function command(array $args): array
     {
         $explicitExecutable = $this->executable !== null && $this->executable !== '';
         $command = [
             $explicitExecutable ? (string) $this->executable : $this->configuredExecutable(),
             '-c',
             'safe.directory='.$this->safeDirectory(),
+            '-c',
+            'core.askPass=',
+            '-c',
+            'credential.helper=',
         ];
 
-        if ($authenticated && $this->token !== null) {
-            $command[] = '-c';
-            $command[] = 'http.extraHeader=Authorization: Basic '.base64_encode('x-access-token:'.$this->token);
+        return array_merge($command, $args);
+    }
+
+    /**
+     * Build the scoped environment for a git process without placing credentials
+     * in the command arguments visible to the host process list.
+     *
+     * @return array<string, string>
+     */
+    public function environment(bool $authenticated = false): array
+    {
+        $environment = ['GIT_TERMINAL_PROMPT' => '0'];
+
+        if (! $authenticated || $this->token === null) {
+            return $environment;
         }
 
-        return array_merge($command, $args);
+        return [
+            ...$environment,
+            'GIT_CONFIG_COUNT' => '1',
+            'GIT_CONFIG_KEY_0' => 'http.extraHeader',
+            'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.$this->token),
+        ];
     }
 
     /**
@@ -174,7 +195,10 @@ final class GitRepository
     public function run(array $args, bool $authenticated = false, int $timeout = 60): GitResult
     {
         try {
-            $result = Process::path($this->path)->timeout($timeout)->run($this->command($args, authenticated: $authenticated));
+            $result = Process::path($this->path)
+                ->env($this->environment(authenticated: $authenticated))
+                ->timeout($timeout)
+                ->run($this->command($args));
         } catch (Throwable $exception) {
             return new GitResult(
                 ok: false,
