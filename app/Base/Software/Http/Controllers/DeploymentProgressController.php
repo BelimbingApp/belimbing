@@ -25,7 +25,7 @@ class DeploymentProgressController
         $failedStartupRunId = $history->failExpiredScheduledUpdate();
 
         if ($failedStartupRunId !== null) {
-            $launcher->releaseStaleUpdateLock();
+            $launcher->releaseStaleUpdateLock($failedStartupRunId);
         }
 
         // The poller stops on a terminal status, so an abandoned pending run would

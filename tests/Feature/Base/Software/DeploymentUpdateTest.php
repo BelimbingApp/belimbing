@@ -2045,6 +2045,37 @@ test('a stale scheduling-only update releases its leaked launcher lock', functio
     }
 });
 
+test('expired startup reconciliation preserves a newer launcher lock owner', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+    $expiredRunId = 'expired-before-owner-turnover';
+    $newRunId = 'new-owner-after-turnover';
+
+    $history->beginDeploymentRun($expiredRunId, ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
+    $this->travel(DeploymentRunHistory::UPDATE_STARTUP_TIMEOUT_SECONDS + 1)->seconds();
+
+    $newOwner = Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $newRunId);
+    expect($newOwner->get())->toBeTrue();
+
+    try {
+        Livewire::test(Index::class)
+            ->assertViewHas('updateInProgress', true)
+            ->assertHasNoErrors();
+
+        expect($history->lastDeploymentRun())->toMatchArray([
+            'run_id' => $expiredRunId,
+            'status' => 'error',
+            'phase' => 'finished',
+        ])->and($newOwner->isOwnedByCurrentProcess())->toBeTrue()
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue();
+    } finally {
+        $newOwner->release();
+    }
+});
+
 test('a freshly scheduled run is not mistaken for an abandoned one', function (): void {
     // Between scheduling and the detached process recording its first line there is
     // a gap with no owner signal yet; the staleness window is what protects it.

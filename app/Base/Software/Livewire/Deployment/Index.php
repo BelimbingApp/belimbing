@@ -246,10 +246,10 @@ class Index extends Component
         $failedStartupRunId = $history->failExpiredScheduledUpdate();
 
         if ($failedStartupRunId !== null) {
-            $launcher->releaseStaleUpdateLock();
+            $launcher->releaseStaleUpdateLock($failedStartupRunId);
         }
 
-        $updateInProgress = $failedStartupRunId === null && $launcher->inProgress();
+        $updateInProgress = $launcher->inProgress();
         $history->abandonStalePendingRun($updateInProgress || $history->reloadIsInProgress());
 
         $lastRun = $history->lastDeploymentRun();
