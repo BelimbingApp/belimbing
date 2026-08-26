@@ -5,6 +5,7 @@ use App\Core\Company\Exceptions\PrimaryCompanyDeletionException;
 use App\Core\Company\Models\Company;
 use App\Core\Company\Services\PrimaryCompanyManager;
 use App\Core\User\Models\User;
+use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 
 // ---------------------------------------------------------------------------
@@ -45,6 +46,21 @@ test('company route binding fails closed for a company in another tenant', funct
     $this->actingAs($user)
         ->get(route('admin.companies.show', $foreignCompany))
         ->assertNotFound();
+});
+
+test('company route binding returns not found without a tenant context', function (): void {
+    [, $company] = createTenantWithCompany(['name' => 'Tenantless Binding Target']);
+    $user = User::factory()->create(['company_id' => null]);
+
+    Route::get('/test/company-binding-without-tenant/{company}', fn (Company $company) => response()->json([
+        'company_id' => $company->id,
+    ]))->middleware(['web', 'auth']);
+
+    $response = $this->withoutVite()->actingAs($user)
+        ->get('/test/company-binding-without-tenant/'.$company->id);
+
+    $response->assertNotFound();
+    expect($response->getContent())->not->toContain('company_id');
 });
 
 test('platform-operator setup is unavailable from a customer tenant', function (): void {

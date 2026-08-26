@@ -93,15 +93,12 @@ $recordReportedError = static function (Throwable $exception): void {
 };
 
 $renderBlbException = static function (BlbException $exception, Request $request) {
-    if (! $request->expectsJson()) {
-        return null;
-    }
-
     $status = match ($exception->reasonCode) {
         FoundationErrorCode::BLB_DATA_CONTRACT,
         AIErrorCode::LARA_AGENT_ID_TYPE_INVALID,
         AuthzErrorCode::AUTHZ_UNKNOWN_CAPABILITY => 422,
         AuthzErrorCode::AUTHZ_DENIED => 403,
+        TenancyErrorCode::TENANT_CONTEXT_MISSING => 404,
         FoundationErrorCode::BLB_INVARIANT_VIOLATION,
         DatabaseErrorCode::CIRCULAR_SEEDER_DEPENDENCY,
         CompanyErrorCode::PRIMARY_COMPANY_DELETION_FORBIDDEN,
@@ -109,6 +106,17 @@ $renderBlbException = static function (BlbException $exception, Request $request
         EmployeeErrorCode::SYSTEM_EMPLOYEE_DELETION_FORBIDDEN => 409,
         default => 500,
     };
+
+    if (! $request->expectsJson()) {
+        if ($exception->reasonCode === TenancyErrorCode::TENANT_CONTEXT_MISSING) {
+            return response()->view('errors.404-guest', [
+                'notFoundTitle' => __('Page not found'),
+                'notFoundMessage' => __('This address does not match anything here. The page may have moved, or the link is out of date.'),
+            ], $status);
+        }
+
+        return null;
+    }
 
     $debug = (bool) config('app.debug', false);
 

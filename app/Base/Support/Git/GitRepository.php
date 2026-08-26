@@ -146,6 +146,10 @@ final class GitRepository
             $explicitExecutable ? (string) $this->executable : $this->configuredExecutable(),
             '-c',
             'safe.directory='.$this->safeDirectory(),
+            '-c',
+            'core.askPass=',
+            '-c',
+            'credential.helper=',
         ];
 
         if ($authenticated && $this->token !== null) {
@@ -174,7 +178,10 @@ final class GitRepository
     public function run(array $args, bool $authenticated = false, int $timeout = 60): GitResult
     {
         try {
-            $result = Process::path($this->path)->timeout($timeout)->run($this->command($args, authenticated: $authenticated));
+            $result = Process::path($this->path)
+                ->env(['GIT_TERMINAL_PROMPT' => '0'])
+                ->timeout($timeout)
+                ->run($this->command($args, authenticated: $authenticated));
         } catch (Throwable $exception) {
             return new GitResult(
                 ok: false,
