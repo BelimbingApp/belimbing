@@ -492,6 +492,22 @@
                         </div>
                         <p class="mt-1 text-sm text-muted">{{ __('Update launches a detached process that pulls the selected sources, installs changed PHP dependencies (or refreshes the autoloader), builds frontend assets, runs migrations, and reloads workers. Private repositories use the token set in') }}
                             <a href="{{ route('admin.system.software.github-access.index') }}" class="font-medium underline" wire:navigate>{{ __('GitHub Access') }}</a>.</p>
+                        <p class="mt-2 text-xs text-muted">
+                            {{-- Say how old this table is. Without it a page left open looks
+                                 exactly like a page just loaded, and the operator launches a
+                                 deployment against a picture of the world from hours ago. --}}
+                            {{ __('Status collected') }} <x-ui.relative-time :value="$statusCollectedAt" />
+                            <button
+                                type="button"
+                                wire:click="refreshStatus"
+                                wire:loading.attr="disabled"
+                                x-bind:disabled="running || refreshing || updateInProgress"
+                                class="ml-1 font-medium underline hover:text-ink"
+                            >
+                                <span wire:loading.remove wire:target="refreshStatus">{{ __('Refresh') }}</span>
+                                <span wire:loading wire:target="refreshStatus">{{ __('Refreshing…') }}</span>
+                            </button>
+                        </p>
                     </div>
                     <div class="ml-auto flex shrink-0 flex-wrap justify-end gap-2">
                         <x-ui.button type="button" variant="primary" wire:click="updateAll" x-on:click="openRunLog(); followDetachedRun()" wire:loading.attr="disabled" x-bind:disabled="running || refreshing || updateInProgress || maintenanceActive || ! $wire.behind">
@@ -553,7 +569,7 @@
                         <td class="px-table-cell-x py-table-cell-y align-top">
                             @if ($s['current'])
                                 <span class="font-mono text-sm text-ink">{{ $s['current']['short'] }}</span>
-                                <div class="text-xs text-muted">{{ $s['current']['ago'] }}</div>
+                                <div class="text-xs text-muted"><x-ui.relative-time :value="$s['current']['date']" /></div>
                             @else
                                 <span class="text-muted">—</span>
                             @endif
@@ -561,7 +577,7 @@
                         <td class="px-table-cell-x py-table-cell-y align-top">
                             @if ($s['latest'])
                                 <span class="font-mono text-sm text-ink">{{ $s['latest']['short'] }}</span>
-                                <div class="text-xs text-muted">{{ $s['latest']['ago'] ?? __('Time unavailable') }}</div>
+                                <div class="text-xs text-muted"><x-ui.relative-time :value="$s['latest']['date']" /></div>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ! $maintenanceActive && ! $updateInProgress)
                                 <span class="inline-flex items-center gap-1.5 text-xs text-muted">
                                     <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5 animate-spin" />
