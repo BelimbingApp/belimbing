@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import stat
@@ -19,7 +20,7 @@ GH_STUB = textwrap.dedent(
     case "$1 $2" in
       "repo view") printf '%s\\n' "$GATE_TEST_CANONICAL" ;;
       "pr view")
-        printf '{"headRefOid":"%s","headRefName":"tb","isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","labels":[]}\\n' "$GATE_TEST_HEAD"
+        printf '{"headRefOid":"%s","headRefName":"tb","isDraft":false,"state":"OPEN","mergeable":"MERGEABLE","labels":%s}\\n' "$GATE_TEST_HEAD" "$GATE_TEST_LABELS"
         ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*check-runs*)
         printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
@@ -29,6 +30,9 @@ GH_STUB = textwrap.dedent(
         ;;
       "api repos/$GATE_TEST_CANONICAL/git/refs/heads/tb")
         printf '%s\\n' "$GATE_TEST_HEAD"
+        ;;
+      "api repos/$GATE_TEST_CANONICAL/pulls/1/reviews")
+        printf '%s\\n' "$GATE_TEST_REVIEWS"
         ;;
       "api repos/$GATE_TEST_CANONICAL/pulls/1/files")
         printf '1\\n'
@@ -111,6 +115,8 @@ class GateMechanismTest(unittest.TestCase):
         reviewed: str | None,
         resolve: str = "",
         head: str | None = None,
+        labels: list[str] | None = None,
+        reviews: list[dict[str, object]] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         base = Path(self.dir.name)
         checkout = base / "checkout"
@@ -135,8 +141,22 @@ class GateMechanismTest(unittest.TestCase):
 
         env["PATH"] = f"{self.dir.name}{os.pathsep}{env['PATH']}"
         env["GATE_TEST_CANONICAL"] = "example/canonical"
-        env["GATE_TEST_HEAD"] = head or self.head_sha
+        effective_head = head or self.head_sha
+        env["GATE_TEST_HEAD"] = effective_head
         env["GATE_TEST_RESOLVE"] = resolve
+        effective_labels = labels if labels is not None else ["task:review", "agent:author"]
+        env["GATE_TEST_LABELS"] = json.dumps([
+            {"name": label} for label in effective_labels
+        ])
+        if reviews is None:
+            reviews = [{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": effective_head,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }]
+        env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
         env["GATE_MIN_CHECKS"] = "1"
 
         args = ["bash", str(SCRIPT), "1"]
@@ -172,6 +192,261 @@ class GateMechanismTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (origin, result.stdout, result.stderr))
             self.assertIn("GATE: PASS", result.stdout)
             self.assertIn("PR head is the reviewed SHA", result.stdout)
+
+    def test_missing_independent_review_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS, reviewed=self.head_sha, reviews=[]
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_same_lane_approval_is_not_independent(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** author",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_stale_approval_does_not_cover_the_current_head(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": self.main_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_shared_account_comment_with_explicit_acceptance_passes(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": "**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_literal_backslash_n_does_not_create_marker_lines(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": r"**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_ambiguous_reviewer_identity_does_not_create_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** author\n"
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_repeated_identical_reviewer_marker_is_unambiguous(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** reviewer\n"
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
+
+    def test_conflicting_verdict_markers_do_not_create_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": (
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept\n"
+                    "**Verdict:** changes required"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_native_approval_cannot_override_conflicting_verdict_markers(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": (
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept\n"
+                    "**Verdict:** changes required"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_native_changes_requested_survives_conflicting_verdict_markers(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "CHANGES_REQUESTED",
+                "body": (
+                    "**From:** reviewer\n\n"
+                    "**Verdict:** accept\n"
+                    "**Verdict:** changes required"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("independent exact-head changes required by reviewer", result.stdout)
+
+    def test_latest_changes_required_verdict_blocks_an_earlier_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[
+                {
+                    "id": 1,
+                    "state": "COMMENTED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                },
+                {
+                    "id": 2,
+                    "state": "COMMENTED",
+                    "body": "**From:** reviewer\n\n**Verdict:** changes required",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:01:00Z",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("independent exact-head changes required by reviewer", result.stdout)
+
+    def test_latest_ambiguous_verdict_revokes_an_earlier_acceptance(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[
+                {
+                    "id": 1,
+                    "state": "COMMENTED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                },
+                {
+                    "id": 2,
+                    "state": "COMMENTED",
+                    "body": (
+                        "**From:** reviewer\n\n"
+                        "**Verdict:** accept\n"
+                        "**Verdict:** changes required"
+                    ),
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:01:00Z",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("no independent exact-head changes-required verdict", result.stdout)
+
+    def test_dismissed_review_cannot_authorize_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "DISMISSED",
+                "body": "**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_task_active_is_not_a_ready_handoff(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:active", "agent:author"],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("task:review is not set", result.stdout)
+
+    def test_missing_or_multiple_author_lanes_fail_the_gate(self):
+        for labels in (
+            ["task:review"],
+            ["task:review", "agent:author", "agent:second-author"],
+        ):
+            with self.subTest(labels=labels):
+                result = self.run_gate(
+                    origin=CANONICAL_HTTPS,
+                    reviewed=self.head_sha,
+                    labels=labels,
+                )
+                self.assertEqual(result.returncode, 1)
+                self.assertIn("expected exactly one agent:<id> author lane", result.stdout)
 
     def test_short_abbreviation_refused(self):
         result = self.run_gate(origin=CANONICAL_HTTPS, reviewed=self.head_sha[:8])
