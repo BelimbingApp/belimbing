@@ -525,7 +525,43 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("body closes #42", result.stdout)
         self.assertIn("GATE: PASS", result.stdout)
 
-    def test_underivable_lane_issue_fails_the_gate(self):
+    def test_conflicting_title_and_branch_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="Closes #99\n",
+            title="Backport context (#99) for lane (#42)",
+            branch="agent/author-issue-42",
+        )
+        # Trailing title (#42) agrees with branch — passes identity; body must close #42.
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no closing reference to #42", result.stdout)
+
+    def test_title_branch_number_conflict_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="Closes #999\n",
+            title="renamed lane (#999)",
+            branch="agent/author-issue-42",
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("disagrees", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_issue_less_lane_with_marker_passes(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            body="AI-Team-Lane-Issue: none\n\nNo tracker issue.\n",
+            title="Ad-hoc mechanism tweak",
+            branch="agent/author-misc",
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("issue-less lane", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_underivable_lane_without_marker_fails_the_gate(self):
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
             reviewed=self.head_sha,
@@ -534,7 +570,7 @@ class GateMechanismTest(unittest.TestCase):
             branch="agent/author-misc",
         )
         self.assertEqual(result.returncode, 1)
-        self.assertIn("cannot derive issue number", result.stdout)
+        self.assertIn("cannot derive issue", result.stdout)
         self.assertIn("GATE: FAIL", result.stdout)
 
 
