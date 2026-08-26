@@ -37,7 +37,13 @@ REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null)
 # One fetch of PR state; every check below reads from it.
 pr=$(gh pr view "$PR" --repo "$REPO" \
        --json headRefOid,headRefName,isDraft,state,mergeable,labels 2>/dev/null)
-[ -n "$pr" ] || { echo "cannot read PR #$PR from $REPO" >&2; exit 2; }
+[ -n "$pr" ] || {
+  echo "cannot read PR #$PR from $REPO" >&2
+  echo "note: this script resolves the repository from this checkout's git remotes —" >&2
+  echo "      'origin' must be the canonical repository (fork layouts resolve wrong)." >&2
+  echo "      Fix with: gh repo set-default <canonical-owner/repo>, or run from a canonical clone." >&2
+  exit 2
+}
 
 remote_head=$(printf '%s' "$pr" | jq -r .headRefOid)
 
@@ -114,11 +120,16 @@ done
 #    by minutes, so compare the branch ref too.
 if [ "$remote_head" = "$REVIEWED" ]; then
   say_ok "PR head is the reviewed SHA"
+elif [ -n "$REVIEWED" ] && [ "${#REVIEWED}" -ge 12 ] && [ "${remote_head#"$REVIEWED"}" != "$remote_head" ]; then
+  # A long (>=12 char) prefix of the live head names that head and nothing
+  # else, so "what merges is exactly what was verified" still holds. Accept
+  # it and say what it expanded to.
+  say_ok "reviewed SHA $REVIEWED is an unambiguous prefix of head $remote_head"
 elif [ -n "$REVIEWED" ] && [ "${remote_head#"$REVIEWED"}" != "$remote_head" ]; then
-  # A prefix of the head, i.e. an abbreviated SHA. The comparison is deliberately
-  # exact — what merges must be exactly what was verified — so say what to pass
-  # rather than advising a re-review that would change nothing.
-  say_bad "you passed an abbreviated SHA ($REVIEWED); pass the full 40-character head $remote_head"
+  # A short abbreviated SHA. The comparison is deliberately strict — what
+  # merges must be exactly what was verified — so say what to pass rather
+  # than advising a re-review that would change nothing.
+  say_bad "you passed a short abbreviated SHA ($REVIEWED); pass at least 12 characters of the head $remote_head"
 else
   say_bad "PR head is $remote_head but you reviewed $REVIEWED — re-review the new head"
 fi
