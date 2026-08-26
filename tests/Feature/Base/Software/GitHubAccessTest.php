@@ -7,6 +7,7 @@ use App\Base\Software\Services\DeploymentBuildRunner;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\SoftwareSourceRepository;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
@@ -25,8 +26,8 @@ beforeEach(function (): void {
         public function owners(): array
         {
             return [
-                ['owner' => 'exampleowner', 'repos' => [['repo' => 'exampleowner/blb-ham', 'public' => false]], 'has_token' => false, 'all_public' => false],
-                ['owner' => 'BelimbingApp', 'repos' => [['repo' => 'BelimbingApp/belimbing', 'public' => true]], 'has_token' => false, 'all_public' => true],
+                ['owner' => 'exampleowner', 'repos' => [['repo' => 'exampleowner/blb-ham', 'visibility' => 'private']], 'has_token' => false, 'all_public' => false],
+                ['owner' => 'BelimbingApp', 'repos' => [['repo' => 'BelimbingApp/belimbing', 'visibility' => 'public']], 'has_token' => false, 'all_public' => true],
             ];
         }
 
@@ -112,8 +113,8 @@ test('a mixed owner names which repos are public and which need a token', functi
                 [
                     'owner' => 'mixedowner',
                     'repos' => [
-                        ['repo' => 'mixedowner/open-module', 'public' => true],
-                        ['repo' => 'mixedowner/private-extension', 'public' => false],
+                        ['repo' => 'mixedowner/open-module', 'visibility' => 'public'],
+                        ['repo' => 'mixedowner/private-extension', 'visibility' => 'private'],
                     ],
                     'has_token' => false,
                     'all_public' => false,
@@ -148,12 +149,17 @@ test('the token field offers a reveal toggle labelled for the token', function (
     expect($response->getContent())->toContain('showRevealButton: true');
 });
 
-test('SoftwareSourceRepository::owners reports a repo GitHub confirms public as public with no token required', function (): void {
+function fakeGitHubAccessRemote(): void
+{
     Process::fake(function ($process) {
         return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
             ? Process::result(GITHUB_ACCESS_REMOTE)
             : Process::result();
     });
+}
+
+test('SoftwareSourceRepository::owners reports a repo GitHub confirms public as public with no token required', function (): void {
+    fakeGitHubAccessRemote();
     Http::fake([
         'api.github.com/repos/BelimbingApp/belimbing' => Http::response(['private' => false], 200),
     ]);
@@ -163,18 +169,14 @@ test('SoftwareSourceRepository::owners reports a repo GitHub confirms public as 
 
     expect($platformOwner)->not->toBeNull()
         ->and($platformOwner['all_public'])->toBeTrue()
-        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['public'])->toBeTrue();
+        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['visibility'])->toBe('public');
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://api.github.com/repos/BelimbingApp/belimbing'
         && ! $request->hasHeader('Authorization'));
 });
 
-test('SoftwareSourceRepository::owners treats a private or anonymously unreachable repo as needing a token', function (): void {
-    Process::fake(function ($process) {
-        return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
-            ? Process::result(GITHUB_ACCESS_REMOTE)
-            : Process::result();
-    });
+test('SoftwareSourceRepository::owners treats an anonymous 404 as private, confirmed', function (): void {
+    fakeGitHubAccessRemote();
     Http::fake([
         'api.github.com/repos/BelimbingApp/belimbing' => Http::response(null, 404),
     ]);
@@ -183,15 +185,11 @@ test('SoftwareSourceRepository::owners treats a private or anonymously unreachab
     $platformOwner = $owners->firstWhere('owner', 'BelimbingApp');
 
     expect($platformOwner['all_public'])->toBeFalse()
-        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['public'])->toBeFalse();
+        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['visibility'])->toBe('private');
 });
 
 test('SoftwareSourceRepository::owners caches repo visibility instead of checking GitHub on every call', function (): void {
-    Process::fake(function ($process) {
-        return gitCommandWithoutConfig($process->command) === ['git', 'remote', 'get-url', 'origin']
-            ? Process::result(GITHUB_ACCESS_REMOTE)
-            : Process::result();
-    });
+    fakeGitHubAccessRemote();
     Http::fake([
         'api.github.com/repos/BelimbingApp/belimbing' => Http::response(['private' => false], 200),
     ]);
@@ -201,4 +199,58 @@ test('SoftwareSourceRepository::owners caches repo visibility instead of checkin
     $repository->owners();
 
     Http::assertSentCount(1);
+});
+
+test('GitHub Access does not throw when GitHub is unreachable, and shows the ordinary workflow instead of asserting private', function (): void {
+    fakeGitHubAccessRemote();
+    Http::fake(function () {
+        throw new ConnectionException('cURL error 7: Failed to connect');
+    });
+
+    $user = createAdminUser();
+
+    $response = $this->actingAs($user)
+        ->get(route('admin.system.software.github-access.index'));
+
+    // The page must render, not 500 — this is the page an operator opens
+    // exactly when the network to GitHub is broken.
+    $response->assertOk();
+
+    $owners = collect(app(SoftwareSourceRepository::class)->owners());
+    $platformOwner = $owners->firstWhere('owner', 'BelimbingApp');
+
+    expect($platformOwner['all_public'])->toBeFalse()
+        ->and(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['visibility'])->toBe('unknown');
+
+    // A page that could not confirm visibility must not claim the repo needs
+    // a token — that claim is false as often as it's true here.
+    $response->assertDontSee('Needs a token');
+});
+
+test('a rate-limited (403) probe is not cached as, or presented as, a private repo', function (): void {
+    fakeGitHubAccessRemote();
+    $requestCount = 0;
+    Http::fake(function () use (&$requestCount) {
+        $requestCount++;
+
+        return Http::response(['message' => 'API rate limit exceeded'], 403);
+    });
+
+    $owners = collect(app(SoftwareSourceRepository::class)->owners());
+    $platformOwner = $owners->firstWhere('owner', 'BelimbingApp');
+
+    expect(collect($platformOwner['repos'])->firstWhere('repo', 'BelimbingApp/belimbing')['visibility'])->toBe('unknown')
+        ->and($requestCount)->toBe(1);
+
+    // Re-rendering within the failure TTL must not re-probe GitHub — that would
+    // make a rate-limit outage worse, not better.
+    app(SoftwareSourceRepository::class)->owners();
+    expect($requestCount)->toBe(1);
+
+    // An 'unknown' result must not sit in the cache for the long
+    // (visibility-changes-rarely) TTL: past the short failure TTL, the next
+    // render must probe again rather than staying pinned for minutes.
+    $this->travel(21)->seconds();
+    app(SoftwareSourceRepository::class)->owners();
+    expect($requestCount)->toBe(2);
 });

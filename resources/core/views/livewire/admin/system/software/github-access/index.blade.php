@@ -36,13 +36,23 @@
                     @endif
                 </div>
 
-                @if (! $owner['all_public'] && collect($owner['repos'])->contains('public', true))
+                @if (! $owner['all_public'] && collect($owner['repos'])->contains('visibility', 'public'))
                     {{-- Mixed owner: some repos are public, but the token still applies
                          to the ones that are not — name which are which rather than
-                         implying the whole owner needs credentials. --}}
+                         implying the whole owner needs credentials. A repo GitHub could
+                         not be reached about (rate limit, outage) is named separately —
+                         it is not confirmed to need a token, only unconfirmed either way. --}}
+                    @php($publicRepos = collect($owner['repos'])->where('visibility', 'public')->pluck('repo')->all())
+                    @php($privateRepos = collect($owner['repos'])->where('visibility', 'private')->pluck('repo')->all())
+                    @php($unknownRepos = collect($owner['repos'])->where('visibility', 'unknown')->pluck('repo')->all())
                     <p class="mt-2 text-xs text-muted">
-                        {{ __('Public, no token needed: :repos.', ['repos' => implode(', ', collect($owner['repos'])->where('public', true)->pluck('repo')->all())]) }}
-                        {{ __('Needs a token: :repos.', ['repos' => implode(', ', collect($owner['repos'])->where('public', false)->pluck('repo')->all())]) }}
+                        {{ __('Public, no token needed: :repos.', ['repos' => implode(', ', $publicRepos)]) }}
+                        @if ($privateRepos !== [])
+                            {{ __('Needs a token: :repos.', ['repos' => implode(', ', $privateRepos)]) }}
+                        @endif
+                        @if ($unknownRepos !== [])
+                            {{ __('Could not confirm right now (GitHub unreachable or rate-limited): :repos.', ['repos' => implode(', ', $unknownRepos)]) }}
+                        @endif
                     </p>
                 @endif
 

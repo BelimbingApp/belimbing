@@ -61,7 +61,7 @@ class DeploymentService
      * live (cached) anonymous GitHub check; testOwner() remains the on-demand,
      * fully authenticated probe.
      *
-     * @return list<array{owner: string, repos: list<array{repo: string, public: bool}>, has_token: bool, all_public: bool}>
+     * @return list<array{owner: string, repos: list<array{repo: string, visibility: 'public'|'private'|'unknown'}>, has_token: bool, all_public: bool}>
      */
     public function owners(): array
     {

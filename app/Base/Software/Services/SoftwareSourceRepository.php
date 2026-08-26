@@ -7,6 +7,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Support\Git\GitRepository;
 use App\Base\Support\Str;
 use Composer\CaBundle\CaBundle;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -143,7 +144,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{owner: string, repos: list<array{repo: string, public: bool}>, has_token: bool, all_public: bool}>
+     * @return list<array{owner: string, repos: list<array{repo: string, visibility: 'public'|'private'|'unknown'}>, has_token: bool, all_public: bool}>
      */
     public function owners(): array
     {
@@ -159,13 +160,13 @@ class SoftwareSourceRepository
             $byOwner[$owner]['owner'] = $owner;
             $byOwner[$owner]['repos'][] = [
                 'repo' => $owner.'/'.$name,
-                'public' => $this->isAnonymouslyReachable($owner, $name),
+                'visibility' => $this->repoVisibility($owner, $name),
             ];
         }
 
         return array_values(array_map(function (array $entry): array {
             $entry['has_token'] = $this->tokenFor($entry['owner']) !== null;
-            $entry['all_public'] = ! collect($entry['repos'])->contains(fn (array $repo): bool => ! $repo['public']);
+            $entry['all_public'] = ! collect($entry['repos'])->contains(fn (array $repo): bool => $repo['visibility'] !== 'public');
 
             return $entry;
         }, $byOwner));
@@ -175,20 +176,54 @@ class SoftwareSourceRepository
      * Whether GitHub reports this repo as public and reachable without a token —
      * the same anonymous-vs-authenticated distinction testOwner() already probes
      * on demand, run automatically here so the page can tell a healthy public
-     * source from one that actually needs credentials. Cached: this runs on every
-     * render (owners() backs a #[Defer] component that re-renders on each
-     * interaction), and visibility changes rarely enough that a few minutes of
-     * staleness is a good trade against calling GitHub on every click.
+     * source from one that actually needs credentials.
+     *
+     * Three-valued rather than a bool: a failed *request* (rate limit, outage,
+     * connection failure) is not evidence the repo is private, and this call runs
+     * on every render — this page is exactly the one an operator opens when
+     * credentials are broken or the network is down, so it must not throw or lie
+     * when GitHub itself is unreachable. 'unknown' leaves the owner out of
+     * all_public without asserting the repo needs a token it may not.
+     *
+     * Cached: this runs on every render (owners() backs a #[Defer] component
+     * that re-renders on each interaction). A confirmed public/private result is
+     * cached for OWNER_VISIBILITY_CACHE_SECONDS, since visibility rarely changes;
+     * an unknown result gets the shorter REMOTE_STATUS_FAILURE_CACHE_SECONDS so a
+     * transient failure is retried soon rather than pinned for minutes — and so
+     * repeated renders during a real outage don't themselves become the thing
+     * that exhausts GitHub's 60-requests-per-hour anonymous rate limit.
+     *
+     * @return 'public'|'private'|'unknown'
      */
-    private function isAnonymouslyReachable(string $owner, string $name): bool
+    private function repoVisibility(string $owner, string $name): string
     {
         $cacheKey = 'software.owner.visibility.'.hash('sha256', strtolower($owner.'/'.$name));
+        $cached = Cache::get($cacheKey);
 
-        return (bool) Cache::remember($cacheKey, self::OWNER_VISIBILITY_CACHE_SECONDS, function () use ($owner, $name): bool {
+        if (is_string($cached)) {
+            return $cached;
+        }
+
+        try {
             $response = $this->githubGet($owner, $name, '', null);
+        } catch (ConnectionException) {
+            return 'unknown';
+        }
 
-            return $response->successful() && $response->json('private') === false;
-        });
+        $visibility = match (true) {
+            $response->successful() && $response->json('private') === false => 'public',
+            // Anonymous access to a private (or nonexistent) repo is a 404 —
+            // GitHub does not distinguish the two to an unauthenticated caller.
+            $response->status() === 404 => 'private',
+            // Anything else (403 rate-limited, 5xx, ...) is a request failure,
+            // not a fact about the repo's visibility.
+            default => 'unknown',
+        };
+
+        $ttl = $visibility === 'unknown' ? self::REMOTE_STATUS_FAILURE_CACHE_SECONDS : self::OWNER_VISIBILITY_CACHE_SECONDS;
+        Cache::put($cacheKey, $visibility, $ttl);
+
+        return $visibility;
     }
 
     /**
