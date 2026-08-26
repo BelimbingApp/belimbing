@@ -10,6 +10,7 @@ use App\Base\Software\Services\DeploymentService;
 use App\Base\Software\Services\FrankenPhpDomainRuntimeReloader;
 use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
+use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Session;
@@ -46,6 +47,20 @@ class Index extends Component
     public bool $behind = false;
 
     public function loadLatestStatus(): void
+    {
+        $this->latestStatusLoaded = true;
+    }
+
+    /**
+     * Re-collect the sources table on demand.
+     *
+     * render() re-runs the whole status read on every Livewire round-trip, so
+     * this needs no body beyond existing — but it is a named action on purpose:
+     * the page is a deployment console, and an operator who wants to know that
+     * what they are looking at is current should not have to reload the browser
+     * to find out.
+     */
+    public function refreshStatus(): void
     {
         $this->latestStatusLoaded = true;
     }
@@ -180,6 +195,10 @@ class Index extends Component
             ? $deployment->status()
             : $deployment->localStatus();
 
+        // Stamped here rather than on mount: this is when the rows above were
+        // actually read, and the page prints it so a stale tab admits its age.
+        $statusCollectedAt = CarbonImmutable::now();
+
         $this->behind = collect($status)->contains(fn (array $s): bool => $s['up_to_date'] === false);
 
         // The run box shows this session's live log while one is running/just ran,
@@ -214,6 +233,7 @@ class Index extends Component
 
         return view('livewire.admin.system.software.deployment.index', [
             'status' => $status,
+            'statusCollectedAt' => $statusCollectedAt,
             'latestStatusLoaded' => $this->latestStatusLoaded,
             'checkFailures' => collect($status)
                 ->filter(fn (array $s): bool => $s['latest'] === null && $s['error'] !== null)
