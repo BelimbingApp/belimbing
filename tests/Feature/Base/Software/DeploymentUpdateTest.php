@@ -696,6 +696,8 @@ test('component updates launch a durable process instead of updating inside the 
 
         expect($run)->toBeArray()
             ->and($run['status'])->toBe('pending')
+            ->and($run['phase'])->toBe('scheduled')
+            ->and($run['run_id'])->toBeString()
             ->and($run['summary'])->toContain(DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE)
             ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue()
             ->and(app()->isDownForMaintenance())->toBeFalse();
@@ -722,6 +724,113 @@ test('an update with unpushed commits is refused before reserving or launching a
         ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
 });
 
+test('a detached update that never acknowledges startup fails promptly with its exact diagnostic reference', function (): void {
+    fakeDeploymentUpdateProcesses();
+    $detached = Mockery::mock(DetachedProcessLauncher::class);
+    $detached->shouldReceive('launch')->once()->andReturnTrue();
+    app()->instance(DetachedProcessLauncher::class, $detached);
+
+    $launch = app(SoftwareUpdateLauncher::class)->launchTracked(['platform']);
+    $runId = $launch['run_id'];
+
+    expect($runId)->toBeString()
+        ->and(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray([
+            'run_id' => $runId,
+            'status' => 'pending',
+            'phase' => 'scheduled',
+        ]);
+
+    $this->travel(DeploymentRunHistory::UPDATE_STARTUP_TIMEOUT_SECONDS + 1)->seconds();
+
+    $this->actingAs(createAdminUser())
+        ->getJson(route('admin.system.software.updates.progress'))
+        ->assertOk()
+        ->assertJsonPath('run_id', $runId)
+        ->assertJsonPath('status', 'error')
+        ->assertJsonPath('phase', 'finished')
+        ->assertJsonPath('lines.1.text', "FAILED: detached update run {$runId} did not acknowledge startup. See storage/logs/software-update-{$runId}.log for the child diagnostic.");
+
+    expect(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+});
+
+test('a child startup acknowledgement wins against expired-schedule reconciliation', function (): void {
+    $runId = 'startup-race-winner';
+    $history = beginDeploymentCommandRun($runId);
+
+    $this->travel(DeploymentRunHistory::UPDATE_STARTUP_TIMEOUT_SECONDS - 1)->seconds();
+    expect($history->acknowledgeDeploymentRunStart($runId))->toBeTrue();
+    $this->travel(2)->seconds();
+
+    $this->actingAs(createAdminUser())
+        ->getJson(route('admin.system.software.updates.progress'))
+        ->assertOk()
+        ->assertJsonPath('run_id', $runId)
+        ->assertJsonPath('status', 'pending')
+        ->assertJsonPath('phase', 'starting');
+
+    expect(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue();
+
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+});
+
+test('a duplicate same-run child cannot release the acknowledged child reservation', function (): void {
+    $runId = 'duplicate-child-owner-token';
+    $history = beginDeploymentCommandRun($runId);
+
+    expect($history->acknowledgeDeploymentRunStart($runId))->toBeTrue();
+
+    try {
+        expect(Artisan::call('blb:software:update', [
+            'keys' => ['platform'],
+            '--run-id' => $runId,
+        ]))->toBe(1)
+            ->and($history->lastDeploymentRun())->toMatchArray([
+                'run_id' => $runId,
+                'status' => 'pending',
+                'phase' => 'starting',
+            ])
+            ->and(Cache::restoreLock(SoftwareUpdateLauncher::LOCK_KEY, $runId)->isOwnedByCurrentProcess())->toBeTrue()
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue();
+    } finally {
+        Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+test('a detached command that cannot restore its reservation closes the matching durable run', function (): void {
+    $runId = 'reservation-restore-failed';
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun($runId, ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
+
+    expect(Artisan::call('blb:software:update', [
+        'keys' => ['platform'],
+        '--run-id' => $runId,
+    ]))->toBe(1)
+        ->and($history->lastDeploymentRun())->toMatchArray([
+            'run_id' => $runId,
+            'status' => 'error',
+            'phase' => 'finished',
+            'summary' => "FAILED: detached update run {$runId} could not restore its active reservation.",
+        ])
+        ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+});
+
+test('a late detached child cannot close or release a newer durable run', function (): void {
+    $history = beginDeploymentCommandRun('superseded-child');
+    $history->beginDeploymentRun('newer-run', ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
+
+    expect(Artisan::call('blb:software:update', [
+        'keys' => ['platform'],
+        '--run-id' => 'superseded-child',
+    ]))->toBe(1)
+        ->and($history->lastDeploymentRun())->toMatchArray([
+            'run_id' => 'newer-run',
+            'status' => 'pending',
+            'phase' => 'scheduled',
+            'summary' => DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE,
+        ])
+        ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
+});
+
 test('detached update command owns cleanup and records a terminal result', function (): void {
     $runId = 'deployment-command-test';
     $history = beginDeploymentCommandRun($runId);
@@ -731,6 +840,10 @@ test('detached update command owns cleanup and records a terminal result', funct
     $deployment->shouldReceive('update')
         ->once()
         ->withArgs(function (array $keys, callable $progress, callable $afterReload): bool {
+            expect(app(DeploymentRunHistory::class)->lastDeploymentRun())->toMatchArray([
+                'status' => 'pending',
+                'phase' => 'running',
+            ]);
             $progress(DEPLOYMENT_UPDATE_PULLING_PLATFORM);
             $afterReload(true);
 
@@ -890,8 +1003,7 @@ test('the previous run log persists at its rest location across page visits', fu
     // A fresh visit still shows the last run at rest (it is session-persisted).
     // The pending run does NOT carry the recorded marker — only terminal runs
     // (success/warning/error) do. A pending marker would let the MutationObserver
-    // fire detectRecordedRun prematurely during the updateAll morph, setting
-    // markerSeen=true before the real terminal marker arrives and leaving the
+    // fire detectRecordedRun prematurely during the updateAll morph and leave the
     // "Running" badge stuck on a completed run.
     Livewire::test(Index::class)
         ->assertSet('log', $log)
@@ -913,10 +1025,9 @@ test('the recorded-run marker is rendered only for terminal runs, not pending', 
     // Regression: the server used to render data-deployment-run-recorded whenever
     // $runStatus !== 'idle', which includes 'pending'. During an updateAll morph,
     // that pending marker let the MutationObserver fire detectRecordedRun
-    // prematurely, setting markerSeen=true before the real terminal marker
-    // arrived — so finishRun never fired and the "Running" badge stuck on a
-    // completed run. The marker must appear only for terminal statuses, matching
-    // the JS-side check in renderRunProgress.
+    // prematurely and the "Running" badge stuck on a completed run. The marker
+    // must appear only for terminal statuses, matching the JS-side check in
+    // renderRunProgress.
     $this->actingAs(createAdminUser());
     $history = app(DeploymentRunHistory::class);
 
@@ -930,7 +1041,45 @@ test('the recorded-run marker is rendered only for terminal runs, not pending', 
     $history->finishDeploymentRun('pending-run', 'success', ['Update complete. Workers reloaded.']);
     Livewire::test(Index::class)
         ->assertSee('data-deployment-run-recorded="true"', false)
+        ->assertSee('data-run-id="pending-run"', false)
         ->assertSee('data-run-outcome="success"', false);
+});
+
+test('a previous terminal marker cannot complete a newly scheduled run', function (): void {
+    $this->actingAs(createAdminUser());
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+    $history->beginDeploymentRun('previous-terminal-run', ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
+    $history->finishDeploymentRun('previous-terminal-run', 'success', ['Previous update complete.']);
+
+    $detached = Mockery::mock(DetachedProcessLauncher::class);
+    $detached->shouldReceive('launch')->once()->andReturnTrue();
+    app()->instance(DetachedProcessLauncher::class, $detached);
+
+    $component = Livewire::test(Index::class)
+        ->assertSee('data-run-id="previous-terminal-run"', false)
+        ->call('updateRepo', 'platform')
+        ->assertDispatched('run-finished', function (string $name, array $detail): bool {
+            return $name === 'run-finished'
+                && $detail['status'] === 'pending'
+                && is_string($detail['runId'])
+                && $detail['runId'] !== 'previous-terminal-run';
+        });
+
+    $newRunId = app(DeploymentRunHistory::class)->lastDeploymentRun()['run_id'];
+
+    expect($newRunId)->toBeString()->not->toBe('previous-terminal-run');
+    $component
+        ->assertSee('run.run_id !== this.activeRunId', false)
+        ->assertSee('marker.dataset.runId !== this.activeRunId', false)
+        ->assertSee("! ['success', 'warning', 'error'].includes(marker.dataset.runOutcome)", false)
+        ->assertSee('if (! allowedStatuses.includes(detail.status))', false)
+        ->assertSee("activeRunPhase === 'scheduled'", false)
+        ->assertSee("activeRunPhase === 'starting'", false)
+        ->assertSee("activeRunPhase === 'running'", false);
+
+    Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
 });
 
 test('a post-run refresh that never gets confirmed is reported instead of spinning forever', function (): void {
@@ -1916,6 +2065,37 @@ test('a stale scheduling-only update releases its leaked launcher lock', functio
             ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeFalse();
     } finally {
         Cache::lock(SoftwareUpdateLauncher::LOCK_KEY)->forceRelease();
+    }
+});
+
+test('expired startup reconciliation preserves a newer launcher lock owner', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+    $history = app(DeploymentRunHistory::class);
+    $expiredRunId = 'expired-before-owner-turnover';
+    $newRunId = 'new-owner-after-turnover';
+
+    $history->beginDeploymentRun($expiredRunId, ['platform'], DEPLOYMENT_UPDATE_SCHEDULED_MESSAGE);
+    $this->travel(DeploymentRunHistory::UPDATE_STARTUP_TIMEOUT_SECONDS + 1)->seconds();
+
+    $newOwner = Cache::lock(SoftwareUpdateLauncher::LOCK_KEY, 3600, $newRunId);
+    expect($newOwner->get())->toBeTrue();
+
+    try {
+        Livewire::test(Index::class)
+            ->assertViewHas('updateInProgress', true)
+            ->assertHasNoErrors();
+
+        expect($history->lastDeploymentRun())->toMatchArray([
+            'run_id' => $expiredRunId,
+            'status' => 'error',
+            'phase' => 'finished',
+        ])->and($newOwner->isOwnedByCurrentProcess())->toBeTrue()
+            ->and(app(SoftwareUpdateLauncher::class)->inProgress())->toBeTrue();
+    } finally {
+        $newOwner->release();
     }
 });
 
