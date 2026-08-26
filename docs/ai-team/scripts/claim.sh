@@ -156,10 +156,30 @@ restore_root_off_claim() {
 }
 
 ensure_worktree() {
+  # Always free the shared root first — the claim branch cannot be attached to
+  # the lane worktree while root still has it checked out.
+  restore_root_off_claim
+
   if [[ -d "$worktree" ]]; then
+    # Old claim.sh often left a detached worktree at the claim tip. Accepting
+    # the directory alone exits "success" while the author lane stays detached;
+    # repair by attaching (or recreating) the claim branch here.
+    (
+      cd "$worktree"
+      if [[ $remote_branch -eq 1 ]]; then
+        git fetch -q origin "$branch"
+        git switch -C "$branch" "origin/$branch"
+      elif [[ $local_branch -eq 1 ]]; then
+        git switch -C "$branch"
+      else
+        echo "cannot attach worktree for missing branch $branch" >&2
+        exit 2
+      fi
+    ) || return 1
+    local_branch=1
     return 0
   fi
-  restore_root_off_claim
+
   if [[ $local_branch -eq 1 ]]; then
     # Prefer the local branch ref so the worktree is not detached.
     git worktree add "$worktree" "$branch"

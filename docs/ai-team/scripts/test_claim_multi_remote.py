@@ -245,6 +245,65 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         self.assertEqual(worktree_head, branch)
         self.assertIn("root checkout left on main", result.stdout)
 
+    def test_resume_repairs_existing_detached_worktree_and_root_on_claim(self):
+        """Legacy half-claim: root on claim branch AND detached worktree already present."""
+        branch = "agent/composer-issue-42"
+        env = self.git_env()
+        subprocess.run(["git", "fetch", "-q", "origin", "main"], cwd=self.clone, check=True, env=env)
+        subprocess.run(
+            ["git", "switch", "-c", branch, "origin/main"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-q", "-m", "claim: #42"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        subprocess.run(["git", "push", "-q", "-u", "origin", branch], cwd=self.clone, check=True, env=env)
+
+        worktree = Path(self.dir.name) / "wt-detached-existing"
+        # Detached worktree at the claim tip while root still owns the branch.
+        subprocess.run(
+            ["git", "worktree", "add", "--detach", str(worktree), "HEAD"],
+            cwd=self.clone,
+            check=True,
+            env=env,
+        )
+        detached = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        self.assertEqual(detached, "HEAD")
+
+        result = self.run_claim(worktree=worktree, resume_branch=branch)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        root_head = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=self.clone,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        worktree_head = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=worktree,
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+        ).stdout.strip()
+        self.assertEqual(root_head, "main")
+        self.assertEqual(worktree_head, branch)
+
 
 if __name__ == "__main__":
     unittest.main()
