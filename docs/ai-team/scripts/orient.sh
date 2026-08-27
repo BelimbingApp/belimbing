@@ -153,3 +153,6 @@ gh issue list --repo "$REPO" --state open --label "task:done" --limit 40 \
 gh issue list --repo "$REPO" --state open --limit 100 --json number,title,labels \
   --jq '[.[]|select([.labels[].name]|map(select(startswith("task:")))|length > 1)]
         |.[]|"  #\(.number) carries two task:* labels — \(.title[0:56])"' 2>/dev/null
+
+echo
+BOARD_REPO="$REPO" "$(dirname "$0")/board.sh" hygiene
