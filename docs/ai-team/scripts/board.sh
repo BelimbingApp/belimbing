@@ -27,6 +27,12 @@ set -u
 REPO="${BOARD_REPO:-BelimbingApp/belimbing}"
 BUDGET="${BOARD_POST_BUDGET:-1400}"
 DIGEST_LINES="${BOARD_DIGEST_LINES:-12}"
+# Accounts whose posts no agent authored and no digest should render or nag
+# about: CI bots. Human accounts are never listed here — an unheadered post
+# from a human account may be the OWNER, whose rulings outrank every marker
+# (#364 P1), so those render; hygiene still counts them because the same
+# shared account may be a forgetful agent, and both readings want the flag.
+BOTS="${BOARD_BOTS:-sonarqubecloud dependabot github-actions}"
 
 usage() {
   sed -n '2,3p;12,23p' "$0" | sed 's/^# \{0,1\}//'
@@ -84,11 +90,27 @@ post() {
   # Split at the last line boundary inside the budget: the visible part stays
   # scannable, the remainder survives for humans inside a fold that digest
   # readers never pay for.
-  local visible="$body" folded=""
-  if [ "${#body}" -gt "$BUDGET" ]; then
+  # Byte-safe split (#364 P3): head -c can cut inside a multibyte character
+  # when the budget window holds no newline, and bash ${#var} counts characters
+  # under a UTF-8 locale while head -c counts bytes — so all arithmetic here is
+  # in bytes (wc -c / tail -c), and a partial trailing sequence is dropped from
+  # the visible part (iconv -c) into the fold, conserving every input byte.
+  local visible="$body" folded="" total_bytes visible_bytes trimmed
+  total_bytes=$(printf '%s' "$body" | wc -c)
+  if [ "$total_bytes" -gt "$BUDGET" ]; then
     visible=$(printf '%s' "$body" | head -c "$BUDGET")
-    visible="${visible%$'\n'*}"
-    folded="${body:${#visible}}"
+    case "$visible" in
+      *$'\n'*) visible="${visible%$'\n'*}" ;;
+      *)
+        # glibc iconv exits 1 on an incomplete trailing sequence even though
+        # -c has already written the correct truncated output (measured) — so
+        # take the output on any exit status, falling back only when empty.
+        trimmed=$(printf '%s' "$visible" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true)
+        [ -n "$trimmed" ] && visible="$trimmed"
+        ;;
+    esac
+    visible_bytes=$(printf '%s' "$visible" | wc -c)
+    folded=$(printf '%s' "$body" | tail -c +"$((visible_bytes + 1))")
     folded="${folded#$'\n'}"
   fi
 
@@ -107,37 +129,45 @@ digest() {
   # gh's built-in --jq lacks --arg and full regex support; gate.sh's idiom —
   # fetch JSON with gh, transform with the real jq binary — applies here too.
   gh issue view "$number" --repo "$REPO" --json number,title,state,labels,comments 2>/dev/null \
-    | jq -r --argjson lines "$DIGEST_LINES" '
+    | jq -r --argjson lines "$DIGEST_LINES" --arg bots "$BOTS" '
+      def is_bot: (.author.login // "") as $l | ($bots | split(" ")) | any(. == $l);
       def structured: (.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*");
+      def strip_and_trim(skip_first):
+        (.body // "")
+        | split("\n")
+        | (if skip_first then .[1:] else . end)
+        # Drop <details> blocks line-by-line rather than by multiline regex:
+        # portable across jq builds, and the fold marker shows a reader that
+        # evidence exists without charging them for it.
+        | reduce .[] as $l ({inside: false, out: []};
+            if ($l | test("^\\s*<details>")) then .inside = true | .out += ["[folded detail omitted]"]
+            elif ($l | test("^\\s*</details>")) then .inside = false
+            elif .inside then .
+            else .out += [$l]
+            end)
+        | .out
+        | map(select(. != "" and (test("^\\*\\*Type:\\*\\*") | not)))
+        | ( if length > $lines
+            then .[:$lines] + ["(+\(length - $lines) more lines — read the thread only if you need them)"]
+            else .
+            end )
+        | map("   " + .)
+        | join("\n");
       "== #\(.number) [\(.state)] \(.title)",
       "   labels: \([.labels[].name] | join(","))",
-      ( [.comments[] | select(structured)] as $s
-        | ( .comments | length ) as $all
-        | ( $s | length ) as $kept
-        | ( $s[]
-            | "-- \((.body // "") | split("\n")[0] | sub("^\\*\\*From:\\*\\*\\s*"; "")) · \(.createdAt)",
-              ( (.body // "")
-                | split("\n")
-                | .[1:]
-                # Drop <details> blocks line-by-line rather than by multiline
-                # regex: portable across jq builds, and the fold marker shows
-                # a reader that evidence exists without charging them for it.
-                | reduce .[] as $l ({inside: false, out: []};
-                    if ($l | test("^\\s*<details>")) then .inside = true | .out += ["[folded detail omitted]"]
-                    elif ($l | test("^\\s*</details>")) then .inside = false
-                    elif .inside then .
-                    else .out += [$l]
-                    end)
-                | .out
-                | map(select(. != "" and (test("^\\*\\*Type:\\*\\*") | not)))
-                | ( if length > $lines
-                    then .[:$lines] + ["(+\(length - $lines) more lines — read the thread only if you need them)"]
-                    else .
-                    end )
-                | map("   " + .)
-                | join("\n") ) ),
-          ( if $all > $kept
-            then "-- \($all - $kept) unstructured post(s) hidden (no **From:** header — invisible to team tooling)"
+      ( ([.comments[] | select(is_bot)] | length) as $bot_count
+        | [.comments[] | select(is_bot | not)] as $human
+        | ( $human[]
+            | if structured
+              then "-- \((.body // "") | split("\n")[0] | sub("^\\*\\*From:\\*\\*\\s*"; "")) · \(.createdAt)",
+                   strip_and_trim(true)
+              # No header, human account: possibly the owner, whose posts
+              # outrank every marker (#364 P1) — render, never hide.
+              else "-- [no header] \(.author.login // "?") · \(.createdAt)",
+                   strip_and_trim(false)
+              end ),
+          ( if $bot_count > 0
+            then "-- \($bot_count) bot post(s) ignored (\($bots))"
             else empty
             end ) )
     ' \
@@ -159,7 +189,12 @@ hygiene() {
   local n count clean=1
   for n in $items; do
     count=$(gh issue view "$n" --repo "$REPO" --json comments 2>/dev/null \
-      | jq -r '[.comments[] | select(((.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*")) | not)] | length' 2>/dev/null) || continue
+      | jq -r --arg bots "$BOTS" '
+          def is_bot: (.author.login // "") as $l | ($bots | split(" ")) | any(. == $l);
+          [.comments[]
+           | select(is_bot | not)
+           | select(((.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*")) | not)]
+          | length' 2>/dev/null) || continue
     if [ -n "$count" ] && [ "$count" -gt 0 ]; then
       echo "  #$n has $count unstructured post(s) — post via board.sh so tooling can see them"
       clean=0

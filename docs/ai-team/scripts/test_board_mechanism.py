@@ -154,9 +154,12 @@ class BoardMechanismTest(unittest.TestCase):
                 "state": "OPEN",
                 "labels": [{"name": "task:review"}, {"name": "agent:fable"}],
                 "comments": [
-                    {"body": structured, "createdAt": "2026-08-27T04:00:00Z"},
-                    {"body": "drive-by chatter with no header", "createdAt": "2026-08-27T04:01:00Z"},
-                    {"body": "more noise\nacross lines", "createdAt": "2026-08-27T04:02:00Z"},
+                    {"body": structured, "createdAt": "2026-08-27T04:00:00Z",
+                     "author": {"login": "kiatng"}},
+                    {"body": "Owner response: fork is not involved", "createdAt": "2026-08-27T04:01:00Z",
+                     "author": {"login": "kiatng"}},
+                    {"body": "## Quality Gate Passed\nbot noise", "createdAt": "2026-08-27T04:02:00Z",
+                     "author": {"login": "sonarqubecloud"}},
                 ],
             }
         )
@@ -172,9 +175,13 @@ class BoardMechanismTest(unittest.TestCase):
             self.assertIn("task:review", result.stdout)
             self.assertIn("-- sol", result.stdout)
             self.assertIn("the lease is load-bearing", result.stdout)
-            self.assertIn("2 unstructured post(s) hidden", result.stdout)
-            self.assertNotIn("drive-by chatter", result.stdout)
-            self.assertNotIn("more noise", result.stdout)
+            # P1 (#364): an unheadered post from a human account may be the
+            # owner, whose rulings outrank every marker — rendered, never hidden.
+            self.assertIn("[no header] kiatng", result.stdout)
+            self.assertIn("Owner response: fork is not involved", result.stdout)
+            # Bot posts are ignored with a count, not rendered and not nagged.
+            self.assertIn("1 bot post(s) ignored", result.stdout)
+            self.assertNotIn("Quality Gate Passed", result.stdout)
 
     def test_digest_strips_folded_details_and_truncates_long_posts(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -190,6 +197,25 @@ class BoardMechanismTest(unittest.TestCase):
             self.assertIn("more lines — read the thread only if you need them", result.stdout)
             self.assertNotIn("detail line 19", result.stdout)
 
+    def test_post_budget_cut_inside_a_multibyte_character_stays_valid_utf8(self):
+        # P3 (#364): a single long line with no newline inside the budget used
+        # to be cut mid-character by head -c. The visible part must decode as
+        # UTF-8 and every input character must survive somewhere in the post.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            body_in = "\u00e9" * 300  # 600 bytes of two-byte characters, no newline
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "finding"],
+                directory,
+                env_extra={"BOARD_POST_BUDGET": "201"},
+                stdin=body_in,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            raw_bytes = (directory / "captured-body").read_bytes()
+            decoded = raw_bytes.decode("utf-8")  # raises on a split character
+            self.assertEqual(decoded.count("\u00e9"), 300, "no character may be lost")
+
     # ---- hygiene ----
 
     def test_hygiene_counts_unstructured_posts_on_active_lanes(self):
@@ -201,7 +227,10 @@ class BoardMechanismTest(unittest.TestCase):
                 ["hygiene"], directory, env_extra={"BOARD_TEST_LIST": "42\n"}
             )
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("#42 has 2 unstructured post(s)", result.stdout)
+            # P2 (#364): the bot comment is excluded — only the human-account
+            # unheadered post counts, since only that one could have been an
+            # agent posting correctly.
+            self.assertIn("#42 has 1 unstructured post(s)", result.stdout)
 
     def test_hygiene_reports_clean_when_every_post_is_structured(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -214,7 +243,10 @@ class BoardMechanismTest(unittest.TestCase):
                     "state": "OPEN",
                     "labels": [],
                     "comments": [
-                        {"body": "**From:** fable\n\n**Type:** status\n\nok", "createdAt": "x"}
+                        {"body": "**From:** fable\n\n**Type:** status\n\nok", "createdAt": "x",
+                         "author": {"login": "kiatng"}},
+                        {"body": "## Quality Gate Passed", "createdAt": "x",
+                         "author": {"login": "sonarqubecloud"}},
                     ],
                 }
             )
