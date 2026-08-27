@@ -9,7 +9,7 @@ const GIT_REPOSITORY_MIGRATION_A = 'ibp/Database/Migrations/a.php';
 const GIT_REPOSITORY_MIGRATION_B = 'ibp/Database/Migrations/b.php';
 const GIT_SAFE_DIRECTORY_OPTION = 'safe.directory=';
 const GIT_NON_INTERACTIVE_OPTIONS = ['-c', 'core.askPass=', '-c', 'credential.helper='];
-const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => ''];
+const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => '', 'LC_ALL' => 'C'];
 const GIT_REPOSITORY_TOKEN = 'ghp_git_repository_token_0123456789';
 
 final class GitRepositoryLaunchException extends RuntimeException {}
@@ -174,6 +174,20 @@ test('commands disable interactive credential prompts', function (): void {
 
     Process::assertRan(fn ($process): bool => $process->command === gitRepositoryCommand(GIT_REPOSITORY_BUNDLE_PATH, 'remote', 'get-url', 'origin')
         && $process->environment === GIT_NON_INTERACTIVE_ENVIRONMENT);
+});
+
+test('every git process pins LC_ALL=C so string-matched errors survive translated locales', function (): void {
+    // Proxy assertion (#357): this proves the pin is present in the spawned
+    // environment, not that a translated locale is actually suppressed — real
+    // behavioural coverage would need a generated non-C locale in CI. Which git
+    // strings are translated is unpredictable ('Authentication failed' in
+    // 16/20 catalogs, 'stale info' in 0/20), so the pin, not a string audit,
+    // is the mechanism under test.
+    Process::fake();
+
+    (new GitRepository(GIT_REPOSITORY_BUNDLE_PATH))->remoteUrl();
+
+    Process::assertRan(fn ($process): bool => ($process->environment['LC_ALL'] ?? null) === 'C');
 });
 
 test('authenticated commands pass the token through Git config environment, not argv', function (): void {
