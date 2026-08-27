@@ -45,6 +45,9 @@ GH_STUB = textwrap.dedent(
       "api repos/$GATE_TEST_CANONICAL/pulls/1/reviews")
         printf '%s\\n' "$GATE_TEST_REVIEWS"
         ;;
+      "api repos/$GATE_TEST_CANONICAL/issues/1/comments")
+        printf '%s\\n' "${GATE_TEST_ISSUE_COMMENTS:-[]}"
+        ;;
       "api repos/$GATE_TEST_CANONICAL/pulls/1/files")
         printf '1\\n'
         ;;
@@ -128,6 +131,7 @@ class GateMechanismTest(unittest.TestCase):
         head: str | None = None,
         labels: list[str] | None = None,
         reviews: list[dict[str, object]] | None = None,
+        issue_comments: list[dict[str, object]] | None = None,
         body: str | None = None,
         branch: str | None = None,
         title: str | None = None,
@@ -176,6 +180,7 @@ class GateMechanismTest(unittest.TestCase):
                 "submitted_at": "2026-01-01T00:00:00Z",
             }]
         env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
+        env["GATE_TEST_ISSUE_COMMENTS"] = json.dumps(issue_comments if issue_comments is not None else [])
         env["GATE_MIN_CHECKS"] = "1"
 
         args = ["bash", str(SCRIPT), "1"]
@@ -285,6 +290,90 @@ class GateMechanismTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_stray_comment_verdict_warns_and_still_fails_the_gate(self):
+        # gh pr review --approve is refused on the shared account; the natural
+        # fallback gh pr comment posts fine but gate.sh reads pulls/:pr/reviews
+        # only. #359: this must be a loud, named WARN, not indistinguishable
+        # from "nobody reviewed".
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[],
+            issue_comments=[{
+                "id": 1,
+                "body": "**From:** reviewer\n\n**Verdict:** accept",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("WARN", result.stdout)
+        self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
+        self.assertIn("gh pr review --comment", result.stdout)
+
+    def test_inline_verdict_in_the_comment_stream_still_warns(self):
+        # The observed #356 incident: an agent improvising the channel (gh pr
+        # comment, after --approve was refused) improvised the formatting too
+        # — "**From:** opus-5 — **Verdict:** accept at `sha`." on one line.
+        # The comment-stream scan is diagnostic only (never grants an
+        # acceptance), so unlike 5c it must not require line-anchoring, or
+        # exactly this case goes undetected.
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[],
+            issue_comments=[{
+                "id": 1,
+                "body": "**From:** reviewer — **Verdict:** accept at `abc1234`.",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
+
+    def test_stray_comment_verdict_is_not_reported_once_a_real_acceptance_exists(self):
+        # The comment-stream scan is a diagnostic for the empty case, not a
+        # second acceptance channel — a real review already answered the
+        # question, so there is nothing to warn about.
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+            issue_comments=[{
+                "id": 1,
+                "body": "**From:** someone-else\n\n**Verdict:** changes required",
+            }],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertNotIn("comment stream", result.stdout)
+
+    def test_malformed_review_marker_warns_about_format_instead_of_silence(self):
+        # A **From:** marker is present, but the verdict is inline rather than
+        # on its own line — gate.sh must say the marker was seen and rejected
+        # for format, not just omit the reviewer as if they never posted.
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": "**From:** reviewer — **Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("WARN", result.stdout)
+        self.assertIn("a review marker from reviewer was seen", result.stdout)
+        self.assertIn("rejected for format", result.stdout)
+        self.assertIn("own line", result.stdout)
 
     def test_ambiguous_reviewer_identity_does_not_create_acceptance(self):
         result = self.run_gate(

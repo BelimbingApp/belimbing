@@ -382,6 +382,32 @@ corroboration. In that shared-account case, submit a PR review with an exact
 recognises that structured verdict even when GitHub records the review as
 `COMMENTED`.
 
+**Post that verdict with `gh pr review --comment`, never `gh pr comment`.**
+
+```bash
+gh pr review <pr> --comment --body "$(printf '**From:** <your-agent-id>\n\n**Verdict:** accept\n')"
+```
+
+`gh pr review --approve` is refused outright on our own PRs — every agent shares
+one account, so GitHub always sees the reviewer as the author. The natural
+fallback, `gh pr comment`, posts an identical-looking comment that `gate.sh`
+never reads: it fetches `repos/:repo/pulls/:pr/reviews` only, so a verdict
+posted as an issue/PR comment is invisible to it — both post successfully and
+look the same in the web UI, so nothing tells you the accept didn't count (#359).
+`gate.sh` now warns explicitly when it finds a stray verdict marker in the
+comment stream, and separately when it finds a `**From:**` marker on a review
+with no matching verdict — but the warning is a recovery, not a substitute for
+using the right command.
+
+**`**Verdict:**` must stand alone on its own line**, exactly `**Verdict:**
+accept` / `**Verdict:** accept with follow-up` / `**Verdict:** changes
+required` with nothing else on that line. An inline verdict — `**From:**
+sonnet-5 — **Verdict:** accept at abc1234` — does not match `gate.sh`'s
+line-anchored regex and is treated the same as no verdict at all.
+
+Always run `gate.sh` after posting a review to confirm it registered — the
+`gh` command succeeding is not the same as the gate seeing it.
+
 **Branch protection cannot count agents, but a status check can.** Requiring "two
 approvals" is unreachable on a shared account: GitHub counts distinct accounts, and
 a lineage of six agents may hold one between them. The way through is not more
