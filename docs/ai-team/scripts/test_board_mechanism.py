@@ -33,7 +33,15 @@ def gh_capture_stub(directory: Path, comments_json: str = "[]") -> Path:
             fi
             if [ "$1" = "issue" ] && [ "$2" = "view" ]; then
               cat "$BOARD_TEST_FIXTURE"
-              exit 0
+              exit $?
+            fi
+            if [ "$1" = "api" ]; then
+              if [ -n "${BOARD_TEST_REVIEWS:-}" ] && [ -f "$BOARD_TEST_REVIEWS" ]; then
+                cat "$BOARD_TEST_REVIEWS"
+                exit 0
+              fi
+              echo "gh: Not Found (HTTP 404)" >&2
+              exit 1
             fi
             if { [ "$1" = "pr" ] || [ "$1" = "issue" ]; } && [ "$2" = "list" ]; then
               printf '%s' "${BOARD_TEST_LIST:-}"
@@ -215,6 +223,72 @@ class BoardMechanismTest(unittest.TestCase):
             raw_bytes = (directory / "captured-body").read_bytes()
             decoded = raw_bytes.decode("utf-8")  # raises on a split character
             self.assertEqual(decoded.count("\u00e9"), 300, "no character may be lost")
+
+    def test_digest_merges_the_pr_review_stream_where_verdicts_live(self):
+        # P1a (#364): verdicts are reviews, not conversation comments — post
+        # itself redirects verdict-writers there — so a digest reading only
+        # issue comments hides every verdict, including a blocking one.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            (directory / "fixture.json").write_text(self.digest_fixture(), encoding="utf-8")
+            reviews = json.dumps(
+                [
+                    {
+                        "body": "**From:** sol\n\n**Verdict:** changes required\n\nthe reader reads the wrong stream",
+                        "submitted_at": "2026-08-27T05:00:00Z",
+                        "state": "COMMENTED",
+                        "commit_id": "489f958363cc5e04cd1881eddeadbeefdeadbeef",
+                        "user": {"login": "faith-tohmm"},
+                    }
+                ]
+            )
+            (directory / "reviews.json").write_text(reviews, encoding="utf-8")
+            result = self.run_board(
+                ["digest", "42"], directory,
+                env_extra={"BOARD_TEST_REVIEWS": str(directory / "reviews.json")},
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("[review COMMENTED @489f958]", result.stdout)
+            self.assertIn("**Verdict:** changes required", result.stdout)
+            self.assertIn("the reader reads the wrong stream", result.stdout)
+
+    def test_digest_of_a_plain_issue_survives_the_reviews_endpoint_404(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            (directory / "fixture.json").write_text(self.digest_fixture(), encoding="utf-8")
+            result = self.run_board(["digest", "42"], directory)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("-- sol", result.stdout)
+
+    def test_digest_fails_loudly_when_the_read_itself_fails(self):
+        # sol's pipefail finding: a failed gh read must not hand jq empty
+        # input and exit 0 as an empty-looking digest.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)  # fixture.json deliberately absent
+            result = self.run_board(["digest", "42"], directory)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("could not read", result.stderr)
+
+    def test_post_budget_smaller_than_one_character_keeps_every_byte_in_the_fold(self):
+        # sol's P2 (#364): iconv correctly emits NOTHING for a one-byte prefix
+        # of a two-byte character; treating empty output as failure restored
+        # the invalid byte — the exit-status error repeated one layer down.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "finding"],
+                directory,
+                env_extra={"BOARD_POST_BUDGET": "1"},
+                stdin="\u00e9",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            raw_bytes = (directory / "captured-body").read_bytes()
+            decoded = raw_bytes.decode("utf-8")
+            self.assertEqual(decoded.count("\u00e9"), 1)
 
     # ---- hygiene ----
 

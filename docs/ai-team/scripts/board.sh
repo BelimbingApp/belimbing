@@ -22,7 +22,9 @@
 #       Per-thread unstructured-post counts over active lanes only (open PRs
 #       and open agent:* issues), for orient.sh to surface.
 
-set -u
+# pipefail: a failed gh read must fail the digest loudly, not hand jq empty
+# input and exit 0 (sol's finding on #364).
+set -uo pipefail
 
 REPO="${BOARD_REPO:-BelimbingApp/belimbing}"
 BUDGET="${BOARD_POST_BUDGET:-1400}"
@@ -103,10 +105,13 @@ post() {
       *$'\n'*) visible="${visible%$'\n'*}" ;;
       *)
         # glibc iconv exits 1 on an incomplete trailing sequence even though
-        # -c has already written the correct truncated output (measured) — so
-        # take the output on any exit status, falling back only when empty.
-        trimmed=$(printf '%s' "$visible" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true)
-        [ -n "$trimmed" ] && visible="$trimmed"
+        # -c has already written the correct truncated output (measured), and
+        # EMPTY output is the correct answer for a budget smaller than one
+        # character — so the output is taken unconditionally: reading exit
+        # status or emptiness as a claim about correctness was the same error
+        # at two successive layers (#364, sol's P2). If iconv is absent the
+        # visible part degrades to empty and the whole body rides in the fold.
+        visible=$(printf '%s' "$visible" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true)
         ;;
     esac
     visible_bytes=$(printf '%s' "$visible" | wc -c)
@@ -128,8 +133,20 @@ digest() {
 
   # gh's built-in --jq lacks --arg and full regex support; gate.sh's idiom —
   # fetch JSON with gh, transform with the real jq binary — applies here too.
-  gh issue view "$number" --repo "$REPO" --json number,title,state,labels,comments 2>/dev/null \
-    | jq -r --argjson lines "$DIGEST_LINES" --arg bots "$BOTS" '
+  #
+  # Verdicts live in the REVIEW stream, not the conversation stream — the same
+  # split behind #359, and post itself points verdict-writers at gh pr review —
+  # so a digest reading only issue comments hides every verdict, including a
+  # blocking one (sol's P1a on #364). Merge pulls/:n/reviews in; a plain issue
+  # 404s there and contributes nothing.
+  local issue_json reviews_json
+  issue_json=$(gh issue view "$number" --repo "$REPO" --json number,title,state,labels,comments 2>/dev/null) \
+    || { echo "digest: could not read #$number from $REPO" >&2; exit 1; }
+  reviews_json=$(gh api "repos/$REPO/pulls/$number/reviews" --paginate 2>/dev/null | jq -s 'add // []' 2>/dev/null) || reviews_json='[]'
+  [ -n "$reviews_json" ] || reviews_json='[]'
+
+  printf '%s' "$issue_json" \
+    | jq -r --argjson lines "$DIGEST_LINES" --arg bots "$BOTS" --argjson reviews "$reviews_json" '
       def is_bot: (.author.login // "") as $l | ($bots | split(" ")) | any(. == $l);
       def structured: (.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*");
       def strip_and_trim(skip_first):
@@ -155,23 +172,31 @@ digest() {
         | join("\n");
       "== #\(.number) [\(.state)] \(.title)",
       "   labels: \([.labels[].name] | join(","))",
-      ( ([.comments[] | select(is_bot)] | length) as $bot_count
-        | [.comments[] | select(is_bot | not)] as $human
+      ( ( .comments
+          + ( $reviews
+              | map(select((.body // "") != "")
+                    | { body: .body,
+                        createdAt: (.submitted_at // ""),
+                        author: {login: (.user.login // "?")},
+                        tag: ("[review \(.state // "")\(if .commit_id then " @" + .commit_id[0:7] else "" end)] ") }) ) )
+        | sort_by(.createdAt) ) as $stream
+      | ( ([$stream[] | select(is_bot)] | length) as $bot_count
+        | [$stream[] | select(is_bot | not)] as $human
         | ( $human[]
+            | (.tag // "") as $tag
             | if structured
-              then "-- \((.body // "") | split("\n")[0] | sub("^\\*\\*From:\\*\\*\\s*"; "")) · \(.createdAt)",
+              then "-- \($tag)\((.body // "") | split("\n")[0] | sub("^\\*\\*From:\\*\\*\\s*"; "")) · \(.createdAt)",
                    strip_and_trim(true)
               # No header, human account: possibly the owner, whose posts
               # outrank every marker (#364 P1) — render, never hide.
-              else "-- [no header] \(.author.login // "?") · \(.createdAt)",
+              else "-- \($tag)[no header] \(.author.login // "?") · \(.createdAt)",
                    strip_and_trim(false)
               end ),
           ( if $bot_count > 0
             then "-- \($bot_count) bot post(s) ignored (\($bots))"
             else empty
             end ) )
-    ' \
-    || { echo "digest: could not read #$number from $REPO" >&2; exit 1; }
+    '
 }
 
 hygiene() {

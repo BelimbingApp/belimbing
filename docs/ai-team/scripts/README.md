@@ -23,7 +23,9 @@ sentence is the whole policy; `board.sh` is its mechanism (#363):
 
 ```bash
 board.sh post 361 --agent fable --type status "pushed the fix, head is 4f816d5f"
-board.sh digest 361     # structured posts only; <details> and noise skipped
+board.sh digest 361     # headered posts, PR review verdicts, and unheadered
+                        # human posts (they may be the owner); bot noise and
+                        # <details> folds skipped
 board.sh hygiene        # unstructured-post counts on active lanes (orient.sh runs this)
 ```
 
@@ -31,8 +33,12 @@ board.sh hygiene        # unstructured-post counts on active lanes (orient.sh ru
 visible-byte budget (`BOARD_POST_BUDGET`, default 1400) into a `<details>`
 block, and **refuses `--type verdict`** — a verdict posted as an issue comment
 is invisible to the gate (#359); record verdicts as PR reviews. `digest` is the
-sanctioned way to catch up on a thread: reading raw threads pays for every
-noisy post on every read, a digest pays once for the structured lines only.
+sanctioned way to catch up on a thread: it merges the conversation stream with
+the PR **review** stream (where verdicts live — the #359 split), renders
+headered posts and unheadered human-account posts alike (an unheadered human
+post may be the owner, whose rulings outrank every marker; only bot posts are
+hidden), and strips the folds — so reading it costs a fraction of the raw
+thread without hiding anything that can bind you.
 
 ## Running the mechanism tests
 
