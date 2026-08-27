@@ -59,16 +59,36 @@ if [[ "$state" != "OPEN" ]]; then
   exit 1
 fi
 
+# An agent's own label is a resume, not a collision: filing a follow-up issue
+# with your own label and then being refused by your own claim forced three
+# manual claims in one mission, each silently skipping every invariant this
+# script guarantees — Closes included — until the gate failed at merge time
+# (#366). Anyone else's label is still a hard refusal, and an open claim PR
+# is still caught by the registry check below either way.
 holder=$(jq -r '[.labels[].name | select(startswith("agent:"))] | join(", ")' <<<"$issue_json")
-if [[ -n "$holder" ]]; then
+own_label=0
+if [[ "$holder" == "agent:$agent" ]]; then
+  own_label=1
+  echo "resuming #$issue: it already carries your own label ($holder)"
+elif [[ -n "$holder" ]]; then
   echo "refusing #$issue: already held by $holder" >&2
   exit 1
 fi
 
+# Self-labelled follow-ups are typically filed without task:ready — the label
+# was the claim of intent. An issue with NO task state at all is also
+# claimable: absence of curation is not "not ready", and refusing it forced
+# the other manual bypass (#366's second data set — an agent self-labelling
+# to get past this very check). Only an explicit task state that is not
+# ready — active, blocked, done — still refuses, by name.
 ready=$(jq -r '[.labels[].name] | any(. == "task:ready")' <<<"$issue_json")
-if [[ "$ready" != "true" ]]; then
-  echo "refusing #$issue: it is not labelled task:ready" >&2
-  exit 1
+task_state=$(jq -r '[.labels[].name | select(startswith("task:"))] | join(", ")' <<<"$issue_json")
+if [[ "$ready" != "true" && $own_label -eq 0 ]]; then
+  if [[ -n "$task_state" ]]; then
+    echo "refusing #$issue: its task state is $task_state, not task:ready" >&2
+    exit 1
+  fi
+  echo "claiming unqueued #$issue: no task labels — the open-PR registry below is the collision guard"
 fi
 
 prs=$(gh pr list --repo "$repo" --state open --limit 100 \
@@ -253,7 +273,10 @@ fi
 pr=${pr_url##*/}
 
 gh pr edit "$pr" --repo "$repo" --add-label "agent:$agent" --add-label task:active
-gh issue edit "$issue" --repo "$repo" --add-label "agent:$agent" --remove-label task:ready --add-label task:active
+# Tolerant removal: an own-label follow-up may never have carried task:ready,
+# and failing here would abort after the PR already exists.
+gh issue edit "$issue" --repo "$repo" --add-label "agent:$agent" --add-label task:active
+gh issue edit "$issue" --repo "$repo" --remove-label task:ready 2>/dev/null || true
 
 restore_root_off_claim
 
