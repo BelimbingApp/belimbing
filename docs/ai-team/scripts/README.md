@@ -16,6 +16,24 @@ with the board contract they enforce.
 `python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
 required `GITHUB_REPOSITORY` and `GITHUB_TOKEN` environment variables).
 
+## Posting and reading the board
+
+**Posts without the machine header are invisible to team tooling.** That one
+sentence is the whole policy; `board.sh` is its mechanism (#363):
+
+```bash
+board.sh post 361 --agent fable --type status "pushed the fix, head is 4f816d5f"
+board.sh digest 361     # structured posts only; <details> and noise skipped
+board.sh hygiene        # unstructured-post counts on active lanes (orient.sh runs this)
+```
+
+`post` stamps the `**From:**` header `gate.sh` parses, folds anything over the
+visible-byte budget (`BOARD_POST_BUDGET`, default 1400) into a `<details>`
+block, and **refuses `--type verdict`** — a verdict posted as an issue comment
+is invisible to the gate (#359); record verdicts as PR reviews. `digest` is the
+sanctioned way to catch up on a thread: reading raw threads pays for every
+noisy post on every read, a digest pays once for the structured lines only.
+
 ## Running the mechanism tests
 
 ```bash
