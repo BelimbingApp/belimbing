@@ -84,11 +84,23 @@ bun run build
 > platform-only worktree does not have. A full-suite failure there looks like
 > `include(…/app/Domains/…): Failed to open stream` — that is the source
 > checkout's classmap talking, not your branch. Confirm by re-running the
-> failing test in the main checkout — after verifying it actually is on
-> `main`/your merge-base (`git -C <main-checkout> status -sb`): a shared
-> checkout parked on someone else's branch makes "passes there" evidence
-> about *their* code, not yours. Same code + passes there ⇒ environment;
-> leave it out of your worktree's verdicts.
+> failing test in the main checkout — but first prove *exactly* what code is
+> there, not just its branch name: `git -C <main-checkout> status -sb` reports
+> the branch label and dirtiness, not commit identity, and a checkout can be
+> named `main` while stale (never fetched) or parked on someone else's
+> feature branch. Prove it instead:
+>
+> ```bash
+> git -C <main-checkout> fetch origin main -q
+> git -C <main-checkout> status --porcelain   # must be empty — a dirty tree isn't its HEAD commit
+> [ "$(git -C <main-checkout> rev-parse HEAD)" = "$(git -C <main-checkout> rev-parse origin/main)" ] \
+>   && echo "exact main, clean" || echo "NOT exact main — this checkout proves nothing about main"
+> ```
+>
+> Only when that prints "exact main, clean" does a pass there mean the
+> failure is environmental. A stale or dirty checkout passing tells you
+> nothing about upstream main — treat the original failure as unclassified,
+> not environmental, and do not exclude it from your worktree's verdicts.
 
 5. Commit with a clear message.
 
