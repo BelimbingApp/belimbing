@@ -84,23 +84,27 @@ bun run build
 > platform-only worktree does not have. A full-suite failure there looks like
 > `include(…/app/Domains/…): Failed to open stream` — that is the source
 > checkout's classmap talking, not your branch. Confirm by re-running the
-> failing test in the main checkout — but first prove *exactly* what code is
-> there, not just its branch name: `git -C <main-checkout> status -sb` reports
-> the branch label and dirtiness, not commit identity, and a checkout can be
-> named `main` while stale (never fetched) or parked on someone else's
-> feature branch. Prove it instead:
+> failing test in the main checkout — **on your exact commit**, not whatever
+> the checkout happens to be on. A pass on a *different* commit (main
+> included) proves nothing about your branch, only that the other commit's
+> code doesn't hit this path; you'd need your code and its vendor to isolate
+> the vendor as the actual variable. `git -C <main-checkout> status -sb`
+> proves neither: it reports branch label and dirtiness, not commit identity,
+> and "main" can be stale (never fetched) or someone else's parked branch.
 >
 > ```bash
-> git -C <main-checkout> fetch origin main -q
-> git -C <main-checkout> status --porcelain   # must be empty — a dirty tree isn't its HEAD commit
-> [ "$(git -C <main-checkout> rev-parse HEAD)" = "$(git -C <main-checkout> rev-parse origin/main)" ] \
->   && echo "exact main, clean" || echo "NOT exact main — this checkout proves nothing about main"
+> git -C <main-checkout> status --porcelain            # must be empty first
+> git -C <main-checkout> checkout "$(git rev-parse HEAD)"   # your exact commit, detached
+> # re-run the failing test in <main-checkout> now
+> git -C <main-checkout> checkout main                 # restore — never leave a shared checkout parked
 > ```
 >
-> Only when that prints "exact main, clean" does a pass there mean the
-> failure is environmental. A stale or dirty checkout passing tells you
-> nothing about upstream main — treat the original failure as unclassified,
-> not environmental, and do not exclude it from your worktree's verdicts.
+> Only a pass on your own exact commit means the failure is environmental
+> (vendor/classmap, not code) — the source is held identical, so the vendor
+> tree is the only thing that differs. Anything else (a different commit,
+> including plain "main", or a dirty tree) proves nothing about your code;
+> treat the original failure as unclassified, not environmental, and do not
+> exclude it from your worktree's verdicts.
 
 5. Commit with a clear message.
 
