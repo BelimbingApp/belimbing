@@ -271,7 +271,14 @@ final class GitRepository
         // and core.askpass alike (measured on git 2.54): without it, a helper
         // inherited from the worker's environment can launch and block despite
         // GIT_TERMINAL_PROMPT=0, which stops only the terminal prompt.
-        $environment = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => ''];
+        //
+        // LC_ALL=C keeps git's output byte-stable regardless of server locale
+        // (#357): several callers match on git's English error strings, and
+        // which strings are translated is unpredictable from context —
+        // 'Authentication failed' is translated in 16/20 catalogs on this
+        // machine, 'stale info' beside it in the same rejection path in none —
+        // so pinning the locale beats auditing strings.
+        $environment = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => '', 'LC_ALL' => 'C'];
 
         if (! $authenticated || $this->token === null) {
             return $environment;
