@@ -173,7 +173,11 @@ printf '%s' "$reach_prs" | jq -r '.[]
 # The window between claim and PR: an agent-labelled issue with no open PR
 # referencing it has an owner but no lane row — exactly when reaching the
 # claimer matters most. Board-assumed; issues carry no roster line.
-printf '%s' "$reach_prs" | jq -r '[.[] | .body // ""] | join("\n")' 2>/dev/null > /tmp/orient-reach-bodies.$$
+# mktemp + trap, not a predictable name: shared /tmp, early-exit leaks, and
+# symlink clobbering are the classic trio (#373 review, non-blocking).
+reach_bodies=$(mktemp)
+trap 'rm -f "$reach_bodies"' EXIT
+printf '%s' "$reach_prs" | jq -r '[.[] | .body // ""] | join("\n")' 2>/dev/null > "$reach_bodies"
 gh issue list --repo "$REPO" --state open --limit 60 --json number,labels 2>/dev/null \
   | jq -r '.[]
       | ([.labels[].name | select(startswith("agent:"))] | join(",")) as $agents
@@ -181,10 +185,15 @@ gh issue list --repo "$REPO" --state open --limit 60 --json number,labels 2>/dev
       | "\(.number)\t\($agents)"' 2>/dev/null \
   | while IFS=$'\t' read -r inum iagents; do
       [ -n "$inum" ] || continue
-      grep -q "#$inum" /tmp/orient-reach-bodies.$$ 2>/dev/null && continue
+      # Boundary-anchored: plain "#$inum" substring-matches, so issue #36
+      # silently vanishes from this list whenever any PR body mentions #365 —
+      # the same silent-omission class this board has fixed three times, and
+      # under-reporting is the direction that costs (#373 review).
+      grep -qE "#${inum}([^0-9]|\$)" "$reach_bodies" 2>/dev/null && continue
       echo "  #$inum [$iagents] (claimed, no PR yet) reachable: board (assumed)"
     done
-rm -f /tmp/orient-reach-bodies.$$
+rm -f "$reach_bodies"
+trap - EXIT
 
 echo
 echo "== ready and unclaimed — no agent:* label =="

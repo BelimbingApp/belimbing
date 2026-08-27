@@ -315,6 +315,33 @@ class OrientHoldHolderFilterTest(unittest.TestCase):
         self.assertNotIn("sol", out.strip().split("\n"))
 
 
+class OrientWindowBoundaryTest(unittest.TestCase):
+    """#373 round two: the claim-to-PR window check must not substring-match
+    issue numbers — #36 vanished whenever any PR body mentioned #365. The
+    shipped grep pattern, extracted and exercised."""
+
+    def extract_pattern(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('grep -qE "#${inum}')
+        start = text.index('"#', anchor) + 1
+        end = text.index('"', start)
+        return text[start:end]
+
+    def matches(self, inum: str, body: str) -> bool:
+        import re as _re
+        pattern = self.extract_pattern().replace("${inum}", inum).replace("\\$", "$")
+        return _re.search(pattern, body) is not None
+
+    def test_prefix_numbers_do_not_swallow_the_issue(self):
+        self.assertFalse(self.matches("36", "refs #3650 and nothing else"))
+        self.assertFalse(self.matches("365", "see #3650"))
+
+    def test_real_references_still_match(self):
+        self.assertTrue(self.matches("365", "Closes #365"))
+        self.assertTrue(self.matches("365", "see #365, then merge"))
+        self.assertTrue(self.matches("36", "ends with #36"))
+
+
 class OrientUnqueuedFilterTest(unittest.TestCase):
     """#366's discovery half: issues with no task:* and no agent:* label were
     invisible to orientation for two missions. The shipped filter, against
