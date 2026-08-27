@@ -116,6 +116,86 @@ else
 fi
 
 echo
+echo "== reachability — self-reported at claim; where the owner was when written (#360) =="
+echo "   (agents move between sessions; the board itself always reaches everyone)"
+# The channel, not a session name: holds are clearable only by their owner, so
+# reaching the owner is a correctness dependency of the hold mechanism, and
+# the board is the one channel spanning every lineage, harness, and machine.
+reach_prs=$(gh pr list --repo "$REPO" --state open --limit 40 \
+  --json number,labels,body,updatedAt 2>/dev/null) || reach_prs='[]'
+[ -n "$reach_prs" ] || reach_prs='[]'
+
+printf '%s' "$reach_prs" | jq -r '.[]
+    | ([.labels[].name | select(startswith("agent:"))] | join(",")) as $agents
+    | select($agents != "")
+    | ((((.body // "") | capture("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)") | .c)?) // "board (assumed — no roster line)") as $channel
+    | "  #\(.number) [\($agents)] reachable: \($channel) · last seen \(.updatedAt)"' 2>/dev/null \
+  || echo "  (gh unavailable)"
+
+# The lane owner is not the person the steward usually needs (#373 review):
+# on the motivating incident the lane said agent:fable while the unreachable
+# agent was the HOLD owner, whom no label records. The review stream does
+# record them — the **From:** markers gate.sh parses — so for each held PR,
+# name the agents whose latest verdict is changes-required, with their
+# channel resolved from their own lane row above, else board.
+agent_channels=$(printf '%s' "$reach_prs" | jq -r '.[]
+    | ([.labels[].name | select(startswith("agent:")) | sub("^agent:"; "")] | .[]) as $a
+    | ((((.body // "") | capture("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)") | .c)?) // "") as $c
+    | select($c != "")
+    | "\($a)\t\($c)"' 2>/dev/null)
+
+printf '%s' "$reach_prs" | jq -r '.[]
+    | select([.labels[].name] | any(startswith("hold:")))
+    | .number' 2>/dev/null \
+  | while read -r held_pr; do
+      [ -n "$held_pr" ] || continue
+      gh api "repos/$REPO/pulls/$held_pr/reviews" --paginate 2>/dev/null \
+        | jq -s 'add // []' 2>/dev/null \
+        | jq -r '
+            [.[]
+             | ((((.body // "") | split("\n") | .[0]
+                 | capture("^\\*\\*From:\\*\\*\\s*(?<a>[a-z0-9]+([._-][a-z0-9]+)*)"; "i") | .a)?) // "") as $agent
+             | select($agent != "")
+             | (([(.body // "") | split("\n")[]
+                 | (capture("^\\*\\*Verdict:\\*\\*\\s*(?<v>accept( with follow-up)?|changes required)\\s*$"; "i") | .v)?
+                 | select(. != null) | ascii_downcase] | last) // "") as $verdict
+             | select($verdict != "")
+             | {agent: $agent, verdict: $verdict, at: (.submitted_at // "")}]
+            | group_by(.agent) | map(max_by(.at))
+            | .[] | select(.verdict == "changes required") | .agent' 2>/dev/null \
+        | while read -r holder; do
+            [ -n "$holder" ] || continue
+            channel=$(printf '%s\n' "$agent_channels" | awk -F'\t' -v a="$holder" '$1 == a {print $2; exit}')
+            echo "  #$held_pr [hold] held by $holder — reachable: ${channel:-board (assumed — no lane of their own)}"
+          done
+    done
+
+# The window between claim and PR: an agent-labelled issue with no open PR
+# referencing it has an owner but no lane row — exactly when reaching the
+# claimer matters most. Board-assumed; issues carry no roster line.
+# mktemp + trap, not a predictable name: shared /tmp, early-exit leaks, and
+# symlink clobbering are the classic trio (#373 review, non-blocking).
+reach_bodies=$(mktemp)
+trap 'rm -f "$reach_bodies"' EXIT
+printf '%s' "$reach_prs" | jq -r '[.[] | .body // ""] | join("\n")' 2>/dev/null > "$reach_bodies"
+gh issue list --repo "$REPO" --state open --limit 60 --json number,labels 2>/dev/null \
+  | jq -r '.[]
+      | ([.labels[].name | select(startswith("agent:"))] | join(",")) as $agents
+      | select($agents != "")
+      | "\(.number)\t\($agents)"' 2>/dev/null \
+  | while IFS=$'\t' read -r inum iagents; do
+      [ -n "$inum" ] || continue
+      # Boundary-anchored: plain "#$inum" substring-matches, so issue #36
+      # silently vanishes from this list whenever any PR body mentions #365 —
+      # the same silent-omission class this board has fixed three times, and
+      # under-reporting is the direction that costs (#373 review).
+      grep -qE "#${inum}([^0-9]|\$)" "$reach_bodies" 2>/dev/null && continue
+      echo "  #$inum [$iagents] (claimed, no PR yet) reachable: board (assumed)"
+    done
+rm -f "$reach_bodies"
+trap - EXIT
+
+echo
 echo "== ready and unclaimed — no agent:* label =="
 gh issue list --repo "$REPO" --state open --label "task:ready" --limit 40 \
   --json number,title,labels \

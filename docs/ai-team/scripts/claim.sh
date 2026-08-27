@@ -251,8 +251,15 @@ trap 'rm -f "$body"' EXIT
 # Closes #N must ship in the claim body: authors rewrite descriptions at handoff
 # and forget the keyword, leaving merged PRs with open issues and a lying board.
 # ready.sh re-asserts the same line when the PR leaves draft.
-printf '**From:** %s\n\nClaiming #%s through docs/ai-team/scripts/claim.sh.\n\nCloses #%s\n' \
-  "$agent" "$issue" "$issue" >"$body"
+#
+# **Reachable:** records the channel for reaching this lane's owner (#360) —
+# a channel, never a session name: cross-lineage agents have no session
+# address, and the agent that motivated the roster is one of them. The
+# default is board, the only channel guaranteed to span every lineage,
+# harness, and machine. Override with CLAIM_REACHABLE="session <name>" when
+# a live session address exists; update by editing the PR body if it moves.
+printf '**From:** %s\n\n**Reachable:** %s\n\nClaiming #%s through docs/ai-team/scripts/claim.sh.\n\nCloses #%s\n' \
+  "$agent" "${CLAIM_REACHABLE:-board}" "$issue" "$issue" >"$body"
 
 # --head is load-bearing on multi-remote checkouts: without it, gh cannot infer
 # which remote owns the branch and aborts *after* the push, leaving an invisible

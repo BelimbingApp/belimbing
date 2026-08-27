@@ -56,7 +56,16 @@ class ClaimOwnLabelTest(unittest.TestCase):
                   "issue view") printf '%s\\n' "$CLAIM_TEST_ISSUE_JSON" ;;
                   "pr list") printf '%s\\n' "${CLAIM_TEST_PR_LIST:-[]}" ;;
                   "label list") printf '[{"name":"agent:fable"}]\\n' ;;
-                  "pr create") printf 'https://example/pull/99\\n' ;;
+                  "pr create")
+                    prev=""
+                    for arg in "$@"; do
+                      if [ "$prev" = "--body-file" ] && [ -f "$arg" ]; then
+                        cp "$arg" "${CLAIM_TEST_BODY_CAPTURE:-/dev/null}"
+                      fi
+                      prev="$arg"
+                    done
+                    printf 'https://example/pull/99\\n'
+                    ;;
                   "pr edit") exit 0 ;;
                   "issue edit")
                     if printf '%s' "$*" | grep -q -- '--remove-label task:ready'; then
@@ -92,6 +101,7 @@ class ClaimOwnLabelTest(unittest.TestCase):
         env["CLAIM_TEST_ISSUE_JSON"] = json.dumps(issue_json)
         env["CLAIM_TEST_PR_LIST"] = pr_list
         env["CLAIM_TEST_REMOVE_READY_EXIT"] = remove_ready_exit
+        env["CLAIM_TEST_BODY_CAPTURE"] = str(self.bin / "captured-pr-body")
         return run_with_bash_path(
             ["bash", str(SCRIPT), "42"],
             stub_directory=self.bin,
@@ -157,6 +167,37 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("task:blocked", result.stderr)
 
+    def test_claim_body_records_the_reachable_channel_defaulting_to_board(self):
+        # #360: the roster records a channel, never a session name; board is
+        # the only channel guaranteed to span every lineage and machine.
+        result = self.run_claim(self.issue(["task:ready"]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = (self.bin / "captured-pr-body").read_text(encoding="utf-8")
+        self.assertIn("**Reachable:** board", body)
+        self.assertIn("**From:** fable", body)
+        self.assertIn("Closes #42", body)
+
+    def test_claim_reachable_override_is_recorded_verbatim(self):
+        env = self.git_env()
+        env.update(
+            {
+                "CLAIM_AGENT": "fable",
+                "CLAIM_TEST_ISSUE_JSON": json.dumps(self.issue(["task:ready"])),
+                "CLAIM_TEST_PR_LIST": "[]",
+                "CLAIM_TEST_REMOVE_READY_EXIT": "0",
+                "CLAIM_TEST_BODY_CAPTURE": str(self.bin / "captured-pr-body"),
+                "CLAIM_REACHABLE": "session R2 Fable",
+            }
+        )
+        result = run_with_bash_path(
+            ["bash", str(SCRIPT), "42"],
+            stub_directory=self.bin, env=env, cwd=self.clone,
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = (self.bin / "captured-pr-body").read_text(encoding="utf-8")
+        self.assertIn("**Reachable:** session R2 Fable", body)
+
     def test_failed_task_ready_removal_cannot_abort_a_finished_claim(self):
         result = self.run_claim(self.issue(["agent:fable"]), remove_ready_exit="1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -196,6 +237,109 @@ class OrientReviewQueueFilterTest(unittest.TestCase):
     def test_reports_ok_when_the_queue_is_clean(self):
         out = self.run_filter([{"number": 5, "title": "t", "body": "closes #4"}])
         self.assertIn("ok", out)
+
+
+class OrientReachabilityFilterTest(unittest.TestCase):
+    """#360: the shipped reachability filter against fixtures — channel from
+    the claim body, board-assumed when absent, agent-labelled lanes only."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index("reachable: ")
+        start = text.rindex("| jq -r '", 0, anchor) + len("| jq -r '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, prs):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(prs), text=True, capture_output=True, check=True,
+        ).stdout
+
+    def test_channel_read_from_the_claim_body_with_last_seen(self):
+        out = self.run_filter(
+            [
+                {"number": 373, "labels": [{"name": "agent:fable"}, {"name": "task:active"}],
+                 "body": "**From:** fable\n\n**Reachable:** session R2 Fable\n\nCloses #360",
+                 "updatedAt": "2026-08-27T06:30:00Z"},
+                {"number": 374, "labels": [{"name": "agent:sol"}],
+                 "body": "review lane, no roster line", "updatedAt": "2026-08-27T06:00:00Z"},
+                {"number": 375, "labels": [{"name": "task:review"}],
+                 "body": "no agent label", "updatedAt": "x"},
+            ]
+        )
+        self.assertIn("#373 [agent:fable] reachable: session R2 Fable · last seen 2026-08-27T06:30:00Z", out)
+        self.assertIn("#374 [agent:sol] reachable: board (assumed — no roster line)", out)
+        self.assertNotIn("#375", out)
+
+
+class OrientHoldHolderFilterTest(unittest.TestCase):
+    """#373's P1: the unreachable agent in the incident was the HOLD owner,
+    whom no label records — the review stream does. The shipped filter that
+    extracts agents whose latest verdict is changes-required, against a
+    fixture shaped like #356 (sol blocking, opus-5 accepting)."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('select(.verdict == "changes required")')
+        start = text.rindex("| jq -r '", 0, anchor) + len("| jq -r '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, reviews):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(reviews), text=True, capture_output=True, check=True,
+        ).stdout
+
+    def test_latest_changes_required_agents_extracted_like_356(self):
+        reviews = [
+            {"body": "**From:** sol\n\n**Verdict:** changes required\n\nfinding",
+             "submitted_at": "2026-08-27T05:00:00Z"},
+            {"body": "**From:** opus-5\n\n**Verdict:** accept\n\nfine",
+             "submitted_at": "2026-08-27T05:01:00Z"},
+            {"body": "no header drive-by", "submitted_at": "2026-08-27T05:02:00Z"},
+        ]
+        out = self.run_filter(reviews)
+        self.assertIn("sol", out)
+        self.assertNotIn("opus-5", out)
+
+    def test_a_holder_whose_later_verdict_accepts_is_no_longer_listed(self):
+        reviews = [
+            {"body": "**From:** sol\n\n**Verdict:** changes required\n\nround one",
+             "submitted_at": "2026-08-27T05:00:00Z"},
+            {"body": "**From:** sol\n\n**Verdict:** accept\n\nfixed",
+             "submitted_at": "2026-08-27T06:00:00Z"},
+        ]
+        out = self.run_filter(reviews)
+        self.assertNotIn("sol", out.strip().split("\n"))
+
+
+class OrientWindowBoundaryTest(unittest.TestCase):
+    """#373 round two: the claim-to-PR window check must not substring-match
+    issue numbers — #36 vanished whenever any PR body mentioned #365. The
+    shipped grep pattern, extracted and exercised."""
+
+    def extract_pattern(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('grep -qE "#${inum}')
+        start = text.index('"#', anchor) + 1
+        end = text.index('"', start)
+        return text[start:end]
+
+    def matches(self, inum: str, body: str) -> bool:
+        import re as _re
+        pattern = self.extract_pattern().replace("${inum}", inum).replace("\\$", "$")
+        return _re.search(pattern, body) is not None
+
+    def test_prefix_numbers_do_not_swallow_the_issue(self):
+        self.assertFalse(self.matches("36", "refs #3650 and nothing else"))
+        self.assertFalse(self.matches("365", "see #3650"))
+
+    def test_real_references_still_match(self):
+        self.assertTrue(self.matches("365", "Closes #365"))
+        self.assertTrue(self.matches("365", "see #365, then merge"))
+        self.assertTrue(self.matches("36", "ends with #36"))
 
 
 class OrientUnqueuedFilterTest(unittest.TestCase):
