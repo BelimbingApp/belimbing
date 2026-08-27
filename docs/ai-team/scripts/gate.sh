@@ -288,10 +288,16 @@ if [ -z "$accepted_agents" ]; then
          | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
          | ascii_downcase)] | unique) as $agents
       | if ($agents | length) == 1 then $agents[0] else "" end;
+    # Deliberately unanchored, unlike explicit_verdicts/5c: this path only ever
+    # produces a WARN, never an acceptance, so a missed warning (silence) is
+    # the failure that matters and a false one costs nothing — someone posted
+    # a well-formed verdict gets told to repost, which they can ignore. An
+    # agent improvising the channel (gh pr comment, after --approve is
+    # refused) improvises the formatting too: the observed incident was
+    # exactly this, "**From:** opus-5 — **Verdict:** accept at `sha`." on one
+    # line, which a line-anchored **Verdict:** would never match.
     def has_verdict_marker:
-      ([(.body // "") | split("\n")[]
-        | select(test("^\\*\\*Verdict:\\*\\*[[:space:]]*(accept(?: with follow-up)?|changes required)[[:space:]]*$"; "i"))]
-       | length) > 0;
+      (.body // "") | test("\\*\\*Verdict:\\*\\*[[:space:]]*(accept(?: with follow-up)?|changes required)"; "i");
     [.[] | . + {agent: from_agent} | select(.agent != "" and .agent != $author and has_verdict_marker) | .agent]
     | unique | join("\n")
   ' 2>/dev/null)

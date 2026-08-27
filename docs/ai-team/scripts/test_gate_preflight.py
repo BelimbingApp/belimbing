@@ -311,6 +311,26 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
         self.assertIn("gh pr review --comment", result.stdout)
 
+    def test_inline_verdict_in_the_comment_stream_still_warns(self):
+        # The observed #356 incident: an agent improvising the channel (gh pr
+        # comment, after --approve was refused) improvised the formatting too
+        # — "**From:** opus-5 — **Verdict:** accept at `sha`." on one line.
+        # The comment-stream scan is diagnostic only (never grants an
+        # acceptance), so unlike 5c it must not require line-anchoring, or
+        # exactly this case goes undetected.
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[],
+            issue_comments=[{
+                "id": 1,
+                "body": "**From:** reviewer — **Verdict:** accept at `abc1234`.",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
+
     def test_stray_comment_verdict_is_not_reported_once_a_real_acceptance_exists(self):
         # The comment-stream scan is a diagnostic for the empty case, not a
         # second acceptance channel — a real review already answered the
