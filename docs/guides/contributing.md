@@ -84,8 +84,11 @@ bun run build
 > platform-only worktree does not have. A full-suite failure there looks like
 > `include(…/app/Domains/…): Failed to open stream` — that is the source
 > checkout's classmap talking, not your branch. Confirm by re-running the
-> failing test in the main checkout (same code, passes there ⇒ environment),
-> and leave it out of your worktree's verdicts.
+> failing test in the main checkout — after verifying it actually is on
+> `main`/your merge-base (`git -C <main-checkout> status -sb`): a shared
+> checkout parked on someone else's branch makes "passes there" evidence
+> about *their* code, not yours. Same code + passes there ⇒ environment;
+> leave it out of your worktree's verdicts.
 
 5. Commit with a clear message.
 
