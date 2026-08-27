@@ -128,6 +128,18 @@ gh issue list --repo "$REPO" --state open --label "task:blocked" --limit 40 \
   --json number,title --jq '.[]|"  #\(.number) \(.title[0:70])"' 2>/dev/null
 
 echo
+echo "== review-queue hygiene — unmergeable before review effort is spent (#366) =="
+# A lane that bypassed claim.sh/ready.sh reaches task:review without the
+# closing reference the gate requires; three PRs arrived unmergeable that way
+# in one mission and nothing said so until merge time. Flag it where agents
+# look, before a reviewer pays for it.
+gh pr list --repo "$REPO" --state open --label "task:review" --limit 40   --json number,title,body 2>/dev/null   | jq -r '[.[] | select((.body // "") | test("(?i)closes #[0-9]+") | not)]
+           | if length == 0
+             then "  ok      every task:review PR carries a closing reference"
+             else .[] | "  #\(.number) has no Closes #N — run ready.sh before review effort is spent — \(.title[0:48])"
+             end' 2>/dev/null   || echo "  (gh unavailable)"
+
+echo
 echo "== label hygiene — these are invisible to the queries above =="
 gh issue list --repo "$REPO" --state open --label "task:done" --limit 40 \
   --json number,title --jq '.[]|"  #\(.number) OPEN but labelled task:done — \(.title[0:56])"' 2>/dev/null
