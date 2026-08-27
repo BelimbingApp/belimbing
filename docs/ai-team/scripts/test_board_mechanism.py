@@ -290,6 +290,44 @@ class BoardMechanismTest(unittest.TestCase):
             decoded = raw_bytes.decode("utf-8")
             self.assertEqual(decoded.count("\u00e9"), 1)
 
+    def test_post_without_iconv_falls_back_to_the_raw_cut_not_an_empty_post(self):
+        # #369: on a box without iconv the previous behavior published an
+        # EMPTY visible section for every over-budget single-line post. The
+        # lesser harm is one possibly-split trailing character; the visible
+        # section must stay non-empty.
+        import shutil
+
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            # A PATH that genuinely lacks iconv: symlink only what post needs.
+            for tool in ("bash", "head", "tail", "wc", "cat", "sed"):
+                real = shutil.which(tool)
+                self.assertIsNotNone(real, f"{tool} required for the fixture")
+                (directory / tool).symlink_to(real)
+            env = os.environ.copy()
+            env["BOARD_TEST_CAPTURE"] = str(directory / "captured-body")
+            env["BOARD_TEST_FIXTURE"] = str(directory / "fixture.json")
+            env["BOARD_POST_BUDGET"] = "201"
+            env["PATH"] = str(directory)
+            result = subprocess.run(
+                [str(directory / "bash"), str(SCRIPT), "post", "42",
+                 "--agent", "fable", "--type", "finding"],
+                input="\u00e9" * 300,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body_bytes = (directory / "captured-body").read_bytes()
+            visible = body_bytes.split(b"<details>")[0]
+            # The visible section carries real content (header ~40 bytes plus
+            # ~200 payload bytes), not just the header over an empty body.
+            self.assertGreater(len(visible), 150, "visible section must not be empty")
+            # Byte conservation still holds: every input byte is in the post.
+            self.assertEqual(body_bytes.count(b"\xc3\xa9"), 299)
+
     # ---- hygiene ----
 
     def test_hygiene_counts_unstructured_posts_on_active_lanes(self):
