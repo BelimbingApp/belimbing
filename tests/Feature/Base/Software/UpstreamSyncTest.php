@@ -48,18 +48,21 @@ function fakeSyncGit(
     bool $rcExists = false,
     bool $integrationConflicts = false,
     bool $pushRejected = false,
+    bool $pushStaleInfo = false,
     bool $rcLookupFails = false,
     bool $mirrorLookupFails = false,
 ): void {
-    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $rcExists, $integrationConflicts, $pushRejected, $rcLookupFails, $mirrorLookupFails) {
+    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $rcExists, $integrationConflicts, $pushRejected, $pushStaleInfo, $rcLookupFails, $mirrorLookupFails) {
         $command = gitCommandWithoutConfig($process->command);
 
         if (($command[1] ?? null) === 'push') {
             $ran['push '.implode(' ', array_slice($command, 2))] = true;
 
-            return $pushRejected
-                ? Process::result(errorOutput: 'remote: permission denied', exitCode: 1)
-                : Process::result('');
+            return match (true) {
+                $pushStaleInfo => Process::result(errorOutput: ' ! [rejected]        rc (stale info)', exitCode: 1),
+                $pushRejected => Process::result(errorOutput: 'remote: permission denied', exitCode: 1),
+                default => Process::result(''),
+            };
         }
 
         if (($command[1] ?? null) === 'fetch') {
@@ -151,7 +154,17 @@ test('a clean integration cuts rc in the object database and pushes it', functio
 
     expect($result['ok'])->toBeTrue()
         ->and($result['message'])->toContain('Open the pull request')
-        ->and($ran)->toHaveKey('push origin '.SYNC_RC_SHA.':refs/heads/rc');
+        ->and($ran)->toHaveKey('push origin '.SYNC_RC_SHA.':refs/heads/rc --force-with-lease=refs/heads/rc:');
+});
+
+test('an rc appearing between preflight and push is refused by the push lease, not fast-forwarded', function (): void {
+    $ran = [];
+    fakeSyncGit($ran, pushRejected: true, pushStaleInfo: true);
+
+    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('appeared on origin while this cut was being prepared');
 });
 
 test('a conflicting integration aborts, names the files, and pushes nothing', function (): void {

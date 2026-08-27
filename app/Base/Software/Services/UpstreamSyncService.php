@@ -213,7 +213,17 @@ final class UpstreamSyncService
             return $this->failure((string) __('Could not create the release-candidate commit.'), $commit->message());
         }
 
-        $pushed = $repo->run(['push', 'origin', $commit->output.':refs/heads/'.self::RC_BRANCH], timeout: 300);
+        // The preflight absence check cannot be atomic with the push, so the push
+        // itself carries the expectation: --force-with-lease with an empty value
+        // is git's documented "must not exist" form. Measured (git 2.54): creates
+        // the branch when absent, rejects with "(stale info)" when any rc appeared
+        // since — including a descendant, which a plain push would fast-forward,
+        // letting two concurrent cuts both report success (sol's P1 on #356).
+        $pushed = $repo->run(['push', 'origin', $commit->output.':refs/heads/'.self::RC_BRANCH, '--force-with-lease=refs/heads/'.self::RC_BRANCH.':'], timeout: 300);
+
+        if (! $pushed->ok && str_contains($pushed->message(), 'stale info')) {
+            return $this->failure((string) __('Refused: an rc branch appeared on origin while this cut was being prepared. Check whether another operator just cut one.'), $pushed->message());
+        }
 
         if (! $pushed->ok) {
             return $this->failure((string) __('Could not push rc to origin.'), $pushed->message());
