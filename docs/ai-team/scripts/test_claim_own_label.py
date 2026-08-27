@@ -273,6 +273,48 @@ class OrientReachabilityFilterTest(unittest.TestCase):
         self.assertNotIn("#375", out)
 
 
+class OrientHoldHolderFilterTest(unittest.TestCase):
+    """#373's P1: the unreachable agent in the incident was the HOLD owner,
+    whom no label records — the review stream does. The shipped filter that
+    extracts agents whose latest verdict is changes-required, against a
+    fixture shaped like #356 (sol blocking, opus-5 accepting)."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('select(.verdict == "changes required")')
+        start = text.rindex("| jq -r '", 0, anchor) + len("| jq -r '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, reviews):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(reviews), text=True, capture_output=True, check=True,
+        ).stdout
+
+    def test_latest_changes_required_agents_extracted_like_356(self):
+        reviews = [
+            {"body": "**From:** sol\n\n**Verdict:** changes required\n\nfinding",
+             "submitted_at": "2026-08-27T05:00:00Z"},
+            {"body": "**From:** opus-5\n\n**Verdict:** accept\n\nfine",
+             "submitted_at": "2026-08-27T05:01:00Z"},
+            {"body": "no header drive-by", "submitted_at": "2026-08-27T05:02:00Z"},
+        ]
+        out = self.run_filter(reviews)
+        self.assertIn("sol", out)
+        self.assertNotIn("opus-5", out)
+
+    def test_a_holder_whose_later_verdict_accepts_is_no_longer_listed(self):
+        reviews = [
+            {"body": "**From:** sol\n\n**Verdict:** changes required\n\nround one",
+             "submitted_at": "2026-08-27T05:00:00Z"},
+            {"body": "**From:** sol\n\n**Verdict:** accept\n\nfixed",
+             "submitted_at": "2026-08-27T06:00:00Z"},
+        ]
+        out = self.run_filter(reviews)
+        self.assertNotIn("sol", out.strip().split("\n"))
+
+
 class OrientUnqueuedFilterTest(unittest.TestCase):
     """#366's discovery half: issues with no task:* and no agent:* label were
     invisible to orientation for two missions. The shipped filter, against
