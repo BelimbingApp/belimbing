@@ -56,7 +56,16 @@ class ClaimOwnLabelTest(unittest.TestCase):
                   "issue view") printf '%s\\n' "$CLAIM_TEST_ISSUE_JSON" ;;
                   "pr list") printf '%s\\n' "${CLAIM_TEST_PR_LIST:-[]}" ;;
                   "label list") printf '[{"name":"agent:fable"}]\\n' ;;
-                  "pr create") printf 'https://example/pull/99\\n' ;;
+                  "pr create")
+                    prev=""
+                    for arg in "$@"; do
+                      if [ "$prev" = "--body-file" ] && [ -f "$arg" ]; then
+                        cp "$arg" "${CLAIM_TEST_BODY_CAPTURE:-/dev/null}"
+                      fi
+                      prev="$arg"
+                    done
+                    printf 'https://example/pull/99\\n'
+                    ;;
                   "pr edit") exit 0 ;;
                   "issue edit")
                     if printf '%s' "$*" | grep -q -- '--remove-label task:ready'; then
@@ -92,6 +101,7 @@ class ClaimOwnLabelTest(unittest.TestCase):
         env["CLAIM_TEST_ISSUE_JSON"] = json.dumps(issue_json)
         env["CLAIM_TEST_PR_LIST"] = pr_list
         env["CLAIM_TEST_REMOVE_READY_EXIT"] = remove_ready_exit
+        env["CLAIM_TEST_BODY_CAPTURE"] = str(self.bin / "captured-pr-body")
         return run_with_bash_path(
             ["bash", str(SCRIPT), "42"],
             stub_directory=self.bin,
@@ -157,6 +167,37 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("task:blocked", result.stderr)
 
+    def test_claim_body_records_the_reachable_channel_defaulting_to_board(self):
+        # #360: the roster records a channel, never a session name; board is
+        # the only channel guaranteed to span every lineage and machine.
+        result = self.run_claim(self.issue(["task:ready"]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = (self.bin / "captured-pr-body").read_text(encoding="utf-8")
+        self.assertIn("**Reachable:** board", body)
+        self.assertIn("**From:** fable", body)
+        self.assertIn("Closes #42", body)
+
+    def test_claim_reachable_override_is_recorded_verbatim(self):
+        env = self.git_env()
+        env.update(
+            {
+                "CLAIM_AGENT": "fable",
+                "CLAIM_TEST_ISSUE_JSON": json.dumps(self.issue(["task:ready"])),
+                "CLAIM_TEST_PR_LIST": "[]",
+                "CLAIM_TEST_REMOVE_READY_EXIT": "0",
+                "CLAIM_TEST_BODY_CAPTURE": str(self.bin / "captured-pr-body"),
+                "CLAIM_REACHABLE": "session R2 Fable",
+            }
+        )
+        result = run_with_bash_path(
+            ["bash", str(SCRIPT), "42"],
+            stub_directory=self.bin, env=env, cwd=self.clone,
+            text=True, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = (self.bin / "captured-pr-body").read_text(encoding="utf-8")
+        self.assertIn("**Reachable:** session R2 Fable", body)
+
     def test_failed_task_ready_removal_cannot_abort_a_finished_claim(self):
         result = self.run_claim(self.issue(["agent:fable"]), remove_ready_exit="1")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -196,6 +237,40 @@ class OrientReviewQueueFilterTest(unittest.TestCase):
     def test_reports_ok_when_the_queue_is_clean(self):
         out = self.run_filter([{"number": 5, "title": "t", "body": "closes #4"}])
         self.assertIn("ok", out)
+
+
+class OrientReachabilityFilterTest(unittest.TestCase):
+    """#360: the shipped reachability filter against fixtures — channel from
+    the claim body, board-assumed when absent, agent-labelled lanes only."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index("reachable: ")
+        start = text.rindex("| jq -r '", 0, anchor) + len("| jq -r '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, prs):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(prs), text=True, capture_output=True, check=True,
+        ).stdout
+
+    def test_channel_read_from_the_claim_body_with_last_seen(self):
+        out = self.run_filter(
+            [
+                {"number": 373, "labels": [{"name": "agent:fable"}, {"name": "task:active"}],
+                 "body": "**From:** fable\n\n**Reachable:** session R2 Fable\n\nCloses #360",
+                 "updatedAt": "2026-08-27T06:30:00Z"},
+                {"number": 374, "labels": [{"name": "agent:sol"}],
+                 "body": "review lane, no roster line", "updatedAt": "2026-08-27T06:00:00Z"},
+                {"number": 375, "labels": [{"name": "task:review"}],
+                 "body": "no agent label", "updatedAt": "x"},
+            ]
+        )
+        self.assertIn("#373 [agent:fable] reachable: session R2 Fable · last seen 2026-08-27T06:30:00Z", out)
+        self.assertIn("#374 [agent:sol] reachable: board (assumed — no roster line)", out)
+        self.assertNotIn("#375", out)
 
 
 class OrientUnqueuedFilterTest(unittest.TestCase):

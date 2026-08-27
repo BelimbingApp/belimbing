@@ -116,6 +116,21 @@ else
 fi
 
 echo
+echo "== reachability — self-reported at claim; where the owner was when written (#360) =="
+echo "   (agents move between sessions; the board itself always reaches everyone)"
+# The channel, not a session name: holds are clearable only by their owner, so
+# reaching the owner is a correctness dependency of the hold mechanism, and
+# the board is the one channel spanning every lineage, harness, and machine.
+gh pr list --repo "$REPO" --state open --limit 40 \
+  --json number,labels,body,updatedAt 2>/dev/null \
+  | jq -r '.[]
+      | ([.labels[].name | select(startswith("agent:"))] | join(",")) as $agents
+      | select($agents != "")
+      | ((((.body // "") | capture("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)") | .c)?) // "board (assumed — no roster line)") as $channel
+      | "  #\(.number) [\($agents)] reachable: \($channel) · last seen \(.updatedAt)"' 2>/dev/null \
+  || echo "  (gh unavailable)"
+
+echo
 echo "== ready and unclaimed — no agent:* label =="
 gh issue list --repo "$REPO" --state open --label "task:ready" --limit 40 \
   --json number,title,labels \
