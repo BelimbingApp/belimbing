@@ -121,6 +121,13 @@ gh issue list --repo "$REPO" --state open --label "task:ready" --limit 40 \
   --json number,title,labels \
   --jq '.[]|select([.labels[].name]|any(startswith("agent:"))|not)|"  #\(.number) \(.title[0:70])"' 2>/dev/null \
   || echo "  (gh unavailable)"
+# Unqueued issues — no task:* and no agent:* label — were invisible here for
+# two missions because nothing produced task:ready, and the queue read as
+# empty ("nothing to do") while work sat open (#366). Surface them in the
+# same section; claim.sh accepts them directly.
+gh issue list --repo "$REPO" --state open --limit 100 \
+  --json number,title,labels \
+  --jq '.[]|select(([.labels[].name] | any(startswith("agent:")) or any(startswith("task:")) or any(. == "ops:halt") | not))|"  #\(.number) (unqueued — no task label) \(.title[0:52])"' 2>/dev/null
 
 echo
 echo "== blocked =="

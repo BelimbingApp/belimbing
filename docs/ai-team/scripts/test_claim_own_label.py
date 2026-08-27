@@ -138,10 +138,24 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("an open PR already holds it", result.stderr)
 
-    def test_unlabelled_issue_still_requires_task_ready(self):
+    def test_an_unqueued_issue_with_no_labels_at_all_is_claimable(self):
+        # #366's second data set: refusing an unlabelled issue forced an agent
+        # to self-label to get past the check — the same manual bypass through
+        # a different door. Absence of curation is not "not ready".
         result = self.run_claim(self.issue([]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("claiming unqueued #42", result.stdout)
+        self.assertIn("claimed #42 in draft PR", result.stdout)
+
+    def test_an_explicit_non_ready_task_state_still_refuses_by_name(self):
+        result = self.run_claim(self.issue(["task:active"]))
         self.assertEqual(result.returncode, 1)
-        self.assertIn("not labelled task:ready", result.stderr)
+        self.assertIn("task state is task:active", result.stderr)
+
+    def test_task_blocked_still_refuses(self):
+        result = self.run_claim(self.issue(["task:blocked"]))
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("task:blocked", result.stderr)
 
     def test_failed_task_ready_removal_cannot_abort_a_finished_claim(self):
         result = self.run_claim(self.issue(["agent:fable"]), remove_ready_exit="1")
@@ -182,6 +196,42 @@ class OrientReviewQueueFilterTest(unittest.TestCase):
     def test_reports_ok_when_the_queue_is_clean(self):
         out = self.run_filter([{"number": 5, "title": "t", "body": "closes #4"}])
         self.assertIn("ok", out)
+
+
+class OrientUnqueuedFilterTest(unittest.TestCase):
+    """#366's discovery half: issues with no task:* and no agent:* label were
+    invisible to orientation for two missions. The shipped filter, against
+    fixtures."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index("unqueued — no task label")
+        start = text.rindex("--jq '", 0, anchor) + len("--jq '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, issues):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(issues),
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    def test_surfaces_only_truly_unqueued_issues(self):
+        out = self.run_filter(
+            [
+                {"number": 360, "title": "roster gap", "labels": [{"name": "bug"}]},
+                {"number": 359, "title": "gate", "labels": [{"name": "task:done"}]},
+                {"number": 344, "title": "lane", "labels": [{"name": "agent:fable"}]},
+                {"number": 1, "title": "halt", "labels": [{"name": "ops:halt"}]},
+            ]
+        )
+        self.assertIn("#360 (unqueued — no task label)", out)
+        self.assertNotIn("#359", out)
+        self.assertNotIn("#344", out)
+        self.assertNotIn("#1 ", out)
 
 
 if __name__ == "__main__":

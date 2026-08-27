@@ -76,11 +76,19 @@ elif [[ -n "$holder" ]]; then
 fi
 
 # Self-labelled follow-ups are typically filed without task:ready — the label
-# was the claim of intent. Everyone else still needs the queue's say-so.
+# was the claim of intent. An issue with NO task state at all is also
+# claimable: absence of curation is not "not ready", and refusing it forced
+# the other manual bypass (#366's second data set — an agent self-labelling
+# to get past this very check). Only an explicit task state that is not
+# ready — active, blocked, done — still refuses, by name.
 ready=$(jq -r '[.labels[].name] | any(. == "task:ready")' <<<"$issue_json")
+task_state=$(jq -r '[.labels[].name | select(startswith("task:"))] | join(", ")' <<<"$issue_json")
 if [[ "$ready" != "true" && $own_label -eq 0 ]]; then
-  echo "refusing #$issue: it is not labelled task:ready" >&2
-  exit 1
+  if [[ -n "$task_state" ]]; then
+    echo "refusing #$issue: its task state is $task_state, not task:ready" >&2
+    exit 1
+  fi
+  echo "claiming unqueued #$issue: no task labels — the open-PR registry below is the collision guard"
 fi
 
 prs=$(gh pr list --repo "$repo" --state open --limit 100 \
