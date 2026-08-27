@@ -78,6 +78,17 @@ bun run build
 > The PSR-4 map then points `App\` at the main checkout's `app/`, and the
 > suite passes while silently testing that checkout's branch instead of the
 > worktree's. A relative symlink resolves the same way; copy for real.
+>
+> The copy has one tax of its own: a vendor built where nested Domain repos
+> are checked out carries classmap entries for `app/Domains/…` files a
+> platform-only worktree does not have. A full-suite failure there looks like
+> `include(…/app/Domains/…): Failed to open stream` — that is the source
+> checkout's classmap talking, not your branch. Confirm by re-running the
+> failing test in the main checkout — after verifying it actually is on
+> `main`/your merge-base (`git -C <main-checkout> status -sb`): a shared
+> checkout parked on someone else's branch makes "passes there" evidence
+> about *their* code, not yours. Same code + passes there ⇒ environment;
+> leave it out of your worktree's verdicts.
 
 5. Commit with a clear message.
 
