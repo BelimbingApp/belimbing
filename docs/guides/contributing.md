@@ -94,10 +94,23 @@ bun run build
 >
 > ```bash
 > git -C <main-checkout> status --porcelain            # must be empty first
+> original_ref=$(git -C <main-checkout> symbolic-ref --quiet --short HEAD \
+>   || git -C <main-checkout> rev-parse HEAD)          # capture whatever it was ON, before you touch it
 > git -C <main-checkout> checkout "$(git rev-parse HEAD)"   # your exact commit, detached
 > # re-run the failing test in <main-checkout> now
-> git -C <main-checkout> checkout main                 # restore — never leave a shared checkout parked
+> git -C <main-checkout> checkout "$original_ref"      # restore to what it actually was — not to "main"
 > ```
+>
+> Restore to what you captured, not to `main` by name: the checkout may have
+> been parked on someone else's branch — the exact state this note warns
+> about — and a hardcoded `main` restore relocates it instead of putting it
+> back, manufacturing the failure for whoever reads it next. This is still a
+> manual mutation of a shared resource: if the run is interrupted before the
+> restore line, the checkout sits detached at your commit and anyone reading
+> it concurrently gets a wrong answer. There is no version of this procedure
+> that avoids touching the checkout — borrowing its vendor tree is the whole
+> point — so treat the restore as a hazard to stay alert to, not a promise
+> the steps below keep for you.
 >
 > Only a pass on your own exact commit means the failure is environmental
 > (vendor/classmap, not code) — the source is held identical, so the vendor
