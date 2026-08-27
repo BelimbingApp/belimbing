@@ -246,8 +246,14 @@ final class GitRepository
             'safe.directory='.$this->safeDirectory(),
         ];
 
+        // core.askPass stays disabled unconditionally: GIT_TERMINAL_PROMPT=0
+        // stops only the *terminal* prompt (sol's P1 on #356, measured) — a
+        // configured askpass program would still launch and block a web worker.
+        // Ambient credentials only re-enable the non-interactive helper.
+        $command = [...$command, '-c', 'core.askPass='];
+
         if (! $this->ambientCredentials) {
-            $command = [...$command, '-c', 'core.askPass=', '-c', 'credential.helper='];
+            $command = [...$command, '-c', 'credential.helper='];
         }
 
         return array_merge($command, $args);
@@ -261,7 +267,11 @@ final class GitRepository
      */
     public function environment(bool $authenticated = false): array
     {
-        $environment = ['GIT_TERMINAL_PROMPT' => '0'];
+        // An empty GIT_ASKPASS wins over an inherited GIT_ASKPASS, SSH_ASKPASS,
+        // and core.askpass alike (measured on git 2.54): without it, a helper
+        // inherited from the worker's environment can launch and block despite
+        // GIT_TERMINAL_PROMPT=0, which stops only the terminal prompt.
+        $environment = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => ''];
 
         if (! $authenticated || $this->token === null) {
             return $environment;

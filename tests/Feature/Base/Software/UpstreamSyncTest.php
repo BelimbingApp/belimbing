@@ -2,6 +2,7 @@
 
 use App\Base\Software\Livewire\Deployment\Index;
 use App\Base\Software\Services\UpstreamSyncService;
+use App\Base\Support\Git\GitRepository;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -47,8 +48,10 @@ function fakeSyncGit(
     bool $rcExists = false,
     bool $integrationConflicts = false,
     bool $pushRejected = false,
+    bool $rcLookupFails = false,
+    bool $mirrorLookupFails = false,
 ): void {
-    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $rcExists, $integrationConflicts, $pushRejected) {
+    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $rcExists, $integrationConflicts, $pushRejected, $rcLookupFails, $mirrorLookupFails) {
         $command = gitCommandWithoutConfig($process->command);
 
         if (($command[1] ?? null) === 'push') {
@@ -72,12 +75,16 @@ function fakeSyncGit(
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
             ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
             ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".SYNC_UPSTREAM_SHA."\tHEAD"),
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => $mirrorSha !== null
-                ? Process::result($mirrorSha."\trefs/heads/main")
-                : Process::result('', exitCode: 2),
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/rc'] => $rcExists
-                ? Process::result(SYNC_RC_SHA."\trefs/heads/rc")
-                : Process::result('', exitCode: 2),
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => match (true) {
+                $mirrorLookupFails => Process::result(errorOutput: 'fatal: unable to access: could not resolve host', exitCode: 128),
+                $mirrorSha !== null => Process::result($mirrorSha."\trefs/heads/main"),
+                default => Process::result('', exitCode: 2),
+            },
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/rc'] => match (true) {
+                $rcLookupFails => Process::result(errorOutput: 'fatal: unable to access: could not resolve host', exitCode: 128),
+                $rcExists => Process::result(SYNC_RC_SHA."\trefs/heads/rc"),
+                default => Process::result('', exitCode: 2),
+            },
             ['git', 'merge-base', '--is-ancestor', (string) $mirrorSha, SYNC_UPSTREAM_SHA] => $mirrorDiverged
                 ? Process::result('', exitCode: 1)
                 : Process::result(''),
@@ -169,6 +176,42 @@ test('an existing rc from a previous round refuses the cut (per-cycle policy)', 
     expect($result['ok'])->toBeFalse()
         ->and($result['message'])->toContain('already exists')
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
+});
+
+test('a failed rc lookup refuses the cut instead of reading failure as absence', function (): void {
+    $ran = [];
+    fakeSyncGit($ran, rcLookupFails: true);
+
+    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('Could not determine')
+        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
+});
+
+test('a failed mirror lookup refuses the refresh instead of creating over the unknown', function (): void {
+    $ran = [];
+    fakeSyncGit($ran, mirrorLookupFails: true);
+
+    $result = app(UpstreamSyncService::class)->refreshMirror(createAdminUser());
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('Could not determine')
+        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
+});
+
+test('askpass is disabled at both the config and environment level, ambient credentials or not', function (): void {
+    $ambient = new GitRepository(base_path(), ambientCredentials: true);
+    $default = new GitRepository(base_path());
+
+    // GIT_TERMINAL_PROMPT=0 stops only the terminal prompt; a configured or
+    // inherited askpass program still runs unless both of these hold (measured
+    // on git 2.54 — sol's P1 on #356).
+    expect($ambient->command(['push']))->toContain('core.askPass=')
+        ->and($ambient->command(['push']))->not->toContain('credential.helper=')
+        ->and($default->command(['push']))->toContain('credential.helper=')
+        ->and($ambient->environment()['GIT_ASKPASS'])->toBe('')
+        ->and($default->environment()['GIT_ASKPASS'])->toBe('');
 });
 
 test('a checkout with no upstream remote states that, for both actions', function (): void {

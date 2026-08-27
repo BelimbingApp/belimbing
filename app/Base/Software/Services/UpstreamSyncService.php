@@ -70,7 +70,15 @@ final class UpstreamSyncService
             return $this->failure((string) __('Could not fetch :remote/:branch.', ['remote' => $identity['remote'], 'branch' => $branch]), $fetched->message());
         }
 
+        // ls-remote --exit-code separates "no such ref" (2) from a failed lookup
+        // (128, auth/network). A failure is not a fact about the repository
+        // (sol's P1 on #356): refusing here stops an unreachable origin from
+        // being read as "mirror absent" and answered with a creation push.
         $mirror = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$branch]);
+
+        if (! $mirror->ok && $mirror->exitCode !== 2) {
+            return $this->failure((string) __('Could not determine whether origin/:branch exists.', ['branch' => $branch]), $mirror->message());
+        }
 
         if ($mirror->ok) {
             $mirrorSha = (string) strtok($mirror->output, " \t");
@@ -125,9 +133,17 @@ final class UpstreamSyncService
         $repo = $this->syncRepository($path);
 
         // Per-cycle rc (owner ruling on #339): an existing rc is an unfinished
-        // round. Refuse with the state named rather than force or reuse.
-        if ($repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.self::RC_BRANCH])->ok) {
+        // round. Refuse with the state named rather than force or reuse — and a
+        // failed lookup (exit 128) is not "absent" (exit 2): cutting while
+        // GitHub is unreachable must refuse, not proceed (sol's P1 on #356).
+        $rc = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.self::RC_BRANCH]);
+
+        if ($rc->ok) {
             return $this->failure((string) __('Refused: an rc branch already exists on origin from a previous round. Merge or delete it before cutting a new release candidate.'));
+        }
+
+        if ($rc->exitCode !== 2) {
+            return $this->failure((string) __('Could not determine whether an rc branch already exists on origin.'), $rc->message());
         }
 
         $upstream = $this->resolveUpstreamHead($repo, $identity);
