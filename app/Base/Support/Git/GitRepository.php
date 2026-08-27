@@ -17,10 +17,19 @@ use Throwable;
  */
 final class GitRepository
 {
+    /**
+     * $ambientCredentials opts a repository into the machine's own configured
+     * git credential helper (needed by upstream-sync pushes, #339, which are
+     * deliberately built on ambient developer credentials instead of a stored
+     * token). Default off: read paths keep the helper disabled so a misconfigured
+     * remote can never trigger a credential lookup, and interactive prompts stay
+     * impossible either way via GIT_TERMINAL_PROMPT=0.
+     */
     public function __construct(
         private readonly string $path,
         private readonly ?string $token = null,
         private readonly ?string $executable = null,
+        private readonly bool $ambientCredentials = false,
     ) {}
 
     public function isRepository(): bool
@@ -235,11 +244,11 @@ final class GitRepository
             $explicitExecutable ? (string) $this->executable : $this->configuredExecutable(),
             '-c',
             'safe.directory='.$this->safeDirectory(),
-            '-c',
-            'core.askPass=',
-            '-c',
-            'credential.helper=',
         ];
+
+        if (! $this->ambientCredentials) {
+            $command = [...$command, '-c', 'core.askPass=', '-c', 'credential.helper='];
+        }
 
         return array_merge($command, $args);
     }
