@@ -92,6 +92,7 @@ git cat-file -e "${REVIEWED}^{commit}" 2>/dev/null || git fetch -q origin "pull/
 fail=0
 say_ok()   { echo "  ok      $*"; }
 say_bad()  { echo "  BLOCKED $*"; fail=1; }
+say_warn() { echo "  WARN    $*"; }
 
 echo "gate: $REPO #$PR at ${REVIEWED:0:8}"
 
@@ -254,6 +255,59 @@ if [ -z "$blocking_agents" ]; then
   say_ok "no independent exact-head changes-required verdict"
 else
   say_bad "independent exact-head changes required by $blocking_agents"
+fi
+
+# 5c. A review that carries a **From:** marker but no line-anchored **Verdict:**
+# (or 2+ conflicting ones) is silently excluded above rather than counted — say
+# so, so a reviewer who wrote an inline verdict finds out from the gate instead
+# of a "no acceptance" message that looks identical to never having reviewed (#359).
+malformed_agents=$(printf '%s' "$latest_reviews" | jq -r --arg author "$author_agent" \
+  '[.[] | select(.agent != $author and .verdict == "") | .agent] | unique | join("\n")' \
+  2>/dev/null)
+if [ -n "$malformed_agents" ]; then
+  while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    say_warn "a review marker from $agent was seen at ${REVIEWED:0:8} but rejected for format — **Verdict:** must stand alone on its own line (accept / accept with follow-up / changes required)"
+  done <<< "$malformed_agents"
+fi
+
+# 5d. gh pr review --approve is refused on our own PRs (shared account), and
+# the natural fallback `gh pr comment` posts fine but gate.sh only ever reads
+# repos/:repo/pulls/:pr/reviews — an accept posted there silently does not
+# exist as far as the gate is concerned (#359). Only worth the extra API call
+# when the review stream came up empty; a comment-stream marker never overrides
+# an actual review either way.
+if [ -z "$accepted_agents" ]; then
+  issue_comments=$(gh api "repos/$REPO/issues/$PR/comments" --paginate 2>/dev/null \
+    | jq -s 'add // []' 2>/dev/null)
+  [ -n "$issue_comments" ] || issue_comments='[]'
+
+  stray_agents=$(printf '%s' "$issue_comments" | jq -r --arg author "$author_agent" '
+    def from_agent:
+      ([((.body // "") | split("\n")[]
+         | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
+         | ascii_downcase)] | unique) as $agents
+      | if ($agents | length) == 1 then $agents[0] else "" end;
+    # Deliberately unanchored, unlike explicit_verdicts/5c: this path only ever
+    # produces a WARN, never an acceptance, so a missed warning (silence) is
+    # the failure that matters and a false one costs nothing — someone posted
+    # a well-formed verdict gets told to repost, which they can ignore. An
+    # agent improvising the channel (gh pr comment, after --approve is
+    # refused) improvises the formatting too: the observed incident was
+    # exactly this, "**From:** opus-5 — **Verdict:** accept at `sha`." on one
+    # line, which a line-anchored **Verdict:** would never match.
+    def has_verdict_marker:
+      (.body // "") | test("\\*\\*Verdict:\\*\\*[[:space:]]*(accept(?: with follow-up)?|changes required)"; "i");
+    [.[] | . + {agent: from_agent} | select(.agent != "" and .agent != $author and has_verdict_marker) | .agent]
+    | unique | join("\n")
+  ' 2>/dev/null)
+
+  if [ -n "$stray_agents" ]; then
+    while IFS= read -r agent; do
+      [ -n "$agent" ] || continue
+      say_warn "found a verdict marker from $agent in the comment stream; gate reads reviews only — repost with 'gh pr review --comment'"
+    done <<< "$stray_agents"
+  fi
 fi
 
 # 6. The head has not moved since the review. GitHub's PR head also lags a push
