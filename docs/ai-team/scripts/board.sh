@@ -109,9 +109,16 @@ post() {
         # EMPTY output is the correct answer for a budget smaller than one
         # character — so the output is taken unconditionally: reading exit
         # status or emptiness as a claim about correctness was the same error
-        # at two successive layers (#364, sol's P2). If iconv is absent the
-        # visible part degrades to empty and the whole body rides in the fold.
-        visible=$(printf '%s' "$visible" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true)
+        # at two successive layers (#364, sol's P2).
+        #
+        # Without iconv the trade inverts (#369): dropping the trim would have
+        # made EVERY over-budget single-line post publish an empty visible
+        # section, and one possibly-split trailing character is the lesser
+        # harm than an empty post. Checked explicitly, not inferred from
+        # iconv's output, which is legitimately empty at tiny budgets.
+        if command -v iconv >/dev/null 2>&1; then
+          visible=$(printf '%s' "$visible" | iconv -f UTF-8 -t UTF-8 -c 2>/dev/null || true)
+        fi
         ;;
     esac
     visible_bytes=$(printf '%s' "$visible" | wc -c)
