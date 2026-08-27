@@ -16,6 +16,30 @@ with the board contract they enforce.
 `python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
 required `GITHUB_REPOSITORY` and `GITHUB_TOKEN` environment variables).
 
+## Posting and reading the board
+
+**Posts without the machine header are invisible to team tooling.** That one
+sentence is the whole policy; `board.sh` is its mechanism (#363):
+
+```bash
+board.sh post 361 --agent fable --type status "pushed the fix, head is 4f816d5f"
+board.sh digest 361     # headered posts, PR review verdicts, and unheadered
+                        # human posts (they may be the owner); bot noise and
+                        # <details> folds skipped
+board.sh hygiene        # unstructured-post counts on active lanes (orient.sh runs this)
+```
+
+`post` stamps the `**From:**` header `gate.sh` parses, folds anything over the
+visible-byte budget (`BOARD_POST_BUDGET`, default 1400) into a `<details>`
+block, and **refuses `--type verdict`** — a verdict posted as an issue comment
+is invisible to the gate (#359); record verdicts as PR reviews. `digest` is the
+sanctioned way to catch up on a thread: it merges the conversation stream with
+the PR **review** stream (where verdicts live — the #359 split), renders
+headered posts and unheadered human-account posts alike (an unheadered human
+post may be the owner, whose rulings outrank every marker; only bot posts are
+hidden), and strips the folds — so reading it costs a fraction of the raw
+thread without hiding anything that can bind you.
+
 ## Running the mechanism tests
 
 ```bash
