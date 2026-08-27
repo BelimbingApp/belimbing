@@ -651,6 +651,19 @@
                                      point of use. Visibility above never depends on this gate. --}}
                                 @if ($upstreamSyncState['available'])
                                     <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available on this deployment.') }}</div>
+                                    {{-- Buttons are convenience; the boundary is UpstreamSyncGate::authorize()
+                                         inside each action (#339). Stops at the rc push: the PR is a human
+                                         click in GitHub. --}}
+                                    <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="refreshMirror" wire:loading.attr="disabled" wire:target="refreshMirror" :title="__('Fast-forward origin\'s mirror branch from the framework upstream; refused if the mirror has diverged.')">
+                                            <span wire:loading.remove wire:target="refreshMirror">{{ __('Refresh mirror') }}</span>
+                                            <span wire:loading wire:target="refreshMirror">{{ __('Refreshing…') }}</span>
+                                        </x-ui.button>
+                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="cutReleaseCandidate" wire:loading.attr="disabled" wire:target="cutReleaseCandidate" :title="__('Create rc = master + mirror in the object database (the checkout is never touched) and push it; the pull request is then opened by a person in GitHub.')">
+                                            <span wire:loading.remove wire:target="cutReleaseCandidate">{{ __('Cut release candidate') }}</span>
+                                            <span wire:loading wire:target="cutReleaseCandidate">{{ __('Cutting…') }}</span>
+                                        </x-ui.button>
+                                    </div>
                                 @else
                                     <div class="mt-1 text-xs text-muted">{{ $upstreamSyncState['reason'] }}</div>
                                 @endif

@@ -9,7 +9,7 @@ const GIT_REPOSITORY_MIGRATION_A = 'ibp/Database/Migrations/a.php';
 const GIT_REPOSITORY_MIGRATION_B = 'ibp/Database/Migrations/b.php';
 const GIT_SAFE_DIRECTORY_OPTION = 'safe.directory=';
 const GIT_NON_INTERACTIVE_OPTIONS = ['-c', 'core.askPass=', '-c', 'credential.helper='];
-const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0'];
+const GIT_NON_INTERACTIVE_ENVIRONMENT = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => ''];
 const GIT_REPOSITORY_TOKEN = 'ghp_git_repository_token_0123456789';
 
 final class GitRepositoryLaunchException extends RuntimeException {}

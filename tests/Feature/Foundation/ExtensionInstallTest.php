@@ -130,6 +130,7 @@ it('clones an extension with the stored github token and redirects', function ()
 
     $expectedAuthEnvironment = [
         'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_ASKPASS' => '',
         'GIT_CONFIG_COUNT' => '1',
         'GIT_CONFIG_KEY_0' => 'http.extraHeader',
         'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.EXTENSION_INSTALL_TOKEN),

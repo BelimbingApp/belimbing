@@ -73,6 +73,7 @@ it('installs a private repository as a domain with the explicitly selected crede
 
     $expectedAuthEnvironment = [
         'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_ASKPASS' => '',
         'GIT_CONFIG_COUNT' => '1',
         'GIT_CONFIG_KEY_0' => 'http.extraHeader',
         'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.SOURCE_REPOSITORY_INSTALL_TOKEN),

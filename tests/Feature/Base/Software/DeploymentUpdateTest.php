@@ -424,7 +424,7 @@ test('deployment remote checks disable interactive credential prompts', function
     app(SoftwareSourceRepository::class)->status(useRemoteCache: false);
 
     Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']
-        && $process->environment === ['GIT_TERMINAL_PROMPT' => '0']);
+        && $process->environment === ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => '']);
 });
 
 test('deployment remote checks keep stored GitHub tokens out of command arguments', function (): void {
@@ -435,6 +435,7 @@ test('deployment remote checks keep stored GitHub tokens out of command argument
 
     $expectedEnvironment = [
         'GIT_TERMINAL_PROMPT' => '0',
+        'GIT_ASKPASS' => '',
         'GIT_CONFIG_COUNT' => '1',
         'GIT_CONFIG_KEY_0' => 'http.extraHeader',
         'GIT_CONFIG_VALUE_0' => 'Authorization: Basic '.base64_encode('x-access-token:'.DEPLOYMENT_UPDATE_GITHUB_TOKEN),

@@ -17,10 +17,19 @@ use Throwable;
  */
 final class GitRepository
 {
+    /**
+     * $ambientCredentials opts a repository into the machine's own configured
+     * git credential helper (needed by upstream-sync pushes, #339, which are
+     * deliberately built on ambient developer credentials instead of a stored
+     * token). Default off: read paths keep the helper disabled so a misconfigured
+     * remote can never trigger a credential lookup, and interactive prompts stay
+     * impossible either way via GIT_TERMINAL_PROMPT=0.
+     */
     public function __construct(
         private readonly string $path,
         private readonly ?string $token = null,
         private readonly ?string $executable = null,
+        private readonly bool $ambientCredentials = false,
     ) {}
 
     public function isRepository(): bool
@@ -235,11 +244,17 @@ final class GitRepository
             $explicitExecutable ? (string) $this->executable : $this->configuredExecutable(),
             '-c',
             'safe.directory='.$this->safeDirectory(),
-            '-c',
-            'core.askPass=',
-            '-c',
-            'credential.helper=',
         ];
+
+        // core.askPass stays disabled unconditionally: GIT_TERMINAL_PROMPT=0
+        // stops only the *terminal* prompt (sol's P1 on #356, measured) — a
+        // configured askpass program would still launch and block a web worker.
+        // Ambient credentials only re-enable the non-interactive helper.
+        $command = [...$command, '-c', 'core.askPass='];
+
+        if (! $this->ambientCredentials) {
+            $command = [...$command, '-c', 'credential.helper='];
+        }
 
         return array_merge($command, $args);
     }
@@ -252,7 +267,11 @@ final class GitRepository
      */
     public function environment(bool $authenticated = false): array
     {
-        $environment = ['GIT_TERMINAL_PROMPT' => '0'];
+        // An empty GIT_ASKPASS wins over an inherited GIT_ASKPASS, SSH_ASKPASS,
+        // and core.askpass alike (measured on git 2.54): without it, a helper
+        // inherited from the worker's environment can launch and block despite
+        // GIT_TERMINAL_PROMPT=0, which stops only the terminal prompt.
+        $environment = ['GIT_TERMINAL_PROMPT' => '0', 'GIT_ASKPASS' => ''];
 
         if (! $authenticated || $this->token === null) {
             return $environment;

@@ -4,6 +4,7 @@ namespace App\Base\Software\Livewire\Deployment;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Software\Livewire\Deployment\Concerns\FormatsDeploymentRunOutput;
 use App\Base\Software\Services\DeploymentRunHistory;
 use App\Base\Software\Services\DeploymentService;
@@ -12,7 +13,10 @@ use App\Base\Software\Services\PhpExtensionDriftProbe;
 use App\Base\Software\Services\SoftwareSourceGitReader;
 use App\Base\Software\Services\SoftwareUpdateLauncher;
 use App\Base\Software\Services\UpstreamSyncGate;
+use App\Base\Software\Services\UpstreamSyncService;
 use Carbon\CarbonImmutable;
+use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Session;
@@ -27,6 +31,7 @@ use Livewire\Component;
 class Index extends Component
 {
     use FormatsDeploymentRunOutput;
+    use InteractsWithNotifications;
 
     public function placeholder(): View
     {
@@ -84,6 +89,38 @@ class Index extends Component
         SoftwareUpdateLauncher $launcher,
     ): void {
         $this->runDetachedUpdate($history, $launcher, []);
+    }
+
+    public function refreshMirror(UpstreamSyncService $sync): void
+    {
+        $this->runUpstreamSyncAction(fn (): array => $sync->refreshMirror(Auth::user()));
+    }
+
+    public function cutReleaseCandidate(UpstreamSyncService $sync): void
+    {
+        $this->runUpstreamSyncAction(fn (): array => $sync->cutReleaseCandidate(Auth::user()));
+    }
+
+    /**
+     * The service authorizes against UpstreamSyncGate itself, so a request
+     * that bypasses the UI (or a gate that closed between render and click)
+     * still stops at the server with the gate's own stated reason.
+     *
+     * @param  Closure(): array{ok: bool, message: string, detail: string|null}  $action
+     */
+    private function runUpstreamSyncAction(Closure $action): void
+    {
+        try {
+            $result = $action();
+        } catch (AuthorizationException $exception) {
+            $this->notifyError($exception->getMessage());
+
+            return;
+        }
+
+        $message = $result['detail'] !== null ? $result['message'].' '.$result['detail'] : $result['message'];
+
+        $result['ok'] ? $this->notifySuccess($result['message']) : $this->notifyError($message);
     }
 
     public function rebuildPhp(
