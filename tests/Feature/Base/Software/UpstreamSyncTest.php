@@ -84,7 +84,7 @@ function fakeSyncGit(
             ['git', 'rev-parse', 'refs/remotes/origin/master'] => Process::result(SYNC_STABLE_SHA),
             ['git', 'rev-parse', 'refs/remotes/origin/main'] => Process::result(SYNC_UPSTREAM_SHA),
             ['git', 'merge-tree', '--write-tree', '--name-only', SYNC_STABLE_SHA, SYNC_UPSTREAM_SHA] => $integrationConflicts
-                ? Process::result(SYNC_TREE_OID."\napp/Base/Foundation/Kernel.php\nconfig/app.php", exitCode: 1)
+                ? Process::result(SYNC_TREE_OID."\napp/Base/Foundation/Kernel.php\nconfig/app.php\n\nAuto-merging config/app.php\nCONFLICT (content): Merge conflict in config/app.php", exitCode: 1)
                 : Process::result(SYNC_TREE_OID),
             ['git', 'commit-tree', SYNC_TREE_OID, '-p', SYNC_STABLE_SHA, '-p', SYNC_UPSTREAM_SHA, '-m', 'rc: integrate upstream/main into master'] => Process::result(SYNC_RC_SHA),
             default => Process::result(),
@@ -156,6 +156,7 @@ test('a conflicting integration aborts, names the files, and pushes nothing', fu
     expect($result['ok'])->toBeFalse()
         ->and($result['message'])->toContain('app/Base/Foundation/Kernel.php')
         ->and($result['message'])->toContain('working tree was not touched')
+        ->and($result['message'])->not->toContain('Auto-merging')
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 

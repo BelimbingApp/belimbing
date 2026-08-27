@@ -158,8 +158,22 @@ final class UpstreamSyncService
         // merge-tree exits 1 for a conflicted merge (first output line is still a
         // tree oid, the rest are the conflicted paths) and >1 for a real error.
         if (! $merge->ok && $merge->exitCode === 1) {
+            // Observed output shape (git 2.54): tree oid, the conflicted paths,
+            // then a blank line followed by informational messages ("Auto-merging
+            // …", "CONFLICT (content): …"). Only the section before the blank
+            // line is file names.
             $lines = preg_split('/\R/', $merge->output) ?: [];
-            $conflicted = implode(', ', array_slice(array_values(array_filter(array_map('trim', array_slice($lines, 1)))), 0, 20));
+            $files = [];
+
+            foreach (array_slice($lines, 1) as $line) {
+                if (trim($line) === '') {
+                    break;
+                }
+
+                $files[] = trim($line);
+            }
+
+            $conflicted = implode(', ', array_slice($files, 0, 20));
 
             return $this->failure(
                 (string) __('The integration conflicts; the release candidate was not created and the working tree was not touched. A person needs to resolve these files: :files', ['files' => $conflicted !== '' ? $conflicted : (string) __('(none listed)')]),
