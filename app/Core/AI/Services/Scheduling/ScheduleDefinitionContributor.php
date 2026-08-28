@@ -4,7 +4,10 @@ namespace App\Core\AI\Services\Scheduling;
 
 use App\Base\Schedule\Contracts\ScheduleContributor;
 use App\Base\Schedule\DTO\RecordedRun;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Models\ScheduleDefinition;
@@ -52,16 +55,45 @@ class ScheduleDefinitionContributor implements ScheduleContributor
             ->all();
     }
 
-    public function recentRuns(int $limit): array
+    public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
     {
         if (! Schema::hasTable('ai_operation_dispatches')) {
-            return [];
+            return new ScheduleHistoryPage([], 0, false);
         }
 
-        return OperationDispatch::query()
+        $builder = OperationDispatch::query()
             ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask])
-            ->orderByDesc('created_at')
-            ->limit($limit)
+            ->where(function ($q) use ($query): void {
+                $q->where(function ($inner) use ($query): void {
+                    $inner->whereNotNull('started_at')
+                        ->where('started_at', '>=', $query->from)
+                        ->where('started_at', '<=', $query->to);
+                })->orWhere(function ($inner) use ($query): void {
+                    $inner->whereNull('started_at')
+                        ->where('created_at', '>=', $query->from)
+                        ->where('created_at', '<=', $query->to);
+                });
+            });
+
+        if ($query->status !== 'all') {
+            $status = OperationStatus::tryFrom($query->status);
+
+            if ($status === null) {
+                // This source never records the requested status.
+                return new ScheduleHistoryPage([], 0, $this->hasHistory());
+            }
+
+            $builder->where('status', $status);
+        }
+
+        $hasHistory = $this->hasHistory();
+
+        // The searchable name is derived from JSON meta plus the task column,
+        // so search is applied over the period/status-filtered rows rather than
+        // pushed into a non-portable JSON predicate. The source volume is
+        // bounded by retention, so this stays cheap.
+        $runs = $builder
+            ->orderByRaw('COALESCE(started_at, created_at) DESC')
             ->get()
             ->map(fn (OperationDispatch $dispatch): RecordedRun => new RecordedRun(
                 source: (string) ($dispatch->meta['source'] ?? $dispatch->meta['schedule_source'] ?? 'ai-agent'),
@@ -71,7 +103,53 @@ class ScheduleDefinitionContributor implements ScheduleContributor
                 finishedAt: $dispatch->finished_at,
                 detail: $this->dispatchDetail($dispatch),
             ))
+            ->filter(fn (RecordedRun $run): bool => $query->search === '' || str_contains(mb_strtolower($run->name), $query->search))
+            ->values()
             ->all();
+
+        $total = count($runs);
+        $runs = $this->sortRuns($runs, $query->sortColumn, $query->sortDirection);
+
+        return new ScheduleHistoryPage(array_slice($runs, 0, $limit), $total, $hasHistory);
+    }
+
+    private function hasHistory(): bool
+    {
+        if (! Schema::hasTable('ai_operation_dispatches')) {
+            return false;
+        }
+
+        return OperationDispatch::query()
+            ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask])
+            ->exists();
+    }
+
+    /**
+     * @param  list<RecordedRun>  $runs
+     * @return list<RecordedRun>
+     */
+    private function sortRuns(array $runs, string $column, string $direction): array
+    {
+        usort($runs, function (RecordedRun $a, RecordedRun $b) use ($column, $direction): int {
+            $comparison = match ($column) {
+                'name' => strnatcasecmp($a->name, $b->name),
+                'source' => strnatcasecmp($a->source, $b->source),
+                'status' => strnatcasecmp($a->status, $b->status),
+                default => $a->startedAt->timestamp <=> $b->startedAt->timestamp,
+            };
+
+            $comparison = $direction === 'desc' ? -$comparison : $comparison;
+
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+
+            $comparison = $b->startedAt->timestamp <=> $a->startedAt->timestamp;
+
+            return $comparison !== 0 ? $comparison : strnatcasecmp($a->name, $b->name);
+        });
+
+        return $runs;
     }
 
     private function dispatchDetail(OperationDispatch $dispatch): ?string
