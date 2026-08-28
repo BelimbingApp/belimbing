@@ -34,7 +34,11 @@ GH_STUB = textwrap.dedent(
           '{headRefOid:$head,headRefName:$branch,title:$title,body:$body,isDraft:false,state:"OPEN",mergeable:"MERGEABLE",labels:$labels}'
         ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*check-runs*)
-        printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
+        if [ -n "${GATE_TEST_CHECK_RUNS:-}" ]; then
+          printf '%s\\n' "$GATE_TEST_CHECK_RUNS"
+        else
+          printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
+        fi
         ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*)
         [ -n "$GATE_TEST_RESOLVE" ] && printf '%s\\n' "$GATE_TEST_RESOLVE"
@@ -132,6 +136,7 @@ class GateMechanismTest(unittest.TestCase):
         labels: list[str] | None = None,
         reviews: list[dict[str, object]] | None = None,
         issue_comments: list[dict[str, object]] | None = None,
+        check_runs: list[dict[str, object]] | None = None,
         body: str | None = None,
         branch: str | None = None,
         title: str | None = None,
@@ -181,6 +186,15 @@ class GateMechanismTest(unittest.TestCase):
             }]
         env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
         env["GATE_TEST_ISSUE_COMMENTS"] = json.dumps(issue_comments if issue_comments is not None else [])
+        if check_runs is None:
+            check_runs = [{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }]
+        env["GATE_TEST_CHECK_RUNS"] = json.dumps({"check_runs": check_runs})
         env["GATE_MIN_CHECKS"] = "1"
 
         args = ["bash", str(SCRIPT), "1"]
@@ -221,6 +235,63 @@ class GateMechanismTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (origin, result.stdout, result.stderr))
             self.assertIn("GATE: PASS", result.stdout)
             self.assertIn("PR head is the reviewed SHA", result.stdout)
+
+    def test_latest_success_supersedes_a_cancelled_run_with_the_same_name(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "cancelled",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "3",
+                    "completed_at": "4",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("1 distinct checks", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_failing_check_run_blocks_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "failure",
+                "started_at": "1",
+                "completed_at": "2",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("1 distinct, 1 not passing", result.stdout)
+        self.assertIn("ci: completed/failure", result.stdout)
+
+    def test_pending_check_run_blocks_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "in_progress",
+                "conclusion": None,
+                "started_at": "1",
+                "completed_at": None,
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("1 distinct, 1 not passing", result.stdout)
+        self.assertIn("ci: in_progress/pending", result.stdout)
 
     def test_missing_independent_review_fails_the_gate(self):
         result = self.run_gate(

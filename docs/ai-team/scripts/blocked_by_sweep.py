@@ -20,11 +20,10 @@ from urllib.request import Request, urlopen
 BLOCKED_LABEL = "task:blocked"
 READY_LABEL = "task:ready"
 BLOCKED_BY_RE = re.compile(
-    r"(?i)^[ \t]*Blocked-By:[ \t]*(#[0-9]+(?:[ \t]*,[ \t]*#[0-9]+)*)[ \t]*$"
+    r"(?i)(?<![\w-])Blocked-By:[ \t]*(#[0-9]+(?:[ \t]*,[ \t]*#[0-9]+)*)(?=[ \t]*(?:[.;]|$))"
 )
-# Deliberately identical to scripts/review_gate.sh's safe_logical_lines: same
-# expressions, same order. Two different treatments of "which lines are prose"
-# would drift, and the weaker one becomes the exploitable one.
+# Only prose can declare a dependency. The guard is intentionally local: there
+# is no same-repository parser to keep in lockstep with this Markdown boundary.
 OPENING_FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 CLOSING_FENCE_RE = re.compile(r"^(`{3,}|~{3,})[ \t]*$")
 INDENTED_CODE_RE = re.compile(r"^( {4}|[ ]*\t)")
@@ -82,25 +81,25 @@ def _closes_fence(closing: str, opening: str) -> bool:
 
 
 def parse_blockers(body: str | None) -> tuple[int, ...]:
-    """Return the issue numbers from every valid Blocked-By header.
+    """Return issue numbers from every valid prose Blocked-By declaration.
 
-    All headers are unioned rather than only the first. Recording a new blocker
-    by adding a line is the natural edit, and reading only the first silently
-    dropped the rest -- which marked an issue ready while a blocker was open.
+    Standalone headers and inline sentences ending the reference list with a
+    period or semicolon are both declarations. All declarations are unioned
+    rather than only the first: recording a new blocker by adding a line is the
+    natural edit, and reading only the first silently dropped the rest -- which
+    marked an issue ready while a blocker was open.
 
-    A malformed or missing header contributes nothing. Duplicate references are
-    collapsed while preserving their first-seen order.
+    A malformed or missing declaration contributes nothing. Duplicate
+    references are collapsed while preserving their first-seen order.
     """
 
     numbers: list[int] = []
 
     for line in safe_lines(body or ""):
-        match = BLOCKED_BY_RE.match(line)
-        if match is None:
-            continue
-        numbers.extend(
-            int(reference.strip()[1:]) for reference in match.group(1).split(",")
-        )
+        for match in BLOCKED_BY_RE.finditer(line):
+            numbers.extend(
+                int(reference.strip()[1:]) for reference in match.group(1).split(",")
+            )
 
     return tuple(dict.fromkeys(numbers))
 
@@ -144,7 +143,7 @@ def transition_for(
 
 def comment_marker(blockers: tuple[int, ...]) -> str:
     references = ",".join(str(number) for number in blockers)
-    return f"<!-- bilimbi-blocked-by-sweep:{references} -->"
+    return f"<!-- belimbing-blocked-by-sweep:{references} -->"
 
 
 class GitHubAPI:
@@ -161,7 +160,7 @@ class GitHubAPI:
                 "Accept": "application/vnd.github+json",
                 "Authorization": f"Bearer {self.token}",
                 "Content-Type": "application/json",
-                "User-Agent": "bilimbi-blocked-by-sweep",
+                "User-Agent": "belimbing-blocked-by-sweep",
                 "X-GitHub-Api-Version": "2022-11-28",
             },
             method=method,
