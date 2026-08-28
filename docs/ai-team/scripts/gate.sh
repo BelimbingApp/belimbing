@@ -15,10 +15,10 @@
 # can still run when a check fails. That is exactly how #382 reached main while
 # BEHIND it: the check printed its warning and the merge went ahead anyway.
 #
-# Why a script rather than branch protection: the "Protect main" ruleset does set
-# strict_required_status_checks_policy, but it lists both shared human accounts
-# as bypass actors with bypass_mode "always" — and those accounts are every agent
-# we have. GitHub will not stop us. This will.
+# Why both: Protect Main now requires the six repository/Sonar contexts with
+# strict_required_status_checks_policy and no merge bypass actors. This gate is
+# still the richer pre-flight: it checks exact reviewed-head identity, lane
+# ownership, holds, issue closure, and independent review before a merge call.
 #
 set -u
 
