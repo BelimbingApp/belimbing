@@ -10,15 +10,11 @@ use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Schedule\Services\ScheduleStatusBarDiagnosticProvider;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
-use App\Core\AI\Enums\OperationStatus;
-use App\Core\AI\Enums\OperationType;
-use App\Core\AI\Models\OperationDispatch;
-use App\Core\AI\Models\ScheduleDefinition;
-use App\Core\Company\Models\Company;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
+use Tests\Support\ScheduleHealthFixtures;
 
 const SINGLE_SCHEDULE_FAILURE_SUMMARY = '1 scheduled task failing';
 
@@ -252,28 +248,7 @@ it('includes contributor failures without invoking the full board projection', f
 });
 
 it('includes failures from the AI schedule contributor projection', function (): void {
-    $definition = ScheduleDefinition::query()->create([
-        'company_id' => Company::factory()->create()->id,
-        'source' => 'core-ai',
-        'source_key' => 'nightly-summary',
-        'executor' => ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
-        'description' => 'Nightly summary',
-        'execution_payload' => 'Summarize the day',
-        'cron_expression' => '0 2 * * *',
-        'timezone' => 'UTC',
-        'is_enabled' => true,
-        'concurrency_policy' => 'skip',
-    ]);
-
-    OperationDispatch::query()->create([
-        'id' => 'op_health_failed',
-        'operation_type' => OperationType::ScheduledTask,
-        'task' => 'Nightly summary',
-        'status' => OperationStatus::Failed,
-        'meta' => ['schedule_id' => $definition->id],
-        'started_at' => now()->subMinutes(5),
-        'finished_at' => now()->subMinutes(4),
-    ]);
+    ScheduleHealthFixtures::failedAiSchedule('op_health_failed');
 
     $user = createAdminUser();
     $this->actingAs($user);

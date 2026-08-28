@@ -15,7 +15,6 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
-use App\Core\AI\Models\ScheduleDefinition;
 use App\Core\AI\Services\Scheduling\ScheduleDefinitionContributor;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
@@ -34,6 +33,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\NullOutput;
+use Tests\Support\ScheduleHealthFixtures;
 
 uses(RefreshDatabase::class);
 
@@ -566,28 +566,7 @@ test('AI contributor selects JSON grammar from its active connection driver', fu
 });
 
 test('AI health projection joins a failed dispatch to its definition', function (): void {
-    $definition = ScheduleDefinition::query()->create([
-        'company_id' => Company::factory()->create()->id,
-        'source' => 'core-ai',
-        'source_key' => 'nightly-summary',
-        'executor' => ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
-        'description' => 'Nightly summary',
-        'execution_payload' => 'Summarize the day',
-        'cron_expression' => '0 2 * * *',
-        'timezone' => 'UTC',
-        'is_enabled' => true,
-        'concurrency_policy' => 'skip',
-    ]);
-
-    OperationDispatch::query()->create([
-        'id' => 'op_schedule_health_projection',
-        'operation_type' => OperationType::ScheduledTask,
-        'task' => 'Nightly summary',
-        'status' => OperationStatus::Failed,
-        'meta' => ['schedule_id' => $definition->id],
-        'started_at' => now()->subMinutes(5),
-        'finished_at' => now()->subMinutes(4),
-    ]);
+    ScheduleHealthFixtures::failedAiSchedule('op_schedule_health_projection');
 
     $tasks = app(ScheduleDefinitionContributor::class)->unhealthyTasks();
 
