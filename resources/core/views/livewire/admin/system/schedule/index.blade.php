@@ -188,7 +188,7 @@ $tabs = [
                                                     <x-ui.button type="button" size="sm" variant="secondary" wire:click="previewCron">{{ __('Preview') }}</x-ui.button>
                                                     <x-ui.button type="button" size="sm" variant="primary" wire:click="saveCron">{{ __('Save') }}</x-ui.button>
                                                     @if($item->overridden)
-                                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="resetCron(@js($item->source), @js($item->key))" :title="__('Remove the override and adopt the code-declared default immediately.')">{{ __('Reset to default') }}</x-ui.button>
+                                                        <x-ui.button type="button" size="sm" variant="secondary" :wire:click="'resetCron('.\Illuminate\Support\Js::from($item->source).', '.\Illuminate\Support\Js::from($item->key).')'" :title="__('Remove the override and adopt the code-declared default immediately.')">{{ __('Reset to default') }}</x-ui.button>
                                                     @endif
                                                     <x-ui.button type="button" size="sm" variant="secondary" wire:click="cancelCronEdit">{{ __('Cancel') }}</x-ui.button>
                                                 </div>
@@ -204,7 +204,7 @@ $tabs = [
                                                         icon="heroicon-o-pencil-square"
                                                         :label="__('Edit cadence for :task', ['task' => $item->name])"
                                                         :title="__('Edit cadence')"
-                                                        wire:click="startCronEdit(@js($item->source), @js($item->key))"
+                                                        :wire:click="'startCronEdit('.\Illuminate\Support\Js::from($item->source).', '.\Illuminate\Support\Js::from($item->key).')'"
                                                     />
                                                 @endif
                                             </span>
