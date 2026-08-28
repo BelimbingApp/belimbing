@@ -195,7 +195,6 @@ class GateMechanismTest(unittest.TestCase):
                 "completed_at": "2",
             }]
         env["GATE_TEST_CHECK_RUNS"] = json.dumps({"check_runs": check_runs})
-        env["GATE_MIN_CHECKS"] = "1"
 
         args = ["bash", str(SCRIPT), "1"]
         if reviewed is not None:
@@ -292,6 +291,16 @@ class GateMechanismTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("1 distinct, 1 not passing", result.stdout)
         self.assertIn("ci: in_progress/pending", result.stdout)
+
+    def test_no_reported_check_runs_blocks_with_the_actual_condition(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no checks reported yet", result.stdout)
+        self.assertNotIn("need >=", result.stdout)
 
     def test_missing_independent_review_fails_the_gate(self):
         result = self.run_gate(
@@ -402,10 +411,9 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("no independent exact-head acceptance", result.stdout)
         self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
 
-    def test_stray_comment_verdict_is_not_reported_once_a_real_acceptance_exists(self):
-        # The comment-stream scan is a diagnostic for the empty case, not a
-        # second acceptance channel — a real review already answered the
-        # question, so there is nothing to warn about.
+    def test_blocking_comment_verdict_warns_even_when_a_real_acceptance_exists(self):
+        # Comment-stream markers never become verdicts, but a real acceptance
+        # must not hide another reviewer's explicit blocking marker.
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
             reviewed=self.head_sha,
@@ -422,7 +430,28 @@ class GateMechanismTest(unittest.TestCase):
             }],
         )
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
-        self.assertNotIn("comment stream", result.stdout)
+        self.assertIn("WARN", result.stdout)
+        self.assertIn("blocking verdict marker from someone-else", result.stdout)
+        self.assertIn("gh pr review --comment", result.stdout)
+
+    def test_unfetchable_reviewed_sha_is_not_misreported_as_behind(self):
+        missing_sha = "f" * 40
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=missing_sha,
+            head=missing_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": missing_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("is unavailable after fetching PR #1", result.stdout)
+        self.assertIn("history may have been rewritten", result.stdout)
+        self.assertNotIn("BEHIND origin/main", result.stdout)
 
     def test_malformed_review_marker_warns_about_format_instead_of_silence(self):
         # A **From:** marker is present, but the verdict is inline rather than
