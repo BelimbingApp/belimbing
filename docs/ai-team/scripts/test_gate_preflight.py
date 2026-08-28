@@ -844,5 +844,90 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("GATE: FAIL", result.stdout)
 
 
+    # -- #385: hold:review:<agent> — every named holder blocks independently,
+    # clearing one never clears another, and a legacy bare hold:review still
+    # blocks unattributed during migration. --
+
+    def test_no_hold_labels_pass_both_hold_checks(self):
+        result = self.run_gate(origin=CANONICAL_HTTPS, reviewed=self.head_sha)
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("no hold:author", result.stdout)
+        self.assertIn("no named hold:review:<agent>", result.stdout)
+        self.assertIn("no unattributed hold:review", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_a_single_named_hold_blocks_and_names_its_holder(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:review:sol"],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("hold:review held by sol", result.stdout)
+        self.assertIn("hold.sh review clear", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_two_named_holders_are_both_reported(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:review:sol", "hold:review:luna"],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("hold:review held by", result.stdout)
+        self.assertIn("sol", result.stdout)
+        self.assertIn("luna", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_clearing_one_holders_label_leaves_the_others_finding_blocking(self):
+        # The exact regression #385 was filed for: two independent holders,
+        # one clears, the other's finding must still block the merge.
+        both = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:review:sol", "hold:review:luna"],
+        )
+        self.assertEqual(both.returncode, 1)
+
+        # sol's hold cleared (label removed); luna's remains.
+        after_sol_clears = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:review:luna"],
+        )
+        self.assertEqual(after_sol_clears.returncode, 1)
+        self.assertIn("hold:review held by luna", after_sol_clears.stdout)
+        self.assertNotIn("sol", after_sol_clears.stdout)
+        self.assertIn("GATE: FAIL", after_sol_clears.stdout)
+
+        # Both cleared: the gate's hold checks pass (other checks still apply).
+        after_both_clear = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author"],
+        )
+        self.assertEqual(after_both_clear.returncode, 0, (after_both_clear.stdout, after_both_clear.stderr))
+        self.assertIn("no named hold:review:<agent>", after_both_clear.stdout)
+
+    def test_legacy_unattributed_hold_review_still_blocks_during_migration(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:review"],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("hold:review (unattributed, pre-#385) is set", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_hold_author_is_unaffected_by_the_named_review_hold_change(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            labels=["task:review", "agent:author", "hold:author"],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("hold:author is set", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()
