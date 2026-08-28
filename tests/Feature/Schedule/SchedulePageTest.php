@@ -524,6 +524,69 @@ test('AI contributor filters and limits its database projection without material
         ->and($projection)->toMatch('/limit\\s+(?:\\?|1)/');
 });
 
+test('AI contributor selects JSON grammar from its active connection driver', function (): void {
+    $connection = 'schedule-history-postgres';
+    $original = config('database.connections.'.$connection);
+    config()->set('database.connections.'.$connection, [
+        'driver' => 'pgsql',
+        'host' => '127.0.0.1',
+        'port' => 5432,
+        'database' => 'schedule_history_test',
+        'username' => 'testing',
+        'password' => '',
+        'charset' => 'utf8',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'schema' => 'public',
+        'sslmode' => 'prefer',
+    ]);
+
+    try {
+        $contributor = app(ScheduleDefinitionContributor::class);
+        $nameExpression = new ReflectionMethod($contributor, 'historyNameExpression');
+        $sourceExpression = new ReflectionMethod($contributor, 'historySourceExpression');
+        $driver = OperationDispatch::on($connection)->getQuery()->getConnection()->getDriverName();
+
+        expect($driver)->toBe('pgsql')
+            ->and($nameExpression->invoke($contributor, $driver))->toContain("meta->>'source_key'")
+            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'");
+    } finally {
+        DB::purge($connection);
+        config()->set('database.connections.'.$connection, $original);
+    }
+});
+
+test('AI contributor searches metadata names with literal LIKE metacharacters', function (): void {
+    $now = now()->startOfSecond();
+
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_literal_like',
+        'operation_type' => OperationType::ScheduledTask,
+        'task' => 'Literal search payload',
+        'status' => OperationStatus::Succeeded,
+        'meta' => ['schedule_description' => 'Report 100%_complete \\ archive'],
+        'started_at' => $now->subMinute(),
+        'finished_at' => $now,
+    ]);
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_like_near_match',
+        'operation_type' => OperationType::ScheduledTask,
+        'task' => 'Near match payload',
+        'status' => OperationStatus::Succeeded,
+        'meta' => ['schedule_description' => 'Report 100xxcomplete x archive'],
+        'started_at' => $now->subMinutes(2),
+        'finished_at' => $now->subMinute(),
+    ]);
+
+    $history = app(ScheduleDefinitionContributor::class)->history(
+        new ScheduleHistoryQuery(now()->subDay(), now(), 'all', 'report 100%_complete \\ archive', 'started_at', 'desc'),
+        25,
+    );
+
+    expect($history->total)->toBe(1)
+        ->and(collect($history->items)->pluck('name')->all())->toBe(['Report 100%_complete \\ archive']);
+});
+
 test('history filters apply before truncation so an old failure stays discoverable under high-frequency successes', function (): void {
     $now = now()->startOfSecond();
 

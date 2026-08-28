@@ -95,11 +95,12 @@ class ScheduleDefinitionContributor implements ScheduleContributor
         // board's pagination dishonest and unbounded. The explicit grammar
         // variants retain the same metadata fallback order on every supported
         // database without relying on one vendor's JSON syntax.
-        $name = $this->historyNameExpression();
-        $source = $this->historySourceExpression();
+        $driver = $builder->getQuery()->getConnection()->getDriverName();
+        $name = $this->historyNameExpression($driver);
+        $source = $this->historySourceExpression($driver);
 
         if ($query->search !== '') {
-            $builder->whereRaw("LOWER({$name}) LIKE ?", ['%'.$query->search.'%']);
+            $builder->whereRaw("LOWER({$name}) LIKE ? ESCAPE ?", [$this->historySearchPattern($query->search), '\\']);
         }
 
         $total = (clone $builder)->count();
@@ -139,22 +140,31 @@ class ScheduleDefinitionContributor implements ScheduleContributor
             ->exists();
     }
 
-    private function historyNameExpression(): string
+    private function historyNameExpression(string $driver): string
     {
-        return match (config('database.default')) {
+        return match ($driver) {
             'pgsql' => "COALESCE(meta->>'source_key', meta->>'schedule_source_key', meta->>'schedule_description', task, id)",
             'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_description')), task, id)",
             default => "COALESCE(json_extract(meta, '$.source_key'), json_extract(meta, '$.schedule_source_key'), json_extract(meta, '$.schedule_description'), task, id)",
         };
     }
 
-    private function historySourceExpression(): string
+    private function historySourceExpression(string $driver): string
     {
-        return match (config('database.default')) {
+        return match ($driver) {
             'pgsql' => "COALESCE(meta->>'source', meta->>'schedule_source', 'ai-agent')",
             'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source')), 'ai-agent')",
             default => "COALESCE(json_extract(meta, '$.source'), json_extract(meta, '$.schedule_source'), 'ai-agent')",
         };
+    }
+
+    private function historySearchPattern(string $search): string
+    {
+        return '%'.str_replace(
+            ['\\', '%', '_'],
+            ['\\\\', '\\%', '\\_'],
+            $search,
+        ).'%';
     }
 
     private function orderHistory(Builder $builder, ScheduleHistoryQuery $query, string $name, string $source): void
