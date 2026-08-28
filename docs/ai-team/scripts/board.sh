@@ -155,11 +155,20 @@ digest() {
   printf '%s' "$issue_json" \
     | jq -r --argjson lines "$DIGEST_LINES" --arg bots "$BOTS" --argjson reviews "$reviews_json" '
       def is_bot: (.author.login // "") as $l | ($bots | split(" ")) | any(. == $l);
-      def structured: (.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*");
-      def strip_and_trim(skip_first):
+      # Match the gate.sh attribution contract exactly: scan every line, accept
+      # one unambiguous stable identity, and reject conflicting identities.
+      def from_agents:
+        [((.body // "") | split("\n")[]
+          | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
+          | ascii_downcase)] | unique;
+      def from_agent:
+        from_agents as $agents
+        | if ($agents | length) == 1 then $agents[0] else "" end;
+      def structured: from_agent != "";
+      def strip_and_trim(skip_header):
         (.body // "")
         | split("\n")
-        | (if skip_first then .[1:] else . end)
+        | map(select((skip_header and test("^\\*\\*From:\\*\\*[[:space:]]*[a-z0-9]+(?:[._-][a-z0-9]+)*(?:[[:space:]]|$)"; "i")) | not))
         # Drop <details> blocks line-by-line rather than by multiline regex:
         # portable across jq builds, and the fold marker shows a reader that
         # evidence exists without charging them for it.
@@ -192,7 +201,7 @@ digest() {
         | ( $human[]
             | (.tag // "") as $tag
             | if structured
-              then "-- \($tag)\((.body // "") | split("\n")[0] | sub("^\\*\\*From:\\*\\*\\s*"; "")) · \(.createdAt)",
+              then "-- \($tag)\(from_agent) · \(.createdAt)",
                    strip_and_trim(true)
               # No header, human account: possibly the owner, whose posts
               # outrank every marker (#364 P1) — render, never hide.
@@ -223,9 +232,14 @@ hygiene() {
     count=$(gh issue view "$n" --repo "$REPO" --json comments 2>/dev/null \
       | jq -r --arg bots "$BOTS" '
           def is_bot: (.author.login // "") as $l | ($bots | split(" ")) | any(. == $l);
+          def from_agent:
+            ([((.body // "") | split("\n")[]
+               | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
+               | ascii_downcase)] | unique) as $agents
+            | if ($agents | length) == 1 then $agents[0] else "" end;
           [.comments[]
            | select(is_bot | not)
-           | select(((.body // "") | split("\n") | .[0] | test("^\\*\\*From:\\*\\*")) | not)]
+           | select(from_agent == "")]
           | length' 2>/dev/null) || continue
     if [ -n "$count" ] && [ "$count" -gt 0 ]; then
       echo "  #$n has $count unstructured post(s) — post via board.sh so tooling can see them"
