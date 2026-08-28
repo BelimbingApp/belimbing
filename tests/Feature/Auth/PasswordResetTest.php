@@ -3,8 +3,8 @@
 use App\Core\User\Livewire\Auth\ForgotPassword;
 use App\Core\User\Livewire\Auth\ResetPassword;
 use App\Core\User\Models\User;
+use App\Core\User\Notifications\ResetPasswordNotification;
 use Illuminate\Auth\Events\PasswordReset;
-use Illuminate\Auth\Notifications\ResetPassword as ResetPasswordNotification;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
