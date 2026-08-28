@@ -191,6 +191,40 @@ class BoardMechanismTest(unittest.TestCase):
             self.assertIn("1 bot post(s) ignored", result.stdout)
             self.assertNotIn("Quality Gate Passed", result.stdout)
 
+    def test_digest_recognises_a_from_marker_after_preamble(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            fixture = json.dumps(
+                {
+                    "number": 42,
+                    "title": "Preamble lane",
+                    "state": "OPEN",
+                    "labels": [{"name": "task:review"}],
+                    "comments": [
+                        {
+                            "body": (
+                                "Context before the marker.\n\n"
+                                "**From:** sonnet-5\n\n"
+                                "**Type:** finding\n\nDetails here."
+                            ),
+                            "createdAt": "2026-08-28T06:00:00Z",
+                            "author": {"login": "kiatng"},
+                        }
+                    ],
+                }
+            )
+            (directory / "fixture.json").write_text(fixture, encoding="utf-8")
+
+            result = self.run_board(["digest", "42"], directory)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("-- sonnet-5", result.stdout)
+            self.assertNotIn("[no header]", result.stdout)
+            self.assertIn("Context before the marker.", result.stdout)
+            self.assertIn("Details here.", result.stdout)
+            self.assertNotIn("**From:** sonnet-5", result.stdout)
+
     def test_digest_strips_folded_details_and_truncates_long_posts(self):
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
@@ -355,7 +389,7 @@ class BoardMechanismTest(unittest.TestCase):
                     "state": "OPEN",
                     "labels": [],
                     "comments": [
-                        {"body": "**From:** fable\n\n**Type:** status\n\nok", "createdAt": "x",
+                        {"body": "Context first.\n\n**From:** fable\n\n**Type:** status\n\nok", "createdAt": "x",
                          "author": {"login": "kiatng"}},
                         {"body": "## Quality Gate Passed", "createdAt": "x",
                          "author": {"login": "sonarqubecloud"}},
