@@ -15,6 +15,7 @@ use App\Base\Settings\Contracts\SettingsService;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
+use App\Core\AI\Models\ScheduleDefinition;
 use App\Core\AI\Services\Scheduling\ScheduleDefinitionContributor;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
@@ -555,11 +556,45 @@ test('AI contributor selects JSON grammar from its active connection driver', fu
             ->and($scheduleIdExpression->invoke($contributor, $driver, 'ai_operation_dispatches.meta'))
             ->toContain("ai_operation_dispatches.meta->>'schedule_id'")
             ->and($scheduleIdComparison->invoke($contributor, $driver, "ai_operation_dispatches.meta->>'schedule_id'"))
-            ->toBe("ai_operation_dispatches.meta->>'schedule_id' = CAST(ai_schedule_definitions.id AS TEXT)");
+            ->toBe("ai_operation_dispatches.meta->>'schedule_id' = CAST(ai_schedule_definitions.id AS TEXT)")
+            ->and($scheduleIdComparison->invoke($contributor, $driver, 'health_dispatches.schedule_id_value', 'health_definitions.id'))
+            ->toBe('health_dispatches.schedule_id_value = CAST(health_definitions.id AS TEXT)');
     } finally {
         DB::purge($connection);
         config()->set('database.connections.'.$connection, $original);
     }
+});
+
+test('AI health projection joins a failed dispatch to its definition', function (): void {
+    $definition = ScheduleDefinition::query()->create([
+        'company_id' => Company::factory()->create()->id,
+        'source' => 'core-ai',
+        'source_key' => 'nightly-summary',
+        'executor' => ScheduleDefinition::EXECUTOR_AGENTIC_RUNTIME,
+        'description' => 'Nightly summary',
+        'execution_payload' => 'Summarize the day',
+        'cron_expression' => '0 2 * * *',
+        'timezone' => 'UTC',
+        'is_enabled' => true,
+        'concurrency_policy' => 'skip',
+    ]);
+
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_health_projection',
+        'operation_type' => OperationType::ScheduledTask,
+        'task' => 'Nightly summary',
+        'status' => OperationStatus::Failed,
+        'meta' => ['schedule_id' => $definition->id],
+        'started_at' => now()->subMinutes(5),
+        'finished_at' => now()->subMinutes(4),
+    ]);
+
+    $tasks = app(ScheduleDefinitionContributor::class)->unhealthyTasks();
+
+    expect($tasks)->toHaveCount(1)
+        ->and($tasks[0]->source)->toBe('core-ai')
+        ->and($tasks[0]->name)->toBe('nightly-summary')
+        ->and($tasks[0]->consecutiveFailures)->toBe(1);
 });
 
 test('AI contributor searches metadata names with literal LIKE metacharacters', function (): void {

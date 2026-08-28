@@ -74,10 +74,16 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             ->orderBy('next_due_at')
             ->limit(50);
         $dispatches = $this->rankedDispatchesBySchedule();
+        $driver = $dispatches->getQuery()->getConnection()->getDriverName();
         $rows = DB::query()
             ->fromSub($definitions->toBase(), 'health_definitions')
-            ->leftJoinSub($dispatches->toBase(), 'health_dispatches', function (JoinClause $join): void {
-                $join->on('health_dispatches.schedule_id_value', '=', 'health_definitions.id')
+            ->leftJoinSub($dispatches->toBase(), 'health_dispatches', function (JoinClause $join) use ($driver): void {
+                $join
+                    ->whereRaw($this->scheduleIdComparison(
+                        $driver,
+                        'health_dispatches.schedule_id_value',
+                        'health_definitions.id',
+                    ))
                     ->where('health_dispatches.dispatch_rank', '<=', self::HEALTH_RUNS_PER_DEFINITION);
             })
             ->select([
@@ -406,11 +412,11 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$scheduleId} ORDER BY COALESCE(started_at, created_at) DESC, id DESC) AS dispatch_rank");
     }
 
-    private function scheduleIdComparison(string $driver, string $scheduleId): string
+    private function scheduleIdComparison(string $driver, string $scheduleId, string $definitionId = 'ai_schedule_definitions.id'): string
     {
         return $driver === 'pgsql'
-            ? "{$scheduleId} = CAST(ai_schedule_definitions.id AS TEXT)"
-            : "{$scheduleId} = ai_schedule_definitions.id";
+            ? "{$scheduleId} = CAST({$definitionId} AS TEXT)"
+            : "{$scheduleId} = {$definitionId}";
     }
 
     private function statusValue(mixed $status): ?string
