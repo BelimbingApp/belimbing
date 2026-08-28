@@ -213,6 +213,7 @@ return [
             'label' => 'Email',
             'description' => 'Outgoing mail transport, credentials, and sender identity.',
             'capability' => 'admin.system.email.manage',
+            'view' => 'livewire.admin.system.email.index',
             'fields' => [
                 [
                     'key' => MailRuntimeSettings::MAILER_KEY,
