@@ -1,4 +1,6 @@
+import io
 import unittest
+from contextlib import redirect_stdout
 
 from blocked_by_sweep import (
     BLOCKED_LABEL,
@@ -16,6 +18,12 @@ class BlockedBySweepTest(unittest.TestCase):
     def test_rejects_missing_or_malformed_header(self):
         self.assertEqual(parse_blockers("blocked on #131"), ())
         self.assertEqual(parse_blockers("Blocked-By: #131 and #132"), ())
+
+    def test_uses_a_belimbing_specific_idempotency_marker(self):
+        self.assertEqual(
+            comment_marker((131, 132)),
+            "<!-- belimbing-blocked-by-sweep:131,132 -->",
+        )
 
     def test_leaves_open_blockers_untouched(self):
         issue = {"body": "Blocked-By: #131", "labels": [{"name": BLOCKED_LABEL}]}
@@ -89,6 +97,39 @@ class BlockedBySweepTest(unittest.TestCase):
         self.assertEqual(api.labels_written, (READY_LABEL,))
         self.assertIn("#131, #132", api.comments_seen[0])
 
+    def test_sweep_replays_issue_345s_inline_blocker_and_prints_the_transition(self):
+        from blocked_by_sweep import sweep
+
+        class FakeAPI:
+            def __init__(self):
+                self.issue = {
+                    "number": 345,
+                    "body": "Parent: #339. Blocked-By: #344. Blocks lane 3 (sync preparation and publication) — **lane 3 must not merge before this does.**",
+                    "labels": [{"name": BLOCKED_LABEL}],
+                }
+                self.labels_written = None
+
+            def open_blocked_issues(self):
+                return [self.issue]
+
+            def issue_state(self, number):
+                return {344: "closed"}[number]
+
+            def comments(self, number):
+                return []
+
+            def add_comment(self, number, body):
+                pass
+
+            def replace_labels(self, number, labels):
+                self.labels_written = labels
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(sweep(FakeAPI()), 1)
+
+        self.assertEqual(output.getvalue(), "unblocked issue #345\n")
+
 
 class BlockedByParsingTest(unittest.TestCase):
     """Fail-open cases found while reviewing #204, fixed in #224.
@@ -115,6 +156,42 @@ class BlockedByParsingTest(unittest.TestCase):
 
         self.assertIsNotNone(transition)
         self.assertIn(READY_LABEL, transition.labels)
+
+    def test_parses_issue_345s_verbatim_inline_declaration(self):
+        body = """## Problem
+
+Lane 2 of #339, split out per the decomposition on that issue.
+
+#339 requires that upstream synchronization be available **only** in an explicitly enabled development or staging administration environment, and that production remain a read-only deployment consumer. That boundary is the safety property of the whole feature, and it must exist *before* anything can act on it.
+
+## Scope
+
+The gate, and only the gate. No synchronization logic, no write credentials, no PR creation — those are lane 3.
+
+- An explicit deployment-role / feature setting that enables synchronization capability. Off by default; production cannot enable it by accident or by inheriting a development config.
+- An authorization capability governing who may use it, consistent with how this codebase already gates admin actions.
+- Read-only upstream visibility (#344) stays available regardless of the gate — seeing is not synchronizing.
+- When the gate is closed, the UI states plainly that synchronization is unavailable and why, rather than hiding the concept or failing at the point of use.
+
+## Required resolution
+
+Add the setting and capability, and make them the precondition every later synchronization action checks. Fail closed: an unset or unrecognised deployment role means synchronization is unavailable.
+
+Gate at the server, not only in the view. A hidden button is not a boundary — #307 in this codebase is the precedent for a UI-level assumption that broke at the server.
+
+## Acceptance
+
+- Synchronization capability is unavailable in production and unavailable by default anywhere.
+- Enabling it requires an explicit, deliberate setting plus the authorization capability.
+- Read-only upstream visibility is unaffected by the gate's state.
+- A closed gate produces an explanatory state, not a silent absence or a runtime failure.
+- Focused tests cover: production, unset role, development-without-capability, and development-with-capability.
+- Relevant tests, Pint, and diff-check pass.
+
+Parent: #339. Blocked-By: #344. Blocks lane 3 (sync preparation and publication) — **lane 3 must not merge before this does.**
+"""
+
+        self.assertEqual(parse_blockers(body), (344,))
 
     def test_header_inside_a_fenced_block_is_not_a_declaration(self):
         # Documenting the convention in an issue body must not arm the sweep
@@ -150,6 +227,9 @@ class BlockedByParsingTest(unittest.TestCase):
 
     def test_a_quoted_header_is_not_a_declaration(self):
         self.assertEqual(parse_blockers("> Blocked-By: #1\n"), ())
+
+    def test_an_inline_declaration_inside_a_fenced_block_is_not_a_declaration(self):
+        self.assertEqual(parse_blockers("```\nParent: #1. Blocked-By: #2.\n```\n"), ())
 
     def test_a_header_after_a_closed_fence_still_counts(self):
         # The guard must not swallow the rest of the body.
