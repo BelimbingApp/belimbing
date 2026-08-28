@@ -68,8 +68,9 @@ fi
 
 issue="$derived"
 
-# GitHub closing keywords are case-insensitive; keep Closes for consistency with claim.sh.
-if ! grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${issue}([^0-9]|$)" <<<"$body"; then
+# Keep Closes for consistency with claim.sh when the shared contract reports
+# that no GitHub closing keyword is bound to this lane issue.
+if ! ai_team_body_has_closing_reference "$body" "$issue"; then
   if [[ -n "$body" && "$body" != *$'\n' ]]; then
     body+=$'\n'
   fi
