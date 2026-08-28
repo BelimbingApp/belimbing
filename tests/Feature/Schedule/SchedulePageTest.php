@@ -25,9 +25,11 @@ use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\NullOutput;
@@ -474,6 +476,52 @@ test('schedule page labels cancelled contributor runs honestly', function (): vo
         ->assertOk()
         ->assertSee('Cancelled')
         ->assertSee(SCHEDULE_TEST_CANCELLED_DETAIL);
+});
+
+test('AI contributor filters and limits its database projection without materializing retained dispatches', function (): void {
+    $now = now()->startOfSecond();
+
+    foreach (range(1, 600) as $index) {
+        OperationDispatch::query()->create([
+            'id' => 'op_schedule_noisy_'.$index,
+            'operation_type' => OperationType::ScheduledTask,
+            'task' => 'Noisy schedule payload '.$index,
+            'status' => OperationStatus::Succeeded,
+            'meta' => ['schedule_description' => 'Noisy schedule '.$index],
+            'started_at' => $now->copy()->subSeconds($index),
+            'finished_at' => $now->copy()->subSeconds($index)->addSecond(),
+        ]);
+    }
+
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_needle',
+        'operation_type' => OperationType::HeadlessTask,
+        'task' => 'Needle payload',
+        'status' => OperationStatus::Failed,
+        'meta' => ['schedule_description' => 'Needle schedule'],
+        'started_at' => $now->copy()->subDays(2),
+        'finished_at' => $now->copy()->subDays(2)->addMinute(),
+    ]);
+
+    $queries = [];
+    DB::listen(function (QueryExecuted $event) use (&$queries): void {
+        if (str_contains($event->sql, 'ai_operation_dispatches')) {
+            $queries[] = strtolower($event->sql);
+        }
+    });
+
+    $history = app(ScheduleDefinitionContributor::class)->history(
+        new ScheduleHistoryQuery(now()->subDays(30), now(), 'all', 'needle', 'name', 'asc'),
+        1,
+    );
+
+    $projection = collect($queries)->first(fn (string $sql): bool => str_contains($sql, 'schedule_history_name'));
+
+    expect($history->total)->toBe(1)
+        ->and(collect($history->items)->pluck('name')->all())->toBe(['Needle schedule'])
+        ->and($projection)->not->toBeNull()
+        ->and($projection)->toContain('lower(coalesce')
+        ->and($projection)->toMatch('/limit\\s+(?:\\?|1)/');
 });
 
 test('history filters apply before truncation so an old failure stays discoverable under high-frequency successes', function (): void {

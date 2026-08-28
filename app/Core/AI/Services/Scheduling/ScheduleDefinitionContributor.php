@@ -11,6 +11,7 @@ use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Models\ScheduleDefinition;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -88,29 +89,43 @@ class ScheduleDefinitionContributor implements ScheduleContributor
 
         $hasHistory = $this->hasHistory();
 
-        // The searchable name is derived from JSON meta plus the task column,
-        // so search is applied over the period/status-filtered rows rather than
-        // pushed into a non-portable JSON predicate. The source volume is
-        // bounded by retention, so this stays cheap.
-        $runs = $builder
-            ->orderByRaw('COALESCE(started_at, created_at) DESC')
-            ->get()
-            ->map(fn (OperationDispatch $dispatch): RecordedRun => new RecordedRun(
-                source: (string) ($dispatch->meta['source'] ?? $dispatch->meta['schedule_source'] ?? 'ai-agent'),
-                name: (string) ($dispatch->meta['source_key'] ?? $dispatch->meta['schedule_source_key'] ?? $dispatch->meta['schedule_description'] ?? $dispatch->task ?? $dispatch->id),
-                status: $this->statusValue($dispatch->status) ?? 'unknown',
-                startedAt: $dispatch->started_at ?? $dispatch->created_at ?? now(),
-                finishedAt: $dispatch->finished_at,
-                detail: $this->dispatchDetail($dispatch),
-            ))
-            ->filter(fn (RecordedRun $run): bool => $query->search === '' || str_contains(mb_strtolower($run->name), $query->search))
-            ->values()
-            ->all();
+        // Schedule names and sources live in the dispatch JSON metadata. Keep
+        // the projection in the database for filtering, ordering, counting,
+        // and limiting; materializing the operation ledger in PHP makes the
+        // board's pagination dishonest and unbounded. The explicit grammar
+        // variants retain the same metadata fallback order on every supported
+        // database without relying on one vendor's JSON syntax.
+        $name = $this->historyNameExpression();
+        $source = $this->historySourceExpression();
 
-        $total = count($runs);
-        $runs = $this->sortRuns($runs, $query->sortColumn, $query->sortDirection);
+        if ($query->search !== '') {
+            $builder->whereRaw("LOWER({$name}) LIKE ?", ['%'.$query->search.'%']);
+        }
 
-        return new ScheduleHistoryPage(array_slice($runs, 0, $limit), $total, $hasHistory);
+        $total = (clone $builder)->count();
+        $this->orderHistory($builder, $query, $name, $source);
+
+        $dispatches = $builder
+            ->select('ai_operation_dispatches.*')
+            ->selectRaw("{$name} as schedule_history_name")
+            ->selectRaw("{$source} as schedule_history_source")
+            ->limit(max(1, $limit))
+            ->get();
+
+        return new ScheduleHistoryPage(
+            $dispatches
+                ->map(fn (OperationDispatch $dispatch): RecordedRun => new RecordedRun(
+                    source: (string) $dispatch->getAttribute('schedule_history_source'),
+                    name: (string) $dispatch->getAttribute('schedule_history_name'),
+                    status: $this->statusValue($dispatch->status) ?? 'unknown',
+                    startedAt: $dispatch->started_at ?? $dispatch->created_at ?? now(),
+                    finishedAt: $dispatch->finished_at,
+                    detail: $this->dispatchDetail($dispatch),
+                ))
+                ->all(),
+            $total,
+            $hasHistory,
+        );
     }
 
     private function hasHistory(): bool
@@ -124,32 +139,41 @@ class ScheduleDefinitionContributor implements ScheduleContributor
             ->exists();
     }
 
-    /**
-     * @param  list<RecordedRun>  $runs
-     * @return list<RecordedRun>
-     */
-    private function sortRuns(array $runs, string $column, string $direction): array
+    private function historyNameExpression(): string
     {
-        usort($runs, function (RecordedRun $a, RecordedRun $b) use ($column, $direction): int {
-            $comparison = match ($column) {
-                'name' => strnatcasecmp($a->name, $b->name),
-                'source' => strnatcasecmp($a->source, $b->source),
-                'status' => strnatcasecmp($a->status, $b->status),
-                default => $a->startedAt->timestamp <=> $b->startedAt->timestamp,
-            };
+        return match (config('database.default')) {
+            'pgsql' => "COALESCE(meta->>'source_key', meta->>'schedule_source_key', meta->>'schedule_description', task, id)",
+            'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_description')), task, id)",
+            default => "COALESCE(json_extract(meta, '$.source_key'), json_extract(meta, '$.schedule_source_key'), json_extract(meta, '$.schedule_description'), task, id)",
+        };
+    }
 
-            $comparison = $direction === 'desc' ? -$comparison : $comparison;
+    private function historySourceExpression(): string
+    {
+        return match (config('database.default')) {
+            'pgsql' => "COALESCE(meta->>'source', meta->>'schedule_source', 'ai-agent')",
+            'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source')), 'ai-agent')",
+            default => "COALESCE(json_extract(meta, '$.source'), json_extract(meta, '$.schedule_source'), 'ai-agent')",
+        };
+    }
 
-            if ($comparison !== 0) {
-                return $comparison;
-            }
+    private function orderHistory(Builder $builder, ScheduleHistoryQuery $query, string $name, string $source): void
+    {
+        $direction = $query->sortDirection === 'asc' ? 'ASC' : 'DESC';
+        $startedAt = 'COALESCE(started_at, created_at)';
+        $primary = match ($query->sortColumn) {
+            'name' => "LOWER({$name})",
+            'source' => "LOWER({$source})",
+            'status' => 'status',
+            default => $startedAt,
+        };
 
-            $comparison = $b->startedAt->timestamp <=> $a->startedAt->timestamp;
-
-            return $comparison !== 0 ? $comparison : strnatcasecmp($a->name, $b->name);
-        });
-
-        return $runs;
+        $builder
+            ->orderByRaw("{$primary} {$direction}")
+            ->orderByRaw("{$startedAt} DESC")
+            ->orderByRaw("LOWER({$source}) ASC")
+            ->orderByRaw("LOWER({$name}) ASC")
+            ->orderBy('id');
     }
 
     private function dispatchDetail(OperationDispatch $dispatch): ?string
