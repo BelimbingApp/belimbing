@@ -3,6 +3,7 @@
 namespace App\Base\Schedule;
 
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
+use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\FrameworkScheduleDevelopmentSanitizer;
 use App\Base\Schedule\Services\ScheduleBoard;
@@ -63,8 +64,48 @@ class ServiceProvider extends BaseServiceProvider
                 return;
             }
 
+            $this->applySchedulerOverrides($recorder());
             $this->attachSuppressionFilters($recorder());
         });
+    }
+
+    /**
+     * Cron overrides take effect here, at scheduler start — the same one safe
+     * moment the suppression filters use. `schedule:work` runs each minute's
+     * evaluation in a fresh `schedule:run` subprocess, so a saved or reset
+     * override is honored at the next evaluation without any service restart
+     * (#398). Failure degrades to the code-declared default, logged.
+     */
+    private function applySchedulerOverrides(ScheduleRunRecorder $recorder): void
+    {
+        try {
+            if (! Schema::hasTable('base_schedule_overrides')) {
+                return;
+            }
+
+            $overrides = ScheduleOverride::query()
+                ->where('source', 'scheduler')
+                ->pluck('expression', 'key');
+        } catch (Throwable $e) {
+            Log::warning('Schedule override load failed; running code defaults.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($overrides->isEmpty()) {
+            return;
+        }
+
+        foreach ($this->app->make(Schedule::class)->events() as $task) {
+            $expression = $overrides->get($recorder->key($task));
+
+            if (is_string($expression) && $expression !== '') {
+                $task->cron($expression);
+            }
+        }
     }
 
     private function attachSuppressionFilters(ScheduleRunRecorder $recorder): void
