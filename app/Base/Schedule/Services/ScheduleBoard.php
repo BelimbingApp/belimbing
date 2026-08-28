@@ -80,7 +80,6 @@ class ScheduleBoard
                 overridden: $override !== null,
                 editable: true,
                 timezone: $timezone,
-                overrideVersion: $override?->updated_at?->toISOString(),
             );
         }
 

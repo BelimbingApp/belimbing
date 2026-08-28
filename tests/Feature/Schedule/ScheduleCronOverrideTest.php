@@ -136,6 +136,25 @@ test('a stale concurrent edit is refused rather than silently overwriting the ot
     expect(ScheduleOverride::query()->where('key', $key)->value('expression'))->toBe('5 5 * * *');
 });
 
+test('a concurrent create landing mid-edit is refused atomically, not overwritten', function (): void {
+    // The create path of the stale guard (#411 review): editing began with no
+    // override, another operator lands one meanwhile — the INSERT must be
+    // refused by the unique index, never overwrite via updateOrCreate.
+    [, $key] = overrideTestEvent();
+    $this->actingAs(createAdminUser());
+
+    $component = Livewire::test(Index::class)
+        ->call('startCronEdit', 'scheduler', $key)
+        ->set('cronDraft', '10 2 * * *')
+        ->call('previewCron');
+
+    ScheduleOverride::query()->create(['source' => 'scheduler', 'key' => $key, 'name' => 'x', 'expression' => '5 5 * * *']);
+
+    $component->call('saveCron')->assertHasErrors(['cronDraft']);
+
+    expect(ScheduleOverride::query()->where('key', $key)->value('expression'))->toBe('5 5 * * *');
+});
+
 test('saving the code default is the reset: no redundant override row is persisted', function (): void {
     [, $key] = overrideTestEvent(cron: '0 3 * * *');
     ScheduleOverride::query()->create(['source' => 'scheduler', 'key' => $key, 'name' => 'x', 'expression' => '9 9 * * *']);

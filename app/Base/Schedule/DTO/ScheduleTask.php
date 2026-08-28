@@ -27,6 +27,5 @@ final readonly class ScheduleTask
         public bool $overridden = false,
         public bool $editable = false,
         public ?string $timezone = null,
-        public ?string $overrideVersion = null,
     ) {}
 }

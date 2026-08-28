@@ -22,6 +22,7 @@ use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Settings\Contracts\SettingsService;
 use Cron\CronExpression;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
@@ -179,10 +180,12 @@ class Index extends Component
         $this->editingSource = $source;
         $this->editingKey = $key;
         $this->cronDraft = $task->cron;
-        // The version the operator is editing FROM: a concurrent save changes
-        // it, and stale writes are refused rather than silently overwriting
-        // another operator's change. Empty string = "no override existed".
-        $this->cronVersion = $task->overrideVersion ?? '';
+        // The value the operator is editing FROM is the version token: a
+        // concurrent save changes the stored expression by definition, so an
+        // atomic conditional write keyed on it needs no timestamp precision
+        // (#411 review — the previous read-then-write left a race window).
+        // Empty string = "no override existed when editing began".
+        $this->cronVersion = $task->overridden ? $task->cron : '';
         $this->cronPreview = [];
         $this->cronPreviewFor = null;
         $this->cronPreviewTimezone = null;
@@ -277,23 +280,36 @@ class Index extends Component
             return;
         }
 
-        // Stale-edit guard: the override row this operator started editing
-        // from must still be what is persisted — a concurrent edit bumps
-        // updated_at and this write is refused instead of overwriting it.
-        $current = ScheduleOverride::query()->where('source', 'scheduler')->where('key', $key)->first();
-        $currentVersion = $current?->updated_at?->toISOString() ?? '';
+        // Stale-edit guard, atomic (#411 review): a read-then-write check
+        // leaves a window where a concurrent save lands between the read and
+        // the write and is silently overwritten. Instead the write itself
+        // carries the expectation — INSERT relies on the source+key unique
+        // index to refuse a row that appeared meanwhile, and UPDATE matches
+        // the expression this operator started editing from, so zero
+        // affected rows IS the staleness verdict.
+        if (($this->cronVersion ?? '') === '') {
+            try {
+                ScheduleOverride::query()->create(
+                    ['source' => 'scheduler', 'key' => $key, 'name' => $task->name, 'expression' => $expression],
+                );
+            } catch (UniqueConstraintViolationException) {
+                $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
 
-        if (($this->cronVersion ?? '') !== $currentVersion) {
-            $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
-            $this->cronVersion = $currentVersion;
+                return;
+            }
+        } else {
+            $affected = ScheduleOverride::query()
+                ->where('source', 'scheduler')
+                ->where('key', $key)
+                ->where('expression', $this->cronVersion)
+                ->update(['name' => $task->name, 'expression' => $expression, 'updated_at' => now()]);
 
-            return;
+            if ($affected === 0) {
+                $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
+
+                return;
+            }
         }
-
-        ScheduleOverride::query()->updateOrCreate(
-            ['source' => 'scheduler', 'key' => $key],
-            ['name' => $task->name, 'expression' => $expression],
-        );
 
         $this->cancelCronEdit();
         $this->notify(__('Cadence saved — the scheduler honors it from the next evaluation.'));
