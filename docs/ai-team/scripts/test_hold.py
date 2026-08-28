@@ -35,6 +35,7 @@ class HoldTestCase(unittest.TestCase):
         self.pr_labels = base / "pr-labels.json"
         self.pr_labels.write_text("[]", encoding="utf-8")
         self.comment_body = base / "comment-body.txt"
+        self.lookup_count = base / "lookup-count.txt"
         gh = self.bin / "gh"
         gh.write_text(
             textwrap.dedent(
@@ -59,6 +60,13 @@ class HoldTestCase(unittest.TestCase):
                       prev="$arg"
                     done
                     if [ "$json_fields" = "labels" ]; then
+                      count_path="$HOLD_TEST_LOOKUP_COUNT"
+                      n=$(( $(cat "$count_path" 2>/dev/null || echo 0) + 1 ))
+                      printf '%s' "$n" >"$count_path"
+                      if [ "$n" = "${HOLD_TEST_LOOKUP_FAIL_ON_CALL:-0}" ]; then
+                        echo "simulated transient lookup failure" >&2
+                        exit 1
+                      fi
                       pr_obj=$(jq -n --slurpfile names "$pr_labels_path" \\
                         '{labels: ($names[0] | map({name: .}))}')
                       if [ -n "$jq_prog" ]; then
@@ -133,12 +141,14 @@ class HoldTestCase(unittest.TestCase):
         state: str = "OPEN",
         removal_actually_fails: bool = False,
         comment_fails: bool = False,
+        lookup_fails_on_call: int | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["HOLD_TEST_GH_LOG"] = bash_path(self.gh_log)
         env["HOLD_TEST_LABELS"] = bash_path(self.existing_labels)
         env["HOLD_TEST_PR_LABELS"] = bash_path(self.pr_labels)
         env["HOLD_TEST_COMMENT"] = bash_path(self.comment_body)
+        env["HOLD_TEST_LOOKUP_COUNT"] = bash_path(self.lookup_count)
         env["HOLD_TEST_STATE"] = state
         env["CLAIM_AGENT"] = agent
         if removal_actually_fails:
@@ -149,6 +159,10 @@ class HoldTestCase(unittest.TestCase):
             env["HOLD_TEST_COMMENT_FAILS"] = "1"
         elif "HOLD_TEST_COMMENT_FAILS" in env:
             del env["HOLD_TEST_COMMENT_FAILS"]
+        if lookup_fails_on_call is not None:
+            env["HOLD_TEST_LOOKUP_FAIL_ON_CALL"] = str(lookup_fails_on_call)
+        elif "HOLD_TEST_LOOKUP_FAIL_ON_CALL" in env:
+            del env["HOLD_TEST_LOOKUP_FAIL_ON_CALL"]
         env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
         return run_with_bash_path(
             ["bash", str(SCRIPT), *args],
@@ -357,6 +371,33 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.assertIn("hold:review:luna", self.pr_labels_now())
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertNotIn("remove-label", log)
+
+    def test_a_verify_lookup_that_itself_fails_is_never_read_as_gone(self):
+        # #420 review, second pass: label_present() used to swallow a gh
+        # error into the empty string, and the post-removal check treated
+        # anything not literally "true" as gone — an API failure on the
+        # verify call therefore read as a successful clear. The pre-check
+        # (call #1: label present, comment posted) succeeds; the
+        # post-removal check (call #2) is the one that fails here.
+        self.seed_pr_labels(["hold:review:luna"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--reason", "discharged",
+            agent="opus-5",
+            lookup_fails_on_call=2,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not confirm", result.stdout + result.stderr)
+        self.assertNotIn("steward-cleared", result.stdout)
+
+    def test_a_verify_lookup_failure_on_plain_self_clear_is_also_not_reported_as_success(self):
+        self.seed_pr_labels(["hold:review:sol"])
+        result = self.run_hold(
+            "review", "clear", "7", agent="sol", lookup_fails_on_call=1,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("could not confirm", result.stdout + result.stderr)
+        self.assertNotIn("cleared hold:review:sol on PR #7", result.stdout)
 
 
 class HoldLegacyClearTest(HoldTestCase):

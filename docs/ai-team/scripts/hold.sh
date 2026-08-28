@@ -144,8 +144,18 @@ label_present() {
   # --arg: $hold_label is built only from already-regex-validated agent ids
   # or the literal string "hold:review", so it can never carry a quote or
   # break out of the jq string literal (#420 review, P1).
-  gh pr view "$pr" --repo "$repo" --json labels \
-    --jq ".labels | any(.name == \"$hold_label\")" 2>/dev/null
+  #
+  # Three states, not two: a failed lookup prints "unknown", never "false" —
+  # `|| true` swallowing the gh error used to make an API failure read as a
+  # negative result, which the post-removal check then trusted as "gone"
+  # (#420 review, second pass). "unknown" is neither name a caller treats as
+  # confirmation; the pre-check (which wants "true") and the post-check
+  # (which wants exactly "false") both correctly refuse on it.
+  local out
+  out=$(gh pr view "$pr" --repo "$repo" --json labels \
+    --jq ".labels | any(.name == \"$hold_label\")" 2>/dev/null) || { echo "unknown"; return; }
+  [[ "$out" == "true" || "$out" == "false" ]] || out="unknown"
+  printf '%s' "$out"
 }
 
 if [[ "$action" == "add" ]]; then
@@ -204,10 +214,15 @@ else
 
   gh pr edit "$pr" --repo "$repo" --remove-label "$hold_label" >/dev/null 2>&1 || true
 
-  if [[ "$(label_present)" == "true" ]]; then
-    echo "$hold_label is still present on #$pr after attempting to remove it — the label was not actually cleared" >&2
+  after="$(label_present)"
+  if [[ "$after" != "false" ]]; then
+    if [[ "$after" == "unknown" ]]; then
+      echo "could not confirm $hold_label was actually removed from #$pr — the verification lookup itself failed, so this is not reported as cleared" >&2
+    else
+      echo "$hold_label is still present on #$pr after attempting to remove it — the label was not actually cleared" >&2
+    fi
     if [[ -n "$evidenced" ]]; then
-      echo "the evidence comment above is already posted and stands as the record of this attempt — retry the clear once the label removal itself succeeds" >&2
+      echo "the evidence comment above is already posted and stands as the record of this attempt — retry the clear once the label removal itself succeeds and can be confirmed" >&2
     fi
     exit 1
   fi
