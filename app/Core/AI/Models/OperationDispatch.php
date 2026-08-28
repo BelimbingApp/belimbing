@@ -1,6 +1,8 @@
 <?php
+
 namespace App\Core\AI\Models;
 
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\Employee\Models\Employee;
@@ -43,6 +45,16 @@ use Illuminate\Support\Carbon;
  */
 class OperationDispatch extends Model
 {
+    protected static function booted(): void
+    {
+        static::saved(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+        static::deleted(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+    }
+
     /**
      * Prefix for operation dispatch IDs.
      */
