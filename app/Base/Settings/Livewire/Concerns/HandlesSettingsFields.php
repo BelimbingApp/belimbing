@@ -77,7 +77,7 @@ trait HandlesSettingsFields
     /**
      * @return list<array<string, mixed>>
      */
-    private function allFields(): array
+    protected function allFields(): array
     {
         $fields = [];
 
@@ -157,7 +157,7 @@ trait HandlesSettingsFields
     /**
      * @param  array<string, mixed>  $field
      */
-    private function scopeForField(array $field, ?Scope $companyScope): ?Scope
+    protected function scopeForField(array $field, ?Scope $companyScope): ?Scope
     {
         if (($field['scope'] ?? 'global') !== 'company') {
             return null;
@@ -174,7 +174,7 @@ trait HandlesSettingsFields
         return in_array(($field['type'] ?? 'text'), ['readonly'], true);
     }
 
-    private function requiresCompanyScope(): bool
+    protected function requiresCompanyScope(): bool
     {
         return collect($this->allFields())
             ->contains(fn (array $field): bool => ($field['scope'] ?? 'global') === 'company');

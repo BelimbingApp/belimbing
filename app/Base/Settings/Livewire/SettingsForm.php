@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Livewire\Concerns\HandlesSettingsFields;
 use App\Base\Settings\Support\SettingsFieldValue;
+use App\Base\Settings\Support\SettingSubject;
 use App\Base\Support\Str as BlbStr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
@@ -119,6 +120,7 @@ abstract class SettingsForm extends Component
             ],
             $this->groups(),
         );
+        $historySubjects = $this->historySubjects();
 
         return view('livewire.settings.form', [
             'groups' => $groups,
@@ -127,6 +129,11 @@ abstract class SettingsForm extends Component
             'pageSubtitle' => $this->pageSubtitle(),
             'pageHelp' => $this->pageHelp(),
             'pageHelpLabel' => $this->pageHelpLabel(),
+            'historySubjects' => $historySubjects,
+            'historyCapability' => $this->historyCapability(),
+            'historySubjectLabel' => trans_choice(':count setting|:count settings', count($historySubjects), [
+                'count' => count($historySubjects),
+            ]),
         ]);
     }
 
@@ -166,6 +173,42 @@ abstract class SettingsForm extends Component
     protected function pageHelpLabel(): string
     {
         return __('Help');
+    }
+
+    /** @return list<array{name: string, id: string}> */
+    protected function historySubjects(): array
+    {
+        $companyScope = $this->requiresCompanyScope() ? $this->companyScope() : null;
+        $subjects = [];
+
+        foreach ($this->allFields() as $field) {
+            if ($this->isReadonlyField($field)) {
+                continue;
+            }
+
+            $subject = SettingSubject::handle(
+                $field['key'],
+                $this->scopeForField($field, $companyScope),
+            );
+            $subjects[$subject['id']] = $subject;
+        }
+
+        return array_values($subjects);
+    }
+
+    protected function historyCapability(): string
+    {
+        $capabilities = collect($this->groups())
+            ->map(fn (string $groupId): mixed => $this->groupConfigFor($groupId)['capability'] ?? null)
+            ->filter(fn (mixed $capability): bool => is_string($capability) && $capability !== '')
+            ->unique()
+            ->values();
+
+        if ($capabilities->count() !== 1) {
+            throw new \LogicException('A settings history surface must have one shared source capability.');
+        }
+
+        return (string) $capabilities->first();
     }
 
     /**

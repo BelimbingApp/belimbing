@@ -7,6 +7,9 @@ use App\Base\Settings\Livewire\SettingsForm;
 /** @var bool $multiGroup */
 /** @var string|null $pageHelp */
 /** @var string $pageHelpLabel */
+/** @var list<array{name: string, id: string}> $historySubjects */
+/** @var string $historyCapability */
+/** @var string $historySubjectLabel */
 ?>
 
 <div>
@@ -14,6 +17,14 @@ use App\Base\Settings\Livewire\SettingsForm;
 
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$pageTitle" :subtitle="$pageSubtitle" :help-label="$pageHelpLabel">
+            <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for :page', ['page' => $pageTitle])"
+                    :subjects="$historySubjects"
+                    :subject-label="$historySubjectLabel"
+                    :source-capability="$historyCapability"
+                />
+            </x-slot>
             @if ($pageHelp !== null)
                 <x-slot name="help">
                     <p class="max-w-3xl leading-6 text-ink">{{ $pageHelp }}</p>

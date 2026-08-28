@@ -248,9 +248,7 @@ class DatabaseSettingsService implements SettingsService
         $this->assertKeyIsClaimed($key, $definition !== null);
         $definition?->assertScopeAllowed($scope);
 
-        Setting::query()
-            ->where($this->scopeAttributes($key, $scope))
-            ->delete();
+        Setting::findByKeyAndScope($key, $scope)?->delete();
 
         $this->bustCache($key, $scope);
     }

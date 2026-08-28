@@ -27,12 +27,21 @@
 
     <x-ui.page-header :title="__('Performance')" :subtitle="__('Where request time goes — wall, database, subprocess — from the live request log.')">
         <x-slot name="actions">
-            <div @segmented-control-change="$wire.setWindow($event.detail.value)">
-                <x-ui.segmented-control
-                    :options="collect($windows)->map(fn (string $w): array => ['value' => $w, 'label' => $w])->all()"
-                    :value="$window"
-                    :label="__('Time window')"
+            <div class="flex flex-wrap items-center justify-end gap-3">
+                <x-ui.record-history
+                    :title="__('Performance recording settings history')"
+                    :subjects="$historySubjects"
+                    :subject-label="trans_choice(':count setting|:count settings', count($historySubjects), ['count' => count($historySubjects)])"
+                    source-capability="admin.system.perf.manage"
                 />
+
+                <div @segmented-control-change="$wire.setWindow($event.detail.value)">
+                    <x-ui.segmented-control
+                        :options="collect($windows)->map(fn (string $w): array => ['value' => $w, 'label' => $w])->all()"
+                        :value="$window"
+                        :label="__('Time window')"
+                    />
+                </div>
             </div>
         </x-slot>
     </x-ui.page-header>

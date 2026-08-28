@@ -7,6 +7,7 @@ use App\Base\Perf\Livewire\Dashboard\Index;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Models\Setting;
+use App\Base\Settings\Support\SettingSubject;
 use App\Core\Company\Models\Company;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\File;
@@ -69,7 +70,17 @@ it('shows the performance dashboard to authorized admins', function (): void {
         ->assertSee('Where the time goes')
         ->assertSee('admin.system.software.domains.index')
         ->assertSee('Recording settings')
+        ->assertSee('History')
         ->assertSee('perf:slowest');
+});
+
+it('binds performance history to the exact bounded recording settings', function (): void {
+    Livewire::actingAs(createAdminUser())
+        ->test(Index::class)
+        ->assertViewHas(
+            'historySubjects',
+            SettingSubject::handles(PerfRuntimeSettings::KEYS),
+        );
 });
 
 it('teaches how to fill the log when the window is empty', function (): void {
