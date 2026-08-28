@@ -6,7 +6,7 @@ namespace App\Base\AI\Enums;
  */
 enum ToolCategory: string
 {
-    case DATA = 'data'; // temporary Protect Main enforcement probe
+    case DATA = 'data';
     case WEB = 'web';
     case SYSTEM = 'system';
     case MEMORY = 'memory';
