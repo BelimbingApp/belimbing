@@ -186,7 +186,7 @@ case "$lane_issue" in
     say_ok "issue-less lane (AI-Team-Lane-Issue: none)"
     ;;
   *)
-    if printf '%s' "$pr_body" | grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${lane_issue}([^0-9]|$)"; then
+    if ai_team_body_has_closing_reference "$pr_body" "$lane_issue"; then
       say_ok "body closes #$lane_issue"
     else
       say_bad "body has no closing reference to #$lane_issue — run ready.sh or add Closes #$lane_issue"

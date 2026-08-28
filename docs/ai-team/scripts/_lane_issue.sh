@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Shared lane-issue identity for claim/ready/gate.
-# Sourced — do not execute. Callers: ready.sh, gate.sh.
+# Shared lane-issue identity and closing-reference contract for ready/gate/orient.
+# Sourced — do not execute.
 #
 # Rules (fail closed on conflict):
 # - Branch identity: ...issue-N... from claim.sh branch names.
@@ -66,4 +66,16 @@ ai_team_derive_lane_issue() {
   fi
 
   printf 'error:cannot derive issue from trailing (#N) or branch issue-N; pass READY_ISSUE or set AI-Team-Lane-Issue: none\n'
+}
+
+# Return success when the body carries a GitHub closing keyword bound to the
+# supplied lane issue. GitHub treats the keywords case-insensitively; callers
+# must derive the lane issue before asking this predicate.
+ai_team_body_has_closing_reference() {
+  local body="${1:-}"
+  local issue="${2:-}"
+
+  [[ "$issue" =~ ^[0-9]+$ ]] || return 2
+
+  grep -qiE "(^|[^A-Za-z])(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#${issue}([^0-9]|$)" <<<"$body"
 }

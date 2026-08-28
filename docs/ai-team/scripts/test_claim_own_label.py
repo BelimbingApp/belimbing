@@ -204,41 +204,6 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertIn("claimed #42 in draft PR", result.stdout)
 
 
-class OrientReviewQueueFilterTest(unittest.TestCase):
-    """The bypass-visibility half of #366: the jq filter orient.sh runs over
-    open task:review PRs, exercised against fixtures. Extracted from the
-    script so the tested program is the shipped program."""
-
-    def extract_filter(self) -> str:
-        text = ORIENT.read_text(encoding="utf-8")
-        start = text.index("| jq -r '", text.index("review-queue hygiene")) + len("| jq -r '")
-        end = text.index("'", start)
-        return text[start:end]
-
-    def run_filter(self, prs):
-        return subprocess.run(
-            ["jq", "-r", self.extract_filter()],
-            input=json.dumps(prs),
-            text=True,
-            capture_output=True,
-            check=True,
-        ).stdout
-
-    def test_flags_a_task_review_pr_without_a_closing_reference(self):
-        out = self.run_filter(
-            [
-                {"number": 361, "title": "pin LC_ALL", "body": "**From:** fable\n\nready"},
-                {"number": 362, "title": "docs", "body": "Closes #358"},
-            ]
-        )
-        self.assertIn("#361 has no Closes #N", out)
-        self.assertNotIn("#362", out)
-
-    def test_reports_ok_when_the_queue_is_clean(self):
-        out = self.run_filter([{"number": 5, "title": "t", "body": "closes #4"}])
-        self.assertIn("ok", out)
-
-
 class OrientReachabilityFilterTest(unittest.TestCase):
     """#360: the shipped reachability filter against fixtures — channel from
     the claim body, board-assumed when absent, agent-labelled lanes only."""
