@@ -22,6 +22,7 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -62,6 +63,7 @@ class Index extends Component
 
     public string $historySearch = '';
 
+    #[Url(as: 'status')]
     public string $historyStatus = 'all';
 
     public string $historySort = 'started_at';

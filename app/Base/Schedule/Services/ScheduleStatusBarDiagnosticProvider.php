@@ -5,6 +5,7 @@ namespace App\Base\Schedule\Services;
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Enums\StatusVariant;
+use App\Base\Schedule\DTO\UnhealthyScheduleTask;
 use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
@@ -17,7 +18,10 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
 {
     private const int RECENT_ACTIVITY_MINUTES = 15;
 
-    public function __construct(private readonly AuthorizationService $authorizationService) {}
+    public function __construct(
+        private readonly AuthorizationService $authorizationService,
+        private readonly ScheduleHealthService $healthService,
+    ) {}
 
     public function diagnosticsFor(Authenticatable $user): iterable
     {
@@ -27,23 +31,62 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
                 return [];
             }
 
+            $diagnostics = [];
+
+            // Scheduler-wide heartbeat: activity was recorded, but not recently.
             $lastRecordedActivity = ScheduleRun::query()->max('started_at');
-            if ($lastRecordedActivity === null
-                || now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->lt($lastRecordedActivity)) {
-                return [];
+            if ($lastRecordedActivity !== null
+                && now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->gte($lastRecordedActivity)) {
+                $diagnostics[] = new StatusBarDiagnostic(
+                    id: 'schedule.no-recent-recorded-activity',
+                    severity: StatusVariant::Warning,
+                    source: __('Schedule'),
+                    summary: __('No recent scheduled activity was recorded'),
+                    detail: __('No scheduled run has been recorded in the last :minutes minutes. This can mean the scheduler, recorder, or database path needs attention.', ['minutes' => self::RECENT_ACTIVITY_MINUTES]),
+                    target: Route::has('admin.system.schedule.index') ? route('admin.system.schedule.index') : null,
+                    metadata: ['activity_window_minutes' => self::RECENT_ACTIVITY_MINUTES],
+                );
             }
+
+            $unhealthy = $this->healthService->unhealthyTasks();
+            if ($unhealthy !== []) {
+                $diagnostics[] = $this->unhealthyTasksDiagnostic($unhealthy);
+            }
+
+            return $diagnostics;
         } catch (Throwable) {
             return [];
         }
+    }
 
-        return [new StatusBarDiagnostic(
-            id: 'schedule.no-recent-recorded-activity',
-            severity: StatusVariant::Warning,
+    /**
+     * @param  list<UnhealthyScheduleTask>  $unhealthy
+     */
+    private function unhealthyTasksDiagnostic(array $unhealthy): StatusBarDiagnostic
+    {
+        $count = count($unhealthy);
+        $escalated = collect($unhealthy)->contains(
+            fn (UnhealthyScheduleTask $task): bool => $task->consecutiveFailures >= 2,
+        );
+
+        $names = collect($unhealthy)->map(fn (UnhealthyScheduleTask $task): string => $task->name)->all();
+
+        $detail = collect($unhealthy)
+            ->map(fn (UnhealthyScheduleTask $task): string => sprintf(
+                '%s — %s',
+                $task->name,
+                $task->lastAttemptAt->diffForHumans(),
+            ))
+            ->implode('; ');
+
+        return new StatusBarDiagnostic(
+            id: 'schedule.failing-tasks',
+            severity: $escalated ? StatusVariant::Error : StatusVariant::Warning,
             source: __('Schedule'),
-            summary: __('No recent scheduled activity was recorded'),
-            detail: __('No scheduled run has been recorded in the last :minutes minutes. This can mean the scheduler, recorder, or database path needs attention.', ['minutes' => self::RECENT_ACTIVITY_MINUTES]),
-            target: Route::has('admin.system.schedule.index') ? route('admin.system.schedule.index') : null,
-            metadata: ['activity_window_minutes' => self::RECENT_ACTIVITY_MINUTES],
-        )];
+            summary: trans_choice('{1} :count scheduled task failing|[2,*] :count scheduled tasks failing', $count, ['count' => $count]),
+            detail: $detail,
+            target: Route::has('admin.system.schedule.index') ? route('admin.system.schedule.index', ['tab' => 'history', 'status' => 'failed']) : null,
+            metadata: ['failing_task_count' => $count, 'failing_task_names' => $names],
+        );
     }
 }

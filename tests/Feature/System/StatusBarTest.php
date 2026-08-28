@@ -2,14 +2,31 @@
 
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Schedule\Models\ScheduleRun;
+use App\Base\Schedule\Models\ScheduleSuppression;
+use App\Base\Schedule\Services\ScheduleRunRecorder;
+use App\Base\Schedule\Services\ScheduleStatusBarDiagnosticProvider;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 
 beforeEach(function (): void {
     Process::fake();
+    Cache::forget('schedule.health.unhealthy-tasks');
 });
+
+/**
+ * Register a scheduler event and return its stable key, so a test can write
+ * runs for a task the board actually considers active.
+ */
+function scheduleHealthTestKey(string $command = 'inspire'): string
+{
+    $event = app(Schedule::class)->command($command)->description($command);
+
+    return app(ScheduleRunRecorder::class)->key($event);
+}
 
 it('links the inactive Lara status-bar action to AI Providers with setup guidance', function (): void {
     $this->actingAs(createAdminUser());
@@ -82,4 +99,132 @@ it('reports only stale previously recorded schedule activity', function (): void
     $this->get(route('admin.system.info.index'))
         ->assertOk()
         ->assertDontSee('No recent scheduled activity was recorded');
+});
+
+it('flags a scheduler task whose latest run failed', function (): void {
+    $key = scheduleHealthTestKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'failed',
+        'started_at' => now()->subMinutes(5),
+        'finished_at' => now()->subMinutes(4),
+    ]);
+
+    $this->actingAs(createAdminUser());
+
+    $this->get(route('admin.system.info.index'))
+        ->assertOk()
+        ->assertSee('1 scheduled task failing')
+        ->assertSee('inspire');
+});
+
+it('aggregates multiple failing tasks into one diagnostic', function (): void {
+    $alpha = scheduleHealthTestKey('inspire');
+    $beta = scheduleHealthTestKey('inspire:second');
+
+    foreach ([$alpha, $beta] as $key) {
+        ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'key' => $key,
+            'name' => $key,
+            'status' => 'failed',
+            'started_at' => now()->subMinutes(5),
+            'finished_at' => now()->subMinutes(4),
+        ]);
+    }
+
+    $this->actingAs(createAdminUser());
+
+    $this->get(route('admin.system.info.index'))
+        ->assertOk()
+        ->assertSee('2 scheduled tasks failing');
+});
+
+it('escalates repeated consecutive failures to danger', function (): void {
+    $key = scheduleHealthTestKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'failed',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(9),
+    ]);
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'failed',
+        'started_at' => now()->subMinutes(5),
+        'finished_at' => now()->subMinutes(4),
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $diagnostic = collect(app(ScheduleStatusBarDiagnosticProvider::class)->diagnosticsFor($user))
+        ->firstWhere('id', 'schedule.failing-tasks');
+
+    expect($diagnostic)->not->toBeNull()
+        ->and($diagnostic->severity)->toBe(StatusVariant::Error);
+});
+
+it('a later success clears the failing-task diagnostic', function (): void {
+    $key = scheduleHealthTestKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'failed',
+        'started_at' => now()->subMinutes(10),
+        'finished_at' => now()->subMinutes(9),
+    ]);
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'succeeded',
+        'started_at' => now()->subMinutes(5),
+        'finished_at' => now()->subMinutes(4),
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $diagnostic = collect(app(ScheduleStatusBarDiagnosticProvider::class)->diagnosticsFor($user))
+        ->firstWhere('id', 'schedule.failing-tasks');
+
+    expect($diagnostic)->toBeNull();
+});
+
+it('does not flag a paused task whose last run failed', function (): void {
+    $key = scheduleHealthTestKey();
+
+    ScheduleSuppression::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+    ]);
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'failed',
+        'started_at' => now()->subMinutes(5),
+        'finished_at' => now()->subMinutes(4),
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $diagnostic = collect(app(ScheduleStatusBarDiagnosticProvider::class)->diagnosticsFor($user))
+        ->firstWhere('id', 'schedule.failing-tasks');
+
+    expect($diagnostic)->toBeNull();
 });
