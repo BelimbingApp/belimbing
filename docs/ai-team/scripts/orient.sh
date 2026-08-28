@@ -37,19 +37,33 @@ echo
 echo "== active leader/steward =="
 stewards=$(gh issue list --repo "$REPO" --state open --label "ops:steward" \
   --json number,title,labels \
-  --jq '.[] | ([.labels[].name | select(startswith("agent:"))] | join(", ")) as $agents
-        | "  #\(.number) [\(if $agents == "" then "MISSING agent label" else $agents end)] \(.title)"' \
+  --jq '.[]
+        | ([.labels[]?.name | select(startswith("agent:"))]) as $agents
+        | [(.number | tostring), ($agents | if length == 0 then "-" else join(", ") end), ($agents | length | tostring), .title]
+        | @tsv' \
   2>/dev/null)
 steward_status=$?
 if [ "$steward_status" -ne 0 ]; then
   echo "  unavailable — inspect the board before relying on steward backstops"
 elif [ -z "$stewards" ]; then
   echo "  none appointed"
+  echo "  WARNING expected exactly one active ops:steward issue (found 0)"
 else
-  printf '%s\n' "$stewards"
-  steward_count=$(printf '%s\n' "$stewards" | wc -l | tr -d ' ')
+  steward_count=$(printf '%s\n' "$stewards" | awk 'NF {count++} END {print count + 0}')
+  while IFS=$'\t' read -r steward_number agent_names agent_count steward_title; do
+    [ -n "$steward_number" ] || continue
+    if [ "$agent_count" -eq 1 ]; then
+      printf '  #%s [%s] %s\n' "$steward_number" "$agent_names" "$steward_title"
+    elif [ "$agent_count" -eq 0 ]; then
+      printf '  #%s [MISSING agent label] %s\n' "$steward_number" "$steward_title"
+      printf '  WARNING #%s active steward must carry exactly one agent:* label (found 0)\n' "$steward_number"
+    else
+      printf '  #%s [%s] %s\n' "$steward_number" "$agent_names" "$steward_title"
+      printf '  WARNING #%s active steward must carry exactly one agent:* label (found %s)\n' "$steward_number" "$agent_count"
+    fi
+  done <<< "$stewards"
   if [ "$steward_count" -ne 1 ]; then
-    echo "  WARNING expected exactly one active ops:steward issue"
+    echo "  WARNING expected exactly one active ops:steward issue (found $steward_count)"
   fi
 fi
 
