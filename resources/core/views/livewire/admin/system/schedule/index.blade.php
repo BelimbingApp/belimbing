@@ -3,6 +3,7 @@
 
 use App\Base\Schedule\DTO\RecordedRun;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Base\Schedule\Services\ScheduleRunRecorder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /** @var list<ScheduleTask> $tasks */
@@ -42,6 +43,9 @@ $duration = function ($start, $end): string {
 
     return $seconds >= 90 ? intdiv($seconds, 60).'m '.($seconds % 60).'s' : $seconds.'s';
 };
+$activeRunLooksStuck = fn (ScheduleTask $task): bool => in_array($task->status, ['queued', 'running'], true)
+    && $task->lastRunAt !== null
+    && $task->lastRunAt->lt(now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES));
 $tabs = [
     ['id' => 'tasks', 'label' => __('Tasks'), 'icon' => 'heroicon-o-clock'],
     ['id' => 'history', 'label' => __('History'), 'icon' => 'heroicon-o-queue-list'],
@@ -120,6 +124,16 @@ $tabs = [
                                                             :label="__('Run :task now', ['task' => $item->name])"
                                                             :title="__('Run now')"
                                                             wire:click="runNow(@js($item->key))"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="runNow"
+                                                        />
+                                                    @elseif($canExecute && $activeRunLooksStuck($item))
+                                                        <x-ui.icon-action
+                                                            icon="heroicon-o-bolt"
+                                                            :label="__('Force run :task (currently :status, unresponsive for over :minutes minutes)', ['task' => $item->name, 'status' => $item->status, 'minutes' => \App\Base\Schedule\Services\ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES])"
+                                                            :title="__('Force run')"
+                                                            wire:click="runNow(@js($item->key), true)"
+                                                            wire:confirm="{{ __('This task has been :status for over :minutes minutes without finishing — likely a stalled worker or queue. Mark it failed and run it again?', ['status' => $item->status, 'minutes' => \App\Base\Schedule\Services\ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES]) }}"
                                                             wire:loading.attr="disabled"
                                                             wire:target="runNow"
                                                         />

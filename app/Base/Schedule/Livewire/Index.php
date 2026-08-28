@@ -137,8 +137,16 @@ class Index extends Component
      * must not already have a queued/running row, and gets its `queued`
      * ledger row written before the job dispatch call returns — so a job
      * that never reaches the worker still leaves visible, correct state.
+     *
+     * $force lets a capable operator supersede a queued/running row that
+     * has sat unresponsive past ScheduleRunRecorder's staleness window —
+     * the Blade view only ever sends true once activeRunLooksStuck() would
+     * agree, but that's re-checked here rather than trusted from the
+     * client (#401 review: an unbounded lock was a regression this PR
+     * introduced, and the escape from it must not become an unconditional
+     * override).
      */
-    public function runNow(string $key, ScheduleRunRecorder $recorder, Schedule $schedule): void
+    public function runNow(string $key, ScheduleRunRecorder $recorder, Schedule $schedule, bool $force = false): void
     {
         if (! $this->checkCapability('admin.system.schedule.execute')) {
             return;
@@ -152,20 +160,27 @@ class Index extends Component
             return;
         }
 
-        if ($recorder->hasActiveRun($key)) {
-            $this->notifyWarning(__('This task is already queued or running.'));
-
-            return;
-        }
-
         $user = auth()->user();
+        $userName = $user !== null ? (string) data_get($user, 'name') : null;
+
+        $active = $recorder->activeRun($key);
+
+        if ($active !== null) {
+            if (! $force || ! $recorder->activeRunLooksStuck($active)) {
+                $this->notifyWarning(__('This task is already queued or running.'));
+
+                return;
+            }
+
+            $recorder->supersedeActiveRun($key, $userName);
+        }
 
         $run = $recorder->queueManualRun(
             $key,
             $recorder->name($event),
             (string) $event->expression,
             $user !== null ? (int) $user->getAuthIdentifier() : null,
-            $user !== null ? (string) data_get($user, 'name') : null,
+            $userName,
         );
 
         try {

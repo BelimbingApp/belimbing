@@ -99,21 +99,108 @@ class ScheduleRunRecorder
     }
 
     /**
+     * How long a `queued` row may sit unpicked before a stalled queue or
+     * dead worker is the more honest explanation than "still waiting" —
+     * and, since #401 review, the bound that keeps an unpicked queue from
+     * becoming a *permanent* lock on the Run now control (there was no
+     * such row, and so no such lock, before this queued state existed).
+     * Applies only to `queued`: task runtimes vary too widely to guess a
+     * safe universal timeout for `running` without risking the worse lie
+     * of declaring a healthy long-running task dead — see
+     * supersedeActiveRun() for the operator-driven escape instead.
+     */
+    public const int QUEUE_PICKUP_STALE_AFTER_MINUTES = 5;
+
+    /**
+     * The row currently blocking a new manual dispatch for this key, if
+     * any. A `queued` row past the pickup window is reconciled to an
+     * honest `failed` state as a side effect (mirrors
+     * DeploymentRunHistory::abandonStalePendingRun()'s "close what nothing
+     * is going to finish" reconciliation) rather than counted as active,
+     * so a stalled queue self-heals instead of locking the control forever.
+     */
+    public function activeRun(string $key): ?ScheduleRun
+    {
+        $run = $this->activeRunRow($key);
+
+        if (! $run instanceof ScheduleRun) {
+            return null;
+        }
+
+        if ($run->status === 'queued' && $this->isStale($run)) {
+            $this->failUnstartedRun($run->id, __(
+                'This run was queued but no worker picked it up within :minutes minutes — the queue connection or a worker may be down. Check queue health, then try again.',
+                ['minutes' => self::QUEUE_PICKUP_STALE_AFTER_MINUTES],
+            ));
+
+            return null;
+        }
+
+        return $run;
+    }
+
+    /**
      * True while a scheduler key already has a queued or running row —
      * used to refuse a duplicate manual dispatch rather than stacking two
      * concurrent "Run now" requests for the same task (#401).
      */
     public function hasActiveRun(string $key): bool
     {
+        return $this->activeRun($key) !== null;
+    }
+
+    /**
+     * Lets a capable operator close out a stuck queued/running row and
+     * dispatch a fresh one, rather than a stalled worker locking the
+     * control forever with only database access as a way out. The
+     * superseded row is marked `failed` — truthfully, by name, never
+     * silently discarded — recording who chose to move past it (#401
+     * follow-up: a queued/running row is a new kind of state this PR
+     * introduces, so a new kind of permanent lock is a regression it must
+     * not ship without an escape).
+     */
+    public function supersedeActiveRun(string $key, ?string $supersededByName): void
+    {
+        $run = $this->activeRunRow($key);
+
+        if (! $run instanceof ScheduleRun) {
+            return;
+        }
+
+        $this->failUnstartedRun($run->id, $supersededByName !== null
+            ? __('Superseded by a new manual run requested by :name.', ['name' => $supersededByName])
+            : __('Superseded by a new manual run.'));
+    }
+
+    /**
+     * Whether an active row is old enough that a manual override is worth
+     * offering — mirrors DeploymentRecoveryController only allowing
+     * recovery once a run's lease has actually expired, rather than an
+     * operator being able to supersede a run that started seconds ago.
+     */
+    public function activeRunLooksStuck(ScheduleRun $run): bool
+    {
+        return $this->isStale($run);
+    }
+
+    private function isStale(ScheduleRun $run): bool
+    {
+        return $run->started_at !== null
+            && $run->started_at->lt(now()->subMinutes(self::QUEUE_PICKUP_STALE_AFTER_MINUTES));
+    }
+
+    private function activeRunRow(string $key): ?ScheduleRun
+    {
         if (! $this->ready()) {
-            return false;
+            return null;
         }
 
         return ScheduleRun::query()
             ->where('source', 'scheduler')
             ->where('key', $key)
             ->whereIn('status', ['queued', 'running'])
-            ->exists();
+            ->orderByDesc('started_at')
+            ->first();
     }
 
     /**
