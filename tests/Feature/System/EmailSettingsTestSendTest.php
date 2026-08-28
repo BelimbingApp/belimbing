@@ -78,6 +78,31 @@ test('a non-admin cannot reach the email settings page to send a test email', fu
     $this->get(route('admin.system.email.index'))->assertForbidden();
 });
 
+test('a test result is cleared when the settings it verified are saved again', function (): void {
+    $this->actingAs(createAdminUser());
+    $component = Livewire::test(EmailSettings::class)
+        ->set('testRecipient', 'operator@example.test')
+        ->call('sendTestEmail');
+
+    expect($component->get('lastTestResult'))->not->toBeNull();
+
+    // Any save — even of an unrelated field — makes the shown result
+    // describe a configuration that is no longer necessarily what's saved;
+    // it must not keep reading as valid.
+    $component->call('save')->assertSet('lastTestResult', null);
+});
+
+test('a test result is cleared when defaults are restored', function (): void {
+    $this->actingAs(createAdminUser());
+    $component = Livewire::test(EmailSettings::class)
+        ->set('testRecipient', 'operator@example.test')
+        ->call('sendTestEmail');
+
+    expect($component->get('lastTestResult'))->not->toBeNull();
+
+    $component->call('restoreDefaults')->assertSet('lastTestResult', null);
+});
+
 test('log-only delivery mode is stated plainly, and disappears once SMTP is saved', function (): void {
     $settings = app(SettingsService::class);
     $settings->set(MailRuntimeSettings::MAILER_KEY, 'log');

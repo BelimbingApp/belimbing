@@ -2,6 +2,8 @@
 
 namespace App\Base\System\Services;
 
+use Closure;
+use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 use Throwable;
@@ -19,7 +21,21 @@ use Throwable;
  */
 final readonly class MailTransportTester
 {
-    public function __construct(private MailRuntimeSettings $mail) {}
+    /**
+     * @var (Closure(array<string, mixed>): Mailer)|null test seam only — null
+     *                                                   in production, where Mail::build() talks to a real transport
+     */
+    private ?Closure $mailerBuilder;
+
+    /**
+     * @param  (Closure(array<string, mixed>): Mailer)|null  $mailerBuilder
+     */
+    public function __construct(
+        private MailRuntimeSettings $mail,
+        ?Closure $mailerBuilder = null,
+    ) {
+        $this->mailerBuilder = $mailerBuilder;
+    }
 
     /**
      * @return array{ok: bool, category: string, message: string}
@@ -29,9 +45,10 @@ final readonly class MailTransportTester
         $config = $this->mail->configuration();
         $username = (string) ($config['mailers.smtp.username'] ?? '');
         $password = (string) ($config['mailers.smtp.password'] ?? '');
+        $build = $this->mailerBuilder ?? static fn (array $mailerConfig): Mailer => Mail::build($mailerConfig);
 
         try {
-            $mailer = Mail::build([
+            $mailer = $build([
                 'transport' => 'smtp',
                 'scheme' => $config['mailers.smtp.scheme'] ?: null,
                 'host' => $config['mailers.smtp.host'],
@@ -40,11 +57,7 @@ final readonly class MailTransportTester
                 'password' => $password !== '' ? $password : null,
             ]);
         } catch (Throwable) {
-            return [
-                'ok' => false,
-                'category' => 'configuration',
-                'message' => __('Could not build the SMTP transport from saved settings — check host, port, and scheme.'),
-            ];
+            return $this->result('configuration', false);
         }
 
         try {
@@ -57,34 +70,20 @@ final readonly class MailTransportTester
                 },
             );
         } catch (TransportExceptionInterface $exception) {
-            return [
-                'ok' => false,
-                'category' => $this->classify($exception),
-                'message' => $this->sanitize($exception->getMessage(), $username, $password),
-            ];
-        } catch (Throwable $exception) {
-            return [
-                'ok' => false,
-                'category' => 'unknown',
-                'message' => $this->sanitize($exception->getMessage(), $username, $password),
-            ];
+            return $this->result($this->classify($exception), false);
+        } catch (Throwable) {
+            return $this->result('unknown', false);
         }
 
-        return [
-            'ok' => true,
-            'category' => 'ok',
-            'message' => __('Test message submitted to :host:port. Check :recipient for delivery — submission success does not guarantee inbox placement.', [
-                'host' => $config['mailers.smtp.host'],
-                'port' => $config['mailers.smtp.port'],
-                'recipient' => $recipient,
-            ]),
-        ];
+        return $this->result('ok', true, $config, $recipient);
     }
 
     /**
      * Best-effort classification from the transport exception's own text —
      * Symfony/SMTP servers vary in exact wording, so this is a heuristic to
-     * point the operator at the right place, not a guarantee.
+     * point the operator at the right place, not a guarantee. The raw text
+     * this reads is used *only* to pick a category here; it is never
+     * returned — see result().
      */
     private function classify(TransportExceptionInterface $exception): string
     {
@@ -100,22 +99,33 @@ final readonly class MailTransportTester
     }
 
     /**
-     * Defense in depth: SMTP does not echo a password back, and a transport
-     * exception's message is Symfony/server-generated text, not saved-setting
-     * interpolation — but "never render credentials" (#376) is worth a
-     * belt-and-suspenders strip rather than trusting that invariant to hold
-     * forever across transport implementations.
+     * Every returned message is composed entirely by this application from a
+     * fixed set — never interpolated from a transport exception's own text.
+     * A denylist that strips known secrets from server-controlled text is
+     * unwinnable (the SMTP peer chooses the encoding, not us — a base64 or
+     * quoted-printable credential survives a literal-substring strip); an
+     * allow-list of our own strings cannot leak what it never contains, no
+     * matter what the server said (luna's #397 P1).
+     *
+     * @param  array<string, mixed>  $config
+     * @return array{ok: bool, category: string, message: string}
      */
-    private function sanitize(string $message, string $username, string $password): string
+    private function result(string $category, bool $ok, array $config = [], string $recipient = ''): array
     {
-        $redacted = $message;
+        $message = match ($category) {
+            'ok' => __('Test message submitted to :host:port. Check :recipient for delivery — submission success does not guarantee inbox placement.', [
+                'host' => $config['mailers.smtp.host'] ?? '',
+                'port' => $config['mailers.smtp.port'] ?? '',
+                'recipient' => $recipient,
+            ]),
+            'connection' => __('Could not connect to the SMTP server. Check the host and port, and that this deployment can reach it over the network.'),
+            'tls' => __('The TLS/SSL handshake failed. Check the scheme setting against what your provider requires.'),
+            'authentication' => __('The SMTP server rejected the saved username or password.'),
+            'sender_rejected' => __('The SMTP server rejected the sender address. Check that your provider has authorized this From address to send.'),
+            'configuration' => __('Could not build the SMTP transport from saved settings — check host, port, and scheme.'),
+            default => __('The test message could not be sent. Check the saved SMTP settings.'),
+        };
 
-        foreach ([$password, $username] as $secret) {
-            if ($secret !== '') {
-                $redacted = str_replace($secret, '[redacted]', $redacted);
-            }
-        }
-
-        return $redacted;
+        return ['ok' => $ok, 'category' => $category, 'message' => $message];
     }
 }

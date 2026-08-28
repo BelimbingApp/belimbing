@@ -3,6 +3,7 @@
 namespace App\Base\System\Livewire\Email;
 
 use App\Base\Foundation\Contracts\SemanticActionRecorder;
+use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\Livewire\SettingsForm;
 use App\Base\System\Services\MailTransportTester;
 use Illuminate\Support\Facades\Auth;
@@ -33,6 +34,26 @@ final class Index extends SettingsForm
     protected function pageSubtitle(): string
     {
         return __('Configure outgoing delivery and sender identity.');
+    }
+
+    /**
+     * A stale green result is worse than none: it describes the transport
+     * that was tested, not necessarily the one currently saved. Clearing on
+     * every save keeps "the last test still shown" and "the last saved
+     * configuration" the same claim (luna's #397 P2/3).
+     */
+    public function save(SettingsService $settings): void
+    {
+        parent::save($settings);
+
+        $this->lastTestResult = null;
+    }
+
+    public function restoreDefaults(SettingsService $settings): void
+    {
+        parent::restoreDefaults($settings);
+
+        $this->lastTestResult = null;
     }
 
     /**

@@ -44,6 +44,8 @@ it('enforces the settings group capability at the page boundary', function (): v
 });
 
 it('renders the email settings page through its registered route', function (): void {
+    app(SettingsService::class)->set(MailRuntimeSettings::MAILER_KEY, 'smtp');
+
     $this->actingAs(createAdminUser());
 
     $this->get(route('admin.system.email.index'))
@@ -59,10 +61,22 @@ it('renders the email settings page through its registered route', function (): 
         ->toHaveKey('app.base.system.livewire.email', EmailSettings::class);
 });
 
+it('hides SMTP fields while Log only is the active delivery mode', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $this->get(route('admin.system.email.index'))
+        ->assertOk()
+        ->assertDontSee('SMTP host')
+        ->assertDontSee('SMTP username')
+        ->assertDontSee('SMTP password')
+        ->assertDontSee('Send a test email');
+});
+
 it('stores mail credentials encrypted and offers reveal controls for saved secrets', function (): void {
     $username = SettingsFieldValue::formKey(MailRuntimeSettings::USERNAME_KEY);
     $password = SettingsFieldValue::formKey(MailRuntimeSettings::PASSWORD_KEY);
 
+    app(SettingsService::class)->set(MailRuntimeSettings::MAILER_KEY, 'smtp');
     $this->actingAs(createAdminUser());
 
     Livewire::test(EmailSettings::class)
