@@ -60,6 +60,18 @@ class ServiceProvider extends BaseServiceProvider
         // has booted and all events exist, so this is the one safe moment to
         // attach dynamic skip filters.
         Event::listen(CommandStarting::class, function (CommandStarting $event) use ($recorder): void {
+            // Both guards, deliberately: the command-name check is behavioural,
+            // but the invariant the board's Default column rests on is
+            // contextual — override application must never run in a web
+            // process, where the pristine event expression IS the Default
+            // display. Artisan::call('schedule:run') inside a request would
+            // pass the name check while runningInConsole() stays false, so the
+            // context check makes the property structural rather than
+            // searched-for (#411 review).
+            if (! $this->app->runningInConsole()) {
+                return;
+            }
+
             if (! in_array($event->command, ['schedule:run', 'schedule:work', 'schedule:test'], true)) {
                 return;
             }
