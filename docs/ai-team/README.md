@@ -31,9 +31,10 @@ and stopping do not depend on what the repository builds. To adopt it elsewhere,
 copy this directory, replace or remove `scripts/project-orient.sh`, and create
 the fixed board labels used below:
 `task:ready`, `task:active`, `task:review`, `task:blocked`, `task:done`,
-`hold:author`, `hold:review`, and
-`ops:halt`, `ops:steward`. The claim mechanism creates `agent:<id>` labels as
-lanes appear. Run the mechanism tests before enabling the scheduled sweep.
+`hold:author`, and
+`ops:halt`, `ops:steward`. The claim mechanism creates `agent:<id>` labels,
+and `hold.sh` creates `hold:review:<agent>` labels, as they're first needed.
+Run the mechanism tests before enabling the scheduled sweep.
 
 ---
 
@@ -362,22 +363,74 @@ five times in one session; the label has never been.
 | Label | Set by | Cleared by | Means |
 |---|---|---|---|
 | `hold:author` | the author | the author | mid-fix — do not merge yet |
-| `hold:review` | a reviewer | that reviewer | an open finding — do not merge yet |
+| `hold:review:<agent>` | that reviewer (`hold.sh review add`) | that same reviewer (`hold.sh review clear`) | *that agent's* open finding — do not merge yet |
 
-When two reviewers hold the same label, **every holder with an open finding must
-clear before the label comes off.** `hold:review` is binary and the gate cannot
-tell one holder's satisfaction from another's, so a single removal opens a real
-merge window while a finding is still open — and "I named the absent holder in a
-comment" is prose the gate does not read. If a holder has gone unresponsive, that
-is a stale lane and the steward resolves it under **Stale-lane recovery** below,
-on the record, rather than by one reviewer speaking for another.
+**A review hold is named, not shared.** Two reviewers can each have an
+independent open finding on the same PR; a single `hold:review` boolean
+cannot tell one holder's satisfaction from another's, so a review hold is one
+label *per holder* — `hold:review:sol`, `hold:review:luna`, however many are
+open at once — and `gate.sh` blocks on every one present (#385). Clearing your
+own label never touches anyone else's, mechanically, not by convention: "I
+named the absent holder in a comment" used to be prose the gate did not read;
+now there is nothing left to name, because the label already says who. Set
+your hold the moment you have something you intend to fix — that means when
+you *begin* the fix, not when you push it — with `CLAIM_AGENT=<your-id>
+docs/ai-team/scripts/hold.sh review add <pr>`, and clear it with `hold.sh
+review clear <pr>` the moment the fix is pushed.
+
+*Migration note:* PRs holding the old bare `hold:review` label (set before
+#385) are still honored as an unattributed hold — `gate.sh` still blocks on
+it and `orient.sh` still reconstructs a likely holder from the review stream,
+exactly as before. It has no owner to name, so it clears through its own
+explicit path rather than `review clear`'s default target: `CLAIM_AGENT=<id>
+hold.sh review clear <pr> --legacy --reason "<evidence>"` — same
+evidence-first, verify-after-mutation discipline as the steward path below,
+because a bare hold is exactly the case with no name to hold accountable if
+the clearance turns out to be wrong.
+
+**An unresponsive holder on an open PR** — the reviewer who set
+`hold:review:<agent>` has gone quiet and the finding is demonstrably
+discharged (a pushed fix, a superseding review, or equivalent recorded
+evidence) — is a steward action, not a fellow reviewer speaking for the
+absent one, and it goes through `hold.sh`, never a bare `gh pr edit
+--remove-label`: routing around the tool at the one moment attribution
+matters most is worse than the ownerless label it replaces, because an
+ownerless label at least never claimed to be authoritative about who may
+clear it.
+
+```bash
+CLAIM_AGENT=<steward-id> docs/ai-team/scripts/hold.sh review clear <pr> \
+  --steward <holder-agent> --reason "<what was discharged, and how you know>"
+```
+
+`--steward` and `--reason` are mandatory together — the script refuses one
+without the other, and refuses naming yourself. This clears *exactly*
+`hold:review:<holder-agent>`, leaves every other holder's label untouched,
+and posts the reason as a headered PR comment automatically, *before*
+touching the label: if the label was never actually set (a typo'd holder
+id) or the comment fails to post, the script refuses rather than silently
+reporting success, and if the removal itself somehow doesn't take, it says
+so loudly rather than trusting the exit code — the evidence is never only
+in the steward's memory, and it never gets manufactured for a mutation that
+did not happen. Cite something checkable (a commit SHA, a review comment, a
+passing regression) as the reason — never "enough time has passed." A
+discharged-but-unconfirmed hold is not stale; it is unverified, and the
+evidence requirement is what makes a steward clearing it different from one
+reviewer overriding another — never clear a hold whose finding you have not
+personally confirmed resolved, no matter how long it has sat.
+
+`--steward` names who is acting; it checks no role of its own, and any
+agent can pass it. The recorded `--reason` is the control, not the flag —
+`gate.sh` cannot distinguish a legitimate steward transfer from one
+reviewer overriding a rival's hold, only the presence and content of the
+evidence on the record can, exactly as it would if a human read the PR and
+judged it. Do not read the flag name as a permission check it does not
+perform.
 
 An author never clears a reviewer's hold: one agent believed they had, having
 actually cleared their own `hold:author`, and only the label timeline showed the
 difference.
 
-Add it the moment you have something you intend to fix — that means when you
-*begin* the fix, not when you push it — and remove it when the fix is pushed.
 Before acting on review findings at all, fetch the PR head: one agent
 re-implemented a fix another session had already pushed because the claim
 registry covers issues and new PRs, not fix-ups in flight on an existing PR;
@@ -513,7 +566,7 @@ identity.
 | Current work and priorities | Open issues, PRs, and repository instructions |
 | Claims, handoffs, blockers, review findings | Comments on that issue or PR |
 | Owner and state | `agent:<id>` and `task:*` labels |
-| Merge holds | `hold:author`, `hold:review` |
+| Merge holds | `hold:author`, `hold:review:<agent>` (per holder; `hold.sh`), bare `hold:review` honored as legacy/unattributed |
 | Gates, sweeps, orientation, and cleanup | [`scripts/`](./scripts/) |
 | Halt / stand-down signal | open issue labelled `ops:halt`, shown first by `orient.sh` |
 | Cleanup when you stop | [`scripts/cleanup.sh`](./scripts/cleanup.sh) |
