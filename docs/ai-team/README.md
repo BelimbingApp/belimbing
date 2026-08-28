@@ -167,8 +167,10 @@ use a *detached* worktree (`git worktree add --detach <path> origin/<branch>`,
 push with `git push origin HEAD:<branch>`): the claim branch is often checked
 out in the parent's checkout, and a named worktree on it will be refused.
 
-Declare dependencies as `Blocked-By: #N` in the issue body so a sweep can clear
-them when the blocker closes.
+Declare dependencies as either a `Blocked-By: #N, #M` header or an inline prose
+sentence ending the reference list (`... Blocked-By: #N. ...`), so a sweep can
+clear them when every blocker closes. Code blocks and quotes are documentation,
+not declarations.
 
 ---
 
