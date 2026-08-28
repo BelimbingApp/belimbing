@@ -590,7 +590,7 @@ class Index extends Component
                 ->map(fn (ScheduleOverride $o): array => ['name' => 'schedule-task', 'id' => $o->source.':'.$o->key])
                 ->concat(ScheduleSuppression::query()->get()
                     ->map(fn (ScheduleSuppression $x): array => ['name' => 'schedule-task', 'id' => $x->source.':'.$x->key]));
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // Tables absent (fresh install mid-migration): the header action
             // simply renders without subjects.
         }
