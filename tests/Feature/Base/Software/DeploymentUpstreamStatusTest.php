@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Livewire\Deployment\Index;
 use App\Base\Software\Services\SoftwareSourceRepository;
 use Illuminate\Support\Facades\Cache;
@@ -9,6 +10,7 @@ use Livewire\Livewire;
 
 const UPSTREAM_LOCAL_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 const UPSTREAM_HEAD_SHA = 'cafebabecafebabecafebabecafebabecafebabe';
+const UPSTREAM_MIRROR_SHA = 'a11ce000a11ce000a11ce000a11ce000a11ce000';
 const UPSTREAM_TRAILER = "\x1fCI\x1fCurrent";
 
 beforeEach(function (): void {
@@ -17,25 +19,40 @@ beforeEach(function (): void {
 });
 
 /**
- * Platform checkout is an operator fork (origin = fork, matching local), with a
- * framework upstream remote. $counts drives the fork↔upstream relationship as
- * rev-list would report it: [behind (upstream-only), ahead (fork-only)]; null
- * means the upstream object was never fetched. $remote/$branch cover non-default
- * names; $upstreamError simulates an unreachable upstream.
+ * Platform checkout is an operator fork (origin = fork). The release flow's
+ * two transitions (#374) are driven independently:
  *
- * @param  array{0: int, 1: int}|null  $counts
+ * - $mirror: 'absent' | 'current' (equals upstream head) | a SHA (distinct
+ *   mirror head) | 'fail' (lookup error).
+ * - $mirrorCounts: [upstream-only, mirror-only] from rev-list when the mirror
+ *   SHA differs from upstream's; null = objects unfetched.
+ * - $stableCounts: [mirror-only(missing), stable-only(fork own)] for the
+ *   stable comparison; null = objects unfetched.
+ * - $originError: origin (stable head) unreadable.
+ * - $upstreamError: upstream head unreachable.
  */
 function fakeUpstreamGit(
     string $remote = 'upstream',
     ?string $configuredRemote = null,
     ?string $configuredBranch = null,
-    ?string $defaultBranch = 'main',
-    ?array $counts = [0, 0],
+    string $defaultBranch = 'main',
+    string $mirror = 'current',
+    ?array $mirrorCounts = null,
+    ?array $stableCounts = [0, 0],
+    ?string $originError = null,
     ?string $upstreamError = null,
+    string $localBranch = 'master',
+    ?string $localSha = null,
 ): void {
     $upstreamBranch = $configuredBranch ?? $defaultBranch;
+    $localSha ??= UPSTREAM_LOCAL_SHA;
+    $mirrorSha = match ($mirror) {
+        'current' => UPSTREAM_HEAD_SHA,
+        'absent', 'fail' => null,
+        default => $mirror,
+    };
 
-    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $counts, $upstreamError, $upstreamBranch) {
+    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha) {
         $command = gitCommandWithoutConfig($process->command);
 
         $result = match ($command) {
@@ -48,10 +65,24 @@ function fakeUpstreamGit(
                 : Process::result('', exitCode: 1),
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
             ['git', 'remote', 'get-url', $remote] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## master...origin/master'),
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('master'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(UPSTREAM_LOCAL_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
+            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result("## {$localBranch}...origin/{$localBranch}"),
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result($localBranch),
+            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($localSha."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
+            // The latest pipeline follows the local branch — a decoy when the
+            // checkout is parked off master. Keyed only for non-master so it
+            // can never shadow the originError-aware master arm below.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.($localBranch !== 'master' ? $localBranch : chr(0))] => Process::result($localSha."\trefs/heads/{$localBranch}"),
+            // Stable head: origin/master, the branch the checkout tracks.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => $originError !== null
+                ? Process::result(errorOutput: $originError, exitCode: 128)
+                : Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
+            // Mirror head: origin/<upstream branch>, tri-state.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.$upstreamBranch] => match ($mirror) {
+                'absent' => Process::result('', exitCode: 2),
+                'fail' => Process::result(errorOutput: 'fatal: unable to access: could not resolve host', exitCode: 128),
+                default => Process::result($mirrorSha."\trefs/heads/{$upstreamBranch}"),
+            },
+            // Upstream head via --symref (no branch configured) or --exit-code.
             ['git', 'ls-remote', '--symref', $remote, 'HEAD'] => $upstreamError !== null
                 ? Process::result(errorOutput: $upstreamError, exitCode: 128)
                 : Process::result("ref: refs/heads/{$defaultBranch}\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD"),
@@ -59,8 +90,13 @@ function fakeUpstreamGit(
                 ? Process::result(errorOutput: $upstreamError, exitCode: 128)
                 : Process::result(UPSTREAM_HEAD_SHA."\trefs/heads/{$upstreamBranch}"),
             ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', UPSTREAM_HEAD_SHA] => Process::result(UPSTREAM_HEAD_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.UPSTREAM_LOCAL_SHA] => $counts !== null
-                ? Process::result($counts[0]."\t".$counts[1])
+            // Mirror vs upstream counts: rev-list <upstream>...<mirror>.
+            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.($mirrorSha ?? '')] => $mirrorCounts !== null
+                ? Process::result($mirrorCounts[0]."\t".$mirrorCounts[1])
+                : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
+            // Stable vs mirror counts: rev-list <mirror>...<stable>.
+            ['git', 'rev-list', '--left-right', '--count', ($mirrorSha ?? '').'...'.UPSTREAM_LOCAL_SHA] => $stableCounts !== null
+                ? Process::result($stableCounts[0]."\t".$stableCounts[1])
                 : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
             default => null,
         };
@@ -102,168 +138,194 @@ test('a deployment with no upstream remote renders exactly as today', function (
         ->call('loadLatestStatus')
         ->assertSee('Up to date')
         ->assertDontSee('Fork up to date')
-        ->assertDontSee('Upstream');
+        ->assertDontSee('Mirror');
 });
 
-test('a contained upstream reports the relationship and keeps the plain Up to date badge', function (): void {
-    fakeUpstreamGit(counts: [0, 3]);
+// ---- relationship 1: mirror vs upstream ----
+
+test('a mirror matching the upstream head is current', function (): void {
+    fakeUpstreamGit(mirror: 'current');
 
     $upstream = platformUpstream();
 
-    expect($upstream)->not->toBeNull()
-        ->and($upstream['repo'])->toBe('BelimbingApp/belimbing')
-        ->and($upstream['branch'])->toBe('main')
-        ->and($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA)
-        ->and($upstream['relationship'])->toBe('contained')
-        ->and($upstream['ahead'])->toBe(3)
-        ->and($upstream['behind'])->toBe(0);
-
-    $user = createAdminUser();
-    $this->actingAs($user);
-
-    Livewire::test(Index::class)
-        ->call('loadLatestStatus')
-        ->assertSee('Upstream contained')
-        ->assertSee('Up to date')
-        ->assertDontSee('Fork up to date');
+    expect($upstream['mirror']['state'])->toBe('current')
+        ->and($upstream['mirror']['sha'])->toBe(UPSTREAM_HEAD_SHA)
+        ->and($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA);
 });
 
-test('a fast-forwardable upstream is stated with its commit count', function (): void {
-    fakeUpstreamGit(counts: [4, 0]);
+test('an absent mirror branch is an explicit missing state, not an error', function (): void {
+    fakeUpstreamGit(mirror: 'absent');
 
     $upstream = platformUpstream();
 
-    expect($upstream['relationship'])->toBe('fast_forwardable')
-        ->and($upstream['ahead'])->toBe(0)
-        ->and($upstream['behind'])->toBe(4);
-});
-
-test('a divergent fork and upstream are stated with both counts', function (): void {
-    fakeUpstreamGit(counts: [2, 5]);
-
-    $upstream = platformUpstream();
-
-    expect($upstream['relationship'])->toBe('divergent')
-        ->and($upstream['ahead'])->toBe(5)
-        ->and($upstream['behind'])->toBe(2);
-});
-
-test('Up to date is not shown from origin agreement alone when the upstream is not contained', function (): void {
-    fakeUpstreamGit(counts: [4, 0]);
-
-    $user = createAdminUser();
-    $this->actingAs($user);
-
-    Livewire::test(Index::class)
-        ->call('loadLatestStatus')
-        ->assertSee('Fork up to date')
-        ->assertSee('fast-forwardable');
-});
-
-test('an unfetched upstream head is a stated reason, not an error or a guessed relationship', function (): void {
-    fakeUpstreamGit(counts: null);
-
-    $upstream = platformUpstream();
-
-    expect($upstream['relationship'])->toBeNull()
+    expect($upstream['mirror']['state'])->toBe('missing')
         ->and($upstream['error'])->toBeNull()
-        ->and($upstream['reason'])->toContain('fetch upstream');
+        ->and($upstream['stable']['state'])->toBe('unknown')
+        ->and($upstream['stable']['reason'])->toContain('No mirror branch exists yet');
 });
 
-test('an unreachable upstream is a stated failure on the upstream line, not an exception', function (): void {
-    fakeUpstreamGit(upstreamError: 'fatal: unable to access https://github.com/BelimbingApp/belimbing.git: could not resolve host');
+test('mirror count states follow the rev-list geometry', function (array $counts, string $state, int $behind, int $ahead): void {
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: $counts, stableCounts: [0, 2]);
 
     $upstream = platformUpstream();
 
-    expect($upstream['head'])->toBeNull()
-        ->and($upstream['relationship'])->toBeNull()
+    expect($upstream['mirror']['state'])->toBe($state)
+        ->and($upstream['mirror']['behind'])->toBe($behind)
+        ->and($upstream['mirror']['ahead'])->toBe($ahead);
+})->with([
+    'behind: upstream-only commits fast-forward' => [[4, 0], 'behind', 4, 0],
+    'diverged: the mirror holds its own commits' => [[3, 2], 'diverged', 3, 2],
+]);
+
+test('a failed mirror lookup is unknown with a reason, never treated as absent', function (): void {
+    fakeUpstreamGit(mirror: 'fail');
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('unknown')
+        ->and($upstream['mirror']['reason'])->toContain('Could not determine')
+        ->and($upstream['stable']['state'])->toBe('unknown');
+});
+
+test('unfetched mirror objects are unknown with a fetch reason', function (): void {
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: null, stableCounts: [0, 0]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('unknown')
+        ->and($upstream['mirror']['reason'])->toContain('fetch upstream');
+});
+
+test('an unreachable upstream leaves the mirror uncomparable with a stated reason', function (): void {
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, upstreamError: 'fatal: could not resolve host');
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('unknown')
+        ->and($upstream['mirror']['reason'])->toContain('upstream head could not be read')
         ->and($upstream['error'])->not->toBeNull();
 });
 
-test('an unreadable origin never substitutes the installed HEAD for the fork head', function (): void {
-    // The SBG shape: origin (the fork) is unreadable — lapsed credentials — while
-    // the checkout carries unpushed local commits, so installed HEAD and fork head
-    // genuinely differ. The relationship must become unknown with a stated reason,
-    // not the installed checkout's relationship presented as the fork's.
-    fakeUpstreamGit(counts: [0, 3]);
+// ---- relationship 2: stable vs mirror ----
 
-    Process::fake(function ($process) {
-        $command = gitCommandWithoutConfig($process->command);
-
-        if ($command === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master']) {
-            return Process::result(errorOutput: 'fatal: could not read Username for https://github.com', exitCode: 128);
-        }
-
-        return fakeUpstreamGitResultForAnonymous($command) ?? Process::result();
-    });
+test('stable states are keyed on mirror commits the stable branch lacks', function (array $counts, string $state, int $missing, int $forkOwn): void {
+    // `missing` drives the state; the fork's own commits are information.
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: $counts);
 
     $upstream = platformUpstream();
 
-    expect($upstream)->not->toBeNull()
-        ->and($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA)
-        ->and($upstream['relationship'])->toBeNull()
-        ->and($upstream['ahead'])->toBeNull()
-        ->and($upstream['behind'])->toBeNull()
-        ->and($upstream['reason'])->toContain('fork head could not be read');
+    expect($upstream['stable']['state'])->toBe($state)
+        ->and($upstream['stable']['missing'])->toBe($missing)
+        ->and($upstream['stable']['fork_own'])->toBe($forkOwn);
+})->with([
+    'contained: every mirrored update present' => [[0, 7], 'contained', 0, 7],
+    'behind: updates available to integrate' => [[5, 12], 'behind', 5, 12],
+]);
+
+test('an unreadable origin leaves the stable relationship unknown, never substituting local HEAD', function (): void {
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, originError: 'fatal: could not read Username for https://github.com');
+
+    $upstream = platformUpstream();
+
+    expect($upstream['stable']['state'])->toBe('unknown')
+        ->and($upstream['stable']['reason'])->toContain('stable head could not be read');
 });
 
+test('a stable head equal to the mirror is contained without a rev-list call', function (): void {
+    fakeUpstreamGit(mirror: UPSTREAM_LOCAL_SHA, mirrorCounts: [1, 0], stableCounts: null);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['stable']['state'])->toBe('contained')
+        ->and($upstream['stable']['missing'])->toBe(0);
+});
+
+test('the stable comparison is pinned to origin/master even when the checkout sits on another branch', function (): void {
+    // sol's P1 #1 on #395: the branch identity must be fixed, not read from
+    // the local checkout. A deployment parked on a feature branch must still
+    // compare origin/master to the mirror — never origin/<feature>, whose
+    // head the fixture serves as a decoy through the latest pipeline.
+    fakeUpstreamGit(mirror: 'current', stableCounts: [3, 9], localBranch: 'feature-x', localSha: 'feedfacefeedfacefeedfacefeedfacefeedface');
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('current')
+        ->and($upstream['stable']['state'])->toBe('behind')
+        ->and($upstream['stable']['missing'])->toBe(3)
+        ->and($upstream['stable']['fork_own'])->toBe(9);
+
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master']);
+});
+
+test('origin lookups authenticate with the origin owner token so private forks resolve', function (): void {
+    // sol's P1 #2 on #395: the mirror and stable probes go to origin, and a
+    // private deployment fork must not read as Unknown because they went out
+    // anonymously. The auth travels in env, never argv.
+    app(SettingsService::class)->set('integrations.github.token.operator', 'ghp_upstream_status_token_000000000000');
+    fakeUpstreamGit(mirror: 'current', stableCounts: [0, 0]);
+
+    platformUpstream();
+
+    Process::assertRan(function ($process): bool {
+        if (gitCommandWithoutConfig($process->command) !== ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            return false;
+        }
+        $environment = $process->environment ?? [];
+
+        return ($environment['GIT_CONFIG_VALUE_0'] ?? '') === 'Authorization: Basic '.base64_encode('x-access-token:ghp_upstream_status_token_000000000000');
+    });
+});
+
+// ---- configuration and page rendering ----
+
 test('non-default upstream remote and branch names configured in git config are honoured', function (): void {
-    fakeUpstreamGit(remote: 'framework', configuredRemote: 'framework', configuredBranch: 'stable', counts: [1, 0]);
+    fakeUpstreamGit(remote: 'framework', configuredRemote: 'framework', configuredBranch: 'stable', mirror: 'current');
 
     $upstream = platformUpstream();
 
     expect($upstream['remote'])->toBe('framework')
         ->and($upstream['branch'])->toBe('stable')
-        ->and($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA)
-        ->and($upstream['relationship'])->toBe('fast_forwardable');
+        ->and($upstream['mirror']['state'])->toBe('current');
 });
 
-test('the upstream head resolves anonymously when no token is stored for the upstream owner', function (): void {
-    $sawAuthEnv = false;
+test('the page shows both transitions and plain Up to date only when both are settled', function (): void {
+    fakeUpstreamGit(mirror: 'current', stableCounts: [0, 3]);
 
-    fakeUpstreamGit(counts: [0, 3]);
+    $user = createAdminUser();
+    $this->actingAs($user);
 
-    // No token is stored in this test (no GitHubTokenStore writes), so the
-    // ls-remote must succeed purely from the faked git response — the assertion
-    // above on relationship already proves it; here we additionally prove no
-    // Authorization header was injected into any upstream call.
-    Process::fake(function ($process) use (&$sawAuthEnv) {
-        $command = gitCommandWithoutConfig($process->command);
-
-        if ($command === ['git', 'ls-remote', '--symref', 'upstream', 'HEAD']) {
-            $env = $process->environment ?? [];
-            $sawAuthEnv = $sawAuthEnv || array_key_exists('GIT_CONFIG_VALUE_0', $env);
-
-            return Process::result("ref: refs/heads/main\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD");
-        }
-
-        return fakeUpstreamGitResultForAnonymous($command) ?? Process::result();
-    });
-
-    $upstream = platformUpstream();
-
-    expect($upstream['head']['sha'])->toBe(UPSTREAM_HEAD_SHA)
-        ->and($sawAuthEnv)->toBeFalse();
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Mirror')
+        ->assertSee('Current with the framework')
+        ->assertSee('Stable')
+        ->assertSee('Has every mirrored update')
+        ->assertSee('Up to date')
+        ->assertDontSee('Fork up to date');
 });
 
-/**
- * @param  list<string>  $command
- */
-function fakeUpstreamGitResultForAnonymous(array $command): mixed
-{
-    return match ($command) {
-        ['git', 'remote'] => Process::result("origin\nupstream"),
-        ['git', 'config', '--get', 'belimbing.upstream-remote'],
-        ['git', 'config', '--get', 'belimbing.upstream-branch'] => Process::result('', exitCode: 1),
-        ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
-        ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-        ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD"),
-        ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## master...origin/master'),
-        ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('master'),
-        ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(UPSTREAM_LOCAL_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-        ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
-        ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', UPSTREAM_HEAD_SHA] => Process::result(UPSTREAM_HEAD_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-        ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.UPSTREAM_LOCAL_SHA] => Process::result("0\t3"),
-        default => null,
-    };
-}
+test('pending updates suppress plain Up to date and name the release-candidate action', function (): void {
+    fakeUpstreamGit(mirror: 'current', stableCounts: [5, 2]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('updates available')
+        ->assertSee('cut a release candidate')
+        ->assertSee('Fork up to date')
+        ->assertDontSeeHtml('>Up to date<');
+});
+
+test('a missing mirror renders as its own state on the page', function (): void {
+    fakeUpstreamGit(mirror: 'absent');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Livewire::test(Index::class)
+        ->call('loadLatestStatus')
+        ->assertSee('Not created yet')
+        ->assertSee('No mirror branch exists yet');
+});

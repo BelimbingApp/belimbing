@@ -7,15 +7,16 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\FiltersByPeriod;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
-use App\Base\Schedule\DTO\RecordedRun;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\Jobs\RunScheduledTaskJob;
 use App\Base\Schedule\Livewire\Concerns\DescribesCronSchedules;
-use App\Base\Schedule\Livewire\Concerns\FiltersScheduleRuns;
 use App\Base\Schedule\Livewire\Concerns\ProvidesScheduleStatusOptions;
 use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
@@ -23,7 +24,6 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
-use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -39,13 +39,10 @@ class Index extends Component
     use ChecksCapabilityAuthorization;
     use DescribesCronSchedules;
     use FiltersByPeriod;
-    use FiltersScheduleRuns;
     use ProvidesScheduleStatusOptions;
     use SelectsPerPage;
     use SortsScheduleBoardItems;
     use WithPagination;
-
-    private const int HISTORY_FETCH_LIMIT = 500;
 
     private const array TASK_SORTS = ['name', 'next_run', 'last_run'];
 
@@ -225,6 +222,7 @@ class Index extends Component
             ->where('source', 'scheduler')
             ->where('key', $key)
             ->delete();
+        ScheduleHealthService::invalidate();
 
         $this->notify(__('Task resumed.'));
     }
@@ -262,16 +260,31 @@ class Index extends Component
     public function render(ScheduleBoard $board): View
     {
         $allTasks = $board->tasks();
-        $allRuns = $board->recentRuns(self::HISTORY_FETCH_LIMIT);
         $tasks = $this->filteredTasks($allTasks);
         [$from, $to, $historyRangeError] = $this->periodRange();
-        $runs = $this->paginateHistory($historyRangeError === null ? $this->filteredHistory($allRuns, $from, $to) : []);
+
+        $history = $historyRangeError === null
+            ? $board->history(
+                new ScheduleHistoryQuery(
+                    from: $from,
+                    to: $to,
+                    status: $this->historyStatus,
+                    search: mb_strtolower(trim($this->historySearch)),
+                    sortColumn: $this->historySort,
+                    sortDirection: $this->historySortDirection,
+                ),
+                $this->clampedPerPage(),
+                max(1, (int) $this->getPage()),
+            )
+            : new ScheduleHistoryPage([], 0, false);
+
+        $runs = $this->historyPaginator($history);
 
         return view('livewire.admin.system.schedule.index', [
             'tasks' => $tasks,
             'runs' => $runs,
             'taskEmptyMessage' => $allTasks === [] ? __('Nothing is scheduled.') : __('No tasks match the current filters.'),
-            'historyEmptyMessage' => $historyRangeError ?? ($allRuns === [] ? __('No runs recorded yet.') : __('No runs match the current filters.')),
+            'historyEmptyMessage' => $historyRangeError ?? ($history->hasHistory ? __('No runs match the current filters.') : __('No runs recorded yet.')),
             'historyRangeError' => $historyRangeError,
             'cronDescriptions' => $this->cronDescriptions($tasks),
             'periodOptions' => $this->periodOptions(),
@@ -317,40 +330,13 @@ class Index extends Component
     }
 
     /**
-     * @param  list<RecordedRun>  $runs
-     * @return list<RecordedRun>
+     * Build the paginator for one merged history page. The page is clamped to
+     * the last page when a filter change shrank the result set.
      */
-    private function filteredHistory(array $runs, Carbon $from, Carbon $to): array
-    {
-        $search = mb_strtolower(trim($this->historySearch));
-        $status = $this->historyStatus;
-
-        $filtered = array_values(array_filter(
-            $runs,
-            fn (RecordedRun $run): bool => $this->historyRunMatchesFilters($run, $search, $status, $from, $to),
-        ));
-
-        return $this->sortItems(
-            $filtered,
-            $this->historySort,
-            $this->historySortDirection,
-            fn (RecordedRun $run, string $column): mixed => match ($column) {
-                'name' => mb_strtolower($run->name),
-                'source' => mb_strtolower($run->source),
-                'status' => $run->status,
-                default => $run->startedAt->getTimestamp(),
-            },
-        );
-    }
-
-    /**
-     * @param  list<RecordedRun>  $runs
-     * @return LengthAwarePaginator<int, RecordedRun>
-     */
-    private function paginateHistory(array $runs): LengthAwarePaginator
+    private function historyPaginator(ScheduleHistoryPage $history): LengthAwarePaginator
     {
         $perPage = $this->clampedPerPage();
-        $total = count($runs);
+        $total = $history->total;
         $lastPage = max(1, (int) ceil($total / $perPage));
         $page = min(max(1, (int) $this->getPage()), $lastPage);
 
@@ -359,7 +345,7 @@ class Index extends Component
         }
 
         return new LengthAwarePaginator(
-            array_slice($runs, ($page - 1) * $perPage, $perPage),
+            $history->items,
             $total,
             $perPage,
             $page,

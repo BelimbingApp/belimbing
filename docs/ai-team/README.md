@@ -60,6 +60,17 @@ later edit. When the implementation is ready, hand off through the ready script
 CLAIM_AGENT=<your-stable-agent-id> docs/ai-team/scripts/ready.sh <pr-number>
 ```
 
+After an independent review accepts the exact head, land the PR through the
+terminal transition. It gates first, merges only after a passing gate, moves the
+PR and its issue to `task:done`, and records who acted:
+
+```bash
+LAND_AGENT=<your-stable-agent-id> docs/ai-team/scripts/land.sh <pr-number> <reviewed-full-sha>
+```
+
+If a post-merge label or attribution call is interrupted, rerun the same command;
+an already-merged PR is finalized without a second merge attempt.
+
 Claim in the draft PR rather than an issue comment because that is the surface
 everyone already queries — `gh pr list` is how each of us finds work, so the
 claim registry comes free and nobody has to poll anything extra. Claims posted
@@ -167,8 +178,10 @@ use a *detached* worktree (`git worktree add --detach <path> origin/<branch>`,
 push with `git push origin HEAD:<branch>`): the claim branch is often checked
 out in the parent's checkout, and a named worktree on it will be refused.
 
-Declare dependencies as `Blocked-By: #N` in the issue body so a sweep can clear
-them when the blocker closes.
+Declare dependencies as either a `Blocked-By: #N, #M` header or an inline prose
+sentence ending the reference list (`... Blocked-By: #N. ...`), so a sweep can
+clear them when every blocker closes. Code blocks and quotes are documentation,
+not declarations.
 
 ---
 

@@ -128,10 +128,17 @@ reach_prs=$(gh pr list --repo "$REPO" --state open --limit 40 \
   --json number,labels,body,updatedAt 2>/dev/null) || reach_prs='[]'
 [ -n "$reach_prs" ] || reach_prs='[]'
 
+# The channel, not a session name: holds are clearable only by their owner, so
+# reaching the owner is a correctness dependency of the hold mechanism, and
+# the board is the one channel spanning every lineage, harness, and machine.
+# An agent that moves between sessions updates their reachability by appending
+# a new **Reachable:** line rather than rewriting the body — so the LAST match
+# is the current one (#390). `capture(...)` returns only the first; `match(;"g")`
+# with `last` returns the last.
 printf '%s' "$reach_prs" | jq -r '.[]
     | ([.labels[].name | select(startswith("agent:"))] | join(",")) as $agents
     | select($agents != "")
-    | ((((.body // "") | capture("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)") | .c)?) // "board (assumed — no roster line)") as $channel
+    | (((( .body // "") | [match("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)"; "g") | .captures[0].string] | last)?) // "board (assumed — no roster line)") as $channel
     | "  #\(.number) [\($agents)] reachable: \($channel) · last seen \(.updatedAt)"' 2>/dev/null \
   || echo "  (gh unavailable)"
 
@@ -143,7 +150,7 @@ printf '%s' "$reach_prs" | jq -r '.[]
 # channel resolved from their own lane row above, else board.
 agent_channels=$(printf '%s' "$reach_prs" | jq -r '.[]
     | ([.labels[].name | select(startswith("agent:")) | sub("^agent:"; "")] | .[]) as $a
-    | ((((.body // "") | capture("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)") | .c)?) // "") as $c
+    | (((( .body // "") | [match("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)"; "g") | .captures[0].string] | last)?) // "") as $c
     | select($c != "")
     | "\($a)\t\($c)"' 2>/dev/null)
 
@@ -258,13 +265,7 @@ else
   echo "  (gh unavailable)"
 fi
 
-echo
-echo "== label hygiene — these are invisible to the queries above =="
-gh issue list --repo "$REPO" --state open --label "task:done" --limit 40 \
-  --json number,title --jq '.[]|"  #\(.number) OPEN but labelled task:done — \(.title[0:56])"' 2>/dev/null
-gh issue list --repo "$REPO" --state open --limit 100 --json number,title,labels \
-  --jq '[.[]|select([.labels[].name]|map(select(startswith("task:")))|length > 1)]
-        |.[]|"  #\(.number) carries two task:* labels — \(.title[0:56])"' 2>/dev/null
+"$SCRIPT_DIR/label_hygiene.sh" "$REPO"
 
 echo
 BOARD_REPO="$REPO" "$(dirname "$0")/board.sh" hygiene

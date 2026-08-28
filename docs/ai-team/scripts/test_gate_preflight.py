@@ -33,8 +33,15 @@ GH_STUB = textwrap.dedent(
           --argjson labels "$GATE_TEST_LABELS" \
           '{headRefOid:$head,headRefName:$branch,title:$title,body:$body,isDraft:false,state:"OPEN",mergeable:"MERGEABLE",labels:$labels}'
         ;;
+      "api repos/$GATE_TEST_CANONICAL/commits/$GATE_TEST_MAIN_SHA/check-runs")
+        printf '%s\\n' "$GATE_TEST_MAIN_CHECK_RUNS"
+        ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*check-runs*)
-        printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
+        if [ -n "${GATE_TEST_CHECK_RUNS:-}" ]; then
+          printf '%s\\n' "$GATE_TEST_CHECK_RUNS"
+        else
+          printf '{"check_runs":[{"name":"ci","status":"completed","conclusion":"success","started_at":"1","completed_at":"2"}]}\\n'
+        fi
         ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*)
         [ -n "$GATE_TEST_RESOLVE" ] && printf '%s\\n' "$GATE_TEST_RESOLVE"
@@ -132,6 +139,8 @@ class GateMechanismTest(unittest.TestCase):
         labels: list[str] | None = None,
         reviews: list[dict[str, object]] | None = None,
         issue_comments: list[dict[str, object]] | None = None,
+        check_runs: list[dict[str, object]] | None = None,
+        main_check_runs: list[dict[str, object]] | None = None,
         body: str | None = None,
         branch: str | None = None,
         title: str | None = None,
@@ -158,6 +167,7 @@ class GateMechanismTest(unittest.TestCase):
         env["GATE_TEST_REAL_GIT"] = real_git
 
         env["GATE_TEST_CANONICAL"] = "example/canonical"
+        env["GATE_TEST_MAIN_SHA"] = self.main_sha
         effective_head = head or self.head_sha
         env["GATE_TEST_HEAD"] = effective_head
         env["GATE_TEST_RESOLVE"] = resolve
@@ -181,7 +191,24 @@ class GateMechanismTest(unittest.TestCase):
             }]
         env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
         env["GATE_TEST_ISSUE_COMMENTS"] = json.dumps(issue_comments if issue_comments is not None else [])
-        env["GATE_MIN_CHECKS"] = "1"
+        if check_runs is None:
+            check_runs = [{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }]
+        env["GATE_TEST_CHECK_RUNS"] = json.dumps({"check_runs": check_runs})
+        if main_check_runs is None:
+            main_check_runs = [{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }]
+        env["GATE_TEST_MAIN_CHECK_RUNS"] = json.dumps({"check_runs": main_check_runs})
 
         args = ["bash", str(SCRIPT), "1"]
         if reviewed is not None:
@@ -221,6 +248,140 @@ class GateMechanismTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (origin, result.stdout, result.stderr))
             self.assertIn("GATE: PASS", result.stdout)
             self.assertIn("PR head is the reviewed SHA", result.stdout)
+
+    def test_latest_success_supersedes_a_cancelled_run_with_the_same_name(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "cancelled",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "3",
+                    "completed_at": "4",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("1 distinct checks", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_failing_check_run_blocks_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "failure",
+                "started_at": "1",
+                "completed_at": "2",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("1 distinct, 1 not passing", result.stdout)
+        self.assertIn("ci: completed/failure", result.stdout)
+
+    def test_pending_check_run_blocks_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "in_progress",
+                "conclusion": None,
+                "started_at": "1",
+                "completed_at": None,
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("1 distinct, 1 not passing", result.stdout)
+        self.assertIn("ci: in_progress/pending", result.stdout)
+
+    def test_no_reported_check_runs_blocks_with_the_actual_condition(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no checks reported yet", result.stdout)
+        self.assertNotIn("need >=", result.stdout)
+
+    def test_missing_expected_check_name_blocks_before_it_reports(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }],
+            main_check_runs=[
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+                {
+                    "name": "quality",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("checks not yet reported", result.stdout)
+        self.assertIn("quality", result.stdout)
+
+    def test_expected_check_names_are_observed_from_main_not_encoded_as_a_count(self):
+        runs = [
+            {
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            },
+            {
+                "name": "quality",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            },
+        ]
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=runs,
+            main_check_runs=runs,
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("2 distinct checks", result.stdout)
+
+    def test_unobservable_main_check_baseline_blocks_closed(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            main_check_runs=[],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot observe expected checks on origin/main", result.stdout)
 
     def test_missing_independent_review_fails_the_gate(self):
         result = self.run_gate(
@@ -331,10 +492,9 @@ class GateMechanismTest(unittest.TestCase):
         self.assertIn("no independent exact-head acceptance", result.stdout)
         self.assertIn("found a verdict marker from reviewer in the comment stream", result.stdout)
 
-    def test_stray_comment_verdict_is_not_reported_once_a_real_acceptance_exists(self):
-        # The comment-stream scan is a diagnostic for the empty case, not a
-        # second acceptance channel — a real review already answered the
-        # question, so there is nothing to warn about.
+    def test_blocking_comment_verdict_warns_even_when_a_real_acceptance_exists(self):
+        # Comment-stream markers never become verdicts, but a real acceptance
+        # must not hide another reviewer's explicit blocking marker.
         result = self.run_gate(
             origin=CANONICAL_HTTPS,
             reviewed=self.head_sha,
@@ -351,7 +511,28 @@ class GateMechanismTest(unittest.TestCase):
             }],
         )
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
-        self.assertNotIn("comment stream", result.stdout)
+        self.assertIn("WARN", result.stdout)
+        self.assertIn("blocking verdict marker from someone-else", result.stdout)
+        self.assertIn("gh pr review --comment", result.stdout)
+
+    def test_unfetchable_reviewed_sha_is_not_misreported_as_behind(self):
+        missing_sha = "f" * 40
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=missing_sha,
+            head=missing_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": missing_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("is unavailable after fetching PR #1", result.stdout)
+        self.assertIn("history may have been rewritten", result.stdout)
+        self.assertNotIn("BEHIND origin/main", result.stdout)
 
     def test_malformed_review_marker_warns_about_format_instead_of_silence(self):
         # A **From:** marker is present, but the verdict is inline rather than

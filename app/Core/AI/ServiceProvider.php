@@ -10,6 +10,7 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Media\PhotoCleanup\Contracts\ImageProviderCredentialStore as ImageProviderCredentialStoreContract;
 use App\Base\Menu\Services\MenuConditionRegistry;
+use App\Base\Schedule\Contracts\ScheduleHealthContributor;
 use App\Base\Settings\Services\SettingDefinitionRegistry;
 use App\Core\AI\Console\Commands\BrowserStatusCommand;
 use App\Core\AI\Console\Commands\BrowserSweepCommand;
@@ -249,6 +250,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ScheduleDefinitionService::class);
         $this->app->singleton(SchedulePlanner::class);
         $this->app->tag(ScheduleDefinitionContributor::class, 'schedule.contributors');
+        $this->app->tag(ScheduleDefinitionContributor::class, ScheduleHealthContributor::CONTAINER_TAG);
         $this->app->tag(AiScheduleDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);
 
         // Background command subsystem
