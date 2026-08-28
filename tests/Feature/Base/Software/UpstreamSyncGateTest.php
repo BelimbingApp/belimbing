@@ -50,38 +50,41 @@ function fakeSyncGateUpstreamGit(): void
     });
 }
 
-test('synchronization is unavailable on a production deployment even for a capable admin', function (): void {
-    config()->set('software.deployment_role', 'production');
+test('synchronization is unavailable in production even for a capable admin', function (): void {
+    app()->instance('env', 'production');
 
     $user = createAdminUser();
     $state = app(UpstreamSyncGate::class)->state($user);
 
     expect($state['available'])->toBeFalse()
-        ->and($state['reason'])->toContain('production');
+        ->and($state['environment'])->toBe('production')
+        ->and($state['reason'])->toContain('APP_ENV is production');
 });
 
-test('an unset deployment role fails closed with a stated reason', function (): void {
-    config()->set('software.deployment_role', null);
+test('an unresolved application environment fails closed with a stated reason', function (): void {
+    app()->instance('env', '');
 
     $user = createAdminUser();
     $state = app(UpstreamSyncGate::class)->state($user);
 
     expect($state['available'])->toBeFalse()
-        ->and($state['reason'])->toContain('declares no role');
+        ->and($state['environment'])->toBeNull()
+        ->and($state['reason'])->toContain('APP_ENV is not resolved');
 });
 
-test('an unrecognised deployment role fails closed, not open', function (): void {
-    config()->set('software.deployment_role', 'dev-box');
+test('an unrecognised application environment fails closed, not open', function (): void {
+    app()->instance('env', 'dev-box');
 
     $user = createAdminUser();
     $state = app(UpstreamSyncGate::class)->state($user);
 
     expect($state['available'])->toBeFalse()
+        ->and($state['environment'])->toBe('dev-box')
         ->and($state['reason'])->toContain('dev-box');
 });
 
-test('a development deployment without the capability is still closed', function (): void {
-    config()->set('software.deployment_role', 'development');
+test('a local environment without the capability is still closed', function (): void {
+    app()->instance('env', 'local');
 
     $user = createUserWithoutCapabilities();
     $state = app(UpstreamSyncGate::class)->state($user);
@@ -90,18 +93,19 @@ test('a development deployment without the capability is still closed', function
         ->and($state['reason'])->toContain(UpstreamSyncGate::CAPABILITY);
 });
 
-test('a development deployment with the capability opens the gate', function (): void {
-    config()->set('software.deployment_role', 'development');
+test('a local environment with the capability opens the gate', function (): void {
+    app()->instance('env', 'local');
 
     $user = createAdminUser();
     $state = app(UpstreamSyncGate::class)->state($user);
 
     expect($state['available'])->toBeTrue()
+        ->and($state['environment'])->toBe('local')
         ->and($state['reason'])->toBeNull();
 });
 
-test('a staging deployment with the capability opens the gate', function (): void {
-    config()->set('software.deployment_role', 'staging');
+test('a staging environment with the capability opens the gate', function (): void {
+    app()->instance('env', 'staging');
 
     $user = createAdminUser();
 
@@ -113,13 +117,16 @@ test('the server-side boundary throws for every closed condition and passes when
     $admin = createAdminUser();
     $incapable = createUserWithoutCapabilities();
 
-    config()->set('software.deployment_role', 'production');
+    app()->instance('env', 'production');
     expect(fn () => $gate->authorize($admin))->toThrow(AuthorizationException::class);
 
-    config()->set('software.deployment_role', null);
+    app()->instance('env', '');
     expect(fn () => $gate->authorize($admin))->toThrow(AuthorizationException::class);
 
-    config()->set('software.deployment_role', 'development');
+    app()->instance('env', 'testing');
+    expect(fn () => $gate->authorize($admin))->toThrow(AuthorizationException::class);
+
+    app()->instance('env', 'local');
     expect(fn () => $gate->authorize($incapable))->toThrow(AuthorizationException::class);
     expect(fn () => $gate->authorize(null))->toThrow(AuthorizationException::class);
 
@@ -128,7 +135,7 @@ test('the server-side boundary throws for every closed condition and passes when
 });
 
 test('a closed gate is an explanation on the page, and read-only visibility is unaffected', function (): void {
-    config()->set('software.deployment_role', 'production');
+    app()->instance('env', 'production');
     fakeSyncGateUpstreamGit();
 
     $user = createAdminUser();
@@ -139,11 +146,11 @@ test('a closed gate is an explanation on the page, and read-only visibility is u
         // #344's visibility renders regardless of the gate.
         ->assertSee('Upstream contained')
         // The gate's state is stated, not hidden.
-        ->assertSee('unavailable on a production deployment');
+        ->assertSee('unavailable when APP_ENV is production');
 });
 
 test('an open gate states availability on the page', function (): void {
-    config()->set('software.deployment_role', 'development');
+    app()->instance('env', 'local');
     fakeSyncGateUpstreamGit();
 
     $user = createAdminUser();
@@ -151,5 +158,5 @@ test('an open gate states availability on the page', function (): void {
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        ->assertSee('Upstream synchronization is available on this deployment.');
+        ->assertSee('Upstream synchronization is available because APP_ENV is local and your account has permission.');
 });

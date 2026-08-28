@@ -650,7 +650,7 @@
                                      explanation on the page, never a hidden concept or a 500 at the
                                      point of use. Visibility above never depends on this gate. --}}
                                 @if ($upstreamSyncState['available'])
-                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available on this deployment.') }}</div>
+                                    <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available because APP_ENV is :environment and your account has permission.', ['environment' => $upstreamSyncState['environment']]) }}</div>
                                     {{-- Buttons are convenience; the boundary is UpstreamSyncGate::authorize()
                                          inside each action (#339). Stops at the rc push: the PR is a human
                                          click in GitHub. --}}
