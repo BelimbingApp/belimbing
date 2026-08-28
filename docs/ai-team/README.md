@@ -381,8 +381,12 @@ review clear <pr>` the moment the fix is pushed.
 *Migration note:* PRs holding the old bare `hold:review` label (set before
 #385) are still honored as an unattributed hold — `gate.sh` still blocks on
 it and `orient.sh` still reconstructs a likely holder from the review stream,
-exactly as before. Replace it with a named `hold:review:<agent>` label at
-your next touch of the PR rather than leaving it bare.
+exactly as before. It has no owner to name, so it clears through its own
+explicit path rather than `review clear`'s default target: `CLAIM_AGENT=<id>
+hold.sh review clear <pr> --legacy --reason "<evidence>"` — same
+evidence-first, verify-after-mutation discipline as the steward path below,
+because a bare hold is exactly the case with no name to hold accountable if
+the clearance turns out to be wrong.
 
 **An unresponsive holder on an open PR** — the reviewer who set
 `hold:review:<agent>` has gone quiet and the finding is demonstrably
@@ -402,13 +406,26 @@ CLAIM_AGENT=<steward-id> docs/ai-team/scripts/hold.sh review clear <pr> \
 `--steward` and `--reason` are mandatory together — the script refuses one
 without the other, and refuses naming yourself. This clears *exactly*
 `hold:review:<holder-agent>`, leaves every other holder's label untouched,
-and posts the reason as a headered PR comment automatically: the evidence is
-never only in the steward's memory. Cite something checkable (a commit SHA, a
-review comment, a passing regression) as the reason — never "enough time has
-passed." A discharged-but-unconfirmed hold is not stale; it is unverified,
-and the evidence requirement is what makes a steward clearing it different
-from one reviewer overriding another — never clear a hold whose finding you
-have not personally confirmed resolved, no matter how long it has sat.
+and posts the reason as a headered PR comment automatically, *before*
+touching the label: if the label was never actually set (a typo'd holder
+id) or the comment fails to post, the script refuses rather than silently
+reporting success, and if the removal itself somehow doesn't take, it says
+so loudly rather than trusting the exit code — the evidence is never only
+in the steward's memory, and it never gets manufactured for a mutation that
+did not happen. Cite something checkable (a commit SHA, a review comment, a
+passing regression) as the reason — never "enough time has passed." A
+discharged-but-unconfirmed hold is not stale; it is unverified, and the
+evidence requirement is what makes a steward clearing it different from one
+reviewer overriding another — never clear a hold whose finding you have not
+personally confirmed resolved, no matter how long it has sat.
+
+`--steward` names who is acting; it checks no role of its own, and any
+agent can pass it. The recorded `--reason` is the control, not the flag —
+`gate.sh` cannot distinguish a legitimate steward transfer from one
+reviewer overriding a rival's hold, only the presence and content of the
+evidence on the record can, exactly as it would if a human read the PR and
+judged it. Do not read the flag name as a permission check it does not
+perform.
 
 An author never clears a reviewer's hold: one agent believed they had, having
 actually cleared their own `hold:author`, and only the label timeline showed the
