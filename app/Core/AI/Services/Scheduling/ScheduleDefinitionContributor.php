@@ -3,16 +3,22 @@
 namespace App\Core\AI\Services\Scheduling;
 
 use App\Base\Schedule\Contracts\ScheduleContributor;
+use App\Base\Schedule\Contracts\ScheduleHealthContributor;
 use App\Base\Schedule\DTO\RecordedRun;
 use App\Base\Schedule\DTO\ScheduleHistoryPage;
 use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Base\Schedule\DTO\UnhealthyScheduleTask;
 use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Models\ScheduleDefinition;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -20,19 +26,17 @@ use Illuminate\Support\Facades\Schema;
  * the central Schedule page (Base\Schedule). Read-only projection;
  * editing stays in the AI module's own tools.
  */
-class ScheduleDefinitionContributor implements ScheduleContributor
+class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHealthContributor
 {
+    private const int HEALTH_RUNS_PER_DEFINITION = 10;
+
     public function tasks(): array
     {
         if (! Schema::hasTable('ai_schedule_definitions')) {
             return [];
         }
 
-        $definitions = ScheduleDefinition::query()
-            ->where('is_enabled', true)
-            ->orderBy('next_due_at')
-            ->limit(50)
-            ->get();
+        $definitions = $this->enabledDefinitions();
 
         $latestBySchedule = $this->latestDispatchesBySchedule($definitions->pluck('id')->all());
 
@@ -54,6 +58,65 @@ class ScheduleDefinitionContributor implements ScheduleContributor
                 );
             })
             ->all();
+    }
+
+    /**
+     * Return only active contributor failures for the shared status bar.
+     * This deliberately avoids the full ScheduleBoard projection and reads a
+     * bounded recent window per definition from the operation ledger.
+     *
+     * @return list<UnhealthyScheduleTask>
+     */
+    public function unhealthyTasks(): array
+    {
+        $definitions = ScheduleDefinition::query()
+            ->where('is_enabled', true)
+            ->orderBy('next_due_at')
+            ->limit(50);
+        $dispatches = $this->rankedDispatchesBySchedule();
+        $driver = $dispatches->getQuery()->getConnection()->getDriverName();
+        $rows = DB::query()
+            ->fromSub($definitions->toBase(), 'health_definitions')
+            ->leftJoinSub($dispatches->toBase(), 'health_dispatches', function (JoinClause $join) use ($driver): void {
+                $join
+                    ->whereRaw($this->scheduleIdComparison(
+                        $driver,
+                        'health_dispatches.schedule_id_value',
+                        'health_definitions.id',
+                    ))
+                    ->where('health_dispatches.dispatch_rank', '<=', self::HEALTH_RUNS_PER_DEFINITION);
+            })
+            ->select([
+                'health_definitions.id as definition_id',
+                'health_definitions.source',
+                'health_definitions.source_key',
+                'health_definitions.description',
+                'health_dispatches.dispatch_status',
+                'health_dispatches.dispatch_started_at',
+                'health_dispatches.dispatch_created_at',
+            ])
+            ->orderBy('health_definitions.next_due_at')
+            ->orderBy('health_dispatches.dispatch_rank')
+            ->get();
+        $dispatchesByDefinition = $rows->groupBy('definition_id');
+        $unhealthy = [];
+
+        foreach ($rows->pluck('definition_id')->unique() as $definitionId) {
+            $definition = $dispatchesByDefinition->get($definitionId)->first();
+            $task = $this->unhealthyTaskForDispatches(
+                (string) $definition->source,
+                (string) $definition->source_key,
+                (string) $definition->description,
+                (int) $definitionId,
+                $dispatchesByDefinition->get($definitionId),
+            );
+
+            if ($task !== null) {
+                $unhealthy[] = $task;
+            }
+        }
+
+        return $unhealthy;
     }
 
     public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
@@ -211,26 +274,149 @@ class ScheduleDefinitionContributor implements ScheduleContributor
      */
     private function latestDispatchesBySchedule(array $scheduleIds): array
     {
+        $latest = [];
+
+        foreach ($this->dispatchesBySchedule($scheduleIds, 1) as $scheduleId => $dispatches) {
+            $latest[$scheduleId] = $dispatches[0] ?? null;
+        }
+
+        return $latest;
+    }
+
+    /**
+     * @return Collection<int, ScheduleDefinition>
+     */
+    private function enabledDefinitions(): Collection
+    {
+        return ScheduleDefinition::query()
+            ->where('is_enabled', true)
+            ->orderBy('next_due_at')
+            ->limit(50)
+            ->get();
+    }
+
+    /**
+     * @param  list<int|string>  $scheduleIds
+     * @return array<int, list<OperationDispatch>>
+     */
+    private function dispatchesBySchedule(array $scheduleIds, int $perSchedule): array
+    {
         if ($scheduleIds === [] || ! Schema::hasTable('ai_operation_dispatches')) {
             return [];
         }
 
-        $latest = [];
-
-        OperationDispatch::query()
+        $query = OperationDispatch::query()
             ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask])
-            ->whereIn('meta->schedule_id', $scheduleIds)
-            ->orderByDesc('created_at')
-            ->get()
-            ->each(function (OperationDispatch $dispatch) use (&$latest): void {
-                $scheduleId = data_get($dispatch->meta, 'schedule_id');
+            ->whereIn('meta->schedule_id', $scheduleIds);
+        $driver = $query->getQuery()->getConnection()->getDriverName();
+        $scheduleId = $this->scheduleIdExpression($driver);
 
-                if (is_int($scheduleId) || (is_string($scheduleId) && ctype_digit($scheduleId))) {
-                    $latest[(int) $scheduleId] ??= $dispatch;
-                }
-            });
+        $ranked = $query
+            ->select('ai_operation_dispatches.*')
+            ->selectRaw("{$scheduleId} AS schedule_id_value")
+            ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$scheduleId} ORDER BY COALESCE(started_at, created_at) DESC, id DESC) AS schedule_rank");
+        $dispatches = OperationDispatch::query()
+            ->fromSub($ranked->toBase(), 'recent_operation_dispatches')
+            ->where('schedule_rank', '<=', max(1, $perSchedule))
+            ->get();
+        $grouped = [];
 
-        return $latest;
+        foreach ($dispatches as $dispatch) {
+            $scheduleIdValue = $dispatch->getAttribute('schedule_id_value');
+
+            if (is_int($scheduleIdValue) || (is_string($scheduleIdValue) && ctype_digit($scheduleIdValue))) {
+                $grouped[(int) $scheduleIdValue][] = $dispatch;
+            }
+        }
+
+        return $grouped;
+    }
+
+    private function scheduleIdExpression(string $driver, string $column = 'meta'): string
+    {
+        return match ($driver) {
+            'pgsql' => "{$column}->>'schedule_id'",
+            'mysql', 'mariadb' => "JSON_UNQUOTE(JSON_EXTRACT({$column}, '$.schedule_id'))",
+            default => "json_extract({$column}, '$.schedule_id')",
+        };
+    }
+
+    /**
+     * @param  Collection<int, object{dispatch_status: string|null, dispatch_started_at: string|null, dispatch_created_at: string|null}>  $dispatches
+     */
+    private function unhealthyTaskForDispatches(
+        string $source,
+        string $sourceKey,
+        string $description,
+        int $definitionId,
+        Collection $dispatches,
+    ): ?UnhealthyScheduleTask {
+        $consecutiveFailures = 0;
+        $lastAttemptAt = null;
+
+        foreach ($dispatches as $dispatch) {
+            $status = strtolower((string) $dispatch->dispatch_status);
+
+            if ($status === OperationStatus::Failed->value) {
+                $consecutiveFailures++;
+                $lastAttemptAt ??= Carbon::parse($dispatch->dispatch_started_at ?? $dispatch->dispatch_created_at);
+
+                continue;
+            }
+
+            if ($status === OperationStatus::Succeeded->value) {
+                return null;
+            }
+        }
+
+        if ($lastAttemptAt === null) {
+            return null;
+        }
+
+        $name = $sourceKey !== '' ? $sourceKey : $description;
+
+        return new UnhealthyScheduleTask(
+            source: $source,
+            key: $source.':'.$definitionId,
+            name: $name,
+            lastAttemptAt: $lastAttemptAt,
+            consecutiveFailures: max(1, $consecutiveFailures),
+        );
+    }
+
+    /**
+     * @return Builder<OperationDispatch>
+     */
+    private function rankedDispatchesBySchedule(): Builder
+    {
+        $query = OperationDispatch::query()
+            ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask]);
+        $driver = $query->getQuery()->getConnection()->getDriverName();
+        $scheduleId = $this->scheduleIdExpression($driver, 'ai_operation_dispatches.meta');
+
+        return $query
+            ->whereExists(function (QueryBuilder $definitions) use ($driver, $scheduleId): void {
+                $definitions
+                    ->selectRaw('1')
+                    ->from('ai_schedule_definitions')
+                    ->where('is_enabled', true)
+                    ->whereRaw($this->scheduleIdComparison($driver, $scheduleId));
+            })
+            ->select([
+                'id',
+                'status as dispatch_status',
+                'started_at as dispatch_started_at',
+                'created_at as dispatch_created_at',
+            ])
+            ->selectRaw("{$scheduleId} AS schedule_id_value")
+            ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$scheduleId} ORDER BY COALESCE(started_at, created_at) DESC, id DESC) AS dispatch_rank");
+    }
+
+    private function scheduleIdComparison(string $driver, string $scheduleId, string $definitionId = 'ai_schedule_definitions.id'): string
+    {
+        return $driver === 'pgsql'
+            ? "{$scheduleId} = CAST({$definitionId} AS TEXT)"
+            : "{$scheduleId} = {$definitionId}";
     }
 
     private function statusValue(mixed $status): ?string

@@ -33,6 +33,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\NullOutput;
+use Tests\Support\ScheduleHealthFixtures;
 
 uses(RefreshDatabase::class);
 
@@ -545,15 +546,34 @@ test('AI contributor selects JSON grammar from its active connection driver', fu
         $contributor = app(ScheduleDefinitionContributor::class);
         $nameExpression = new ReflectionMethod($contributor, 'historyNameExpression');
         $sourceExpression = new ReflectionMethod($contributor, 'historySourceExpression');
+        $scheduleIdExpression = new ReflectionMethod($contributor, 'scheduleIdExpression');
+        $scheduleIdComparison = new ReflectionMethod($contributor, 'scheduleIdComparison');
         $driver = OperationDispatch::on($connection)->getQuery()->getConnection()->getDriverName();
 
         expect($driver)->toBe('pgsql')
             ->and($nameExpression->invoke($contributor, $driver))->toContain("meta->>'source_key'")
-            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'");
+            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'")
+            ->and($scheduleIdExpression->invoke($contributor, $driver, 'ai_operation_dispatches.meta'))
+            ->toContain("ai_operation_dispatches.meta->>'schedule_id'")
+            ->and($scheduleIdComparison->invoke($contributor, $driver, "ai_operation_dispatches.meta->>'schedule_id'"))
+            ->toBe("ai_operation_dispatches.meta->>'schedule_id' = CAST(ai_schedule_definitions.id AS TEXT)")
+            ->and($scheduleIdComparison->invoke($contributor, $driver, 'health_dispatches.schedule_id_value', 'health_definitions.id'))
+            ->toBe('health_dispatches.schedule_id_value = CAST(health_definitions.id AS TEXT)');
     } finally {
         DB::purge($connection);
         config()->set('database.connections.'.$connection, $original);
     }
+});
+
+test('AI health projection joins a failed dispatch to its definition', function (): void {
+    ScheduleHealthFixtures::failedAiSchedule('op_schedule_health_projection');
+
+    $tasks = app(ScheduleDefinitionContributor::class)->unhealthyTasks();
+
+    expect($tasks)->toHaveCount(1)
+        ->and($tasks[0]->source)->toBe('core-ai')
+        ->and($tasks[0]->name)->toBe('nightly-summary')
+        ->and($tasks[0]->consecutiveFailures)->toBe(1);
 });
 
 test('AI contributor searches metadata names with literal LIKE metacharacters', function (): void {

@@ -16,6 +16,7 @@ use App\Base\Schedule\Livewire\Concerns\ProvidesScheduleStatusOptions;
 use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Contracts\View\View;
@@ -161,6 +162,7 @@ class Index extends Component
             ->where('source', 'scheduler')
             ->where('key', $key)
             ->delete();
+        ScheduleHealthService::invalidate();
 
         $this->notify(__('Task resumed.'));
     }

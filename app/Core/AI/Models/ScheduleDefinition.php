@@ -2,6 +2,7 @@
 
 namespace App\Core\AI\Models;
 
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Core\Company\Models\Company;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
@@ -44,6 +45,16 @@ use Illuminate\Support\Carbon;
  */
 class ScheduleDefinition extends Model
 {
+    protected static function booted(): void
+    {
+        static::saved(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+        static::deleted(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+    }
+
     public const SOURCE_CORE_AI = 'core-ai';
 
     public const EXECUTOR_AGENTIC_RUNTIME = 'agentic_runtime';
