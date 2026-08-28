@@ -26,6 +26,12 @@ post-merge failure retries terminalization without attempting a second merge.
 directly. It reports open task-label contradictions and non-terminal labels on
 issues closed within `AI_TEAM_CLOSED_HYGIENE_DAYS` (30 by default).
 
+`hold.sh` sets or clears a named review hold — `CLAIM_AGENT=<id> hold.sh
+review add|clear <pr>` applies or removes `hold:review:<id>`, creating the
+label on first use the same way `claim.sh` creates `agent:<id>` labels. Each
+holder's label is independent (#385): `gate.sh` blocks on every one present,
+and clearing yours never touches another reviewer's.
+
 ## Posting and reading the board
 
 **Posts without the machine header are invisible to team tooling.** That one

@@ -333,6 +333,58 @@ class OrientHoldHolderFilterTest(unittest.TestCase):
         self.assertNotIn("sol", out.strip().split("\n"))
 
 
+class OrientNamedHoldLabelFilterTest(unittest.TestCase):
+    """#385: since a review hold now names its holder directly
+    (hold:review:<agent>), orient.sh reads that label instead of
+    reconstructing ownership from the review stream — no heuristic, no
+    review-history fetch, just the label the same way gate.sh reads it."""
+
+    def extract_filter(self) -> str:
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('ltrimstr("hold:review:")')
+        start = text.rindex("jq -r '", 0, anchor) + len("jq -r '")
+        end = text.index("'", start)
+        return text[start:end]
+
+    def run_filter(self, prs):
+        return subprocess.run(
+            ["jq", "-r", self.extract_filter()],
+            input=json.dumps(prs), text=True, capture_output=True, check=True,
+        ).stdout
+
+    def test_named_holder_extracted_directly_from_the_label(self):
+        prs = [
+            {"number": 411, "labels": [{"name": "hold:review:luna"}, {"name": "agent:fable"}]},
+        ]
+        out = self.run_filter(prs)
+        self.assertIn("411\tluna", out)
+
+    def test_pr_with_no_named_hold_label_produces_nothing(self):
+        prs = [
+            {"number": 415, "labels": [{"name": "agent:fable"}, {"name": "task:review"}]},
+        ]
+        out = self.run_filter(prs)
+        self.assertEqual(out.strip(), "")
+
+    def test_two_named_holders_on_one_pr_each_get_their_own_row(self):
+        prs = [
+            {"number": 411, "labels": [{"name": "hold:review:sol"}, {"name": "hold:review:luna"}]},
+        ]
+        out = self.run_filter(prs)
+        self.assertIn("411\tsol", out)
+        self.assertIn("411\tluna", out)
+
+    def test_a_bare_legacy_hold_review_label_is_not_matched_here(self):
+        # The unattributed pre-#385 label has no agent suffix to extract —
+        # that PR falls through to the separate legacy-fallback block, not
+        # this one, so this filter must produce nothing for it.
+        prs = [
+            {"number": 420, "labels": [{"name": "hold:review"}]},
+        ]
+        out = self.run_filter(prs)
+        self.assertEqual(out.strip(), "")
+
+
 class OrientWindowBoundaryTest(unittest.TestCase):
     """#373 round two: the claim-to-PR window check must not substring-match
     issue numbers — #36 vanished whenever any PR body mentioned #365. The
