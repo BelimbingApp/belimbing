@@ -5,6 +5,7 @@ namespace App\Base\Schedule\Services;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\DTO\UnhealthyScheduleTask;
 use App\Base\Schedule\Models\ScheduleRun;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
@@ -50,19 +51,19 @@ final class ScheduleHealthService
      * have ever been recorded. The cache TTL is short enough that the
      * "no recent activity" diagnostic reflects fresh writes.
      */
-    public function lastRecordedActivity(): ?\Illuminate\Support\Carbon
+    public function lastRecordedActivity(): ?Carbon
     {
         return Cache::remember(
             'schedule.health.last-recorded-at',
             self::HEARTBEAT_CACHE_TTL_SECONDS,
-            function (): ?\Illuminate\Support\Carbon {
+            function (): ?Carbon {
                 if (! Schema::hasTable('base_schedule_runs')) {
                     return null;
                 }
 
                 $startedAt = ScheduleRun::query()->max('started_at');
 
-                return $startedAt ? \Illuminate\Support\Carbon::parse($startedAt) : null;
+                return $startedAt ? Carbon::parse($startedAt) : null;
             },
         );
     }
