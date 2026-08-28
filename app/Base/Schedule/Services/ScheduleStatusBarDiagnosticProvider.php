@@ -6,7 +6,6 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Enums\StatusVariant;
 use App\Base\Schedule\DTO\UnhealthyScheduleTask;
-use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\System\Contracts\StatusBarDiagnosticProvider;
 use App\Base\System\DTO\StatusBarDiagnostic;
 use Illuminate\Contracts\Auth\Authenticatable;
@@ -33,10 +32,14 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
 
             $diagnostics = [];
 
-            // Scheduler-wide heartbeat: activity was recorded, but not recently.
-            $lastRecordedActivity = ScheduleRun::query()->max('started_at');
-            if ($lastRecordedActivity !== null
-                && now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->gte($lastRecordedActivity)) {
+            // The health snapshot covers both the scheduler heartbeat
+            // (last_recorded_at) and the failing-task projection in one
+            // cached call, so the diagnostic provider no longer fans out a
+            // separate max('started_at') query on every render.
+            $snapshot = $this->healthService->snapshot();
+
+            if ($snapshot['last_recorded_at'] !== null
+                && now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->gte($snapshot['last_recorded_at'])) {
                 $diagnostics[] = new StatusBarDiagnostic(
                     id: 'schedule.no-recent-recorded-activity',
                     severity: StatusVariant::Warning,
@@ -48,9 +51,8 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
                 );
             }
 
-            $unhealthy = $this->healthService->unhealthyTasks();
-            if ($unhealthy !== []) {
-                $diagnostics[] = $this->unhealthyTasksDiagnostic($unhealthy);
+            if ($snapshot['unhealthy'] !== []) {
+                $diagnostics[] = $this->unhealthyTasksDiagnostic($snapshot['unhealthy']);
             }
 
             return $diagnostics;

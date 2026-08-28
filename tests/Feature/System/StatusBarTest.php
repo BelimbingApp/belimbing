@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Process;
 
 beforeEach(function (): void {
     Process::fake();
-    Cache::forget('schedule.health.unhealthy-tasks');
+    Cache::forget('schedule.health.snapshot');
 });
 
 /**

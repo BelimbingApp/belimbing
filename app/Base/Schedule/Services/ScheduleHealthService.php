@@ -5,14 +5,16 @@ namespace App\Base\Schedule\Services;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\DTO\UnhealthyScheduleTask;
 use App\Base\Schedule\Models\ScheduleRun;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
 /**
  * The compact health projection behind the Schedule status-bar diagnostic:
- * which currently-active tasks' latest definitive outcome is a failure, and
- * how many times in a row. Bounded, indexed queries plus a short-lived cache
- * so the status bar (rendered on every authenticated page) stays cheap.
+ * which currently-active tasks' latest definitive outcome is a failure, how
+ * many times in a row, and when the scheduler last recorded any activity.
+ * Bounded, indexed queries plus a short-lived cache so the status bar
+ * (rendered on every authenticated page) stays cheap.
  */
 final class ScheduleHealthService
 {
@@ -23,29 +25,38 @@ final class ScheduleHealthService
     public function __construct(private readonly ScheduleBoard $board) {}
 
     /**
-     * @return list<UnhealthyScheduleTask>
+     * @return array{unhealthy: list<UnhealthyScheduleTask>, last_recorded_at: ?Carbon}
      */
-    public function unhealthyTasks(): array
+    public function snapshot(): array
     {
         return Cache::remember(
-            'schedule.health.unhealthy-tasks',
+            'schedule.health.snapshot',
             self::CACHE_TTL_SECONDS,
-            fn (): array => $this->computeUnhealthyTasks(),
+            fn (): array => $this->computeSnapshot(),
         );
     }
 
     /**
      * @return list<UnhealthyScheduleTask>
      */
-    private function computeUnhealthyTasks(): array
+    public function unhealthyTasks(): array
+    {
+        return $this->snapshot()['unhealthy'];
+    }
+
+    /**
+     * @return array{unhealthy: list<UnhealthyScheduleTask>, last_recorded_at: ?Carbon}
+     */
+    private function computeSnapshot(): array
     {
         if (! Schema::hasTable('base_schedule_runs')) {
-            return [];
+            return ['unhealthy' => [], 'last_recorded_at' => null];
         }
 
         $tasks = $this->board->tasks();
         $schedulerKeys = [];
         $unhealthy = [];
+        $lastRecordedAt = null;
 
         foreach ($tasks as $task) {
             // Paused and never-run tasks are not failures.
@@ -69,37 +80,54 @@ final class ScheduleHealthService
         }
 
         if ($schedulerKeys === []) {
-            return $unhealthy;
+            return ['unhealthy' => $unhealthy, 'last_recorded_at' => null];
         }
 
-        // Latest definitive outcome per scheduler key. A later running or
-        // skipped run must not erase a prior failure, so only failed/succeeded
-        // rows count as outcomes.
-        $latestOutcomes = ScheduleRun::query()
+        $uniqueKeys = array_values(array_unique($schedulerKeys));
+
+        // One indexed query covers the latest-definitive-outcome, the
+        // consecutive-failure scan, AND the most-recent-activity timestamp
+        // the diagnostic provider needs. Newest-first from the ORDER BY,
+        // grouped in PHP. The limit caps the per-key scan window at
+        // CONSECUTIVE_FAILURE_SCAN (10) — matching the previous behaviour —
+        // and `first()->started_at` of the result set is the most recent
+        // recorded activity across the scheduler keys.
+        $runs = ScheduleRun::query()
             ->where('source', 'scheduler')
-            ->whereIn('key', array_values(array_unique($schedulerKeys)))
-            ->whereIn('status', ['failed', 'succeeded'])
+            ->whereIn('key', $uniqueKeys)
             ->orderByDesc('started_at')
-            ->get()
-            ->unique('key');
+            ->limit(self::CONSECUTIVE_FAILURE_SCAN * count($uniqueKeys))
+            ->get();
+
+        $lastRecordedAt = $runs->first()?->started_at;
 
         $failedKeys = [];
         $lastAttemptByKey = [];
+        $consecutiveByKey = [];
 
-        foreach ($latestOutcomes as $run) {
-            if ($run->status !== 'failed') {
-                continue;
+        foreach ($runs->groupBy('key') as $key => $keyRuns) {
+            $consecutive = 0;
+
+            foreach ($keyRuns as $run) {
+                if ($run->status === 'failed') {
+                    $consecutive++;
+                    if (! isset($lastAttemptByKey[$key])) {
+                        $lastAttemptByKey[$key] = $run->started_at;
+                        $failedKeys[] = $key;
+                    }
+                } elseif ($run->status === 'succeeded') {
+                    // Recovery breaks the streak; running and skipped neither
+                    // establish recovery nor break it.
+                    break;
+                }
             }
 
-            $failedKeys[] = $run->key;
-            $lastAttemptByKey[$run->key] = $run->started_at;
+            $consecutiveByKey[$key] = max(1, $consecutive);
         }
 
         if ($failedKeys === []) {
-            return $unhealthy;
+            return ['unhealthy' => $unhealthy, 'last_recorded_at' => $lastRecordedAt];
         }
-
-        $consecutiveByKey = $this->consecutiveFailures($failedKeys);
 
         $tasksByKey = collect($tasks)
             ->filter(fn (ScheduleTask $task): bool => $task->source === 'scheduler')
@@ -117,41 +145,6 @@ final class ScheduleHealthService
             );
         }
 
-        return $unhealthy;
-    }
-
-    /**
-     * Consecutive failed outcomes per key, newest first, ignoring running and
-     * skipped rows (they neither establish recovery nor break the streak).
-     *
-     * @param  list<string>  $keys
-     * @return array<string, int>
-     */
-    private function consecutiveFailures(array $keys): array
-    {
-        $runs = ScheduleRun::query()
-            ->where('source', 'scheduler')
-            ->whereIn('key', $keys)
-            ->orderByDesc('started_at')
-            ->limit(self::CONSECUTIVE_FAILURE_SCAN * count($keys))
-            ->get();
-
-        $counts = [];
-
-        foreach ($runs->groupBy('key') as $key => $group) {
-            $consecutive = 0;
-
-            foreach ($group as $run) {
-                if ($run->status === 'failed') {
-                    $consecutive++;
-                } elseif ($run->status === 'succeeded') {
-                    break;
-                }
-            }
-
-            $counts[$key] = max(1, $consecutive);
-        }
-
-        return $counts;
+        return ['unhealthy' => $unhealthy, 'last_recorded_at' => $lastRecordedAt];
     }
 }
