@@ -16,6 +16,16 @@ with the board contract they enforce.
 `python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
 required `GITHUB_REPOSITORY` and `GITHUB_TOKEN` environment variables).
 
+`land.sh` is the terminal lane transition. After an independent review, run
+`LAND_AGENT=<stable-agent-id> land.sh <pr> <reviewed-full-sha>`; it runs the gate,
+merges through the REST endpoint only when the gate passes, moves the PR and its
+issue to `task:done`, and records the acting agent. A rerun after a transient
+post-merge failure retries terminalization without attempting a second merge.
+
+`label_hygiene.sh` is called by `orient.sh` and also accepts a repository name
+directly. It reports open task-label contradictions and non-terminal labels on
+issues closed within `AI_TEAM_CLOSED_HYGIENE_DAYS` (30 by default).
+
 ## Posting and reading the board
 
 **Posts without the machine header are invisible to team tooling.** That one
