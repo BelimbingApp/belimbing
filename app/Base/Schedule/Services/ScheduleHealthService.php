@@ -5,7 +5,6 @@ namespace App\Base\Schedule\Services;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\DTO\UnhealthyScheduleTask;
 use App\Base\Schedule\Models\ScheduleRun;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 
@@ -15,48 +14,71 @@ use Illuminate\Support\Facades\Schema;
  * many times in a row, and when the scheduler last recorded any activity.
  * Bounded, indexed queries plus a short-lived cache so the status bar
  * (rendered on every authenticated page) stays cheap.
+ *
+ * Cache shape: two keys with different TTLs. The unhealthy-task list
+ * (consecutive-failure streaks) is stable on the order of minutes — the
+ * scheduler does not generate failures faster than that — so 60s is fine.
+ * The recent-activity heartbeat is cheaper to recompute (one indexed
+ * \`max('started_at')\`) and the status-bar contract reads "no recent
+ * activity" only when it crosses the threshold, so 15s keeps the diagnostic
+ * truthful without inflating the per-render cost.
  */
 final class ScheduleHealthService
 {
-    private const int CACHE_TTL_SECONDS = 60;
+    private const int UNHEALTHY_TASKS_CACHE_TTL_SECONDS = 60;
+
+    private const int HEARTBEAT_CACHE_TTL_SECONDS = 15;
 
     private const int CONSECUTIVE_FAILURE_SCAN = 10;
 
     public function __construct(private readonly ScheduleBoard $board) {}
 
     /**
-     * @return array{unhealthy: list<UnhealthyScheduleTask>, last_recorded_at: ?Carbon}
+     * @return list<UnhealthyScheduleTask>
      */
-    public function snapshot(): array
+    public function unhealthyTasks(): array
     {
         return Cache::remember(
-            'schedule.health.snapshot',
-            self::CACHE_TTL_SECONDS,
-            fn (): array => $this->computeSnapshot(),
+            'schedule.health.unhealthy-tasks',
+            self::UNHEALTHY_TASKS_CACHE_TTL_SECONDS,
+            fn (): array => $this->computeUnhealthyTasks(),
+        );
+    }
+
+    /**
+     * Most recent scheduler-keyed activity timestamp, or null if no runs
+     * have ever been recorded. The cache TTL is short enough that the
+     * "no recent activity" diagnostic reflects fresh writes.
+     */
+    public function lastRecordedActivity(): ?\Illuminate\Support\Carbon
+    {
+        return Cache::remember(
+            'schedule.health.last-recorded-at',
+            self::HEARTBEAT_CACHE_TTL_SECONDS,
+            function (): ?\Illuminate\Support\Carbon {
+                if (! Schema::hasTable('base_schedule_runs')) {
+                    return null;
+                }
+
+                $startedAt = ScheduleRun::query()->max('started_at');
+
+                return $startedAt ? \Illuminate\Support\Carbon::parse($startedAt) : null;
+            },
         );
     }
 
     /**
      * @return list<UnhealthyScheduleTask>
      */
-    public function unhealthyTasks(): array
-    {
-        return $this->snapshot()['unhealthy'];
-    }
-
-    /**
-     * @return array{unhealthy: list<UnhealthyScheduleTask>, last_recorded_at: ?Carbon}
-     */
-    private function computeSnapshot(): array
+    private function computeUnhealthyTasks(): array
     {
         if (! Schema::hasTable('base_schedule_runs')) {
-            return ['unhealthy' => [], 'last_recorded_at' => null];
+            return [];
         }
 
         $tasks = $this->board->tasks();
         $schedulerKeys = [];
         $unhealthy = [];
-        $lastRecordedAt = null;
 
         foreach ($tasks as $task) {
             // Paused and never-run tasks are not failures.
@@ -80,26 +102,23 @@ final class ScheduleHealthService
         }
 
         if ($schedulerKeys === []) {
-            return ['unhealthy' => $unhealthy, 'last_recorded_at' => null];
+            return $unhealthy;
         }
 
         $uniqueKeys = array_values(array_unique($schedulerKeys));
 
-        // One indexed query covers the latest-definitive-outcome, the
-        // consecutive-failure scan, AND the most-recent-activity timestamp
-        // the diagnostic provider needs. Newest-first from the ORDER BY,
-        // grouped in PHP. The limit caps the per-key scan window at
-        // CONSECUTIVE_FAILURE_SCAN (10) — matching the previous behaviour —
-        // and `first()->started_at` of the result set is the most recent
-        // recorded activity across the scheduler keys.
+        // One indexed query covers both the latest-definitive-outcome and the
+        // consecutive-failure scan: the runs are already in newest-first order
+        // from the ORDER BY, and per-key grouping in PHP gives each key the
+        // recent slice it needs without a second round-trip. The limit caps
+        // the per-key scan window to CONSECUTIVE_FAILURE_SCAN, matching the
+        // previous two-query implementation's bound so behaviour is identical.
         $runs = ScheduleRun::query()
             ->where('source', 'scheduler')
             ->whereIn('key', $uniqueKeys)
             ->orderByDesc('started_at')
             ->limit(self::CONSECUTIVE_FAILURE_SCAN * count($uniqueKeys))
             ->get();
-
-        $lastRecordedAt = $runs->first()?->started_at;
 
         $failedKeys = [];
         $lastAttemptByKey = [];
@@ -126,7 +145,7 @@ final class ScheduleHealthService
         }
 
         if ($failedKeys === []) {
-            return ['unhealthy' => $unhealthy, 'last_recorded_at' => $lastRecordedAt];
+            return $unhealthy;
         }
 
         $tasksByKey = collect($tasks)
@@ -145,6 +164,6 @@ final class ScheduleHealthService
             );
         }
 
-        return ['unhealthy' => $unhealthy, 'last_recorded_at' => $lastRecordedAt];
+        return $unhealthy;
     }
 }

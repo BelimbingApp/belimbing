@@ -32,14 +32,12 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
 
             $diagnostics = [];
 
-            // The health snapshot covers both the scheduler heartbeat
-            // (last_recorded_at) and the failing-task projection in one
-            // cached call, so the diagnostic provider no longer fans out a
-            // separate max('started_at') query on every render.
-            $snapshot = $this->healthService->snapshot();
-
-            if ($snapshot['last_recorded_at'] !== null
-                && now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->gte($snapshot['last_recorded_at'])) {
+            // The heartbeat cache is short (15s), so this surfaces the
+            // "no recent activity" diagnostic truthfully after a fresh write
+            // without fanning out a per-render max('started_at') query.
+            $lastRecordedAt = $this->healthService->lastRecordedActivity();
+            if ($lastRecordedAt !== null
+                && now()->subMinutes(self::RECENT_ACTIVITY_MINUTES)->gte($lastRecordedAt)) {
                 $diagnostics[] = new StatusBarDiagnostic(
                     id: 'schedule.no-recent-recorded-activity',
                     severity: StatusVariant::Warning,
@@ -51,8 +49,9 @@ final class ScheduleStatusBarDiagnosticProvider implements StatusBarDiagnosticPr
                 );
             }
 
-            if ($snapshot['unhealthy'] !== []) {
-                $diagnostics[] = $this->unhealthyTasksDiagnostic($snapshot['unhealthy']);
+            $unhealthy = $this->healthService->unhealthyTasks();
+            if ($unhealthy !== []) {
+                $diagnostics[] = $this->unhealthyTasksDiagnostic($unhealthy);
             }
 
             return $diagnostics;
