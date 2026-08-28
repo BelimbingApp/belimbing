@@ -270,8 +270,6 @@ class Index extends Component
     /**
      * Build the paginator for one merged history page. The page is clamped to
      * the last page when a filter change shrank the result set.
-     *
-     * @return LengthAwarePaginator<int, \App\Base\Schedule\DTO\RecordedRun>
      */
     private function historyPaginator(ScheduleHistoryPage $history): LengthAwarePaginator
     {
