@@ -164,25 +164,18 @@ test('an absent mirror branch is an explicit missing state, not an error', funct
         ->and($upstream['stable']['reason'])->toContain('No mirror branch exists yet');
 });
 
-test('a mirror behind the upstream is fast-forwardable with the commit count', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: [0, 2]);
+test('mirror count states follow the rev-list geometry', function (array $counts, string $state, int $behind, int $ahead): void {
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: $counts, stableCounts: [0, 2]);
 
     $upstream = platformUpstream();
 
-    expect($upstream['mirror']['state'])->toBe('behind')
-        ->and($upstream['mirror']['behind'])->toBe(4)
-        ->and($upstream['mirror']['ahead'])->toBe(0);
-});
-
-test('a mirror holding its own commits is diverged with both counts', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [3, 2], stableCounts: [0, 2]);
-
-    $upstream = platformUpstream();
-
-    expect($upstream['mirror']['state'])->toBe('diverged')
-        ->and($upstream['mirror']['behind'])->toBe(3)
-        ->and($upstream['mirror']['ahead'])->toBe(2);
-});
+    expect($upstream['mirror']['state'])->toBe($state)
+        ->and($upstream['mirror']['behind'])->toBe($behind)
+        ->and($upstream['mirror']['ahead'])->toBe($ahead);
+})->with([
+    'behind: upstream-only commits fast-forward' => [[4, 0], 'behind', 4, 0],
+    'diverged: the mirror holds its own commits' => [[3, 2], 'diverged', 3, 2],
+]);
 
 test('a failed mirror lookup is unknown with a reason, never treated as absent', function (): void {
     fakeUpstreamGit(mirror: 'fail');
@@ -215,25 +208,19 @@ test('an unreachable upstream leaves the mirror uncomparable with a stated reaso
 
 // ---- relationship 2: stable vs mirror ----
 
-test('a stable branch holding every mirror commit is contained', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: [0, 7]);
+test('stable states are keyed on mirror commits the stable branch lacks', function (array $counts, string $state, int $missing, int $forkOwn): void {
+    // `missing` drives the state; the fork's own commits are information.
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: $counts);
 
     $upstream = platformUpstream();
 
-    expect($upstream['stable']['state'])->toBe('contained')
-        ->and($upstream['stable']['missing'])->toBe(0)
-        ->and($upstream['stable']['fork_own'])->toBe(7);
-});
-
-test('updates available is keyed on mirror commits the stable branch lacks', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [0, 0], stableCounts: [5, 12]);
-
-    $upstream = platformUpstream();
-
-    expect($upstream['stable']['state'])->toBe('behind')
-        ->and($upstream['stable']['missing'])->toBe(5)
-        ->and($upstream['stable']['fork_own'])->toBe(12);
-});
+    expect($upstream['stable']['state'])->toBe($state)
+        ->and($upstream['stable']['missing'])->toBe($missing)
+        ->and($upstream['stable']['fork_own'])->toBe($forkOwn);
+})->with([
+    'contained: every mirrored update present' => [[0, 7], 'contained', 0, 7],
+    'behind: updates available to integrate' => [[5, 12], 'behind', 5, 12],
+]);
 
 test('an unreadable origin leaves the stable relationship unknown, never substituting local HEAD', function (): void {
     fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, originError: 'fatal: could not read Username for https://github.com');
