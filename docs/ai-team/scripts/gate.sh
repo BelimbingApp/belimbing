@@ -121,26 +121,48 @@ else
   say_bad "BEHIND origin/main ($(git rev-parse --short origin/main)) — merge main into the branch first"
 fi
 
-# 3. Checks on the REVIEWED sha, not on the PR, not on the branch.
+# 3. Checks on the REVIEWED sha, not on the PR, not on the branch. The current
+#    main tip supplies the expected check names. This is observed repository
+#    state, not a count copied into the script; when CI adds or removes a job,
+#    the gate follows main. A passing early check can therefore never authorize
+#    a merge while another expected check has not reported on the reviewed SHA.
 # Judge the LATEST run of each check NAME, not every run on the SHA. A
 # superseded run stays on the commit forever: `concurrency: cancel-in-progress`
 # leaves a `cancelled` entry behind whenever a PR is force-pushed or pushed
 # twice quickly, and counting it blocked #432 while all four of those checks had
 # already passed on the same SHA (#433). `neutral` is likewise not a failure --
 # CodeQL reports it transiently before settling.
-runs=$(gh api "repos/$REPO/commits/$REVIEWED/check-runs" --paginate 2>/dev/null)
+runs=$(gh api "repos/$REPO/commits/$REVIEWED/check-runs" --paginate 2>/dev/null \
+  | jq -sc '[.[].check_runs[]]')
+
+main_sha=$(git rev-parse origin/main)
+main_runs=$(gh api "repos/$REPO/commits/$main_sha/check-runs" --paginate 2>/dev/null \
+  | jq -sc '[.[].check_runs[]]')
 
 latest=$(printf '%s' "$runs" | jq -c '
-  [.check_runs[]]
-  | group_by(.name)
+  group_by(.name)
+  | map(sort_by(.started_at, .completed_at) | last)' 2>/dev/null)
+
+expected_latest=$(printf '%s' "$main_runs" | jq -c '
+  group_by(.name)
   | map(sort_by(.started_at, .completed_at) | last)' 2>/dev/null)
 
 n=$(printf '%s' "$latest" | jq -r 'length' 2>/dev/null || echo 0)
+expected_n=$(printf '%s' "$expected_latest" | jq -r 'length' 2>/dev/null || echo 0)
+present_names=$(printf '%s' "$latest" | jq -c '[.[].name] | unique' 2>/dev/null || echo '[]')
+expected_names=$(printf '%s' "$expected_latest" | jq -c '[.[].name] | unique' 2>/dev/null || echo '[]')
+missing=$(jq -nc --argjson expected "$expected_names" --argjson present "$present_names" \
+  '$expected - $present' 2>/dev/null || echo '[]')
+missing_n=$(printf '%s' "$missing" | jq -r 'length' 2>/dev/null || echo 0)
 bad=$(printf '%s' "$latest" | jq -r \
       '[.[]|select(.status!="completed" or (.conclusion|IN("success","skipped","neutral")|not))]|length' \
       2>/dev/null || echo 1)
-if [ "${n:-0}" -lt 1 ]; then
+if [ "${expected_n:-0}" -lt 1 ]; then
+  say_bad "cannot observe expected checks on origin/main ${main_sha:0:8}"
+elif [ "${n:-0}" -lt 1 ]; then
   say_bad "no checks reported yet on ${REVIEWED:0:8}"
+elif [ "${missing_n:-0}" -gt 0 ]; then
+  say_bad "checks not yet reported on ${REVIEWED:0:8}: $(printf '%s' "$missing" | jq -r 'join(", ")')"
 elif [ "${bad:-1}" != "0" ]; then
   say_bad "checks on ${REVIEWED:0:8}: $n distinct, $bad not passing"
   printf '%s' "$latest" | jq -r \

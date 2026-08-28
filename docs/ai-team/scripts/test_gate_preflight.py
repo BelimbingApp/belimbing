@@ -33,6 +33,9 @@ GH_STUB = textwrap.dedent(
           --argjson labels "$GATE_TEST_LABELS" \
           '{headRefOid:$head,headRefName:$branch,title:$title,body:$body,isDraft:false,state:"OPEN",mergeable:"MERGEABLE",labels:$labels}'
         ;;
+      "api repos/$GATE_TEST_CANONICAL/commits/$GATE_TEST_MAIN_SHA/check-runs")
+        printf '%s\\n' "$GATE_TEST_MAIN_CHECK_RUNS"
+        ;;
       "api repos/$GATE_TEST_CANONICAL/commits/"*check-runs*)
         if [ -n "${GATE_TEST_CHECK_RUNS:-}" ]; then
           printf '%s\\n' "$GATE_TEST_CHECK_RUNS"
@@ -137,6 +140,7 @@ class GateMechanismTest(unittest.TestCase):
         reviews: list[dict[str, object]] | None = None,
         issue_comments: list[dict[str, object]] | None = None,
         check_runs: list[dict[str, object]] | None = None,
+        main_check_runs: list[dict[str, object]] | None = None,
         body: str | None = None,
         branch: str | None = None,
         title: str | None = None,
@@ -163,6 +167,7 @@ class GateMechanismTest(unittest.TestCase):
         env["GATE_TEST_REAL_GIT"] = real_git
 
         env["GATE_TEST_CANONICAL"] = "example/canonical"
+        env["GATE_TEST_MAIN_SHA"] = self.main_sha
         effective_head = head or self.head_sha
         env["GATE_TEST_HEAD"] = effective_head
         env["GATE_TEST_RESOLVE"] = resolve
@@ -195,6 +200,15 @@ class GateMechanismTest(unittest.TestCase):
                 "completed_at": "2",
             }]
         env["GATE_TEST_CHECK_RUNS"] = json.dumps({"check_runs": check_runs})
+        if main_check_runs is None:
+            main_check_runs = [{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }]
+        env["GATE_TEST_MAIN_CHECK_RUNS"] = json.dumps({"check_runs": main_check_runs})
 
         args = ["bash", str(SCRIPT), "1"]
         if reviewed is not None:
@@ -301,6 +315,73 @@ class GateMechanismTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("no checks reported yet", result.stdout)
         self.assertNotIn("need >=", result.stdout)
+
+    def test_missing_expected_check_name_blocks_before_it_reports(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }],
+            main_check_runs=[
+                {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+                {
+                    "name": "quality",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "started_at": "1",
+                    "completed_at": "2",
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("checks not yet reported", result.stdout)
+        self.assertIn("quality", result.stdout)
+
+    def test_expected_check_names_are_observed_from_main_not_encoded_as_a_count(self):
+        runs = [
+            {
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            },
+            {
+                "name": "quality",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            },
+        ]
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=runs,
+            main_check_runs=runs,
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("2 distinct checks", result.stdout)
+
+    def test_unobservable_main_check_baseline_blocks_closed(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            main_check_runs=[],
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("cannot observe expected checks on origin/main", result.stdout)
 
     def test_missing_independent_review_fails_the_gate(self):
         result = self.run_gate(
