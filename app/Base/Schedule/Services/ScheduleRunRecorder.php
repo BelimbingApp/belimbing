@@ -9,6 +9,7 @@ use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -39,18 +40,137 @@ class ScheduleRunRecorder
 
             $this->output->prepare($event->task);
 
-            $run = ScheduleRun::query()->create([
-                'source' => 'scheduler',
-                'key' => $this->key($event->task),
-                'name' => $this->name($event->task),
-                'expression' => $this->expression($event->task),
-                'status' => 'running',
-                'started_at' => now(),
-            ]);
+            // A manual "Run now" click already created a `queued` row before
+            // this event ever fired (#401) — transition that same row rather
+            // than creating a second one, so the operator sees one continuous
+            // record instead of an orphaned queued row plus a fresh running one.
+            $existing = $this->existingRun($event->task);
+
+            if ($existing instanceof ScheduleRun) {
+                $existing->update([
+                    'status' => 'running',
+                    'started_at' => now(),
+                ]);
+                $run = $existing;
+            } else {
+                $run = ScheduleRun::query()->create([
+                    'source' => 'scheduler',
+                    'key' => $this->key($event->task),
+                    'name' => $this->name($event->task),
+                    'expression' => $this->expression($event->task),
+                    'status' => 'running',
+                    'started_at' => now(),
+                ]);
+            }
 
             $event->task->{self::RUN_ID_PROPERTY} = $run->id;
             $this->historyPruner->prune();
         });
+    }
+
+    /**
+     * Creates the durable `queued` row an operator's "Run now" click needs to
+     * exist *before* dispatch returns — the whole point being that a job that
+     * never reaches ScheduledTaskStarting (queue down, worker never picks it
+     * up) still leaves observable, honest state instead of nothing (#401).
+     */
+    public function queueManualRun(
+        string $key,
+        string $name,
+        ?string $expression,
+        ?int $triggeredByUserId,
+        ?string $triggeredByName,
+    ): ?ScheduleRun {
+        if (! $this->ready()) {
+            return null;
+        }
+
+        return ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'trigger' => 'manual',
+            'triggered_by_user_id' => $triggeredByUserId,
+            'triggered_by_name' => $triggeredByName,
+            'key' => $key,
+            'name' => $name,
+            'expression' => $expression,
+            'status' => 'queued',
+            'started_at' => now(),
+        ]);
+    }
+
+    /**
+     * True while a scheduler key already has a queued or running row —
+     * used to refuse a duplicate manual dispatch rather than stacking two
+     * concurrent "Run now" requests for the same task (#401).
+     */
+    public function hasActiveRun(string $key): bool
+    {
+        if (! $this->ready()) {
+            return false;
+        }
+
+        return ScheduleRun::query()
+            ->where('source', 'scheduler')
+            ->where('key', $key)
+            ->whereIn('status', ['queued', 'running'])
+            ->exists();
+    }
+
+    /**
+     * Marks a run that never reached ScheduledTaskStarting as failed —
+     * covers "the key isn't registered" and "the job itself couldn't be
+     * dispatched", neither of which ever produces a ScheduledTaskFailed
+     * event because no Event instance exists yet (#401).
+     */
+    public function failUnstartedRun(int $runId, string $reason): void
+    {
+        $this->guard(function () use ($runId, $reason): void {
+            if (! $this->ready()) {
+                return;
+            }
+
+            $run = ScheduleRun::query()->find($runId);
+
+            if (! $run instanceof ScheduleRun || $run->finished_at !== null) {
+                return;
+            }
+
+            $now = now();
+
+            $run->update([
+                'status' => 'failed',
+                'finished_at' => $now,
+                'runtime_ms' => $this->runtimeMs($run, $now, null),
+                'output_excerpt' => $this->truncate($reason, self::STORAGE_STRING_LIMIT),
+            ]);
+        });
+    }
+
+    /**
+     * Attaches a pre-created run row (typically a `queued` row from
+     * queueManualRun()) to the Event instance the job is about to execute,
+     * so taskStarting()/taskSkipped() below transition that same row
+     * instead of creating a disconnected one (#401).
+     */
+    public function attachRun(Event $task, int $runId): void
+    {
+        $task->{self::RUN_ID_PROPERTY} = $runId;
+    }
+
+    /**
+     * The same "find the registered scheduler event for this stable key"
+     * lookup the manual-run job needs — shared so the Livewire action and
+     * the job agree on what "not registered" means (#401).
+     */
+    public function findEvent(Schedule $schedule, string $key): ?Event
+    {
+        foreach ($schedule->events() as $event) {
+            if ($this->key($event) === $key) {
+                return $event;
+            }
+        }
+
+        return null;
     }
 
     public function taskFinished(ScheduledTaskFinished $event): void
@@ -82,9 +202,9 @@ class ScheduleRunRecorder
         $this->complete($event->task, 'failed', $this->exitCode($event->task) ?? 1, failure: $event->exception->getMessage());
     }
 
-    public function taskSkipped(ScheduledTaskSkipped $event): void
+    public function taskSkipped(ScheduledTaskSkipped $event, ?string $reason = null): void
     {
-        $this->complete($event->task, 'skipped');
+        $this->complete($event->task, 'skipped', failure: $reason);
     }
 
     /**
@@ -163,7 +283,7 @@ class ScheduleRunRecorder
         });
     }
 
-    private function resolveRun(Event $task): ScheduleRun
+    private function existingRun(Event $task): ?ScheduleRun
     {
         $runId = $task->{self::RUN_ID_PROPERTY} ?? null;
 
@@ -173,6 +293,17 @@ class ScheduleRunRecorder
             if ($run instanceof ScheduleRun) {
                 return $run;
             }
+        }
+
+        return null;
+    }
+
+    private function resolveRun(Event $task): ScheduleRun
+    {
+        $existing = $this->existingRun($task);
+
+        if ($existing instanceof ScheduleRun) {
+            return $existing;
         }
 
         $key = $this->key($task);

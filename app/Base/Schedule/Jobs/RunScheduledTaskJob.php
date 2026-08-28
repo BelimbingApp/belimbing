@@ -10,7 +10,6 @@ use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Events\ScheduledTaskStarting;
-use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Console\Kernel as ConsoleKernel;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -36,6 +35,7 @@ class RunScheduledTaskJob implements ShouldQueue
 
     public function __construct(
         public readonly string $key,
+        public readonly ?int $runId = null,
     ) {}
 
     public function handle(
@@ -46,19 +46,48 @@ class RunScheduledTaskJob implements ShouldQueue
     ): void {
         app(ConsoleKernel::class)->all();
 
-        $event = $this->findEvent($schedule, $recorder);
+        $event = $recorder->findEvent($schedule, $this->key);
 
         if ($event === null) {
+            if ($this->runId !== null) {
+                $recorder->failUnstartedRun($this->runId, __('This task is no longer registered — its schedule entry may have been renamed or removed.'));
+            }
+
             throw ScheduledTaskExecutionException::notRegistered($this->key);
         }
 
+        // Carries the pre-created `queued` row (if any) onto the Event so
+        // taskStarting()/taskSkipped() below transition that same row
+        // instead of writing a second, disconnected one (#401).
+        if ($this->runId !== null) {
+            $recorder->attachRun($event, $this->runId);
+        }
+
         if ($this->suppressed()) {
+            // Recorded directly, with a reason, before the generic event
+            // dispatch below — whichever handler runs first "wins" the row,
+            // and only this call carries the specific reason text.
+            $recorder->taskSkipped(new ScheduledTaskSkipped($event), __('Skipped — this task is currently paused.'));
+            $dispatcher->dispatch(new ScheduledTaskSkipped($event));
+
+            return;
+        }
+
+        // withoutOverlapping() registers its overlap check as a skip filter
+        // (see ManagesAttributes::withoutOverlapping()), so the generic
+        // filtersPass() check below already rejects it — check it first,
+        // by name, so the operator gets "overlap protection" instead of a
+        // generic "schedule conditions" message for the single most likely
+        // reason a manual re-run gets rejected (#401).
+        if ($event->withoutOverlapping && $event->mutex->exists($event)) {
+            $recorder->taskSkipped(new ScheduledTaskSkipped($event), __('Skipped — another run of this task is already in progress (overlap protection).'));
             $dispatcher->dispatch(new ScheduledTaskSkipped($event));
 
             return;
         }
 
         if (! $event->filtersPass(app())) {
+            $recorder->taskSkipped(new ScheduledTaskSkipped($event), __('Skipped — the task\'s own schedule conditions rejected this run.'));
             $dispatcher->dispatch(new ScheduledTaskSkipped($event));
 
             return;
@@ -74,6 +103,7 @@ class RunScheduledTaskJob implements ShouldQueue
             $event->run(app());
 
             if ($event->skippedBecauseOverlapping) {
+                $recorder->taskSkipped(new ScheduledTaskSkipped($event), __('Skipped — another run of this task is already in progress (overlap protection).'));
                 $dispatcher->dispatch(new ScheduledTaskSkipped($event));
 
                 return;
@@ -95,17 +125,6 @@ class RunScheduledTaskJob implements ShouldQueue
         } finally {
             $event->runInBackground = $wasBackground;
         }
-    }
-
-    private function findEvent(Schedule $schedule, ScheduleRunRecorder $recorder): ?Event
-    {
-        foreach ($schedule->events() as $event) {
-            if ($recorder->key($event) === $this->key) {
-                return $event;
-            }
-        }
-
-        return null;
     }
 
     private function suppressed(): bool

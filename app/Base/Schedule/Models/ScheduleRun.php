@@ -16,6 +16,9 @@ class ScheduleRun extends Model
 
     protected $fillable = [
         'source',
+        'trigger',
+        'triggered_by_user_id',
+        'triggered_by_name',
         'key',
         'name',
         'expression',

@@ -17,13 +17,16 @@ use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
+use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\View\View;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Throwable;
 
 /**
  * Central schedule observability: everything scheduled to fire (Laravel
@@ -128,13 +131,55 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function runNow(string $key): void
+    /**
+     * Makes "Run now" an observable, honest state transition instead of a
+     * fire-and-forget dispatch (#401): the task must already be registered,
+     * must not already have a queued/running row, and gets its `queued`
+     * ledger row written before the job dispatch call returns — so a job
+     * that never reaches the worker still leaves visible, correct state.
+     */
+    public function runNow(string $key, ScheduleRunRecorder $recorder, Schedule $schedule): void
     {
         if (! $this->checkCapability('admin.system.schedule.execute')) {
             return;
         }
 
-        RunScheduledTaskJob::dispatch($key);
+        $event = $recorder->findEvent($schedule, $key);
+
+        if ($event === null) {
+            $this->notifyError(__('This task is no longer registered and cannot be run.'));
+
+            return;
+        }
+
+        if ($recorder->hasActiveRun($key)) {
+            $this->notifyWarning(__('This task is already queued or running.'));
+
+            return;
+        }
+
+        $user = auth()->user();
+
+        $run = $recorder->queueManualRun(
+            $key,
+            $recorder->name($event),
+            (string) $event->expression,
+            $user !== null ? (int) $user->getAuthIdentifier() : null,
+            $user !== null ? (string) data_get($user, 'name') : null,
+        );
+
+        try {
+            RunScheduledTaskJob::dispatch($key, $run?->id);
+        } catch (Throwable $e) {
+            if ($run !== null) {
+                $recorder->failUnstartedRun($run->id, __('Could not queue this run: :message', ['message' => $e->getMessage()]));
+            }
+
+            report($e);
+            $this->notifyError(__('Could not queue the run — check the queue connection.'));
+
+            return;
+        }
 
         $this->notify(__('Run queued.'));
     }

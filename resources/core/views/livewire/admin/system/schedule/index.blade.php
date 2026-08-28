@@ -19,6 +19,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 $statusVariant = fn (?string $status): string => match ($status) {
     'succeeded' => 'success',
     'running' => 'info',
+    'queued' => 'accent',
     'failed' => 'danger',
     'cancelled', 'skipped' => 'warning',
     default => 'default',
@@ -113,7 +114,7 @@ $tabs = [
 
                                             @if($item->source === 'scheduler')
                                                 <x-ui.icon-action-group class="shrink-0">
-                                                    @if($canExecute && ! $item->paused)
+                                                    @if($canExecute && ! $item->paused && ! in_array($item->status, ['queued', 'running'], true))
                                                         <x-ui.icon-action
                                                             icon="heroicon-o-play"
                                                             :label="__('Run :task now', ['task' => $item->name])"
@@ -245,7 +246,14 @@ $tabs = [
                                         <x-ui.datetime :value="$run->startedAt" />
                                         <span class="text-xs text-muted">({{ $duration($run->startedAt, $run->finishedAt) }})</span>
                                     </td>
-                                    <td class="px-table-cell-x py-table-cell-y font-mono text-sm text-ink">{{ $run->name }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y font-mono text-sm text-ink">
+                                        {{ $run->name }}
+                                        @if($run->trigger === 'manual')
+                                            <span class="ml-1 whitespace-nowrap font-sans text-xs text-muted">
+                                                {{ $run->triggeredByName ? __('(Run now by :name)', ['name' => $run->triggeredByName]) : __('(Run now)') }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm"><x-ui.badge variant="{{ $run->source === 'scheduler' ? 'default' : 'info' }}">{{ $run->source }}</x-ui.badge></td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm"><x-ui.badge variant="{{ $statusVariant($run->status) }}">{{ $statusLabel($run->status) }}</x-ui.badge></td>
                                     <td class="px-table-cell-x py-table-cell-y max-w-md truncate font-mono text-xs text-muted">{{ $run->detail ? str()->limit($run->detail, 90) : '—' }}</td>
