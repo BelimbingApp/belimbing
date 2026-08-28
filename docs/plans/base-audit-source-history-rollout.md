@@ -1,7 +1,7 @@
 # base-audit-source-history-rollout.md
 
-**Status:** Complete for current stable record/detail pages — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages; the shared drawer has dense-history search/sort/progressive loading; workflow transitions now record semantic actions; stable Audit guidance documents the bridge contract. Codex completed the in-app-browser/manual closeout, route-specific page-weight evidence, parent/child propagation rule, and log-explosion guard review. Later-wave route inventory found no additional stable one-record detail pages to promote; broader detail-page weight reduction stays with `docs/plans/performance-page-rendering.md`.
-**Last Updated:** 2026-06-20
+**Status:** Complete for current stable record/detail pages and bounded Administration configuration pages — the neutral bridge is live on Wave 1 plus IT/Quality, Workflow, Outbound Exchange, and Authz Role Wave 2 detail pages. Bounded settings history is now shared by `SettingsForm` and the bespoke Database Backups and Performance settings surfaces; unbounded, mixed, diagnostic, and log surfaces remain explicitly excluded. The shared drawer has dense-history search/sort/progressive loading; workflow transitions record semantic actions; stable Audit guidance documents both record and bounded-configuration contracts. Broader detail-page weight reduction stays with `docs/plans/performance-page-rendering.md`.
+**Last Updated:** 2026-08-28
 **Sources:**
 - `docs/plans/base-audit-log-usability.md` — completed User-management audit usability rollout and current Codex UI/UX workstream.
 - `app/Base/Audit/AGENTS.md` — zero-coupling Audit module rules, subject metadata contract, semantic action boundary, and UI ownership.
@@ -12,7 +12,7 @@
 - `resources/core/views/livewire/admin/users/show.blade.php`, `resources/core/views/livewire/admin/companies/show.blade.php`, `resources/core/views/livewire/admin/employees/show.blade.php`, `resources/core/views/livewire/admin/addresses/show.blade.php`, and `app/Domains/People/Employees/Views/livewire/people/employees/show.blade.php` — first visible rollout pages using the bridge.
 - `tests/Feature/Audit/AuditLogUiTest.php` and `tests/Feature/Audit/AuditSourceHistorySubjectCoverageTest.php` — bridge visibility, authorization, and subject metadata coverage.
 - Oracle architecture check in the current Amp thread — lightweight review of rollout boundaries and risks.
-**Agents:** amp/gpt-5, codex/gpt-5
+**Agents:** amp/gpt-5, codex/gpt-5, luna/gpt-5.6-luna
 
 ## Problem Essence
 
@@ -62,9 +62,9 @@ Use `App\Base\Foundation\Contracts\SemanticActionRecorder` only for workflows wh
 
 The current direct `@livewire(\App\Base\Audit\...)` pattern is acceptable as proof on the Core/User page, but non-Core modules must not copy it. The first implementation step is the neutral bridge, then migrating the User page to that bridge as the regression test.
 
-### Roll out only to stable record contexts
+### Roll out only to stable record or bounded configuration contexts
 
-The History trigger belongs on detail/show pages and one-record inspectors where the user is clearly viewing one source record. It does not belong on every list row, dense grid cell, settings page, or bulk workbench by default.
+The History trigger belongs on detail/show pages and one-record inspectors where the user is clearly viewing one source record. It may also belong on a configuration page when the exact persisted setting subjects are stable and bounded. It does not belong on every list row, dense grid cell, unbounded settings registry, or bulk workbench by default.
 
 ### Define page completion by truthfulness, not by trigger presence
 
@@ -97,6 +97,7 @@ Audit mutation `auditable_id` and `subject_id` values are normalized bounded str
 - Non-Core modules may expose subject metadata with duck-typed model methods and may record semantic product actions only through the Foundation `SemanticActionRecorder` contract.
 - The bridge renders nothing for users who fail either the global audit-log capability or the source-page capability.
 - The drawer loads a bounded latest-history result set only when opened and links to the full Audit page only through bridge/Audit-owned URL generation.
+- Bounded settings pages use the stable `setting` subject identity (`<key>` globally or `<key>@<scope>:<scope-id>` when scoped); multi-subject drawers do not offer an arbitrary single-key full-history link.
 - Redacted values remain redacted everywhere, excluded fields remain absent, and truncated fields remain bounded.
 - Non-material or implementation-maintained fields are excluded from local history unless the owning page documents why they matter to the business record.
 - Related child changes appear in a parent history only through explicit subject-entry rules, not by generic table ancestry or foreign-key discovery.
@@ -118,7 +119,13 @@ This inventory is intentionally a starting matrix. Phase 2 owns turning each row
 | 2 | `admin/workflows/{workflow}` and `admin/integration/outbound-exchanges/{exchange}` | Workflow history is live for direct workflow, status, transition, and kanban-column configuration rows. Outbound Exchange history is live after string-key Audit support and payload/header field exclusions, so local history does not bypass the retained-payload inspection capability. |
 | 2 | `admin/roles/{role}` | Authz role history is live for direct role edits, role-capability rows, and user-role assignment rows; single-row removals now use model deletes so deletion events are captured. |
 | 3 | Leave, Claim, Attendance, Payroll, Marketplace, and IBP workbenches | Current route inventory found no additional stable one-record detail contexts. These remain out of scope until a future page introduces a one-record route or inspector; do not add one history Livewire island per table row, roster cell, batch row, period row, or grid cell. |
-| Deferred | System logs, database-table viewers, UI reference, generic settings/list pages | Not source-record history targets unless a future phase identifies a stable auditable record and business value. |
+| Configuration | Shared `SettingsForm` pages: System General, Email, and Data Share Settings | Bridge supplied once at the shared form seam. Subjects are the exact editable fields at their effective scope; all groups must share one source capability. Email is the regression case for visibility, bounded subjects, save/restore evidence, and secret redaction. |
+| Configuration | Database Backups and Performance | Bespoke pages with exact fixed setting-key inventories. The bridge is added beside their existing header actions and requires each page's management capability. |
+| Configuration | Localization | Existing explicit three-setting bridge remains. Multi-subject navigation now stays in the bounded drawer instead of linking to one arbitrary key. |
+| Excluded | Schedule | The page is itself a task/run History surface with one subordinate retention control; a second page-level “History” action would be ambiguous. |
+| Excluded | Integration Secrets and Software GitHub Access | These are dynamic secret registries: integration keys are heterogeneous and paginated, while GitHub token subjects depend on runtime-discovered owners. Neither has one honest stable aggregate. |
+| Excluded | AI Control Plane, AI Providers, and AI Tools | Mixed diagnostic/operational workbenches with dynamic provider, model, tool, credential, and runtime-setting sets. They need a deliberately designed bounded inspector before local history is truthful. |
+| Excluded | System logs, Audit pages, database-table viewers, UI reference, read-only diagnostics, create-before-subject forms, and heterogeneous lists/workbenches | These are logs/history themselves, have no persisted subject yet, or cannot provide one honest bounded subject set. |
 
 ## Phases
 
@@ -294,6 +301,26 @@ Goal: leave a durable convention and accurate status surface.
 - [x] Mark this plan complete for current stable record/detail pages; future workbench/extension expansion requires a new one-record detail or inspector target before this bridge is applied again. {amp/gpt-5}
 
 Validation: plan status reflects reality, evidence is linked per completed wave, no page integration bypasses the bridge, Codex verified lazy route-bound drawer behavior, and broader page-weight debt remains in `docs/plans/performance-page-rendering.md` instead of blocking this Audit rollout.
+
+### Phase 8 — Extend the contract to bounded Administration settings
+
+Goal: let operators answer “who changed this configuration, and when?” without
+turning every settings registry or diagnostic surface into a misleading history
+entry point.
+
+- [x] Add exact global/scoped setting subject construction and derive shared `SettingsForm` subjects from the editable fields shown at their effective scope. {luna/gpt-5.6-luna}
+- [x] Keep multi-subject history inside the bounded drawer; do not generate a full Audit link that silently narrows to one key. {luna/gpt-5.6-luna}
+- [x] Capture model deletion events when settings overrides are forgotten and dynamically redact `Setting.value` whenever the current or deleted row was encrypted. {luna/gpt-5.6-luna}
+- [x] Prove Email visibility, exact `mail.*` subject scope, dual capability gating, save/restoration mutations, and SMTP password redaction. {luna/gpt-5.6-luna}
+- [x] Apply the shared seam to System General and Data Share Settings, add the bridge to the fixed Database Backups and Performance setting inventories, and record the intentional Administration exclusions above. {luna/gpt-5.6-luna}
+
+Validation: `RuntimeSettingsUiTest`, `DataShareGenericPackageTest`,
+`PerfDashboardTest`, `BackupsIndexTest`, `SettingSubjectTest`, the Audit source-history
+and model-listener suites, Pint, UI detector, and `git diff --check`. Responsive
+browser screenshots were not available in Luna's author session because no browser
+backend was connected; the clean detector and rendered route/Livewire assertions are
+recorded evidence, while visual browser verification remains an explicit handoff
+observation rather than an assumed pass.
 
 ## Oracle Use
 

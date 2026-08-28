@@ -3,6 +3,7 @@
 namespace App\Base\Settings\Models;
 
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Support\SettingSubject;
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -103,12 +104,22 @@ class Setting extends Model
      */
     public function getAuditSubject(): ?array
     {
-        $id = $this->key;
+        return SettingSubject::handleStored(
+            $this->key,
+            $this->scope_type,
+            $this->scope_id,
+        );
+    }
 
-        if ($this->scope_type !== null) {
-            $id .= '@'.$this->scope_type.':'.$this->scope_id;
-        }
-
-        return ['name' => 'setting', 'id' => $id];
+    /**
+     * Prevent encrypted setting payloads from entering mutation history.
+     *
+     * @return list<string>
+     */
+    public function getAuditRedactedFields(): array
+    {
+        return $this->is_encrypted || (bool) $this->getRawOriginal('is_encrypted')
+            ? ['value']
+            : [];
     }
 }

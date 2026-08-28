@@ -9,6 +9,7 @@ use App\Base\Database\Services\Backup\BackupRuntimeSettings;
 use App\Base\Database\Services\Backup\BackupService;
 use App\Base\Database\Services\Backup\Encryption\EncryptionModeRegistry;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Support\SettingSubject;
 use App\Core\User\Models\User;
 use Illuminate\Contracts\View\View;
 use Illuminate\Filesystem\FilesystemManager;
@@ -190,6 +191,7 @@ class Index extends Component
             'canCreate' => $this->capabilityAllows('admin.system.database-backup.create'),
             'canDelete' => $this->capabilityAllows('admin.system.database-backup.delete'),
             'canManageBackup' => $this->capabilityAllows('admin.system.database-backup.manage'),
+            'historySubjects' => SettingSubject::handles(self::EDITABLE_SETTING_KEYS),
             'statusMessage' => $this->statusMessage,
             'statusVariant' => $this->statusVariant,
         ]);

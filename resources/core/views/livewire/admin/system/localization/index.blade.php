@@ -10,6 +10,7 @@
                 <x-ui.record-history
                     :title="__('History for Language & Region')"
                     :subjects="$auditSubjects"
+                    :subject-label="trans_choice(':count setting|:count settings', count($auditSubjects), ['count' => count($auditSubjects)])"
                     source-capability="admin.system.localization.manage"
                 />
             </x-slot>

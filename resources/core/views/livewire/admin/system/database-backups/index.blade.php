@@ -10,6 +10,13 @@ use App\Base\Database\Livewire\Backups\Index;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="__('Database Backups')" :subtitle="__('Encrypted database backups stored on the configured Laravel disk')">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('Database backup settings history')"
+                    :subjects="$historySubjects"
+                    :subject-label="trans_choice(':count setting|:count settings', count($historySubjects), ['count' => count($historySubjects)])"
+                    source-capability="admin.system.database-backup.manage"
+                />
+
                 @if ($canCreate && $enabled)
                     <div x-data="{ running: false }" class="inline-flex">
                         <x-ui.button

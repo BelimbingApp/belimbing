@@ -9,10 +9,10 @@ use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
  * The safety boundary of upstream synchronization (#345, lane 2 of #339):
- * synchronization capability exists only in an explicitly enabled development
- * or staging deployment, for a user who holds the capability. Production is a
- * read-only deployment consumer, and every undecidable state fails closed —
- * an unset or unrecognised deployment role means unavailable, never available.
+ * synchronization capability exists only in the resolved local or staging
+ * application environment, for a user who holds the capability. Production is
+ * a read-only deployment consumer, and every undecidable state fails closed —
+ * an unset or unrecognised APP_ENV means unavailable, never available.
  *
  * Read-only upstream visibility (#344) never consults this gate: seeing is
  * not synchronizing.
@@ -25,71 +25,74 @@ final class UpstreamSyncGate
     public const CAPABILITY = 'admin.system.software.upstream-sync.manage';
 
     /**
-     * Roles that may hold synchronization capability. An allow-list, not a
-     * production deny-list: a new or misspelled role is closed by construction.
+     * Environments that may hold synchronization capability. An allow-list,
+     * not a production deny-list: a new or misspelled APP_ENV is closed by
+     * construction.
      */
-    private const SYNC_ROLES = ['development', 'staging'];
+    private const SYNC_ENVIRONMENTS = ['local', 'staging'];
 
     public function __construct(
         private readonly AuthorizationService $authorization,
     ) {}
 
     /**
-     * The instance's declared deployment role, or null when unset. Read from
-     * deployment configuration (BLB_DEPLOYMENT_ROLE), deliberately not from
-     * APP_ENV: enabling synchronization must be its own explicit act, not a
-     * side effect of inheriting a development app config.
+     * The resolved Laravel application environment, or null when unavailable.
+     * Preserve it exactly: Laravel's environment vocabulary is case-sensitive,
+     * so normalizing a misspelling could accidentally open this write boundary.
+     * APP_ENV is already the platform's development/production boundary; a
+     * second value in the same environment file would not be independent.
      */
-    public function role(): ?string
+    public function environment(): ?string
     {
-        $role = config('software.deployment_role');
+        $environment = app()->environment();
 
-        if (! is_string($role)) {
+        if (! is_string($environment)) {
             return null;
         }
 
-        $role = strtolower(trim($role));
-
-        return $role !== '' ? $role : null;
+        return $environment !== '' ? $environment : null;
     }
 
-    public function roleAllowsSync(): bool
+    public function environmentAllowsSync(): bool
     {
-        return in_array($this->role(), self::SYNC_ROLES, true);
+        return in_array($this->environment(), self::SYNC_ENVIRONMENTS, true);
     }
 
     /**
      * Availability plus the operator-facing reason when closed. The page states
      * this plainly instead of hiding the concept or failing at the point of use.
      *
-     * @return array{available: bool, reason: string|null}
+     * @return array{available: bool, environment: string|null, reason: string|null}
      */
     public function state(?Authenticatable $user): array
     {
-        if (! $this->roleAllowsSync()) {
-            $role = $this->role();
+        $environment = $this->environment();
+
+        if (! $this->environmentAllowsSync()) {
 
             return [
                 'available' => false,
-                'reason' => $role === null
-                    ? (string) __('Upstream synchronization is unavailable: this deployment declares no role (BLB_DEPLOYMENT_ROLE). It is only available on a deployment explicitly declared development or staging.')
-                    : (string) __('Upstream synchronization is unavailable on a :role deployment. It is only available on a deployment explicitly declared development or staging.', ['role' => $role]),
+                'environment' => $environment,
+                'reason' => $environment === null
+                    ? (string) __('Upstream synchronization is unavailable because APP_ENV is not resolved. It is only available when APP_ENV is local or staging.')
+                    : (string) __('Upstream synchronization is unavailable when APP_ENV is :environment. It is only available when APP_ENV is local or staging.', ['environment' => $environment]),
             ];
         }
 
         if ($user === null || ! $this->authorization->can(Actor::forUser($user), self::CAPABILITY)->allowed) {
             return [
                 'available' => false,
+                'environment' => $environment,
                 'reason' => (string) __('Upstream synchronization is unavailable: your account does not hold the :capability capability.', ['capability' => self::CAPABILITY]),
             ];
         }
 
-        return ['available' => true, 'reason' => null];
+        return ['available' => true, 'environment' => $environment, 'reason' => null];
     }
 
     /**
      * The server-side precondition for every synchronization action. Throws on
-     * any closed condition — role and capability both — so a request that
+     * any closed condition — environment and capability both — so a request that
      * bypasses the UI still stops here.
      *
      * @throws AuthorizationException
