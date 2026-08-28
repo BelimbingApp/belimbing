@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\System\Enums\MailPurpose;
 use App\Base\System\Services\MailRuntimeSettings;
 use App\Base\System\Services\SystemRuntimeSettings;
 
@@ -93,7 +94,7 @@ return [
             'encrypted' => false,
             'rules' => ['required', 'email', 'max:255'],
             'label' => 'Sender address',
-            'help' => 'Email address shown in the From header of outgoing messages.',
+            'help' => 'Email address shown in the From header of outgoing messages. What recipients see and what your SMTP provider must authorize you to send from. Every purpose below falls back to this unless it has its own override.',
         ],
         MailRuntimeSettings::FROM_NAME_KEY => [
             'type' => 'string',
@@ -104,6 +105,66 @@ return [
             'rules' => ['nullable', 'string', 'max:255'],
             'label' => 'Sender name',
             'help' => 'Optional From name. Leave blank to use the current product name.',
+        ],
+        MailRuntimeSettings::purposeFromAddressKey(MailPurpose::AccountSecurity) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'email', 'max:255'],
+            'label' => 'Account-security From address',
+            'help' => 'Overrides the global sender address for password-reset and email-verification mail only. Leave blank to use the sender address above — most deployments never need this.',
+        ],
+        MailRuntimeSettings::purposeFromNameKey(MailPurpose::AccountSecurity) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'string', 'max:255'],
+            'label' => 'Account-security From name',
+            'help' => 'Overrides the global sender name for password-reset and email-verification mail only. Leave blank to use the sender name above.',
+        ],
+        MailRuntimeSettings::purposeReplyToKey(MailPurpose::AccountSecurity) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'email', 'max:255'],
+            'label' => 'Account-security Reply-To',
+            'help' => 'Where a reply to a password-reset or verification email goes, if anyone replies. A mailbox someone monitors, not the From address. Leave blank for no Reply-To header.',
+        ],
+        MailRuntimeSettings::purposeFromAddressKey(MailPurpose::Notifications) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'email', 'max:255'],
+            'label' => 'Notifications From address',
+            'help' => 'Not used yet: ticket and workflow notifications are delivered in-app today, not by email. Held for when an email notification channel exists, so it falls back to the global sender until then.',
+        ],
+        MailRuntimeSettings::purposeFromNameKey(MailPurpose::Notifications) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'string', 'max:255'],
+            'label' => 'Notifications From name',
+            'help' => 'Not used yet, for the same reason as the address above.',
+        ],
+        MailRuntimeSettings::purposeReplyToKey(MailPurpose::Notifications) => [
+            'type' => 'string',
+            'scopes' => ['global'],
+            'default' => null,
+            'nullable' => true,
+            'encrypted' => false,
+            'rules' => ['nullable', 'email', 'max:255'],
+            'label' => 'Notifications Reply-To',
+            'help' => 'Not used yet, for the same reason as the address above.',
         ],
         'integrations.*.description' => [
             'type' => 'string',
@@ -157,6 +218,7 @@ return [
                 [
                     'key' => MailRuntimeSettings::MAILER_KEY,
                     'type' => 'select',
+                    'section' => 'Delivery — how Belimbing authenticates and connects',
                     'options' => [
                         'log' => 'Log only',
                         'smtp' => 'SMTP',
@@ -190,12 +252,45 @@ return [
                 [
                     'key' => MailRuntimeSettings::FROM_ADDRESS_KEY,
                     'type' => 'email',
+                    'section' => 'Global sender',
                     'placeholder' => 'noreply@example.com',
                 ],
                 [
                     'key' => MailRuntimeSettings::FROM_NAME_KEY,
                     'type' => 'text',
                     'placeholder' => 'Use product name',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeFromAddressKey(MailPurpose::AccountSecurity),
+                    'type' => 'email',
+                    'section' => 'Account security — password reset, email verification',
+                    'placeholder' => 'Use the global sender address',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeFromNameKey(MailPurpose::AccountSecurity),
+                    'type' => 'text',
+                    'placeholder' => 'Use the global sender name',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeReplyToKey(MailPurpose::AccountSecurity),
+                    'type' => 'email',
+                    'placeholder' => 'No Reply-To header',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeFromAddressKey(MailPurpose::Notifications),
+                    'type' => 'email',
+                    'section' => 'Application notifications — not yet used',
+                    'placeholder' => 'Use the global sender address',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeFromNameKey(MailPurpose::Notifications),
+                    'type' => 'text',
+                    'placeholder' => 'Use the global sender name',
+                ],
+                [
+                    'key' => MailRuntimeSettings::purposeReplyToKey(MailPurpose::Notifications),
+                    'type' => 'email',
+                    'placeholder' => 'No Reply-To header',
                 ],
             ],
         ],
