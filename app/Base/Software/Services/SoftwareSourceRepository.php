@@ -57,7 +57,7 @@ class SoftwareSourceRepository
     }
 
     /**
-     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null, upstream: array{remote: string, repo: string|null, branch: string|null, head: array<string, mixed>|null, relationship: 'contained'|'fast_forwardable'|'divergent'|null, ahead: int|null, behind: int|null, reason: string|null, error: string|null, error_detail: string|null}|null}>
+     * @return list<array{key: string, label: string, path: string, owner: string|null, repo: string|null, branch: string|null, working_tree: array{dirty: int, ahead: int, behind: int}, current: array<string, mixed>|null, latest: array<string, mixed>|null, update_state: 'up_to_date'|'ahead'|'behind'|null, error: string|null, error_detail: string|null, upstream: array{remote: string, repo: string|null, branch: string|null, head: array<string, mixed>|null, mirror: array{state: 'missing'|'current'|'behind'|'diverged'|'unknown', sha: string|null, ahead: int|null, behind: int|null, reason: string|null}, stable: array{state: 'contained'|'behind'|'unknown', missing: int|null, fork_own: int|null, reason: string|null}, error: string|null, error_detail: string|null}|null}>
      */
     public function status(bool $useRemoteCache = true, bool $includeRemote = true): array
     {
@@ -126,14 +126,23 @@ class SoftwareSourceRepository
     }
 
     /**
-     * Read-only framework-upstream visibility for the platform source (#344).
+     * Read-only visibility of the release flow's two transitions (#374, was #344):
      *
-     * A fork-based deployment carries the framework as a second remote; matching
-     * `origin` alone then says nothing about the framework. Resolve the upstream
-     * head (anonymously — public upstreams need no token) and state the fork's
-     * relationship to it from git ancestry, never from dates or SHA inequality.
-     * No upstream remote is a normal state: the entry stays null and the page
-     * renders exactly as before.
+     *   upstream/<branch>  ->  origin/<branch> mirror  ->  origin/master stable
+     *
+     * Relationship 1 (mirror): the mirror branch on origin relative to the
+     * upstream head — missing / current / behind (fast-forwardable, count) /
+     * diverged (both counts) / unknown with a reason.
+     * Relationship 2 (stable): origin/master relative to the mirror —
+     * contained (no RC needed) / behind (mirror commits stable lacks, the
+     * "updates available" count; the fork's own commits are reported as info,
+     * since a fork's stable normally carries some) / unknown with a reason.
+     *
+     * Remote branch heads are the source of truth throughout — never local
+     * main, never the installed checkout's HEAD. Ancestry and counts come from
+     * the local object database and degrade to a stated unknown when objects
+     * were never fetched. No upstream remote is a normal state: the entry
+     * stays null and the page renders exactly as before.
      *
      * @param  array<string, array<string, mixed>>  $entries
      * @param  array<string, string>  $absolutePaths
@@ -158,48 +167,128 @@ class SoftwareSourceRepository
             'repo' => $identity['repo'],
             'branch' => $branch,
             'head' => $head,
-            'relationship' => null,
-            'ahead' => null,
-            'behind' => null,
-            'reason' => null,
+            'mirror' => ['state' => 'unknown', 'sha' => null, 'ahead' => null, 'behind' => null, 'reason' => null],
+            'stable' => ['state' => 'unknown', 'missing' => null, 'fork_own' => null, 'reason' => null],
             'error' => $error,
             'error_detail' => $detail,
         ];
 
-        if ($head !== null) {
-            // The fork head only — never the installed HEAD. `latest` (origin) and
-            // `current` (local checkout) are distinct roles in #344's model, and the
-            // UI labels every relationship statement "fork". On the deployment this
-            // feature targets, origin can be unreadable (lapsed credentials, #300)
-            // while local commits sit unpushed, so substituting `current` would
-            // silently report the installed checkout's relationship as the fork's.
-            $forkSha = $entries['platform']['latest']['sha'] ?? null;
+        $repo = new GitRepository($path);
+        $upstreamSha = $head['sha'] ?? null;
 
-            if ($forkSha === null) {
-                $upstream['reason'] = (string) __('The fork head could not be read from origin, so the fork-to-upstream relationship is unknown.');
+        [$mirrorState, $mirrorSha, $mirrorDetail] = $branch !== null
+            ? $this->mirrorHead($path, $identity, $branch, $useRemoteCache)
+            : ['unknown', null, null];
+
+        // Relationship 1: origin/<branch> mirror vs upstream/<branch>.
+        if ($mirrorState === 'error') {
+            $upstream['mirror']['reason'] = (string) __('Could not determine whether the mirror branch exists on origin.');
+            $upstream['error_detail'] = $upstream['error_detail'] ?? $mirrorDetail;
+        } elseif ($mirrorState === 'absent') {
+            // Explicitly a state, not an error: the mirror has simply never
+            // been created (#374 acceptance).
+            $upstream['mirror']['state'] = 'missing';
+        } elseif ($upstreamSha === null) {
+            $upstream['mirror']['sha'] = $mirrorSha;
+            $upstream['mirror']['reason'] = (string) __('The upstream head could not be read, so the mirror cannot be compared.');
+        } else {
+            $upstream['mirror']['sha'] = $mirrorSha;
+
+            if ($mirrorSha === $upstreamSha) {
+                $upstream['mirror']['state'] = 'current';
+                $upstream['mirror']['ahead'] = 0;
+                $upstream['mirror']['behind'] = 0;
             } else {
-                // base = upstream head, tip = fork head: `behind` counts commits only
-                // upstream has, `ahead` commits only the fork has. Contained means the
-                // fork already carries every upstream commit; a fork with nothing of
-                // its own that lacks upstream commits can fast-forward; both sides
-                // holding unique commits is a divergence only a human reconciles.
-                $counts = (new GitRepository($path))->aheadBehindBetween((string) $head['sha'], $forkSha);
+                // base = upstream head, tip = mirror: `behind` counts commits
+                // only upstream has (what a fast-forward would bring), `ahead`
+                // commits only the mirror has (a broken mirror — someone
+                // committed to it directly).
+                $counts = $repo->aheadBehindBetween($upstreamSha, $mirrorSha);
 
-                if ($counts !== null) {
-                    $upstream['ahead'] = $counts['ahead'];
-                    $upstream['behind'] = $counts['behind'];
-                    $upstream['relationship'] = match (true) {
-                        $counts['behind'] === 0 => 'contained',
-                        $counts['ahead'] === 0 => 'fast_forwardable',
-                        default => 'divergent',
-                    };
+                if ($counts === null) {
+                    $upstream['mirror']['reason'] = (string) __('Commits are not in this checkout yet — fetch :remote to compare histories.', ['remote' => $identity['remote']]);
                 } else {
-                    $upstream['reason'] = (string) __('Upstream commits are not in this checkout yet — fetch :remote to compare histories.', ['remote' => $identity['remote']]);
+                    $upstream['mirror']['ahead'] = $counts['ahead'];
+                    $upstream['mirror']['behind'] = $counts['behind'];
+                    $upstream['mirror']['state'] = $counts['ahead'] === 0 ? 'behind' : 'diverged';
                 }
             }
         }
 
+        // Relationship 2: origin/master stable vs the mirror. The stable head
+        // is the live origin head the existing pipeline already fetched
+        // (`latest`) — never the installed checkout's HEAD (#344's lesson).
+        $stableSha = $entries['platform']['latest']['sha'] ?? null;
+
+        if ($mirrorState === 'absent') {
+            $upstream['stable']['reason'] = (string) __('No mirror branch exists yet — refresh the mirror to create it, then compare.');
+        } elseif ($mirrorSha === null) {
+            $upstream['stable']['reason'] = (string) __('The mirror head is unavailable, so the stable branch cannot be compared.');
+        } elseif ($stableSha === null) {
+            $upstream['stable']['reason'] = (string) __('The stable head could not be read from origin, so the stable-to-mirror relationship is unknown.');
+        } elseif ($mirrorSha === $stableSha) {
+            $upstream['stable']['state'] = 'contained';
+            $upstream['stable']['missing'] = 0;
+            $upstream['stable']['fork_own'] = 0;
+        } else {
+            // base = mirror, tip = stable: `behind` counts mirror commits the
+            // stable branch lacks — the "updates available" number the RC cut
+            // would integrate — and `ahead` the fork's own commits, which are
+            // normal for a fork and reported as information, not divergence.
+            $counts = $repo->aheadBehindBetween($mirrorSha, $stableSha);
+
+            if ($counts === null) {
+                $upstream['stable']['reason'] = (string) __('Commits are not in this checkout yet — fetch origin to compare histories.');
+            } else {
+                $upstream['stable']['missing'] = $counts['behind'];
+                $upstream['stable']['fork_own'] = $counts['ahead'];
+                $upstream['stable']['state'] = $counts['behind'] === 0 ? 'contained' : 'behind';
+            }
+        }
+
         $entries['platform']['upstream'] = $upstream;
+    }
+
+    /**
+     * The mirror branch's head on origin, tri-state and cached: 'present' with
+     * the SHA, 'absent' (exit 2 — a normal state, the mirror was never
+     * created), or 'error' (a failed lookup is not a fact about the
+     * repository, #356).
+     *
+     * @param  array{remote: string, branch: string|null, repo: string|null, url: string}  $identity
+     * @return array{0: 'present'|'absent'|'error', 1: string|null, 2: string|null} [state, sha, detail]
+     */
+    private function mirrorHead(string $path, array $identity, string $branch, bool $useRemoteCache): array
+    {
+        $cacheKey = 'software.source.mirror.'.hash('sha256', strtolower($identity['url']).'|'.$branch);
+        $cached = $useRemoteCache
+            ? ($this->upstreamRuntimeCache[$cacheKey] ?? Cache::get($cacheKey))
+            : null;
+
+        if (is_array($cached)) {
+            return [$cached[0], $cached[1], $cached[2]];
+        }
+
+        $result = (new GitRepository($path))->lsRemoteHead($branch);
+
+        if ($result->ok) {
+            $sha = (string) strtok($result->output, " \t");
+            $tuple = preg_match('/^[a-f0-9]{40}$/i', $sha) === 1
+                ? ['present', $sha, null]
+                : ['error', null, $result->output];
+        } elseif ($result->exitCode === 2) {
+            $tuple = ['absent', null, null];
+        } else {
+            $tuple = ['error', null, $result->message()];
+        }
+
+        if ($useRemoteCache) {
+            $ttl = $tuple[0] !== 'error' ? self::REMOTE_STATUS_CACHE_SECONDS : self::REMOTE_STATUS_FAILURE_CACHE_SECONDS;
+            $this->upstreamRuntimeCache[$cacheKey] = $tuple;
+            Cache::put($cacheKey, $tuple, $ttl);
+        }
+
+        return [$tuple[0], $tuple[1], $tuple[2]];
     }
 
     /**

@@ -39,6 +39,7 @@ function fakeSyncGateUpstreamGit(): void
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
             ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
             ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".SYNC_GATE_UPSTREAM_SHA."\tHEAD"),
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => Process::result(SYNC_GATE_UPSTREAM_SHA."\trefs/heads/main"),
             ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## master...origin/master'),
             ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('master'),
             ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(SYNC_GATE_LOCAL_SHA."\x1f".now()->toIso8601String()."\x1fCI\x1fCurrent"),
@@ -136,8 +137,8 @@ test('a closed gate is an explanation on the page, and read-only visibility is u
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        // #344's visibility renders regardless of the gate.
-        ->assertSee('Upstream contained')
+        // #344/#374 visibility renders regardless of the gate.
+        ->assertSee('Current with the framework')
         // The gate's state is stated, not hidden.
         ->assertSee('unavailable on a production deployment');
 });
