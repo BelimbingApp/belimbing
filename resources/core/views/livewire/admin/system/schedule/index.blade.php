@@ -129,7 +129,7 @@ $tabs = [
                                                             icon="heroicon-o-play"
                                                             :label="__('Run :task now', ['task' => $item->name])"
                                                             :title="__('Run now')"
-                                                            wire:click="runNow(@js($item->key))"
+                                                            :wire:click="'runNow('.\Illuminate\Support\Js::from($item->key).')'"
                                                             wire:loading.attr="disabled"
                                                             wire:target="runNow"
                                                         />
@@ -141,7 +141,7 @@ $tabs = [
                                                                 icon="heroicon-o-arrow-path"
                                                                 :label="__('Resume :task', ['task' => $item->name])"
                                                                 :title="__('Resume')"
-                                                                wire:click="resume(@js($item->key))"
+                                                                :wire:click="'resume('.\Illuminate\Support\Js::from($item->key).')'"
                                                                 wire:loading.attr="disabled"
                                                                 wire:target="resume"
                                                             />
@@ -150,7 +150,7 @@ $tabs = [
                                                                 icon="heroicon-o-pause"
                                                                 :label="__('Pause :task', ['task' => $item->name])"
                                                                 :title="__('Pause')"
-                                                                wire:click="pause(@js($item->key), @js($item->name))"
+                                                                :wire:click="'pause('.\Illuminate\Support\Js::from($item->key).', '.\Illuminate\Support\Js::from($item->name).')'"
                                                                 wire:loading.attr="disabled"
                                                                 wire:target="pause"
                                                             />

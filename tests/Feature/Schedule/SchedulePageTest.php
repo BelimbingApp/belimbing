@@ -2,6 +2,8 @@
 
 use App\Base\Schedule\Contracts\ScheduleContributor;
 use App\Base\Schedule\DTO\RecordedRun;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\Jobs\RunScheduledTaskJob;
 use App\Base\Schedule\Livewire\Index;
@@ -23,9 +25,11 @@ use Illuminate\Console\Events\ScheduledTaskSkipped;
 use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Symfony\Component\Console\Input\ArgvInput;
 use Symfony\Component\Console\Output\NullOutput;
@@ -160,9 +164,13 @@ test('the board merges scheduler events with tagged contributors, soonest first'
             return [new ScheduleTask('ai-agent', 'ai-agent:weekly-digest', SCHEDULE_DIGEST_NAME, '0 9 * * 1', now()->addMinute(), 'succeeded')];
         }
 
-        public function recentRuns(int $limit): array
+        public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
         {
-            return [new RecordedRun('ai-agent', SCHEDULE_DIGEST_NAME, 'succeeded', now()->subHour(), now()->subHour()->addMinutes(2), 'ok')];
+            return new ScheduleHistoryPage(
+                [new RecordedRun('ai-agent', SCHEDULE_DIGEST_NAME, 'succeeded', now()->subHour(), now()->subHour()->addMinutes(2), 'ok')],
+                1,
+                true,
+            );
         }
     };
     app()->instance('schedule-test-contributor', $contributor);
@@ -178,7 +186,9 @@ test('the board merges scheduler events with tagged contributors, soonest first'
     expect(collect($tasks)->pluck('name'))->toContain(SCHEDULE_DIGEST_NAME)
         ->and($times->values()->all())->toBe($times->sort()->values()->all()); // soonest first
 
-    expect(collect($board->recentRuns())->pluck('name'))->toContain(SCHEDULE_DIGEST_NAME);
+    $query = new ScheduleHistoryQuery(now()->subDays(30), now(), 'all', '', 'started_at', 'desc');
+
+    expect(collect($board->history($query, 25, 1)->items)->pluck('name'))->toContain(SCHEDULE_DIGEST_NAME);
 });
 
 test('the board accepts scheduler timezone objects', function (): void {
@@ -314,9 +324,9 @@ test('schedule tasks can be searched filtered sorted and explained', function ()
             ];
         }
 
-        public function recentRuns(int $limit): array
+        public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
         {
-            return [];
+            return new ScheduleHistoryPage([], 0, false);
         }
     };
 
@@ -448,7 +458,10 @@ test('schedule page labels cancelled contributor runs honestly', function (): vo
         'finished_at' => $finishedAt,
     ]);
 
-    $run = collect(app(ScheduleDefinitionContributor::class)->recentRuns(50))
+    $run = collect(app(ScheduleDefinitionContributor::class)->history(
+        new ScheduleHistoryQuery(now()->subDays(30), now(), 'all', '', 'started_at', 'desc'),
+        50,
+    )->items)
         ->firstWhere('name', 'Agent digest');
 
     expect($run)->not->toBeNull()
@@ -463,6 +476,218 @@ test('schedule page labels cancelled contributor runs honestly', function (): vo
         ->assertOk()
         ->assertSee('Cancelled')
         ->assertSee(SCHEDULE_TEST_CANCELLED_DETAIL);
+});
+
+test('AI contributor filters and limits its database projection without materializing retained dispatches', function (): void {
+    $now = now()->startOfSecond();
+
+    foreach (range(1, 600) as $index) {
+        OperationDispatch::query()->create([
+            'id' => 'op_schedule_noisy_'.$index,
+            'operation_type' => OperationType::ScheduledTask,
+            'task' => 'Noisy schedule payload '.$index,
+            'status' => OperationStatus::Succeeded,
+            'meta' => ['schedule_description' => 'Noisy schedule '.$index],
+            'started_at' => $now->copy()->subSeconds($index),
+            'finished_at' => $now->copy()->subSeconds($index)->addSecond(),
+        ]);
+    }
+
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_needle',
+        'operation_type' => OperationType::HeadlessTask,
+        'task' => 'Needle payload',
+        'status' => OperationStatus::Failed,
+        'meta' => ['schedule_description' => 'Needle schedule'],
+        'started_at' => $now->copy()->subDays(2),
+        'finished_at' => $now->copy()->subDays(2)->addMinute(),
+    ]);
+
+    $queries = [];
+    DB::listen(function (QueryExecuted $event) use (&$queries): void {
+        if (str_contains($event->sql, 'ai_operation_dispatches')) {
+            $queries[] = strtolower($event->sql);
+        }
+    });
+
+    $history = app(ScheduleDefinitionContributor::class)->history(
+        new ScheduleHistoryQuery(now()->subDays(30), now(), 'all', 'needle', 'name', 'asc'),
+        1,
+    );
+
+    $projection = collect($queries)->first(fn (string $sql): bool => str_contains($sql, 'schedule_history_name'));
+
+    expect($history->total)->toBe(1)
+        ->and(collect($history->items)->pluck('name')->all())->toBe(['Needle schedule'])
+        ->and($projection)->not->toBeNull()
+        ->and($projection)->toContain('lower(coalesce')
+        ->and($projection)->toMatch('/limit\\s+(?:\\?|1)/');
+});
+
+test('AI contributor selects JSON grammar from its active connection driver', function (): void {
+    $connection = 'schedule-history-postgres';
+    $original = config('database.connections.'.$connection);
+    config()->set('database.connections.'.$connection, [
+        'driver' => 'pgsql',
+        'host' => '127.0.0.1',
+        'port' => 5432,
+        'database' => 'schedule_history_test',
+        'username' => 'testing',
+        'password' => '',
+        'charset' => 'utf8',
+        'prefix' => '',
+        'prefix_indexes' => true,
+        'schema' => 'public',
+        'sslmode' => 'prefer',
+    ]);
+
+    try {
+        $contributor = app(ScheduleDefinitionContributor::class);
+        $nameExpression = new ReflectionMethod($contributor, 'historyNameExpression');
+        $sourceExpression = new ReflectionMethod($contributor, 'historySourceExpression');
+        $driver = OperationDispatch::on($connection)->getQuery()->getConnection()->getDriverName();
+
+        expect($driver)->toBe('pgsql')
+            ->and($nameExpression->invoke($contributor, $driver))->toContain("meta->>'source_key'")
+            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'");
+    } finally {
+        DB::purge($connection);
+        config()->set('database.connections.'.$connection, $original);
+    }
+});
+
+test('AI contributor searches metadata names with literal LIKE metacharacters', function (): void {
+    $now = now()->startOfSecond();
+
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_literal_like',
+        'operation_type' => OperationType::ScheduledTask,
+        'task' => 'Literal search payload',
+        'status' => OperationStatus::Succeeded,
+        'meta' => ['schedule_description' => 'Report 100%_complete \\ archive'],
+        'started_at' => $now->subMinute(),
+        'finished_at' => $now,
+    ]);
+    OperationDispatch::query()->create([
+        'id' => 'op_schedule_like_near_match',
+        'operation_type' => OperationType::ScheduledTask,
+        'task' => 'Near match payload',
+        'status' => OperationStatus::Succeeded,
+        'meta' => ['schedule_description' => 'Report 100xxcomplete x archive'],
+        'started_at' => $now->subMinutes(2),
+        'finished_at' => $now->subMinute(),
+    ]);
+
+    $history = app(ScheduleDefinitionContributor::class)->history(
+        new ScheduleHistoryQuery(now()->subDay(), now(), 'all', 'report 100%_complete \\ archive', 'started_at', 'desc'),
+        25,
+    );
+
+    expect($history->total)->toBe(1)
+        ->and(collect($history->items)->pluck('name')->all())->toBe(['Report 100%_complete \\ archive']);
+});
+
+test('history filters apply before truncation so an old failure stays discoverable under high-frequency successes', function (): void {
+    $now = now()->startOfSecond();
+
+    // 600 recent successful runs would consume the old fixed 500-row slice.
+    foreach (range(1, 600) as $index) {
+        ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'key' => 'high-frequency-'.$index,
+            'name' => 'high frequency task',
+            'status' => 'succeeded',
+            'started_at' => $now->copy()->subSeconds($index),
+            'finished_at' => $now->copy()->subSeconds($index)->addSeconds(1),
+        ]);
+    }
+
+    // One older failure inside the selected period, outside the newest 500.
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => 'daily-task',
+        'name' => 'daily business task',
+        'status' => 'failed',
+        'started_at' => $now->copy()->subDays(2),
+        'finished_at' => $now->copy()->subDays(2)->addMinutes(2),
+    ]);
+
+    $this->actingAs(createAdminUser());
+
+    Livewire\Livewire::test(Index::class)
+        ->set('historyStatus', 'failed')
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => $runs->total() === 1
+            && collect($runs->items())->pluck('name')->values()->all() === ['daily business task'])
+        ->set('historyStatus', 'all')
+        ->set('historySearch', 'daily business')
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => $runs->total() === 1
+            && collect($runs->items())->pluck('name')->values()->all() === ['daily business task']);
+});
+
+test('history empty state distinguishes no recorded runs from no matching runs', function (): void {
+    $this->actingAs(createAdminUser());
+
+    Livewire\Livewire::test(Index::class)
+        ->assertViewHas('historyEmptyMessage', __('No runs recorded yet.'));
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'key' => 'only-task',
+        'name' => 'only task',
+        'status' => 'succeeded',
+        'started_at' => now()->subHour(),
+        'finished_at' => now()->subHour()->addSeconds(5),
+    ]);
+
+    Livewire\Livewire::test(Index::class)
+        ->set('historySearch', 'no such task')
+        ->assertViewHas('historyEmptyMessage', __('No runs match the current filters.'));
+});
+
+test('scheduler and contributor histories merge without starving each other before filtering', function (): void {
+    $now = now()->startOfSecond();
+
+    foreach (range(1, 3) as $index) {
+        ScheduleRun::query()->create([
+            'source' => 'scheduler',
+            'key' => 'scheduler-'.$index,
+            'name' => 'scheduler task '.$index,
+            'status' => 'succeeded',
+            'started_at' => $now->copy()->subMinutes($index),
+            'finished_at' => $now->copy()->subMinutes($index)->addSeconds(1),
+        ]);
+    }
+
+    $contributor = new class implements ScheduleContributor
+    {
+        public function tasks(): array
+        {
+            return [];
+        }
+
+        public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
+        {
+            return new ScheduleHistoryPage(
+                [
+                    new RecordedRun('ai-agent', 'contributor task', 'failed', now()->subMinutes(2), now()->subMinutes(2)->addSeconds(3), 'boom'),
+                ],
+                1,
+                true,
+            );
+        }
+    };
+    app()->instance('schedule-merge-contributor', $contributor);
+    app()->tag(['schedule-merge-contributor'], 'schedule.contributors');
+
+    $this->actingAs(createAdminUser());
+
+    Livewire\Livewire::test(Index::class)
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => $runs->total() === 4
+            && collect($runs->items())->pluck('name')->contains('contributor task')
+            && collect($runs->items())->pluck('name')->contains('scheduler task 1'))
+        ->set('historyStatus', 'failed')
+        ->assertViewHas('runs', fn (LengthAwarePaginator $runs): bool => $runs->total() === 1
+            && collect($runs->items())->pluck('name')->values()->all() === ['contributor task']);
 });
 
 test('old schedule urls are not kept as compatibility routes', function (): void {
