@@ -228,7 +228,7 @@ class OrientReachabilityFilterTest(unittest.TestCase):
     def run_filter(self, prs):
         return subprocess.run(
             ["jq", "-r", self.extract_filter()],
-            input=json.dumps(prs), text=True, capture_output=True, check=True,
+            input=json.dumps(prs), text=True, encoding="utf-8", capture_output=True, check=True,
         ).stdout
 
     def test_channel_read_from_the_claim_body_with_last_seen(self):
@@ -307,7 +307,7 @@ class OrientHoldHolderFilterTest(unittest.TestCase):
     def run_filter(self, reviews):
         return subprocess.run(
             ["jq", "-r", self.extract_filter()],
-            input=json.dumps(reviews), text=True, capture_output=True, check=True,
+            input=json.dumps(reviews), text=True, encoding="utf-8", capture_output=True, check=True,
         ).stdout
 
     def test_latest_changes_required_agents_extracted_like_356(self):
@@ -349,7 +349,7 @@ class OrientNamedHoldLabelFilterTest(unittest.TestCase):
     def run_filter(self, prs):
         return subprocess.run(
             ["jq", "-r", self.extract_filter()],
-            input=json.dumps(prs), text=True, capture_output=True, check=True,
+            input=json.dumps(prs), text=True, encoding="utf-8", capture_output=True, check=True,
         ).stdout
 
     def test_named_holder_extracted_directly_from_the_label(self):
@@ -429,6 +429,7 @@ class OrientUnqueuedFilterTest(unittest.TestCase):
             ["jq", "-r", self.extract_filter()],
             input=json.dumps(issues),
             text=True,
+            encoding="utf-8",
             capture_output=True,
             check=True,
         ).stdout
