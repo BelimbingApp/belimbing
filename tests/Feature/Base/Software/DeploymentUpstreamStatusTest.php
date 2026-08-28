@@ -1,5 +1,6 @@
 <?php
 
+use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Software\Livewire\Deployment\Index;
 use App\Base\Software\Services\SoftwareSourceRepository;
 use Illuminate\Support\Facades\Cache;
@@ -243,6 +244,66 @@ test('a stable head equal to the mirror is contained without a rev-list call', f
 
     expect($upstream['stable']['state'])->toBe('contained')
         ->and($upstream['stable']['missing'])->toBe(0);
+});
+
+test('the stable comparison is pinned to origin/master even when the checkout sits on another branch', function (): void {
+    // sol's P1 #1 on #395: the branch identity must be fixed, not read from
+    // the local checkout. A deployment parked on a feature branch must still
+    // compare origin/master to the mirror — never origin/<feature>.
+    $featureSha = 'feedfacefeedfacefeedfacefeedfacefeedface';
+
+    Process::fake(function ($process) use ($featureSha) {
+        return match (gitCommandWithoutConfig($process->command)) {
+            ['git', 'remote'] => Process::result("origin\nupstream"),
+            ['git', 'config', '--get', 'belimbing.upstream-remote'],
+            ['git', 'config', '--get', 'belimbing.upstream-branch'] => Process::result('', exitCode: 1),
+            ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
+            ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
+            // The checkout is parked on a feature branch.
+            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## feature-x...origin/feature-x'),
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('feature-x'),
+            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($featureSha."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
+            // The latest pipeline follows the local branch — a decoy here.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/feature-x'] => Process::result($featureSha."\trefs/heads/feature-x"),
+            // The stable comparison must ask for master regardless.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => Process::result(UPSTREAM_HEAD_SHA."\trefs/heads/main"),
+            ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD"),
+            ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', UPSTREAM_HEAD_SHA] => Process::result(UPSTREAM_HEAD_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
+            // stable(master) vs mirror: 3 updates available; the feature-branch
+            // comparison would have asked for a different pair entirely.
+            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.UPSTREAM_LOCAL_SHA] => Process::result("3\t9"),
+            default => Process::result(),
+        };
+    });
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('current')
+        ->and($upstream['stable']['state'])->toBe('behind')
+        ->and($upstream['stable']['missing'])->toBe(3)
+        ->and($upstream['stable']['fork_own'])->toBe(9);
+
+    Process::assertRan(fn ($process): bool => gitCommandWithoutConfig($process->command) === ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master']);
+});
+
+test('origin lookups authenticate with the origin owner token so private forks resolve', function (): void {
+    // sol's P1 #2 on #395: the mirror and stable probes go to origin, and a
+    // private deployment fork must not read as Unknown because they went out
+    // anonymously. The auth travels in env, never argv.
+    app(SettingsService::class)->set('integrations.github.token.operator', 'ghp_upstream_status_token_000000000000');
+    fakeUpstreamGit(mirror: 'current', stableCounts: [0, 0]);
+
+    platformUpstream();
+
+    Process::assertRan(function ($process): bool {
+        if (gitCommandWithoutConfig($process->command) !== ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main']) {
+            return false;
+        }
+        $environment = $process->environment ?? [];
+
+        return ($environment['GIT_CONFIG_VALUE_0'] ?? '') === 'Authorization: Basic '.base64_encode('x-access-token:ghp_upstream_status_token_000000000000');
+    });
 });
 
 // ---- configuration and page rendering ----
