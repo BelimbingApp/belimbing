@@ -237,6 +237,49 @@ class OrientReachabilityFilterTest(unittest.TestCase):
         self.assertIn("#374 [agent:sol] reachable: board (assumed — no roster line)", out)
         self.assertNotIn("#375", out)
 
+    def test_appended_reachable_line_overrides_the_first_one(self):
+        # #390: `capture(...)` returns only the first match, so an agent that
+        # moves between sessions and appends `**Reachable:** session new`
+        # rather than rewriting the body silently keeps the stale channel.
+        # The shipped filter must take the LAST **Reachable:** line, because
+        # that is how a person reading the thread top-to-bottom would update
+        # their belief about where the owner is reachable.
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**From:** fable\n\n**Reachable:** session old\n\nsome text\n\n**Reachable:** session new",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: session new", out)
+        self.assertNotIn("session old", out)
+
+    def test_last_reachable_wins_even_when_first_is_more_recent_in_text_order(self):
+        # Same shape as above with three updates, to prove LAST, not
+        # LAST-OF-TWO, and not "the unique line after a fence".
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**Reachable:** session one\n\n**Reachable:** session two\n\n**Reachable:** session three",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: session three", out)
+        self.assertNotIn("session one", out)
+        self.assertNotIn("session two", out)
+
+    def test_no_reachable_line_still_falls_back_to_board_assumed(self):
+        # Regression guard: when the body has no `**Reachable:**` marker at
+        # all, the LAST-wins change must not break the existing fallback.
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**From:** fable\n\nno roster line, just prose",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: board (assumed — no roster line)", out)
+
 
 class OrientHoldHolderFilterTest(unittest.TestCase):
     """#373's P1: the unreachable agent in the incident was the HOLD owner,
