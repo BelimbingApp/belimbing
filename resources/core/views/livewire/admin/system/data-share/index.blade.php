@@ -1,10 +1,11 @@
 <?php
 
 use App\Base\Database\Livewire\DataShare\Index;
+use App\Base\Database\Models\DataShareTransferOffer;
 use App\Base\Database\Services\DataShare\DataShareTransferOfferManager;
+use App\Base\Locale\Contracts\NumberDisplayService;
 
 /** @var Index $this */
-
 $badgeVariant = static fn (string $status): string => match ($status) {
     'applied', 'ready', 'verified', 'published' => 'success',
     'conflicts', 'expired', 'revoked', 'exhausted' => 'warning',
@@ -13,16 +14,16 @@ $badgeVariant = static fn (string $status): string => match ($status) {
 };
 $shortHash = static fn (?string $hash): string => $hash === null ? '—' : substr($hash, 0, 12).'…';
 $formatBytes = static fn (int $bytes): string => match (true) {
-    $bytes >= 1_048_576 => app(\App\Base\Locale\Contracts\NumberDisplayService::class)->format($bytes / 1_048_576, 1, 1).' MB',
-    $bytes >= 1024 => app(\App\Base\Locale\Contracts\NumberDisplayService::class)->format($bytes / 1024, 1, 1).' KB',
-    default => app(\App\Base\Locale\Contracts\NumberDisplayService::class)->formatInteger($bytes).' B',
+    $bytes >= 1_048_576 => app(NumberDisplayService::class)->format($bytes / 1_048_576, 1, 1).' MB',
+    $bytes >= 1024 => app(NumberDisplayService::class)->format($bytes / 1024, 1, 1).' KB',
+    default => app(NumberDisplayService::class)->formatInteger($bytes).' B',
 };
 $selectedScope = collect($scopes)->firstWhere('name', $scopeName);
 $scopeOptions = collect($scopes)->map(fn (array $scope): array => [
     'value' => $scope['name'],
     'label' => "{$scope['label']} · {$scope['module_path']}",
 ])->values()->all();
-$offerMorphType = (new \App\Base\Database\Models\DataShareTransferOffer)->getMorphClass();
+$offerMorphType = (new DataShareTransferOffer)->getMorphClass();
 $dataShareTabs = [
     ['id' => 'share', 'label' => __('Share'), 'icon' => 'heroicon-o-share'],
     ['id' => 'published', 'label' => __('Published'), 'icon' => 'heroicon-o-link'],
@@ -307,7 +308,7 @@ if ($instance->role->value === 'development') {
                                 <div class="mt-3">
                                     <x-ui.textarea id="data-share-published-offer" rows="7" readonly>{{ $publishedOfferBundle }}</x-ui.textarea>
                                 </div>
-                                <div class="mt-3" x-data="{ copyState: 'idle', copyTimer: null }">
+                                <div class="mt-3" x-data="{ copyState: 'idle', copyTimer: null, offerBundle: @js($publishedOfferBundle) }">
                                     <x-ui.button
                                         variant="control"
                                         size="sm"
@@ -316,7 +317,7 @@ if ($instance->role->value === 'development') {
                                             copyState = 'copying';
                                             (async () => {
                                                 try {
-                                                    await navigator.clipboard.writeText(@js($publishedOfferBundle));
+                                                    await navigator.clipboard.writeText(offerBundle);
                                                     copyState = 'copied';
                                                     copyTimer = setTimeout(() => copyState = 'idle', 1600);
                                                 } catch (error) {
@@ -620,7 +621,7 @@ if ($instance->role->value === 'development') {
                                         <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm tabular-nums text-muted"><x-ui.datetime :value="$package['created_at']" /></td>
                                         @if($canDelete)
                                             <td class="px-table-cell-x py-table-cell-y text-right">
-                                                <x-ui.button variant="ghost" size="sm" wire:click="deletePackage(@js($package['path']))" wire:confirm="{{ __('Delete this diagnostic package?') }}">
+                                                <x-ui.button variant="ghost" size="sm" :wire:click="'deletePackage('.\Illuminate\Support\Js::from($package['path']).')'" wire:confirm="{{ __('Delete this diagnostic package?') }}">
                                                     <x-icon name="heroicon-o-trash" class="h-4 w-4" />
                                                     {{ __('Delete') }}
                                                 </x-ui.button>
