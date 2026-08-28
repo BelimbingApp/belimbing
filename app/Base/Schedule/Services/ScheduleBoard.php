@@ -4,6 +4,8 @@ namespace App\Base\Schedule\Services;
 
 use App\Base\Schedule\Contracts\ScheduleContributor;
 use App\Base\Schedule\DTO\RecordedRun;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\Schedule\Models\ScheduleSuppression;
@@ -82,37 +84,130 @@ class ScheduleBoard
     }
 
     /**
-     * @return list<RecordedRun>
+     * One page of merged schedule history. Filters are pushed into each
+     * source's query before any truncation, so a low-frequency failure stays
+     * discoverable even under thousands of newer high-frequency successes.
+     * Each source contributes a newest-first window large enough to cover the
+     * requested page; the merged window is re-sorted and sliced, and the total
+     * is the complete filtered count across sources.
      */
-    public function recentRuns(int $limit = 50): array
+    public function history(ScheduleHistoryQuery $query, int $perPage, int $page): ScheduleHistoryPage
     {
-        $rows = Schema::hasTable('base_schedule_runs')
-            ? ScheduleRun::query()
-                ->orderByDesc('started_at')
-                ->limit($limit)
-                ->get()
-                ->map(fn (ScheduleRun $run): RecordedRun => new RecordedRun(
-                    source: $run->source,
-                    name: $run->name,
-                    status: $run->status,
-                    startedAt: $run->started_at,
-                    finishedAt: $run->finished_at,
-                    detail: $run->output_excerpt,
-                ))
-                ->all()
-            : [];
+        $perPage = max(1, $perPage);
+        $requestedPage = max(1, $page);
+        $window = $perPage * $requestedPage;
+
+        $items = [];
+        $total = 0;
+        $hasHistory = false;
+
+        $scheduler = $this->schedulerHistory($query, $window);
+        $items = [...$items, ...$scheduler->items];
+        $total += $scheduler->total;
+        $hasHistory = $hasHistory || $scheduler->hasHistory;
 
         foreach ($this->contributors() as $contributor) {
             try {
-                $rows = [...$rows, ...$contributor->recentRuns($limit)];
+                $slice = $contributor->history($query, $window);
+                $items = [...$items, ...$slice->items];
+                $total += $slice->total;
+                $hasHistory = $hasHistory || $slice->hasHistory;
             } catch (Throwable $e) {
-                Log::warning('Schedule contributor recentRuns() failed', ['contributor' => $contributor::class, 'error' => $e->getMessage()]);
+                Log::warning('Schedule contributor history() failed', ['contributor' => $contributor::class, 'error' => $e->getMessage()]);
             }
         }
 
-        usort($rows, fn (RecordedRun $a, RecordedRun $b): int => $b->startedAt->timestamp <=> $a->startedAt->timestamp);
+        $items = $this->sortHistoryItems($items, $query->sortColumn, $query->sortDirection);
 
-        return array_slice($rows, 0, $limit);
+        $lastPage = max(1, (int) ceil($total / $perPage));
+        $page = min($requestedPage, $lastPage);
+        $offset = ($page - 1) * $perPage;
+
+        return new ScheduleHistoryPage(array_slice($items, $offset, $perPage), $total, $hasHistory);
+    }
+
+    private function schedulerHistory(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
+    {
+        if (! Schema::hasTable('base_schedule_runs')) {
+            return new ScheduleHistoryPage([], 0, false);
+        }
+
+        $builder = ScheduleRun::query()
+            ->where('started_at', '>=', $query->from)
+            ->where('started_at', '<=', $query->to);
+
+        if ($query->status !== 'all') {
+            $builder->where('status', $query->status);
+        }
+
+        if ($query->search !== '') {
+            $builder->whereRaw('LOWER(name) LIKE ?', ['%'.$query->search.'%']);
+        }
+
+        $total = (clone $builder)->count();
+        $hasHistory = ScheduleRun::query()->exists();
+
+        $sortColumn = in_array($query->sortColumn, ['started_at', 'name', 'source', 'status'], true)
+            ? $query->sortColumn
+            : 'started_at';
+        $direction = $query->sortDirection === 'asc' ? 'asc' : 'desc';
+
+        $builder->orderBy($sortColumn, $direction);
+        if ($sortColumn !== 'started_at') {
+            $builder->orderByDesc('started_at');
+        }
+        $builder->orderByDesc('id');
+
+        $items = $builder
+            ->limit($limit)
+            ->get()
+            ->map(fn (ScheduleRun $run): RecordedRun => new RecordedRun(
+                source: $run->source,
+                name: $run->name,
+                status: $run->status,
+                startedAt: $run->started_at,
+                finishedAt: $run->finished_at,
+                detail: $run->output_excerpt,
+            ))
+            ->all();
+
+        return new ScheduleHistoryPage($items, $total, $hasHistory);
+    }
+
+    /**
+     * @param  list<RecordedRun>  $items
+     * @return list<RecordedRun>
+     */
+    private function sortHistoryItems(array $items, string $column, string $direction): array
+    {
+        usort($items, function (RecordedRun $a, RecordedRun $b) use ($column, $direction): int {
+            $comparison = match ($column) {
+                'name' => strnatcasecmp($a->name, $b->name),
+                'source' => strnatcasecmp($a->source, $b->source),
+                'status' => strnatcasecmp($a->status, $b->status),
+                default => $a->startedAt->timestamp <=> $b->startedAt->timestamp,
+            };
+
+            $comparison = $direction === 'desc' ? -$comparison : $comparison;
+
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+
+            // Deterministic tiebreak, independent of the primary direction:
+            // newest first, then source, then name.
+            $comparison = $b->startedAt->timestamp <=> $a->startedAt->timestamp;
+
+            if ($comparison !== 0) {
+                return $comparison;
+            }
+
+            $comparison = strnatcasecmp($a->source, $b->source);
+
+            return $comparison !== 0 ? $comparison : strnatcasecmp($a->name, $b->name);
+        });
+
+        return $items;
     }
 
     /**
