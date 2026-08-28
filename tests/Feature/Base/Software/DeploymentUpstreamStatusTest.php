@@ -41,15 +41,18 @@ function fakeUpstreamGit(
     ?array $stableCounts = [0, 0],
     ?string $originError = null,
     ?string $upstreamError = null,
+    string $localBranch = 'master',
+    ?string $localSha = null,
 ): void {
     $upstreamBranch = $configuredBranch ?? $defaultBranch;
+    $localSha ??= UPSTREAM_LOCAL_SHA;
     $mirrorSha = match ($mirror) {
         'current' => UPSTREAM_HEAD_SHA,
         'absent', 'fail' => null,
         default => $mirror,
     };
 
-    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch) {
+    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha) {
         $command = gitCommandWithoutConfig($process->command);
 
         $result = match ($command) {
@@ -62,9 +65,13 @@ function fakeUpstreamGit(
                 : Process::result('', exitCode: 1),
             ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
             ['git', 'remote', 'get-url', $remote] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## master...origin/master'),
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('master'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result(UPSTREAM_LOCAL_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
+            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result("## {$localBranch}...origin/{$localBranch}"),
+            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result($localBranch),
+            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($localSha."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
+            // The latest pipeline follows the local branch — a decoy when the
+            // checkout is parked off master. Keyed only for non-master so it
+            // can never shadow the originError-aware master arm below.
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.($localBranch !== 'master' ? $localBranch : chr(0))] => Process::result($localSha."\trefs/heads/{$localBranch}"),
             // Stable head: origin/master, the branch the checkout tracks.
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => $originError !== null
                 ? Process::result(errorOutput: $originError, exitCode: 128)
@@ -249,33 +256,9 @@ test('a stable head equal to the mirror is contained without a rev-list call', f
 test('the stable comparison is pinned to origin/master even when the checkout sits on another branch', function (): void {
     // sol's P1 #1 on #395: the branch identity must be fixed, not read from
     // the local checkout. A deployment parked on a feature branch must still
-    // compare origin/master to the mirror — never origin/<feature>.
-    $featureSha = 'feedfacefeedfacefeedfacefeedfacefeedface';
-
-    Process::fake(function ($process) use ($featureSha) {
-        return match (gitCommandWithoutConfig($process->command)) {
-            ['git', 'remote'] => Process::result("origin\nupstream"),
-            ['git', 'config', '--get', 'belimbing.upstream-remote'],
-            ['git', 'config', '--get', 'belimbing.upstream-branch'] => Process::result('', exitCode: 1),
-            ['git', 'remote', 'get-url', 'origin'] => Process::result('https://github.com/operator/belimbing-fork.git'),
-            ['git', 'remote', 'get-url', 'upstream'] => Process::result('https://github.com/BelimbingApp/belimbing.git'),
-            // The checkout is parked on a feature branch.
-            ['git', 'status', '--porcelain=v1', '--branch'] => Process::result('## feature-x...origin/feature-x'),
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'] => Process::result('feature-x'),
-            ['git', 'log', '-1', '--format=%H%x1f%cI%x1f%an%x1f%s'] => Process::result($featureSha."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-            // The latest pipeline follows the local branch — a decoy here.
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/feature-x'] => Process::result($featureSha."\trefs/heads/feature-x"),
-            // The stable comparison must ask for master regardless.
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/main'] => Process::result(UPSTREAM_HEAD_SHA."\trefs/heads/main"),
-            ['git', 'ls-remote', '--symref', 'upstream', 'HEAD'] => Process::result("ref: refs/heads/main\tHEAD\n".UPSTREAM_HEAD_SHA."\tHEAD"),
-            ['git', 'show', '-s', '--format=%H%x1f%cI%x1f%an%x1f%s', UPSTREAM_HEAD_SHA] => Process::result(UPSTREAM_HEAD_SHA."\x1f".now()->toIso8601String().UPSTREAM_TRAILER),
-            // stable(master) vs mirror: 3 updates available; the feature-branch
-            // comparison would have asked for a different pair entirely.
-            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.UPSTREAM_LOCAL_SHA] => Process::result("3\t9"),
-            default => Process::result(),
-        };
-    });
+    // compare origin/master to the mirror — never origin/<feature>, whose
+    // head the fixture serves as a decoy through the latest pipeline.
+    fakeUpstreamGit(mirror: 'current', stableCounts: [3, 9], localBranch: 'feature-x', localSha: 'feedfacefeedfacefeedfacefeedfacefeedface');
 
     $upstream = platformUpstream();
 
