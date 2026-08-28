@@ -21,7 +21,7 @@ const SYNC_RC_SHA = 'ba5eba11ba5eba11ba5eba11ba5eba11ba5eba11';
 beforeEach(function (): void {
     Cache::flush();
     Http::fake();
-    config()->set('software.deployment_role', 'development');
+    app()->instance('env', 'local');
 });
 
 function syncIncapableUser(): User
@@ -257,11 +257,11 @@ test('the gate stops both actions in production and without the capability, befo
     $admin = createAdminUser();
     $incapable = syncIncapableUser();
 
-    config()->set('software.deployment_role', 'production');
+    app()->instance('env', 'production');
     expect(fn () => $service->refreshMirror($admin))->toThrow(AuthorizationException::class);
     expect(fn () => $service->cutReleaseCandidate($admin))->toThrow(AuthorizationException::class);
 
-    config()->set('software.deployment_role', 'development');
+    app()->instance('env', 'local');
     expect(fn () => $service->refreshMirror($incapable))->toThrow(AuthorizationException::class);
     expect(fn () => $service->cutReleaseCandidate($incapable))->toThrow(AuthorizationException::class);
 
@@ -278,7 +278,7 @@ test('a gate that closes between render and click stops the Livewire action at t
     $component = Livewire::test(Index::class)->call('loadLatestStatus');
 
     // The page rendered with the gate open; it closes before the click lands.
-    config()->set('software.deployment_role', 'production');
+    app()->instance('env', 'production');
 
     $component->call('refreshMirror');
 
