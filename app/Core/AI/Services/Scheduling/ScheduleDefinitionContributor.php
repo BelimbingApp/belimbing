@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\Schema;
  */
 class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHealthContributor
 {
+    private const int HEALTH_RUNS_PER_DEFINITION = 10;
+
     public function tasks(): array
     {
         if (! Schema::hasTable('ai_schedule_definitions')) {
@@ -71,12 +73,12 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             ->where('is_enabled', true)
             ->orderBy('next_due_at')
             ->limit(50);
-        $dispatches = $this->rankedDispatchesBySchedule(10);
+        $dispatches = $this->rankedDispatchesBySchedule();
         $rows = DB::query()
             ->fromSub($definitions->toBase(), 'health_definitions')
             ->leftJoinSub($dispatches->toBase(), 'health_dispatches', function (JoinClause $join): void {
                 $join->on('health_dispatches.schedule_id_value', '=', 'health_definitions.id')
-                    ->where('health_dispatches.dispatch_rank', '<=', 10);
+                    ->where('health_dispatches.dispatch_rank', '<=', self::HEALTH_RUNS_PER_DEFINITION);
             })
             ->select([
                 'health_definitions.id as definition_id',
@@ -361,21 +363,25 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             }
         }
 
-        return $lastAttemptAt === null
-            ? null
-            : new UnhealthyScheduleTask(
-                source: $source,
-                key: $source.':'.$definitionId,
-                name: $sourceKey !== '' ? $sourceKey : $description,
-                lastAttemptAt: $lastAttemptAt,
-                consecutiveFailures: max(1, $consecutiveFailures),
-            );
+        if ($lastAttemptAt === null) {
+            return null;
+        }
+
+        $name = $sourceKey !== '' ? $sourceKey : $description;
+
+        return new UnhealthyScheduleTask(
+            source: $source,
+            key: $source.':'.$definitionId,
+            name: $name,
+            lastAttemptAt: $lastAttemptAt,
+            consecutiveFailures: max(1, $consecutiveFailures),
+        );
     }
 
     /**
      * @return Builder<OperationDispatch>
      */
-    private function rankedDispatchesBySchedule(int $perSchedule): Builder
+    private function rankedDispatchesBySchedule(): Builder
     {
         $query = OperationDispatch::query()
             ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask]);
@@ -383,12 +389,12 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
         $scheduleId = $this->scheduleIdExpression($driver, 'ai_operation_dispatches.meta');
 
         return $query
-            ->whereExists(function (QueryBuilder $definitions) use ($scheduleId): void {
+            ->whereExists(function (QueryBuilder $definitions) use ($driver, $scheduleId): void {
                 $definitions
                     ->selectRaw('1')
                     ->from('ai_schedule_definitions')
                     ->where('is_enabled', true)
-                    ->whereRaw("{$scheduleId} = ai_schedule_definitions.id");
+                    ->whereRaw($this->scheduleIdComparison($driver, $scheduleId));
             })
             ->select([
                 'id',
@@ -398,6 +404,13 @@ class ScheduleDefinitionContributor implements ScheduleContributor, ScheduleHeal
             ])
             ->selectRaw("{$scheduleId} AS schedule_id_value")
             ->selectRaw("ROW_NUMBER() OVER (PARTITION BY {$scheduleId} ORDER BY COALESCE(started_at, created_at) DESC, id DESC) AS dispatch_rank");
+    }
+
+    private function scheduleIdComparison(string $driver, string $scheduleId): string
+    {
+        return $driver === 'pgsql'
+            ? "{$scheduleId} = CAST(ai_schedule_definitions.id AS TEXT)"
+            : "{$scheduleId} = ai_schedule_definitions.id";
     }
 
     private function statusValue(mixed $status): ?string

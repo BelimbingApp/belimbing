@@ -20,6 +20,8 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 
+const SINGLE_SCHEDULE_FAILURE_SUMMARY = '1 scheduled task failing';
+
 beforeEach(function (): void {
     Process::fake();
     ScheduleHealthService::invalidate();
@@ -121,7 +123,7 @@ it('flags a scheduler task whose latest run failed', function (): void {
 
     $this->get(route('admin.system.info.index'))
         ->assertOk()
-        ->assertSee('1 scheduled task failing')
+        ->assertSee(SINGLE_SCHEDULE_FAILURE_SUMMARY)
         ->assertSee('inspire');
 });
 
@@ -245,7 +247,7 @@ it('includes contributor failures without invoking the full board projection', f
 
     $this->get(route('admin.system.info.index'))
         ->assertOk()
-        ->assertSee('1 scheduled task failing')
+        ->assertSee(SINGLE_SCHEDULE_FAILURE_SUMMARY)
         ->assertSee('Contributor failure');
 });
 

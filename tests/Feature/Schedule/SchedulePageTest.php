@@ -545,11 +545,17 @@ test('AI contributor selects JSON grammar from its active connection driver', fu
         $contributor = app(ScheduleDefinitionContributor::class);
         $nameExpression = new ReflectionMethod($contributor, 'historyNameExpression');
         $sourceExpression = new ReflectionMethod($contributor, 'historySourceExpression');
+        $scheduleIdExpression = new ReflectionMethod($contributor, 'scheduleIdExpression');
+        $scheduleIdComparison = new ReflectionMethod($contributor, 'scheduleIdComparison');
         $driver = OperationDispatch::on($connection)->getQuery()->getConnection()->getDriverName();
 
         expect($driver)->toBe('pgsql')
             ->and($nameExpression->invoke($contributor, $driver))->toContain("meta->>'source_key'")
-            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'");
+            ->and($sourceExpression->invoke($contributor, $driver))->toContain("meta->>'source'")
+            ->and($scheduleIdExpression->invoke($contributor, $driver, 'ai_operation_dispatches.meta'))
+            ->toContain("ai_operation_dispatches.meta->>'schedule_id'")
+            ->and($scheduleIdComparison->invoke($contributor, $driver, "ai_operation_dispatches.meta->>'schedule_id'"))
+            ->toBe("ai_operation_dispatches.meta->>'schedule_id' = CAST(ai_schedule_definitions.id AS TEXT)");
     } finally {
         DB::purge($connection);
         config()->set('database.connections.'.$connection, $original);
