@@ -7,6 +7,7 @@ use App\Base\Schedule\DTO\RecordedRun;
 use App\Base\Schedule\DTO\ScheduleHistoryPage;
 use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use Cron\CronExpression;
@@ -47,18 +48,28 @@ class ScheduleBoard
 
         $latestRuns = $this->latestSchedulerRuns(collect($scheduledEvents)->pluck(1)->all());
         $suppressed = $this->suppressedSchedulerKeys();
+        $overrides = $this->schedulerOverrides();
 
         foreach ($scheduledEvents as [$event, $key]) {
             $latestRun = $latestRuns->get($key);
             $timezone = $this->eventTimezone($event);
 
+            // In a web process the runtime hook never fires, so the event still
+            // carries its code-declared expression — which is exactly what the
+            // Default column needs. Effective = override when one exists; the
+            // next run is computed from the effective value in the task's own
+            // declared timezone, because that is what the runtime will honor.
+            $default = (string) $event->expression;
+            $override = $overrides->get($key);
+            $effective = $override?->expression ?? $default;
+
             $rows[] = new ScheduleTask(
                 source: 'scheduler',
                 key: $key,
                 name: $this->recorder->name($event),
-                cron: (string) $event->expression,
-                nextRunAt: CronExpression::isValidExpression((string) $event->expression)
-                    ? Carbon::instance((new CronExpression((string) $event->expression))->getNextRunDate(Carbon::now($timezone), 0, false, $timezone))
+                cron: $effective,
+                nextRunAt: CronExpression::isValidExpression($effective)
+                    ? Carbon::instance((new CronExpression($effective))->getNextRunDate(Carbon::now($timezone), 0, false, $timezone))
                     : null,
                 status: $latestRun?->status,
                 lastRunAt: $latestRun?->started_at,
@@ -67,6 +78,10 @@ class ScheduleBoard
                 paused: $suppressed->has($key),
                 canRun: true,
                 canPause: true,
+                defaultCron: $default,
+                overridden: $override !== null,
+                editable: true,
+                timezone: $timezone,
             );
         }
 
@@ -246,6 +261,21 @@ class ScheduleBoard
             ->pluck('key')
             ->filter()
             ->flip();
+    }
+
+    /**
+     * @return Collection<string, ScheduleOverride>
+     */
+    private function schedulerOverrides(): Collection
+    {
+        if (! Schema::hasTable('base_schedule_overrides')) {
+            return collect();
+        }
+
+        return ScheduleOverride::query()
+            ->where('source', 'scheduler')
+            ->get()
+            ->keyBy('key');
     }
 
     private function resultFor(?ScheduleRun $run): ?string
