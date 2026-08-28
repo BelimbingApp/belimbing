@@ -50,16 +50,20 @@ function fakeSyncGateUpstreamGit(): void
     });
 }
 
-test('synchronization is unavailable in production even for a capable admin', function (): void {
-    app()->instance('env', 'production');
+test('denied application environments fail closed even for a capable admin', function (string $environment): void {
+    app()->instance('env', $environment);
 
     $user = createAdminUser();
     $state = app(UpstreamSyncGate::class)->state($user);
 
     expect($state['available'])->toBeFalse()
-        ->and($state['environment'])->toBe('production')
-        ->and($state['reason'])->toContain('APP_ENV is production');
-});
+        ->and($state['environment'])->toBe($environment)
+        ->and($state['reason'])->toContain("APP_ENV is {$environment}");
+})->with([
+    'production' => 'production',
+    'testing' => 'testing',
+    'unrecognised' => 'dev-box',
+]);
 
 test('an unresolved application environment fails closed with a stated reason', function (): void {
     app()->instance('env', '');
@@ -70,17 +74,6 @@ test('an unresolved application environment fails closed with a stated reason', 
     expect($state['available'])->toBeFalse()
         ->and($state['environment'])->toBeNull()
         ->and($state['reason'])->toContain('APP_ENV is not resolved');
-});
-
-test('an unrecognised application environment fails closed, not open', function (): void {
-    app()->instance('env', 'dev-box');
-
-    $user = createAdminUser();
-    $state = app(UpstreamSyncGate::class)->state($user);
-
-    expect($state['available'])->toBeFalse()
-        ->and($state['environment'])->toBe('dev-box')
-        ->and($state['reason'])->toContain('dev-box');
 });
 
 test('a local environment without the capability is still closed', function (): void {
