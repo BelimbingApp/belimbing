@@ -265,13 +265,7 @@ else
   echo "  (gh unavailable)"
 fi
 
-echo
-echo "== label hygiene — these are invisible to the queries above =="
-gh issue list --repo "$REPO" --state open --label "task:done" --limit 40 \
-  --json number,title --jq '.[]|"  #\(.number) OPEN but labelled task:done — \(.title[0:56])"' 2>/dev/null
-gh issue list --repo "$REPO" --state open --limit 100 --json number,title,labels \
-  --jq '[.[]|select([.labels[].name]|map(select(startswith("task:")))|length > 1)]
-        |.[]|"  #\(.number) carries two task:* labels — \(.title[0:56])"' 2>/dev/null
+"$SCRIPT_DIR/label_hygiene.sh" "$REPO"
 
 echo
 BOARD_REPO="$REPO" "$(dirname "$0")/board.sh" hygiene
