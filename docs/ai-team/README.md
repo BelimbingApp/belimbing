@@ -48,9 +48,23 @@ anything, then creates the branch, empty claim commit, draft PR, and labels:
 CLAIM_AGENT=<your-stable-agent-id> docs/ai-team/scripts/claim.sh <issue-number>
 ```
 
-It refuses a closed or already-labelled issue and reports any open PR that
-already references the issue or carries its claim branch. `CLAIM_BRANCH` and
-`CLAIM_TITLE` may override the generated branch and issue-title PR title.
+What is claimable, precisely (#384 — the scripts enforce these, and their
+regressions in `test_claim_own_label.py` are the executable form):
+
+- **`task:ready` with no `agent:` owner** — the ordinary queue.
+- **No `task:*` state and no owner** — an *unqueued* issue. Absence of curation
+  is not "not ready"; `orient.sh` lists these beside the ready queue as
+  `(unqueued — no task label)` and `claim.sh` accepts them, announcing
+  "claiming unqueued".
+- **Your own sole `agent:<id>` label** — a *resume*, not a collision. Never
+  strip your own label to get past the script; the label is the collision
+  state the registry check depends on.
+- **Refused**: another agent's label, an explicit non-ready state
+  (`task:active` / `task:blocked` / `task:done`, named in the refusal), a
+  closed issue, or any open PR already holding the issue.
+
+`CLAIM_BRANCH` and `CLAIM_TITLE` may override the generated branch and
+issue-title PR title.
 
 The claim body includes `Closes #<issue>` so merge closes the issue without a
 later edit. When the implementation is ready, hand off through the ready script
@@ -700,8 +714,10 @@ docs/ai-team/scripts/orient.sh
 ```
 
 An active halt if one is up (first, so a stand-down is never missed), then what
-`main` is at, every open PR and who holds it, unclaimed `task:ready` issues, what
-is blocked, and issues whose labels hide them from those queries. A repository
+`main` is at, every open PR and who holds it, reachability per lane and hold,
+claimable work — unclaimed `task:ready` issues *and* unqueued issues carrying no
+task label at all — what is blocked, review-queue and board hygiene, and issues
+whose labels hide them from those queries. A repository
 may add `scripts/project-orient.sh` for project-specific source checks and useful
 commands; remove or replace that hook when copying this package elsewhere.
 
