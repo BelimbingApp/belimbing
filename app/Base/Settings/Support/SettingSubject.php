@@ -12,19 +12,44 @@ final class SettingSubject
     /** @return array{name: string, id: string} */
     public static function handle(string $key, ?Scope $scope = null): array
     {
+        return self::handleStored(
+            $key,
+            $scope?->type->value,
+            $scope?->id,
+        );
+    }
+
+    /** @return array{name: string, id: string} */
+    public static function handleStored(
+        string $key,
+        ?string $scopeType,
+        int|string|null $scopeId,
+    ): array {
         return [
             'name' => 'setting',
-            'id' => self::id($key, $scope),
+            'id' => self::storedId($key, $scopeType, $scopeId),
         ];
     }
 
     public static function id(string $key, ?Scope $scope = null): string
     {
-        if ($scope === null) {
+        return self::storedId(
+            $key,
+            $scope?->type->value,
+            $scope?->id,
+        );
+    }
+
+    public static function storedId(
+        string $key,
+        ?string $scopeType,
+        int|string|null $scopeId,
+    ): string {
+        if ($scopeType === null && $scopeId === null) {
             return $key;
         }
 
-        return $key.'@'.$scope->type->value.':'.$scope->id;
+        return $key.'@'.($scopeType ?? '').':'.($scopeId ?? '');
     }
 
     /**

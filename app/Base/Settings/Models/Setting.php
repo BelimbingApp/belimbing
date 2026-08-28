@@ -3,7 +3,6 @@
 namespace App\Base\Settings\Models;
 
 use App\Base\Settings\DTO\Scope;
-use App\Base\Settings\DTO\ScopeType;
 use App\Base\Settings\Support\SettingSubject;
 use Illuminate\Database\Eloquent\Attributes\Scope as ScopeAttribute;
 use Illuminate\Database\Eloquent\Builder;
@@ -105,11 +104,11 @@ class Setting extends Model
      */
     public function getAuditSubject(): ?array
     {
-        $scope = $this->scope_type !== null && $this->scope_id !== null
-            ? new Scope(ScopeType::from($this->scope_type), $this->scope_id)
-            : null;
-
-        return SettingSubject::handle($this->key, $scope);
+        return SettingSubject::handleStored(
+            $this->key,
+            $this->scope_type,
+            $this->scope_id,
+        );
     }
 
     /**
