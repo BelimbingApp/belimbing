@@ -2,6 +2,8 @@
 
 use App\Base\Schedule\Contracts\ScheduleCadenceContributor;
 use App\Base\Schedule\Contracts\ScheduleContributor;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
 use App\Base\Schedule\Livewire\Index;
 use App\Base\Schedule\Models\ScheduleOverride;
@@ -243,6 +245,11 @@ test('a contributor task without the cadence contract stays read-only', function
         {
             return [];
         }
+
+        public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
+        {
+            return new ScheduleHistoryPage(items: [], total: 0, hasHistory: false);
+        }
     };
     app()->tag([$contributor::class], 'schedule.contributors');
     app()->instance($contributor::class, $contributor);
@@ -266,6 +273,11 @@ test('a contributor implementing the cadence contract receives the validated edi
         public function recentRuns(int $limit): array
         {
             return [];
+        }
+
+        public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
+        {
+            return new ScheduleHistoryPage(items: [], total: 0, hasHistory: false);
         }
 
         public function updateCadence(string $key, string $expression): bool
