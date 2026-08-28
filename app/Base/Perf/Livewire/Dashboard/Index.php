@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Perf\Services\PerfLog;
 use App\Base\Perf\Services\PerfRuntimeSettings;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Support\SettingSubject;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -145,6 +146,7 @@ class Index extends Component
             'slowest' => $this->slowestRequests($entries),
             'canManagePerformanceSettings' => $this->canManageSettings(),
             'performanceSettingDefinitions' => $runtimeSettings->definitions(),
+            'historySubjects' => SettingSubject::handles(PerfRuntimeSettings::KEYS),
         ]);
     }
 

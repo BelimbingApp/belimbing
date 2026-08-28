@@ -3,6 +3,7 @@
 namespace App\Base\System\Services;
 
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\System\Enums\MailPurpose;
 
 final readonly class MailRuntimeSettings
 {
@@ -26,6 +27,52 @@ final readonly class MailRuntimeSettings
         private SettingsService $settings,
         private SystemRuntimeSettings $system,
     ) {}
+
+    /**
+     * Purpose-specific From/Reply-To override key, e.g.
+     * "mail.purposes.account_security.from_address". Never a distinct SMTP
+     * credential or mailer — SMTP transport stays global (#377).
+     */
+    public static function purposeFromAddressKey(MailPurpose $purpose): string
+    {
+        return $purpose->settingsKeyPrefix().'from_address';
+    }
+
+    public static function purposeFromNameKey(MailPurpose $purpose): string
+    {
+        return $purpose->settingsKeyPrefix().'from_name';
+    }
+
+    public static function purposeReplyToKey(MailPurpose $purpose): string
+    {
+        return $purpose->settingsKeyPrefix().'reply_to';
+    }
+
+    /**
+     * The effective sender identity for one mail purpose: its own override
+     * when set, otherwise the global sender (from.address/from.name) — the
+     * same fallback #377 requires ("Unset purpose-specific values fall back
+     * to the global sender without duplicated required configuration").
+     * Reply-To has no global fallback: it is either explicitly set for this
+     * purpose or absent, since there is no platform-wide Reply-To concept.
+     *
+     * @return array{address: string, name: string, reply_to: ?string}
+     */
+    public function effectiveIdentity(MailPurpose $purpose): array
+    {
+        $address = $this->nullableString(self::purposeFromAddressKey($purpose))
+            ?? (string) $this->settings->get(self::FROM_ADDRESS_KEY);
+
+        $name = $this->nullableString(self::purposeFromNameKey($purpose))
+            ?? $this->nullableString(self::FROM_NAME_KEY)
+            ?? $this->system->productName();
+
+        return [
+            'address' => $address,
+            'name' => $name,
+            'reply_to' => $this->nullableString(self::purposeReplyToKey($purpose)),
+        ];
+    }
 
     /**
      * @return array<string, mixed>

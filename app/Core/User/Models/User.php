@@ -12,6 +12,8 @@ use App\Core\Company\Models\Company;
 use App\Core\Company\Models\ExternalAccess;
 use App\Core\Employee\Models\Employee;
 use App\Core\User\Database\Factories\UserFactory;
+use App\Core\User\Notifications\ResetPasswordNotification;
+use App\Core\User\Notifications\VerifyEmailNotification;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,6 +34,26 @@ class User extends Authenticatable implements CompanyScoped
     protected static function newFactory(): UserFactory
     {
         return new UserFactory;
+    }
+
+    /**
+     * Overrides the framework default so this real outbound flow (#377) uses
+     * the effective account-security sender identity instead of the raw
+     * global default.
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    /**
+     * Overrides the framework default so this real outbound flow (#377) uses
+     * the effective account-security sender identity instead of the raw
+     * global default.
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new VerifyEmailNotification);
     }
 
     /**

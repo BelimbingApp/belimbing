@@ -31,6 +31,8 @@ class SourceHistory extends Component
 
     public bool $iconOnly = false;
 
+    public ?string $subjectLabel = null;
+
     public string $sourceCapability = '';
 
     public function open(): void
@@ -45,6 +47,7 @@ class SourceHistory extends Component
             auditableType: $this->auditableType,
             auditableId: $this->auditableId,
             allUrl: $this->allUrl !== '' ? $this->allUrl : null,
+            subjectLabel: $this->subjectLabel,
         );
     }
 

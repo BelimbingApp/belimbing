@@ -6,6 +6,7 @@
     'sourceCapability',
     'buttonLabel' => null,
     'iconOnly' => false,
+    'subjectLabel' => null,
 ])
 
 @php
@@ -31,7 +32,7 @@
         ->values()
         ->all();
 
-    $primarySubject = $subjectHandles[0] ?? null;
+    $primarySubject = count($subjectHandles) === 1 ? $subjectHandles[0] : null;
     $fullHistorySearch = $primarySubject !== null
         ? $primarySubject['name'].'#'.$primarySubject['id']
         : null;
@@ -43,6 +44,7 @@
         'auditable_type' => $auditableType,
         'auditable_id' => $auditableId,
         'source_capability' => $resolvedSourceCapability,
+        'subject_label' => $subjectLabel,
     ], JSON_THROW_ON_ERROR));
 @endphp
 
@@ -55,6 +57,7 @@
         'allUrl' => $fullHistoryUrl,
         'buttonLabel' => $buttonLabel ?? __('History'),
         'iconOnly' => $iconOnly,
+        'subjectLabel' => $subjectLabel,
         'sourceCapability' => $resolvedSourceCapability,
     ], key($componentKey))
 @endif
