@@ -70,6 +70,11 @@ function scheduleTestEvent(): Event
     return $event;
 }
 
+function scheduleTestEventKey(): string
+{
+    return app(ScheduleRunRecorder::class)->key(scheduleTestEvent());
+}
+
 test('scheduler events record a run with status and duration', function (): void {
     $recorder = app(ScheduleRunRecorder::class);
     $event = scheduleTestEvent();
@@ -239,15 +244,274 @@ test('pausing a scheduler entry suppresses it at tick time; resuming clears it',
 
 test('admin can queue a scheduler task to run now', function (): void {
     Queue::fake();
-    $this->actingAs(createAdminUser());
+    $admin = createAdminUser();
+    $this->actingAs($admin);
 
-    $event = scheduleTestEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $key = scheduleTestEventKey();
 
     Livewire\Livewire::test(Index::class)
         ->call('runNow', $key);
 
-    Queue::assertPushed(RunScheduledTaskJob::class, fn (RunScheduledTaskJob $job): bool => $job->key === $key);
+    // The queued row must exist before dispatch returns — that's the whole
+    // point (#401): a job that never reaches the worker still leaves an
+    // honest, durable state instead of nothing.
+    $run = ScheduleRun::query()->where('key', $key)->sole();
+
+    expect($run->status)->toBe('queued')
+        ->and($run->trigger)->toBe('manual')
+        ->and($run->triggered_by_user_id)->toBe($admin->id)
+        ->and($run->triggered_by_name)->toBe($admin->name);
+
+    Queue::assertPushed(RunScheduledTaskJob::class, fn (RunScheduledTaskJob $job): bool => $job->key === $key && $job->runId === $run->id);
+});
+
+test('running now for an unregistered key notifies an error and dispatches nothing', function (): void {
+    Queue::fake();
+    $this->actingAs(createAdminUser());
+
+    Livewire\Livewire::test(Index::class)
+        ->call('runNow', 'no-such-scheduler-key')
+        ->assertDispatched('notify', variant: 'error');
+
+    Queue::assertNotPushed(RunScheduledTaskJob::class);
+    expect(ScheduleRun::query()->count())->toBe(0);
+});
+
+test('running now while a run is already queued or running is refused rather than stacked', function (): void {
+    Queue::fake();
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    Livewire\Livewire::test(Index::class)->call('runNow', $key);
+
+    expect(ScheduleRun::query()->where('key', $key)->count())->toBe(1);
+
+    Livewire\Livewire::test(Index::class)
+        ->call('runNow', $key)
+        ->assertDispatched('notify', variant: 'warning');
+
+    // Still exactly one row and one dispatched job — the second click did
+    // not stack a duplicate manual run (#401's dedupe requirement).
+    expect(ScheduleRun::query()->where('key', $key)->count())->toBe(1);
+    Queue::assertPushed(RunScheduledTaskJob::class, 1);
+});
+
+test('reserveManualRun refuses a second sequential reservation for the same key', function (): void {
+    $recorder = app(ScheduleRunRecorder::class);
+    $key = scheduleTestEventKey();
+
+    $first = $recorder->reserveManualRun($key, 'inspire', null, 1, 'Ops Operator', false);
+    $second = $recorder->reserveManualRun($key, 'inspire', null, 1, 'Ops Operator', false);
+
+    expect($first->created)->toBeTrue()
+        ->and($second->created)->toBeFalse()
+        ->and($second->run)->toBeNull();
+
+    // Only the created reservation's row exists — the refused attempt
+    // mutated nothing, which is what lets Index::runNow() dispatch exactly
+    // one job per reservation outcome rather than per call (#407 review).
+    expect(ScheduleRun::query()->where('key', $key)->count())->toBe(1)
+        ->and(ScheduleRun::query()->where('key', $key)->sole()->id)->toBe($first->run->id);
+});
+
+test('a queued row a worker never picked up is reconciled to failed instead of locking the control forever', function (): void {
+    Queue::fake();
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'queued',
+        'started_at' => now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES + 1),
+    ]);
+
+    expect(app(ScheduleRunRecorder::class)->hasActiveRun($key))->toBeFalse();
+
+    $stale = ScheduleRun::query()->where('key', $key)->sole();
+
+    expect($stale->status)->toBe('failed')
+        ->and($stale->output_excerpt)->toContain('no worker picked it up');
+
+    // The reconciliation unblocked it — a fresh manual run can proceed.
+    Livewire\Livewire::test(Index::class)->call('runNow', $key);
+
+    expect(ScheduleRun::query()->where('key', $key)->count())->toBe(2);
+    Queue::assertPushed(RunScheduledTaskJob::class, 1);
+});
+
+test('a running row is never auto-reconciled no matter how old, to avoid declaring a healthy long task dead', function (): void {
+    $key = scheduleTestEventKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'running',
+        'started_at' => now()->subHours(6),
+    ]);
+
+    expect(app(ScheduleRunRecorder::class)->hasActiveRun($key))->toBeTrue();
+
+    $run = ScheduleRun::query()->where('key', $key)->sole();
+    expect($run->status)->toBe('running');
+});
+
+test('forcing a run refuses to supersede an active run that is not yet stale', function (): void {
+    Queue::fake();
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'running',
+        'started_at' => now(),
+    ]);
+
+    Livewire\Livewire::test(Index::class)
+        ->call('runNow', $key, true)
+        ->assertDispatched('notify', variant: 'warning');
+
+    $run = ScheduleRun::query()->where('key', $key)->sole();
+    expect($run->status)->toBe('running');
+    Queue::assertNotPushed(RunScheduledTaskJob::class);
+});
+
+test('a capable operator can force-run a stuck row, which is marked superseded by name rather than discarded', function (): void {
+    Queue::fake();
+    $admin = createAdminUser();
+    $this->actingAs($admin);
+
+    $key = scheduleTestEventKey();
+
+    $stuck = ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'running',
+        'started_at' => now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES + 1),
+    ]);
+
+    Livewire\Livewire::test(Index::class)
+        ->call('runNow', $key, true)
+        ->assertDispatched('notify');
+
+    $stuck->refresh();
+
+    expect($stuck->status)->toBe('failed')
+        ->and($stuck->output_excerpt)->toContain('Superseded by a new manual run requested by '.$admin->name);
+
+    $fresh = ScheduleRun::query()->where('key', $key)->where('status', 'queued')->sole();
+    expect($fresh->id)->not->toBe($stuck->id);
+
+    Queue::assertPushed(RunScheduledTaskJob::class, fn (RunScheduledTaskJob $job): bool => $job->runId === $fresh->id);
+});
+
+test('the Force run control appears only once an active run looks stuck', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'running',
+        'started_at' => now(),
+    ]);
+
+    // Fresh: neither the normal Play control nor Force run should show.
+    // Asserted against each control's accessible label, which is
+    // task-specific and Blade-echoed — unlike wire:click, which @js()
+    // renders identically for every row regardless of key, so it can't
+    // isolate one row's control from any other real scheduler task also
+    // registered in this test's full application boot.
+    Livewire\Livewire::test(Index::class)
+        ->assertDontSee('Run inspire now')
+        ->assertDontSee('Force run inspire');
+
+    ScheduleRun::query()->where('key', $key)->update([
+        'started_at' => now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES + 1),
+    ]);
+
+    Livewire\Livewire::test(Index::class)
+        ->assertDontSee('Run inspire now')
+        ->assertSee('Force run inspire (currently running, unresponsive for over '.ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES.' minutes)');
+});
+
+test('a dispatch failure marks the queued row failed and notifies rather than leaving it stuck', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    // An unresolvable queue connection makes dispatch() itself throw.
+    config(['queue.default' => 'schedule-test-missing-connection']);
+
+    Livewire\Livewire::test(Index::class)
+        ->call('runNow', $key)
+        ->assertDispatched('notify', variant: 'error');
+
+    $run = ScheduleRun::query()->where('key', $key)->sole();
+
+    expect($run->status)->toBe('failed')
+        ->and($run->finished_at)->not->toBeNull();
+});
+
+test('the Run now control disappears while a task is queued or running', function (): void {
+    $this->actingAs(createAdminUser());
+
+    $key = scheduleTestEventKey();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'key' => $key,
+        'name' => 'inspire',
+        'status' => 'queued',
+        'started_at' => now(),
+    ]);
+
+    // The play action's accessible label is task-specific and Blade-echoed
+    // (unlike its wire:click, which @js() renders identically for every
+    // row regardless of key — not a reliable way to isolate one row's
+    // control), so assert on that instead of the wire:click markup.
+    Livewire\Livewire::test(Index::class)
+        ->assertSee('Queued')
+        ->assertDontSee('Run inspire now');
+});
+
+test('manually triggered history rows are labelled with who ran them', function (): void {
+    $admin = createAdminUser();
+
+    ScheduleRun::query()->create([
+        'source' => 'scheduler',
+        'trigger' => 'manual',
+        'triggered_by_user_id' => $admin->id,
+        'triggered_by_name' => $admin->name,
+        'key' => 'ui-manual-run',
+        'name' => 'UI Manual Run',
+        'status' => 'succeeded',
+        'started_at' => now()->subMinute(),
+        'finished_at' => now(),
+    ]);
+
+    $this->actingAs($admin);
+
+    $this->get(route('admin.system.schedule.index'))
+        ->assertOk()
+        ->assertSee('UI Manual Run')
+        ->assertSee('Run now by '.$admin->name);
 });
 
 test('admin can save schedule history retention', function (): void {
