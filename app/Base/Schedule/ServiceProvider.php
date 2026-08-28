@@ -6,6 +6,7 @@ use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\FrameworkScheduleDevelopmentSanitizer;
 use App\Base\Schedule\Services\ScheduleBoard;
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Schedule\Services\ScheduleStatusBarDiagnosticProvider;
@@ -35,6 +36,7 @@ class ServiceProvider extends BaseServiceProvider
         $this->app->singleton(ScheduleHistoryPruner::class);
         $this->app->singleton(ScheduleRunRecorder::class);
         $this->app->singleton(ScheduleBoard::class);
+        $this->app->singleton(ScheduleHealthService::class);
         $this->app->singleton(ScheduleStatusBarDiagnosticProvider::class);
         $this->app->tag(ScheduleStatusBarDiagnosticProvider::class, StatusBarDiagnosticProvider::CONTAINER_TAG);
         $this->app->tag(FrameworkScheduleDevelopmentSanitizer::class, DevelopmentSanitizationContributor::CONTAINER_TAG);

@@ -2,6 +2,7 @@
 
 namespace App\Base\Schedule\Models;
 
+use App\Base\Schedule\Services\ScheduleHealthService;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -11,6 +12,16 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ScheduleSuppression extends Model
 {
+    protected static function booted(): void
+    {
+        static::saved(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+        static::deleted(function (): void {
+            ScheduleHealthService::invalidate();
+        });
+    }
+
     protected $table = 'base_schedule_suppressions';
 
     protected $fillable = [
