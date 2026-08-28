@@ -164,3 +164,6 @@ jobs:
         run: |
           ./vendor/bin/pest tests/Integration/Database/DevelopmentTableMirrorPostgresTest.php
           DB_CONNECTION=sqlite DB_DATABASE=:memory: ./vendor/bin/pest tests/Integration/Database/PortableDevelopmentTableMirrorTest.php
+
+      - name: Run schedule reservation concurrency tests
+        run: ./vendor/bin/pest tests/Integration/Schedule/ScheduleRunReservationConcurrencyTest.php

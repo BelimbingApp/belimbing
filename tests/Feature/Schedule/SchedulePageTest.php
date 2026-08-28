@@ -297,6 +297,24 @@ test('running now while a run is already queued or running is refused rather tha
     Queue::assertPushed(RunScheduledTaskJob::class, 1);
 });
 
+test('reserveManualRun refuses a second sequential reservation for the same key', function (): void {
+    $recorder = app(ScheduleRunRecorder::class);
+    $key = scheduleTestEventKey();
+
+    $first = $recorder->reserveManualRun($key, 'inspire', null, 1, 'Ops Operator', false);
+    $second = $recorder->reserveManualRun($key, 'inspire', null, 1, 'Ops Operator', false);
+
+    expect($first->created)->toBeTrue()
+        ->and($second->created)->toBeFalse()
+        ->and($second->run)->toBeNull();
+
+    // Only the created reservation's row exists — the refused attempt
+    // mutated nothing, which is what lets Index::runNow() dispatch exactly
+    // one job per reservation outcome rather than per call (#407 review).
+    expect(ScheduleRun::query()->where('key', $key)->count())->toBe(1)
+        ->and(ScheduleRun::query()->where('key', $key)->sole()->id)->toBe($first->run->id);
+});
+
 test('a queued row a worker never picked up is reconciled to failed instead of locking the control forever', function (): void {
     Queue::fake();
     $this->actingAs(createAdminUser());

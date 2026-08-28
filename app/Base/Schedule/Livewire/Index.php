@@ -138,10 +138,15 @@ class Index extends Component
      * $force lets a capable operator supersede a queued/running row that
      * has sat unresponsive past ScheduleRunRecorder's staleness window —
      * the Blade view only ever sends true once activeRunLooksStuck() would
-     * agree, but that's re-checked here rather than trusted from the
-     * client (#401 review: an unbounded lock was a regression this PR
-     * introduced, and the escape from it must not become an unconditional
-     * override).
+     * agree, but that's re-checked inside reserveManualRun() rather than
+     * trusted from the client.
+     *
+     * The active-row check, any stale/supersede reconciliation, and the
+     * queued-row insert are all decided inside reserveManualRun() as one
+     * locked transaction — not read here and written separately, which two
+     * concurrent requests for the same key could otherwise interleave
+     * (#407 review, luna's P1 / terra's implementation guidance). Dispatch
+     * only happens after that transaction has committed.
      */
     public function runNow(string $key, ScheduleRunRecorder $recorder, Schedule $schedule, bool $force = false): void
     {
@@ -160,32 +165,27 @@ class Index extends Component
         $user = auth()->user();
         $userName = $user !== null ? (string) data_get($user, 'name') : null;
 
-        $active = $recorder->activeRun($key);
-
-        if ($active !== null) {
-            if (! $force || ! $recorder->activeRunLooksStuck($active)) {
-                $this->notifyWarning(__('This task is already queued or running.'));
-
-                return;
-            }
-
-            $recorder->supersedeActiveRun($key, $userName);
-        }
-
-        $run = $recorder->queueManualRun(
+        $reservation = $recorder->reserveManualRun(
             $key,
             $recorder->name($event),
             (string) $event->expression,
             $user !== null ? (int) $user->getAuthIdentifier() : null,
             $userName,
+            $force,
         );
 
+        if (! $reservation->created || $reservation->run === null) {
+            $this->notifyWarning(__('This task is already queued or running.'));
+
+            return;
+        }
+
+        $run = $reservation->run;
+
         try {
-            RunScheduledTaskJob::dispatch($key, $run?->id);
+            RunScheduledTaskJob::dispatch($key, $run->id);
         } catch (Throwable $e) {
-            if ($run !== null) {
-                $recorder->failUnstartedRun($run->id, __('Could not queue this run: :message', ['message' => $e->getMessage()]));
-            }
+            $recorder->failUnstartedRun($run->id, __('Could not queue this run: :message', ['message' => $e->getMessage()]));
 
             report($e);
             $this->notifyError(__('Could not queue the run — check the queue connection.'));

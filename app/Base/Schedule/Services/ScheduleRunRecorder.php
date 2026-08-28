@@ -2,6 +2,7 @@
 
 namespace App\Base\Schedule\Services;
 
+use App\Base\Schedule\DTO\ScheduleRunReservation;
 use App\Base\Schedule\Models\ScheduleRun;
 use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
@@ -11,6 +12,7 @@ use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
@@ -117,6 +119,105 @@ class ScheduleRunRecorder
             'status' => 'queued',
             'started_at' => now(),
         ]);
+    }
+
+    /**
+     * Atomically decides and performs a manual "Run now" dispatch — the
+     * active-row check, any stale/supersede reconciliation, and the queued
+     * row insert are one operation under a per-key row lock, rather than
+     * separate reads and writes a second concurrent request could interleave
+     * with (#407 review, luna's P1 / terra's implementation guidance).
+     *
+     * A per-key row in base_schedule_run_gates (created on first use,
+     * never deleted) gives every reservation attempt for the same key a
+     * stable target to serialize on via SELECT ... FOR UPDATE — the gate
+     * row carries no state of its own. Only exactly one concurrent caller
+     * for a key ever gets a `created` reservation; the rest get `refused`
+     * having mutated nothing.
+     */
+    public function reserveManualRun(
+        string $key,
+        string $name,
+        ?string $expression,
+        ?int $triggeredByUserId,
+        ?string $triggeredByName,
+        bool $force,
+    ): ScheduleRunReservation {
+        if (! $this->ready() || ! Schema::hasTable('base_schedule_run_gates')) {
+            return ScheduleRunReservation::refused();
+        }
+
+        return DB::transaction(function () use ($key, $name, $expression, $triggeredByUserId, $triggeredByName, $force): ScheduleRunReservation {
+            // A bounded wait, not a permanent hang: if the gate row is held
+            // long enough to hit this, something is genuinely wrong (a
+            // stuck transaction elsewhere), and a manual "Run now" request
+            // should fail fast with a clear error rather than tie up a web
+            // worker indefinitely — same instinct as the DataShare mirror's
+            // own lock_timeout. SQLite (tests, single-writer already) has
+            // no such GUC.
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                DB::statement("SET LOCAL lock_timeout = '5s'");
+            }
+
+            DB::table('base_schedule_run_gates')->insertOrIgnore([
+                'source' => 'scheduler',
+                'key' => $key,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('base_schedule_run_gates')
+                ->where('source', 'scheduler')
+                ->where('key', $key)
+                ->lockForUpdate()
+                ->first();
+
+            // Locked alongside the gate row: no other reservation attempt
+            // for this key can be mid-decision while this one reads it.
+            $active = ScheduleRun::query()
+                ->where('source', 'scheduler')
+                ->where('key', $key)
+                ->whereIn('status', ['queued', 'running'])
+                ->lockForUpdate()
+                ->orderByDesc('started_at')
+                ->first();
+
+            if ($active instanceof ScheduleRun && $active->status === 'queued' && $this->isStale($active)) {
+                $this->terminalizeOpenRow($active, 'failed', __(
+                    'This run was queued but no worker picked it up within :minutes minutes — the queue connection or a worker may be down. Check queue health, then try again.',
+                    ['minutes' => self::QUEUE_PICKUP_STALE_AFTER_MINUTES],
+                ));
+                $active = null;
+            }
+
+            if ($active instanceof ScheduleRun) {
+                if (! $force || ! $this->isStale($active)) {
+                    return ScheduleRunReservation::refused();
+                }
+
+                // Supersedes the exact row this transaction locked and
+                // validated as stale — never a re-query by key, which
+                // could target a different row a concurrent request had
+                // since inserted (terra's finding on the Force path).
+                $this->terminalizeOpenRow($active, 'failed', $triggeredByName !== null
+                    ? __('Superseded by a new manual run requested by :name.', ['name' => $triggeredByName])
+                    : __('Superseded by a new manual run.'));
+            }
+
+            $run = ScheduleRun::query()->create([
+                'source' => 'scheduler',
+                'trigger' => 'manual',
+                'triggered_by_user_id' => $triggeredByUserId,
+                'triggered_by_name' => $triggeredByName,
+                'key' => $key,
+                'name' => $name,
+                'expression' => $expression,
+                'status' => 'queued',
+                'started_at' => now(),
+            ]);
+
+            return ScheduleRunReservation::created($run);
+        });
     }
 
     /**
@@ -239,19 +340,34 @@ class ScheduleRunRecorder
 
             $run = ScheduleRun::query()->find($runId);
 
-            if (! $run instanceof ScheduleRun || $run->finished_at !== null) {
+            if (! $run instanceof ScheduleRun) {
                 return;
             }
 
-            $now = now();
-
-            $run->update([
-                'status' => 'failed',
-                'finished_at' => $now,
-                'runtime_ms' => $this->runtimeMs($run, $now, null),
-                'output_excerpt' => $this->truncate($reason, self::STORAGE_STRING_LIMIT),
-            ]);
+            $this->terminalizeOpenRow($run, 'failed', $reason);
         });
+    }
+
+    /**
+     * Closes an already-loaded row in place — never a re-query by id or
+     * key — so a caller that already validated and locked a specific row
+     * (reserveManualRun()) terminalizes exactly that row, not whatever
+     * currently matches its key (#407 review, terra).
+     */
+    private function terminalizeOpenRow(ScheduleRun $run, string $status, string $reason): void
+    {
+        if ($run->finished_at !== null) {
+            return;
+        }
+
+        $now = now();
+
+        $run->update([
+            'status' => $status,
+            'finished_at' => $now,
+            'runtime_ms' => $this->runtimeMs($run, $now, null),
+            'output_excerpt' => $this->truncate($reason, self::STORAGE_STRING_LIMIT),
+        ]);
     }
 
     /**
