@@ -124,6 +124,20 @@ class OrientStewardMechanismTest(unittest.TestCase):
             "WARNING #380 active steward must carry exactly one agent:* label (found 2)",
         )
 
+    def test_the_active_steward_query_is_scoped_to_open_state(self):
+        # #383: retirement never removes ops:steward — the label is a
+        # permanent historical record, and --state open is the entire
+        # contract for "counts as active." A closed appointment retaining
+        # the label (#309, #343, #365 all do) must never be discovered here.
+        # This test protects the flag directly rather than only trusting the
+        # stub's behavior, since the stub cannot itself prove production
+        # asked gh to filter by state.
+        text = ORIENT.read_text(encoding="utf-8")
+        anchor = text.index('--label "ops:steward"')
+        line_start = text.rindex("\n", 0, anchor) + 1
+        line = text[line_start:text.index("\n", anchor)]
+        self.assertIn("--state open", line)
+
 
 if __name__ == "__main__":
     unittest.main()

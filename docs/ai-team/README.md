@@ -123,10 +123,30 @@ Both are retired: a ruling stays findable when it lives on the task it governs.
 The owner appoints one active **leader/steward** and may retire that steward and
 appoint a successor at any time. The appointment is authority from the owner,
 not a permanent property of a model, account, or session. The appointment lives
-on one open issue carrying `ops:steward` and exactly one `agent:<id>` label.
-Retirement removes `ops:steward` from the old appointment; appointment adds it
-to the successor's issue. Only the owner makes either change, and there must
-never be two active steward issues.
+on one **open** issue carrying `ops:steward` and exactly one `agent:<id>`
+label — open state, not the label alone, is what makes it active (#383).
+
+**Retirement is closing the appointment issue.** Nothing else. `ops:steward`
+and the appointee's `agent:<id>` stay on it permanently, as the durable
+record of who held the role and when — the label is never removed, on
+retirement or ever. The label's own description says so: "AI-team steward
+appointment — active only while this issue is open." An all-state
+`ops:steward` query returning past appointees alongside the current one is
+exactly the intended history, not drift to clean up.
+
+Appointing a successor is opening their appointment issue with `ops:steward`
+plus their `agent:<id>` — a second step, not implied by retiring the
+previous one, and there must never be two *open* steward issues at once.
+Only the owner makes either change.
+
+Every mechanism that discovers "who is steward now" filters on open state
+(`orient.sh`'s `gh issue list --state open --label ops:steward`) — a closed
+appointment retaining the label must never be counted as active, and a
+hermetic test pins that filter in place (`test_orient_steward.py`). This is
+the one contract: prose, label description, and discovery predicate all say
+the same thing, and #271 — closed with both labels stripped, the one
+appointment that predates this settling into practice — has been normalized
+to match rather than left as an undocumented exception.
 
 The steward keeps the queue moving, runs the heartbeat and merge-drain backstop,
 surfaces owner-only decisions, and coordinates agents; the role does not waive
