@@ -7,7 +7,6 @@ use App\Base\System\Services\MailRuntimeSettings;
 /** @var Index $this */
 /** @var array<string, mixed> $group */
 /** @var array<string, mixed> $values */
-
 $mailerFormKey = SettingsFieldValue::formKey(MailRuntimeSettings::MAILER_KEY);
 $isLogOnly = ($values[$mailerFormKey] ?? 'log') !== 'smtp';
 ?>
