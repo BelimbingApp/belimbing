@@ -13,6 +13,9 @@ set -u
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git checkout" >&2; exit 2; }
 cd "$ROOT" || exit 2
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=docs/ai-team/scripts/_lane_issue.sh
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_lane_issue.sh"
 
 # A halt must reach every agent regardless of tool, so it lives on the board and
 # surfaces here — the one command every agent runs each tick. An open issue
@@ -218,13 +221,42 @@ echo
 echo "== review-queue hygiene — unmergeable before review effort is spent (#366) =="
 # A lane that bypassed claim.sh/ready.sh reaches task:review without the
 # closing reference the gate requires; three PRs arrived unmergeable that way
-# in one mission and nothing said so until merge time. Flag it where agents
-# look, before a reviewer pays for it.
-gh pr list --repo "$REPO" --state open --label "task:review" --limit 40   --json number,title,body 2>/dev/null   | jq -r '[.[] | select((.body // "") | test("(?i)closes #[0-9]+") | not)]
-           | if length == 0
-             then "  ok      every task:review PR carries a closing reference"
-             else .[] | "  #\(.number) has no Closes #N — run ready.sh before review effort is spent — \(.title[0:48])"
-             end' 2>/dev/null   || echo "  (gh unavailable)"
+# in one mission and nothing said so until merge time. Derive the same lane
+# identity and call the same predicate as the gate so this warning is always
+# clearable by ready.sh.
+if review_prs=$(gh pr list --repo "$REPO" --state open --label "task:review" --limit 40 \
+    --json number,title,body,headRefName 2>/dev/null) \
+    && jq -e 'type == "array"' >/dev/null 2>&1 <<<"$review_prs"; then
+  review_hygiene=""
+  while IFS= read -r review_pr; do
+    review_number=$(jq -r '.number' <<<"$review_pr")
+    review_title=$(jq -r '.title // ""' <<<"$review_pr")
+    review_branch=$(jq -r '.headRefName // ""' <<<"$review_pr")
+    review_body=$(jq -r '.body // ""' <<<"$review_pr")
+    review_issue=$(ai_team_derive_lane_issue "$review_title" "$review_branch" "$review_body" "")
+
+    case "$review_issue" in
+      error:*)
+        review_hygiene+=$'\n'"  #$review_number has invalid lane identity — ${review_issue#error:}"
+        ;;
+      none)
+        ;;
+      *)
+        if ! ai_team_body_has_closing_reference "$review_body" "$review_issue"; then
+          review_hygiene+=$'\n'"  #$review_number has no closing reference to #$review_issue — run ready.sh before review effort is spent — ${review_title:0:48}"
+        fi
+        ;;
+    esac
+  done < <(jq -c '.[]' <<<"$review_prs")
+
+  if [ -z "$review_hygiene" ]; then
+    echo "  ok      every task:review lane satisfies the closing-reference contract"
+  else
+    printf '%s\n' "${review_hygiene#$'\n'}"
+  fi
+else
+  echo "  (gh unavailable)"
+fi
 
 echo
 echo "== label hygiene — these are invisible to the queries above =="
