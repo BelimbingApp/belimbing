@@ -126,6 +126,16 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertIn("resuming #42: it already carries your own label", result.stdout)
         self.assertIn("claimed #42 in draft PR", result.stdout)
 
+    def test_existing_label_skips_label_create_and_claims(self):
+        # #403: `--arg label` shadowed jq's `label` keyword, so the existence
+        # check never parsed and a second claim by the same agent aborted at
+        # `gh label create` (the stub's label list already carries agent:fable
+        # and `label create` exits 1). A green claim proves the existence
+        # check ran and skipped creation.
+        result = self.run_claim(self.issue(["task:ready"]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("claimed #42 in draft PR", result.stdout)
+
     def test_anothers_label_is_still_a_hard_refusal(self):
         result = self.run_claim(self.issue(["agent:sol", "task:ready"]))
         self.assertEqual(result.returncode, 1)
