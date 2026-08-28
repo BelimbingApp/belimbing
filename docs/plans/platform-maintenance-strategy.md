@@ -1,9 +1,9 @@
 # platform-maintenance-strategy
 
 **Status:** In progress — platform implementation underway; Domain caller pinning, Sonar administration, Windows cutover, and restore-drill evidence require post-merge/external rollout
-**Last Updated:** 2026-08-07
-**Sources:** `.github/workflows/lint.yml`; `.github/workflows/security.yml`; `.github/workflows/tests.yml`; `.github/workflows/test-audit-report.yml`; `.github/workflows/domain-ci.yml`; `.github/dependabot.yml`; `scripts/ci/domain-repos.json`; `scripts/ci/compose-domain.php`; `scripts/ci/setup-sonar.php`; `sonar-project.properties`; `composer.json`; `package.json`; `app/Base/Schedule`; `app/Base/System/Services/StatusBarDiagnostics.php`; `docs/plans/base-status-bar-diagnostics.md`; `docs/plans/authorable-php-formatting-baseline.md`; `docs/plans/security-hardening.md`; `app/Base/Database/Console/Commands/SchemaDriftCommand.php`; `docs/plans/database-backup-security.md`; `docs/runbooks/database-backup.md`; Larastan 3.x repository and Packagist metadata
-**Agents:** Amp/GPT-5; Amp/GPT-5.1
+**Last Updated:** 2026-08-29
+**Sources:** `.github/workflows/lint.yml`; `.github/workflows/security.yml`; `.github/workflows/tests.yml`; `.github/workflows/test-audit-report.yml`; `.github/workflows/domain-ci.yml`; `.github/dependabot.yml`; `scripts/ci/domain-repos.json`; `scripts/ci/compose-domain.php`; `scripts/ci/setup-sonar.php`; `sonar-project.properties`; `composer.json`; `package.json`; `app/Base/Schedule`; `app/Base/System/Services/StatusBarDiagnostics.php`; `docs/plans/base-status-bar-diagnostics.md`; `docs/plans/authorable-php-formatting-baseline.md`; `docs/plans/security-hardening.md`; `app/Base/Database/Console/Commands/SchemaDriftCommand.php`; `docs/plans/database-backup-security.md`; `docs/runbooks/database-backup.md`; `docs/ai-team/scripts/gate.sh`; GitHub Protect Main ruleset `11722555`; issue #421; Larastan 3.x repository and Packagist metadata
+**Agents:** Amp/GPT-5; Amp/GPT-5.1; kiat-luna/GPT-5
 
 **Revision note:** The 2026-08-07 CI review updates Current Coverage to recognize the platform's SonarQube Cloud automatic analysis and the three existing thin Domain callers. Design Decisions and Phases now distinguish Sonar from Larastan, replace hand-copied Domain workflows with a versioned composed-source contract, and add idempotent bootstrap/verification for Belimbing-controlled distributed Domains. Extensions remain outside Belimbing's repository authority: the platform skill `setting-up-extension-ci` becomes the licensee-facing path to an optional conformance kit, while BLB validates installed compatibility but never provisions or attests an Extension repository's CI. The schema-drift review removes periodic inspection and status-bar projection: drift validation now runs only at migration-source change and migration/deployment boundaries, where it can halt unsafe code before workers reload.
 
@@ -24,7 +24,7 @@ Each maintenance concern runs in the narrowest trustworthy environment: determin
 | Dependency vulnerabilities | Composer and Bun audits run on push, pull request, and weekly. | Keep; no additional audit cron. |
 | Secret scanning | Gitleaks runs on push, pull request, and weekly. | Keep; no in-app equivalent. |
 | Dependency update discovery | Dependabot opens weekly Composer and Bun pull requests. | Keep automation; use Amp for triage, grouping, verification, and major-version decisions rather than adding another updater. |
-| Platform code quality | SonarQube Cloud automatic analysis currently publishes a successful `SonarCloud Code Analysis` check on the platform's `main`; the root workflow does not invoke the scanner or upload test coverage. | Preserve the existing check while its server-side quality profile, gate, new-code policy, and branch-rule enforcement are inventoried. Move to workflow-driven analysis only as an explicit no-duplicate migration when coverage and consistent gate semantics justify it. |
+| Platform code quality | SonarQube Cloud automatic analysis currently publishes a successful `SonarCloud Code Analysis` check on the platform's `main`; the root workflow does not invoke the scanner or upload test coverage. Protect Main now requires that check alongside the five repository checks documented below. | Preserve the existing check while its server-side quality profile, gate, and new-code policy are inventoried. Move to workflow-driven analysis only as an explicit no-duplicate migration when coverage and consistent gate semantics justify it. |
 | Domain CI | People, Commerce, and Operation call the platform's reusable `domain-ci.yml`, which composes the source, builds assets, runs Pint check mode, runs scoped Pest with coverage, and submits Sonar analysis. | Keep the central harness, but harden and version it. The current callers' floating `@main`, duplicated inputs, inconsistent manual trigger, limited security checks, and non-reproducible dependency checkout are unfinished distribution infrastructure. |
 | Extension CI | Extension repositories are operator/user chosen and outside Belimbing's control. BLB cannot inspect their settings, require workflows, provision credentials, or attest source quality. Inexperienced licensees still need an actionable path to a reasonable baseline. | Ship a platform-owned `setting-up-extension-ci` agent skill as the primary guide. The skill invokes an optional composed conformance workflow/local validator, helps install repository-owned CI, and leaves credentials, enforcement, and quality claims with the Extension owner. |
 | Source bootstrap | `compose-domain.php` resolves immediate cross-Domain dependencies and `setup-sonar.php` provisions known Sonar projects/tokens. No tool creates or verifies a controlled Domain repository's workflow, ruleset, CI settings, or future package test shape. | Evolve these into one descriptor-driven, idempotent bootstrap/verify path for Belimbing-controlled Domains rather than maintaining their repository setup by hand. |
@@ -91,9 +91,43 @@ Schema drift does not belong in this signal model. A scheduled or shell-visible 
 
 The platform already receives SonarQube Cloud automatic analysis, and each registered Domain already submits a scoped Sonar scan with Pest coverage. Replacing Sonar with Larastan would lose maintainability, duplication, security, and cross-language analysis. Running both without distinct contracts would create duplicate findings and unclear merge authority.
 
-Recommendation: Sonar remains the broad code-quality and security service. First inventory the server-owned platform quality profile, assigned gate, new-code definition, pull-request decoration, and whether `SonarCloud Code Analysis` is a required check under the active Protect Main ruleset. The repository should record the intended policy even when SonarCloud owns the implementation.
+Recommendation: Sonar remains the broad code-quality and security service. First inventory the server-owned platform quality profile, assigned gate, new-code definition, and pull-request decoration. The required-check portion of that contract is recorded below and enforced by the active Protect Main ruleset; the repository should record the intended policy even when SonarCloud owns the implementation.
 
 Automatic platform analysis is acceptable while it produces a reliable gate and secret-free pull-request coverage. Workflow-driven platform analysis becomes preferable if Belimbing wants test coverage in Sonar, one scanner configuration across platform and distributed sources, or explicit quality-gate wait/failure semantics. Migration must be atomic: configure the workflow and branch check, prove it, then disable automatic analysis so one commit never produces competing Sonar analyses.
+
+### Make Protect Main enforce the revision checks
+
+The repository's `Protect Main` ruleset previously enforced pull-request shape,
+code quality, and Copilot review settings but had no `required_status_checks`
+rule. That left the six checks below advisory and made `gate.sh` the only
+merge-time defense against a red revision. The platform rule now carries the
+same exact contexts observed on the merged `main` revision, with GitHub Actions
+integration ID `15368` for the five workflow checks and SonarCloud integration
+ID `12526` for its check.
+
+The chosen enforcement contract is strict head freshness
+(`strict_required_status_checks_policy: true`): a pull request must contain the
+current `main` tip before its checks can satisfy the rule. No merge bypass actors
+are configured. This keeps the normal merge path subject to the same proof for
+repository administrators, repository roles, and integrations; an emergency
+owner can still change the ruleset itself through GitHub administration rather
+than silently bypassing a failing revision.
+
+The six required contexts are:
+
+- `ci` (GitHub Actions, integration `15368`)
+- `quality` (GitHub Actions, integration `15368`)
+- `postgres-mirror` (GitHub Actions, integration `15368`)
+- `Secret scan` (GitHub Actions, integration `15368`)
+- `Dependency audit` (GitHub Actions, integration `15368`)
+- `SonarCloud Code Analysis` (SonarCloud, integration `12526`)
+
+The current repository does not use a merge queue. If one is enabled later,
+the queue's temporary merge-group revision must report these same contexts;
+the workflows must first opt into the `merge_group` event and the ruleset must
+be observed on a real queued pull request before queue merges are treated as
+covered. Strictness remains enabled because it prevents a check result from
+proving a tree that no longer contains `main`.
 
 Larastan has a narrower candidate role: Laravel-aware type and call-contract analysis before runtime. Adopt it only if the pilot finds high-confidence defects or useful type debt that the current Sonar profile does not report. If retained, Larastan is a required CI command whose output may be linked from CI; Sonar remains the quality trend/gate. Do not import Larastan findings into Sonar unless a later measurement proves that a single display reduces rather than duplicates triage.
 
@@ -159,6 +193,7 @@ Recommendation: keep restore drills outside the product execution path. Add only
 - `composer lint` remains the local write-mode formatting command; CI uses Pint's check mode.
 - Composer package metadata is validated strictly in pull-request CI.
 - SonarQube Cloud remains the broad quality/security analysis contract. Platform automatic analysis and workflow-driven analysis are mutually exclusive modes; any migration switches once and preserves one stable required check.
+- Protect Main requires the six revision checks listed in this plan, uses strict head freshness, and has no merge bypass actors; `docs/ai-team/scripts/gate.sh` remains the richer exact-head/ownership pre-flight.
 - Every Belimbing-controlled Domain is represented by one platform-owned descriptor with stable Domain ID, repository, mount path, Sonar identity, and compatibility/ref policy. Module identities and dependencies remain in Module manifests.
 - Controlled Domain callers contain only triggers, permissions, a pinned reusable-workflow reference, and their stable Domain ID. Generated caller drift fails bootstrap verification.
 - The target composed Domain CI contract records exact source refs and runs build, authorable Pint, Pest, Sonar, security/secret checks, manifest validation, migration checks, and Larastan when adopted. The current harness delivers exact materialization, build, Domain-scoped Pint/Pest, and Sonar; the remaining checks stay explicit rollout work below.
@@ -194,8 +229,9 @@ Goal: Pull requests fail on repository defects without rewriting the runner chec
 
 - [x] Change platform Pint CI to check only changed authorable PHP files, preserving recorded immutable migrations until the formatting-baseline plan completes; reduce workflow permissions to read-only. {Amp/GPT-5.1}
 - [x] Add strict Composer manifest validation to pull-request CI. {Amp/GPT-5.1}
-- [ ] Record the platform SonarQube Cloud project, quality profile, assigned quality gate, new-code definition, pull-request decoration, and required-check/ruleset contract without copying server secrets into source.
-- [x] Retain automatic platform Sonar analysis: the existing check is successful and no evidence yet justifies duplicate workflow scanning or a hosted-settings migration. Gate/ruleset inventory remains external administration work. {Amp/GPT-5}
+- [ ] Record the platform SonarQube Cloud project, quality profile, assigned quality gate, and new-code definition without copying server secrets into source.
+- [x] Make Protect Main require the six observed CI/Sonar contexts with strict head freshness, no merge bypass actors, and a documented merge-queue decision. {kiat-luna/GPT-5}
+- [x] Retain automatic platform Sonar analysis: the existing check is successful and no evidence yet justifies duplicate workflow scanning or a hosted-settings migration. The remaining profile/gate inventory stays external administration work. {Amp/GPT-5}
 - [x] Keep existing Pest, build, PostgreSQL mirror, dependency-audit, Gitleaks, Dependabot, slow-test, mutation, and changed-test checks; add only the migration-source postcondition to the existing test job. {Amp/GPT-5.1}
 - [ ] Document the local distinction between write-mode formatting and CI check mode in the smallest existing contributor surface.
 
