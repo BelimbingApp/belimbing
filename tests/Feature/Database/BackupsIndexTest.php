@@ -2,6 +2,7 @@
 
 use App\Base\Database\Livewire\Backups\Index;
 use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\Support\SettingSubject;
 use App\Core\User\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -32,7 +33,22 @@ test('admin sees the backups page with config snapshot', function (): void {
         ->assertSee('Disk')
         ->assertSee('local')
         ->assertSee('Encryption')
+        ->assertSee('History')
         ->assertSee('No backups yet');
+});
+
+test('backup history is bounded to the editable settings', function (): void {
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(Index::class)
+        ->assertViewHas('historySubjects', SettingSubject::handles([
+            'backup.enabled',
+            'backup.disk',
+            'backup.path_prefix',
+            'backup.encryption.mode',
+            'backup.retention.keep_days',
+            'backup.retention.keep_count',
+        ]));
 });
 
 test('unauthenticated request is redirected from the backups page', function (): void {

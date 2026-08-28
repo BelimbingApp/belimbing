@@ -345,8 +345,11 @@ class MutationListener
     {
         $global = config('audit.redact', []);
         $modelLevel = $this->readModelProperty($model, 'auditRedact', []);
+        $dynamic = method_exists($model, 'getAuditRedactedFields')
+            ? $model->getAuditRedactedFields()
+            : [];
 
-        return array_merge($global, $modelLevel);
+        return array_values(array_unique(array_merge($global, $modelLevel, is_array($dynamic) ? $dynamic : [])));
     }
 
     /**

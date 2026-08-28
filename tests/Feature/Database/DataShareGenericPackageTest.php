@@ -474,6 +474,7 @@ it('explains the Data Share features and orients Data Share settings', function 
     $this->get(route('admin.system.data-share.settings'))
         ->assertOk()
         ->assertSee('About Data Share settings')
+        ->assertSee('History')
         ->assertSee('Choose and initialize a development provider here');
 });
 

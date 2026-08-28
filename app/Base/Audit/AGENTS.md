@@ -45,6 +45,12 @@ public function getAuditSubjectEntries(string $event, array $oldValues = [], arr
 }
 ```
 
+When redaction depends on stored model state rather than a cast or a fixed field list,
+models may expose a duck-typed `getAuditRedactedFields(): array` method. Its result is
+merged with global and model-property redaction. For example, `Setting` redacts
+`value` whenever `is_encrypted` is or was true, so secret creation, changes, and
+deletion remain visible without disclosing plaintext or ciphertext.
+
 Subject `id` values may be integers or stable strings (UUID, ULID, prefixed integration IDs). Audit stores them as normalized strings; do not cast string identifiers to integers in model metadata or source-history queries.
 
 ## Opting Out
@@ -136,6 +142,14 @@ optional direct auditable fallback, a source capability, and labels; they must
 not import Audit Livewire classes, query Audit tables, or build Audit search
 URLs. `SourceHistory` and `AuditSourceHistory` own authorization, bounded
 lookup, search/sort/load-more behavior, trace links, and full-history URLs.
+
+Bounded configuration pages follow the same bridge contract. Settings-backed
+pages derive exact `setting` handles through `App\Base\Settings\Support\SettingSubject`;
+global IDs are `<key>` and scoped IDs are `<key>@<scope>:<scope-id>`. A page may
+show a drawer for an exact bounded set, but the bridge offers full-history
+navigation only for a single subject rather than silently narrowing a set to its
+first key. Unbounded secret registries, mixed workbenches, diagnostics, and pages
+that are themselves logs do not get a misleading History action.
 
 ## Migration Prefix
 

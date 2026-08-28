@@ -47,9 +47,10 @@ trait InteractsWithSourceHistory
         ?string $auditableType = null,
         int|string|null $auditableId = null,
         ?string $allUrl = null,
+        ?string $subjectLabel = null,
     ): void {
         $this->sourceHistoryTitle = $title;
-        $this->sourceHistorySubjectLabel = $this->sourceHistorySubjectLabel($subjects);
+        $this->sourceHistorySubjectLabel = $subjectLabel ?? $this->sourceHistorySubjectLabel($subjects);
         $this->sourceHistoryAllUrl = $allUrl ?? '';
         $this->sourceHistorySearch = '';
         $this->sourceHistorySortBy = 'occurred_at';
@@ -131,6 +132,10 @@ trait InteractsWithSourceHistory
      */
     private function sourceHistorySubjectLabel(array $subjects): string
     {
+        if (count($subjects) > 1) {
+            return trans_choice(':count subject|:count subjects', count($subjects), ['count' => count($subjects)]);
+        }
+
         $subject = $subjects[0] ?? null;
 
         if (! is_array($subject) || ! isset($subject['name'], $subject['id'])) {
