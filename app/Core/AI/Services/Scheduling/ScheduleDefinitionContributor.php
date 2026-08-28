@@ -4,10 +4,14 @@ namespace App\Core\AI\Services\Scheduling;
 
 use App\Base\Schedule\Contracts\ScheduleContributor;
 use App\Base\Schedule\DTO\RecordedRun;
+use App\Base\Schedule\DTO\ScheduleHistoryPage;
+use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Core\AI\Enums\OperationStatus;
 use App\Core\AI\Enums\OperationType;
 use App\Core\AI\Models\OperationDispatch;
 use App\Core\AI\Models\ScheduleDefinition;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 
@@ -52,26 +56,134 @@ class ScheduleDefinitionContributor implements ScheduleContributor
             ->all();
     }
 
-    public function recentRuns(int $limit): array
+    public function history(ScheduleHistoryQuery $query, int $limit): ScheduleHistoryPage
     {
         if (! Schema::hasTable('ai_operation_dispatches')) {
-            return [];
+            return new ScheduleHistoryPage([], 0, false);
+        }
+
+        $builder = OperationDispatch::query()
+            ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask])
+            ->where(function ($q) use ($query): void {
+                $q->where(function ($inner) use ($query): void {
+                    $inner->whereNotNull('started_at')
+                        ->where('started_at', '>=', $query->from)
+                        ->where('started_at', '<=', $query->to);
+                })->orWhere(function ($inner) use ($query): void {
+                    $inner->whereNull('started_at')
+                        ->where('created_at', '>=', $query->from)
+                        ->where('created_at', '<=', $query->to);
+                });
+            });
+
+        if ($query->status !== 'all') {
+            $status = OperationStatus::tryFrom($query->status);
+
+            if ($status === null) {
+                // This source never records the requested status.
+                return new ScheduleHistoryPage([], 0, $this->hasHistory());
+            }
+
+            $builder->where('status', $status);
+        }
+
+        $hasHistory = $this->hasHistory();
+
+        // Schedule names and sources live in the dispatch JSON metadata. Keep
+        // the projection in the database for filtering, ordering, counting,
+        // and limiting; materializing the operation ledger in PHP makes the
+        // board's pagination dishonest and unbounded. The explicit grammar
+        // variants retain the same metadata fallback order on every supported
+        // database without relying on one vendor's JSON syntax.
+        $driver = $builder->getQuery()->getConnection()->getDriverName();
+        $name = $this->historyNameExpression($driver);
+        $source = $this->historySourceExpression($driver);
+
+        if ($query->search !== '') {
+            $builder->whereRaw("LOWER({$name}) LIKE ? ESCAPE ?", [$this->historySearchPattern($query->search), '\\']);
+        }
+
+        $total = (clone $builder)->count();
+        $this->orderHistory($builder, $query, $name, $source);
+
+        $dispatches = $builder
+            ->select('ai_operation_dispatches.*')
+            ->selectRaw("{$name} as schedule_history_name")
+            ->selectRaw("{$source} as schedule_history_source")
+            ->limit(max(1, $limit))
+            ->get();
+
+        return new ScheduleHistoryPage(
+            $dispatches
+                ->map(fn (OperationDispatch $dispatch): RecordedRun => new RecordedRun(
+                    source: (string) $dispatch->getAttribute('schedule_history_source'),
+                    name: (string) $dispatch->getAttribute('schedule_history_name'),
+                    status: $this->statusValue($dispatch->status) ?? 'unknown',
+                    startedAt: $dispatch->started_at ?? $dispatch->created_at ?? now(),
+                    finishedAt: $dispatch->finished_at,
+                    detail: $this->dispatchDetail($dispatch),
+                ))
+                ->all(),
+            $total,
+            $hasHistory,
+        );
+    }
+
+    private function hasHistory(): bool
+    {
+        if (! Schema::hasTable('ai_operation_dispatches')) {
+            return false;
         }
 
         return OperationDispatch::query()
             ->whereIn('operation_type', [OperationType::ScheduledTask, OperationType::HeadlessTask])
-            ->orderByDesc('created_at')
-            ->limit($limit)
-            ->get()
-            ->map(fn (OperationDispatch $dispatch): RecordedRun => new RecordedRun(
-                source: (string) ($dispatch->meta['source'] ?? $dispatch->meta['schedule_source'] ?? 'ai-agent'),
-                name: (string) ($dispatch->meta['source_key'] ?? $dispatch->meta['schedule_source_key'] ?? $dispatch->meta['schedule_description'] ?? $dispatch->task ?? $dispatch->id),
-                status: $this->statusValue($dispatch->status) ?? 'unknown',
-                startedAt: $dispatch->started_at ?? $dispatch->created_at ?? now(),
-                finishedAt: $dispatch->finished_at,
-                detail: $this->dispatchDetail($dispatch),
-            ))
-            ->all();
+            ->exists();
+    }
+
+    private function historyNameExpression(string $driver): string
+    {
+        return match ($driver) {
+            'pgsql' => "COALESCE(meta->>'source_key', meta->>'schedule_source_key', meta->>'schedule_description', task, id)",
+            'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source_key')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_description')), task, id)",
+            default => "COALESCE(json_extract(meta, '$.source_key'), json_extract(meta, '$.schedule_source_key'), json_extract(meta, '$.schedule_description'), task, id)",
+        };
+    }
+
+    private function historySourceExpression(string $driver): string
+    {
+        return match ($driver) {
+            'pgsql' => "COALESCE(meta->>'source', meta->>'schedule_source', 'ai-agent')",
+            'mysql', 'mariadb' => "COALESCE(JSON_UNQUOTE(JSON_EXTRACT(meta, '$.source')), JSON_UNQUOTE(JSON_EXTRACT(meta, '$.schedule_source')), 'ai-agent')",
+            default => "COALESCE(json_extract(meta, '$.source'), json_extract(meta, '$.schedule_source'), 'ai-agent')",
+        };
+    }
+
+    private function historySearchPattern(string $search): string
+    {
+        return '%'.str_replace(
+            ['\\', '%', '_'],
+            ['\\\\', '\\%', '\\_'],
+            $search,
+        ).'%';
+    }
+
+    private function orderHistory(Builder $builder, ScheduleHistoryQuery $query, string $name, string $source): void
+    {
+        $direction = $query->sortDirection === 'asc' ? 'ASC' : 'DESC';
+        $startedAt = 'COALESCE(started_at, created_at)';
+        $primary = match ($query->sortColumn) {
+            'name' => "LOWER({$name})",
+            'source' => "LOWER({$source})",
+            'status' => 'status',
+            default => $startedAt,
+        };
+
+        $builder
+            ->orderByRaw("{$primary} {$direction}")
+            ->orderByRaw("{$startedAt} DESC")
+            ->orderByRaw("LOWER({$source}) ASC")
+            ->orderByRaw("LOWER({$name}) ASC")
+            ->orderBy('id');
     }
 
     private function dispatchDetail(OperationDispatch $dispatch): ?string
