@@ -65,6 +65,11 @@ function scheduleTestEvent(): Event
     return $event;
 }
 
+function scheduleTestEventKey(): string
+{
+    return app(ScheduleRunRecorder::class)->key(scheduleTestEvent());
+}
+
 test('scheduler events record a run with status and duration', function (): void {
     $recorder = app(ScheduleRunRecorder::class);
     $event = scheduleTestEvent();
@@ -231,8 +236,7 @@ test('admin can queue a scheduler task to run now', function (): void {
     $admin = createAdminUser();
     $this->actingAs($admin);
 
-    $event = scheduleTestEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $key = scheduleTestEventKey();
 
     Livewire\Livewire::test(Index::class)
         ->call('runNow', $key);
@@ -266,8 +270,7 @@ test('running now while a run is already queued or running is refused rather tha
     Queue::fake();
     $this->actingAs(createAdminUser());
 
-    $event = scheduleTestEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $key = scheduleTestEventKey();
 
     Livewire\Livewire::test(Index::class)->call('runNow', $key);
 
@@ -286,8 +289,7 @@ test('running now while a run is already queued or running is refused rather tha
 test('a dispatch failure marks the queued row failed and notifies rather than leaving it stuck', function (): void {
     $this->actingAs(createAdminUser());
 
-    $event = scheduleTestEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $key = scheduleTestEventKey();
 
     // An unresolvable queue connection makes dispatch() itself throw.
     config(['queue.default' => 'schedule-test-missing-connection']);
@@ -305,8 +307,7 @@ test('a dispatch failure marks the queued row failed and notifies rather than le
 test('the Run now control disappears while a task is queued or running', function (): void {
     $this->actingAs(createAdminUser());
 
-    $event = scheduleTestEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $key = scheduleTestEventKey();
 
     ScheduleRun::query()->create([
         'source' => 'scheduler',

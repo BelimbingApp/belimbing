@@ -5,7 +5,10 @@ use App\Base\Schedule\Jobs\RunScheduledTaskJob;
 use App\Base\Schedule\Models\ScheduleRun;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
+use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
@@ -14,7 +17,7 @@ beforeEach(function (): void {
     setupAuthzRoles();
 });
 
-function runScheduledTaskJobEvent(): Illuminate\Console\Scheduling\Event
+function runScheduledTaskJobEvent(): Event
 {
     $event = app(Schedule::class)->command('inspire')->description('inspire');
     $event->exitCode = 0;
@@ -22,22 +25,28 @@ function runScheduledTaskJobEvent(): Illuminate\Console\Scheduling\Event
     return $event;
 }
 
+function runScheduledTaskJobHandle(string $key, ?int $runId, ScheduleRunRecorder $recorder): void
+{
+    (new RunScheduledTaskJob($key, $runId))->handle(
+        app(Schedule::class),
+        $recorder,
+        app(Dispatcher::class),
+        app(ExceptionHandler::class),
+    );
+}
+
 test('running the job for real transitions a pre-queued row through running to succeeded', function (): void {
     $event = runScheduledTaskJobEvent();
-    $key = app(ScheduleRunRecorder::class)->key($event);
+    $recorder = app(ScheduleRunRecorder::class);
+    $key = $recorder->key($event);
 
-    $run = app(ScheduleRunRecorder::class)->queueManualRun($key, 'inspire', (string) $event->expression, 1, 'Ops Operator');
+    $run = $recorder->queueManualRun($key, 'inspire', (string) $event->expression, 1, 'Ops Operator');
 
     expect($run->status)->toBe('queued')
         ->and($run->trigger)->toBe('manual')
         ->and($run->triggered_by_name)->toBe('Ops Operator');
 
-    (new RunScheduledTaskJob($key, $run->id))->handle(
-        app(Schedule::class),
-        app(ScheduleRunRecorder::class),
-        app(Illuminate\Contracts\Events\Dispatcher::class),
-        app(Illuminate\Contracts\Debug\ExceptionHandler::class),
-    );
+    runScheduledTaskJobHandle($key, $run->id, $recorder);
 
     expect(ScheduleRun::query()->count())->toBe(1);
 
@@ -53,14 +62,8 @@ test('the job fails an unstarted queued row explicitly when the key is no longer
     $recorder = app(ScheduleRunRecorder::class);
     $run = $recorder->queueManualRun('missing:key', 'missing task', null, 1, 'Ops Operator');
 
-    expect(
-        fn () => (new RunScheduledTaskJob('missing:key', $run->id))->handle(
-            app(Schedule::class),
-            $recorder,
-            app(Illuminate\Contracts\Events\Dispatcher::class),
-            app(Illuminate\Contracts\Debug\ExceptionHandler::class),
-        )
-    )->toThrow(ScheduledTaskExecutionException::class);
+    expect(fn () => runScheduledTaskJobHandle('missing:key', $run->id, $recorder))
+        ->toThrow(ScheduledTaskExecutionException::class);
 
     $run->refresh();
 
@@ -78,12 +81,7 @@ test('the job records an explicit skip reason for a suppressed task', function (
 
     $run = $recorder->queueManualRun($key, 'inspire', null, 1, 'Ops Operator');
 
-    (new RunScheduledTaskJob($key, $run->id))->handle(
-        app(Schedule::class),
-        $recorder,
-        app(Illuminate\Contracts\Events\Dispatcher::class),
-        app(Illuminate\Contracts\Debug\ExceptionHandler::class),
-    );
+    runScheduledTaskJobHandle($key, $run->id, $recorder);
 
     $run->refresh();
 
@@ -101,12 +99,7 @@ test('the job records an explicit skip reason for overlap protection', function 
 
     $run = $recorder->queueManualRun($key, 'inspire', null, 1, 'Ops Operator');
 
-    (new RunScheduledTaskJob($key, $run->id))->handle(
-        app(Schedule::class),
-        $recorder,
-        app(Illuminate\Contracts\Events\Dispatcher::class),
-        app(Illuminate\Contracts\Debug\ExceptionHandler::class),
-    );
+    runScheduledTaskJobHandle($key, $run->id, $recorder);
 
     $run->refresh();
 
