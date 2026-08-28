@@ -16,5 +16,7 @@ final readonly class RecordedRun
         public CarbonInterface $startedAt,
         public ?CarbonInterface $finishedAt = null,
         public ?string $detail = null,
+        public string $trigger = 'scheduled',
+        public ?string $triggeredByName = null,
     ) {}
 }

@@ -18,9 +18,12 @@ use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
 use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
+use App\Base\Schedule\Services\ScheduleHealthService;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
+use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
 use Cron\CronExpression;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -28,6 +31,7 @@ use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Throwable;
 
 /**
  * Central schedule observability: everything scheduled to fire (Laravel
@@ -129,13 +133,70 @@ class Index extends Component
         $this->resetPage();
     }
 
-    public function runNow(string $key): void
+    /**
+     * Makes "Run now" an observable, honest state transition instead of a
+     * fire-and-forget dispatch (#401): the task must already be registered,
+     * must not already have a queued/running row, and gets its `queued`
+     * ledger row written before the job dispatch call returns — so a job
+     * that never reaches the worker still leaves visible, correct state.
+     *
+     * $force lets a capable operator supersede a queued/running row that
+     * has sat unresponsive past ScheduleRunRecorder's staleness window —
+     * the Blade view only ever sends true once activeRunLooksStuck() would
+     * agree, but that's re-checked inside reserveManualRun() rather than
+     * trusted from the client.
+     *
+     * The active-row check, any stale/supersede reconciliation, and the
+     * queued-row insert are all decided inside reserveManualRun() as one
+     * locked transaction — not read here and written separately, which two
+     * concurrent requests for the same key could otherwise interleave
+     * (#407 review, luna's P1 / terra's implementation guidance). Dispatch
+     * only happens after that transaction has committed.
+     */
+    public function runNow(string $key, ScheduleRunRecorder $recorder, Schedule $schedule, bool $force = false): void
     {
         if (! $this->checkCapability('admin.system.schedule.execute')) {
             return;
         }
 
-        RunScheduledTaskJob::dispatch($key);
+        $event = $recorder->findEvent($schedule, $key);
+
+        if ($event === null) {
+            $this->notifyError(__('This task is no longer registered and cannot be run.'));
+
+            return;
+        }
+
+        $user = auth()->user();
+        $userName = $user !== null ? (string) data_get($user, 'name') : null;
+
+        $reservation = $recorder->reserveManualRun(
+            $key,
+            $recorder->name($event),
+            (string) $event->expression,
+            $user !== null ? (int) $user->getAuthIdentifier() : null,
+            $userName,
+            $force,
+        );
+
+        if (! $reservation->created || $reservation->run === null) {
+            $this->notifyWarning(__('This task is already queued or running.'));
+
+            return;
+        }
+
+        $run = $reservation->run;
+
+        try {
+            RunScheduledTaskJob::dispatch($key, $run->id);
+        } catch (Throwable $e) {
+            $recorder->failUnstartedRun($run->id, __('Could not queue this run: :message', ['message' => $e->getMessage()]));
+
+            report($e);
+            $this->notifyError(__('Could not queue the run — check the queue connection.'));
+
+            return;
+        }
 
         $this->notify(__('Run queued.'));
     }
@@ -440,6 +501,7 @@ class Index extends Component
             ->where('source', 'scheduler')
             ->where('key', $key)
             ->delete();
+        ScheduleHealthService::invalidate();
 
         $this->notify(__('Task resumed.'));
     }

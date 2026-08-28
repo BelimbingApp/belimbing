@@ -3,6 +3,7 @@
 
 use App\Base\Schedule\DTO\RecordedRun;
 use App\Base\Schedule\DTO\ScheduleTask;
+use App\Base\Schedule\Services\ScheduleRunRecorder;
 use Illuminate\Pagination\LengthAwarePaginator;
 
 /** @var list<ScheduleTask> $tasks */
@@ -19,6 +20,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 $statusVariant = fn (?string $status): string => match ($status) {
     'succeeded' => 'success',
     'running' => 'info',
+    'queued' => 'accent',
     'failed' => 'danger',
     'cancelled', 'skipped' => 'warning',
     default => 'default',
@@ -41,6 +43,9 @@ $duration = function ($start, $end): string {
 
     return $seconds >= 90 ? intdiv($seconds, 60).'m '.($seconds % 60).'s' : $seconds.'s';
 };
+$activeRunLooksStuck = fn (ScheduleTask $task): bool => in_array($task->status, ['queued', 'running'], true)
+    && $task->lastRunAt !== null
+    && $task->lastRunAt->lt(now()->subMinutes(ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES));
 $tabs = [
     ['id' => 'tasks', 'label' => __('Tasks'), 'icon' => 'heroicon-o-clock'],
     ['id' => 'history', 'label' => __('History'), 'icon' => 'heroicon-o-queue-list'],
@@ -124,12 +129,22 @@ $tabs = [
 
                                             @if($item->source === 'scheduler')
                                                 <x-ui.icon-action-group class="shrink-0">
-                                                    @if($canExecute && ! $item->paused)
+                                                    @if($canExecute && ! $item->paused && ! in_array($item->status, ['queued', 'running'], true))
                                                         <x-ui.icon-action
                                                             icon="heroicon-o-play"
                                                             :label="__('Run :task now', ['task' => $item->name])"
                                                             :title="__('Run now')"
                                                             :wire:click="'runNow('.\Illuminate\Support\Js::from($item->key).')'"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="runNow"
+                                                        />
+                                                    @elseif($canExecute && $activeRunLooksStuck($item))
+                                                        <x-ui.icon-action
+                                                            icon="heroicon-o-bolt"
+                                                            :label="__('Force run :task (currently :status, unresponsive for over :minutes minutes)', ['task' => $item->name, 'status' => $item->status, 'minutes' => \App\Base\Schedule\Services\ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES])"
+                                                            :title="__('Force run')"
+                                                            :wire:click="'runNow('.\Illuminate\Support\Js::from($item->key).', true)'"
+                                                            wire:confirm="{{ __('This task has been :status for over :minutes minutes without finishing — likely a stalled worker or queue. Mark it failed and run it again?', ['status' => $item->status, 'minutes' => \App\Base\Schedule\Services\ScheduleRunRecorder::QUEUE_PICKUP_STALE_AFTER_MINUTES]) }}"
                                                             wire:loading.attr="disabled"
                                                             wire:target="runNow"
                                                         />
@@ -303,7 +318,14 @@ $tabs = [
                                         <x-ui.datetime :value="$run->startedAt" />
                                         <span class="text-xs text-muted">({{ $duration($run->startedAt, $run->finishedAt) }})</span>
                                     </td>
-                                    <td class="px-table-cell-x py-table-cell-y font-mono text-sm text-ink">{{ $run->name }}</td>
+                                    <td class="px-table-cell-x py-table-cell-y font-mono text-sm text-ink">
+                                        {{ $run->name }}
+                                        @if($run->trigger === 'manual')
+                                            <span class="ml-1 whitespace-nowrap font-sans text-xs text-muted">
+                                                {{ $run->triggeredByName ? __('(Run now by :name)', ['name' => $run->triggeredByName]) : __('(Run now)') }}
+                                            </span>
+                                        @endif
+                                    </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm"><x-ui.badge variant="{{ $run->source === 'scheduler' ? 'default' : 'info' }}">{{ $run->source }}</x-ui.badge></td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm"><x-ui.badge variant="{{ $statusVariant($run->status) }}">{{ $statusLabel($run->status) }}</x-ui.badge></td>
                                     <td class="px-table-cell-x py-table-cell-y max-w-md truncate font-mono text-xs text-muted">{{ $run->detail ? str()->limit($run->detail, 90) : '—' }}</td>
