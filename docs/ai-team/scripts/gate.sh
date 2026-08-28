@@ -87,7 +87,16 @@ elif [ "${#REVIEWED}" -lt 40 ]; then
 fi
 
 git fetch -q origin main 2>/dev/null
-git cat-file -e "${REVIEWED}^{commit}" 2>/dev/null || git fetch -q origin "pull/$PR/head" 2>/dev/null
+if git cat-file -e "${REVIEWED}^{commit}" 2>/dev/null; then
+  reviewed_object_available=1
+else
+  git fetch -q origin "pull/$PR/head" 2>/dev/null
+  if git cat-file -e "${REVIEWED}^{commit}" 2>/dev/null; then
+    reviewed_object_available=1
+  else
+    reviewed_object_available=0
+  fi
+fi
 
 fail=0
 say_ok()   { echo "  ok      $*"; }
@@ -104,33 +113,58 @@ draft=$(printf '%s' "$pr" | jq -r .isDraft)
 
 # 2. Up to date with main. CI green on a tree that never existed on main is not
 #    evidence about main. #326 landed red exactly this way.
-if git merge-base --is-ancestor origin/main "$REVIEWED" 2>/dev/null; then
+if [ "$reviewed_object_available" != "1" ]; then
+  say_bad "reviewed SHA $REVIEWED is unavailable after fetching PR #$PR — its history may have been rewritten; re-review the current head"
+elif git merge-base --is-ancestor origin/main "$REVIEWED" 2>/dev/null; then
   say_ok "contains origin/main ($(git rev-parse --short origin/main))"
 else
   say_bad "BEHIND origin/main ($(git rev-parse --short origin/main)) — merge main into the branch first"
 fi
 
-# 3. Checks on the REVIEWED sha, not on the PR, not on the branch.
+# 3. Checks on the REVIEWED sha, not on the PR, not on the branch. The current
+#    main tip supplies the expected check names. This is observed repository
+#    state, not a count copied into the script; when CI adds or removes a job,
+#    the gate follows main. A passing early check can therefore never authorize
+#    a merge while another expected check has not reported on the reviewed SHA.
 # Judge the LATEST run of each check NAME, not every run on the SHA. A
 # superseded run stays on the commit forever: `concurrency: cancel-in-progress`
 # leaves a `cancelled` entry behind whenever a PR is force-pushed or pushed
 # twice quickly, and counting it blocked #432 while all four of those checks had
 # already passed on the same SHA (#433). `neutral` is likewise not a failure --
 # CodeQL reports it transiently before settling.
-runs=$(gh api "repos/$REPO/commits/$REVIEWED/check-runs" --paginate 2>/dev/null)
+runs=$(gh api "repos/$REPO/commits/$REVIEWED/check-runs" --paginate 2>/dev/null \
+  | jq -sc '[.[].check_runs[]]')
+
+main_sha=$(git rev-parse origin/main)
+main_runs=$(gh api "repos/$REPO/commits/$main_sha/check-runs" --paginate 2>/dev/null \
+  | jq -sc '[.[].check_runs[]]')
 
 latest=$(printf '%s' "$runs" | jq -c '
-  [.check_runs[]]
-  | group_by(.name)
+  group_by(.name)
+  | map(sort_by(.started_at, .completed_at) | last)' 2>/dev/null)
+
+expected_latest=$(printf '%s' "$main_runs" | jq -c '
+  group_by(.name)
   | map(sort_by(.started_at, .completed_at) | last)' 2>/dev/null)
 
 n=$(printf '%s' "$latest" | jq -r 'length' 2>/dev/null || echo 0)
+expected_n=$(printf '%s' "$expected_latest" | jq -r 'length' 2>/dev/null || echo 0)
+present_names=$(printf '%s' "$latest" | jq -c '[.[].name] | unique' 2>/dev/null || echo '[]')
+expected_names=$(printf '%s' "$expected_latest" | jq -c '[.[].name] | unique' 2>/dev/null || echo '[]')
+missing=$(jq -nc --argjson expected "$expected_names" --argjson present "$present_names" \
+  '$expected - $present' 2>/dev/null || echo '[]')
+missing_n=$(printf '%s' "$missing" | jq -r 'length' 2>/dev/null || echo 0)
 bad=$(printf '%s' "$latest" | jq -r \
       '[.[]|select(.status!="completed" or (.conclusion|IN("success","skipped","neutral")|not))]|length' \
       2>/dev/null || echo 1)
-min=${GATE_MIN_CHECKS:-6}
-if [ "${n:-0}" -lt "$min" ] || [ "${bad:-1}" != "0" ]; then
-  say_bad "checks on ${REVIEWED:0:8}: $n distinct, $bad not passing (need >=$min, 0 bad)"
+if [ "${expected_n:-0}" -lt 1 ]; then
+  say_bad "cannot observe expected checks on origin/main ${main_sha:0:8}"
+elif [ "${n:-0}" -lt 1 ]; then
+  say_bad "no checks reported yet on ${REVIEWED:0:8}"
+elif [ "${missing_n:-0}" -gt 0 ]; then
+  say_bad "checks not yet reported on ${REVIEWED:0:8}: $(printf '%s' "$missing" | jq -r 'join(", ")')"
+elif [ "${bad:-1}" != "0" ]; then
+  say_bad "checks on ${REVIEWED:0:8}: $n distinct, $bad not passing"
   printf '%s' "$latest" | jq -r \
     '.[]|select(.status!="completed" or (.conclusion|IN("success","skipped","neutral")|not))
         |"            \(.name): \(.status)/\(.conclusion // "pending")"'
@@ -273,16 +307,34 @@ fi
 
 # 5d. gh pr review --approve is refused on our own PRs (shared account), and
 # the natural fallback `gh pr comment` posts fine but gate.sh only ever reads
-# repos/:repo/pulls/:pr/reviews — an accept posted there silently does not
-# exist as far as the gate is concerned (#359). Only worth the extra API call
-# when the review stream came up empty; a comment-stream marker never overrides
-# an actual review either way.
-if [ -z "$accepted_agents" ]; then
-  issue_comments=$(gh api "repos/$REPO/issues/$PR/comments" --paginate 2>/dev/null \
-    | jq -s 'add // []' 2>/dev/null)
-  [ -n "$issue_comments" ] || issue_comments='[]'
+# repos/:repo/pulls/:pr/reviews. A comment-stream marker never becomes a
+# verdict, but a blocking marker must remain visible even when another reviewer
+# has already accepted: otherwise the acceptance hides the warning (#392).
+issue_comments=$(gh api "repos/$REPO/issues/$PR/comments" --paginate 2>/dev/null \
+  | jq -s 'add // []' 2>/dev/null)
+[ -n "$issue_comments" ] || issue_comments='[]'
 
-  stray_agents=$(printf '%s' "$issue_comments" | jq -r --arg author "$author_agent" '
+stray_blocking_agents=$(printf '%s' "$issue_comments" | jq -r --arg author "$author_agent" '
+  def from_agent:
+    ([((.body // "") | split("\n")[]
+       | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
+       | ascii_downcase)] | unique) as $agents
+    | if ($agents | length) == 1 then $agents[0] else "" end;
+  def has_blocking_marker:
+    (.body // "") | test("\\*\\*Verdict:\\*\\*[[:space:]]*changes required(?:[[:space:]]|$)"; "i");
+  [.[] | . + {agent: from_agent} | select(.agent != "" and .agent != $author and has_blocking_marker) | .agent]
+  | unique | join("\n")
+' 2>/dev/null)
+
+if [ -n "$stray_blocking_agents" ]; then
+  while IFS= read -r agent; do
+    [ -n "$agent" ] || continue
+    say_warn "found a blocking verdict marker from $agent in the comment stream; gate reads reviews only — repost with 'gh pr review --comment'"
+  done <<< "$stray_blocking_agents"
+fi
+
+if [ -z "$accepted_agents" ]; then
+  stray_accept_agents=$(printf '%s' "$issue_comments" | jq -r --arg author "$author_agent" '
     def from_agent:
       ([((.body // "") | split("\n")[]
          | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
@@ -296,17 +348,17 @@ if [ -z "$accepted_agents" ]; then
     # refused) improvises the formatting too: the observed incident was
     # exactly this, "**From:** opus-5 — **Verdict:** accept at `sha`." on one
     # line, which a line-anchored **Verdict:** would never match.
-    def has_verdict_marker:
-      (.body // "") | test("\\*\\*Verdict:\\*\\*[[:space:]]*(accept(?: with follow-up)?|changes required)"; "i");
-    [.[] | . + {agent: from_agent} | select(.agent != "" and .agent != $author and has_verdict_marker) | .agent]
+    def has_accept_marker:
+      (.body // "") | test("\\*\\*Verdict:\\*\\*[[:space:]]*accept(?: with follow-up)?(?:[[:space:]]|$)"; "i");
+    [.[] | . + {agent: from_agent} | select(.agent != "" and .agent != $author and has_accept_marker) | .agent]
     | unique | join("\n")
   ' 2>/dev/null)
 
-  if [ -n "$stray_agents" ]; then
+  if [ -n "$stray_accept_agents" ]; then
     while IFS= read -r agent; do
       [ -n "$agent" ] || continue
       say_warn "found a verdict marker from $agent in the comment stream; gate reads reviews only — repost with 'gh pr review --comment'"
-    done <<< "$stray_agents"
+    done <<< "$stray_accept_agents"
   fi
 fi
 
