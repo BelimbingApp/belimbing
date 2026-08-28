@@ -168,6 +168,8 @@ class ScheduleBoard
                 startedAt: $run->started_at,
                 finishedAt: $run->finished_at,
                 detail: $run->output_excerpt,
+                trigger: $run->trigger ?? 'scheduled',
+                triggeredByName: $run->triggered_by_name,
             ))
             ->all();
 
