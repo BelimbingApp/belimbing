@@ -63,6 +63,8 @@ test('denied application environments fail closed even for a capable admin', fun
     'production' => 'production',
     'testing' => 'testing',
     'unrecognised' => 'dev-box',
+    'uppercase local' => 'LOCAL',
+    'whitespace-padded staging' => ' staging ',
 ]);
 
 test('an unresolved application environment fails closed with a stated reason', function (): void {

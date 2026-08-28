@@ -37,6 +37,8 @@ final class UpstreamSyncGate
 
     /**
      * The resolved Laravel application environment, or null when unavailable.
+     * Preserve it exactly: Laravel's environment vocabulary is case-sensitive,
+     * so normalizing a misspelling could accidentally open this write boundary.
      * APP_ENV is already the platform's development/production boundary; a
      * second value in the same environment file would not be independent.
      */
@@ -47,8 +49,6 @@ final class UpstreamSyncGate
         if (! is_string($environment)) {
             return null;
         }
-
-        $environment = strtolower(trim($environment));
 
         return $environment !== '' ? $environment : null;
     }
