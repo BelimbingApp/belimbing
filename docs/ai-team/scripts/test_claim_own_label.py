@@ -126,6 +126,16 @@ class ClaimOwnLabelTest(unittest.TestCase):
         self.assertIn("resuming #42: it already carries your own label", result.stdout)
         self.assertIn("claimed #42 in draft PR", result.stdout)
 
+    def test_existing_label_skips_label_create_and_claims(self):
+        # #403: `--arg label` shadowed jq's `label` keyword, so the existence
+        # check never parsed and a second claim by the same agent aborted at
+        # `gh label create` (the stub's label list already carries agent:fable
+        # and `label create` exits 1). A green claim proves the existence
+        # check ran and skipped creation.
+        result = self.run_claim(self.issue(["task:ready"]))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("claimed #42 in draft PR", result.stdout)
+
     def test_anothers_label_is_still_a_hard_refusal(self):
         result = self.run_claim(self.issue(["agent:sol", "task:ready"]))
         self.assertEqual(result.returncode, 1)
@@ -236,6 +246,49 @@ class OrientReachabilityFilterTest(unittest.TestCase):
         self.assertIn("#373 [agent:fable] reachable: session R2 Fable · last seen 2026-08-27T06:30:00Z", out)
         self.assertIn("#374 [agent:sol] reachable: board (assumed — no roster line)", out)
         self.assertNotIn("#375", out)
+
+    def test_appended_reachable_line_overrides_the_first_one(self):
+        # #390: `capture(...)` returns only the first match, so an agent that
+        # moves between sessions and appends `**Reachable:** session new`
+        # rather than rewriting the body silently keeps the stale channel.
+        # The shipped filter must take the LAST **Reachable:** line, because
+        # that is how a person reading the thread top-to-bottom would update
+        # their belief about where the owner is reachable.
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**From:** fable\n\n**Reachable:** session old\n\nsome text\n\n**Reachable:** session new",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: session new", out)
+        self.assertNotIn("session old", out)
+
+    def test_last_reachable_wins_even_when_first_is_more_recent_in_text_order(self):
+        # Same shape as above with three updates, to prove LAST, not
+        # LAST-OF-TWO, and not "the unique line after a fence".
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**Reachable:** session one\n\n**Reachable:** session two\n\n**Reachable:** session three",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: session three", out)
+        self.assertNotIn("session one", out)
+        self.assertNotIn("session two", out)
+
+    def test_no_reachable_line_still_falls_back_to_board_assumed(self):
+        # Regression guard: when the body has no `**Reachable:**` marker at
+        # all, the LAST-wins change must not break the existing fallback.
+        out = self.run_filter(
+            [
+                {"number": 374, "labels": [{"name": "agent:fable"}],
+                 "body": "**From:** fable\n\nno roster line, just prose",
+                 "updatedAt": "2026-08-27T06:35:00Z"},
+            ]
+        )
+        self.assertIn("#374 [agent:fable] reachable: board (assumed — no roster line)", out)
 
 
 class OrientHoldHolderFilterTest(unittest.TestCase):

@@ -126,7 +126,10 @@ labels=$(gh label list --repo "$repo" --limit 1000 --json name 2>/dev/null) || {
   exit 2
 }
 
-if ! jq -e --arg label "$agent_label" 'any(.name == $label)' <<<"$labels" >/dev/null; then
+# `label` is a jq keyword (label $out | break $out), so a variable named
+# $label is a parse error on jq 1.6 — the existence check never ran and a
+# second claim by the same agent aborted at `gh label create` (#403).
+if ! jq -e --arg want "$agent_label" 'any(.name == $want)' <<<"$labels" >/dev/null; then
   gh label create "$agent_label" --repo "$repo" --color "5319e7" \
     --description "AI-team identity and ownership: $agent"
 fi
