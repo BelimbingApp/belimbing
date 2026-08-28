@@ -44,17 +44,38 @@ class ScheduleRunRecorder
             // this event ever fired (#401) — transition that same row rather
             // than creating a second one, so the operator sees one continuous
             // record instead of an orphaned queued row plus a fresh running one.
+            //
+            // But only while it's still open: a worker can recover a job
+            // *after* its attached row was already reconciled to failed by
+            // the staleness window or explicitly superseded by an operator
+            // (#407 review, fable) — transitioning a terminal row back to
+            // `running` would silently erase that failed/superseded record
+            // the moment the slow worker finally shows up, which is exactly
+            // the kind of retroactive lie this whole mechanism exists to
+            // prevent. A terminal attached row means the execution it once
+            // tracked is no longer the same story as the one now starting,
+            // so this gets a fresh row of its own — two honest records
+            // instead of one falsified one, matching complete()'s own
+            // finished_at guard for the same reason.
             $existing = $this->existingRun($event->task);
 
-            if ($existing instanceof ScheduleRun) {
+            if ($existing instanceof ScheduleRun && $existing->finished_at === null) {
                 $existing->update([
                     'status' => 'running',
                     'started_at' => now(),
                 ]);
                 $run = $existing;
             } else {
+                // A terminal $existing row still means a worker eventually
+                // did pick this job up — the fresh row it earns is honestly
+                // that same manually-requested run finally executing late,
+                // not a fresh scheduler tick, so it keeps the same
+                // trigger/actor provenance rather than reading as anonymous.
                 $run = ScheduleRun::query()->create([
                     'source' => 'scheduler',
+                    'trigger' => $existing?->trigger ?? 'scheduled',
+                    'triggered_by_user_id' => $existing?->triggered_by_user_id,
+                    'triggered_by_name' => $existing?->triggered_by_name,
                     'key' => $this->key($event->task),
                     'name' => $this->name($event->task),
                     'expression' => $this->expression($event->task),
