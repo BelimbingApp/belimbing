@@ -182,6 +182,7 @@ $tabs = [
                                         @if($editingSource === $item->source && $editingKey === $item->key)
                                             <div class="space-y-1.5">
                                                 <x-ui.input
+                                                    id="schedule-cron-{{ hash('sha256', $item->source."\0".$item->key) }}"
                                                     wire:model.live.debounce.400ms="cronDraft"
                                                     class="w-44 font-mono text-sm"
                                                     :aria-label="__('Cron expression for :task', ['task' => $item->name])"

@@ -111,6 +111,20 @@ final class ScheduleCronOverrideTestContributor implements ScheduleCadenceContri
 
 // ---- editing and validation ----
 
+test('the inline cron editor keeps a stable id across live renders', function (): void {
+    [, $key] = overrideTestEvent();
+    $inputId = 'schedule-cron-'.hash('sha256', "scheduler\0{$key}");
+    $this->actingAs(createAdminUser());
+
+    $component = Livewire::test(Index::class)
+        ->call('startCronEdit', 'scheduler', $key)
+        ->assertSeeHtml('id="'.$inputId.'"');
+
+    $component
+        ->set('cronDraft', '15 6 * * 1')
+        ->assertSeeHtml('id="'.$inputId.'"');
+});
+
 test('a valid saved override becomes the effective cadence with the default shown honestly', function (): void {
     [, $key] = overrideTestEvent(cron: '0 3 * * *');
     $this->actingAs(createAdminUser());
