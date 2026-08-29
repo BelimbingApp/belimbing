@@ -284,15 +284,18 @@ class TallyAndCloseTest(DecideTestCase):
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
         body = self.last_decision_body()
+        self.assertIn("**Resolution:** majority", body)
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=2", body)
         self.assertIn("right=1", body)
         self.assertIn("**Tie-Break:** none", body)
-        # opus-5's #436 finding: on the majority path the closer is never
-        # asked for --authority-effect at all, so the record must say so —
-        # "none" in this field's vocabulary means an affirmative "does not
-        # expand my own authority" declaration, which nobody made here.
-        self.assertIn("**Authority-Effect:** not-required", body)
+        # opus-5's #436 finding, resolved by the Resolution field rather
+        # than a second vocabulary value: on the majority path the closer
+        # is never asked for --authority-effect, but "Authority-Effect:
+        # none" alongside "Resolution: majority" is unambiguous — the
+        # record itself says the field was never in play, without needing
+        # a third "not asked" token to keep in sync.
+        self.assertIn("**Authority-Effect:** none", body)
 
     def test_latest_vote_per_agent_replaces_the_earlier_one(self):
         self.set_roster(["p", "a", "b", "c"])
@@ -373,6 +376,7 @@ class TallyAndCloseTest(DecideTestCase):
         )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         body = self.last_decision_body()
+        self.assertIn("**Resolution:** tie", body)
         self.assertIn("**Chosen:** right", body)
         self.assertIn("**Tie-Break:** right matches the architecture doc", body)
         self.assertIn("**Authority-Effect:** none", body)
@@ -479,6 +483,7 @@ class TallyAndCloseTest(DecideTestCase):
         )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         body = self.last_decision_body()
+        self.assertIn("**Resolution:** expired", body)
         self.assertIn("**Chosen:** left", body)
         self.assertIn("not met by the deadline", body)
         self.assertIn("**Authority-Effect:** none", body)
@@ -709,6 +714,27 @@ class MalformedDecisionTest(DecideTestCase):
         result = self.vote(10, "d", "left", agent="a")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_a_decision_missing_only_resolution_does_not_close(self):
+        # opus-5's #436 finding: Resolution is a stable, machine-readable
+        # token naming which of close()'s three branches produced the
+        # record, replacing free-form Quorum prose a reader would otherwise
+        # have to parse (terra's P2). It must be required like every other
+        # field, not assumed present.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Chosen:** left\n**Tally:** left=1\n**Quorum:** met\n"
+            "**Deciding-Agent:** p\n**Implementation-Owner:** p\n"
+            "**Revisit-If:** never\n**Tie-Break:** none\n"
+            "**Authority-Effect:** none\n**Owner-Delegation:** none\n"
+            "**Did-Not-Vote:** none\n**Unacknowledged:** none\n"
+            # Resolution omitted — every other field present.
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])
         self.propose(10, "d", "left,right", "left", agent="p")
@@ -805,6 +831,25 @@ class RequiredEvidenceTest(DecideTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("rationale is required", result.stderr)
         self.assertEqual(len(self.comments_now()), 1)  # only the proposal
+
+    def test_propose_refuses_whitespace_only_evidence(self):
+        # terra's #436 P2: `[ -n "$x" ]` is true for whitespace, so a
+        # bare `[ -n ]` check alone did not actually enforce content.
+        result = self.run_decide(
+            "propose", "10", "--id", "d", "--question", "q?",
+            "--options", "a,b", "--recommend", "a", "   \t  ", agent="p",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("evidence is required", result.stderr)
+        self.assertEqual(self.comments_now(), [])
+
+    def test_vote_refuses_whitespace_only_rationale(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        result = self.run_decide("vote", "10", "--id", "d", "--option", "left", "   ", agent="a")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rationale is required", result.stderr)
+        self.assertEqual(len(self.comments_now()), 1)
 
 
 class AcknowledgementTest(DecideTestCase):

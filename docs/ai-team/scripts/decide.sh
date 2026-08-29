@@ -90,6 +90,13 @@ require_decision_id() {
   fi
 }
 
+# `[ -n "$x" ]` tests for a non-empty string, not non-empty content —
+# whitespace passes it (#436 review, terra P2: `[ -n "   " ]` is true, so
+# whitespace-only evidence/rationale satisfied the "required" check).
+is_blank() {
+  [[ "$1" =~ ^[[:space:]]*$ ]]
+}
+
 resolve_repo() {
   gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || printf '%s' "$REPO"
 }
@@ -168,6 +175,7 @@ DECIDE_JQ_COMMON='
   def owner_delegation_value: one_capture_raw("^\\*\\*Owner-Delegation:\\*\\*[[:space:]]*(?<v>.+)$");
   def did_not_vote_value: one_capture_raw("^\\*\\*Did-Not-Vote:\\*\\*[[:space:]]*(?<v>.+)$");
   def unacknowledged_value: one_capture_raw("^\\*\\*Unacknowledged:\\*\\*[[:space:]]*(?<v>.+)$");
+  def resolution_value: one_capture("^\\*\\*Resolution:\\*\\*[[:space:]]*(?<v>majority|tie|expired)[[:space:]]*$");
   # A comment only terminates a round if it is an actually well-formed
   # decision record. Third round on this class of gap (#436 review):
   # requiring only Chosen let a four-field forgery close a round (terra
@@ -188,6 +196,7 @@ DECIDE_JQ_COMMON='
     and (chosen_value as $c | $opts | index($c)) != null
     and deciding_agent_value != ""
     and deciding_agent_value == from_agent
+    and resolution_value != ""
     and tally_value != ""
     and quorum_value != ""
     and implementation_owner_value != ""
@@ -225,9 +234,9 @@ propose() {
   [ -n "$recommend" ] || { echo "propose: --recommend required" >&2; exit 2; }
   # #430 requires evidence/trade-offs on the proposal, not just a bare
   # question — fail closed rather than accept a blank body (#436 review,
-  # terra P4).
-  [ -n "$body" ] || {
-    echo "propose: evidence is required — pass trade-offs, costs, risks, reversibility, and what a wrong answer would break as trailing text; a bare question is not a proposal" >&2
+  # terra P4, and whitespace-only closed by terra P2).
+  is_blank "$body" && {
+    echo "propose: evidence is required — pass trade-offs, costs, risks, reversibility, and what a wrong answer would break as trailing text; a bare or whitespace-only question is not a proposal" >&2
     exit 2
   }
   [[ "$deadline_minutes" =~ ^[0-9]+$ ]] && [ "$deadline_minutes" -ge 1 ] && [ "$deadline_minutes" -le "$MAX_DEADLINE_MINUTES" ] || {
@@ -317,9 +326,10 @@ vote() {
     *,*) echo "vote: --option must name exactly one option, not a list" >&2; exit 2 ;;
   esac
   # #430 requires a rationale tied to the authority stack on every vote —
-  # fail closed on a blank one (#436 review, terra P4).
-  [ -n "$body" ] || {
-    echo "vote: a rationale is required — tie your choice to the authority stack (owner constraints, AGENTS.md, docs/brief.md, the relevant architecture contracts) as trailing text" >&2
+  # fail closed on a blank one (#436 review, terra P4, and whitespace-only
+  # closed by terra P2).
+  is_blank "$body" && {
+    echo "vote: a rationale is required — tie your choice to the authority stack (owner constraints, AGENTS.md, docs/brief.md, the relevant architecture contracts) as trailing text, not whitespace" >&2
     exit 2
   }
 
@@ -613,19 +623,34 @@ close() {
   local tally_summary; tally_summary=$(printf '%s' "$tally_json" | jq -r 'map("\(.option)=\(.count)") | join(", ")')
   [ -n "$tally_summary" ] || tally_summary="(no valid votes recorded)"
 
-  local chosen="" needs_rationale="false" quorum_note=""
+  # Resolution is a stable, machine-readable token naming exactly which of
+  # close()'s three branches produced this record — terra's #436 P2: a
+  # reader (or a future script) should not have to parse free-form Quorum
+  # prose ("met but tied…", "not met by the deadline…") to know which path
+  # ran, and doing so is fragile in practice, not just in principle. It
+  # also settles opus-5's Authority-Effect finding better than the
+  # vocabulary patch opus-5 first proposed and then asked not to be built:
+  # with Resolution on the record, "Authority-Effect: none" on
+  # "Resolution: majority" is unambiguously "never asked" because the
+  # record itself says which path produced it — no second vocabulary to
+  # keep in sync, derived directly from the branch already taken below
+  # rather than invented separately.
+  local chosen="" needs_rationale="false" quorum_note="" resolution=""
   if [ "$quorum_met" = "true" ] && [ "$is_tie" = "false" ] && [ "$top_count" -gt 0 ]; then
     chosen=$(printf '%s' "$leaders_json" | jq -r '.[0]')
     quorum_note="met (active=$roster_count, voted=$voter_count)"
+    resolution="majority"
     if [ -n "$decision" ] && [ "$decision" != "$chosen" ]; then
       echo "close: --decision '$decision' overrides a clear quorum majority of '$chosen' — that is exactly the override the authority stack forbids without a recorded reason; use it only when the majority itself is the tie/expired case, or drop --decision to accept '$chosen'" >&2
       exit 2
     fi
   elif [ "$quorum_met" = "true" ] && [ "$is_tie" = "true" ]; then
     needs_rationale="true"
+    resolution="tie"
     quorum_note="met but tied (active=$roster_count, voted=$voter_count, tied: $(printf '%s' "$leaders_json" | jq -r 'join(", ")'))"
   elif [ "$deadline_passed" = "true" ]; then
     needs_rationale="true"
+    resolution="expired"
     quorum_note="not met by the deadline (active=$roster_count, voted=$voter_count) — round does not stall, the deciding agent records the available tally"
   else
     echo "close: '$id' on #$issue is not yet decidable — quorum not met (active=$roster_count, voted=$voter_count) and the deadline ($deadline_str) has not passed. Vote, or wait for the deadline." >&2
@@ -683,19 +708,18 @@ close() {
   # only ever one record shape, so "every field present" is the whole
   # requirement, not a set someone has to keep re-deriving by hand).
   #
-  # Authority-Effect is the one field where "not asked" and "declared" must
-  # print differently: --authority-effect none|self is a genuine assertion
-  # in that field's vocabulary (opus-5's own carve-out finding), so on the
-  # majority path — where the closer is never asked for it at all — the
-  # default is the out-of-vocabulary "not-required", never "none". "none"
-  # must always mean an explicit, affirmative declaration, or an auditor
-  # scanning this field afterward cannot tell "affirmed none" from "never
-  # asked" — identical text collapsing the one distinction this field
-  # exists to preserve (#436 review, opus-5, caught in their own fix).
+  # Authority-Effect keeps a two-value vocabulary (none|self) rather than a
+  # third "not asked" token: with Resolution on the record, "Authority-
+  # Effect: none" on "Resolution: majority" is unambiguously "never asked"
+  # — the record itself says which branch ran, so an auditor never has to
+  # guess. A prior version of this fix invented a third vocabulary value
+  # for exactly this; opus-5 proposed Resolution instead and asked for
+  # their own vocabulary patch not to be built, since it solved the
+  # narrower problem and left terra's free-form-prose fragility unfixed.
   local payload
-  payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
-    "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
-    "${rationale:-none}" "${authority_effect:-not-required}" "${owner_delegation:-none}" \
+  payload=$(printf '**Decision:** %s\n**Resolution:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
+    "$id" "$resolution" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
+    "${rationale:-none}" "${authority_effect:-none}" "${owner_delegation:-none}" \
     "${not_reached:-none}" "${unacknowledged:-none}")
   payload="${payload}
 

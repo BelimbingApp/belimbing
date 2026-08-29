@@ -326,11 +326,19 @@ still missing, does not stall the round — the active steward (the lane owner,
 if none is reachable) records the available tally and closes with an explicit
 `--decision`/`--rationale` naming the tie-break reasoning against the
 authority stack, rather than waiting indefinitely for a voter who may not
-return. The closing record on the issue carries the chosen option, the tally,
-minority votes, the deciding agent, the implementation owner, and the
-condition that would justify revisiting it (`orient.sh` surfaces every open
-round and its deadline/quorum state under "open deliberations" — never as
-"waiting for owner").
+return. The closing record on the issue carries a stable `**Resolution:**
+majority|tie|expired` naming exactly which of those three paths produced it
+— never something a reader has to infer by parsing free-form quorum prose —
+alongside the chosen option, the tally, minority votes, the deciding agent,
+the implementation owner, and the condition that would justify revisiting it
+(`orient.sh` surfaces every open round and its deadline/quorum state under
+"open deliberations" — never as "waiting for owner"). Every field on this
+record is unconditionally present, `none` standing in for a conditional
+value that does not apply — there is exactly one record shape, and
+`decide.sh` treats a comment as a genuine closing record only when every
+field is present, `**Chosen:**` names a declared option, `**Deciding-
+Agent:**` matches the comment's own identity, and the author is on the
+currently active roster.
 
 **`propose()` snapshots the active roster as `**Notify:**`**, and the closing
 record separates two deliberately distinct, honestly-named facts rather than
