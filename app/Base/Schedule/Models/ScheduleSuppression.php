@@ -29,4 +29,16 @@ class ScheduleSuppression extends Model
         'key',
         'name',
     ];
+
+    /**
+     * Same stable audit identity as ScheduleOverride: pause/resume is
+     * configuration history for the task, queryable as
+     * `schedule-task / <source>:<key>` (#398).
+     *
+     * @return array{name: string, id: string}
+     */
+    public function getAuditSubject(): ?array
+    {
+        return ['name' => 'schedule-task', 'id' => $this->source.':'.$this->key];
+    }
 }

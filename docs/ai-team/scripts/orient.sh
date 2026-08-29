@@ -163,18 +163,35 @@ printf '%s' "$reach_prs" | jq -r '.[]
 
 # The lane owner is not the person the steward usually needs (#373 review):
 # on the motivating incident the lane said agent:fable while the unreachable
-# agent was the HOLD owner, whom no label records. The review stream does
-# record them — the **From:** markers gate.sh parses — so for each held PR,
-# name the agents whose latest verdict is changes-required, with their
-# channel resolved from their own lane row above, else board.
+# agent was the HOLD owner, whom no label recorded at the time. channel
+# lookup for whoever the holder turns out to be, from their own lane row
+# above, else board.
 agent_channels=$(printf '%s' "$reach_prs" | jq -r '.[]
     | ([.labels[].name | select(startswith("agent:")) | sub("^agent:"; "")] | .[]) as $a
     | (((( .body // "") | [match("\\*\\*Reachable:\\*\\*\\s*(?<c>[^\\r\\n]+)"; "g") | .captures[0].string] | last)?) // "") as $c
     | select($c != "")
     | "\($a)\t\($c)"' 2>/dev/null)
 
+# Since #385, a review hold names its holder directly — hold:review:<agent> —
+# so read that label rather than reconstructing ownership from the review
+# stream at all. This is the primary path now; no heuristics involved.
 printf '%s' "$reach_prs" | jq -r '.[]
-    | select([.labels[].name] | any(startswith("hold:")))
+    | . as $pr
+    | ($pr.labels[].name | select(startswith("hold:review:")) | ltrimstr("hold:review:")) as $holder
+    | "\($pr.number)\t\($holder)"' 2>/dev/null \
+  | while IFS=$'\t' read -r held_pr holder; do
+      [ -n "$held_pr" ] && [ -n "$holder" ] || continue
+      channel=$(printf '%s\n' "$agent_channels" | awk -F'\t' -v a="$holder" '$1 == a {print $2; exit}')
+      echo "  #$held_pr [hold] held by $holder — reachable: ${channel:-board (assumed — no lane of their own)}"
+    done
+
+# Legacy fallback only: a bare, unattributed `hold:review` label (pre-#385)
+# names no holder, so reconstruct one the old way — the agent whose latest
+# review verdict on that PR is changes-required — from the review stream
+# **From:**/**Verdict:** markers gate.sh also parses. Migrate these PRs to
+# hold.sh's named label and this block stops having anything to do.
+printf '%s' "$reach_prs" | jq -r '.[]
+    | select([.labels[].name] | any(. == "hold:review"))
     | .number' 2>/dev/null \
   | while read -r held_pr; do
       [ -n "$held_pr" ] || continue
@@ -195,7 +212,7 @@ printf '%s' "$reach_prs" | jq -r '.[]
         | while read -r holder; do
             [ -n "$holder" ] || continue
             channel=$(printf '%s\n' "$agent_channels" | awk -F'\t' -v a="$holder" '$1 == a {print $2; exit}')
-            echo "  #$held_pr [hold] held by $holder — reachable: ${channel:-board (assumed — no lane of their own)}"
+            echo "  #$held_pr [hold, unattributed legacy label — migrate with hold.sh] held by $holder (reconstructed) — reachable: ${channel:-board (assumed — no lane of their own)}"
           done
     done
 

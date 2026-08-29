@@ -5,18 +5,42 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
+def _git_root() -> Path | None:
+    """Return the installation root for the Git executable on PATH."""
+    git = shutil.which("git")
+    if git is None:
+        return None
+
+    return Path(git).resolve().parent.parent
+
+
+def _git_tool_executable(tool: str) -> str | None:
+    """Resolve a Git-for-Windows tool when it is not itself on PATH."""
+    git_root = _git_root()
+    if git_root is None:
+        return None
+
+    for directory in ("bin", "usr/bin"):
+        for suffix in ("", ".exe"):
+            candidate = git_root / directory / f"{tool}{suffix}"
+            if candidate.is_file():
+                return str(candidate)
+
+    return None
+
+
 def _bash_executable() -> str:
     """Resolve Bash for POSIX hosts and ordinary Git-for-Windows installs."""
+    # On Windows, `bash` may resolve to the WSL launcher in System32 even
+    # though Git-for-Windows is installed. Prefer the Git installation so the
+    # shell and the companion coreutils come from the same environment.
+    git_bash = _git_tool_executable("bash")
+    if git_bash is not None:
+        return git_bash
+
     bash = shutil.which("bash")
     if bash is not None:
         return bash
-
-    git = shutil.which("git")
-    if git is not None:
-        git_root = Path(git).resolve().parent.parent
-        for candidate in (git_root / "bin" / "bash.exe", git_root / "usr" / "bin" / "bash.exe"):
-            if candidate.is_file():
-                return str(candidate)
 
     raise FileNotFoundError("Bash is required to exercise the AI-team shell mechanisms")
 
@@ -42,6 +66,8 @@ def run_with_bash_path(
     """Run a command under Bash with extensionless test shims first on PATH."""
     child_env = env.copy()
     child_env["AI_TEAM_TEST_STUB_PATH"] = bash_path(stub_directory)
+    if kwargs.get("text") or kwargs.get("universal_newlines"):
+        kwargs.setdefault("encoding", "utf-8")
 
     return subprocess.run(
         [

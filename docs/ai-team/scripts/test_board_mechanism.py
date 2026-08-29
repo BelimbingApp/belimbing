@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -8,7 +9,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import _bash_executable, _git_tool_executable, run_with_bash_path
 
 
 SCRIPT = Path(__file__).with_name("board.sh")
@@ -329,27 +330,40 @@ class BoardMechanismTest(unittest.TestCase):
         # EMPTY visible section for every over-budget single-line post. The
         # lesser harm is one possibly-split trailing character; the visible
         # section must stay non-empty.
-        import shutil
-
         with tempfile.TemporaryDirectory() as raw:
             directory = Path(raw)
             gh_capture_stub(directory)
-            # A PATH that genuinely lacks iconv: symlink only what post needs.
+            # A PATH that genuinely lacks iconv: stage only what post needs.
+            # Copying instead of symlinking keeps this fixture usable on
+            # ordinary Windows checkouts without SeCreateSymbolicLinkPrivilege.
+            # Resolve Bash through the shared helper so ordinary PowerShell
+            # still finds Git-for-Windows even when bash.exe is not itself on
+            # PATH (#389).
+            bash = _bash_executable()
             for tool in ("bash", "head", "tail", "wc", "cat", "sed"):
-                real = shutil.which(tool)
+                real = (
+                    bash
+                    if tool == "bash"
+                    else shutil.which(tool) or _git_tool_executable(tool)
+                )
                 self.assertIsNotNone(real, f"{tool} required for the fixture")
-                (directory / tool).symlink_to(real)
+                destination_name = Path(real).name if os.name == "nt" else tool
+                destination = directory / destination_name
+                shutil.copy2(real, destination)
+                if os.name != "nt":
+                    destination.chmod(destination.stat().st_mode | stat.S_IXUSR)
             env = os.environ.copy()
             env["BOARD_TEST_CAPTURE"] = str(directory / "captured-body")
             env["BOARD_TEST_FIXTURE"] = str(directory / "fixture.json")
             env["BOARD_POST_BUDGET"] = "201"
             env["PATH"] = str(directory)
             result = subprocess.run(
-                [str(directory / "bash"), str(SCRIPT), "post", "42",
+                [bash, str(SCRIPT), "post", "42",
                  "--agent", "fable", "--type", "finding"],
                 input="\u00e9" * 300,
                 env=env,
                 text=True,
+                encoding="utf-8",
                 capture_output=True,
                 check=False,
             )
@@ -360,7 +374,12 @@ class BoardMechanismTest(unittest.TestCase):
             # ~200 payload bytes), not just the header over an empty body.
             self.assertGreater(len(visible), 150, "visible section must not be empty")
             # Byte conservation still holds: every input byte is in the post.
-            self.assertEqual(body_bytes.count(b"\xc3\xa9"), 299)
+            # The raw-cut fallback may split one pair on POSIX (299 complete
+            # pairs), while Git-for-Windows can land on the pair boundary
+            # (300 complete pairs). Both outcomes preserve all input bytes.
+            self.assertEqual(body_bytes.count(b"\xc3"), 300)
+            self.assertEqual(body_bytes.count(b"\xa9"), 300)
+            self.assertGreaterEqual(body_bytes.count(b"\xc3\xa9"), 299)
 
     # ---- hygiene ----
 

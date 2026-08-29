@@ -7,6 +7,7 @@ use App\Base\Authz\DTO\Actor;
 use App\Base\Authz\Livewire\Concerns\ChecksCapabilityAuthorization;
 use App\Base\Foundation\Livewire\Concerns\FiltersByPeriod;
 use App\Base\Foundation\Livewire\Concerns\SelectsPerPage;
+use App\Base\Schedule\Contracts\ScheduleCadenceContributor;
 use App\Base\Schedule\DTO\ScheduleHistoryPage;
 use App\Base\Schedule\DTO\ScheduleHistoryQuery;
 use App\Base\Schedule\DTO\ScheduleTask;
@@ -14,16 +15,20 @@ use App\Base\Schedule\Jobs\RunScheduledTaskJob;
 use App\Base\Schedule\Livewire\Concerns\DescribesCronSchedules;
 use App\Base\Schedule\Livewire\Concerns\ProvidesScheduleStatusOptions;
 use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
+use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
-use App\Base\Schedule\Services\ScheduleHealthService;
+use App\Base\Schedule\Services\ScheduleConfigurationGate;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
+use Cron\CronExpression;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Carbon;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -196,6 +201,361 @@ class Index extends Component
         $this->notify(__('Run queued.'));
     }
 
+    // Inline cron editing (#398): one row at a time, identified by
+    // source+key. `cronPreviewFor` records which normalized expression the
+    // shown preview belongs to — saving requires the preview to have been
+    // taken for exactly the draft being saved, so the next-three-runs
+    // confirmation is a mechanism, not an instruction.
+    public ?string $editingSource = null;
+
+    public ?string $editingKey = null;
+
+    public string $cronDraft = '';
+
+    public ?string $cronVersion = null;
+
+    /** @var list<string> */
+    public array $cronPreview = [];
+
+    public ?string $cronPreviewFor = null;
+
+    public ?string $cronPreviewTimezone = null;
+
+    public function startCronEdit(string $source, string $key): void
+    {
+        if (! $this->checkCapability('admin.system.schedule.manage')) {
+            return;
+        }
+
+        $task = $this->boardTask($source, $key);
+
+        if ($task === null || ! $task->editable) {
+            $this->notifyError(__("This task's cadence cannot be edited from this page — its owner does not support it."));
+
+            return;
+        }
+
+        $this->editingSource = $source;
+        $this->editingKey = $key;
+        $this->cronDraft = $task->cron;
+        // The value the operator is editing FROM is the version token: a
+        // concurrent save changes the stored expression by definition, so an
+        // atomic conditional write keyed on it needs no timestamp precision
+        // (#411 review — the previous read-then-write left a race window).
+        // Empty string = "no override existed when editing began".
+        $this->cronVersion = $task->overridden ? $task->cron : '';
+        $this->cronPreview = [];
+        $this->cronPreviewFor = null;
+        $this->cronPreviewTimezone = null;
+        $this->resetErrorBag('cronDraft');
+    }
+
+    public function cancelCronEdit(): void
+    {
+        $this->editingSource = null;
+        $this->editingKey = null;
+        $this->cronDraft = '';
+        $this->cronVersion = null;
+        $this->cronPreview = [];
+        $this->cronPreviewFor = null;
+        $this->cronPreviewTimezone = null;
+        $this->resetErrorBag('cronDraft');
+    }
+
+    public function previewCron(): void
+    {
+        if (! $this->checkCapability('admin.system.schedule.manage') || $this->editingKey === null) {
+            return;
+        }
+
+        $task = $this->boardTask((string) $this->editingSource, $this->editingKey);
+        $expression = $this->validCronOrError($this->cronDraft);
+
+        if ($task === null || $expression === null) {
+            $this->cronPreview = [];
+            $this->cronPreviewFor = null;
+
+            return;
+        }
+
+        $timezone = $task->timezone ?? (string) config('app.timezone');
+        $cursor = Carbon::now($timezone);
+        $preview = [];
+
+        // Evaluated in the task's declared timezone — the same clock the
+        // runtime will use — and displayed with that timezone stated.
+        $cron = new CronExpression($expression);
+        for ($i = 0; $i < 3; $i++) {
+            $cursor = Carbon::instance($cron->getNextRunDate($cursor, 0, false, $timezone));
+            $preview[] = $cursor->format('D, M j Y H:i');
+        }
+
+        $this->cronPreview = $preview;
+        $this->cronPreviewFor = $expression;
+        $this->cronPreviewTimezone = $timezone;
+    }
+
+    public function saveCron(): void
+    {
+        if (! $this->checkCapability('admin.system.schedule.manage') || $this->editingKey === null) {
+            return;
+        }
+
+        $source = (string) $this->editingSource;
+        $key = $this->editingKey;
+        $task = $this->boardTask($source, $key);
+
+        if ($task === null || ! $task->editable) {
+            $this->notifyError(__("This task's cadence cannot be edited from this page — its owner does not support it."));
+
+            return;
+        }
+
+        $expression = $this->validCronOrError($this->cronDraft);
+
+        if ($expression === null) {
+            return;
+        }
+
+        if ($this->cronPreviewFor !== $expression) {
+            $this->addError('cronDraft', __('Preview the next run times before saving.'));
+
+            return;
+        }
+
+        if ($expression === $task->defaultCron) {
+            // Saving the default IS the reset — do not persist a redundant
+            // override that would freeze the task against future deployments
+            // changing the code default.
+            if ($source === 'scheduler') {
+                if (! $this->resetSchedulerOverrideFromEdit($key)) {
+                    return;
+                }
+
+                $this->cancelCronEdit();
+                $this->notify(__('Cadence reset to the code-declared default.'));
+
+                return;
+            }
+
+            $this->resetCron($source, $key);
+
+            return;
+        }
+
+        if ($source !== 'scheduler') {
+            $this->saveContributorCadence($source, $key, $expression);
+
+            return;
+        }
+
+        // Stale-edit guard, atomic (#411 review): a read-then-write check
+        // leaves a window where a concurrent save lands between the read and
+        // the write and is silently overwritten. Instead the write itself
+        // carries the expectation — INSERT relies on the source+key unique
+        // index to refuse a row that appeared meanwhile, and UPDATE matches
+        // the expression this operator started editing from, so zero
+        // affected rows IS the staleness verdict.
+        $saved = $this->withSchedulerConfigurationLock($key, function () use ($key, $task, $expression): bool {
+            if (($this->cronVersion ?? '') === '') {
+                try {
+                    ScheduleOverride::query()->create(
+                        ['source' => 'scheduler', 'key' => $key, 'name' => $task->name, 'expression' => $expression],
+                    );
+                } catch (UniqueConstraintViolationException) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            $override = ScheduleOverride::query()
+                ->where('source', 'scheduler')
+                ->where('key', $key)
+                ->lockForUpdate()
+                ->first();
+
+            if ($override === null || $override->expression !== $this->cronVersion) {
+                return false;
+            }
+
+            $override->fill(['name' => $task->name, 'expression' => $expression])->save();
+
+            return true;
+        });
+
+        if (! $saved) {
+            $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
+
+            return;
+        }
+
+        $this->cancelCronEdit();
+        $this->notify(__('Cadence saved — the scheduler honors it from the next evaluation.'));
+    }
+
+    public function resetCron(string $source, string $key): void
+    {
+        if (! $this->checkCapability('admin.system.schedule.manage')) {
+            return;
+        }
+
+        $task = $this->boardTask($source, $key);
+
+        if ($task === null || ! $task->editable) {
+            $this->notifyError(__("This task's cadence cannot be edited from this page — its owner does not support it."));
+
+            return;
+        }
+
+        if ($source !== 'scheduler') {
+            $contributor = $this->cadenceContributorFor($source, $key);
+
+            if ($contributor === null || ! $contributor->resetCadence($key)) {
+                $this->notifyError(__("This task's owner did not accept the reset."));
+
+                return;
+            }
+        } else {
+            $this->withSchedulerConfigurationLock($key, function () use ($key): bool {
+                ScheduleOverride::query()
+                    ->where('source', 'scheduler')
+                    ->where('key', $key)
+                    ->lockForUpdate()
+                    ->first()?->delete();
+
+                return true;
+            });
+        }
+
+        $this->cancelCronEdit();
+        $this->notify(__('Cadence reset to the code-declared default.'));
+    }
+
+    /**
+     * Deletes a scheduler override only when it is still the value the
+     * operator began editing. An edit that started with no override must still
+     * verify that the row remains absent before reporting a successful reset:
+     * a concurrent create must be preserved and reported as stale.
+     */
+    private function resetSchedulerOverrideFromEdit(string $key): bool
+    {
+        $version = $this->cronVersion ?? '';
+
+        $deleted = $this->withSchedulerConfigurationLock($key, function () use ($key, $version): ?bool {
+            $override = ScheduleOverride::query()
+                ->where('source', 'scheduler')
+                ->where('key', $key)
+                ->lockForUpdate()
+                ->first();
+
+            if ($version === '') {
+                return $override === null;
+            }
+
+            if ($override === null || $override->expression !== $version) {
+                return false;
+            }
+
+            $override->delete();
+
+            return true;
+        });
+
+        if ($deleted) {
+            return true;
+        }
+
+        $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
+
+        return false;
+    }
+
+    private function withSchedulerConfigurationLock(string $key, callable $operation): mixed
+    {
+        return app(ScheduleConfigurationGate::class)->synchronize($key, $operation);
+    }
+
+    /**
+     * Normalizes harmless whitespace, then validates against the same cron
+     * grammar the runtime accepts (dragonmantank/cron-expression — the class
+     * the scheduler itself evaluates). Never reinterprets an invalid
+     * expression: anything not exactly five valid fields is refused with a
+     * specific error and nothing is persisted (#398).
+     */
+    private function validCronOrError(string $raw): ?string
+    {
+        $expression = trim(preg_replace('/\s+/', ' ', $raw) ?? '');
+
+        if ($expression === '') {
+            $this->addError('cronDraft', __('The cron expression cannot be empty.'));
+
+            return null;
+        }
+
+        if (count(explode(' ', $expression)) !== 5) {
+            $this->addError('cronDraft', __('A cron expression needs exactly five fields: minute, hour, day of month, month, day of week.'));
+
+            return null;
+        }
+
+        if (! CronExpression::isValidExpression($expression)) {
+            $this->addError('cronDraft', __('This is not a valid cron expression — check field ranges (minute 0–59, hour 0–23, day 1–31, month 1–12, weekday 0–7).'));
+
+            return null;
+        }
+
+        return $expression;
+    }
+
+    private function saveContributorCadence(string $source, string $key, string $expression): void
+    {
+        $contributor = $this->cadenceContributorFor($source, $key);
+
+        if ($contributor === null) {
+            $this->notifyError(__("This task's cadence cannot be edited from this page — its owner does not support it."));
+
+            return;
+        }
+
+        if (! $contributor->updateCadence($key, $expression)) {
+            $this->notifyError(__("This task's owner did not accept the new cadence."));
+
+            return;
+        }
+
+        $this->cancelCronEdit();
+        $this->notify(__('Cadence saved with the task owner.'));
+    }
+
+    private function cadenceContributorFor(string $source, string $key): ?ScheduleCadenceContributor
+    {
+        foreach (app()->tagged('schedule.contributors') as $contributor) {
+            if (! $contributor instanceof ScheduleCadenceContributor) {
+                continue;
+            }
+
+            foreach ($contributor->tasks() as $task) {
+                if ($task->source === $source && $task->key === $key && $task->editable) {
+                    return $contributor;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function boardTask(string $source, string $key): ?ScheduleTask
+    {
+        foreach (app(ScheduleBoard::class)->tasks() as $task) {
+            if ($task->source === $source && $task->key === $key) {
+                return $task;
+            }
+        }
+
+        return null;
+    }
+
     public function pause(string $key, string $name): void
     {
         if (! $this->checkCapability('admin.system.schedule.manage')) {
@@ -218,11 +578,12 @@ class Index extends Component
             return;
         }
 
-        ScheduleSuppression::query()
+        $suppression = ScheduleSuppression::query()
             ->where('source', 'scheduler')
             ->where('key', $key)
-            ->delete();
-        ScheduleHealthService::invalidate();
+            ->first();
+
+        $suppression?->delete();
 
         $this->notify(__('Task resumed.'));
     }
@@ -292,7 +653,23 @@ class Index extends Component
             'historyStatusOptions' => $this->historyStatusOptions(),
             'canExecute' => $this->can('admin.system.schedule.execute'),
             'canManage' => $this->can('admin.system.schedule.manage'),
+            // Configuration-history subjects (#398): the schedule-task
+            // identities that have persisted configuration (an override or a
+            // suppression) — the union both models expose via getAuditSubject.
+            'historySubjects' => $this->configurationHistorySubjects($allTasks),
         ]);
+    }
+
+    /**
+     * @return list<array{name: string, id: string}>
+     */
+    private function configurationHistorySubjects(array $tasks): array
+    {
+        return collect($tasks)
+            ->map(fn (ScheduleTask $task): array => ['name' => 'schedule-task', 'id' => $task->source.':'.$task->key])
+            ->unique('id')
+            ->values()
+            ->all();
     }
 
     /**

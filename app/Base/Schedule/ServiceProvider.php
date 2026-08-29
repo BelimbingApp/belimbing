@@ -3,6 +3,7 @@
 namespace App\Base\Schedule;
 
 use App\Base\Database\Contracts\DevelopmentSanitizationContributor;
+use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\FrameworkScheduleDevelopmentSanitizer;
 use App\Base\Schedule\Services\ScheduleBoard;
@@ -61,12 +62,64 @@ class ServiceProvider extends BaseServiceProvider
         // has booted and all events exist, so this is the one safe moment to
         // attach dynamic skip filters.
         Event::listen(CommandStarting::class, function (CommandStarting $event) use ($recorder): void {
+            // Both guards, deliberately: the command-name check is behavioural,
+            // but the invariant the board's Default column rests on is
+            // contextual — override application must never run in a web
+            // process, where the pristine event expression IS the Default
+            // display. Artisan::call('schedule:run') inside a request would
+            // pass the name check while runningInConsole() stays false, so the
+            // context check makes the property structural rather than
+            // searched-for (#411 review).
+            if (! $this->app->runningInConsole()) {
+                return;
+            }
+
             if (! in_array($event->command, ['schedule:run', 'schedule:work', 'schedule:test'], true)) {
                 return;
             }
 
+            $this->applySchedulerOverrides($recorder());
             $this->attachSuppressionFilters($recorder());
         });
+    }
+
+    /**
+     * Cron overrides take effect here, at scheduler start — the same one safe
+     * moment the suppression filters use. `schedule:work` runs each minute's
+     * evaluation in a fresh `schedule:run` subprocess, so a saved or reset
+     * override is honored at the next evaluation without any service restart
+     * (#398). Failure degrades to the code-declared default, logged.
+     */
+    private function applySchedulerOverrides(ScheduleRunRecorder $recorder): void
+    {
+        try {
+            if (! Schema::hasTable('base_schedule_overrides')) {
+                return;
+            }
+
+            $overrides = ScheduleOverride::query()
+                ->where('source', 'scheduler')
+                ->pluck('expression', 'key');
+        } catch (Throwable $e) {
+            Log::warning('Schedule override load failed; running code defaults.', [
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+            ]);
+
+            return;
+        }
+
+        if ($overrides->isEmpty()) {
+            return;
+        }
+
+        foreach ($this->app->make(Schedule::class)->events() as $task) {
+            $expression = $overrides->get($recorder->key($task));
+
+            if (is_string($expression) && $expression !== '') {
+                $task->cron($expression);
+            }
+        }
     }
 
     private function attachSuppressionFilters(ScheduleRunRecorder $recorder): void

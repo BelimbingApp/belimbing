@@ -15,10 +15,10 @@
 # can still run when a check fails. That is exactly how #382 reached main while
 # BEHIND it: the check printed its warning and the merge went ahead anyway.
 #
-# Why a script rather than branch protection: the "Protect main" ruleset does set
-# strict_required_status_checks_policy, but it lists both shared human accounts
-# as bypass actors with bypass_mode "always" — and those accounts are every agent
-# we have. GitHub will not stop us. This will.
+# Why both: Protect Main now requires the six repository/Sonar contexts with
+# strict_required_status_checks_policy and no merge bypass actors. This gate is
+# still the richer pre-flight: it checks exact reviewed-head identity, lane
+# ownership, holds, issue closure, and independent review before a merge call.
 #
 set -u
 
@@ -172,16 +172,37 @@ else
   say_ok "$n distinct checks on ${REVIEWED:0:8}, latest run of each passing"
 fi
 
-# 4. Holds. hold:author is the author mid-fix; hold:review is a reviewer with an
-#    open finding. Either one stops the merge, and only its owner clears it.
+# 4. Holds. hold:author is the author mid-fix — a single label is unambiguous
+#    because a PR has exactly one author lane. A review hold is not: two
+#    reviewers can each have an independent open finding on the same PR, and
+#    one shared `hold:review` boolean cannot tell one holder's satisfaction
+#    from another's — clearing it for one clears it for both (#385). So a
+#    review hold is named per holder: `hold:review:<agent>`, set and cleared
+#    only by that agent (hold.sh), and every named holder present blocks the
+#    merge independently. The bare `hold:review` label (pre-#385) is still
+#    honored as an unattributed hold during migration, since anyone may have
+#    set it under the old convention and it still means the same thing: do
+#    not merge until its owner clears it.
 labels=$(printf '%s' "$pr" | jq -r '[.labels[].name]|join(",")')
 echo "  labels: ${labels:-none}"
-for h in hold:author hold:review; do
-  case ",$labels," in
-    *",$h,"*) say_bad "$h is set — the label's owner clears it, not you" ;;
-    *)        say_ok "no $h" ;;
-  esac
-done
+
+case ",$labels," in
+  *",hold:author,"*) say_bad "hold:author is set — the label's owner clears it, not you" ;;
+  *)                  say_ok "no hold:author" ;;
+esac
+
+review_holders=$(printf '%s' "$pr" | jq -r \
+  '[.labels[].name | select(startswith("hold:review:")) | ltrimstr("hold:review:")] | join(",")')
+if [ -n "$review_holders" ]; then
+  say_bad "hold:review held by $review_holders — each holder clears their own (hold.sh review clear), not you"
+else
+  say_ok "no named hold:review:<agent>"
+fi
+
+case ",$labels," in
+  *",hold:review,"*) say_bad "hold:review (unattributed, pre-#385) is set — its owner clears it, not you" ;;
+  *)                  say_ok "no unattributed hold:review" ;;
+esac
 
 # 5. Ready state and independent exact-head review. GitHub accounts are shared,
 # so account identity is only corroboration: the stable **From:** marker must

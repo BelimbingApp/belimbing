@@ -60,7 +60,18 @@ $tabs = [
         <x-ui.page-header
             :title="__('Schedule')"
             :subtitle="__('Everything scheduled to fire across the system, and how the last runs went.')"
-        />
+        >
+            <x-slot name="actions">
+                {{-- Configuration history (#398): who changed, paused, resumed, or
+                     rescheduled a task — distinct from the execution History tab. --}}
+                <x-ui.record-history
+                    :title="__('Schedule configuration history')"
+                    :subjects="$historySubjects"
+                    :subject-label="trans_choice(':count task|:count tasks', count($historySubjects), ['count' => count($historySubjects)])"
+                    source-capability="admin.system.schedule.manage"
+                />
+            </x-slot>
+        </x-ui.page-header>
 
         <x-ui.tabs tabs-id="system-schedule-tabs" :tabs="$tabs" :default="$tab" persistence="query" query-key="tab" wire-action="setTab">
             <x-ui.tab id="tasks">
@@ -168,12 +179,60 @@ $tabs = [
                                         <x-ui.badge variant="{{ $item->source === 'scheduler' ? 'default' : 'info' }}">{{ $item->source }}</x-ui.badge>
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y min-w-40 text-sm">
-                                        <span
-                                            class="inline-flex items-center gap-1 font-mono text-muted"
-                                            @if($cronDescription) title="{{ $cronDescription }}" @endif
-                                        >
-                                            {{ $item->cron }}
-                                        </span>
+                                        @if($editingSource === $item->source && $editingKey === $item->key)
+                                            <div class="space-y-1.5">
+                                                <x-ui.input
+                                                    id="schedule-cron-{{ hash('sha256', $item->source."\0".$item->key) }}"
+                                                    wire:model.live.debounce.400ms="cronDraft"
+                                                    class="w-44 font-mono text-sm"
+                                                    :aria-label="__('Cron expression for :task', ['task' => $item->name])"
+                                                />
+                                                @error('cronDraft')
+                                                    <div class="text-xs text-status-danger">{{ $message }}</div>
+                                                @enderror
+                                                @if($cronPreview !== [] && $cronPreviewFor !== null)
+                                                    <div class="text-xs text-muted">
+                                                        {{ __('Next runs (:timezone):', ['timezone' => $cronPreviewTimezone]) }}
+                                                        <ul class="ml-3 list-disc">
+                                                            @foreach($cronPreview as $when)
+                                                                <li>{{ $when }}</li>
+                                                            @endforeach
+                                                        </ul>
+                                                    </div>
+                                                @endif
+                                                <div class="flex flex-wrap items-center gap-1.5">
+                                                    <x-ui.button type="button" size="sm" variant="secondary" wire:click="previewCron">{{ __('Preview') }}</x-ui.button>
+                                                    <x-ui.button type="button" size="sm" variant="primary" wire:click="saveCron">{{ __('Save') }}</x-ui.button>
+                                                    @if($item->overridden)
+                                                        <x-ui.button type="button" size="sm" variant="secondary" :wire:click="'resetCron('.\Illuminate\Support\Js::from($item->source).', '.\Illuminate\Support\Js::from($item->key).')'" :title="__('Remove the override and adopt the code-declared default immediately.')">{{ __('Reset to default') }}</x-ui.button>
+                                                    @endif
+                                                    <x-ui.button type="button" size="sm" variant="secondary" wire:click="cancelCronEdit">{{ __('Cancel') }}</x-ui.button>
+                                                </div>
+                                            </div>
+                                        @else
+                                            <span
+                                                class="inline-flex items-center gap-1 font-mono text-muted"
+                                                @if($cronDescription) title="{{ $cronDescription }}" @endif
+                                            >
+                                                {{ $item->cron }}
+                                                @if($canManage && $item->editable)
+                                                    <x-ui.icon-action
+                                                        icon="heroicon-o-pencil-square"
+                                                        :label="__('Edit cadence for :task', ['task' => $item->name])"
+                                                        :title="__('Edit cadence')"
+                                                        :wire:click="'startCronEdit('.\Illuminate\Support\Js::from($item->source).', '.\Illuminate\Support\Js::from($item->key).')'"
+                                                    />
+                                                @endif
+                                            </span>
+                                            @if($item->overridden)
+                                                {{-- Both values, honestly: a later deployment may change the
+                                                     default while the override pins the effective cadence. --}}
+                                                <div class="text-xs text-muted">
+                                                    <x-ui.badge variant="accent">{{ __('Overridden') }}</x-ui.badge>
+                                                    <span class="font-mono">{{ __('default: :cron', ['cron' => $item->defaultCron]) }}</span>
+                                                </div>
+                                            @endif
+                                        @endif
                                     </td>
                                     <td class="px-table-cell-x py-table-cell-y whitespace-nowrap text-sm text-ink">
                                         @if($item->paused)
