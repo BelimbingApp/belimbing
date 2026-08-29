@@ -212,6 +212,12 @@ exact tip and record one durable outcome before the lane is considered recovered
 2. **Still wanted** — open or identify a current issue and its live claimed lane,
    then delete the stale ref; the new lane, not the old branch, carries the work.
 
+Closing a superseded lane's issue follows the same attribution discipline as
+`land.sh`: record the replacement PR and merged SHA, move only its `task:*`
+labels to the truthful terminal state (normally `task:done`), and preserve its
+existing `agent:<id>` label. Supersession transfers implementation ownership;
+it does not erase who owned the original lane.
+
 Archive tags may preserve an investigated tip where recovery needs to be
 reversible, but they are evidence, not a live lane. **Give each one a named
 retention owner and one outcome** — delete after a stated date, retain for a
