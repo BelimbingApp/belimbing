@@ -261,6 +261,30 @@ gh issue list --repo "$REPO" --state open --label "task:blocked" --limit 40 \
   --json number,title --jq '.[]|"  #\(.number) \(.title[0:70])"' 2>/dev/null
 
 echo
+echo "== open deliberations — decide.sh (#430) =="
+# A product/architecture choice never reads as "waiting for owner" here: it is
+# either still gathering votes (deadline not yet reached, or quorum-with-a-tie
+# needing an explicit tie-break) or ready to close. Scanning active lanes only
+# — the same open-PR / open-agent:*-issue set board.sh's hygiene pass already
+# scans — keeps this bounded instead of a full-repository search.
+deliberation_lanes=$( {
+  gh pr list --repo "$REPO" --state open --limit 100 --json number --jq '.[].number' 2>/dev/null
+  gh issue list --repo "$REPO" --state open --limit 100 --json number,labels \
+    --jq '.[] | select([.labels[].name] | any(startswith("agent:"))) | .number' 2>/dev/null
+} | sort -un )
+deliberation_found=""
+if [ -n "$deliberation_lanes" ]; then
+  for lane in $deliberation_lanes; do
+    lane_status=$(DECIDE_REPO="$REPO" "$SCRIPT_DIR/decide.sh" status "$lane" 2>/dev/null)
+    if [ -n "$lane_status" ]; then
+      printf '%s\n' "$lane_status"
+      deliberation_found=1
+    fi
+  done
+fi
+[ -n "$deliberation_found" ] || echo "  (no open proposals on any active lane)"
+
+echo
 echo "== review-queue hygiene — unmergeable before review effort is spent (#366) =="
 # A lane that bypassed claim.sh/ready.sh reaches task:review without the
 # closing reference the gate requires; three PRs arrived unmergeable that way
