@@ -38,7 +38,7 @@ current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)   # "HEAD" when detached
 any=0
 while IFS= read -r b; do
   [ -z "$b" ] && continue
-  [ "$b" = "main" ] && continue
+  [ "$b" = "$BASE" ] && continue
   git merge-base --is-ancestor "$b" "origin/$BASE" 2>/dev/null || continue
   any=1
   if [ "$b" = "$current" ]; then
@@ -59,7 +59,7 @@ echo
 echo "== unmerged local branches (left alone — verify before deleting by hand) =="
 any=0
 while IFS= read -r b; do
-  [ -z "$b" ] || [ "$b" = "main" ] && continue
+  [ -z "$b" ] || [ "$b" = "$BASE" ] && continue
   git merge-base --is-ancestor "$b" "origin/$BASE" 2>/dev/null && continue
   echo "  $b"
   any=1

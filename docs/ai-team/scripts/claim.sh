@@ -152,8 +152,20 @@ if [[ -n "${CLAIM_WORKTREE:-}" ]]; then
 else
   lane_root="${AI_TEAM_WORKTREE_ROOT:-}"
   if [[ -z "$lane_root" ]]; then
-    outermost=$(git -C "$root" rev-parse --show-superproject-working-tree 2>/dev/null || true)
-    [[ -n "$outermost" ]] || outermost="$root"
+    # --show-superproject-working-tree only answers for a registered submodule.
+    # It is EMPTY for an ordinary independent repository nested inside another
+    # working tree, which is exactly the private-Extension shape this fix exists
+    # for, so relying on it left lanes at <host>/app/Extensions/.ai-team-lanes —
+    # still inside the scanner path. Walk outward instead until no enclosing
+    # working tree remains.
+    outermost="$root"
+    probe=$(dirname "$outermost")
+    while [[ -n "$probe" && "$probe" != "/" && "$probe" != "." ]]; do
+      enclosing=$(git -C "$probe" rev-parse --show-toplevel 2>/dev/null || true)
+      [[ -n "$enclosing" ]] || break
+      outermost="$enclosing"
+      probe=$(dirname "$enclosing")
+    done
     lane_root="$(dirname "$outermost")/.ai-team-lanes"
   fi
   mkdir -p "$lane_root"

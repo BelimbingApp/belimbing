@@ -1,7 +1,9 @@
 import os
+import re
 import stat
 import subprocess
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -87,11 +89,23 @@ class DefaultBranchResolutionTest(unittest.TestCase):
         # first orient.
         offenders = []
         for script in sorted(Path(__file__).parent.glob("*.sh")):
+            # The resolver is the single place allowed to name the constant —
+            # it owns the final fallback. Everywhere else must go through it.
+            if script.name == "_default_branch.sh":
+                continue
             text = script.read_text(encoding="utf-8")
             for number, line in enumerate(text.splitlines(), start=1):
                 if line.lstrip().startswith("#"):
                     continue
                 if "origin/main" in line or "origin main" in line:
+                    offenders.append(f"{script.name}:{number}: {line.strip()}")
+                # A bare comparison against the literal branch name is the form
+                # that escaped the first version of this test: cleanup.sh
+                # protected `main` from deletion and orient.sh keyed its
+                # freshness path on `main`, neither of which contains
+                # "origin/main". On a master-default repository the first would
+                # have offered to delete `master`.
+                if re.search(r'=\s*"main"|"main"\s*=|=\s*\x27main\x27', line):
                     offenders.append(f"{script.name}:{number}: {line.strip()}")
         self.assertEqual(offenders, [], "hardcoded default branch:\n" + "\n".join(offenders))
 
@@ -104,6 +118,166 @@ class DefaultBranchResolutionTest(unittest.TestCase):
                 if "BelimbingApp/belimbing" in line:
                     offenders.append(f"{script.name}:{number}: {line.strip()}")
         self.assertEqual(offenders, [], "hardcoded repository:\n" + "\n".join(offenders))
+
+
+    # --- behavioural regressions for the literal-branch assumptions that a
+    # --- static text scan alone did not catch (found in review of #446).
+
+    def _run(self, script, cwd, env_extra=None):
+        env = os.environ.copy()
+        env.pop("AI_TEAM_BASE_BRANCH", None)
+        env.update(env_extra or {})
+        return subprocess.run(
+            ["bash", str(Path(__file__).with_name(script))],
+            cwd=str(cwd), env=env, capture_output=True, text=True, check=False,
+        )
+
+    def test_cleanup_never_offers_to_delete_a_non_main_default_branch(self):
+        # cleanup.sh protected the literal `main`, so on this repository it
+        # would have listed `master` as deletable and --yes would have deleted
+        # the default branch. That is data loss, not a cosmetic branch-name bug.
+        self._git("checkout", "-q", "-b", "agent/x-issue-1")
+        (self.work / "b.txt").write_text("b\n", encoding="utf-8")
+        self._git("add", "b.txt")
+        self._git("commit", "-q", "-m", "lane")
+        self._git("checkout", "-q", "master")
+        self._git("merge", "-q", "--ff-only", "agent/x-issue-1")
+        self._git("push", "-q", "origin", "master")
+        result = self._run("cleanup.sh", self.work)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        merged = result.stdout.split("== unmerged")[0]
+        self.assertNotIn("  master", merged, f"cleanup offered to delete the default branch:\n{result.stdout}")
+        self.assertIn("agent/x-issue-1", merged, result.stdout)
+
+    def test_orient_reports_freshness_for_a_non_main_default_checkout(self):
+        # orient.sh keyed its default-branch freshness path on the literal
+        # `main`, so a stale `master` checkout silently took the lane path and
+        # lost the behind-count and stale-files warning.
+        publisher = self.base / "publisher"
+        subprocess.run(["git", "clone", "-q", "-b", "master", str(self.remote), str(publisher)], check=True)
+        subprocess.run(["git", "config", "user.email", "t@t"], cwd=publisher, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=publisher, check=True)
+        (publisher / "new.txt").write_text("new\n", encoding="utf-8")
+        subprocess.run(["git", "add", "new.txt"], cwd=publisher, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "advance"], cwd=publisher, check=True)
+        subprocess.run(["git", "push", "-q", "origin", "master"], cwd=publisher, check=True)
+        self._git("fetch", "-q", "origin", "master")
+
+        bindir = self.base / "bin"
+        bindir.mkdir(exist_ok=True)
+        gh = bindir / "gh"
+        gh.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                case "$1 $2" in
+                  "repo view") printf 'example/canonical\\n' ;;
+                  "issue list")
+                    # An empty string means "no halt". Returning [] here reads as
+                    # an active halt and orient.sh exits before the main section.
+                    if [[ "$*" == *"--label ops:halt"* ]]; then printf ''
+                    else printf '[]\\n'; fi
+                    ;;
+                  *) printf '[]\\n' ;;
+                esac
+                """
+            ),
+            encoding="utf-8",
+        )
+        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
+        result = self._run("orient.sh", self.work, {"PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH','')}"})
+        self.assertIn("master: BEHIND origin/master by 1 commit", result.stdout, result.stdout + result.stderr)
+
+
+class NestedRepositoryLanePlacementTest(unittest.TestCase):
+    """A lane worktree must never be created inside the host working tree.
+
+    --show-superproject-working-tree only answers for a registered submodule and
+    is EMPTY for an ordinary independent repository nested inside another, which
+    is exactly the private-Extension shape. Relying on it left lanes at
+    <host>/app/Extensions/.ai-team-lanes — inside the path the host application
+    scans for modules, where a stray checkout can register phantom modules.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.base = Path(self.dir.name)
+        env = os.environ.copy()
+        env.update({"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+                    "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"})
+        self.env = env
+
+        self.host = self.base / "host"
+        (self.host / "app" / "Extensions").mkdir(parents=True)
+        self._run(["git", "init", "-q", "-b", "main", str(self.host)])
+        (self.host / "README").write_text("host\n", encoding="utf-8")
+        self._run(["git", "add", "-A"], cwd=self.host)
+        self._run(["git", "commit", "-q", "-m", "host"], cwd=self.host)
+
+        # An ordinary nested repository — deliberately NOT a submodule.
+        self.bare = self.base / "ext.git"
+        self._run(["git", "init", "-q", "--bare", str(self.bare)])
+        self._run(["git", "--git-dir", str(self.bare), "symbolic-ref", "HEAD", "refs/heads/main"])
+        self.ext = self.host / "app" / "Extensions" / "SbGroup"
+        self._run(["git", "init", "-q", "-b", "main", str(self.ext)])
+        (self.ext / "e.txt").write_text("e\n", encoding="utf-8")
+        self._run(["git", "add", "-A"], cwd=self.ext)
+        self._run(["git", "commit", "-q", "-m", "ext"], cwd=self.ext)
+        self._run(["git", "remote", "add", "origin", str(self.bare)], cwd=self.ext)
+        self._run(["git", "push", "-q", "-u", "origin", "main"], cwd=self.ext)
+
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        gh = self.bin / "gh"
+        gh.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                case "$1 $2" in
+                  "repo view") printf 'example/canonical\\n' ;;
+                  "issue view") printf '%s\\n' '{"state":"OPEN","labels":[],"title":"t","url":"u"}' ;;
+                  "pr list") printf '[]\\n' ;;
+                  "label list") printf '[]\\n' ;;
+                  "label create") exit 0 ;;
+                  "pr create") printf 'https://example/pull/1\\n' ;;
+                  "pr edit"|"issue edit") exit 0 ;;
+                  *) printf '[]\\n' ;;
+                esac
+                """
+            ),
+            encoding="utf-8",
+        )
+        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def _run(self, args, cwd=None):
+        return subprocess.run(args, cwd=str(cwd) if cwd else None,
+                              env=getattr(self, "env", None), check=True, capture_output=True)
+
+    def test_the_lane_worktree_is_created_outside_the_host_working_tree(self):
+        env = self.env.copy()
+        env["CLAIM_AGENT"] = "opus-5-b"
+        env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH','')}"
+        result = subprocess.run(
+            ["bash", str(Path(__file__).with_name("claim.sh")), "7"],
+            cwd=str(self.ext), env=env, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+        reported = [l for l in result.stdout.splitlines() if l.startswith("worktree:")]
+        self.assertTrue(reported, result.stdout)
+        lane = Path(reported[0].split("worktree:", 1)[1].strip()).resolve()
+        host = self.host.resolve()
+        self.assertFalse(
+            str(lane).startswith(str(host) + os.sep),
+            f"lane worktree {lane} is inside the host working tree {host}; "
+            "a checkout there can register phantom modules in the composed app",
+        )
+        self.assertTrue(lane.exists(), f"claim reported {lane} but it does not exist")
 
 
 if __name__ == "__main__":

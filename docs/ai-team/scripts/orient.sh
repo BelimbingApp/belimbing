@@ -84,7 +84,7 @@ branch=$(git rev-parse --abbrev-ref HEAD)
 if git merge-base --is-ancestor "origin/$BASE" HEAD 2>/dev/null; then
   echo "  $branch: contains origin/$BASE"
 else
-  if [ "$branch" = "main" ]; then
+  if [ "$branch" = "$BASE" ]; then
     behind_count=$(git rev-list --count "HEAD..origin/$BASE" 2>/dev/null)
     commit_word="commits"
     [ "$behind_count" -eq 1 ] && commit_word="commit"
