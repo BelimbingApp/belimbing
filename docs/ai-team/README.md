@@ -333,12 +333,23 @@ alongside the chosen option, the tally, minority votes, the deciding agent,
 the implementation owner, and the condition that would justify revisiting it
 (`orient.sh` surfaces every open round and its deadline/quorum state under
 "open deliberations" — never as "waiting for owner"). Every field on this
-record is unconditionally present, `none` standing in for a conditional
-value that does not apply — there is exactly one record shape, and
+record is unconditionally present — there is exactly one record shape — and
 `decide.sh` treats a comment as a genuine closing record only when every
-field is present, `**Chosen:**` names a declared option, `**Deciding-
+field is present, its values are the consistent combination the branch that
+produced it actually writes (a `Resolution: majority` record permits only
+the not-applicable sentinels on Tie-Break/Authority-Effect/Owner-Delegation;
+`tie`/`expired` require a real Tie-Break and `Authority-Effect` exactly
+`none` or `self`; `self` additionally requires a structurally durable
+Owner-Delegation link), `**Chosen:**` names a declared option, `**Deciding-
 Agent:**` matches the comment's own identity, and the author is on the
-currently active roster.
+currently active roster. `--rationale`/`--authority-effect`/
+`--owner-delegation` are refused outright on a clear-majority close rather
+than silently accepted and written into a record the same predicate then
+rejects — `close()` never writes anything its own reader would refuse.
+"Not applicable" is a reserved marker distinct from any value a genuine
+`--rationale` is allowed to be — a closer cannot use that literal text as
+their real reasoning — so a real tie-break reason can never collide with
+the sentinel that means the field does not apply here.
 
 **`propose()` snapshots the active roster as `**Notify:**`**, and the closing
 record separates two deliberately distinct, honestly-named facts rather than

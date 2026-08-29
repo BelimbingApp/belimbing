@@ -288,7 +288,7 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=2", body)
         self.assertIn("right=1", body)
-        self.assertIn("**Tie-Break:** none", body)
+        self.assertIn("**Tie-Break:** (not applicable)", body)
         # opus-5's #436 finding, resolved by the Resolution field rather
         # than a second vocabulary value: on the majority path the closer
         # is never asked for --authority-effect, but "Authority-Effect:
@@ -748,7 +748,7 @@ class MalformedDecisionTest(DecideTestCase):
             "**Resolution:** tie\n**Chosen:** left\n**Tally:** left=1, right=1\n"
             "**Quorum:** met but tied\n**Deciding-Agent:** p\n"
             "**Implementation-Owner:** p\n**Revisit-If:** never\n"
-            "**Tie-Break:** none\n**Authority-Effect:** none\n"
+            "**Tie-Break:** (not applicable)\n**Authority-Effect:** none\n"
             "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
             "**Unacknowledged:** none\n"
         )
@@ -764,7 +764,7 @@ class MalformedDecisionTest(DecideTestCase):
             "**Resolution:** expired\n**Chosen:** left\n**Tally:** left=1\n"
             "**Quorum:** not met by the deadline\n**Deciding-Agent:** p\n"
             "**Implementation-Owner:** p\n**Revisit-If:** never\n"
-            "**Tie-Break:** none\n**Authority-Effect:** none\n"
+            "**Tie-Break:** (not applicable)\n**Authority-Effect:** none\n"
             "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
             "**Unacknowledged:** none\n"
         )
@@ -840,7 +840,9 @@ class MalformedDecisionTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p", owner_delegation="https://example.invalid/#1")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("only apply on the tie or expired-deadline path", result.stderr)
+        # Caught by the more specific "only with --authority-effect self"
+        # check before it ever reaches the majority-path flags refusal.
+        self.assertIn("only applies when --authority-effect self", result.stderr)
 
     def test_close_refuses_an_authority_effect_on_a_clear_majority(self):
         self.set_roster(["p", "a", "b", "c"])
@@ -852,6 +854,58 @@ class MalformedDecisionTest(DecideTestCase):
         result = self.close(10, "d", agent="p", authority_effect="none")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("only apply on the tie or expired-deadline path", result.stderr)
+
+    def test_close_refuses_owner_delegation_when_authority_effect_is_none(self):
+        # terra's #436 P1, sixth round: --authority-effect none
+        # --owner-delegation <link> on a tie passed with nothing refusing
+        # it, wrote the link, and valid_decision's own predicate requires
+        # Owner-Delegation: none whenever Authority-Effect is none —
+        # exit 0, record silently rejected by its own reader.
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="right", rationale="right matches the doc",
+            authority_effect="none",
+            owner_delegation="https://github.com/BelimbingApp/belimbing/issues/380#issuecomment-1",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("only applies when --authority-effect self", result.stderr)
+
+    def test_close_refuses_whitespace_only_rationale_on_tie_break(self):
+        # terra's #436 P2, confirmed a second time: close() still checked
+        # only `[ -n "$rationale" ]` after propose/vote were both fixed.
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="right", rationale="   ",
+            authority_effect="none",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("--rationale", result.stderr)
+
+    def test_close_refuses_a_rationale_that_is_literally_the_sentinel(self):
+        # terra's #436 P1: a genuine tie-break rationale whose actual text
+        # happens to be "none" (or, now, the reserved marker) would
+        # collide with the not-applicable default and become
+        # indistinguishable from it. Refuse the literal collision at the
+        # source rather than let it reach the record.
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="right", rationale="(not applicable)",
+            authority_effect="none",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reserved", result.stderr)
 
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])

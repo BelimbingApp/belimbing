@@ -60,6 +60,12 @@ set -uo pipefail
 REPO="${DECIDE_REPO:-${BOARD_REPO:-BelimbingApp/belimbing}}"
 BOARD_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/board.sh"
 MAX_DEADLINE_MINUTES=30
+# Reserved for "this field does not apply on this record's path" — never a
+# value real user content is allowed to equal (#436 review, terra P1,
+# sixth round: an ordinary word like "none" collides with genuine content
+# whose actual reasoning happens to be that word; a closer's real
+# --rationale is refused outright if it literally equals this).
+NOT_APPLICABLE="(not applicable)"
 
 AGENT_RE='^[a-z0-9]+([._-][a-z0-9]+)*$'
 DECISION_ID_RE='^[a-z0-9]+(-[a-z0-9]+)*$'
@@ -203,7 +209,7 @@ DECIDE_JQ_COMMON='
   # each branch are checked here as one consistent combination, not merely
   # as five independently-non-empty strings.
   def durable_link: (owner_delegation_value | test("https?://")) or (owner_delegation_value | test("#[0-9]"));
-  def valid_decision($opts; $roster):
+  def valid_decision($opts; $roster; $na):
     decide_type == "decision"
     and (chosen_value as $c | $opts | index($c)) != null
     and deciding_agent_value != ""
@@ -221,9 +227,9 @@ DECIDE_JQ_COMMON='
     and (from_agent as $a | $roster | index($a)) != null
     and (
       if resolution_value == "majority" then
-        tie_break_value == "none" and authority_effect_value == "none" and owner_delegation_value == "none"
+        tie_break_value == $na and authority_effect_value == "none" and owner_delegation_value == "none"
       else
-        tie_break_value != "none"
+        tie_break_value != $na
         and (authority_effect_value == "none" or authority_effect_value == "self")
         and (if authority_effect_value == "self" then durable_link else owner_delegation_value == "none" end)
       end
@@ -374,8 +380,8 @@ vote() {
   vote_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
 
   local closed
-  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson roster "$vote_roster_json" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts; $roster))] | length' 2>/dev/null || echo 0)
+  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson roster "$vote_roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $roster; $na))] | length' 2>/dev/null || echo 0)
   if [ "${closed:-0}" -gt 0 ]; then
     echo "vote: '$id' on #$issue is already closed — this round is over" >&2
     exit 1
@@ -520,6 +526,17 @@ close() {
         exit 2
         ;;
     esac
+    # terra's #436 P1, sixth round: --authority-effect none --owner-delegation
+    # <link> passed here (nothing refused it) and wrote a record
+    # valid_decision's own predicate then rejects, since Owner-Delegation is
+    # only meaningful — and only permitted to be anything but the
+    # not-applicable sentinel — when Authority-Effect is self. Refuse the
+    # accepted-but-unclosable input at the source instead of letting it
+    # reach the payload.
+    if [ "$authority_effect" != "self" ]; then
+      echo "close: --owner-delegation only applies when --authority-effect self is also declared — this round does not claim to expand the closer's own authority, so there is nothing to delegate" >&2
+      exit 2
+    fi
   fi
 
   require_agent
@@ -562,8 +579,8 @@ close() {
   fi
 
   local already_closed
-  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson roster "$roster_json" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts; $roster))] | length' 2>/dev/null || echo 0)
+  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson roster "$roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $roster; $na))] | length' 2>/dev/null || echo 0)
   if [ "${already_closed:-0}" -gt 0 ]; then
     echo "close: '$id' on #$issue is already closed" >&2
     exit 1
@@ -694,10 +711,28 @@ close() {
   fi
 
   if [ "$needs_rationale" = "true" ]; then
+    # terra's #436 P2: propose/vote guard evidence/rationale with
+    # is_blank() (whitespace is not content); close()'s own rationale
+    # check was still the bare `[ -n ]` this whole sequence had already
+    # fixed twice elsewhere.
+    is_blank "$rationale" && rationale=""
     [ -n "$decision" ] && [ -n "$rationale" ] && [ -n "$authority_effect" ] || {
       echo "close: quorum is $quorum_note — this requires an explicit --decision <option>, --rationale \"<why, tied to the authority stack>\", and --authority-effect none|self from the closer; the script does not guess a tie-break" >&2
       exit 2
     }
+    # terra's #436 P1, sixth round (the structural half opus-5 named): the
+    # not-applicable sentinel and genuine user content shared one
+    # namespace — a closer whose actual reasoning happened to be the word
+    # "none" collided with the majority-path default, and the reader could
+    # not tell them apart. Reserving NOT_APPLICABLE as the sentinel instead
+    # of an ordinary word narrows the collision, but the fully structural
+    # fix is refusing that exact literal as real content at the source, so
+    # no value close() ever writes into Tie-Break can be ambiguous between
+    # "the closer said this" and "the field does not apply here".
+    if [ "$(printf '%s' "$rationale" | tr '[:upper:]' '[:lower:]')" = "$NOT_APPLICABLE" ]; then
+      echo "close: --rationale cannot literally be \"$NOT_APPLICABLE\" — that string is reserved to mean this field does not apply, and a real tie-break reason can never collide with it" >&2
+      exit 2
+    fi
     # The carve-out (README, "Autonomous deliberation"): a steward's own
     # tie-break must never close a round that would expand, waive, or
     # transfer the closer's own authority. Full semantic detection is
@@ -759,7 +794,7 @@ close() {
   local payload
   payload=$(printf '**Decision:** %s\n**Resolution:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
     "$id" "$resolution" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
-    "${rationale:-none}" "${authority_effect:-none}" "${owner_delegation:-none}" \
+    "${rationale:-$NOT_APPLICABLE}" "${authority_effect:-none}" "${owner_delegation:-none}" \
     "${not_reached:-none}" "${unacknowledged:-none}")
   payload="${payload}
 
@@ -805,12 +840,12 @@ status() {
   # the roster-gap follow-up) — looked up per comment against $proposals
   # since each open decision id here can have different declared options.
   local closed_ids
-  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" --argjson roster "$status_roster_json" "$DECIDE_JQ_COMMON"'
+  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" --argjson roster "$status_roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
     [.comments[]
      | select(from_agent != "" and decide_type == "decision")
      | (. + {did: decision_id}) as $entry
      | ($proposals[] | select(.id == $entry.did) | .options | split(",")) as $opts
-     | select($entry | valid_decision($opts; $roster))
+     | select($entry | valid_decision($opts; $roster; $na))
      | $entry.did]
     | unique')
 
