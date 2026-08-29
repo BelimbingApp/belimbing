@@ -221,7 +221,15 @@ DECIDE_JQ_COMMON='
   # each branch are checked here as one consistent combination, not merely
   # as five independently-non-empty strings.
   def durable_link: (owner_delegation_value | test("https?://")) or (owner_delegation_value | test("#[0-9]"));
-  def valid_decision($opts; $roster; $na):
+  # Decision eligibility is a proposal-time fact, not a live-board fact.
+  # The proposal Notify snapshot is immutable once posted; the active-lane
+  # roster is not. Rechecking a terminal record against the current roster made
+  # an honestly closed round reopen as soon as the deciding agent lane
+  # ended (#443). Callers therefore pass the proposal snapshot as $eligible.
+  # close() still checks the live roster before writing, while this shared
+  # reader contract proves the author was eligible for this round without
+  # letting later lane churn rewrite history.
+  def valid_decision($opts; $eligible; $na):
     decide_type == "decision"
     and (chosen_value as $c | $opts | index($c)) != null
     and deciding_agent_value != ""
@@ -236,7 +244,7 @@ DECIDE_JQ_COMMON='
     and owner_delegation_value != ""
     and did_not_vote_value != ""
     and unacknowledged_value != ""
-    and (from_agent as $a | $roster | index($a)) != null
+    and (from_agent as $a | $eligible | index($a)) != null
     and (
       if resolution_value == "majority" then
         tie_break_value == $na and authority_effect_value == "none" and owner_delegation_value == "none"
@@ -378,7 +386,8 @@ vote() {
   local proposal
   proposal=$(printf '%s' "$comments" | jq -c --arg id "$id" "$DECIDE_JQ_COMMON"'
     def opts: one_capture_raw("^\\*\\*Options:\\*\\*[[:space:]]*(?<v>.+)$");
-    [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, createdAt}]
+    def notify: one_capture_raw("^\\*\\*Notify:\\*\\*[[:space:]]*(?<v>.*)$");
+    [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, notify: notify, proposer: from_agent, createdAt}]
     | if length == 1 then .[0] else null end' 2>/dev/null)
   if [ -z "$proposal" ] || [ "$proposal" = "null" ]; then
     echo "vote: no open proposal '$id' found on #$issue — check the id, or propose it first" >&2
@@ -388,12 +397,14 @@ vote() {
   local vote_options_json
   vote_options_json=$(printf '%s' "$proposal" | jq -r '.options' | jq -R 'split(",")')
 
-  local vote_roster_json
-  vote_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
+  local vote_eligible_json
+  vote_eligible_json=$(printf '%s' "$proposal" | jq -c '
+    (.notify | split(",") | map(select(length > 0))) as $snapshot
+    | if ($snapshot | length) > 0 then $snapshot else [.proposer] end')
 
   local closed
-  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson roster "$vote_roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts; $roster; $na))] | length' 2>/dev/null || echo 0)
+  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson eligible "$vote_eligible_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $eligible; $na))] | length' 2>/dev/null || echo 0)
   if [ "${closed:-0}" -gt 0 ]; then
     echo "vote: '$id' on #$issue is already closed — this round is over" >&2
     exit 1
@@ -581,21 +592,34 @@ close() {
   deadline_str=$(printf '%s' "$proposal" | jq -r '.deadline')
   notify_csv=$(printf '%s' "$proposal" | jq -r '.notify')
   local options_json; options_json=$(printf '%s\n' "$options_csv" | jq -R 'split(",")')
+  local snapshot_json
+  snapshot_json=$(printf '%s' "$proposal" | jq -c '
+    (.notify | split(",") | map(select(length > 0))) as $snapshot
+    | if ($snapshot | length) > 0 then $snapshot else [.proposer] end')
 
   local roster; roster=$(active_agents "$repo")
   local roster_json; roster_json=$(printf '%s\n' "$roster" | jq -R 'select(length > 0)' | jq -s '.')
+
+  local already_closed
+  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson eligible "$snapshot_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $eligible; $na))] | length' 2>/dev/null || echo 0)
+  if [ "${already_closed:-0}" -gt 0 ]; then
+    echo "close: '$id' on #$issue is already closed" >&2
+    exit 1
+  fi
+
   local roster_count; roster_count=$(printf '%s' "$roster_json" | jq 'length')
   if [ "$roster_count" -eq 0 ]; then
     echo "close: no currently active agents found (open PRs or open agent:* issues) — cannot establish a quorum roster; check gh connectivity before closing" >&2
     exit 2
   fi
-
-  local already_closed
-  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson roster "$roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts; $roster; $na))] | length' 2>/dev/null || echo 0)
-  if [ "${already_closed:-0}" -gt 0 ]; then
-    echo "close: '$id' on #$issue is already closed" >&2
-    exit 1
+  if ! jq -e --arg agent "$agent" 'index($agent) != null' <<<"$roster_json" >/dev/null; then
+    echo "close: '$agent' is not on the current active roster — only an active agent may close this round" >&2
+    exit 2
+  fi
+  if ! jq -e --arg agent "$agent" 'index($agent) != null' <<<"$snapshot_json" >/dev/null; then
+    echo "close: '$agent' was not in this proposal's immutable Notify roster — a later lane cannot forge eligibility for an existing round" >&2
+    exit 2
   fi
 
   local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
@@ -622,8 +646,6 @@ close() {
   # withdrew that once terra named the gap). Tolerant of a missing/empty
   # Notify field from a malformed or pre-this-fix proposal: the diff is
   # simply empty then, never a reason to refuse the close.
-  local snapshot_json
-  snapshot_json=$(jq -cn --arg notify "$notify_csv" '$notify | split(",") | map(select(length > 0))')
   local not_reached
   not_reached=$(jq -rn --argjson snapshot "$snapshot_json" --argjson voters "$voting_agents_json" '
     [$snapshot[] | select(. as $a | $voters | index($a) == null)] | join(", ")')
@@ -839,7 +861,8 @@ status() {
   proposals=$(printf '%s' "$comments" | jq -c "$DECIDE_JQ_COMMON"'
     def opts: one_capture_raw("^\\*\\*Options:\\*\\*[[:space:]]*(?<v>.+)$");
     def deadline: one_capture_raw("^\\*\\*Deadline:\\*\\*[[:space:]]*(?<v>.+)$");
-    [.comments[] | select(from_agent != "" and decide_type == "proposal") | {id: decision_id, options: opts, deadline: deadline, createdAt, proposer: from_agent}]
+    def notify: one_capture_raw("^\\*\\*Notify:\\*\\*[[:space:]]*(?<v>.*)$");
+    [.comments[] | select(from_agent != "" and decide_type == "proposal") | {id: decision_id, options: opts, notify: notify, deadline: deadline, createdAt, proposer: from_agent}]
     | unique_by(.id)')
 
   local status_roster_json
@@ -848,16 +871,21 @@ status() {
   # Same well-formedness bar as vote()/close(): only a **Type:** decision
   # comment with the full schema — an unambiguous **Chosen:** matching that
   # specific proposal's declared options, a matching **Deciding-Agent:**,
-  # and an author on the active roster — counts as closing it (terra P2 /
-  # the roster-gap follow-up) — looked up per comment against $proposals
-  # since each open decision id here can have different declared options.
+  # and an author on the proposal's immutable Notify roster — counts as
+  # closing it. The live roster continues to govern open-round quorum, but
+  # cannot retroactively reopen a terminal record (#443). Eligibility is
+  # looked up per comment against $proposals since each decision id can have
+  # different declared options and a different proposal-time roster.
   local closed_ids
-  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" --argjson roster "$status_roster_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
+  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
     [.comments[]
      | select(from_agent != "" and decide_type == "decision")
      | (. + {did: decision_id}) as $entry
-     | ($proposals[] | select(.id == $entry.did) | .options | split(",")) as $opts
-     | select($entry | valid_decision($opts; $roster; $na))
+     | ($proposals[] | select(.id == $entry.did)) as $proposal
+     | ($proposal.options | split(",")) as $opts
+     | (($proposal.notify | split(",") | map(select(length > 0))) as $snapshot
+        | if ($snapshot | length) > 0 then $snapshot else [$proposal.proposer] end) as $eligible
+     | select($entry | valid_decision($opts; $eligible; $na))
      | $entry.did]
     | unique')
 
