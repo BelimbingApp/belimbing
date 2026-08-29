@@ -7,7 +7,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import bash_path
+from _test_support import bash_path, run_with_bash_path
 
 HELPER = Path(__file__).with_name("_default_branch.sh")
 
@@ -39,6 +39,33 @@ class DefaultBranchResolutionTest(unittest.TestCase):
         self._git("commit", "-q", "-m", "base")
         self._git("remote", "add", "origin", str(self.remote))
         self._git("push", "-q", "-u", "origin", "master")
+
+        # A deterministic gh for every script invocation in this class. Without
+        # it the resolver could reach the developer's real gh and answer for
+        # whatever repository this checkout happens to point at.
+        self.bin = self.base / "bin"
+        self.bin.mkdir()
+        gh = self.bin / "gh"
+        gh.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                case "$1 $2" in
+                  "repo view") printf 'example/canonical\\n' ;;
+                  "issue list")
+                    # Empty means "no halt". [] reads as an active halt and
+                    # orient.sh exits before the section under test.
+                    if [[ "$*" == *"--label ops:halt"* ]]; then printf ''
+                    else printf '[]\\n'; fi
+                    ;;
+                  *) printf '[]\\n' ;;
+                esac
+                """
+            ),
+            encoding="utf-8",
+        )
+        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
 
     def tearDown(self):
         self.dir.cleanup()
@@ -124,12 +151,22 @@ class DefaultBranchResolutionTest(unittest.TestCase):
     # --- static text scan alone did not catch (found in review of #446).
 
     def _run(self, script, cwd, env_extra=None):
+        # Route through run_with_bash_path/bash_path rather than passing a raw
+        # str(Path). On Windows the raw form is a `D:\...` argument that Git Bash
+        # surfaces as BASH_SOURCE[0], so claim.sh cannot cd to its own directory
+        # and cleanup.sh continues with an empty helper and an empty $BASE — the
+        # test then passes or fails for reasons unrelated to what it asserts.
         env = os.environ.copy()
         env.pop("AI_TEAM_BASE_BRANCH", None)
         env.update(env_extra or {})
-        return subprocess.run(
-            ["bash", str(Path(__file__).with_name(script))],
-            cwd=str(cwd), env=env, capture_output=True, text=True, check=False,
+        return run_with_bash_path(
+            ["bash", bash_path(Path(__file__).with_name(script))],
+            stub_directory=self.bin,
+            env=env,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
     def test_cleanup_never_offers_to_delete_a_non_main_default_branch(self):
@@ -163,30 +200,7 @@ class DefaultBranchResolutionTest(unittest.TestCase):
         subprocess.run(["git", "push", "-q", "origin", "master"], cwd=publisher, check=True)
         self._git("fetch", "-q", "origin", "master")
 
-        bindir = self.base / "bin"
-        bindir.mkdir(exist_ok=True)
-        gh = bindir / "gh"
-        gh.write_text(
-            textwrap.dedent(
-                """\
-                #!/usr/bin/env bash
-                set -euo pipefail
-                case "$1 $2" in
-                  "repo view") printf 'example/canonical\\n' ;;
-                  "issue list")
-                    # An empty string means "no halt". Returning [] here reads as
-                    # an active halt and orient.sh exits before the main section.
-                    if [[ "$*" == *"--label ops:halt"* ]]; then printf ''
-                    else printf '[]\\n'; fi
-                    ;;
-                  *) printf '[]\\n' ;;
-                esac
-                """
-            ),
-            encoding="utf-8",
-        )
-        gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
-        result = self._run("orient.sh", self.work, {"PATH": f"{bindir}{os.pathsep}{os.environ.get('PATH','')}"})
+        result = self._run("orient.sh", self.work)
         self.assertIn("master: BEHIND origin/master by 1 commit", result.stdout, result.stdout + result.stderr)
 
 
@@ -261,10 +275,14 @@ class NestedRepositoryLanePlacementTest(unittest.TestCase):
     def test_the_lane_worktree_is_created_outside_the_host_working_tree(self):
         env = self.env.copy()
         env["CLAIM_AGENT"] = "opus-5-b"
-        env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH','')}"
-        result = subprocess.run(
-            ["bash", str(Path(__file__).with_name("claim.sh")), "7"],
-            cwd=str(self.ext), env=env, capture_output=True, text=True, check=False,
+        result = run_with_bash_path(
+            ["bash", bash_path(Path(__file__).with_name("claim.sh")), "7"],
+            stub_directory=self.bin,
+            env=env,
+            cwd=str(self.ext),
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
