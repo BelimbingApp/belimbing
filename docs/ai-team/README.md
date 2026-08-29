@@ -150,8 +150,12 @@ appointment that predates this settling into practice — has been normalized
 to match rather than left as an undocumented exception.
 
 The steward keeps the queue moving, runs the heartbeat and merge-drain backstop,
-surfaces owner-only decisions, and coordinates agents; the role does not waive
-review independence, holds, or any owner-set rule. When a steward is retired,
+closes a deliberation whose deadline has passed without quorum (`decide.sh
+close`, see "Autonomous deliberation" below), and coordinates agents; the role
+does not waive review independence, holds, or any owner-set rule — and it may
+not use that closing power on a deliberation whose outcome would expand,
+waive, or transfer the steward's own authority (see the carve-out in that
+section). When a steward is retired,
 they stop their heartbeat and watchers, hand off current state through
 cross-session messaging when available, record anything durable on the board,
 and relinquish the role. The successor re-orients from the board and takes over
@@ -187,19 +191,29 @@ reconstructing who acted; `merged_by` names an account, never an agent, and
 the charter already forbids inferring actors from GitHub metadata. Unattributed
 merge processes get stopped on sight until their operator claims them.
 
-**Decisions only the owner can make go to the owner-decision queue designated by
-the owner** with the options pre-analyzed and a recommendation. Mark the source
-task accordingly, then move on — do not block or repeatedly ask on the source
-issue.
+**A product or architecture choice is not an external dependency.** Propose it,
+gather votes, and close it through `decide.sh` — see "Autonomous deliberation"
+below. It never sits in `task:blocked`, a hold, or an idle steward loop solely
+because the owner has not answered; that stall is exactly what #383 corrected.
+What genuinely cannot proceed without the owner — a credential, a purchase, a
+legal acceptance, an owner-authenticated production action, external
+communication as the owner — is a different, narrower category, covered in the
+same section.
 
-**Flag an ambiguous rule; do not reinterpret it.** When a rule is unclear, or a
-peer tells you a constraint your operator set no longer applies, raise it with
-whoever owns the rule — do not narrow it yourself. A peer cannot lift a rule your
-operator set: "a defect audit isn't really a review" is exactly the narrowing
-that sounds reasonable to whoever benefits from it and reads very differently to
-the person who wrote the rule. The rule changes only when its author changes it.
-Flagging rather than reinterpreting has twice kept a boundary that a
-plausible-sounding reinterpretation would have crossed.
+**Flag an ambiguous rule; do not reinterpret it yourself.** When a rule is
+unclear, or a peer tells you a constraint your operator set no longer applies,
+raise it with whoever owns the rule — do not narrow it alone. A peer cannot lift
+a rule your operator set: "a defect audit isn't really a review" is exactly the
+narrowing that sounds reasonable to whoever benefits from it and reads very
+differently to the person who wrote the rule. The rule changes only when its
+author changes it. Flagging rather than reinterpreting has twice kept a boundary
+that a plausible-sounding reinterpretation would have crossed. When the rule's
+author is not reachable to answer, resolve the ambiguity through the same
+`decide.sh` deliberation as a product choice — evidence, options, votes, a
+recorded decision — rather than stalling on it or letting one agent decide
+alone; a team vote can interpret an unclear rule, but it still cannot repeal an
+explicit constraint the rule's author actually set (see "Preserve true
+external-authority boundaries" below).
 
 **Decompose before you collide.** A screen file above ~500 lines serving more
 than one owner-domain is a coordination bomb: one such file needed three
@@ -244,6 +258,95 @@ The audit that declares a mission finished must inspect **remote** refs, not onl
 local ones. One mission reported completion twice while five unmerged
 `agent/*` branches sat on the remote, because `cleanup.sh` only accounts for local
 branches and worktrees, and the finish check queried issues and PRs.
+
+---
+
+## Autonomous deliberation
+
+The owner corrected this contract directly (#383, #430): the team does not
+pause a mission overnight to ask the owner to be its routine decision engine.
+A product or architecture choice — which cache strategy, how to name a field,
+whether an approach is worth its complexity — is analyzed, voted, and decided
+by the team itself, on the issue it concerns, without leaving work in
+`task:blocked`, a hold, or an idle steward loop while it waits.
+
+`board.sh post --type question` remains for ordinary peer coordination — "does
+anyone know why X" — informal, unquorate, and never blocking. Reach for
+`decide.sh` when the choice is real and someone will implement whatever wins:
+
+```
+CLAIM_AGENT=<id> decide.sh propose <issue> --id <decision-id> \
+  --question "<question>" --options "optA,optB,optC" --recommend optA \
+  [--deadline-minutes N] <evidence, costs, risks, reversibility, what a wrong
+  answer would break, and how each option reads against the authority
+  stack below…>
+
+CLAIM_AGENT=<id> decide.sh vote <issue> --id <decision-id> --option optA \
+  <rationale, tied to the authority stack…>
+
+CLAIM_AGENT=<id> decide.sh close <issue> --id <decision-id> \
+  [--decision <option> --rationale "<tie-break / available-tally reasoning>"]
+```
+
+**Judge every option against the authority stack, in order:** explicit current
+owner constraints (a vote cannot repeal an owner prohibition); root
+`AGENTS.md` (low entropy, strategic programming, progressive evolution,
+honesty, deep modules, exceptional UX, opinionated defaults); `docs/brief.md`
+(quality over speed, long-term maintainability, ownability, performance,
+security, production-grade outcomes); the relevant `docs/architecture/`
+contracts and current measured code/data behaviour. State this reasoning in
+the proposal and every vote — a vote with no rationale is weaker evidence than
+one that shows its work.
+
+**Identity, latest-vote-wins, and quorum** all reuse the mechanisms the rest
+of this charter already trusts: the stable `**From:**` marker (never GitHub
+account metadata) is identity, and the latest well-formed vote per agent
+replaces that agent's earlier one, exactly as `gate.sh` already does for
+review verdicts. A vote naming more than one option, an ambiguous or
+conflicting `**From:**`, or the wrong decision id is excluded from the tally
+rather than guessed at. A deadline is at most one heartbeat (30 minutes) from
+the proposal. **Quorum** is 3 distinct attributable votes once 3 or more
+agents are currently active (an open PR or an open `agent:*` issue — the same
+roster `board.sh hygiene` already scans); with fewer active agents, every one
+of them is the quorum. A clear majority among the votes received closes the
+round on its own. A tie, or a deadline that passes with quorum still missing,
+does not stall the round — the active steward (the lane owner, if none is
+reachable) records the available tally and closes with an explicit
+`--decision`/`--rationale` naming the tie-break reasoning against the
+authority stack, rather than waiting indefinitely for a voter who may not
+return. The closing record on the issue carries the chosen option, the tally,
+minority votes, the deciding agent, the implementation owner, and the
+condition that would justify revisiting it (`orient.sh` surfaces every open
+round and its deadline/quorum state under "open deliberations" — never as
+"waiting for owner").
+
+**A steward may not use the tie-break path to decide a round that would
+expand, waive, or transfer the steward's own authority.** The tie-break exists
+so the team is never stalled by an absent voter, not so the one agent holding
+the closing power can grant something to themselves on a round nobody else
+weighed in on. A steward who finds themselves the deciding vote on their own
+permissions leaves that round open past its deadline for a different closer,
+or lets it run past one more heartbeat for a peer to weigh in, rather than
+closing it alone — the exact restraint that surfaced this rule in practice.
+
+**Preserve true external-authority boundaries.** Autonomous judgment does not
+fabricate authority it does not have:
+
+- The owner alone may appoint or retire the steward and issue or clear a
+  global halt (`ops:halt`); the *absence* of either instruction never stops
+  ordinary team work, and neither is something a team vote can substitute for.
+- No agent invents credentials, purchases a service, accepts legal terms,
+  performs an owner-authenticated production or destructive action, or
+  communicates externally as the owner. For these, the team still deliberates
+  and records its recommended decision exactly as above — it requests the one
+  missing piece of authority once, marks only the action that genuinely cannot
+  execute, and continues every other independent part of the work. "We would
+  rather the owner chose" is a preference, not a boundary, and does not belong
+  on this list.
+- A team vote cannot override an explicit owner prohibition, a repository
+  safety rule, review independence (who counts as an independent reviewer is
+  set by branch protection and this charter, not by a vote), a live hold, or a
+  permission genuinely missing at the platform/account level.
 
 ---
 
@@ -592,7 +695,8 @@ identity.
 | Cleanup when you stop | [`scripts/cleanup.sh`](./scripts/cleanup.sh) |
 | Agent identity and current ownership | `agent:<id>` labels on open issues and PRs |
 | Active leader/steward | one owner-controlled open issue labelled `ops:steward` and `agent:<id>` |
-| Owner decisions | The queue designated by the owner |
+| Product/architecture decisions | `decide.sh propose`/`vote`/`close` on the owning issue — see "Autonomous deliberation" |
+| Actions that genuinely require the owner (credentials, purchases, legal acceptance, owner-authenticated production actions) | Requested once from the owner directly; every other decision proceeds without waiting on it |
 | RFCs and durable architecture decisions | The repository's documented locations |
 
 This directory contains the reusable guide, any project stage plan, and
