@@ -350,6 +350,39 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("**Authority-Effect:** none", body)
         self.assertIn("tied", body)
 
+    def test_off_roster_votes_cannot_fabricate_quorum(self):
+        # terra's #436 P1: the roster>=3 branch compared a bare vote count
+        # to 3 with no roster check at all — three identities that can post
+        # a comment but hold no live lane (no open PR / agent:* issue)
+        # could vote and close the round themselves.
+        self.set_roster(["p", "a", "b"])  # only p, a, b are active
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="x")  # x, y, z are NOT on the roster
+        self.vote(10, "d", "left", agent="y")
+        self.vote(10, "d", "left", agent="z")
+
+        result = self.close(10, "d", agent="p")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not yet decidable", result.stderr)
+        self.assertEqual(len(self.comments_now()), 4)  # proposal + 3 votes, no decision written
+
+    def test_off_roster_votes_cannot_shift_a_majority_even_with_quorum(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+        self.vote(10, "d", "left", agent="c")  # 3 roster votes: clean quorum + majority for left
+        self.vote(10, "d", "right", agent="x")  # off-roster: must not touch the tally
+        self.vote(10, "d", "right", agent="y")
+        self.vote(10, "d", "right", agent="z")
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Chosen:** left", body)
+        self.assertIn("left=3", body)
+        self.assertNotIn("right=", body)
+
     def test_close_refuses_an_authority_effect_of_self_on_the_tie_break_path(self):
         # #436 review: the self-interest carve-out had no mechanism — a
         # closer's own declaration is the only thing the script can check,

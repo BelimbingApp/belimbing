@@ -346,8 +346,6 @@ close() {
   local options_json; options_json=$(printf '%s\n' "$options_csv" | jq -R 'split(",")')
 
   local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
-  local voting_agents_json; voting_agents_json=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique')
-  local voter_count; voter_count=$(printf '%s' "$voting_agents_json" | jq 'length')
 
   local roster; roster=$(active_agents "$repo")
   local roster_json; roster_json=$(printf '%s\n' "$roster" | jq -R 'select(length > 0)' | jq -s '.')
@@ -357,12 +355,28 @@ close() {
     exit 2
   fi
 
+  # Roster-filter every vote before any quorum or tally arithmetic touches
+  # it: a well-formed **From:** proves identity, not a live lane, and an
+  # identity that can post a comment but holds no open PR / agent:* issue
+  # must not be able to supply quorum or shift a majority (#436 review,
+  # terra's P1 — the roster>=3 branch below used to compare a bare vote
+  # count to 3 with no roster check at all, so three off-roster identities
+  # could fabricate quorum and decide the outcome outright).
+  votes=$(printf '%s' "$votes" | jq -c --argjson roster "$roster_json" \
+    '[.[] | select(.agent as $a | $roster | index($a) != null)]')
+
+  local voting_agents_json; voting_agents_json=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique')
+  local voter_count; voter_count=$(printf '%s' "$voting_agents_json" | jq 'length')
+
   local quorum_met="false"
   if [ "$roster_count" -ge 3 ]; then
     [ "$voter_count" -ge 3 ] && quorum_met="true"
   else
-    quorum_met=$(jq -n --argjson roster "$roster_json" --argjson voters "$voting_agents_json" \
-      '(($roster - ($roster - $voters)) | length) == ($roster | length)')
+    # roster_count < 3: quorum is every active agent. voting_agents_json is
+    # already a subset of roster_json (votes were roster-filtered above),
+    # so equal cardinality proves set equality — no separate intersection
+    # needed here, unlike before this fix.
+    [ "$voter_count" -eq "$roster_count" ] && quorum_met="true"
   fi
 
   local now_epoch deadline_epoch deadline_passed="false"
@@ -495,11 +509,18 @@ status() {
     return 0
   fi
 
+  local status_roster_json
+  status_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
+
   local now_epoch; now_epoch=$(date -u +%s)
   printf '%s' "$rows" | jq -r '.[] | [.id, .deadline, .proposer, .options] | @tsv' | \
   while IFS=$'\t' read -r rid rdeadline rproposer roptions; do
     local votes voter_count deadline_epoch state
     votes=$(tally_votes "$comments" "$rid" "$(printf '%s' "$proposals" | jq -r --arg id "$rid" '.[] | select(.id == $id) | .createdAt')" "$(printf '%s\n' "$roptions" | jq -R 'split(",")')")
+    # Same roster-filter close() applies (#436 review, terra's P1): an
+    # off-roster identity's vote must not inflate the count shown here.
+    votes=$(printf '%s' "$votes" | jq -c --argjson roster "$status_roster_json" \
+      '[.[] | select(.agent as $a | $roster | index($a) != null)]')
     voter_count=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique | length')
     deadline_epoch=$(date -u -d "$rdeadline" +%s 2>/dev/null || date -u -jf '%Y-%m-%dT%H:%M:%SZ' "$rdeadline" +%s 2>/dev/null)
     state="open"
