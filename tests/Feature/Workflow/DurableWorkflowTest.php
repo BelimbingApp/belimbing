@@ -28,6 +28,15 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
+// `travel()` offsets the clock; it does not stop it. Real wall-clock time
+// keeps accumulating on top of the offset, so a lease assertion here was
+// really testing `travelled_offset + real_elapsed_execution_time` against a
+// fixed boundary — a database-round-trip-heavy test could cross a narrow
+// lease margin under load and fail on correct code (#432). freezeTime()
+// pins `now()` so only the explicit travel() calls below move it; do not
+// remove this and rely on travel() alone.
+beforeEach(fn () => $this->freezeTime());
+
 it('treats durable process coordination as stable schema', function (): void {
     $preflight = app(IncubatingSchemaPreflight::class);
 
