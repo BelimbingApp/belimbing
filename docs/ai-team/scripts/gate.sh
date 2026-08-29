@@ -32,6 +32,10 @@ here=$(cd "$(dirname "$0")" && pwd)
 # shellcheck source=docs/ai-team/scripts/_lane_issue.sh
 # shellcheck disable=SC1091
 source "$here/_lane_issue.sh"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$here/_default_branch.sh"
+BASE=$(ai_team_default_branch)
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git checkout" >&2; exit 2; }
 cd "$ROOT" || exit 2
@@ -52,7 +56,7 @@ origin_url=$(git remote get-url origin 2>/dev/null)
 origin_repo=$(printf '%s' "$origin_url" | sed -E 's#^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)##; s#\.git$##')
 [ "$origin_repo" = "$REPO" ] || {
   echo "origin is '$origin_url' but gh resolves the repository as '$REPO'." >&2
-  echo "The gate proves containment against origin/main, so origin must be the" >&2
+  echo "The gate proves containment against origin/$BASE, so origin must be the" >&2
   echo "canonical repository. Run from a clone whose origin is $REPO." >&2
   exit 2
 }
@@ -86,7 +90,7 @@ elif [ "${#REVIEWED}" -lt 40 ]; then
   REVIEWED="$resolved"
 fi
 
-git fetch -q origin main 2>/dev/null
+git fetch -q origin "$BASE" 2>/dev/null
 if git cat-file -e "${REVIEWED}^{commit}" 2>/dev/null; then
   reviewed_object_available=1
 else
@@ -115,10 +119,10 @@ draft=$(printf '%s' "$pr" | jq -r .isDraft)
 #    evidence about main. #326 landed red exactly this way.
 if [ "$reviewed_object_available" != "1" ]; then
   say_bad "reviewed SHA $REVIEWED is unavailable after fetching PR #$PR — its history may have been rewritten; re-review the current head"
-elif git merge-base --is-ancestor origin/main "$REVIEWED" 2>/dev/null; then
-  say_ok "contains origin/main ($(git rev-parse --short origin/main))"
+elif git merge-base --is-ancestor "origin/$BASE" "$REVIEWED" 2>/dev/null; then
+  say_ok "contains origin/$BASE ($(git rev-parse --short "origin/$BASE"))"
 else
-  say_bad "BEHIND origin/main ($(git rev-parse --short origin/main)) — merge main into the branch first"
+  say_bad "BEHIND origin/$BASE ($(git rev-parse --short "origin/$BASE")) — merge $BASE into the branch first"
 fi
 
 # 3. Checks on the REVIEWED sha, not on the PR, not on the branch. The current
@@ -135,7 +139,7 @@ fi
 runs=$(gh api "repos/$REPO/commits/$REVIEWED/check-runs" --paginate 2>/dev/null \
   | jq -sc '[.[].check_runs[]]')
 
-main_sha=$(git rev-parse origin/main)
+main_sha=$(git rev-parse "origin/$BASE")
 main_runs=$(gh api "repos/$REPO/commits/$main_sha/check-runs" --paginate 2>/dev/null \
   | jq -sc '[.[].check_runs[]]')
 
@@ -158,7 +162,7 @@ bad=$(printf '%s' "$latest" | jq -r \
       '[.[]|select(.status!="completed" or (.conclusion|IN("success","skipped","neutral")|not))]|length' \
       2>/dev/null || echo 1)
 if [ "${expected_n:-0}" -lt 1 ]; then
-  say_bad "cannot observe expected checks on origin/main ${main_sha:0:8}"
+  say_bad "cannot observe expected checks on origin/$BASE ${main_sha:0:8}"
 elif [ "${n:-0}" -lt 1 ]; then
   say_bad "no checks reported yet on ${REVIEWED:0:8}"
 elif [ "${missing_n:-0}" -gt 0 ]; then

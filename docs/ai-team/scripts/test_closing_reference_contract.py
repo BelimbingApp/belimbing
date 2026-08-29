@@ -51,7 +51,7 @@ class OrientHarness:
             cwd=self.root, check=True, env=git_env,
         )
 
-        for name in ("orient.sh", "_lane_issue.sh", "halt_status.sh", "board.sh"):
+        for name in ("orient.sh", "_lane_issue.sh", "_default_branch.sh", "halt_status.sh", "board.sh"):
             target = self.scripts / name
             shutil.copy2(SCRIPTS / name, target)
             target.chmod(target.stat().st_mode | stat.S_IXUSR)

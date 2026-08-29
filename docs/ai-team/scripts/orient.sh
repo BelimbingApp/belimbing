@@ -16,6 +16,10 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=docs/ai-team/scripts/_lane_issue.sh
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/_lane_issue.sh"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_default_branch.sh"
+BASE=$(ai_team_default_branch)
 
 # A halt must reach every agent regardless of tool, so it lives on the board and
 # surfaces here — the one command every agent runs each tick. An open issue
@@ -74,19 +78,19 @@ fi
 
 echo
 echo "== main =="
-git fetch -q origin main 2>/dev/null
-echo "  origin/main  $(git log origin/main --oneline -1)"
+git fetch -q origin "$BASE" 2>/dev/null
+echo "  origin/$BASE  $(git log "origin/$BASE" --oneline -1)"
 branch=$(git rev-parse --abbrev-ref HEAD)
-if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
-  echo "  $branch: contains origin/main"
+if git merge-base --is-ancestor "origin/$BASE" HEAD 2>/dev/null; then
+  echo "  $branch: contains origin/$BASE"
 else
-  if [ "$branch" = "main" ]; then
-    behind_count=$(git rev-list --count HEAD..origin/main 2>/dev/null)
+  if [ "$branch" = "$BASE" ]; then
+    behind_count=$(git rev-list --count "HEAD..origin/$BASE" 2>/dev/null)
     commit_word="commits"
     [ "$behind_count" -eq 1 ] && commit_word="commit"
-    echo "  main: BEHIND origin/main by $behind_count $commit_word — scripts and files you read here are stale"
+    echo "  $BASE: BEHIND origin/$BASE by $behind_count $commit_word — scripts and files you read here are stale"
   else
-    echo "  $branch: BEHIND origin/main — merge it in before you ask anyone to review"
+    echo "  $branch: BEHIND origin/$BASE — merge it in before you ask anyone to review"
   fi
 fi
 

@@ -57,8 +57,18 @@
 
 set -uo pipefail
 
-REPO="${DECIDE_REPO:-${BOARD_REPO:-BelimbingApp/belimbing}}"
-BOARD_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/board.sh"
+DECIDE_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$DECIDE_DIR/_default_branch.sh"
+REPO="${DECIDE_REPO:-${BOARD_REPO:-$(ai_team_origin_repo 2>/dev/null || true)}}"
+[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+if [ -z "$REPO" ]; then
+  echo "decide.sh: cannot determine the repository. Set DECIDE_REPO or BOARD_REPO," >&2
+  echo "or run inside a checkout whose origin remote points at a GitHub repository." >&2
+  exit 2
+fi
+BOARD_SH=""$(cd "${BASH_SOURCE[0]%/*}" && pwd)"/board.sh"
 MAX_DEADLINE_MINUTES=30
 # Reserved for "this field does not apply on this record's path" — never a
 # value real user content is allowed to equal (#436 review, terra P1,

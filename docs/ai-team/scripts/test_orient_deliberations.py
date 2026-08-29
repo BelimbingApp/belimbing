@@ -13,6 +13,7 @@ ORIENT = Path(__file__).with_name("orient.sh")
 SCRIPT_NAMES = (
     "orient.sh",
     "_lane_issue.sh",
+    "_default_branch.sh",
     "halt_status.sh",
     "board.sh",
     "label_hygiene.sh",
