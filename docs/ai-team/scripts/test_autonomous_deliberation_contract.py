@@ -43,6 +43,7 @@ class AutonomousDeliberationContractTest(unittest.TestCase):
         section = document.split("## Autonomous deliberation", 1)[1].split("\n---", 1)[0]
         contract = " ".join(section.split())
         self.assertIn("expand, waive, or transfer the steward's own authority", contract)
+        self.assertIn("--authority-effect", contract)
 
     def test_the_where_things_live_table_no_longer_points_at_an_owner_queue(self):
         document = README.read_text(encoding="utf-8")

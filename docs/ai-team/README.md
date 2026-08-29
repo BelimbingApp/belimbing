@@ -334,6 +334,12 @@ weighed in on. A steward who finds themselves the deciding vote on their own
 permissions leaves that round open past its deadline for a different closer,
 or lets it run past one more heartbeat for a peer to weigh in, rather than
 closing it alone — the exact restraint that surfaced this rule in practice.
+The tie-break/available-tally path enforces this mechanically, not just in
+prose: `decide.sh close` requires `--authority-effect none|self` alongside
+`--decision`/`--rationale` on that path, and refuses outright when the closer
+declares `self`. The script cannot know whose authority an option actually
+affects — that stays the closer's judgment — but the closer must state it on
+the record rather than the carve-out depending on memory alone.
 
 **Preserve true external-authority boundaries.** Autonomous judgment does not
 fabricate authority it does not have:

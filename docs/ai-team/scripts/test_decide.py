@@ -143,7 +143,7 @@ class DecideTestCase(unittest.TestCase):
     def vote(self, issue, id_, option, agent, rationale="because reasons"):
         return self.run_decide("vote", str(issue), "--id", id_, "--option", option, rationale, agent=agent)
 
-    def close(self, issue, id_, agent="closer", decision=None, rationale=None, owner=None):
+    def close(self, issue, id_, agent="closer", decision=None, rationale=None, owner=None, authority_effect=None):
         args = ["close", str(issue), "--id", id_]
         if decision is not None:
             args += ["--decision", decision]
@@ -151,6 +151,8 @@ class DecideTestCase(unittest.TestCase):
             args += ["--rationale", rationale]
         if owner is not None:
             args += ["--owner", owner]
+        if authority_effect is not None:
+            args += ["--authority-effect", authority_effect]
         return self.run_decide(*args, agent=agent)
 
     def last_decision_body(self) -> str:
@@ -335,13 +337,50 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertNotEqual(bare.returncode, 0)
         self.assertIn("--decision", bare.stderr)
         self.assertIn("--rationale", bare.stderr)
+        self.assertIn("--authority-effect", bare.stderr)
 
-        resolved = self.close(10, "d", agent="a", decision="right", rationale="right matches the architecture doc")
+        resolved = self.close(
+            10, "d", agent="a", decision="right",
+            rationale="right matches the architecture doc", authority_effect="none",
+        )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         body = self.last_decision_body()
         self.assertIn("**Chosen:** right", body)
         self.assertIn("**Tie-Break:** right matches the architecture doc", body)
+        self.assertIn("**Authority-Effect:** none", body)
         self.assertIn("tied", body)
+
+    def test_close_refuses_an_authority_effect_of_self_on_the_tie_break_path(self):
+        # #436 review: the self-interest carve-out had no mechanism — a
+        # closer's own declaration is the only thing the script can check,
+        # so it must be required and enforced on the record, not assumed.
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="this expands my own review authority", authority_effect="self",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing", result.stderr)
+        self.assertIn("a different closer", result.stderr)
+        self.assertEqual(len(self.comments_now()), 3)  # proposal + 2 votes, no decision posted
+
+    def test_close_rejects_an_invalid_authority_effect_value(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left", rationale="reason",
+            authority_effect="maybe",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("none", result.stderr)
+        self.assertIn("self", result.stderr)
 
     def test_fewer_than_three_active_agents_quorum_is_all_of_them(self):
         self.set_roster(["a", "b"])
@@ -372,11 +411,16 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertNotEqual(bare.returncode, 0)
         self.assertIn("--decision", bare.stderr)
 
-        resolved = self.close(10, "d", agent="p", decision="left", rationale="only respondent, matches the recommendation and the architecture doc")
+        resolved = self.close(
+            10, "d", agent="p", decision="left",
+            rationale="only respondent, matches the recommendation and the architecture doc",
+            authority_effect="none",
+        )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         body = self.last_decision_body()
         self.assertIn("**Chosen:** left", body)
         self.assertIn("not met by the deadline", body)
+        self.assertIn("**Authority-Effect:** none", body)
 
     def test_before_deadline_and_before_quorum_refuses_to_close(self):
         self.set_roster(["p", "a", "b", "c"])

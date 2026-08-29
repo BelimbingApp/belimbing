@@ -16,7 +16,8 @@
 #     [rationale, tied to the authority stack…]
 #
 #   CLAIM_AGENT=<id> decide.sh close <issue> --id <decision-id> \
-#     [--decision <option> --rationale "<tie-break/available-tally reasoning>"] \
+#     [--decision <option> --rationale "<tie-break/available-tally reasoning>" \
+#      --authority-effect none|self] \
 #     [--owner <agent>] [--revisit-if "<condition that would reopen this>"]
 #
 #   decide.sh status <issue> [--id <decision-id>]
@@ -26,8 +27,11 @@
 # attributable votes are quorum. With fewer active agents, every one of them
 # must vote. A clear majority among quorum-reached votes closes on its own;
 # a tie, or a closed deadline without quorum, requires the closer to pass
-# --decision/--rationale explicitly — this script never guesses a tie-break,
-# it only refuses to let the round stall.
+# --decision/--rationale/--authority-effect explicitly — this script never
+# guesses a tie-break, it only refuses to let the round stall. A closer who
+# declares --authority-effect self (this round would expand, waive, or
+# transfer the closer's own authority) is refused outright: the carve-out is
+# enforced on the record, not left to the closer's memory (#436 review).
 #
 # What this cannot do: repeal an explicit owner prohibition, a repository
 # safety rule, review independence, a live hold, or a missing external
@@ -286,7 +290,7 @@ close() {
   local issue="${1:-}"; shift || true
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "close: issue number required" >&2; exit 2; }
 
-  local id="" decision="" rationale="" owner="" revisit=""
+  local id="" decision="" rationale="" owner="" revisit="" authority_effect=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
@@ -294,9 +298,15 @@ close() {
       --rationale) rationale="${2:-}"; shift 2 ;;
       --owner) owner="${2:-}"; shift 2 ;;
       --revisit-if) revisit="${2:-}"; shift 2 ;;
+      --authority-effect) authority_effect="${2:-}"; shift 2 ;;
       *) echo "close: unrecognized argument '$1'" >&2; exit 2 ;;
     esac
   done
+
+  if [ -n "$authority_effect" ] && [ "$authority_effect" != "none" ] && [ "$authority_effect" != "self" ]; then
+    echo "close: --authority-effect must be 'none' or 'self'" >&2
+    exit 2
+  fi
 
   require_agent
   [ -n "$id" ] || { echo "close: --id required" >&2; exit 2; }
@@ -392,10 +402,21 @@ close() {
   fi
 
   if [ "$needs_rationale" = "true" ]; then
-    [ -n "$decision" ] && [ -n "$rationale" ] || {
-      echo "close: quorum is $quorum_note — this requires an explicit --decision <option> and --rationale \"<why, tied to the authority stack>\" from the closer; the script does not guess a tie-break" >&2
+    [ -n "$decision" ] && [ -n "$rationale" ] && [ -n "$authority_effect" ] || {
+      echo "close: quorum is $quorum_note — this requires an explicit --decision <option>, --rationale \"<why, tied to the authority stack>\", and --authority-effect none|self from the closer; the script does not guess a tie-break" >&2
       exit 2
     }
+    # The carve-out (README, "Autonomous deliberation"): a steward's own
+    # tie-break must never close a round that would expand, waive, or
+    # transfer the closer's own authority. Full semantic detection is
+    # impossible — the script cannot know whose authority an option
+    # affects — so the closer must declare it explicitly, on the record,
+    # rather than the rule living in prose the closer can silently ignore
+    # (opus-5's #436 review: the one rule here with no mechanism).
+    if [ "$authority_effect" = "self" ]; then
+      echo "close: refusing — --authority-effect self declares this round would expand, waive, or transfer the closer's own authority; a different closer must close it, or it waits past this deadline for one" >&2
+      exit 2
+    fi
     local ok=""
     case ",$options_csv," in
       *",$decision,"*) ok=1 ;;
@@ -420,6 +441,10 @@ close() {
     "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit")
   if [ -n "$rationale" ]; then
     payload="${payload}**Tie-Break:** ${rationale}
+"
+  fi
+  if [ -n "$authority_effect" ]; then
+    payload="${payload}**Authority-Effect:** ${authority_effect}
 "
   fi
   payload="${payload}
