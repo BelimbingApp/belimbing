@@ -35,6 +35,11 @@ halt_status=$?
 
 echo
 echo "== active leader/steward =="
+# `ops:steward` is never removed on retirement (#383) — it stays on the
+# appointment issue as the durable historical record, so an all-state query
+# returns every past steward alongside the current one by design. `--state
+# open` is what makes an appointment count as active; it is the whole
+# contract, not an incidental filter, so do not drop it while refactoring.
 stewards=$(gh issue list --repo "$REPO" --state open --label "ops:steward" \
   --json number,title,labels \
   --jq '.[]
