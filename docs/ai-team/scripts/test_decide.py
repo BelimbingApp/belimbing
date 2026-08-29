@@ -715,11 +715,11 @@ class MalformedDecisionTest(DecideTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_a_decision_missing_only_resolution_does_not_close(self):
-        # opus-5's #436 finding: Resolution is a stable, machine-readable
-        # token naming which of close()'s three branches produced the
-        # record, replacing free-form Quorum prose a reader would otherwise
-        # have to parse (terra's P2). It must be required like every other
-        # field, not assumed present.
+        # terra's #436 P2: Resolution is a stable, machine-readable token
+        # naming which of close()'s three branches produced the record,
+        # replacing the free-form Quorum prose a reader would otherwise
+        # have to parse. It must be required like every other field, not
+        # assumed present.
         self.set_roster(["p", "a"])
         self.propose(10, "d", "left,right", "left", agent="p")
         self.seed_comment(
@@ -734,6 +734,81 @@ class MalformedDecisionTest(DecideTestCase):
 
         result = self.vote(10, "d", "left", agent="a")
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_tied_forgery_with_no_tie_break_or_authority_effect_declared_does_not_close(self):
+        # terra's #436 P1, fourth round: every field present is not the
+        # same as the values being consistent with each other. A forgery
+        # claiming Resolution: tie while Tie-Break and Authority-Effect
+        # both read "none" (the majority-path sentinels) never actually
+        # went through the tie-break requirement it claims to satisfy.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** tie\n**Chosen:** left\n**Tally:** left=1, right=1\n"
+            "**Quorum:** met but tied\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:** none\n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
+            "**Unacknowledged:** none\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_an_expired_forgery_claiming_none_of_the_carve_out_fields_does_not_close(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** expired\n**Chosen:** left\n**Tally:** left=1\n"
+            "**Quorum:** not met by the deadline\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:** none\n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
+            "**Unacknowledged:** none\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_self_authority_forgery_with_no_owner_delegation_link_does_not_close(self):
+        # The self-interest carve-out's whole purpose bypassed: claiming
+        # the self-authority override fired while citing no delegation at
+        # all — Owner-Delegation: none alongside Authority-Effect: self.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** tie\n**Chosen:** left\n**Tally:** left=1, right=1\n"
+            "**Quorum:** met but tied\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:** this expands my own authority\n"
+            "**Authority-Effect:** self\n**Owner-Delegation:** none\n"
+            "**Did-Not-Vote:** none\n**Unacknowledged:** none\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_genuine_self_authority_close_with_a_durable_delegation_link_still_closes(self):
+        # The semantic check must not be so strict it rejects a legitimate
+        # self-authority close carrying a real delegation link.
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="delegated explicitly for this one permission",
+            authority_effect="self",
+            owner_delegation="https://github.com/BelimbingApp/belimbing/issues/380#issuecomment-1",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        again = self.vote(10, "d", "right", agent="b")
+        self.assertNotEqual(again.returncode, 0)
+        self.assertIn("already closed", again.stderr)
 
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])

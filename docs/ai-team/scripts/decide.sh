@@ -191,6 +191,18 @@ DECIDE_JQ_COMMON='
   # — so there is exactly one record shape and requiring "every field
   # present" is complete by construction, not a second hand-maintained
   # list that can drift from what close() writes a third time.
+  #
+  # Presence alone is not enough (terra P1, fourth round): a forged record
+  # can carry every field non-empty while its VALUES contradict each other
+  # — Resolution: tie with Authority-Effect: none and Tie-Break: none
+  # (claiming a tie-break round happened with nobody declaring anything),
+  # or Authority-Effect: self with Owner-Delegation: none (claiming the
+  # self-interest override fired with no delegation cited). Requiring the
+  # field names alone does not preserve the authority constraint those
+  # fields exist to prove — the values close() actually writes together on
+  # each branch are checked here as one consistent combination, not merely
+  # as five independently-non-empty strings.
+  def durable_link: (owner_delegation_value | test("https?://")) or (owner_delegation_value | test("#[0-9]"));
   def valid_decision($opts; $roster):
     decide_type == "decision"
     and (chosen_value as $c | $opts | index($c)) != null
@@ -206,7 +218,16 @@ DECIDE_JQ_COMMON='
     and owner_delegation_value != ""
     and did_not_vote_value != ""
     and unacknowledged_value != ""
-    and (from_agent as $a | $roster | index($a)) != null;
+    and (from_agent as $a | $roster | index($a)) != null
+    and (
+      if resolution_value == "majority" then
+        tie_break_value == "none" and authority_effect_value == "none" and owner_delegation_value == "none"
+      else
+        tie_break_value != "none"
+        and (authority_effect_value == "none" or authority_effect_value == "self")
+        and (if authority_effect_value == "self" then durable_link else owner_delegation_value == "none" end)
+      end
+    );
 '
 
 propose() {
@@ -713,9 +734,13 @@ close() {
   # Effect: none" on "Resolution: majority" is unambiguously "never asked"
   # — the record itself says which branch ran, so an auditor never has to
   # guess. A prior version of this fix invented a third vocabulary value
-  # for exactly this; opus-5 proposed Resolution instead and asked for
-  # their own vocabulary patch not to be built, since it solved the
-  # narrower problem and left terra's free-form-prose fragility unfixed.
+  # for exactly this; terra proposed Resolution first, to give a stable
+  # machine-readable close path instead of free-form Quorum prose, and
+  # opus-5 connected it to the Authority-Effect ambiguity and asked for
+  # their own narrower vocabulary patch not to be built once Resolution
+  # covered it too (attribution corrected here per terra's review — an
+  # earlier version of this comment repeated the mistake this PR had
+  # already corrected once).
   local payload
   payload=$(printf '**Decision:** %s\n**Resolution:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
     "$id" "$resolution" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
