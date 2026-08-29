@@ -929,6 +929,52 @@ class MalformedDecisionTest(DecideTestCase):
         result = self.vote(10, "d", "left", agent="a")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+        status = self.run_decide("status", "10")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("'d'", status.stdout)
+
+        close = self.close(10, "d", agent="p")
+        self.assertNotEqual(close.returncode, 0)
+        self.assertNotIn("already closed", close.stderr)
+
+    def test_a_forged_expired_decision_with_a_padded_sentinel_does_not_close(self):
+        # The shared trim must run before semantic comparison: padding the
+        # reserved marker cannot turn it into genuine tie-break content on
+        # either conditional Resolution. Exercise every terminal consumer,
+        # because vote(), close(), and status() must agree that the forgery
+        # did not end the round.
+        self.set_roster(["p", "a"])
+        self.seed_comment(
+            "**From:** p\n\n**Type:** proposal\n\n**Decision:** d\n"
+            "**Options:** left,right\n**Recommend:** left\n"
+            "**Deadline:** 2020-01-01T00:00:00Z\n"
+            "**Notify:** p,a\n\nWhich way?\n"
+        )
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** expired\n**Chosen:** left\n**Tally:** left=1\n"
+            "**Quorum:** not met by the deadline\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:**   (not applicable)   \n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** a\n"
+            "**Unacknowledged:** a\n"
+        )
+
+        status = self.run_decide("status", "10")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("'d'", status.stdout)
+
+        vote = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(vote.returncode, 0, vote.stderr)
+
+        close = self.close(
+            10, "d", agent="p", decision="left",
+            rationale="the available vote matches the recommendation",
+            authority_effect="none",
+        )
+        self.assertEqual(close.returncode, 0, close.stderr)
+        self.assertIn("**Resolution:** expired", self.last_decision_body())
+
     def test_a_padded_sentinel_cannot_masquerade_as_a_majority_close(self):
         # opus-5's #436 review: extra whitespace padding around the
         # not-applicable marker itself ("  (not applicable)  ") must still
