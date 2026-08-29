@@ -565,42 +565,55 @@ the clearance turns out to be wrong.
 
 **An unresponsive holder on an open PR** — the reviewer who set
 `hold:review:<agent>` has gone quiet and the finding is demonstrably
-discharged (a pushed fix, a superseding review, or equivalent recorded
-evidence) — is a steward action, not a fellow reviewer speaking for the
-absent one, and it goes through `hold.sh`, never a bare `gh pr edit
+discharged by a repeatable observation — is a steward action, not a fellow
+reviewer speaking for the absent one, and it goes through `hold.sh`, never a
+bare `gh pr edit
 --remove-label`: routing around the tool at the one moment attribution
 matters most is worse than the ownerless label it replaces, because an
 ownerless label at least never claimed to be authoritative about who may
 clear it.
 
+Classify the finding before acting (#438):
+
+- **Verifiable** means the answer does not depend on whose judgment is used:
+  current-main containment, the presence of a label or forbidden pattern, a
+  named regression result, or another repeatable fact. A steward may clear
+  this kind after personally reproducing the fact and citing that evidence.
+- **Judgment** means the unresolved question is whether a design, trade-off,
+  or remedy satisfies the reviewer's intent. Agreement from the steward is a
+  second opinion, not discharge evidence. `hold.sh` refuses this kind; leave
+  the named hold set until its holder records a verdict and clears it.
+
 ```bash
 CLAIM_AGENT=<steward-id> docs/ai-team/scripts/hold.sh review clear <pr> \
-  --steward <holder-agent> --reason "<what was discharged, and how you know>"
+  --steward <holder-agent> --discharge verifiable \
+  --reason "<what was discharged, and how you reproduced it>"
 ```
 
-`--steward` and `--reason` are mandatory together — the script refuses one
-without the other, and refuses naming yourself. This clears *exactly*
+`--steward`, `--discharge verifiable`, and `--reason` are mandatory together —
+the script refuses a missing or unknown classification, refuses
+`--discharge judgment`, and refuses naming yourself. A successful clear records
+the verifiable classification in its durable PR comment, then clears *exactly*
 `hold:review:<holder-agent>`, leaves every other holder's label untouched,
-and posts the reason as a headered PR comment automatically, *before*
-touching the label: if the label was never actually set (a typo'd holder
-id) or the comment fails to post, the script refuses rather than silently
-reporting success, and if the removal itself somehow doesn't take, it says
-so loudly rather than trusting the exit code — the evidence is never only
-in the steward's memory, and it never gets manufactured for a mutation that
-did not happen. Cite something checkable (a commit SHA, a review comment, a
-passing regression) as the reason — never "enough time has passed." A
+and posts the classification plus reason automatically, *before* touching the
+label: if the label was never actually set (a typo'd holder id) or the comment
+fails to post, the script refuses rather than silently reporting success, and
+if the removal itself somehow doesn't take, it says so loudly rather than
+trusting the exit code — the evidence is never only in the steward's memory,
+and it never gets manufactured for a mutation that did not happen. Cite
+something checkable (a commit SHA, a review comment, a passing regression) as
+the reason — never "enough time has passed." A
 discharged-but-unconfirmed hold is not stale; it is unverified, and the
 evidence requirement is what makes a steward clearing it different from one
 reviewer overriding another — never clear a hold whose finding you have not
 personally confirmed resolved, no matter how long it has sat.
 
 `--steward` names who is acting; it checks no role of its own, and any
-agent can pass it. The recorded `--reason` is the control, not the flag —
-`gate.sh` cannot distinguish a legitimate steward transfer from one
-reviewer overriding a rival's hold, only the presence and content of the
-evidence on the record can, exactly as it would if a human read the PR and
-judged it. Do not read the flag name as a permission check it does not
-perform.
+agent can pass it. The explicit classification and recorded `--reason` are the
+auditable controls, not the flag name — `hold.sh` forces the caller to preserve
+the distinction but cannot prove that a claimed fact is truly verifiable.
+Review the durable evidence as you would any other assertion. Do not read the
+flag name as a permission check it does not perform.
 
 An author never clears a reviewer's hold: one agent believed they had, having
 actually cleared their own `hold:author`, and only the label timeline showed the

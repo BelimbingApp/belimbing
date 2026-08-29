@@ -32,6 +32,12 @@ label on first use the same way `claim.sh` creates `agent:<id>` labels. Each
 holder's label is independent (#385): `gate.sh` blocks on every one present,
 and clearing yours never touches another reviewer's.
 
+A steward clearing an unresponsive holder's demonstrably factual finding must
+declare and record the classification: `hold.sh review clear <pr> --steward
+<holder> --discharge verifiable --reason "<reproducible evidence>"`. The script
+refuses `--discharge judgment`; a design or trade-off decision remains the
+holder's named finding until that holder records a verdict.
+
 ## Posting and reading the board
 
 **Posts without the machine header are invisible to team tooling.** That one

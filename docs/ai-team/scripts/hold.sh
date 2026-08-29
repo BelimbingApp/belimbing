@@ -13,11 +13,18 @@
 # label — never another holder's.
 #
 # Steward transfer of an unresponsive holder's hold — the one case where a
-# third party may clear a hold that isn't theirs — requires the target agent
-# and a recorded reason, both mandatory together, never inferred:
+# third party may clear a hold that isn't theirs — requires the target agent,
+# an explicit verifiable-finding classification, and a recorded reason, all
+# mandatory together, never inferred:
 #
 #   CLAIM_AGENT=<steward-id> docs/ai-team/scripts/hold.sh review clear <pr-number> \
-#     --steward <holder-agent> --reason "<what was discharged, and how you know>"
+#     --steward <holder-agent> --discharge verifiable \
+#     --reason "<what was discharged, and how you know>"
+#
+# `--discharge judgment` is deliberately refused: a steward can verify an
+# observable fact on behalf of an unresponsive holder, but cannot silently
+# substitute their own judgment for the reviewer's. The named hold stays set
+# until its holder accepts the trade or otherwise records a superseding verdict.
 #
 # This clears exactly hold:review:<holder-agent> — no other holder's label is
 # touched — and posts the reason as a headered PR comment, so "I named the
@@ -27,11 +34,11 @@
 # exists to prevent: the tool becomes the thing you route around at the one
 # moment attribution matters most.
 #
-# `--steward` names who is acting and checks no role of its own — any agent
-# can pass it. The recorded --reason is the control, not the flag name: a
-# steward transfer is distinguishable from one reviewer overriding a rival's
-# hold only by the evidence on the record, exactly as it would be if a human
-# read the PR and judged it. Do not mistake the flag for a permission check.
+# `--steward` names who is acting and checks no role of its own — any agent can
+# pass it. `--discharge verifiable` and the recorded --reason make the claim
+# auditable: the script cannot prove the classification, but it can prevent the
+# ambiguity from disappearing into an untyped status comment. Do not mistake
+# the flag for a permission check.
 #
 # A pre-#385 unattributed bare `hold:review` label has no owner to name, so
 # it clears through a separate, explicit path rather than by accident:
@@ -55,7 +62,7 @@ usage() {
 usage:
   CLAIM_AGENT=<stable-agent-id> hold.sh review add   <pr-number>
   CLAIM_AGENT=<stable-agent-id> hold.sh review clear  <pr-number>
-  CLAIM_AGENT=<steward-id>      hold.sh review clear  <pr-number> --steward <holder-agent> --reason "<evidence>"
+  CLAIM_AGENT=<steward-id>      hold.sh review clear  <pr-number> --steward <holder-agent> --discharge verifiable --reason "<evidence>"
   CLAIM_AGENT=<agent-id>        hold.sh review clear  <pr-number> --legacy --reason "<evidence>"
 EOF
   exit 2
@@ -66,23 +73,25 @@ EOF
 [[ "$pr" =~ ^[0-9]+$ ]] || usage
 
 steward_target=""
+discharge=""
 reason=""
 legacy=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --steward) steward_target="${2:-}"; shift 2 ;;
+    --discharge) discharge="${2:-}"; shift 2 ;;
     --reason)  reason="${2:-}"; shift 2 ;;
     --legacy)  legacy=1; shift ;;
     *) usage ;;
   esac
 done
 
-if [[ -n "$steward_target" || -n "$reason" || -n "$legacy" ]]; then
-  [[ "$action" == "clear" ]] || { echo "--steward/--reason/--legacy only apply to clear" >&2; usage; }
+if [[ -n "$steward_target" || -n "$discharge" || -n "$reason" || -n "$legacy" ]]; then
+  [[ "$action" == "clear" ]] || { echo "--steward/--discharge/--reason/--legacy only apply to clear" >&2; usage; }
 fi
 
-if [[ -n "$legacy" && -n "$steward_target" ]]; then
-  echo "refusing: --legacy and --steward are mutually exclusive — a bare hold has no owner to name" >&2
+if [[ -n "$legacy" && ( -n "$steward_target" || -n "$discharge" ) ]]; then
+  echo "refusing: --legacy and --steward/--discharge are mutually exclusive — a bare hold has no owner to name" >&2
   exit 2
 fi
 
@@ -91,9 +100,13 @@ if [[ -n "$legacy" ]]; then
     echo "--legacy requires --reason — an unattributed hold has no holder to hold the omission against, so the evidence is the only record there is" >&2
     exit 2
   }
-elif [[ -n "$steward_target" || -n "$reason" ]]; then
-  [[ -n "$steward_target" && -n "$reason" ]] || {
-    echo "--steward and --reason must both be given — a steward transfer without a recorded reason is exactly the prose the gate does not read" >&2
+elif [[ -n "$steward_target" || -n "$discharge" || -n "$reason" ]]; then
+  [[ -n "$steward_target" && -n "$discharge" && -n "$reason" ]] || {
+    echo "--steward, --discharge verifiable, and --reason must all be given — an unclassified steward transfer is exactly the ambiguity the record must preserve" >&2
+    exit 2
+  }
+  [[ "$discharge" == "verifiable" || "$discharge" == "judgment" ]] || {
+    echo "--discharge must be verifiable or judgment" >&2
     exit 2
   }
 fi
@@ -112,6 +125,11 @@ if [[ -n "$steward_target" ]]; then
     echo "refusing: --steward $steward_target is your own id — clear your own hold without --steward" >&2
     exit 2
   fi
+fi
+
+if [[ "$discharge" == "judgment" ]]; then
+  echo "refusing steward clearance of $steward_target's judgment finding — only the holder can accept that trade; leave hold:review:$steward_target set and obtain their recorded verdict" >&2
+  exit 1
 fi
 
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || {
@@ -203,6 +221,7 @@ else
       else
         printf 'Steward-clearing %s — %s clearing on their behalf as an unresponsive holder.\n\n' \
           "$hold_label" "$steward_target"
+        printf 'Discharge classification: %s\n\n' "$discharge"
       fi
       printf 'Discharge evidence: %s\n' "$reason"
     } >"$comment_file"
@@ -230,7 +249,7 @@ else
   if [[ -n "$legacy" ]]; then
     echo "cleared legacy $hold_label on PR #$pr (reason recorded on the PR)"
   elif [[ -n "$steward_target" ]]; then
-    echo "steward-cleared $hold_label on PR #$pr (reason recorded on the PR)"
+    echo "steward-cleared $hold_label on PR #$pr ($discharge discharge and reason recorded on the PR)"
   else
     echo "cleared $hold_label on PR #$pr"
   fi

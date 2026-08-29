@@ -243,11 +243,73 @@ class HoldReviewTest(HoldTestCase):
 class HoldStewardTransferTest(HoldTestCase):
     """The steward path: clearing a *different* agent's hold, never silently."""
 
+    def test_steward_clear_requires_an_explicit_discharge_classification(self):
+        self.seed_pr_labels(["hold:review:luna"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--reason", "pushed fix at abc1234",
+            agent="opus-5",
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("--discharge verifiable", result.stderr)
+        self.assertIn("hold:review:luna", self.pr_labels_now())
+
+    def test_judgment_finding_is_refused_without_comment_or_label_mutation(self):
+        self.seed_pr_labels(["hold:review:luna"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--discharge", "judgment",
+            "--reason", "the steward considers the trade acceptable",
+            agent="opus-5",
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("judgment finding", result.stderr)
+        self.assertFalse(self.gh_log.exists())
+        self.assertIn("hold:review:luna", self.pr_labels_now())
+
+    def test_steward_clear_refuses_an_unknown_discharge_classification(self):
+        self.seed_pr_labels(["hold:review:luna"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--discharge", "subjective",
+            "--reason", "the steward agrees",
+            agent="opus-5",
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("must be verifiable or judgment", result.stderr)
+        self.assertFalse(self.gh_log.exists())
+        self.assertIn("hold:review:luna", self.pr_labels_now())
+
+    def test_discharge_classification_without_steward_is_refused(self):
+        self.seed_pr_labels(["hold:review:opus-5"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--discharge", "verifiable", "--reason", "head contains main",
+            agent="opus-5",
+        )
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("--steward, --discharge verifiable, and --reason", result.stderr)
+        self.assertIn("hold:review:opus-5", self.pr_labels_now())
+
+    def test_verifiable_clear_records_its_classification(self):
+        self.seed_pr_labels(["hold:review:luna"])
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--discharge", "verifiable",
+            "--reason", "head abc1234 contains current main",
+            agent="opus-5",
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        comment = self.comment_body.read_text(encoding="utf-8")
+        self.assertIn("Discharge classification: verifiable", comment)
+        self.assertNotIn("hold:review:luna", self.pr_labels_now())
+
     def test_steward_clear_removes_the_named_holders_label_and_records_evidence(self):
         self.seed_pr_labels(["hold:review:luna"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "luna", "--reason", "pushed fix at abc1234, luna's finding no longer applies",
+            "--steward", "luna", "--discharge", "verifiable",
+            "--reason", "pushed fix at abc1234, luna's finding no longer applies",
             agent="opus-5",
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -259,6 +321,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertIn("**From:** opus-5", comment)
         self.assertIn("hold:review:luna", comment)
         self.assertIn("luna", comment)
+        self.assertIn("Discharge classification: verifiable", comment)
         self.assertIn("pushed fix at abc1234", comment)
         self.assertNotIn("hold:review:luna", self.pr_labels_now())
 
@@ -266,7 +329,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.seed_pr_labels(["hold:review:luna", "hold:review:sol"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "luna", "--reason", "discharged",
+            "--steward", "luna", "--discharge", "verifiable", "--reason", "discharged",
             agent="opus-5",
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -276,25 +339,31 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertIn("hold:review:sol", self.pr_labels_now())
 
     def test_steward_flag_requires_a_reason(self):
-        result = self.run_hold("review", "clear", "7", "--steward", "luna", agent="opus-5")
+        result = self.run_hold(
+            "review", "clear", "7",
+            "--steward", "luna", "--discharge", "verifiable",
+            agent="opus-5",
+        )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("--steward and --reason must both be given", result.stderr)
+        self.assertIn("--steward, --discharge verifiable, and --reason must all be given", result.stderr)
 
     def test_reason_alone_without_steward_is_refused(self):
         result = self.run_hold("review", "clear", "7", "--reason", "discharged", agent="opus-5")
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
-        self.assertIn("--steward and --reason must both be given", result.stderr)
+        self.assertIn("--steward, --discharge verifiable, and --reason must all be given", result.stderr)
 
     def test_steward_cannot_target_their_own_id(self):
         result = self.run_hold(
-            "review", "clear", "7", "--steward", "opus-5", "--reason", "discharged", agent="opus-5",
+            "review", "clear", "7", "--steward", "opus-5", "--discharge", "verifiable",
+            "--reason", "discharged", agent="opus-5",
         )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("your own id", result.stderr)
 
     def test_steward_flags_are_refused_on_add(self):
         result = self.run_hold(
-            "review", "add", "7", "--steward", "luna", "--reason", "discharged", agent="opus-5",
+            "review", "add", "7", "--steward", "luna", "--discharge", "verifiable",
+            "--reason", "discharged", agent="opus-5",
         )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("only apply to clear", result.stderr)
@@ -324,7 +393,8 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.seed_pr_labels(["hold:review:kiat-luna"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "kiat-lunaa", "--reason", "discharged at aa2b6484",
+            "--steward", "kiat-lunaa", "--discharge", "verifiable",
+            "--reason", "discharged at aa2b6484",
             agent="opus-5",
         )
         self.assertNotEqual(result.returncode, 0)
@@ -342,7 +412,8 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.seed_pr_labels(["hold:review:kiat-luna"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "kiat-luna", "--reason", "discharged at aa2b6484",
+            "--steward", "kiat-luna", "--discharge", "verifiable",
+            "--reason", "discharged at aa2b6484",
             agent="opus-5",
             removal_actually_fails=True,
         )
@@ -363,7 +434,7 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.seed_pr_labels(["hold:review:luna"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "luna", "--reason", "discharged",
+            "--steward", "luna", "--discharge", "verifiable", "--reason", "discharged",
             agent="opus-5",
             comment_fails=True,
         )
@@ -382,7 +453,7 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.seed_pr_labels(["hold:review:luna"])
         result = self.run_hold(
             "review", "clear", "7",
-            "--steward", "luna", "--reason", "discharged",
+            "--steward", "luna", "--discharge", "verifiable", "--reason", "discharged",
             agent="opus-5",
             lookup_fails_on_call=2,
         )
