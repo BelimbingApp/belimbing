@@ -665,6 +665,21 @@ close() {
       echo "close: --decision '$decision' overrides a clear quorum majority of '$chosen' — that is exactly the override the authority stack forbids without a recorded reason; use it only when the majority itself is the tie/expired case, or drop --decision to accept '$chosen'" >&2
       exit 2
     fi
+    # --rationale/--authority-effect/--owner-delegation only apply on the
+    # tie/expired path, and nothing here clears them before the record is
+    # written — a closer who adds --rationale on a clear majority out of
+    # habit (nothing says not to) would silently produce a record
+    # valid_decision's majority branch then rejects: close() reports
+    # success and exits 0, but the round is invalid and stays open in
+    # every reader (vote, close, status) with no error anywhere (opus-5,
+    # #436 review — the writer was never checked against the reader every
+    # prior round in this sequence hardened). Refuse rather than silently
+    # drop what the closer wrote — discarding it would be its own
+    # dishonesty.
+    if [ -n "$rationale" ] || [ -n "$authority_effect" ] || [ -n "$owner_delegation" ]; then
+      echo "close: --rationale/--authority-effect/--owner-delegation only apply on the tie or expired-deadline path — this is a clear quorum majority (Resolution: majority), so none of them belong on this close; drop them and re-run" >&2
+      exit 2
+    fi
   elif [ "$quorum_met" = "true" ] && [ "$is_tie" = "true" ]; then
     needs_rationale="true"
     resolution="tie"

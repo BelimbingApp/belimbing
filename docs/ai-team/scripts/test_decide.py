@@ -810,6 +810,49 @@ class MalformedDecisionTest(DecideTestCase):
         self.assertNotEqual(again.returncode, 0)
         self.assertIn("already closed", again.stderr)
 
+    def test_close_refuses_a_rationale_on_a_clear_majority(self):
+        # opus-5's #436 review: every prior round hardened the reader
+        # (valid_decision) against forged records, but nobody checked that
+        # a genuine closer's own flags always produce a record the reader
+        # accepts. --rationale is only meaningful on the tie/expired path;
+        # nothing cleared it before the majority path wrote it into
+        # Tie-Break, producing a record valid_decision's own majority
+        # branch then rejects — close() would report success and exit 0
+        # while the round stayed invalid everywhere else. Refuse instead
+        # of silently writing (or silently dropping) it.
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+        self.vote(10, "d", "right", agent="c")
+
+        result = self.close(10, "d", agent="p", rationale="explaining my reasoning, out of habit")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("only apply on the tie or expired-deadline path", result.stderr)
+        self.assertEqual(self.comments_now()[-1]["body"].count("**Type:** decision"), 0)
+
+    def test_close_refuses_an_owner_delegation_on_a_clear_majority(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+        self.vote(10, "d", "right", agent="c")
+
+        result = self.close(10, "d", agent="p", owner_delegation="https://example.invalid/#1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("only apply on the tie or expired-deadline path", result.stderr)
+
+    def test_close_refuses_an_authority_effect_on_a_clear_majority(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+        self.vote(10, "d", "right", agent="c")
+
+        result = self.close(10, "d", agent="p", authority_effect="none")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("only apply on the tie or expired-deadline path", result.stderr)
+
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])
         self.propose(10, "d", "left,right", "left", agent="p")
@@ -1031,6 +1074,80 @@ class CarriageReturnTest(DecideTestCase):
         body = self.last_decision_body()
         self.assertIn("left=3", body)
         self.assertIn("**Did-Not-Vote:** none", body)
+
+
+class WriterReaderConsistencyTest(DecideTestCase):
+    """opus-5's #436 review, general form: every round in this sequence
+    hardened the reader (valid_decision) against forged records, but never
+    checked that close()'s own genuine output always satisfies it. Round-
+    tripping each of the three resolution paths — close(), then confirm a
+    second close()/vote() sees "already closed"/refused rather than an open
+    round — proves the writer and reader agree, without anyone having to
+    predict the next divergence's exact shape."""
+
+    def assert_record_is_self_consistent(self, issue, decision_id, agent):
+        # If close() just wrote something valid_decision rejects, a second
+        # close attempt would see the round as still open (wrong error) and
+        # a vote would succeed (wrong exit code) instead of both correctly
+        # refusing "already closed".
+        second_close = self.close(issue, decision_id, agent=agent)
+        self.assertNotEqual(second_close.returncode, 0)
+        self.assertIn("already closed", second_close.stderr)
+
+        late_vote = self.run_decide("vote", str(issue), "--id", decision_id, "--option", "left", "late vote", agent=agent)
+        self.assertNotEqual(late_vote.returncode, 0)
+        self.assertIn("already closed", late_vote.stderr)
+
+    def test_a_genuine_majority_close_is_self_consistent(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+        self.vote(10, "d", "right", agent="c")
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_record_is_self_consistent(10, "d", "p")
+
+    def test_a_genuine_tie_close_is_self_consistent(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="matches the recommendation", authority_effect="none",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_record_is_self_consistent(10, "d", "a")
+
+    def test_a_genuine_expired_close_is_self_consistent(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.seed_comment(
+            "**From:** p\n\n**Type:** proposal\n\n**Decision:** d\n"
+            "**Options:** left,right\n**Recommend:** left\n"
+            "**Deadline:** 2020-01-01T00:00:00Z\n\nWhich way?\n"
+        )
+        self.vote(10, "d", "left", agent="a")
+        result = self.close(
+            10, "d", agent="p", decision="left",
+            rationale="only respondent", authority_effect="none",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_record_is_self_consistent(10, "d", "p")
+
+    def test_a_genuine_self_authority_close_is_self_consistent(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="delegated explicitly for this one permission",
+            authority_effect="self",
+            owner_delegation="https://github.com/BelimbingApp/belimbing/issues/380#issuecomment-1",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assert_record_is_self_consistent(10, "d", "a")
 
 
 class StatusTest(DecideTestCase):
