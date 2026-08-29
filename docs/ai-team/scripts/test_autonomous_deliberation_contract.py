@@ -45,6 +45,22 @@ class AutonomousDeliberationContractTest(unittest.TestCase):
         self.assertIn("expand, waive, or transfer the steward's own authority", contract)
         self.assertIn("--authority-effect", contract)
 
+    def test_the_scoped_owner_delegation_clause_is_documented(self):
+        document = README.read_text(encoding="utf-8")
+        section = document.split("## Autonomous deliberation", 1)[1].split("\n---", 1)[0]
+        contract = " ".join(section.split())
+        self.assertIn("--owner-delegation", contract)
+        self.assertIn("never generalized", contract)
+        self.assertIn("silence", contract)
+
+    def test_did_not_vote_and_unacknowledged_are_documented_as_distinct(self):
+        document = README.read_text(encoding="utf-8")
+        section = document.split("## Autonomous deliberation", 1)[1].split("\n---", 1)[0]
+        contract = " ".join(section.split())
+        self.assertIn("**Did-Not-Vote:**", contract)
+        self.assertIn("**Unacknowledged:**", contract)
+        self.assertIn("decide.sh notify", contract)
+
     def test_the_where_things_live_table_no_longer_points_at_an_owner_queue(self):
         document = README.read_text(encoding="utf-8")
         section = document.split("## Where things live", 1)[1].split("\n---", 1)[0]

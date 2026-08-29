@@ -9,7 +9,7 @@
 #
 #   posts without the machine header are invisible to team tooling.
 #
-#   board.sh post <n> --agent <id> --type <status|finding|question|handoff|proposal|vote|decision> [body…]
+#   board.sh post <n> --agent <id> --type <status|finding|question|handoff|proposal|vote|decision|acknowledgement> [body…]
 #       Stamp the header gate.sh parses, enforce a visible-byte budget
 #       (BOARD_POST_BUDGET, default 1400), fold overflow into <details>.
 #       Refuses --type verdict: verdicts must be PR reviews or the gate
@@ -69,7 +69,7 @@ post() {
   fi
 
   case "$type" in
-    status|finding|question|handoff|proposal|vote|decision) ;;
+    status|finding|question|handoff|proposal|vote|decision|acknowledgement) ;;
     verdict*)
       echo "post: refusing — a verdict posted as an issue comment is invisible to gate.sh (#359)." >&2
       echo "      Record it as a PR review instead:" >&2
@@ -79,7 +79,7 @@ post() {
       exit 3
       ;;
     *)
-      echo "post: --type must be one of status|finding|question|handoff|proposal|vote|decision (got '${type:-none}')" >&2
+      echo "post: --type must be one of status|finding|question|handoff|proposal|vote|decision|acknowledgement (got '${type:-none}')" >&2
       exit 2
       ;;
   esac

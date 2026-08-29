@@ -13,11 +13,14 @@
 #     [--deadline-minutes N] [evidence/trade-off body…]
 #
 #   CLAIM_AGENT=<id> decide.sh vote <issue> --id <decision-id> --option optA \
-#     [rationale, tied to the authority stack…]
+#     <rationale, tied to the authority stack…>
+#
+#   CLAIM_AGENT=<id> decide.sh notify <issue> --id <decision-id> \
+#     --acknowledged agentA,agentB
 #
 #   CLAIM_AGENT=<id> decide.sh close <issue> --id <decision-id> \
 #     [--decision <option> --rationale "<tie-break/available-tally reasoning>" \
-#      --authority-effect none|self] \
+#      --authority-effect none|self [--owner-delegation "<durable link>"]] \
 #     [--owner <agent>] [--revisit-if "<condition that would reopen this>"]
 #
 #   decide.sh status <issue> [--id <decision-id>]
@@ -30,13 +33,26 @@
 # --decision/--rationale/--authority-effect explicitly — this script never
 # guesses a tie-break, it only refuses to let the round stall. A closer who
 # declares --authority-effect self (this round would expand, waive, or
-# transfer the closer's own authority) is refused outright: the carve-out is
-# enforced on the record, not left to the closer's memory (#436 review).
+# transfer the closer's own authority) is refused outright unless an
+# explicit --owner-delegation <durable link> names the owner's specific,
+# named delegation of this exact permission — silence is never delegation,
+# and it applies to this one close only. The carve-out is enforced on the
+# record, not left to the closer's memory (#436 review).
+#
+# propose() snapshots the active roster as **Notify:**, and the decision
+# record separates two honestly-named, non-overlapping facts: who never
+# cast a vote (**Did-Not-Vote:**, which says nothing about whether they saw
+# the round — an abstention looks identical to a miss), and who neither
+# voted nor was ever explicitly recorded via `notify --acknowledged` as
+# having received it (**Unacknowledged:**, a fail-closed caller-supplied
+# record, since decide.sh cannot itself deliver a message — only the
+# invoking agent's own cross-session messaging can).
 #
 # What this cannot do: repeal an explicit owner prohibition, a repository
 # safety rule, review independence, a live hold, or a missing external
-# credential/permission. Those are recorded as a recommendation and a
-# request for the specific missing authority, never voted around (see
+# credential/permission (short of the one scoped, explicit, linked
+# delegation above). Those are recorded as a recommendation and a request
+# for the specific missing authority, never voted around (see
 # docs/ai-team/README.md, "Autonomous deliberation").
 
 set -uo pipefail
@@ -50,7 +66,7 @@ DECISION_ID_RE='^[a-z0-9]+(-[a-z0-9]+)*$'
 OPTION_RE='^[A-Za-z0-9][A-Za-z0-9 _.-]*$'
 
 usage() {
-  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,57p' "$0" | sed 's/^# \{0,1\}//'
   exit 2
 }
 
@@ -84,12 +100,31 @@ resolve_repo() {
 # exactly one meaning across the charter.
 active_agents() {
   local repo="$1"
+  # tr -d '\r': native-Windows gh/jq output can retain a trailing CR (#436
+  # review, terra's P1 — 3/33 focused-suite failures on native Windows, the
+  # saved roster losing/mangling identities and falsely marking real voters
+  # not-reached). Every consumer of this list — quorum, tally filtering,
+  # Notify/Did-Not-Vote — depends on exact string equality against agent ids
+  # parsed elsewhere, so one un-stripped \r silently breaks every one of them.
   {
     gh pr list --repo "$repo" --state open --limit 100 --json labels \
       --jq '.[].labels[].name | select(startswith("agent:")) | ltrimstr("agent:")' 2>/dev/null
     gh issue list --repo "$repo" --state open --limit 100 --json labels \
       --jq '.[].labels[].name | select(startswith("agent:")) | ltrimstr("agent:")' 2>/dev/null
-  } | sort -u
+  } | tr -d '\r' | sort -u
+}
+
+# #430's quorum rule as one number: 3 once the active roster reaches 3,
+# otherwise every active agent. Shared by close() (which decides) and
+# status() (which must report the identical requirement, not a redraft of
+# it — #436 review, terra P4).
+quorum_required_for() {
+  local roster_count="$1"
+  if [ "$roster_count" -ge 3 ]; then
+    printf '3'
+  else
+    printf '%s' "$roster_count"
+  fi
 }
 
 fetch_comments() {
@@ -122,6 +157,15 @@ DECIDE_JQ_COMMON='
   # id are independent facts about the same comment.
   def structured($id):
     from_agent != "" and decision_id == $id;
+  def chosen_value: one_capture_raw("^\\*\\*Chosen:\\*\\*[[:space:]]*(?<v>.+)$");
+  # A comment only terminates a round if it is an actually well-formed
+  # decision record — an unambiguous **Chosen:** naming one of the
+  # proposals declared options — not merely something typed "decision"
+  # (#436 review, terra P2: an outsider posting **Type:** decision with no
+  # other fields previously blocked every future vote and made status()
+  # report the round closed, permanently, with no way to recover it).
+  def valid_decision($opts):
+    decide_type == "decision" and (chosen_value as $c | $opts | index($c)) != null;
 '
 
 propose() {
@@ -147,6 +191,13 @@ propose() {
   [ -n "$question" ] || { echo "propose: --question required" >&2; exit 2; }
   [ -n "$options_csv" ] || { echo "propose: --options required (comma-separated)" >&2; exit 2; }
   [ -n "$recommend" ] || { echo "propose: --recommend required" >&2; exit 2; }
+  # #430 requires evidence/trade-offs on the proposal, not just a bare
+  # question — fail closed rather than accept a blank body (#436 review,
+  # terra P4).
+  [ -n "$body" ] || {
+    echo "propose: evidence is required — pass trade-offs, costs, risks, reversibility, and what a wrong answer would break as trailing text; a bare question is not a proposal" >&2
+    exit 2
+  }
   [[ "$deadline_minutes" =~ ^[0-9]+$ ]] && [ "$deadline_minutes" -ge 1 ] && [ "$deadline_minutes" -le "$MAX_DEADLINE_MINUTES" ] || {
     echo "propose: --deadline-minutes must be 1..$MAX_DEADLINE_MINUTES (one heartbeat)" >&2
     exit 2
@@ -233,6 +284,12 @@ vote() {
   case "$option" in
     *,*) echo "vote: --option must name exactly one option, not a list" >&2; exit 2 ;;
   esac
+  # #430 requires a rationale tied to the authority stack on every vote —
+  # fail closed on a blank one (#436 review, terra P4).
+  [ -n "$body" ] || {
+    echo "vote: a rationale is required — tie your choice to the authority stack (owner constraints, AGENTS.md, docs/brief.md, the relevant architecture contracts) as trailing text" >&2
+    exit 2
+  }
 
   local repo; repo=$(resolve_repo)
   local comments; comments=$(fetch_comments "$repo" "$issue") || { echo "vote: cannot read #$issue from $repo" >&2; exit 2; }
@@ -247,9 +304,12 @@ vote() {
     exit 1
   fi
 
+  local vote_options_json
+  vote_options_json=$(printf '%s' "$proposal" | jq -r '.options' | jq -R 'split(",")')
+
   local closed
-  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and decide_type == "decision")] | length' 2>/dev/null || echo 0)
+  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts))] | length' 2>/dev/null || echo 0)
   if [ "${closed:-0}" -gt 0 ]; then
     echo "vote: '$id' on #$issue is already closed — this round is over" >&2
     exit 1
@@ -273,6 +333,63 @@ vote() {
     exit 2
   }
   echo "voted '$option' on '$id' (#$issue)"
+}
+
+# A caller-supplied, fail-closed delivery record (#436 review, terra P1 #1):
+# decide.sh cannot itself deliver a cross-session message, only the calling
+# agent's own messaging tool can — so this records the ONE thing the script
+# can honestly assert: that the invoking agent is personally attesting these
+# specific agents received the round (a successful SendMessage, a reply, a
+# board post they're known to have read). Nobody is ever acknowledged by
+# silence or by default; only a name explicitly listed here counts.
+notify() {
+  local issue="${1:-}"; shift || true
+  [[ "$issue" =~ ^[0-9]+$ ]] || { echo "notify: issue number required" >&2; exit 2; }
+
+  local id="" acknowledged_csv=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --id) id="${2:-}"; shift 2 ;;
+      --acknowledged) acknowledged_csv="${2:-}"; shift 2 ;;
+      *) echo "notify: unrecognized argument '$1'" >&2; exit 2 ;;
+    esac
+  done
+
+  require_agent
+  [ -n "$id" ] || { echo "notify: --id required" >&2; exit 2; }
+  require_decision_id "$id"
+  [ -n "$acknowledged_csv" ] || { echo "notify: --acknowledged <agent-csv> required — who specifically is confirmed reached" >&2; exit 2; }
+
+  local -a ack_ids=()
+  local a trimmed
+  IFS=',' read -ra ack_ids <<<"$acknowledged_csv"
+  local seen=""
+  for a in "${ack_ids[@]}"; do
+    trimmed="${a#"${a%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    [[ "$trimmed" =~ $AGENT_RE ]] || { echo "notify: '$trimmed' in --acknowledged is not a valid stable agent id" >&2; exit 2; }
+    seen="${seen:+$seen,}$trimmed"
+  done
+
+  local repo; repo=$(resolve_repo)
+  local comments; comments=$(fetch_comments "$repo" "$issue") || { echo "notify: cannot read #$issue from $repo" >&2; exit 2; }
+
+  local proposal_exists
+  proposal_exists=$(printf '%s' "$comments" | jq -r --arg id "$id" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and decide_type == "proposal")] | length' 2>/dev/null || echo 0)
+  if [ "${proposal_exists:-0}" -eq 0 ]; then
+    echo "notify: no proposal '$id' found on #$issue — check the id, or propose it first" >&2
+    exit 1
+  fi
+
+  local payload
+  payload=$(printf '**Decision:** %s\n**Acknowledged:** %s' "$id" "$seen")
+
+  CLAIM_AGENT="$agent" "$BOARD_SH" post "$issue" --agent "$agent" --type acknowledgement "$payload" || {
+    echo "notify: could not post the acknowledgement on #$issue — nothing recorded" >&2
+    exit 2
+  }
+  echo "recorded '$seen' as acknowledged for '$id' (#$issue)"
 }
 
 # Latest well-formed vote per agent for $id, cast after the proposal, with an
@@ -303,7 +420,7 @@ close() {
   local issue="${1:-}"; shift || true
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "close: issue number required" >&2; exit 2; }
 
-  local id="" decision="" rationale="" owner="" revisit="" authority_effect=""
+  local id="" decision="" rationale="" owner="" revisit="" authority_effect="" owner_delegation=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
@@ -312,6 +429,7 @@ close() {
       --owner) owner="${2:-}"; shift 2 ;;
       --revisit-if) revisit="${2:-}"; shift 2 ;;
       --authority-effect) authority_effect="${2:-}"; shift 2 ;;
+      --owner-delegation) owner_delegation="${2:-}"; shift 2 ;;
       *) echo "close: unrecognized argument '$1'" >&2; exit 2 ;;
     esac
   done
@@ -319,6 +437,23 @@ close() {
   if [ -n "$authority_effect" ] && [ "$authority_effect" != "none" ] && [ "$authority_effect" != "self" ]; then
     echo "close: --authority-effect must be 'none' or 'self'" >&2
     exit 2
+  fi
+
+  # #430's explicit-delegation clause (terra P3): an owner may delegate one
+  # named prohibition, but only explicitly and with a durable link — silence
+  # is never delegation, and this never generalizes past this one close.
+  # decide.sh cannot verify a claimed delegation's content; what it can and
+  # does enforce is structure — a delegation must point at something
+  # concrete (a URL or #<issue>), never a bare unsubstantiated assertion —
+  # and record it on the decision for anyone to audit afterward.
+  if [ -n "$owner_delegation" ]; then
+    case "$owner_delegation" in
+      *http://*|*https://*|*'#'[0-9]*) ;;
+      *)
+        echo "close: --owner-delegation must include a durable link (a URL or #<issue>) naming where the owner delegated this — a bare claim is not delegation" >&2
+        exit 2
+        ;;
+    esac
   fi
 
   require_agent
@@ -345,20 +480,20 @@ close() {
     exit 1
   fi
 
-  local already_closed
-  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and decide_type == "decision")] | length' 2>/dev/null || echo 0)
-  if [ "${already_closed:-0}" -gt 0 ]; then
-    echo "close: '$id' on #$issue is already closed" >&2
-    exit 1
-  fi
-
   local options_csv proposal_created_at deadline_str notify_csv
   options_csv=$(printf '%s' "$proposal" | jq -r '.options')
   proposal_created_at=$(printf '%s' "$proposal" | jq -r '.createdAt')
   deadline_str=$(printf '%s' "$proposal" | jq -r '.deadline')
   notify_csv=$(printf '%s' "$proposal" | jq -r '.notify')
   local options_json; options_json=$(printf '%s\n' "$options_csv" | jq -R 'split(",")')
+
+  local already_closed
+  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts))] | length' 2>/dev/null || echo 0)
+  if [ "${already_closed:-0}" -gt 0 ]; then
+    echo "close: '$id' on #$issue is already closed" >&2
+    exit 1
+  fi
 
   local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
 
@@ -384,28 +519,47 @@ close() {
   local voter_count; voter_count=$(printf '%s' "$voting_agents_json" | jq 'length')
 
   # The roster propose() saw when the round opened, diffed against who
-  # actually voted: makes "an agent never learned this was decided" a
-  # recorded fact on the decision, not a silent gap (#436 review, terra's
-  # P1 — the concern was raised on #430's spec by opus-5 and missed in the
-  # first implementation review). Tolerant of a missing/empty Notify field
-  # from a malformed or pre-this-fix proposal: the diff is simply empty
-  # then, never a reason to refuse the close.
+  # actually voted. Named for exactly what this measures — not voting — not
+  # for reachability: a deliberate abstention (an agent who read the
+  # proposal and chose not to vote) looks identical here to one who never
+  # saw it, so this field must never claim to know which (#436 review,
+  # terra's P1 #1 — opus-5 initially defended the opposite naming and
+  # withdrew that once terra named the gap). Tolerant of a missing/empty
+  # Notify field from a malformed or pre-this-fix proposal: the diff is
+  # simply empty then, never a reason to refuse the close.
+  local snapshot_json
+  snapshot_json=$(jq -cn --arg notify "$notify_csv" '$notify | split(",") | map(select(length > 0))')
   local not_reached
-  not_reached=$(jq -rn --arg notify "$notify_csv" --argjson voters "$voting_agents_json" '
-    ($notify | split(",") | map(select(length > 0))) as $snapshot
-    | [$snapshot[] | select(. as $a | $voters | index($a) == null)]
-    | join(", ")')
+  not_reached=$(jq -rn --argjson snapshot "$snapshot_json" --argjson voters "$voting_agents_json" '
+    [$snapshot[] | select(. as $a | $voters | index($a) == null)] | join(", ")')
 
+  # A caller-supplied, fail-closed delivery record, distinct from voting:
+  # only an agent explicitly named via `decide.sh notify --acknowledged`
+  # counts as reached — nobody is ever assumed acknowledged by default, and
+  # decide.sh never claims to have delivered anything itself (only the
+  # invoking agent's own cross-session messaging can). This is the
+  # narrower, more meaningful signal terra's P1 #1 asked for: an agent in
+  # the snapshot who neither voted nor was ever recorded as acknowledging
+  # the round.
+  local acknowledged_json
+  acknowledged_json=$(printf '%s' "$comments" | jq -c --arg id "$id" "$DECIDE_JQ_COMMON"'
+    def acked: one_capture_raw("^\\*\\*Acknowledged:\\*\\*[[:space:]]*(?<v>.*)$");
+    [.comments[] | select(structured($id) and decide_type == "acknowledgement") | acked]
+    | map(split(",") | .[]) | map(select(length > 0)) | unique')
+  local unacknowledged
+  unacknowledged=$(jq -rn --argjson snapshot "$snapshot_json" --argjson voters "$voting_agents_json" --argjson acked "$acknowledged_json" '
+    ($voters + $acked | unique) as $reached
+    | [$snapshot[] | select(. as $a | $reached | index($a) == null)] | join(", ")')
+
+  local quorum_required; quorum_required=$(quorum_required_for "$roster_count")
   local quorum_met="false"
-  if [ "$roster_count" -ge 3 ]; then
-    [ "$voter_count" -ge 3 ] && quorum_met="true"
-  else
-    # roster_count < 3: quorum is every active agent. voting_agents_json is
-    # already a subset of roster_json (votes were roster-filtered above),
-    # so equal cardinality proves set equality — no separate intersection
-    # needed here, unlike before this fix.
-    [ "$voter_count" -eq "$roster_count" ] && quorum_met="true"
-  fi
+  # voting_agents_json is already a subset of roster_json (votes were
+  # roster-filtered above), so it can never exceed roster_count — meeting
+  # the required count is equivalent to "every active agent voted" exactly
+  # when roster_count < 3, so one comparison covers both branches of #430's
+  # quorum rule without duplicating it (status() shares this via
+  # quorum_required_for rather than re-deriving it, #436 review, terra P4).
+  [ "$voter_count" -ge "$quorum_required" ] && quorum_met="true"
 
   local now_epoch deadline_epoch deadline_passed="false"
   now_epoch=$(date -u +%s)
@@ -455,8 +609,8 @@ close() {
     # affects — so the closer must declare it explicitly, on the record,
     # rather than the rule living in prose the closer can silently ignore
     # (opus-5's #436 review: the one rule here with no mechanism).
-    if [ "$authority_effect" = "self" ]; then
-      echo "close: refusing — --authority-effect self declares this round would expand, waive, or transfer the closer's own authority; a different closer must close it, or it waits past this deadline for one" >&2
+    if [ "$authority_effect" = "self" ] && [ -z "$owner_delegation" ]; then
+      echo "close: refusing — --authority-effect self declares this round would expand, waive, or transfer the closer's own authority; a different closer must close it, it waits past this deadline for one, or an explicit --owner-delegation <durable link> naming the owner's specific delegation of this exact permission overrides — once, for this decision only, never silently and never inferred from silence" >&2
       exit 2
     fi
     local ok=""
@@ -478,20 +632,33 @@ close() {
     | "- \(.agent) → \(.option)"' 2>/dev/null)
   [ -n "$minority" ] || minority="(no dissenting votes recorded)"
 
+  # `$(...)` unconditionally strips every trailing newline from its output —
+  # so building this record by repeated `payload="${payload}<field>\n"`
+  # concatenation loses the line break after whichever field printf built,
+  # and the next field's `**Key:**` glues onto the end of the previous
+  # field's *value* instead of starting its own line (#436 review, terra's
+  # P1, reproduced by opus-5). The record's whole grammar is line-anchored
+  # (`^\*\*Key:\*\*`), so every field is joined with an explicit leading
+  # newline here — never relying on one already being present.
   local payload
-  payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n' \
+  payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s' \
     "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit")
   if [ -n "$rationale" ]; then
-    payload="${payload}**Tie-Break:** ${rationale}
-"
+    payload="${payload}
+**Tie-Break:** ${rationale}"
   fi
   if [ -n "$authority_effect" ]; then
-    payload="${payload}**Authority-Effect:** ${authority_effect}
-"
+    payload="${payload}
+**Authority-Effect:** ${authority_effect}"
   fi
-  payload="${payload}**Not-Reached:** ${not_reached:-none}
-"
+  if [ -n "$owner_delegation" ]; then
+    payload="${payload}
+**Owner-Delegation:** ${owner_delegation}"
+  fi
   payload="${payload}
+**Did-Not-Vote:** ${not_reached:-none}
+**Unacknowledged:** ${unacknowledged:-none}
+
 Minority votes:
 ${minority}"
 
@@ -524,9 +691,20 @@ status() {
     [.comments[] | select(from_agent != "" and decide_type == "proposal") | {id: decision_id, options: opts, deadline: deadline, createdAt, proposer: from_agent}]
     | unique_by(.id)')
 
+  # Same well-formedness bar as vote()/close(): only a **Type:** decision
+  # comment with an unambiguous **Chosen:** matching that specific
+  # proposal's declared options counts as closing it (terra P2) — looked up
+  # per comment against $proposals since each open decision id here can
+  # have different declared options.
   local closed_ids
-  closed_ids=$(printf '%s' "$comments" | jq -c "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(from_agent != "" and decide_type == "decision") | decision_id] | unique')
+  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" "$DECIDE_JQ_COMMON"'
+    [.comments[]
+     | select(from_agent != "" and decide_type == "decision")
+     | (. + {did: decision_id}) as $entry
+     | ($proposals[] | select(.id == $entry.did) | .options | split(",")) as $opts
+     | select($entry | valid_decision($opts))
+     | $entry.did]
+    | unique')
 
   local rows; rows=$(printf '%s' "$proposals" | jq -c --argjson closed "$closed_ids" '[.[] | select(([.id] | inside($closed)) | not)]')
   if [ -n "$only_id" ]; then
@@ -552,18 +730,25 @@ status() {
     votes=$(printf '%s' "$votes" | jq -c --argjson roster "$status_roster_json" \
       '[.[] | select(.agent as $a | $roster | index($a) != null)]')
     voter_count=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique | length')
+    local voter_names; voter_names=$(printf '%s' "$votes" | jq -r '[.[].agent] | unique | join(", ")')
+    [ -n "$voter_names" ] || voter_names="none"
+    local status_roster_count; status_roster_count=$(printf '%s' "$status_roster_json" | jq 'length')
+    local status_quorum_required; status_quorum_required=$(quorum_required_for "$status_roster_count")
+    local quorum_state="not met"
+    [ "$voter_count" -ge "$status_quorum_required" ] && quorum_state="met"
     deadline_epoch=$(date -u -d "$rdeadline" +%s 2>/dev/null || date -u -jf '%Y-%m-%dT%H:%M:%SZ' "$rdeadline" +%s 2>/dev/null)
     state="open"
     if [ -n "${deadline_epoch:-}" ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
       state="deadline passed — ready to close"
     fi
-    echo "  #$issue '$rid' (by $rproposer, options: $roptions) — $voter_count vote(s) so far, deadline $rdeadline ($state)"
+    echo "  #$issue '$rid' (by $rproposer, options: $roptions) — $voter_count/$status_quorum_required vote(s) (quorum $quorum_state), voters: $voter_names, deadline $rdeadline ($state)"
   done
 }
 
 case "$command" in
   propose) propose "$@" ;;
   vote)    vote "$@" ;;
+  notify)  notify "$@" ;;
   close)   close "$@" ;;
   status)  status "$@" ;;
   *) usage ;;

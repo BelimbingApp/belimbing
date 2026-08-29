@@ -290,8 +290,12 @@ CLAIM_AGENT=<id> decide.sh propose <issue> --id <decision-id> \
 CLAIM_AGENT=<id> decide.sh vote <issue> --id <decision-id> --option optA \
   <rationale, tied to the authority stack…>
 
+CLAIM_AGENT=<id> decide.sh notify <issue> --id <decision-id> \
+  --acknowledged agentA,agentB
+
 CLAIM_AGENT=<id> decide.sh close <issue> --id <decision-id> \
-  [--decision <option> --rationale "<tie-break / available-tally reasoning>"]
+  [--decision <option> --rationale "<tie-break / available-tally reasoning>" \
+   --authority-effect none|self [--owner-delegation "<durable link>"]]
 ```
 
 **Judge every option against the authority stack, in order:** explicit current
@@ -310,14 +314,16 @@ account metadata) is identity, and the latest well-formed vote per agent
 replaces that agent's earlier one, exactly as `gate.sh` already does for
 review verdicts. A vote naming more than one option, an ambiguous or
 conflicting `**From:**`, or the wrong decision id is excluded from the tally
-rather than guessed at. A deadline is at most one heartbeat (30 minutes) from
-the proposal. **Quorum** is 3 distinct attributable votes once 3 or more
-agents are currently active (an open PR or an open `agent:*` issue — the same
-roster `board.sh hygiene` already scans); with fewer active agents, every one
-of them is the quorum. A clear majority among the votes received closes the
-round on its own. A tie, or a deadline that passes with quorum still missing,
-does not stall the round — the active steward (the lane owner, if none is
-reachable) records the available tally and closes with an explicit
+rather than guessed at — and only agents with a currently live lane (an open
+PR or an open `agent:*` issue) count toward quorum or the tally at all; an
+identity that can post a comment but holds no lane cannot supply either. A
+deadline is at most one heartbeat (30 minutes) from the proposal. **Quorum**
+is 3 distinct attributable votes once 3 or more agents are currently active
+(the same roster `board.sh hygiene` already scans); with fewer active agents,
+every one of them is the quorum. A clear majority among the votes received
+closes the round on its own. A tie, or a deadline that passes with quorum
+still missing, does not stall the round — the active steward (the lane owner,
+if none is reachable) records the available tally and closes with an explicit
 `--decision`/`--rationale` naming the tie-break reasoning against the
 authority stack, rather than waiting indefinitely for a voter who may not
 return. The closing record on the issue carries the chosen option, the tally,
@@ -325,6 +331,23 @@ minority votes, the deciding agent, the implementation owner, and the
 condition that would justify revisiting it (`orient.sh` surfaces every open
 round and its deadline/quorum state under "open deliberations" — never as
 "waiting for owner").
+
+**`propose()` snapshots the active roster as `**Notify:**`**, and the closing
+record separates two deliberately distinct, honestly-named facts rather than
+one field that overclaims. `**Did-Not-Vote:**` says exactly what it measures
+— which snapshotted agents never cast a vote — and nothing more; a deliberate
+abstention looks identical here to a genuine miss, so this field never claims
+to know reachability. `decide.sh` cannot itself deliver a message to another
+agent — only the proposer's own cross-session messaging can — so
+`**Unacknowledged:**` is the narrower, caller-supplied fact: an agent who
+neither voted nor was ever explicitly recorded via `decide.sh notify --id
+<id> --acknowledged <agent-csv>` as having received the round. Nobody is ever
+acknowledged by silence or by default; only a name the invoking agent
+explicitly lists counts. Naming one field for what it actually measures
+rather than what it was hoped to guarantee is itself a lesson this mechanism
+cost a reviewer to learn in practice: recording "who never voted" as "who was
+never reached" is the same kind of false attestation a `**Broadcast:** sent`
+field would have been, one level further from the surface.
 
 **A steward may not use the tie-break path to decide a round that would
 expand, waive, or transfer the steward's own authority.** The tie-break exists
@@ -340,6 +363,20 @@ prose: `decide.sh close` requires `--authority-effect none|self` alongside
 declares `self`. The script cannot know whose authority an option actually
 affects — that stays the closer's judgment — but the closer must state it on
 the record rather than the carve-out depending on memory alone.
+
+**An owner may explicitly delegate one named prohibition** — never by
+silence, never generalized past the single decision it names. `decide.sh
+close` accepts `--owner-delegation "<durable link>"` alongside
+`--authority-effect self` as the one override of the refusal above: the link
+must point at something concrete (a URL or a `#<issue>` reference), a bare
+unsubstantiated claim is refused, and the delegation is recorded verbatim on
+the decision (`**Owner-Delegation:**`) for anyone to audit afterward. This is
+narrower than it looks: `decide.sh` cannot verify a claimed delegation's
+content, only its structure, so the closer is asserting — on the permanent
+record, by name — that the owner specifically authorized exactly this. That
+is a different, and much smaller, risk than the rule silently not applying;
+it applies to the one decision the link is invoked for and never becomes a
+standing exception for any future round.
 
 **Preserve true external-authority boundaries.** Autonomous judgment does not
 fabricate authority it does not have:
@@ -358,7 +395,10 @@ fabricate authority it does not have:
 - A team vote cannot override an explicit owner prohibition, a repository
   safety rule, review independence (who counts as an independent reviewer is
   set by branch protection and this charter, not by a vote), a live hold, or a
-  permission genuinely missing at the platform/account level.
+  permission genuinely missing at the platform/account level. The one
+  exception is the owner's own explicit, linked, single-decision delegation
+  described above — never a vote's doing, never inferred from the owner's
+  silence, and never wider than the one named prohibition it addresses.
 
 ---
 

@@ -130,11 +130,13 @@ class DecideTestCase(unittest.TestCase):
         comments.append({"body": body, "createdAt": ts, "author": {"login": "shared-account"}})
         self.comments.write_text(json.dumps(comments), encoding="utf-8")
 
-    def propose(self, issue, id_, options, recommend, agent="proposer", deadline_minutes=30, question="Which way?"):
+    def propose(self, issue, id_, options, recommend, agent="proposer", deadline_minutes=30,
+                question="Which way?", evidence="Costs, risks, and reversibility considered against the authority stack."):
         result = self.run_decide(
             "propose", str(issue), "--id", id_, "--question", question,
             "--options", options, "--recommend", recommend,
             "--deadline-minutes", str(deadline_minutes),
+            evidence,
             agent=agent,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -143,7 +145,11 @@ class DecideTestCase(unittest.TestCase):
     def vote(self, issue, id_, option, agent, rationale="because reasons"):
         return self.run_decide("vote", str(issue), "--id", id_, "--option", option, rationale, agent=agent)
 
-    def close(self, issue, id_, agent="closer", decision=None, rationale=None, owner=None, authority_effect=None):
+    def notify(self, issue, id_, acknowledged_csv, agent="proposer"):
+        return self.run_decide("notify", str(issue), "--id", id_, "--acknowledged", acknowledged_csv, agent=agent)
+
+    def close(self, issue, id_, agent="closer", decision=None, rationale=None, owner=None,
+              authority_effect=None, owner_delegation=None):
         args = ["close", str(issue), "--id", id_]
         if decision is not None:
             args += ["--decision", decision]
@@ -153,6 +159,8 @@ class DecideTestCase(unittest.TestCase):
             args += ["--owner", owner]
         if authority_effect is not None:
             args += ["--authority-effect", authority_effect]
+        if owner_delegation is not None:
+            args += ["--owner-delegation", owner_delegation]
         return self.run_decide(*args, agent=agent)
 
     def last_decision_body(self) -> str:
@@ -192,7 +200,7 @@ class ProposeValidationTest(DecideTestCase):
         self.propose(10, "locale-order", "keep,swap", "keep")
         second = self.run_decide(
             "propose", "10", "--id", "locale-order", "--question", "again?",
-            "--options", "a,b", "--recommend", "a", agent="proposer",
+            "--options", "a,b", "--recommend", "a", "evidence text", agent="proposer",
         )
         self.assertNotEqual(second.returncode, 0)
         self.assertIn("already has a proposal", second.stderr)
@@ -200,7 +208,7 @@ class ProposeValidationTest(DecideTestCase):
     def test_propose_rejects_recommend_not_in_options(self):
         result = self.run_decide(
             "propose", "10", "--id", "x", "--question", "q?",
-            "--options", "a,b", "--recommend", "c", agent="proposer",
+            "--options", "a,b", "--recommend", "c", "evidence text", agent="proposer",
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("not one of the declared", result.stderr)
@@ -209,7 +217,7 @@ class ProposeValidationTest(DecideTestCase):
         result = self.run_decide(
             "propose", "10", "--id", "x", "--question", "q?",
             "--options", "a,b", "--recommend", "a", "--deadline-minutes", "31",
-            agent="proposer",
+            "evidence text", agent="proposer",
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("one heartbeat", result.stderr)
@@ -217,14 +225,14 @@ class ProposeValidationTest(DecideTestCase):
     def test_propose_rejects_a_single_option(self):
         result = self.run_decide(
             "propose", "10", "--id", "x", "--question", "q?",
-            "--options", "a", "--recommend", "a", agent="proposer",
+            "--options", "a", "--recommend", "a", "evidence text", agent="proposer",
         )
         self.assertNotEqual(result.returncode, 0)
 
     def test_propose_rejects_duplicate_options(self):
         result = self.run_decide(
             "propose", "10", "--id", "x", "--question", "q?",
-            "--options", "a,a", "--recommend", "a", agent="proposer",
+            "--options", "a,a", "--recommend", "a", "evidence text", agent="proposer",
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("duplicate option", result.stderr)
@@ -519,7 +527,7 @@ class TallyAndCloseTest(DecideTestCase):
         result = self.close(10, "vote-id", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
         body = self.last_decision_body()
-        self.assertIn("**Not-Reached:** e", body)
+        self.assertIn("**Did-Not-Vote:** e", body)
 
     def test_the_decision_record_says_none_reached_everyone(self):
         self.set_roster(["p", "a", "b"])
@@ -531,7 +539,7 @@ class TallyAndCloseTest(DecideTestCase):
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
         body = self.last_decision_body()
-        self.assertIn("**Not-Reached:** none", body)
+        self.assertIn("**Did-Not-Vote:** none", body)
 
     def test_the_decision_record_carries_every_required_field(self):
         self.set_roster(["p", "a", "b", "c"])
@@ -608,6 +616,239 @@ class VerdictSeparationTest(DecideTestCase):
         self.assertIn("issue comment is invisible to gate.sh", proc.stderr)
 
 
+class MalformedDecisionTest(DecideTestCase):
+    """terra's #436 P2: a comment merely typed **Type:** decision, with no
+    well-formed **Chosen:** matching a declared option, must not be able to
+    terminate a round."""
+
+    def test_a_malformed_decision_comment_does_not_block_a_vote(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        # An outsider (or a corrupted post) claims the round is decided,
+        # but never supplies a Chosen field at all.
+        self.seed_comment("**From:** outsider\n\n**Type:** decision\n\n**Decision:** d\n")
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_malformed_decision_comment_does_not_block_close(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment("**From:** outsider\n\n**Type:** decision\n\n**Decision:** d\n")
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("**Chosen:** left", self.last_decision_body())
+
+    def test_a_malformed_decision_comment_does_not_hide_the_round_from_status(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment("**From:** outsider\n\n**Type:** decision\n\n**Decision:** d\n")
+
+        result = self.run_decide("status", "10")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("'d'", result.stdout)
+
+    def test_a_decision_with_an_undeclared_chosen_value_does_not_close_the_round(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        # Chosen names an option this proposal never declared.
+        self.seed_comment("**From:** p\n\n**Type:** decision\n\n**Decision:** d\n**Chosen:** middle\n")
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class OwnerDelegationTest(DecideTestCase):
+    """#430's explicit-delegation clause (terra P3): an owner may delegate
+    one named prohibition, but only explicitly, with a durable link, and
+    never by silence or generalization."""
+
+    def test_authority_effect_self_is_refused_without_a_delegation_link(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="this expands my own authority", authority_effect="self",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("refusing", result.stderr)
+
+    def test_authority_effect_self_is_refused_with_a_bare_unlinked_claim(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left", rationale="the owner said it's fine",
+            authority_effect="self", owner_delegation="the owner told me directly, trust me",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("durable link", result.stderr)
+
+    def test_authority_effect_self_closes_with_a_valid_delegation_link(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left",
+            rationale="delegated explicitly for this one permission",
+            authority_effect="self",
+            owner_delegation="https://github.com/BelimbingApp/belimbing/issues/380#issuecomment-1",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Owner-Delegation:**", body)
+        self.assertIn("issuecomment-1", body)
+
+    def test_an_issue_reference_also_counts_as_a_durable_link(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(
+            10, "d", agent="a", decision="left", rationale="delegated on #380",
+            authority_effect="self", owner_delegation="see #380",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+
+class RequiredEvidenceTest(DecideTestCase):
+    """#436 review, terra P4: evidence/rationale must not be vacuous."""
+
+    def test_propose_refuses_a_blank_evidence_body(self):
+        result = self.run_decide(
+            "propose", "10", "--id", "d", "--question", "q?",
+            "--options", "a,b", "--recommend", "a", agent="p",
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("evidence is required", result.stderr)
+        self.assertEqual(self.comments_now(), [])
+
+    def test_vote_refuses_a_blank_rationale(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        result = self.run_decide("vote", "10", "--id", "d", "--option", "left", agent="a")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("rationale is required", result.stderr)
+        self.assertEqual(len(self.comments_now()), 1)  # only the proposal
+
+
+class AcknowledgementTest(DecideTestCase):
+    """terra's #436 P1 #1: a fail-closed, caller-supplied delivery record,
+    distinct from voting and never assumed from silence."""
+
+    def test_notify_refuses_without_an_open_proposal(self):
+        result = self.notify(10, "no-such-decision", "a,b", agent="p")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no proposal", result.stderr)
+
+    def test_notify_refuses_an_invalid_agent_id(self):
+        self.set_roster(["p"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        result = self.notify(10, "d", "not a valid id!!", agent="p")
+        self.assertNotEqual(result.returncode, 0)
+
+    def test_an_acknowledged_non_voter_is_not_unacknowledged(self):
+        self.set_roster(["p", "a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.notify(10, "d", "a,b", agent="p")  # both explicitly confirmed reached
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Did-Not-Vote:** none", body)
+        self.assertIn("**Unacknowledged:** none", body)
+
+    def test_a_non_voting_unacknowledged_agent_is_reported_separately_from_did_not_vote(self):
+        self.set_roster(["p", "a", "b", "c"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.notify(10, "d", "c", agent="p")  # c is confirmed reached but abstains
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+        # c never votes, but IS acknowledged — b votes so isn't in either field.
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Did-Not-Vote:** c", body)
+        self.assertIn("**Unacknowledged:** none", body)
+
+    def test_the_notify_type_never_conflicts_with_a_vote_or_decision(self):
+        self.set_roster(["p"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.notify(10, "d", "p", agent="p")
+        body = self.comments_now()[-1]["body"]
+        self.assertIn("**Type:** acknowledgement", body)
+        self.assertNotIn("**Option:**", body)
+        self.assertNotIn("**Chosen:**", body)
+
+
+class RecordGrammarTest(DecideTestCase):
+    """opus-5's #436 review: $()'s trailing-newline strip previously glued
+    Not-Reached onto Revisit-If's value on one line."""
+
+    def test_every_decision_record_field_starts_its_own_line(self):
+        self.set_roster(["a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="a")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "right", agent="b")
+        self.close(
+            10, "d", agent="a", decision="left", rationale="tie-break reason",
+            authority_effect="none",
+        )
+        body = self.last_decision_body()
+        for line_start in (
+            "**Decision:**", "**Chosen:**", "**Tally:**", "**Quorum:**",
+            "**Deciding-Agent:**", "**Implementation-Owner:**", "**Revisit-If:**",
+            "**Tie-Break:**", "**Authority-Effect:**", "**Did-Not-Vote:**", "**Unacknowledged:**",
+        ):
+            matches = [line for line in body.splitlines() if line.startswith(line_start)]
+            self.assertEqual(len(matches), 1, f"expected exactly one line starting with {line_start!r} in:\n{body}")
+
+
+class CarriageReturnTest(DecideTestCase):
+    """terra's #436 P1 #1: native-Windows gh output can retain a trailing
+    CR, which must not corrupt roster identity or quorum/tally filtering."""
+
+    def write_crlf_gh_stub(self):
+        gh = self.bin / "gh"
+        gh.write_text(
+            gh.read_text(encoding="utf-8").replace(
+                'jq -r \'.[]\' "$DECIDE_TEST_ROSTER"',
+                'jq -r \'.[]\' "$DECIDE_TEST_ROSTER" | sed "s/$/\\r/"',
+            ),
+            encoding="utf-8",
+        )
+
+    def test_a_trailing_cr_on_the_roster_pipeline_does_not_break_quorum(self):
+        self.write_crlf_gh_stub()
+        self.set_roster(["p", "a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("left=3", body)
+        self.assertIn("**Did-Not-Vote:** none", body)
+
+
 class StatusTest(DecideTestCase):
     def test_status_lists_an_open_proposal_and_hides_a_closed_one(self):
         self.set_roster(["p", "a"])
@@ -622,6 +863,25 @@ class StatusTest(DecideTestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("open-one", result.stdout)
         self.assertNotIn("closed-one", result.stdout)
+
+    def test_status_reports_quorum_required_met_and_participant_names(self):
+        # terra's #436 P4: "1 vote(s) so far" told a reader nothing about
+        # how many were needed or who had actually voted.
+        self.set_roster(["p", "a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+
+        partial = self.run_decide("status", "10")
+        self.assertEqual(partial.returncode, 0, partial.stderr)
+        self.assertIn("1/3 vote(s)", partial.stdout)
+        self.assertIn("quorum not met", partial.stdout)
+        self.assertIn("voters: a", partial.stdout)
+
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "right", agent="b")
+        full = self.run_decide("status", "10")
+        self.assertIn("3/3 vote(s)", full.stdout)
+        self.assertIn("quorum met", full.stdout)
 
 
 if __name__ == "__main__":
