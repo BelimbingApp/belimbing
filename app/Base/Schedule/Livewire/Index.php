@@ -18,7 +18,7 @@ use App\Base\Schedule\Livewire\Concerns\SortsScheduleBoardItems;
 use App\Base\Schedule\Models\ScheduleOverride;
 use App\Base\Schedule\Models\ScheduleSuppression;
 use App\Base\Schedule\Services\ScheduleBoard;
-use App\Base\Schedule\Services\ScheduleHealthService;
+use App\Base\Schedule\Services\ScheduleConfigurationGate;
 use App\Base\Schedule\Services\ScheduleHistoryPruner;
 use App\Base\Schedule\Services\ScheduleRunRecorder;
 use App\Base\Settings\Contracts\SettingsService;
@@ -356,28 +356,38 @@ class Index extends Component
         // index to refuse a row that appeared meanwhile, and UPDATE matches
         // the expression this operator started editing from, so zero
         // affected rows IS the staleness verdict.
-        if (($this->cronVersion ?? '') === '') {
-            try {
-                ScheduleOverride::query()->create(
-                    ['source' => 'scheduler', 'key' => $key, 'name' => $task->name, 'expression' => $expression],
-                );
-            } catch (UniqueConstraintViolationException) {
-                $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
+        $saved = $this->withSchedulerConfigurationLock($key, function () use ($key, $task, $expression): bool {
+            if (($this->cronVersion ?? '') === '') {
+                try {
+                    ScheduleOverride::query()->create(
+                        ['source' => 'scheduler', 'key' => $key, 'name' => $task->name, 'expression' => $expression],
+                    );
+                } catch (UniqueConstraintViolationException) {
+                    return false;
+                }
 
-                return;
+                return true;
             }
-        } else {
-            $affected = ScheduleOverride::query()
+
+            $override = ScheduleOverride::query()
                 ->where('source', 'scheduler')
                 ->where('key', $key)
-                ->where('expression', $this->cronVersion)
-                ->update(['name' => $task->name, 'expression' => $expression, 'updated_at' => now()]);
+                ->lockForUpdate()
+                ->first();
 
-            if ($affected === 0) {
-                $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
-
-                return;
+            if ($override === null || $override->expression !== $this->cronVersion) {
+                return false;
             }
+
+            $override->fill(['name' => $task->name, 'expression' => $expression])->save();
+
+            return true;
+        });
+
+        if (! $saved) {
+            $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
+
+            return;
         }
 
         $this->cancelCronEdit();
@@ -407,7 +417,15 @@ class Index extends Component
                 return;
             }
         } else {
-            ScheduleOverride::query()->where('source', 'scheduler')->where('key', $key)->delete();
+            $this->withSchedulerConfigurationLock($key, function () use ($key): bool {
+                ScheduleOverride::query()
+                    ->where('source', 'scheduler')
+                    ->where('key', $key)
+                    ->lockForUpdate()
+                    ->first()?->delete();
+
+                return true;
+            });
         }
 
         $this->cancelCronEdit();
@@ -424,30 +442,38 @@ class Index extends Component
     {
         $version = $this->cronVersion ?? '';
 
-        if ($version === '') {
-            $unchanged = ScheduleOverride::query()
+        $deleted = $this->withSchedulerConfigurationLock($key, function () use ($key, $version): ?bool {
+            $override = ScheduleOverride::query()
                 ->where('source', 'scheduler')
                 ->where('key', $key)
-                ->doesntExist();
+                ->lockForUpdate()
+                ->first();
 
-            if ($unchanged) {
-                return true;
+            if ($version === '') {
+                return $override === null;
             }
-        } else {
-            $deleted = ScheduleOverride::query()
-                ->where('source', 'scheduler')
-                ->where('key', $key)
-                ->where('expression', $version)
-                ->delete();
 
-            if ($deleted !== 0) {
-                return true;
+            if ($override === null || $override->expression !== $version) {
+                return false;
             }
+
+            $override->delete();
+
+            return true;
+        });
+
+        if ($deleted) {
+            return true;
         }
 
         $this->addError('cronDraft', __('This cadence was changed by someone else while you were editing — review the current value and try again.'));
 
         return false;
+    }
+
+    private function withSchedulerConfigurationLock(string $key, callable $operation): mixed
+    {
+        return app(ScheduleConfigurationGate::class)->synchronize($key, $operation);
     }
 
     /**
@@ -552,11 +578,12 @@ class Index extends Component
             return;
         }
 
-        ScheduleSuppression::query()
+        $suppression = ScheduleSuppression::query()
             ->where('source', 'scheduler')
             ->where('key', $key)
-            ->delete();
-        ScheduleHealthService::invalidate();
+            ->first();
+
+        $suppression?->delete();
 
         $this->notify(__('Task resumed.'));
     }
@@ -629,28 +656,20 @@ class Index extends Component
             // Configuration-history subjects (#398): the schedule-task
             // identities that have persisted configuration (an override or a
             // suppression) — the union both models expose via getAuditSubject.
-            'historySubjects' => $this->configurationHistorySubjects(),
+            'historySubjects' => $this->configurationHistorySubjects($allTasks),
         ]);
     }
 
     /**
      * @return list<array{name: string, id: string}>
      */
-    private function configurationHistorySubjects(): array
+    private function configurationHistorySubjects(array $tasks): array
     {
-        $subjects = collect();
-
-        try {
-            $subjects = ScheduleOverride::query()->get()
-                ->map(fn (ScheduleOverride $o): array => ['name' => 'schedule-task', 'id' => $o->source.':'.$o->key])
-                ->concat(ScheduleSuppression::query()->get()
-                    ->map(fn (ScheduleSuppression $x): array => ['name' => 'schedule-task', 'id' => $x->source.':'.$x->key]));
-        } catch (Throwable) {
-            // Tables absent (fresh install mid-migration): the header action
-            // simply renders without subjects.
-        }
-
-        return $subjects->unique('id')->values()->all();
+        return collect($tasks)
+            ->map(fn (ScheduleTask $task): array => ['name' => 'schedule-task', 'id' => $task->source.':'.$task->key])
+            ->unique('id')
+            ->values()
+            ->all();
     }
 
     /**

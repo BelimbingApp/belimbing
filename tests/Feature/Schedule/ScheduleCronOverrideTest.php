@@ -1,5 +1,8 @@
 <?php
 
+use App\Base\Audit\Livewire\AuditLog\SourceHistory;
+use App\Base\Audit\Models\AuditMutation;
+use App\Base\Audit\Services\AuditBuffer;
 use App\Base\Schedule\Contracts\ScheduleCadenceContributor;
 use App\Base\Schedule\Contracts\ScheduleContributor;
 use App\Base\Schedule\DTO\ScheduleHistoryPage;
@@ -56,6 +59,13 @@ function assertStaleOverride(Testable $component, string $key): void
     $component->call('saveCron')->assertHasErrors(['cronDraft']);
 
     expect(ScheduleOverride::query()->where('key', $key)->value('expression'))->toBe('5 5 * * *');
+}
+
+function flushScheduleAuditBuffer(): void
+{
+    $buffer = app(AuditBuffer::class);
+    $method = (new ReflectionClass($buffer))->getMethod('flush');
+    $method->invoke($buffer);
 }
 
 final class ScheduleCronOverrideTestContributor implements ScheduleCadenceContributor, ScheduleContributor
@@ -264,6 +274,40 @@ test('reset removes the override and the board immediately adopts the code defau
         ->and($task->overridden)->toBeFalse();
 });
 
+test('schedule configuration create update reset pause and resume all write audit mutations', function (): void {
+    [, $key] = overrideTestEvent(cron: '0 3 * * *');
+    $this->actingAs(createAdminUser());
+
+    Livewire::test(Index::class)
+        ->call('startCronEdit', 'scheduler', $key)
+        ->set('cronDraft', '15 6 * * *')
+        ->call('previewCron')
+        ->call('saveCron');
+    Livewire::test(Index::class)
+        ->call('startCronEdit', 'scheduler', $key)
+        ->set('cronDraft', '20 7 * * *')
+        ->call('previewCron')
+        ->call('saveCron');
+    Livewire::test(Index::class)
+        ->call('startCronEdit', 'scheduler', $key)
+        ->set('cronDraft', '0 3 * * *')
+        ->call('previewCron')
+        ->call('saveCron')
+        ->call('pause', $key, 'inspire')
+        ->call('resume', $key);
+
+    flushScheduleAuditBuffer();
+
+    $mutations = AuditMutation::query()
+        ->where('subject_name', 'schedule-task')
+        ->where('subject_id', 'scheduler:'.$key)
+        ->orderBy('id')
+        ->get();
+
+    expect($mutations)->toHaveCount(5)
+        ->and($mutations->pluck('event')->all())->toBe(['created', 'updated', 'deleted', 'created', 'deleted']);
+});
+
 test('a view-only user cannot start editing and persists nothing', function (): void {
     [, $key] = overrideTestEvent();
     $this->actingAs(overrideTestViewer());
@@ -430,4 +474,31 @@ test('the page header renders the configuration history action for a capable use
 
     Livewire::test(Index::class)
         ->assertSee(__('Schedule configuration history'));
+});
+
+test('configuration history subjects survive reset and include contributor tasks', function (): void {
+    [, $key] = overrideTestEvent();
+    $contributor = new ScheduleCronOverrideTestContributor([
+        new ScheduleTask(source: 'ai', key: 'digest', name: 'Digest', cron: '0 8 * * *', nextRunAt: now()->addHour(), editable: true),
+    ]);
+    app()->instance($contributor::class, $contributor);
+    app()->tag([$contributor::class], 'schedule.contributors');
+    $this->actingAs(createAdminUser());
+
+    ScheduleOverride::query()
+        ->create(['source' => 'scheduler', 'key' => $key, 'name' => 'inspire', 'expression' => '2 2 * * *'])
+        ->delete();
+    flushScheduleAuditBuffer();
+
+    Livewire::test(Index::class)
+        ->assertViewHas('historySubjects', fn (array $subjects): bool => collect($subjects)->pluck('id')->contains('scheduler:'.$key)
+            && collect($subjects)->pluck('id')->contains('ai:digest'));
+
+    Livewire::test(SourceHistory::class, [
+        'subjects' => [['name' => 'schedule-task', 'id' => 'scheduler:'.$key]],
+        'sourceCapability' => 'admin.system.schedule.manage',
+    ])
+        ->call('open')
+        ->assertSet('sourceHistoryDrawerOpen', true)
+        ->assertSet('sourceHistory.total', 2);
 });
