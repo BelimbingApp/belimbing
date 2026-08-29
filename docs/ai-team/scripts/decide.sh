@@ -157,8 +157,20 @@ DECIDE_JQ_COMMON='
   # body (mostly the fallback) instead of a single value. Collecting into an
   # array first, the way from_agent always did, is the only safe form; every
   # field extractor here goes through it.
+  # Trimmed at the shared extraction point, not per-field at each call
+  # site: `(?<v>.+)$` captures whatever text follows a field header,
+  # including a run of nothing but spaces, so a forged "**Tie-Break:**   "
+  # (or any other free-text field) captured a non-empty, non-sentinel
+  # value that satisfied every "!= ...\"\"..." presence check downstream
+  # while carrying no real content (#436 review, terra P1, seventh round —
+  # close() already refuses to *write* whitespace-only content via
+  # is_blank(), but a forged record could still be *read* as satisfying
+  # it; opus-5 named the general form: every field the writer guards, the
+  # reader must guard identically, and trimming here closes it for every
+  # field this def feeds, not only the one instance found).
   def one_capture_raw(pattern):
-    [((.body // "") | split("\n")[] | capture(pattern; "i") | .v)]
+    [((.body // "") | split("\n")[] | capture(pattern; "i") | .v
+       | gsub("^\\s+"; "") | gsub("\\s+$"; ""))]
     | unique
     | if length == 1 then .[0] else "" end;
   def one_capture(pattern): one_capture_raw(pattern) | ascii_downcase;

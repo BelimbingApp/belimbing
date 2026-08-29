@@ -907,6 +907,50 @@ class MalformedDecisionTest(DecideTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("reserved", result.stderr)
 
+    def test_a_forged_tie_with_whitespace_only_tie_break_does_not_close(self):
+        # terra's #436 P1, seventh round, opposite direction from the
+        # sixth: close() refuses to WRITE a whitespace-only rationale
+        # (is_blank), but the reader's `(?<v>.+)$` capture still accepted
+        # a whitespace-only VALUE from a forged record as "non-empty,
+        # non-sentinel" content. Trimming at the shared extraction point
+        # closes it for every free-text field, not only Tie-Break.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** tie\n**Chosen:** left\n**Tally:** left=1, right=1\n"
+            "**Quorum:** met but tied\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:**    \n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
+            "**Unacknowledged:** none\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_a_padded_sentinel_cannot_masquerade_as_a_majority_close(self):
+        # opus-5's #436 review: extra whitespace padding around the
+        # not-applicable marker itself ("  (not applicable)  ") must still
+        # compare equal to the sentinel, or it would read as distinct
+        # "real" content on a Resolution: majority record and make a
+        # genuinely-closed majority round fail its own reader.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Resolution:** majority\n**Chosen:** left\n**Tally:** left=2\n"
+            "**Quorum:** met\n**Deciding-Agent:** p\n"
+            "**Implementation-Owner:** p\n**Revisit-If:** never\n"
+            "**Tie-Break:**   (not applicable)  \n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
+            "**Unacknowledged:** none\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("already closed", result.stderr)
+
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])
         self.propose(10, "d", "left,right", "left", agent="p")
