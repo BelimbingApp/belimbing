@@ -77,9 +77,14 @@ echo "== main =="
 git fetch -q origin main 2>/dev/null
 echo "  origin/main  $(git log origin/main --oneline -1)"
 branch=$(git rev-parse --abbrev-ref HEAD)
-if [ "$branch" != "main" ]; then
-  if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
-    echo "  $branch: contains origin/main"
+if git merge-base --is-ancestor origin/main HEAD 2>/dev/null; then
+  echo "  $branch: contains origin/main"
+else
+  if [ "$branch" = "main" ]; then
+    behind_count=$(git rev-list --count HEAD..origin/main 2>/dev/null)
+    commit_word="commits"
+    [ "$behind_count" -eq 1 ] && commit_word="commit"
+    echo "  main: BEHIND origin/main by $behind_count $commit_word — scripts and files you read here are stale"
   else
     echo "  $branch: BEHIND origin/main — merge it in before you ask anyone to review"
   fi
