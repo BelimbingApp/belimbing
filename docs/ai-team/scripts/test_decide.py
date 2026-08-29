@@ -287,7 +287,7 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=2", body)
         self.assertIn("right=1", body)
-        self.assertNotIn("**Tie-Break:**", body)
+        self.assertIn("**Tie-Break:** none", body)
 
     def test_latest_vote_per_agent_replaces_the_earlier_one(self):
         self.set_roster(["p", "a", "b", "c"])
@@ -681,6 +681,28 @@ class MalformedDecisionTest(DecideTestCase):
 
         status = self.run_decide("status", "10")
         self.assertIn("'d'", status.stdout)  # still open, not hidden as closed
+
+    def test_a_forged_tied_decision_missing_tie_break_and_authority_effect_does_not_close(self):
+        # opus-5's #436 P1, third round: a record claiming a tied/no-quorum
+        # close but omitting the two fields that exist to constrain a
+        # self-interested closer (Tie-Break, Authority-Effect) would defeat
+        # that guard through the terminal comment instead of the close
+        # command — every field close() writes must be present, not just
+        # the six named in the first schema fix.
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Chosen:** left\n**Tally:** left=1, right=1\n"
+            "**Quorum:** met but tied (active=2, voted=2, tied: left, right)\n"
+            "**Deciding-Agent:** p\n**Implementation-Owner:** p\n"
+            "**Revisit-If:** never\n"
+            # Tie-Break, Authority-Effect, Owner-Delegation, Did-Not-Vote,
+            # Unacknowledged all omitted — a real close() would never do this.
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_deciding_agent_must_match_the_posting_agent(self):
         self.set_roster(["p", "a"])

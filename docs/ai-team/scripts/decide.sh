@@ -163,21 +163,26 @@ DECIDE_JQ_COMMON='
   def quorum_value: one_capture_raw("^\\*\\*Quorum:\\*\\*[[:space:]]*(?<v>.+)$");
   def implementation_owner_value: one_capture_raw("^\\*\\*Implementation-Owner:\\*\\*[[:space:]]*(?<v>.+)$");
   def revisit_value: one_capture_raw("^\\*\\*Revisit-If:\\*\\*[[:space:]]*(?<v>.+)$");
+  def tie_break_value: one_capture_raw("^\\*\\*Tie-Break:\\*\\*[[:space:]]*(?<v>.+)$");
+  def authority_effect_value: one_capture_raw("^\\*\\*Authority-Effect:\\*\\*[[:space:]]*(?<v>.+)$");
+  def owner_delegation_value: one_capture_raw("^\\*\\*Owner-Delegation:\\*\\*[[:space:]]*(?<v>.+)$");
+  def did_not_vote_value: one_capture_raw("^\\*\\*Did-Not-Vote:\\*\\*[[:space:]]*(?<v>.+)$");
+  def unacknowledged_value: one_capture_raw("^\\*\\*Unacknowledged:\\*\\*[[:space:]]*(?<v>.+)$");
   # A comment only terminates a round if it is an actually well-formed
-  # decision record: every field close() actually writes present and
-  # non-empty, **Chosen:** naming one of the proposals declared options,
-  # **Deciding-Agent:** matching the **From:** on that same comment, and the
-  # author on the currently active roster — not merely something typed
-  # "decision" with a Chosen line (#436 review, terra P2 for the schema gap
-  # — an outsider posting four bare fields previously blocked every future
-  # vote and made status() report the round closed, permanently, with no
-  # way to recover it; a follow-up finding from opus-5, independently
-  # reached by terra and kiat-luna, that the roster filter close() applies
-  # to *votes*
-  # was never extended to the *decision* comment that ends the round — the
-  # exact identity a vote can no longer supply quorum from could still post
-  # a four-field decision and end it outright, strictly more power than the
-  # one just taken away).
+  # decision record. Third round on this class of gap (#436 review):
+  # requiring only Chosen let a four-field forgery close a round (terra
+  # P2); requiring Chosen plus five more fields still left five fields —
+  # Tie-Break, Authority-Effect, Owner-Delegation, Did-Not-Vote,
+  # Unacknowledged — unchecked, two of which (Tie-Break, Authority-Effect)
+  # exist specifically to constrain a self-interested closer on the
+  # needs_rationale path, so a forged record omitting them defeated that
+  # guard through the terminal comment rather than the closing command
+  # (opus-5, checking systematically rather than confirming one instance).
+  # close() now writes every one of these fields on every record — "none"
+  # standing in for a conditional value that does not apply, never omitted
+  # — so there is exactly one record shape and requiring "every field
+  # present" is complete by construction, not a second hand-maintained
+  # list that can drift from what close() writes a third time.
   def valid_decision($opts; $roster):
     decide_type == "decision"
     and (chosen_value as $c | $opts | index($c)) != null
@@ -187,6 +192,11 @@ DECIDE_JQ_COMMON='
     and quorum_value != ""
     and implementation_owner_value != ""
     and revisit_value != ""
+    and tie_break_value != ""
+    and authority_effect_value != ""
+    and owner_delegation_value != ""
+    and did_not_vote_value != ""
+    and unacknowledged_value != ""
     and (from_agent as $a | $roster | index($a)) != null;
 '
 
@@ -657,32 +667,27 @@ close() {
     | "- \(.agent) → \(.option)"' 2>/dev/null)
   [ -n "$minority" ] || minority="(no dissenting votes recorded)"
 
-  # `$(...)` unconditionally strips every trailing newline from its output —
-  # so building this record by repeated `payload="${payload}<field>\n"`
-  # concatenation loses the line break after whichever field printf built,
-  # and the next field's `**Key:**` glues onto the end of the previous
-  # field's *value* instead of starting its own line (#436 review, terra's
-  # P1, reproduced by opus-5). The record's whole grammar is line-anchored
-  # (`^\*\*Key:\*\*`), so every field is joined with an explicit leading
-  # newline here — never relying on one already being present.
+  # Every field is built in one printf with explicit embedded newlines —
+  # never by repeated `payload="${payload}<field>\n"` concatenation, which
+  # loses its line break to `$(...)`'s unconditional trailing-newline strip
+  # and glues the next field's `**Key:**` onto the previous field's value
+  # instead of starting its own line (#436 review, terra's P1, reproduced
+  # by opus-5). And every field is unconditionally present, "none" standing
+  # in where a conditional value does not apply — never omitted (#436
+  # review, third round: opus-5 found the two hand-maintained lists of one
+  # schema, what close() writes vs. what valid_decision requires, had
+  # drifted twice already, most seriously on Tie-Break/Authority-Effect —
+  # the exact fields that exist to constrain a self-interested closer,
+  # silently unchecked on the path where they matter most. Making the
+  # write side unconditional removes the second list to maintain: there is
+  # only ever one record shape, so "every field present" is the whole
+  # requirement, not a set someone has to keep re-deriving by hand).
   local payload
-  payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s' \
-    "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit")
-  if [ -n "$rationale" ]; then
-    payload="${payload}
-**Tie-Break:** ${rationale}"
-  fi
-  if [ -n "$authority_effect" ]; then
-    payload="${payload}
-**Authority-Effect:** ${authority_effect}"
-  fi
-  if [ -n "$owner_delegation" ]; then
-    payload="${payload}
-**Owner-Delegation:** ${owner_delegation}"
-  fi
+  payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
+    "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
+    "${rationale:-none}" "${authority_effect:-none}" "${owner_delegation:-none}" \
+    "${not_reached:-none}" "${unacknowledged:-none}")
   payload="${payload}
-**Did-Not-Vote:** ${not_reached:-none}
-**Unacknowledged:** ${unacknowledged:-none}
 
 Minority votes:
 ${minority}"
