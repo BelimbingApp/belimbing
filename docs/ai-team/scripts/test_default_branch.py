@@ -77,11 +77,15 @@ class DefaultBranchResolutionTest(unittest.TestCase):
         env = os.environ.copy()
         env.pop("AI_TEAM_BASE_BRANCH", None)
         env.update(env_extra or {})
+        # Through the shared boundary like the other two: bare "bash" can find
+        # WSL's bash rather than Git Bash on Windows, which is what
+        # _bash_executable() exists to settle.
         script = f'source {bash_path(HELPER)}\nai_team_default_branch\n'
-        result = subprocess.run(
+        result = run_with_bash_path(
             ["bash", "-c", script],
-            cwd=str(cwd or self.work),
+            stub_directory=self.bin,
             env=env,
+            cwd=str(cwd or self.work),
             capture_output=True,
             text=True,
             check=False,
