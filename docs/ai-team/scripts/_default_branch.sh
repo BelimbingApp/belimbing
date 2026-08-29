@@ -46,7 +46,16 @@ ai_team_default_branch() {
 
   local candidates=() origin_repo="" reported="" head_ref="" candidate="" chosen=""
 
-  [ -n "${AI_TEAM_BASE_BRANCH:-}" ] && candidates+=("$AI_TEAM_BASE_BRANCH")
+  # An explicit override is honoured verbatim and never verified. It exists so a
+  # repository can gate against something the resolver cannot infer, and silently
+  # substituting an inferred branch for the one an operator named would be the
+  # worst outcome available: they asked for X, got Y, and were not told. If the
+  # branch is wrong the next git command says so, loudly and with the real name.
+  if [ -n "${AI_TEAM_BASE_BRANCH:-}" ]; then
+    _AI_TEAM_BASE_BRANCH_CACHE="$AI_TEAM_BASE_BRANCH"
+    printf '%s' "$_AI_TEAM_BASE_BRANCH_CACHE"
+    return 0
+  fi
 
   if origin_repo=$(ai_team_origin_repo) && [ -n "$origin_repo" ]; then
     reported=$(gh repo view "$origin_repo" --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null) || reported=""
