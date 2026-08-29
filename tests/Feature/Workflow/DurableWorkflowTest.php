@@ -28,6 +28,23 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 
+// `travel($n)` sets test-now to (real now at the call) + $n — a genuine
+// freeze, not a moving offset: `Carbon::setTestNow()` pins the clock, so
+// every later `travel()`/`now()` read offsets from that pinned value, not
+// from real wall-clock time. The only exposure is real time elapsed
+// *before the first* `travel()` call in a test: a state write (e.g.
+// `claim()`) records a real timestamp, and if meaningful wall-clock time
+// passes before the first `travel()` pins the clock, that delay lands
+// inside whatever offset the test intended, eroding a narrow lease margin
+// under load and failing correct code (#432, confirmed by injecting a
+// delay at that exact gap and reproducing the real production error).
+// Every subsequent `travel()` call in a test is safe regardless of real
+// delay, since it offsets from the already-pinned clock, not the wall.
+// freezeTime() removes the one exposed gap entirely by pinning `now()`
+// before any state write happens; do not remove this and rely on
+// travel() alone.
+beforeEach(fn () => $this->freezeTime());
+
 it('treats durable process coordination as stable schema', function (): void {
     $preflight = app(IncubatingSchemaPreflight::class);
 
