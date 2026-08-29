@@ -173,8 +173,10 @@ class ProposeValidationTest(DecideTestCase):
         self.assertIn("**Recommend:** keep", body)
 
     def test_propose_snapshots_the_active_roster_as_notify(self):
-        # opus-5's #436 P2: without a snapshot, a decision could bind agents
-        # who never learned it was being taken, with no trace afterwards.
+        # terra's #436 P1 (the concern was raised on #430's spec by opus-5
+        # and missed in the first implementation review): without a
+        # snapshot, a decision could bind agents who never learned it was
+        # being taken, with no trace afterwards.
         self.set_roster(["proposer", "a", "b"])
         result = self.propose(10, "locale-order", "keep,swap", "keep", agent="proposer")
         body = self.comments_now()[0]["body"]

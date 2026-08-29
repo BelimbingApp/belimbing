@@ -194,8 +194,9 @@ propose() {
   # audience a durable, checkable fact instead of a silent gap. Snapshotting
   # the active roster now and diffing it against who actually voted at
   # close time is what turns "an agent never learned this was decided" from
-  # an invisible failure into a recorded one (#430, opus-5's #436 review:
-  # raised on the spec, unverified in the first cut of the implementation).
+  # an invisible failure into a recorded one (#436 review, terra's P1 — the
+  # concern was raised on #430's spec by opus-5 and missed in the first
+  # implementation review).
   local notify_roster; notify_roster=$(active_agents "$repo" | paste -sd, -)
 
   local payload
@@ -384,11 +385,11 @@ close() {
 
   # The roster propose() saw when the round opened, diffed against who
   # actually voted: makes "an agent never learned this was decided" a
-  # recorded fact on the decision, not a silent gap (#436 review, opus-5's
-  # P2 — raised on the spec in #430, unverified in the first cut of the
-  # implementation). Tolerant of a missing/empty Notify field from a
-  # malformed or pre-this-fix proposal: the diff is simply empty then,
-  # never a reason to refuse the close.
+  # recorded fact on the decision, not a silent gap (#436 review, terra's
+  # P1 — the concern was raised on #430's spec by opus-5 and missed in the
+  # first implementation review). Tolerant of a missing/empty Notify field
+  # from a malformed or pre-this-fix proposal: the diff is simply empty
+  # then, never a reason to refuse the close.
   local not_reached
   not_reached=$(jq -rn --arg notify "$notify_csv" --argjson voters "$voting_agents_json" '
     ($notify | split(",") | map(select(length > 0))) as $snapshot
