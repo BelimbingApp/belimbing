@@ -288,6 +288,11 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("left=2", body)
         self.assertIn("right=1", body)
         self.assertIn("**Tie-Break:** none", body)
+        # opus-5's #436 finding: on the majority path the closer is never
+        # asked for --authority-effect at all, so the record must say so —
+        # "none" in this field's vocabulary means an affirmative "does not
+        # expand my own authority" declaration, which nobody made here.
+        self.assertIn("**Authority-Effect:** not-required", body)
 
     def test_latest_vote_per_agent_replaces_the_earlier_one(self):
         self.set_roster(["p", "a", "b", "c"])

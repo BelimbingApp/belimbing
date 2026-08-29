@@ -682,10 +682,20 @@ close() {
   # write side unconditional removes the second list to maintain: there is
   # only ever one record shape, so "every field present" is the whole
   # requirement, not a set someone has to keep re-deriving by hand).
+  #
+  # Authority-Effect is the one field where "not asked" and "declared" must
+  # print differently: --authority-effect none|self is a genuine assertion
+  # in that field's vocabulary (opus-5's own carve-out finding), so on the
+  # majority path — where the closer is never asked for it at all — the
+  # default is the out-of-vocabulary "not-required", never "none". "none"
+  # must always mean an explicit, affirmative declaration, or an auditor
+  # scanning this field afterward cannot tell "affirmed none" from "never
+  # asked" — identical text collapsing the one distinction this field
+  # exists to preserve (#436 review, opus-5, caught in their own fix).
   local payload
   payload=$(printf '**Decision:** %s\n**Chosen:** %s\n**Tally:** %s\n**Quorum:** %s\n**Deciding-Agent:** %s\n**Implementation-Owner:** %s\n**Revisit-If:** %s\n**Tie-Break:** %s\n**Authority-Effect:** %s\n**Owner-Delegation:** %s\n**Did-Not-Vote:** %s\n**Unacknowledged:** %s' \
     "$id" "$chosen" "$tally_summary" "$quorum_note" "$agent" "$owner" "$revisit" \
-    "${rationale:-none}" "${authority_effect:-none}" "${owner_delegation:-none}" \
+    "${rationale:-none}" "${authority_effect:-not-required}" "${owner_delegation:-none}" \
     "${not_reached:-none}" "${unacknowledged:-none}")
   payload="${payload}
 
