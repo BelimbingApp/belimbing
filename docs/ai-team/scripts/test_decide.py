@@ -660,6 +660,43 @@ class MalformedDecisionTest(DecideTestCase):
         result = self.vote(10, "d", "left", agent="a")
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_a_fully_well_formed_decision_from_an_off_roster_agent_does_not_close_the_round(self):
+        # The sibling-path gap: close() roster-filters *votes*, but that
+        # filter was never extended to the *decision* comment that
+        # terminates the round. An identity that can no longer supply a
+        # vote could otherwise still post a complete, schema-valid decision
+        # record and end the round outright — independently found by
+        # terra and kiat-luna, and by opus-5 as a follow-up.
+        self.set_roster(["p", "a"])  # "outsider" is not, and never was, on the roster
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** outsider\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Chosen:** left\n**Tally:** left=1\n**Quorum:** met\n"
+            "**Deciding-Agent:** outsider\n**Implementation-Owner:** outsider\n"
+            "**Revisit-If:** never\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+        status = self.run_decide("status", "10")
+        self.assertIn("'d'", status.stdout)  # still open, not hidden as closed
+
+    def test_deciding_agent_must_match_the_posting_agent(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        # From: p, but Deciding-Agent claims to be someone else — a forged
+        # attribution rather than an off-roster identity.
+        self.seed_comment(
+            "**From:** p\n\n**Type:** decision\n\n**Decision:** d\n"
+            "**Chosen:** left\n**Tally:** left=1\n**Quorum:** met\n"
+            "**Deciding-Agent:** a\n**Implementation-Owner:** p\n"
+            "**Revisit-If:** never\n"
+        )
+
+        result = self.vote(10, "d", "left", agent="a")
+        self.assertEqual(result.returncode, 0, result.stderr)
+
 
 class OwnerDelegationTest(DecideTestCase):
     """#430's explicit-delegation clause (terra P3): an owner may delegate

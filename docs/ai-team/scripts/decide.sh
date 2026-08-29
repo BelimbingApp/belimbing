@@ -158,14 +158,36 @@ DECIDE_JQ_COMMON='
   def structured($id):
     from_agent != "" and decision_id == $id;
   def chosen_value: one_capture_raw("^\\*\\*Chosen:\\*\\*[[:space:]]*(?<v>.+)$");
+  def deciding_agent_value: one_capture_raw("^\\*\\*Deciding-Agent:\\*\\*[[:space:]]*(?<v>.+)$");
+  def tally_value: one_capture_raw("^\\*\\*Tally:\\*\\*[[:space:]]*(?<v>.+)$");
+  def quorum_value: one_capture_raw("^\\*\\*Quorum:\\*\\*[[:space:]]*(?<v>.+)$");
+  def implementation_owner_value: one_capture_raw("^\\*\\*Implementation-Owner:\\*\\*[[:space:]]*(?<v>.+)$");
+  def revisit_value: one_capture_raw("^\\*\\*Revisit-If:\\*\\*[[:space:]]*(?<v>.+)$");
   # A comment only terminates a round if it is an actually well-formed
-  # decision record — an unambiguous **Chosen:** naming one of the
-  # proposals declared options — not merely something typed "decision"
-  # (#436 review, terra P2: an outsider posting **Type:** decision with no
-  # other fields previously blocked every future vote and made status()
-  # report the round closed, permanently, with no way to recover it).
-  def valid_decision($opts):
-    decide_type == "decision" and (chosen_value as $c | $opts | index($c)) != null;
+  # decision record: every field close() actually writes present and
+  # non-empty, **Chosen:** naming one of the proposals declared options,
+  # **Deciding-Agent:** matching the **From:** on that same comment, and the
+  # author on the currently active roster — not merely something typed
+  # "decision" with a Chosen line (#436 review, terra P2 for the schema gap
+  # — an outsider posting four bare fields previously blocked every future
+  # vote and made status() report the round closed, permanently, with no
+  # way to recover it; a follow-up finding from opus-5, independently
+  # reached by terra and kiat-luna, that the roster filter close() applies
+  # to *votes*
+  # was never extended to the *decision* comment that ends the round — the
+  # exact identity a vote can no longer supply quorum from could still post
+  # a four-field decision and end it outright, strictly more power than the
+  # one just taken away).
+  def valid_decision($opts; $roster):
+    decide_type == "decision"
+    and (chosen_value as $c | $opts | index($c)) != null
+    and deciding_agent_value != ""
+    and deciding_agent_value == from_agent
+    and tally_value != ""
+    and quorum_value != ""
+    and implementation_owner_value != ""
+    and revisit_value != ""
+    and (from_agent as $a | $roster | index($a)) != null;
 '
 
 propose() {
@@ -307,9 +329,12 @@ vote() {
   local vote_options_json
   vote_options_json=$(printf '%s' "$proposal" | jq -r '.options' | jq -R 'split(",")')
 
+  local vote_roster_json
+  vote_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
+
   local closed
-  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts))] | length' 2>/dev/null || echo 0)
+  closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson roster "$vote_roster_json" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $roster))] | length' 2>/dev/null || echo 0)
   if [ "${closed:-0}" -gt 0 ]; then
     echo "vote: '$id' on #$issue is already closed — this round is over" >&2
     exit 1
@@ -487,16 +512,6 @@ close() {
   notify_csv=$(printf '%s' "$proposal" | jq -r '.notify')
   local options_json; options_json=$(printf '%s\n' "$options_csv" | jq -R 'split(",")')
 
-  local already_closed
-  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" "$DECIDE_JQ_COMMON"'
-    [.comments[] | select(structured($id) and valid_decision($opts))] | length' 2>/dev/null || echo 0)
-  if [ "${already_closed:-0}" -gt 0 ]; then
-    echo "close: '$id' on #$issue is already closed" >&2
-    exit 1
-  fi
-
-  local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
-
   local roster; roster=$(active_agents "$repo")
   local roster_json; roster_json=$(printf '%s\n' "$roster" | jq -R 'select(length > 0)' | jq -s '.')
   local roster_count; roster_count=$(printf '%s' "$roster_json" | jq 'length')
@@ -504,6 +519,16 @@ close() {
     echo "close: no currently active agents found (open PRs or open agent:* issues) — cannot establish a quorum roster; check gh connectivity before closing" >&2
     exit 2
   fi
+
+  local already_closed
+  already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson roster "$roster_json" "$DECIDE_JQ_COMMON"'
+    [.comments[] | select(structured($id) and valid_decision($opts; $roster))] | length' 2>/dev/null || echo 0)
+  if [ "${already_closed:-0}" -gt 0 ]; then
+    echo "close: '$id' on #$issue is already closed" >&2
+    exit 1
+  fi
+
+  local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
 
   # Roster-filter every vote before any quorum or tally arithmetic touches
   # it: a well-formed **From:** proves identity, not a live lane, and an
@@ -691,18 +716,22 @@ status() {
     [.comments[] | select(from_agent != "" and decide_type == "proposal") | {id: decision_id, options: opts, deadline: deadline, createdAt, proposer: from_agent}]
     | unique_by(.id)')
 
+  local status_roster_json
+  status_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
+
   # Same well-formedness bar as vote()/close(): only a **Type:** decision
-  # comment with an unambiguous **Chosen:** matching that specific
-  # proposal's declared options counts as closing it (terra P2) — looked up
-  # per comment against $proposals since each open decision id here can
-  # have different declared options.
+  # comment with the full schema — an unambiguous **Chosen:** matching that
+  # specific proposal's declared options, a matching **Deciding-Agent:**,
+  # and an author on the active roster — counts as closing it (terra P2 /
+  # the roster-gap follow-up) — looked up per comment against $proposals
+  # since each open decision id here can have different declared options.
   local closed_ids
-  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" "$DECIDE_JQ_COMMON"'
+  closed_ids=$(printf '%s' "$comments" | jq -c --argjson proposals "$proposals" --argjson roster "$status_roster_json" "$DECIDE_JQ_COMMON"'
     [.comments[]
      | select(from_agent != "" and decide_type == "decision")
      | (. + {did: decision_id}) as $entry
      | ($proposals[] | select(.id == $entry.did) | .options | split(",")) as $opts
-     | select($entry | valid_decision($opts))
+     | select($entry | valid_decision($opts; $roster))
      | $entry.did]
     | unique')
 
@@ -716,9 +745,6 @@ status() {
     [ -n "$only_id" ] && echo "status: '$only_id' on #$issue is not open (closed, or never proposed)"
     return 0
   fi
-
-  local status_roster_json
-  status_roster_json=$(active_agents "$repo" | jq -R 'select(length > 0)' | jq -s '.')
 
   local now_epoch; now_epoch=$(date -u +%s)
   printf '%s' "$rows" | jq -r '.[] | [.id, .deadline, .proposer, .options] | @tsv' | \
