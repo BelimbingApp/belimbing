@@ -172,6 +172,19 @@ class ProposeValidationTest(DecideTestCase):
         self.assertIn("**Options:** keep,swap", body)
         self.assertIn("**Recommend:** keep", body)
 
+    def test_propose_snapshots_the_active_roster_as_notify(self):
+        # opus-5's #436 P2: without a snapshot, a decision could bind agents
+        # who never learned it was being taken, with no trace afterwards.
+        self.set_roster(["proposer", "a", "b"])
+        result = self.propose(10, "locale-order", "keep,swap", "keep", agent="proposer")
+        body = self.comments_now()[0]["body"]
+        self.assertIn("**Notify:**", body)
+        notify_line = next(line for line in body.splitlines() if line.startswith("**Notify:**"))
+        notified = {a.strip() for a in notify_line.removeprefix("**Notify:**").split(",")}
+        self.assertEqual(notified, {"proposer", "a", "b"})
+        self.assertIn("notify the active roster now", result.stdout)
+        self.assertIn("proposer", result.stdout)
+
     def test_propose_rejects_duplicate_decision_id(self):
         self.set_roster(["proposer"])
         self.propose(10, "locale-order", "keep,swap", "keep")
@@ -486,6 +499,37 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("overrides a clear quorum majority", result.stderr)
         self.assertEqual(len(self.comments_now()), 4)  # proposal + 3 votes, no decision posted
+
+    def test_the_decision_record_names_active_agents_who_never_voted(self):
+        # The roster shrinks between propose (p,a,b,c,d) and close (p,a,b,c)
+        # if d's PR/issue closes in between — d never got the chance to
+        # vote and close() correctly can't require a vote from someone no
+        # longer active, but the record should still say d never weighed in
+        # on the round it was snapshotted into.
+        self.set_roster(["p", "a", "b", "c", "e"])
+        self.propose(10, "vote-id", "left,right", "left", agent="p")
+        self.set_roster(["p", "a", "b", "c"])  # e's lane closed after the snapshot
+        self.vote(10, "vote-id", "left", agent="p")
+        self.vote(10, "vote-id", "left", agent="a")
+        self.vote(10, "vote-id", "left", agent="b")
+        self.vote(10, "vote-id", "right", agent="c")
+
+        result = self.close(10, "vote-id", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Not-Reached:** e", body)
+
+    def test_the_decision_record_says_none_reached_everyone(self):
+        self.set_roster(["p", "a", "b"])
+        self.propose(10, "d", "left,right", "left", agent="p")
+        self.vote(10, "d", "left", agent="p")
+        self.vote(10, "d", "left", agent="a")
+        self.vote(10, "d", "left", agent="b")
+
+        result = self.close(10, "d", agent="p")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        body = self.last_decision_body()
+        self.assertIn("**Not-Reached:** none", body)
 
     def test_the_decision_record_carries_every_required_field(self):
         self.set_roster(["p", "a", "b", "c"])

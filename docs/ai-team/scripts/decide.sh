@@ -189,15 +189,27 @@ propose() {
     || deadline=$(date -u -v"+${deadline_minutes}M" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) \
     || { echo "propose: could not compute the deadline timestamp" >&2; exit 2; }
 
+  # This script cannot itself reach another agent — only the caller's own
+  # cross-session messaging can — but it can make the round's expected
+  # audience a durable, checkable fact instead of a silent gap. Snapshotting
+  # the active roster now and diffing it against who actually voted at
+  # close time is what turns "an agent never learned this was decided" from
+  # an invisible failure into a recorded one (#430, opus-5's #436 review:
+  # raised on the spec, unverified in the first cut of the implementation).
+  local notify_roster; notify_roster=$(active_agents "$repo" | paste -sd, -)
+
   local payload
-  payload=$(printf '**Decision:** %s\n**Options:** %s\n**Recommend:** %s\n**Deadline:** %s\n\n%s\n\n%s' \
-    "$id" "$seen" "$recommend" "$deadline" "$question" "$body")
+  payload=$(printf '**Decision:** %s\n**Options:** %s\n**Recommend:** %s\n**Deadline:** %s\n**Notify:** %s\n\n%s\n\n%s' \
+    "$id" "$seen" "$recommend" "$deadline" "$notify_roster" "$question" "$body")
 
   CLAIM_AGENT="$agent" "$BOARD_SH" post "$issue" --agent "$agent" --type proposal "$payload" || {
     echo "propose: could not post '$id' to #$issue — nothing recorded" >&2
     exit 2
   }
   echo "proposed '$id' on #$issue — options: $seen — deadline $deadline"
+  if [ -n "$notify_roster" ]; then
+    echo "notify the active roster now (cross-session messaging, or a board post) so this round isn't decided only by whoever happens to read the issue: $notify_roster"
+  fi
 }
 
 vote() {
@@ -324,7 +336,8 @@ close() {
   proposal=$(printf '%s' "$comments" | jq -c --arg id "$id" "$DECIDE_JQ_COMMON"'
     def opts: one_capture_raw("^\\*\\*Options:\\*\\*[[:space:]]*(?<v>.+)$");
     def deadline: one_capture_raw("^\\*\\*Deadline:\\*\\*[[:space:]]*(?<v>.+)$");
-    [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, deadline: deadline, createdAt, proposer: from_agent}]
+    def notify: one_capture_raw("^\\*\\*Notify:\\*\\*[[:space:]]*(?<v>.*)$");
+    [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, deadline: deadline, notify: notify, createdAt, proposer: from_agent}]
     | if length == 1 then .[0] else null end' 2>/dev/null)
   if [ -z "$proposal" ] || [ "$proposal" = "null" ]; then
     echo "close: no proposal '$id' found on #$issue" >&2
@@ -339,10 +352,11 @@ close() {
     exit 1
   fi
 
-  local options_csv proposal_created_at deadline_str
+  local options_csv proposal_created_at deadline_str notify_csv
   options_csv=$(printf '%s' "$proposal" | jq -r '.options')
   proposal_created_at=$(printf '%s' "$proposal" | jq -r '.createdAt')
   deadline_str=$(printf '%s' "$proposal" | jq -r '.deadline')
+  notify_csv=$(printf '%s' "$proposal" | jq -r '.notify')
   local options_json; options_json=$(printf '%s\n' "$options_csv" | jq -R 'split(",")')
 
   local votes; votes=$(tally_votes "$comments" "$id" "$proposal_created_at" "$options_json")
@@ -367,6 +381,19 @@ close() {
 
   local voting_agents_json; voting_agents_json=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique')
   local voter_count; voter_count=$(printf '%s' "$voting_agents_json" | jq 'length')
+
+  # The roster propose() saw when the round opened, diffed against who
+  # actually voted: makes "an agent never learned this was decided" a
+  # recorded fact on the decision, not a silent gap (#436 review, opus-5's
+  # P2 — raised on the spec in #430, unverified in the first cut of the
+  # implementation). Tolerant of a missing/empty Notify field from a
+  # malformed or pre-this-fix proposal: the diff is simply empty then,
+  # never a reason to refuse the close.
+  local not_reached
+  not_reached=$(jq -rn --arg notify "$notify_csv" --argjson voters "$voting_agents_json" '
+    ($notify | split(",") | map(select(length > 0))) as $snapshot
+    | [$snapshot[] | select(. as $a | $voters | index($a) == null)]
+    | join(", ")')
 
   local quorum_met="false"
   if [ "$roster_count" -ge 3 ]; then
@@ -461,6 +488,8 @@ close() {
     payload="${payload}**Authority-Effect:** ${authority_effect}
 "
   fi
+  payload="${payload}**Not-Reached:** ${not_reached:-none}
+"
   payload="${payload}
 Minority votes:
 ${minority}"
