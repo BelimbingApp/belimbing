@@ -28,7 +28,25 @@
 # input and exit 0 (sol's finding on #364).
 set -uo pipefail
 
-REPO="${BOARD_REPO:-BelimbingApp/belimbing}"
+# No repository default. A vendored copy that names the origin project posts an
+# adopter's status onto the wrong board, and board.sh never consults gh, so being
+# in the right working directory does not save you (#445). Resolve from the
+# origin remote, which is the repo this checkout actually belongs to.
+BOARD_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$BOARD_DIR/_default_branch.sh"
+REPO="${BOARD_REPO:-$(ai_team_origin_repo 2>/dev/null || true)}"
+# Fall back to gh's ambient answer rather than failing: a checkout whose origin
+# is not a GitHub URL still has a repository gh can name. Order matters — origin
+# is asked first because it is the repo this checkout belongs to, and gh can be
+# pointed elsewhere by remote.<name>.gh-resolved.
+[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+if [ -z "$REPO" ]; then
+  echo "board.sh: cannot determine the repository. Set BOARD_REPO=<owner>/<repo>," >&2
+  echo "or run inside a checkout whose origin remote points at a GitHub repository." >&2
+  exit 2
+fi
 BUDGET="${BOARD_POST_BUDGET:-1400}"
 DIGEST_LINES="${BOARD_DIGEST_LINES:-12}"
 # Accounts whose posts no agent authored and no digest should render or nag

@@ -16,6 +16,11 @@
 
 set -euo pipefail
 
+here="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$here/_default_branch.sh"
+
 issue="${1:-}"
 agent="${CLAIM_AGENT:-}"
 
@@ -136,7 +141,24 @@ fi
 
 branch="${CLAIM_BRANCH:-agent/${agent}-issue-${issue}}"
 title="${CLAIM_TITLE:-$(jq -r .title <<<"$issue_json") (#${issue})}"
-worktree="${CLAIM_WORKTREE:-$(dirname "$root")/$(basename "$root")-${agent}-issue-${issue}}"
+# Placing the lane worktree beside $root is only safe when $root's parent is
+# inert. It is not when this repository is a nested checkout: for
+# app/Extensions/SbGroup that resolves inside app/Extensions/, which the host
+# application scans for modules, so a lane worktree can register phantom
+# modules in the composed app (#445). Default outside the outermost work tree
+# instead, and keep lanes together rather than scattering siblings.
+if [[ -n "${CLAIM_WORKTREE:-}" ]]; then
+  worktree="$CLAIM_WORKTREE"
+else
+  lane_root="${AI_TEAM_WORKTREE_ROOT:-}"
+  if [[ -z "$lane_root" ]]; then
+    outermost=$(git -C "$root" rev-parse --show-superproject-working-tree 2>/dev/null || true)
+    [[ -n "$outermost" ]] || outermost="$root"
+    lane_root="$(dirname "$outermost")/.ai-team-lanes"
+  fi
+  mkdir -p "$lane_root"
+  worktree="$lane_root/$(basename "$root")-${agent}-issue-${issue}"
+fi
 
 local_branch=0
 remote_branch=0
@@ -171,10 +193,12 @@ restore_root_off_claim() {
   if [[ "$current" != "$branch" ]]; then
     return 0
   fi
-  if git show-ref --verify --quiet refs/heads/main; then
-    git switch -q main
+  local base
+  base=$(ai_team_default_branch)
+  if git show-ref --verify --quiet "refs/heads/$base"; then
+    git switch -q "$base"
   else
-    git switch -q -c main origin/main
+    git switch -q -c "$base" "origin/$base"
   fi
 }
 
@@ -217,11 +241,12 @@ ensure_worktree() {
   fi
 }
 
-git fetch -q origin main
+base_branch=$(ai_team_default_branch)
+git fetch -q origin "$base_branch"
 
 if [[ $resume -eq 0 ]]; then
   restore_root_off_claim
-  git worktree add -b "$branch" "$worktree" origin/main
+  git worktree add -b "$branch" "$worktree" "origin/$base_branch"
   (
     cd "$worktree"
     git commit --allow-empty -m "claim: #$issue"
@@ -267,7 +292,7 @@ printf '**From:** %s\n\n**Reachable:** %s\n\nClaiming #%s through docs/ai-team/s
 # --head is load-bearing on multi-remote checkouts: without it, gh cannot infer
 # which remote owns the branch and aborts *after* the push, leaving an invisible
 # half-claim. --base keeps the target explicit for the same reason.
-if ! pr_url=$(gh pr create --repo "$repo" --draft --base main --head "$branch" \
+if ! pr_url=$(gh pr create --repo "$repo" --draft --base "$base_branch" --head "$branch" \
   --title "$title" --body-file "$body"); then
   echo "gh pr create failed for #$issue" >&2
   if [[ $resume -eq 0 ]]; then

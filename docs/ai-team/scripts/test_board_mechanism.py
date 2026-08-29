@@ -356,6 +356,11 @@ class BoardMechanismTest(unittest.TestCase):
             env["BOARD_TEST_CAPTURE"] = str(directory / "captured-body")
             env["BOARD_TEST_FIXTURE"] = str(directory / "fixture.json")
             env["BOARD_POST_BUDGET"] = "201"
+            # PATH is deliberately reduced to the fixture's tools, so neither gh
+            # nor git is reachable to name the repository. board.sh no longer
+            # assumes one (#445), so state it explicitly — this test is about
+            # the iconv fallback, not about repository resolution.
+            env["BOARD_REPO"] = "example/canonical"
             env["PATH"] = str(directory)
             result = subprocess.run(
                 [bash, str(SCRIPT), "post", "42",

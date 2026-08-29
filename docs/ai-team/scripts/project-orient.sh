@@ -2,6 +2,12 @@
 # Belimbing-specific orientation. Keep repository-local project facts here so
 # the shared operating guide and its generic mechanisms can move elsewhere.
 
+PROJECT_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
+# shellcheck source=docs/ai-team/scripts/_default_branch.sh
+# shellcheck disable=SC1091
+source "$PROJECT_DIR/_default_branch.sh"
+BASE=$(ai_team_default_branch)
+
 set -u
 
 echo "== Belimbing project: runtime contract =="
@@ -15,11 +21,11 @@ else
 fi
 
 echo
-echo "== Belimbing project: application topology on origin/main =="
+echo "== Belimbing project: application topology on origin/$BASE =="
 for root in Base Core Domains Extensions; do
-  count=$(git ls-tree -r --name-only origin/main -- "app/$root" 2>/dev/null | awk 'NF {seen=1} END {print seen+0}')
+  count=$(git ls-tree -r --name-only "origin/$BASE" -- "app/$root" 2>/dev/null | awk 'NF {seen=1} END {print seen+0}')
   if [[ "$count" -eq 1 ]]; then
-    entries=$(git ls-tree -d --name-only "origin/main:app/$root" 2>/dev/null | paste -sd, -)
+    entries=$(git ls-tree -d --name-only "origin/$BASE:app/$root" 2>/dev/null | paste -sd, -)
     echo "  app/$root  ${entries:-tracked files present}"
   else
     echo "  app/$root  absent"
