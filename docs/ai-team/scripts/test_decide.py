@@ -1294,6 +1294,65 @@ class WriterReaderConsistencyTest(DecideTestCase):
         self.assert_record_is_self_consistent(10, "d", "a")
 
 
+class DurableDecisionEligibilityTest(DecideTestCase):
+    """#443: terminal records cannot depend on today's active-lane roster."""
+
+    def close_majority(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "durable", "left,right", "left", agent="p")
+        self.vote(10, "durable", "left", agent="p")
+        self.vote(10, "durable", "left", agent="a")
+        closed = self.close(10, "durable", agent="p")
+        self.assertEqual(closed.returncode, 0, closed.stderr)
+
+    def assert_round_stays_closed(self, roster):
+        self.set_roster(roster)
+
+        status = self.run_decide("status", "10", "--id", "durable")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("not open", status.stdout)
+
+        late_vote = self.vote(10, "durable", "right", agent="x")
+        self.assertNotEqual(late_vote.returncode, 0)
+        self.assertIn("already closed", late_vote.stderr)
+
+        second_close = self.close(10, "durable", agent="x")
+        self.assertNotEqual(second_close.returncode, 0)
+        self.assertIn("already closed", second_close.stderr)
+
+    def test_closed_round_stays_terminal_after_partial_and_full_roster_turnover(self):
+        self.close_majority()
+
+        for roster in (["a", "b"], ["x", "y"], []):
+            with self.subTest(roster=roster):
+                self.assert_round_stays_closed(roster)
+
+    def test_current_outsider_cannot_forge_a_terminal_record(self):
+        self.set_roster(["p", "a"])
+        self.propose(10, "durable", "left,right", "left", agent="p")
+        self.seed_comment(
+            "**From:** outsider\n\n**Type:** decision\n\n**Decision:** durable\n"
+            "**Resolution:** majority\n**Chosen:** left\n**Tally:** left=2\n"
+            "**Quorum:** met\n**Deciding-Agent:** outsider\n"
+            "**Implementation-Owner:** outsider\n**Revisit-If:** never\n"
+            "**Tie-Break:** (not applicable)\n**Authority-Effect:** none\n"
+            "**Owner-Delegation:** none\n**Did-Not-Vote:** none\n"
+            "**Unacknowledged:** none\n"
+        )
+        self.set_roster(["outsider"])
+
+        status = self.run_decide("status", "10", "--id", "durable")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("'durable'", status.stdout)
+
+        vote = self.vote(10, "durable", "right", agent="outsider")
+        self.assertEqual(vote.returncode, 0, vote.stderr)
+
+        close = self.close(10, "durable", agent="outsider")
+        self.assertNotEqual(close.returncode, 0)
+        self.assertIn("immutable Notify roster", close.stderr)
+
+
 class StatusTest(DecideTestCase):
     def test_status_lists_an_open_proposal_and_hides_a_closed_one(self):
         self.set_roster(["p", "a"])

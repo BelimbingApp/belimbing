@@ -342,7 +342,13 @@ the not-applicable sentinels on Tie-Break/Authority-Effect/Owner-Delegation;
 `none` or `self`; `self` additionally requires a structurally durable
 Owner-Delegation link), `**Chosen:**` names a declared option, `**Deciding-
 Agent:**` matches the comment's own identity, and the author is on the
-currently active roster. `--rationale`/`--authority-effect`/
+proposal's immutable `**Notify:**` roster. `close()` separately requires the
+closer to be active at close time and to belong to that proposal snapshot;
+later lane turnover never changes whether an already-recorded decision is
+terminal. This keeps final decisions durable without letting an identity that
+was never eligible for the round forge one after the fact. Legacy proposals
+without a Notify snapshot conservatively admit only their proposal author.
+`--rationale`/`--authority-effect`/
 `--owner-delegation` are refused outright on a clear-majority close rather
 than silently accepted and written into a record the same predicate then
 rejects — `close()` never writes anything its own reader would refuse.
