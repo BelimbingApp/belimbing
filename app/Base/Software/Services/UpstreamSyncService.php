@@ -27,6 +27,10 @@ use Illuminate\Contracts\Auth\Authenticatable;
  */
 final class UpstreamSyncService
 {
+    private const EXIT_CODE_ARG = '--exit-code';
+
+    private const REF_HEADS_PREFIX = 'refs/heads/';
+
     public const RC_BRANCH = 'rc';
 
     public const STABLE_BRANCH = 'master';
@@ -74,7 +78,7 @@ final class UpstreamSyncService
         // (128, auth/network). A failure is not a fact about the repository
         // (sol's P1 on #356): refusing here stops an unreachable origin from
         // being read as "mirror absent" and answered with a creation push.
-        $mirror = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.$branch]);
+        $mirror = $repo->run(['ls-remote', self::EXIT_CODE_ARG, 'origin', self::REF_HEADS_PREFIX.$branch]);
 
         if (! $mirror->ok && $mirror->exitCode !== 2) {
             return $this->failure((string) __('Could not determine whether origin/:branch exists.', ['branch' => $branch]), $mirror->message());
@@ -97,7 +101,7 @@ final class UpstreamSyncService
 
         // Plain push — never --force. Git itself refuses a non-fast-forward, so
         // even a mirror moved between our check and the push stays protected.
-        $pushed = $repo->run(['push', 'origin', $upstreamSha.':refs/heads/'.$branch], timeout: 300);
+        $pushed = $repo->run(['push', 'origin', $upstreamSha.':'.self::REF_HEADS_PREFIX.$branch], timeout: 300);
 
         if (! $pushed->ok) {
             return $this->failure((string) __('Could not push the mirror to origin/:branch.', ['branch' => $branch]), $pushed->message());
@@ -136,14 +140,10 @@ final class UpstreamSyncService
         // round. Refuse with the state named rather than force or reuse — and a
         // failed lookup (exit 128) is not "absent" (exit 2): cutting while
         // GitHub is unreachable must refuse, not proceed (sol's P1 on #356).
-        $rc = $repo->run(['ls-remote', '--exit-code', 'origin', 'refs/heads/'.self::RC_BRANCH]);
+        $rcFailure = $this->ensureReleaseCandidateBranchIsAbsent($repo);
 
-        if ($rc->ok) {
-            return $this->failure((string) __('Refused: an rc branch already exists on origin from a previous round. Merge or delete it before cutting a new release candidate.'));
-        }
-
-        if ($rc->exitCode !== 2) {
-            return $this->failure((string) __('Could not determine whether an rc branch already exists on origin.'), $rc->message());
+        if ($rcFailure !== null) {
+            return $rcFailure;
         }
 
         $upstream = $this->resolveUpstreamHead($repo, $identity);
@@ -154,54 +154,26 @@ final class UpstreamSyncService
 
         [$branch] = $upstream;
 
-        $fetched = $repo->run(['fetch', 'origin', self::STABLE_BRANCH, $branch], timeout: 300);
+        $fetchFailure = $this->fetchReleaseCandidateInputs($repo, $branch);
 
-        if (! $fetched->ok) {
-            return $this->failure((string) __('Could not fetch origin/:stable and origin/:branch.', ['stable' => self::STABLE_BRANCH, 'branch' => $branch]), $fetched->message());
+        if ($fetchFailure !== null) {
+            return $fetchFailure;
         }
 
-        $stableSha = $repo->output(['rev-parse', 'refs/remotes/origin/'.self::STABLE_BRANCH]);
-        $mirrorSha = $repo->output(['rev-parse', 'refs/remotes/origin/'.$branch]);
+        $shas = $this->resolveReleaseCandidateInputs($repo, $branch);
 
-        if ($stableSha === null || $mirrorSha === null) {
-            return $this->failure((string) __('Could not resolve origin/:stable and origin/:branch after fetching. Refresh the mirror first.', ['stable' => self::STABLE_BRANCH, 'branch' => $branch]));
+        if (! array_is_list($shas)) {
+            return $shas;
         }
 
-        // A real merge, written only to the object database: the active checkout
-        // is untouched whether this succeeds or conflicts.
-        $merge = $repo->run(['merge-tree', '--write-tree', '--name-only', $stableSha, $mirrorSha]);
+        [$stableSha, $mirrorSha] = $shas;
 
-        // merge-tree exits 1 for a conflicted merge (first output line is still a
-        // tree oid, the rest are the conflicted paths) and >1 for a real error.
-        if (! $merge->ok && $merge->exitCode === 1) {
-            // Observed output shape (git 2.54): tree oid, the conflicted paths,
-            // then a blank line followed by informational messages ("Auto-merging
-            // …", "CONFLICT (content): …"). Only the section before the blank
-            // line is file names.
-            $lines = preg_split('/\R/', $merge->output) ?: [];
-            $files = [];
+        $tree = $this->releaseCandidateTree($repo, $stableSha, $mirrorSha);
 
-            foreach (array_slice($lines, 1) as $line) {
-                if (trim($line) === '') {
-                    break;
-                }
-
-                $files[] = trim($line);
-            }
-
-            $conflicted = implode(', ', array_slice($files, 0, 20));
-
-            return $this->failure(
-                (string) __('The integration conflicts; the release candidate was not created and the working tree was not touched. A person needs to resolve these files: :files', ['files' => $conflicted !== '' ? $conflicted : (string) __('(none listed)')]),
-                $merge->output,
-            );
+        if (! is_string($tree)) {
+            return $tree;
         }
 
-        if (! $merge->ok) {
-            return $this->failure((string) __('Could not compute the integration merge.'), $merge->message());
-        }
-
-        $tree = (string) strtok($merge->output, "\n");
         $commit = $repo->run([
             'commit-tree', $tree,
             '-p', $stableSha,
@@ -213,20 +185,10 @@ final class UpstreamSyncService
             return $this->failure((string) __('Could not create the release-candidate commit.'), $commit->message());
         }
 
-        // The preflight absence check cannot be atomic with the push, so the push
-        // itself carries the expectation: --force-with-lease with an empty value
-        // is git's documented "must not exist" form. Measured (git 2.54): creates
-        // the branch when absent, rejects with "(stale info)" when any rc appeared
-        // since — including a descendant, which a plain push would fast-forward,
-        // letting two concurrent cuts both report success (sol's P1 on #356).
-        $pushed = $repo->run(['push', 'origin', $commit->output.':refs/heads/'.self::RC_BRANCH, '--force-with-lease=refs/heads/'.self::RC_BRANCH.':'], timeout: 300);
+        $pushFailure = $this->pushReleaseCandidate($repo, $commit->output);
 
-        if (! $pushed->ok && str_contains($pushed->message(), 'stale info')) {
-            return $this->failure((string) __('Refused: an rc branch appeared on origin while this cut was being prepared. Check whether another operator just cut one.'), $pushed->message());
-        }
-
-        if (! $pushed->ok) {
-            return $this->failure((string) __('Could not push rc to origin.'), $pushed->message());
+        if ($pushFailure !== null) {
+            return $pushFailure;
         }
 
         return [
@@ -243,7 +205,7 @@ final class UpstreamSyncService
     private function resolveUpstreamHead(GitRepository $repo, array $identity): array|string|null
     {
         if ($identity['branch'] !== null) {
-            $result = $repo->run(['ls-remote', '--exit-code', $identity['remote'], 'refs/heads/'.$identity['branch']]);
+            $result = $repo->run(['ls-remote', self::EXIT_CODE_ARG, $identity['remote'], self::REF_HEADS_PREFIX.$identity['branch']]);
 
             if (! $result->ok) {
                 return $result->message();
@@ -257,6 +219,126 @@ final class UpstreamSyncService
         $default = $repo->lsRemoteDefaultBranch($identity['remote']);
 
         return $default !== null ? [$default['branch'], $default['sha']] : null;
+    }
+
+    /**
+     * @return array{ok: bool, message: string, detail: string|null}|null
+     */
+    private function ensureReleaseCandidateBranchIsAbsent(GitRepository $repo): ?array
+    {
+        $rc = $repo->run(['ls-remote', self::EXIT_CODE_ARG, 'origin', self::REF_HEADS_PREFIX.self::RC_BRANCH]);
+
+        if ($rc->ok) {
+            return $this->failure((string) __('Refused: an rc branch already exists on origin from a previous round. Merge or delete it before cutting a new release candidate.'));
+        }
+
+        if ($rc->exitCode !== 2) {
+            return $this->failure((string) __('Could not determine whether an rc branch already exists on origin.'), $rc->message());
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{ok: bool, message: string, detail: string|null}|null
+     */
+    private function fetchReleaseCandidateInputs(GitRepository $repo, string $branch): ?array
+    {
+        $fetched = $repo->run(['fetch', 'origin', self::STABLE_BRANCH, $branch], timeout: 300);
+
+        if ($fetched->ok) {
+            return null;
+        }
+
+        return $this->failure((string) __('Could not fetch origin/:stable and origin/:branch.', ['stable' => self::STABLE_BRANCH, 'branch' => $branch]), $fetched->message());
+    }
+
+    /**
+     * @return array{0: string, 1: string}|array{ok: bool, message: string, detail: string|null}
+     */
+    private function resolveReleaseCandidateInputs(GitRepository $repo, string $branch): array
+    {
+        $stableSha = $repo->output(['rev-parse', 'refs/remotes/origin/'.self::STABLE_BRANCH]);
+        $mirrorSha = $repo->output(['rev-parse', 'refs/remotes/origin/'.$branch]);
+
+        if ($stableSha === null || $mirrorSha === null) {
+            return $this->failure((string) __('Could not resolve origin/:stable and origin/:branch after fetching. Refresh the mirror first.', ['stable' => self::STABLE_BRANCH, 'branch' => $branch]));
+        }
+
+        return [$stableSha, $mirrorSha];
+    }
+
+    /**
+     * @return string|array{ok: bool, message: string, detail: string|null}
+     */
+    private function releaseCandidateTree(GitRepository $repo, string $stableSha, string $mirrorSha): string|array
+    {
+        // A real merge, written only to the object database: the active checkout
+        // is untouched whether this succeeds or conflicts.
+        $merge = $repo->run(['merge-tree', '--write-tree', '--name-only', $stableSha, $mirrorSha]);
+
+        // merge-tree exits 1 for a conflicted merge (first output line is still a
+        // tree oid, the rest are the conflicted paths) and >1 for a real error.
+        if (! $merge->ok && $merge->exitCode === 1) {
+            $conflicted = implode(', ', array_slice($this->releaseCandidateConflictFiles($merge->output), 0, 20));
+
+            return $this->failure(
+                (string) __('The integration conflicts; the release candidate was not created and the working tree was not touched. A person needs to resolve these files: :files', ['files' => $conflicted !== '' ? $conflicted : (string) __('(none listed)')]),
+                $merge->output,
+            );
+        }
+
+        if (! $merge->ok) {
+            return $this->failure((string) __('Could not compute the integration merge.'), $merge->message());
+        }
+
+        return (string) strtok($merge->output, "\n");
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function releaseCandidateConflictFiles(string $output): array
+    {
+        // Observed output shape (git 2.54): tree oid, the conflicted paths,
+        // then a blank line followed by informational messages. Only the
+        // section before the blank line is file names.
+        $lines = preg_split('/\R/', $output) ?: [];
+        $files = [];
+
+        foreach (array_slice($lines, 1) as $line) {
+            if (trim($line) === '') {
+                break;
+            }
+
+            $files[] = trim($line);
+        }
+
+        return $files;
+    }
+
+    /**
+     * @return array{ok: bool, message: string, detail: string|null}|null
+     */
+    private function pushReleaseCandidate(GitRepository $repo, string $commitSha): ?array
+    {
+        // The preflight absence check cannot be atomic with the push, so the push
+        // itself carries the expectation: --force-with-lease with an empty value
+        // is git's documented "must not exist" form. Measured (git 2.54): creates
+        // the branch when absent, rejects with "(stale info)" when any rc appeared
+        // since — including a descendant, which a plain push would fast-forward,
+        // letting two concurrent cuts both report success (sol's P1 on #356).
+        $pushed = $repo->run(['push', 'origin', $commitSha.':'.self::REF_HEADS_PREFIX.self::RC_BRANCH, '--force-with-lease='.self::REF_HEADS_PREFIX.self::RC_BRANCH.':'], timeout: 300);
+
+        if (! $pushed->ok && str_contains($pushed->message(), 'stale info')) {
+            return $this->failure((string) __('Refused: an rc branch appeared on origin while this cut was being prepared. Check whether another operator just cut one.'), $pushed->message());
+        }
+
+        if (! $pushed->ok) {
+            return $this->failure((string) __('Could not push rc to origin.'), $pushed->message());
+        }
+
+        return null;
     }
 
     /**

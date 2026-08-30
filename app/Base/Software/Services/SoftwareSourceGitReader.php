@@ -180,9 +180,13 @@ final class SoftwareSourceGitReader
         }
 
         $configured = $repo->configValue('belimbing.upstream-remote', timeout: $timeout);
-        $remote = $configured !== null && in_array($configured, $remotes, true)
-            ? $configured
-            : (in_array('upstream', $remotes, true) ? 'upstream' : null);
+        if ($configured !== null && in_array($configured, $remotes, true)) {
+            $remote = $configured;
+        } elseif (in_array('upstream', $remotes, true)) {
+            $remote = 'upstream';
+        } else {
+            $remote = null;
+        }
 
         if ($remote === null) {
             return null;
