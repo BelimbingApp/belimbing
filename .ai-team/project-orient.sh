@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Belimbing-specific orientation. Keep repository-local project facts here so
 # the shared operating guide and its generic mechanisms can move elsewhere.
-
-PROJECT_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
-# shellcheck source=docs/ai-team/scripts/_default_branch.sh
-# shellcheck disable=SC1091
-source "$PROJECT_DIR/_default_branch.sh"
-BASE=$(ai_team_default_branch)
-
+#
+# This file is adopter-owned and lives outside the docs/ai-team subtree. The
+# mounted orient.sh exports the resolved branch; the fallback keeps this hook
+# useful when run directly.
 set -u
+BASE="${AI_TEAM_DEFAULT_BRANCH:-$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')}"
+BASE="${BASE:-main}"
 
 echo "== Belimbing project: runtime contract =="
 php_constraint=$(jq -r '.require.php' composer.json 2>/dev/null)
