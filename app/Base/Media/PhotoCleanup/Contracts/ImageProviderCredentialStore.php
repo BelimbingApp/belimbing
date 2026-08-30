@@ -21,6 +21,7 @@ interface ImageProviderCredentialStore
 
     /**
      * @param  array{display_name: string, base_url: string, credentials?: array<string, mixed>, connection_config?: array<string, mixed>}  $attributes
+     * @param  int|null  $createdBy  The acting user's id (`users.id`), not an employee id.
      */
     public function upsert(int $companyId, string $providerKey, array $attributes, ?int $createdBy = null): void;
 

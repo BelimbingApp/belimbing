@@ -7,7 +7,6 @@ use App\Core\AI\Livewire\Providers\Providers;
 use App\Core\AI\Models\AiProvider;
 use App\Core\AI\Services\AiProviderFamilyRegistry;
 use App\Core\Company\Models\Company;
-use App\Core\Employee\Models\Employee;
 use Livewire\Livewire;
 
 function aiProviderFamily(string $key)
@@ -59,7 +58,6 @@ it('reports photoroom as connected once an api key is configured', function (): 
 
 it('maps connected llm providers into family summaries', function (): void {
     $company = Company::factory()->create();
-    $employee = Employee::factory()->create(['company_id' => $company->id]);
 
     AiProvider::query()->create([
         'company_id' => $company->id,
@@ -72,7 +70,6 @@ it('maps connected llm providers into family summaries', function (): void {
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $employee->id,
     ]);
 
     $summaries = aiProviderFamily('llm')->providers($company->id);

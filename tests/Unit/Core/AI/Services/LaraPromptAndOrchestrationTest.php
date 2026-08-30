@@ -56,7 +56,6 @@ function createLaraOrchestrationFixture(object $testCase): array
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $supervisor->id,
     ]);
 
     return $fixture;

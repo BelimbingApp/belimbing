@@ -24,7 +24,7 @@ beforeEach(function (): void {
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $this->user->employee_id,
+        'created_by_user_id' => $this->user->id,
     ]);
     $this->manager = app(OpenAiCodexAuthManager::class);
 
