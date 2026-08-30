@@ -34,7 +34,9 @@ class FrameworkPrimitivesProvisioner implements FrameworkPrimitivesProvisionerCo
         ?callable $outputCallback = null,
         ?string $bootstrapAdminFile = null,
     ) {
-        $this->outputCallback = $outputCallback ?? self::discardOutputMessage(...);
+        $this->outputCallback = $outputCallback ?? static function (string $message): void {
+            unset($message);
+        };
         $this->bootstrapAdminFile = $bootstrapAdminFile;
     }
 
@@ -292,10 +294,5 @@ class FrameworkPrimitivesProvisioner implements FrameworkPrimitivesProvisionerCo
     private function log(string $message): void
     {
         ($this->outputCallback)($message);
-    }
-
-    private static function discardOutputMessage(string $message): void
-    {
-        unset($message);
     }
 }
