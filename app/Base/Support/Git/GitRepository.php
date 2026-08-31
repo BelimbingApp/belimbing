@@ -17,6 +17,12 @@ use Throwable;
  */
 final class GitRepository
 {
+    private const LEFT_RIGHT_ARG = '--left-right';
+
+    private const COUNT_ARG = '--count';
+
+    private const AHEAD_BEHIND_PATTERN = '/^(\d+)\s+(\d+)$/';
+
     /**
      * $ambientCredentials opts a repository into the machine's own configured
      * git credential helper (needed by upstream-sync pushes, #339, which are
@@ -101,9 +107,9 @@ final class GitRepository
      */
     public function aheadBehind(int $timeout = 60): array
     {
-        $counts = $this->output(['rev-list', '--left-right', '--count', '@{u}...HEAD'], timeout: $timeout);
+        $counts = $this->output(['rev-list', self::LEFT_RIGHT_ARG, self::COUNT_ARG, '@{u}...HEAD'], timeout: $timeout);
 
-        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+        if ($counts !== null && preg_match(self::AHEAD_BEHIND_PATTERN, $counts, $matches) === 1) {
             return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
         }
 
@@ -203,9 +209,9 @@ final class GitRepository
      */
     public function aheadBehindBetween(string $base, string $tip, int $timeout = 30): ?array
     {
-        $counts = $this->output(['rev-list', '--left-right', '--count', $base.'...'.$tip], timeout: $timeout);
+        $counts = $this->output(['rev-list', self::LEFT_RIGHT_ARG, self::COUNT_ARG, $base.'...'.$tip], timeout: $timeout);
 
-        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+        if ($counts !== null && preg_match(self::AHEAD_BEHIND_PATTERN, $counts, $matches) === 1) {
             return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
         }
 
@@ -222,9 +228,9 @@ final class GitRepository
      */
     public function aheadBehindFrom(string $sha, int $timeout = 30): ?array
     {
-        $counts = $this->output(['rev-list', '--left-right', '--count', $sha.'...HEAD'], timeout: $timeout);
+        $counts = $this->output(['rev-list', self::LEFT_RIGHT_ARG, self::COUNT_ARG, $sha.'...HEAD'], timeout: $timeout);
 
-        if ($counts !== null && preg_match('/^(\d+)\s+(\d+)$/', $counts, $matches) === 1) {
+        if ($counts !== null && preg_match(self::AHEAD_BEHIND_PATTERN, $counts, $matches) === 1) {
             return ['ahead' => (int) $matches[2], 'behind' => (int) $matches[1]];
         }
 

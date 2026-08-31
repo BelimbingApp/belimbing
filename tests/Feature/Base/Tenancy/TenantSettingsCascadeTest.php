@@ -78,7 +78,7 @@ it('derives the tenant link from the company when the scope carries no tenant id
 });
 
 it('keeps definitions without tenant scope on the pre-tenancy chain', function (): void {
-    [$tenant, $company] = tenantCascadeFixtures();
+    [$tenant] = tenantCascadeFixtures();
     $settings = app(SettingsService::class);
 
     // Tenant-scoped writes are rejected for definitions that do not allow it.
@@ -101,7 +101,7 @@ it('ignores tenant rows for definitions that do not declare tenant scope', funct
 
 it('does not cross tenant boundaries', function (): void {
     [$tenantA, $companyA] = tenantCascadeFixtures();
-    [$tenantB, $companyB] = createTenantWithCompany(['name' => 'Other Tenant']);
+    [, $companyB] = createTenantWithCompany(['name' => 'Other Tenant']);
     $settings = app(SettingsService::class);
 
     $settings->set('zz_tenant.onboarding', 'tenA', Scope::tenant($tenantA->id));
