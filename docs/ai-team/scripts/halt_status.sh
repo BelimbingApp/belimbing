@@ -5,7 +5,7 @@
 set -u
 
 repo="${1:-}"
-if [ -z "$repo" ]; then
+if [[ -z "$repo" ]]; then
   echo "usage: halt_status.sh <owner/repository>" >&2
   exit 2
 fi
@@ -18,7 +18,7 @@ if ! halt=$(gh issue list --repo "$repo" --state open --label "ops:halt" \
   exit 2
 fi
 
-if [ -n "$halt" ]; then
+if [[ -n "$halt" ]]; then
   echo "  *** STAND DOWN — a halt is active ***"
   printf '%s\n' "$halt"
   echo "  Finish or hand off your current PR, run docs/ai-team/scripts/cleanup.sh,"

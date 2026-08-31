@@ -147,7 +147,7 @@ test('a valid saved override becomes the effective cadence with the default show
         ->and($task->nextRunAt->format('i G'))->toBe('15 6');
 });
 
-test('validation refuses malformed expressions with specific errors and persists nothing', function (string $draft, string $needle): void {
+test('validation refuses malformed expressions with specific errors and persists nothing', function (string $draft): void {
     [, $key] = overrideTestEvent();
     $this->actingAs(createAdminUser());
 
@@ -159,11 +159,11 @@ test('validation refuses malformed expressions with specific errors and persists
 
     expect(ScheduleOverride::query()->count())->toBe(0);
 })->with([
-    'empty' => ['   ', 'empty'],
-    'four fields' => ['* * * *', 'five fields'],
-    'six fields' => ['* * * * * *', 'five fields'],
-    'out-of-range minute' => ['61 * * * *', 'valid cron'],
-    'nonsense' => ['banana * * * *', 'valid cron'],
+    'empty' => ['   '],
+    'four fields' => ['* * * *'],
+    'six fields' => ['* * * * * *'],
+    'out-of-range minute' => ['61 * * * *'],
+    'nonsense' => ['banana * * * *'],
 ]);
 
 test('harmless whitespace is normalized, never reinterpreted', function (): void {

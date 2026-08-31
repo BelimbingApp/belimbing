@@ -41,8 +41,8 @@ REPO="${BOARD_REPO:-$(ai_team_origin_repo 2>/dev/null || true)}"
 # is not a GitHub URL still has a repository gh can name. Order matters — origin
 # is asked first because it is the repo this checkout belongs to, and gh can be
 # pointed elsewhere by remote.<name>.gh-resolved.
-[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
-if [ -z "$REPO" ]; then
+[[ -n "$REPO" ]] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+if [[ -z "$REPO" ]]; then
   echo "board.sh: cannot determine the repository. Set BOARD_REPO=<owner>/<repo>," >&2
   echo "or run inside a checkout whose origin remote points at a GitHub repository." >&2
   exit 2
@@ -62,17 +62,17 @@ usage() {
 }
 
 command="${1:-}"
-[ -n "$command" ] || usage
+[[ -n "$command" ]] || usage
 shift
 
 post() {
   local number="" agent="${CLAIM_AGENT:-${BOARD_AGENT:-}}" type="" body="" body_file=""
 
   number="${1:-}"
-  [ -n "$number" ] || { echo "post: issue/PR number required" >&2; exit 2; }
+  [[ -n "$number" ]] || { echo "post: issue/PR number required" >&2; exit 2; }
   shift
 
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --agent) agent="${2:-}"; shift 2 ;;
       --type) type="${2:-}"; shift 2 ;;
@@ -81,7 +81,7 @@ post() {
     esac
   done
 
-  if [ -z "$agent" ]; then
+  if [[ -z "$agent" ]]; then
     echo "post: agent id required (--agent, CLAIM_AGENT, or BOARD_AGENT)" >&2
     exit 2
   fi
@@ -102,12 +102,12 @@ post() {
       ;;
   esac
 
-  if [ -n "$body_file" ]; then
+  if [[ -n "$body_file" ]]; then
     body=$(cat "$body_file") || exit 2
-  elif [ -z "$body" ] && [ ! -t 0 ]; then
+  elif [[ -z "$body" ]] && [[ ! -t 0 ]]; then
     body=$(cat)
   fi
-  [ -n "$body" ] || { echo "post: empty body" >&2; exit 2; }
+  [[ -n "$body" ]] || { echo "post: empty body" >&2; exit 2; }
 
   # Split at the last line boundary inside the budget: the visible part stays
   # scannable, the remainder survives for humans inside a fold that digest
@@ -117,9 +117,9 @@ post() {
   # under a UTF-8 locale while head -c counts bytes — so all arithmetic here is
   # in bytes (wc -c / tail -c), and a partial trailing sequence is dropped from
   # the visible part (iconv -c) into the fold, conserving every input byte.
-  local visible="$body" folded="" total_bytes visible_bytes trimmed
+  local visible="$body" folded="" total_bytes visible_bytes
   total_bytes=$(printf '%s' "$body" | wc -c)
-  if [ "$total_bytes" -gt "$BUDGET" ]; then
+  if [[ "$total_bytes" -gt "$BUDGET" ]]; then
     visible=$(printf '%s' "$body" | head -c "$BUDGET")
     case "$visible" in
       *$'\n'*) visible="${visible%$'\n'*}" ;;
@@ -148,7 +148,7 @@ post() {
 
   {
     printf '**From:** %s\n\n**Type:** %s\n\n%s\n' "$agent" "$type" "$visible"
-    if [ -n "$folded" ]; then
+    if [[ -n "$folded" ]]; then
       printf '\n<details>\n<summary>full detail (folded by board.sh — over the %s-byte visible budget)</summary>\n\n%s\n\n</details>\n' "$BUDGET" "$folded"
     fi
   } | gh issue comment "$number" --repo "$REPO" --body-file -
@@ -156,7 +156,7 @@ post() {
 
 digest() {
   local number="${1:-}"
-  [ -n "$number" ] || { echo "digest: issue/PR number required" >&2; exit 2; }
+  [[ -n "$number" ]] || { echo "digest: issue/PR number required" >&2; exit 2; }
 
   # gh's built-in --jq lacks --arg and full regex support; gate.sh's idiom —
   # fetch JSON with gh, transform with the real jq binary — applies here too.
@@ -170,7 +170,7 @@ digest() {
   issue_json=$(gh issue view "$number" --repo "$REPO" --json number,title,state,labels,comments 2>/dev/null) \
     || { echo "digest: could not read #$number from $REPO" >&2; exit 1; }
   reviews_json=$(gh api "repos/$REPO/pulls/$number/reviews" --paginate 2>/dev/null | jq -s 'add // []' 2>/dev/null) || reviews_json='[]'
-  [ -n "$reviews_json" ] || reviews_json='[]'
+  [[ -n "$reviews_json" ]] || reviews_json='[]'
 
   printf '%s' "$issue_json" \
     | jq -r --argjson lines "$DIGEST_LINES" --arg bots "$BOTS" --argjson reviews "$reviews_json" '
@@ -245,7 +245,7 @@ hygiene() {
       --jq '.[] | select([.labels[].name] | any(startswith("agent:"))) | .number' 2>/dev/null
   } | sort -un )
 
-  [ -n "$items" ] || { echo "  (no active lanes, or gh unavailable)"; return 0; }
+  [[ -n "$items" ]] || { echo "  (no active lanes, or gh unavailable)"; return 0; }
 
   local n count clean=1
   for n in $items; do
@@ -261,12 +261,12 @@ hygiene() {
            | select(is_bot | not)
            | select(from_agent == "")]
           | length' 2>/dev/null) || continue
-    if [ -n "$count" ] && [ "$count" -gt 0 ]; then
+    if [[ -n "$count" ]] && [[ "$count" -gt 0 ]]; then
       echo "  #$n has $count unstructured post(s) — post via board.sh so tooling can see them"
       clean=0
     fi
   done
-  if [ "$clean" -eq 1 ]; then
+  if [[ "$clean" -eq 1 ]]; then
     echo "  ok      every post on active lanes carries the machine header"
   fi
   return 0

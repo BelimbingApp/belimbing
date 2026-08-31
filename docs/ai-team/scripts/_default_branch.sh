@@ -39,7 +39,7 @@ ai_team_origin_repo() {
 }
 
 ai_team_default_branch() {
-  if [ -n "${_AI_TEAM_BASE_BRANCH_CACHE:-}" ]; then
+  if [[ -n "${_AI_TEAM_BASE_BRANCH_CACHE:-}" ]]; then
     printf '%s' "$_AI_TEAM_BASE_BRANCH_CACHE"
     return 0
   fi
@@ -51,21 +51,21 @@ ai_team_default_branch() {
   # substituting an inferred branch for the one an operator named would be the
   # worst outcome available: they asked for X, got Y, and were not told. If the
   # branch is wrong the next git command says so, loudly and with the real name.
-  if [ -n "${AI_TEAM_BASE_BRANCH:-}" ]; then
+  if [[ -n "${AI_TEAM_BASE_BRANCH:-}" ]]; then
     _AI_TEAM_BASE_BRANCH_CACHE="$AI_TEAM_BASE_BRANCH"
     printf '%s' "$_AI_TEAM_BASE_BRANCH_CACHE"
     return 0
   fi
 
-  if origin_repo=$(ai_team_origin_repo) && [ -n "$origin_repo" ]; then
+  if origin_repo=$(ai_team_origin_repo) && [[ -n "$origin_repo" ]]; then
     reported=$(gh repo view "$origin_repo" --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null) || reported=""
-    [ "$reported" = "null" ] && reported=""
-    [ -n "$reported" ] && candidates+=("$reported")
+    [[ "$reported" = "null" ]] && reported=""
+    [[ -n "$reported" ]] && candidates+=("$reported")
   fi
 
   head_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || head_ref=""
   head_ref="${head_ref#origin/}"
-  [ -n "$head_ref" ] && candidates+=("$head_ref")
+  [[ -n "$head_ref" ]] && candidates+=("$head_ref")
 
   candidates+=(main master)
 
@@ -73,7 +73,7 @@ ai_team_default_branch() {
   # stale refs/remotes/origin/HEAD naming a deleted branch, and anything a
   # misconfigured or stubbed `gh` reports that is not a branch at all.
   for candidate in "${candidates[@]}"; do
-    [ -n "$candidate" ] || continue
+    [[ -n "$candidate" ]] || continue
     if git show-ref --verify --quiet "refs/remotes/origin/$candidate" 2>/dev/null; then
       chosen="$candidate"
       break
@@ -87,12 +87,12 @@ ai_team_default_branch() {
   # Nothing verifiable — a fresh checkout with no remote refs, or offline. Take
   # the first stated preference so behaviour is unchanged from before this
   # resolver existed.
-  if [ -z "$chosen" ]; then
+  if [[ -z "$chosen" ]]; then
     for candidate in "${candidates[@]}"; do
-      [ -n "$candidate" ] && { chosen="$candidate"; break; }
+      [[ -n "$candidate" ]] && { chosen="$candidate"; break; }
     done
   fi
-  [ -n "$chosen" ] || chosen="main"
+  [[ -n "$chosen" ]] || chosen="main"
 
   _AI_TEAM_BASE_BRANCH_CACHE="$chosen"
   printf '%s' "$chosen"

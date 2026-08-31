@@ -23,7 +23,7 @@ source "$CLEANUP_DIR/_default_branch.sh"
 BASE=$(ai_team_default_branch)
 
 apply=0
-[ "${1:-}" = "--yes" ] && apply=1
+[[ "${1:-}" = "--yes" ]] && apply=1
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git checkout" >&2; exit 2; }
 cd "$ROOT" || exit 2
@@ -37,13 +37,13 @@ echo "== merged local branches (every commit already in origin/$BASE) =="
 current=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)   # "HEAD" when detached
 any=0
 while IFS= read -r b; do
-  [ -z "$b" ] && continue
-  [ "$b" = "$BASE" ] && continue
+  [[ -z "$b" ]] && continue
+  [[ "$b" = "$BASE" ]] && continue
   git merge-base --is-ancestor "$b" "origin/$BASE" 2>/dev/null || continue
   any=1
-  if [ "$b" = "$current" ]; then
+  if [[ "$b" = "$current" ]]; then
     echo "  $b — current branch; detach (git checkout --detach origin/$BASE) then re-run"
-  elif [ "$apply" -eq 1 ]; then
+  elif [[ "$apply" -eq 1 ]]; then
     if git branch -D "$b" >/dev/null 2>&1; then
       echo "  deleted $b"
     else
@@ -53,25 +53,25 @@ while IFS= read -r b; do
     echo "  would delete $b"
   fi
 done < <(git for-each-ref --format='%(refname:short)' refs/heads/)
-[ "$any" -eq 0 ] && echo "  none"
+[[ "$any" -eq 0 ]] && echo "  none"
 
 echo
 echo "== unmerged local branches (left alone — verify before deleting by hand) =="
 any=0
 while IFS= read -r b; do
-  [ -z "$b" ] || [ "$b" = "$BASE" ] && continue
+  [[ -z "$b" ]] || [[ "$b" = "$BASE" ]] && continue
   git merge-base --is-ancestor "$b" "origin/$BASE" 2>/dev/null && continue
   echo "  $b"
   any=1
 done < <(git for-each-ref --format='%(refname:short)' refs/heads/)
-[ "$any" -eq 0 ] && echo "  none"
+[[ "$any" -eq 0 ]] && echo "  none"
 
 echo
 echo "== worktrees =="
 git worktree list 2>/dev/null | sed 's/^/  /'
-if [ "$apply" -eq 1 ]; then
+if [[ "$apply" -eq 1 ]]; then
   pruned=$(git worktree prune -v 2>&1)
-  [ -n "$pruned" ] && printf '%s\n' "$pruned" | sed 's/^/  pruned: /' || echo "  nothing stale to prune"
+  [[ -n "$pruned" ]] && printf '%s\n' "$pruned" | sed 's/^/  pruned: /' || echo "  nothing stale to prune"
   echo "  note: your own active worktree cannot self-remove; run 'git worktree remove <path>'"
   echo "        from another checkout once this session ends."
 else
@@ -85,7 +85,7 @@ echo "== loops still running under you — cancel these in your tool =="
 loops=$(ps -eo pid,args 2>/dev/null \
   | grep -E 'gate\.sh [0-9]+|pulls/[0-9]+/merge|for i in .*\$\(seq|gh pr (view|checks) [0-9]+' \
   | grep -vE 'grep|cleanup\.sh')
-if [ -z "$loops" ]; then
+if [[ -z "$loops" ]]; then
   echo "  none detected (heuristic — also cancel any heartbeat/scheduled wakeup you set)"
 else
   printf '%s\n' "$loops" | sed 's/^/  /'

@@ -4,6 +4,7 @@
 declare(strict_types=1);
 
 const DEFAULT_DESCRIPTOR = __DIR__.'/domain-repos.json';
+const COMMIT_SHA_PATTERN = '/^[0-9a-f]{40}$/';
 
 function fail(string $message): never
 {
@@ -33,7 +34,7 @@ function descriptor(string $path): array
         if (preg_match('#^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$#', $domain['repo']) !== 1) {
             fail("{$id}.repo is not an owner/repository slug");
         }
-        if (preg_match('/^[0-9a-f]{40}$/', $domain['ref']) !== 1) {
+        if (preg_match(COMMIT_SHA_PATTERN, $domain['ref']) !== 1) {
             fail("{$id}.ref must be an immutable 40-character commit SHA");
         }
     }
@@ -47,7 +48,7 @@ function render(array $data, string $id, string $workflowRef): string
     if (! isset($data['domains'][$id])) {
         fail("unknown domain {$id}");
     }
-    if (preg_match('/^[0-9a-f]{40}$/', $workflowRef) !== 1) {
+    if (preg_match(COMMIT_SHA_PATTERN, $workflowRef) !== 1) {
         fail('workflow ref must be an immutable 40-character commit SHA');
     }
 
@@ -81,7 +82,7 @@ function resolve(array $data, string $id, string $callerRepository, string $work
     if (! isset($data['domains'][$id]) || ! is_array($data['domains'][$id])) {
         fail("unknown domain {$id}");
     }
-    if (preg_match('/^[0-9a-f]{40}$/', $workflowRef) !== 1) {
+    if (preg_match(COMMIT_SHA_PATTERN, $workflowRef) !== 1) {
         fail('workflow ref must be an immutable 40-character commit SHA');
     }
     $domain = $data['domains'][$id];

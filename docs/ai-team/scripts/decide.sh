@@ -62,8 +62,8 @@ DECIDE_DIR="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
 # shellcheck disable=SC1091
 source "$DECIDE_DIR/_default_branch.sh"
 REPO="${DECIDE_REPO:-${BOARD_REPO:-$(ai_team_origin_repo 2>/dev/null || true)}}"
-[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
-if [ -z "$REPO" ]; then
+[[ -n "$REPO" ]] || REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)
+if [[ -z "$REPO" ]]; then
   echo "decide.sh: cannot determine the repository. Set DECIDE_REPO or BOARD_REPO," >&2
   echo "or run inside a checkout whose origin remote points at a GitHub repository." >&2
   exit 2
@@ -87,7 +87,7 @@ usage() {
 }
 
 command="${1:-}"
-[ -n "$command" ] || usage
+[[ -n "$command" ]] || usage
 shift
 
 agent="${CLAIM_AGENT:-}"
@@ -143,7 +143,7 @@ active_agents() {
 # it — #436 review, terra P4).
 quorum_required_for() {
   local roster_count="$1"
-  if [ "$roster_count" -ge 3 ]; then
+  if [[ "$roster_count" -ge 3 ]]; then
     printf '3'
   else
     printf '%s' "$roster_count"
@@ -272,7 +272,7 @@ propose() {
 
   local id="" question="" options_csv="" recommend="" deadline_minutes="$MAX_DEADLINE_MINUTES"
   local body=""
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
       --question) question="${2:-}"; shift 2 ;;
@@ -284,11 +284,11 @@ propose() {
   done
 
   require_agent
-  [ -n "$id" ] || { echo "propose: --id required" >&2; exit 2; }
+  [[ -n "$id" ]] || { echo "propose: --id required" >&2; exit 2; }
   require_decision_id "$id"
-  [ -n "$question" ] || { echo "propose: --question required" >&2; exit 2; }
-  [ -n "$options_csv" ] || { echo "propose: --options required (comma-separated)" >&2; exit 2; }
-  [ -n "$recommend" ] || { echo "propose: --recommend required" >&2; exit 2; }
+  [[ -n "$question" ]] || { echo "propose: --question required" >&2; exit 2; }
+  [[ -n "$options_csv" ]] || { echo "propose: --options required (comma-separated)" >&2; exit 2; }
+  [[ -n "$recommend" ]] || { echo "propose: --recommend required" >&2; exit 2; }
   # #430 requires evidence/trade-offs on the proposal, not just a bare
   # question — fail closed rather than accept a blank body (#436 review,
   # terra P4, and whitespace-only closed by terra P2).
@@ -296,7 +296,7 @@ propose() {
     echo "propose: evidence is required — pass trade-offs, costs, risks, reversibility, and what a wrong answer would break as trailing text; a bare or whitespace-only question is not a proposal" >&2
     exit 2
   }
-  [[ "$deadline_minutes" =~ ^[0-9]+$ ]] && [ "$deadline_minutes" -ge 1 ] && [ "$deadline_minutes" -le "$MAX_DEADLINE_MINUTES" ] || {
+  [[ "$deadline_minutes" =~ ^[0-9]+$ ]] && [[ "$deadline_minutes" -ge 1 ]] && [[ "$deadline_minutes" -le "$MAX_DEADLINE_MINUTES" ]] || {
     echo "propose: --deadline-minutes must be 1..$MAX_DEADLINE_MINUTES (one heartbeat)" >&2
     exit 2
   }
@@ -308,7 +308,7 @@ propose() {
   for opt in "${options[@]}"; do
     trimmed="${opt#"${opt%%[![:space:]]*}"}"
     trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-    [ -n "$trimmed" ] || { echo "propose: empty option in --options" >&2; exit 2; }
+    [[ -n "$trimmed" ]] || { echo "propose: empty option in --options" >&2; exit 2; }
     [[ "$trimmed" =~ $OPTION_RE ]] || { echo "propose: option '$trimmed' has characters outside [A-Za-z0-9 _.-] (commas separate options, so they cannot appear inside one)" >&2; exit 2; }
     case ",$seen," in
       *",$trimmed,"*) echo "propose: duplicate option '$trimmed'" >&2; exit 2 ;;
@@ -316,7 +316,7 @@ propose() {
     seen="${seen:+$seen,}$trimmed"
     clean_options+=("$trimmed")
   done
-  [ "${#clean_options[@]}" -ge 2 ] || { echo "propose: need at least 2 distinct options" >&2; exit 2; }
+  [[ "${#clean_options[@]}" -ge 2 ]] || { echo "propose: need at least 2 distinct options" >&2; exit 2; }
   case ",$seen," in
     *",$recommend,"*) ;;
     *) echo "propose: --recommend '$recommend' is not one of the declared --options" >&2; exit 2 ;;
@@ -328,7 +328,7 @@ propose() {
   local existing
   existing=$(printf '%s' "$comments" | jq -r --arg id "$id" "$DECIDE_JQ_COMMON"'
     [.comments[] | select(structured($id) and decide_type == "proposal")] | length' 2>/dev/null || echo 0)
-  if [ "${existing:-0}" -gt 0 ]; then
+  if [[ "${existing:-0}" -gt 0 ]]; then
     echo "propose: decision id '$id' already has a proposal on #$issue — decision ids are permanent per issue, pick a new one" >&2
     exit 1
   fi
@@ -357,7 +357,7 @@ propose() {
     exit 2
   }
   echo "proposed '$id' on #$issue — options: $seen — deadline $deadline"
-  if [ -n "$notify_roster" ]; then
+  if [[ -n "$notify_roster" ]]; then
     echo "notify the active roster now (cross-session messaging, or a board post) so this round isn't decided only by whoever happens to read the issue: $notify_roster"
   fi
 }
@@ -367,7 +367,7 @@ vote() {
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "vote: issue number required" >&2; exit 2; }
 
   local id="" option="" body=""
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
       --option) option="${2:-}"; shift 2 ;;
@@ -376,9 +376,9 @@ vote() {
   done
 
   require_agent
-  [ -n "$id" ] || { echo "vote: --id required" >&2; exit 2; }
+  [[ -n "$id" ]] || { echo "vote: --id required" >&2; exit 2; }
   require_decision_id "$id"
-  [ -n "$option" ] || { echo "vote: --option required" >&2; exit 2; }
+  [[ -n "$option" ]] || { echo "vote: --option required" >&2; exit 2; }
   case "$option" in
     *,*) echo "vote: --option must name exactly one option, not a list" >&2; exit 2 ;;
   esac
@@ -399,7 +399,7 @@ vote() {
     def notify: one_capture_raw("^\\*\\*Notify:\\*\\*[[:space:]]*(?<v>.*)$");
     [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, notify: notify, proposer: from_agent, createdAt}]
     | if length == 1 then .[0] else null end' 2>/dev/null)
-  if [ -z "$proposal" ] || [ "$proposal" = "null" ]; then
+  if [[ -z "$proposal" ]] || [[ "$proposal" = "null" ]]; then
     echo "vote: no open proposal '$id' found on #$issue — check the id, or propose it first" >&2
     exit 1
   fi
@@ -415,7 +415,7 @@ vote() {
   local closed
   closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$vote_options_json" --argjson eligible "$vote_eligible_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
     [.comments[] | select(structured($id) and valid_decision($opts; $eligible; $na))] | length' 2>/dev/null || echo 0)
-  if [ "${closed:-0}" -gt 0 ]; then
+  if [[ "${closed:-0}" -gt 0 ]]; then
     echo "vote: '$id' on #$issue is already closed — this round is over" >&2
     exit 1
   fi
@@ -452,7 +452,7 @@ notify() {
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "notify: issue number required" >&2; exit 2; }
 
   local id="" acknowledged_csv=""
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
       --acknowledged) acknowledged_csv="${2:-}"; shift 2 ;;
@@ -461,9 +461,9 @@ notify() {
   done
 
   require_agent
-  [ -n "$id" ] || { echo "notify: --id required" >&2; exit 2; }
+  [[ -n "$id" ]] || { echo "notify: --id required" >&2; exit 2; }
   require_decision_id "$id"
-  [ -n "$acknowledged_csv" ] || { echo "notify: --acknowledged <agent-csv> required — who specifically is confirmed reached" >&2; exit 2; }
+  [[ -n "$acknowledged_csv" ]] || { echo "notify: --acknowledged <agent-csv> required — who specifically is confirmed reached" >&2; exit 2; }
 
   local -a ack_ids=()
   local a trimmed
@@ -482,7 +482,7 @@ notify() {
   local proposal_exists
   proposal_exists=$(printf '%s' "$comments" | jq -r --arg id "$id" "$DECIDE_JQ_COMMON"'
     [.comments[] | select(structured($id) and decide_type == "proposal")] | length' 2>/dev/null || echo 0)
-  if [ "${proposal_exists:-0}" -eq 0 ]; then
+  if [[ "${proposal_exists:-0}" -eq 0 ]]; then
     echo "notify: no proposal '$id' found on #$issue — check the id, or propose it first" >&2
     exit 1
   fi
@@ -526,7 +526,7 @@ close() {
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "close: issue number required" >&2; exit 2; }
 
   local id="" decision="" rationale="" owner="" revisit="" authority_effect="" owner_delegation=""
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --id) id="${2:-}"; shift 2 ;;
       --decision) decision="${2:-}"; shift 2 ;;
@@ -539,7 +539,7 @@ close() {
     esac
   done
 
-  if [ -n "$authority_effect" ] && [ "$authority_effect" != "none" ] && [ "$authority_effect" != "self" ]; then
+  if [[ -n "$authority_effect" ]] && [[ "$authority_effect" != "none" ]] && [[ "$authority_effect" != "self" ]]; then
     echo "close: --authority-effect must be 'none' or 'self'" >&2
     exit 2
   fi
@@ -551,7 +551,7 @@ close() {
   # does enforce is structure — a delegation must point at something
   # concrete (a URL or #<issue>), never a bare unsubstantiated assertion —
   # and record it on the decision for anyone to audit afterward.
-  if [ -n "$owner_delegation" ]; then
+  if [[ -n "$owner_delegation" ]]; then
     case "$owner_delegation" in
       *http://*|*https://*|*'#'[0-9]*) ;;
       *)
@@ -566,14 +566,14 @@ close() {
     # not-applicable sentinel — when Authority-Effect is self. Refuse the
     # accepted-but-unclosable input at the source instead of letting it
     # reach the payload.
-    if [ "$authority_effect" != "self" ]; then
+    if [[ "$authority_effect" != "self" ]]; then
       echo "close: --owner-delegation only applies when --authority-effect self is also declared — this round does not claim to expand the closer's own authority, so there is nothing to delegate" >&2
       exit 2
     fi
   fi
 
   require_agent
-  [ -n "$id" ] || { echo "close: --id required" >&2; exit 2; }
+  [[ -n "$id" ]] || { echo "close: --id required" >&2; exit 2; }
   require_decision_id "$id"
   owner="${owner:-$agent}"
   if [[ ! "$owner" =~ $AGENT_RE ]]; then
@@ -591,7 +591,7 @@ close() {
     def notify: one_capture_raw("^\\*\\*Notify:\\*\\*[[:space:]]*(?<v>.*)$");
     [.comments[] | select(structured($id) and decide_type == "proposal") | {options: opts, deadline: deadline, notify: notify, createdAt, proposer: from_agent}]
     | if length == 1 then .[0] else null end' 2>/dev/null)
-  if [ -z "$proposal" ] || [ "$proposal" = "null" ]; then
+  if [[ -z "$proposal" ]] || [[ "$proposal" = "null" ]]; then
     echo "close: no proposal '$id' found on #$issue" >&2
     exit 1
   fi
@@ -613,13 +613,13 @@ close() {
   local already_closed
   already_closed=$(printf '%s' "$comments" | jq -r --arg id "$id" --argjson opts "$options_json" --argjson eligible "$snapshot_json" --arg na "$NOT_APPLICABLE" "$DECIDE_JQ_COMMON"'
     [.comments[] | select(structured($id) and valid_decision($opts; $eligible; $na))] | length' 2>/dev/null || echo 0)
-  if [ "${already_closed:-0}" -gt 0 ]; then
+  if [[ "${already_closed:-0}" -gt 0 ]]; then
     echo "close: '$id' on #$issue is already closed" >&2
     exit 1
   fi
 
   local roster_count; roster_count=$(printf '%s' "$roster_json" | jq 'length')
-  if [ "$roster_count" -eq 0 ]; then
+  if [[ "$roster_count" -eq 0 ]]; then
     echo "close: no currently active agents found (open PRs or open agent:* issues) — cannot establish a quorum roster; check gh connectivity before closing" >&2
     exit 2
   fi
@@ -686,12 +686,12 @@ close() {
   # when roster_count < 3, so one comparison covers both branches of #430's
   # quorum rule without duplicating it (status() shares this via
   # quorum_required_for rather than re-deriving it, #436 review, terra P4).
-  [ "$voter_count" -ge "$quorum_required" ] && quorum_met="true"
+  [[ "$voter_count" -ge "$quorum_required" ]] && quorum_met="true"
 
   local now_epoch deadline_epoch deadline_passed="false"
   now_epoch=$(date -u +%s)
   deadline_epoch=$(date -u -d "$deadline_str" +%s 2>/dev/null || date -u -jf '%Y-%m-%dT%H:%M:%SZ' "$deadline_str" +%s 2>/dev/null)
-  if [ -n "${deadline_epoch:-}" ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+  if [[ -n "${deadline_epoch:-}" ]] && [[ "$now_epoch" -ge "$deadline_epoch" ]]; then
     deadline_passed="true"
   fi
 
@@ -700,10 +700,10 @@ close() {
   local leaders_json; leaders_json=$(printf '%s' "$tally_json" | jq -c --argjson top "$top_count" '[.[] | select(.count == $top) | .option]')
   local leader_count; leader_count=$(printf '%s' "$leaders_json" | jq 'length')
   local is_tie="false"
-  [ "$top_count" -gt 0 ] && [ "$leader_count" -gt 1 ] && is_tie="true"
+  [[ "$top_count" -gt 0 ]] && [[ "$leader_count" -gt 1 ]] && is_tie="true"
 
   local tally_summary; tally_summary=$(printf '%s' "$tally_json" | jq -r 'map("\(.option)=\(.count)") | join(", ")')
-  [ -n "$tally_summary" ] || tally_summary="(no valid votes recorded)"
+  [[ -n "$tally_summary" ]] || tally_summary="(no valid votes recorded)"
 
   # Resolution is a stable, machine-readable token naming exactly which of
   # close()'s three branches produced this record — terra's #436 P2: a
@@ -718,11 +718,11 @@ close() {
   # keep in sync, derived directly from the branch already taken below
   # rather than invented separately.
   local chosen="" needs_rationale="false" quorum_note="" resolution=""
-  if [ "$quorum_met" = "true" ] && [ "$is_tie" = "false" ] && [ "$top_count" -gt 0 ]; then
+  if [[ "$quorum_met" = "true" ]] && [[ "$is_tie" = "false" ]] && [[ "$top_count" -gt 0 ]]; then
     chosen=$(printf '%s' "$leaders_json" | jq -r '.[0]')
     quorum_note="met (active=$roster_count, voted=$voter_count)"
     resolution="majority"
-    if [ -n "$decision" ] && [ "$decision" != "$chosen" ]; then
+    if [[ -n "$decision" ]] && [[ "$decision" != "$chosen" ]]; then
       echo "close: --decision '$decision' overrides a clear quorum majority of '$chosen' — that is exactly the override the authority stack forbids without a recorded reason; use it only when the majority itself is the tie/expired case, or drop --decision to accept '$chosen'" >&2
       exit 2
     fi
@@ -737,15 +737,15 @@ close() {
     # prior round in this sequence hardened). Refuse rather than silently
     # drop what the closer wrote — discarding it would be its own
     # dishonesty.
-    if [ -n "$rationale" ] || [ -n "$authority_effect" ] || [ -n "$owner_delegation" ]; then
+    if [[ -n "$rationale" ]] || [[ -n "$authority_effect" ]] || [[ -n "$owner_delegation" ]]; then
       echo "close: --rationale/--authority-effect/--owner-delegation only apply on the tie or expired-deadline path — this is a clear quorum majority (Resolution: majority), so none of them belong on this close; drop them and re-run" >&2
       exit 2
     fi
-  elif [ "$quorum_met" = "true" ] && [ "$is_tie" = "true" ]; then
+  elif [[ "$quorum_met" = "true" ]] && [[ "$is_tie" = "true" ]]; then
     needs_rationale="true"
     resolution="tie"
     quorum_note="met but tied (active=$roster_count, voted=$voter_count, tied: $(printf '%s' "$leaders_json" | jq -r 'join(", ")'))"
-  elif [ "$deadline_passed" = "true" ]; then
+  elif [[ "$deadline_passed" = "true" ]]; then
     needs_rationale="true"
     resolution="expired"
     quorum_note="not met by the deadline (active=$roster_count, voted=$voter_count) — round does not stall, the deciding agent records the available tally"
@@ -754,13 +754,13 @@ close() {
     exit 1
   fi
 
-  if [ "$needs_rationale" = "true" ]; then
+  if [[ "$needs_rationale" = "true" ]]; then
     # terra's #436 P2: propose/vote guard evidence/rationale with
     # is_blank() (whitespace is not content); close()'s own rationale
     # check was still the bare `[ -n ]` this whole sequence had already
     # fixed twice elsewhere.
     is_blank "$rationale" && rationale=""
-    [ -n "$decision" ] && [ -n "$rationale" ] && [ -n "$authority_effect" ] || {
+    [[ -n "$decision" ]] && [[ -n "$rationale" ]] && [[ -n "$authority_effect" ]] || {
       echo "close: quorum is $quorum_note — this requires an explicit --decision <option>, --rationale \"<why, tied to the authority stack>\", and --authority-effect none|self from the closer; the script does not guess a tie-break" >&2
       exit 2
     }
@@ -773,7 +773,7 @@ close() {
     # fix is refusing that exact literal as real content at the source, so
     # no value close() ever writes into Tie-Break can be ambiguous between
     # "the closer said this" and "the field does not apply here".
-    if [ "$(printf '%s' "$rationale" | tr '[:upper:]' '[:lower:]')" = "$NOT_APPLICABLE" ]; then
+    if [[ "$(printf '%s' "$rationale" | tr '[:upper:]' '[:lower:]')" = "$NOT_APPLICABLE" ]]; then
       echo "close: --rationale cannot literally be \"$NOT_APPLICABLE\" — that string is reserved to mean this field does not apply, and a real tie-break reason can never collide with it" >&2
       exit 2
     fi
@@ -784,7 +784,7 @@ close() {
     # affects — so the closer must declare it explicitly, on the record,
     # rather than the rule living in prose the closer can silently ignore
     # (opus-5's #436 review: the one rule here with no mechanism).
-    if [ "$authority_effect" = "self" ] && [ -z "$owner_delegation" ]; then
+    if [[ "$authority_effect" = "self" ]] && [[ -z "$owner_delegation" ]]; then
       echo "close: refusing — --authority-effect self declares this round would expand, waive, or transfer the closer's own authority; a different closer must close it, it waits past this deadline for one, or an explicit --owner-delegation <durable link> naming the owner's specific delegation of this exact permission overrides — once, for this decision only, never silently and never inferred from silence" >&2
       exit 2
     fi
@@ -792,11 +792,11 @@ close() {
     case ",$options_csv," in
       *",$decision,"*) ok=1 ;;
     esac
-    [ -n "$ok" ] || { echo "close: --decision '$decision' is not one of the proposal's declared options ($options_csv)" >&2; exit 2; }
+    [[ -n "$ok" ]] || { echo "close: --decision '$decision' is not one of the proposal's declared options ($options_csv)" >&2; exit 2; }
     chosen="$decision"
   fi
 
-  [ -n "$revisit" ] || revisit="new evidence that changes the trade-offs recorded above, or an explicit owner override"
+  [[ -n "$revisit" ]] || revisit="new evidence that changes the trade-offs recorded above, or an explicit owner override"
 
   local minority
   minority=$(printf '%s' "$votes" | jq -r --arg chosen "$chosen" -c '
@@ -805,7 +805,7 @@ close() {
     | map(.[0])
     | .[]
     | "- \(.agent) → \(.option)"' 2>/dev/null)
-  [ -n "$minority" ] || minority="(no dissenting votes recorded)"
+  [[ -n "$minority" ]] || minority="(no dissenting votes recorded)"
 
   # Every field is built in one printf with explicit embedded newlines —
   # never by repeated `payload="${payload}<field>\n"` concatenation, which
@@ -857,7 +857,7 @@ status() {
   [[ "$issue" =~ ^[0-9]+$ ]] || { echo "status: issue number required" >&2; exit 2; }
 
   local only_id=""
-  while [ $# -gt 0 ]; do
+  while [[ $# -gt 0 ]]; do
     case "$1" in
       --id) only_id="${2:-}"; shift 2 ;;
       *) shift ;;
@@ -900,13 +900,13 @@ status() {
     | unique')
 
   local rows; rows=$(printf '%s' "$proposals" | jq -c --argjson closed "$closed_ids" '[.[] | select(([.id] | inside($closed)) | not)]')
-  if [ -n "$only_id" ]; then
+  if [[ -n "$only_id" ]]; then
     rows=$(printf '%s' "$rows" | jq -c --arg id "$only_id" '[.[] | select(.id == $id)]')
   fi
 
   local count; count=$(printf '%s' "$rows" | jq 'length')
-  if [ "$count" -eq 0 ]; then
-    [ -n "$only_id" ] && echo "status: '$only_id' on #$issue is not open (closed, or never proposed)"
+  if [[ "$count" -eq 0 ]]; then
+    [[ -n "$only_id" ]] && echo "status: '$only_id' on #$issue is not open (closed, or never proposed)"
     return 0
   fi
 
@@ -921,14 +921,14 @@ status() {
       '[.[] | select(.agent as $a | $roster | index($a) != null)]')
     voter_count=$(printf '%s' "$votes" | jq -c '[.[].agent] | unique | length')
     local voter_names; voter_names=$(printf '%s' "$votes" | jq -r '[.[].agent] | unique | join(", ")')
-    [ -n "$voter_names" ] || voter_names="none"
+    [[ -n "$voter_names" ]] || voter_names="none"
     local status_roster_count; status_roster_count=$(printf '%s' "$status_roster_json" | jq 'length')
     local status_quorum_required; status_quorum_required=$(quorum_required_for "$status_roster_count")
     local quorum_state="not met"
-    [ "$voter_count" -ge "$status_quorum_required" ] && quorum_state="met"
+    [[ "$voter_count" -ge "$status_quorum_required" ]] && quorum_state="met"
     deadline_epoch=$(date -u -d "$rdeadline" +%s 2>/dev/null || date -u -jf '%Y-%m-%dT%H:%M:%SZ' "$rdeadline" +%s 2>/dev/null)
     state="open"
-    if [ -n "${deadline_epoch:-}" ] && [ "$now_epoch" -ge "$deadline_epoch" ]; then
+    if [[ -n "${deadline_epoch:-}" ]] && [[ "$now_epoch" -ge "$deadline_epoch" ]]; then
       state="deadline passed — ready to close"
     fi
     echo "  #$issue '$rid' (by $rproposer, options: $roptions) — $voter_count/$status_quorum_required vote(s) (quorum $quorum_state), voters: $voter_names, deadline $rdeadline ($state)"

@@ -81,7 +81,7 @@ it('prefers the company own provider over the tenant primary company', function 
 });
 
 it('returns null when no company in the tenant has providers', function (): void {
-    [$tenant, $company] = createTenantWithCompany(['name' => 'Empty Tenant']);
+    [, $company] = createTenantWithCompany(['name' => 'Empty Tenant']);
     $employee = Employee::factory()->create(['company_id' => $company->id]);
 
     expect(app(ConfigResolver::class)->resolveDefault((int) $employee->getKey()))->toBeNull();
@@ -92,7 +92,7 @@ it('never resolves providers across tenant boundaries', function (): void {
     app(PrimaryCompanyManager::class)->assign($tenantA, $primaryCompanyA);
     provisionTenantProvider($primaryCompanyA);
 
-    [$tenantB, $companyB] = createTenantWithCompany(['name' => 'Tenant B']);
+    [, $companyB] = createTenantWithCompany(['name' => 'Tenant B']);
     $employee = Employee::factory()->create(['company_id' => $companyB->id]);
 
     expect(app(ConfigResolver::class)->resolveDefault((int) $employee->getKey()))->toBeNull();

@@ -36,7 +36,7 @@ test('two customer tenants can each have an explicit primary company', function 
 });
 
 test('a company cannot become the primary company of a different tenant', function (): void {
-    [$tenantA, $companyA] = createTenantWithCompany(['name' => 'Tenant A']);
+    [, $companyA] = createTenantWithCompany(['name' => 'Tenant A']);
     $tenantB = createTenant(['name' => 'Tenant B']);
 
     app(PrimaryCompanyManager::class)->assign($tenantB, $companyA);
@@ -70,7 +70,7 @@ test('database has no fallback tenant assignment for companies', function (): vo
 })->throws(QueryException::class);
 
 test('a company tenant assignment cannot change after creation', function (): void {
-    [$tenantA, $company] = createTenantWithCompany(['name' => 'Tenant A']);
+    [, $company] = createTenantWithCompany(['name' => 'Tenant A']);
     $tenantB = createTenant(['name' => 'Tenant B']);
 
     $company->tenant_id = $tenantB->id;
@@ -78,7 +78,7 @@ test('a company tenant assignment cannot change after creation', function (): vo
 })->throws(CompanyTenantAssignmentException::class);
 
 test('a parent company must belong to the same tenant', function (): void {
-    [$tenantA, $parent] = createTenantWithCompany(['name' => 'Tenant A']);
+    [, $parent] = createTenantWithCompany(['name' => 'Tenant A']);
     $tenantB = createTenant(['name' => 'Tenant B']);
 
     Company::factory()->create([

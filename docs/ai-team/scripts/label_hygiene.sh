@@ -10,7 +10,7 @@
 set -uo pipefail
 
 repo="${1:-}"
-if [ -z "$repo" ]; then
+if [[ -z "$repo" ]]; then
   echo "usage: label_hygiene.sh <owner/repository>" >&2
   exit 2
 fi

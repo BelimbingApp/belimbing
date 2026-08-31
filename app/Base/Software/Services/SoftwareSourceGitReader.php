@@ -199,11 +199,12 @@ final class SoftwareSourceGitReader
         }
 
         $identity = $this->githubRemoteIdentity($url);
+        $githubRepo = $identity !== null ? $identity[0].'/'.$identity[1] : null;
 
         return [
             'remote' => $remote,
             'branch' => $repo->configValue('belimbing.upstream-branch', timeout: $timeout),
-            'repo' => $identity !== null ? $identity[0].'/'.$identity[1] : null,
+            'repo' => $githubRepo,
             'url' => $url,
         ];
     }
