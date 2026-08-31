@@ -1,16 +1,25 @@
 # AI-team mechanisms
 
-These scripts enforce the reusable operating guide. Copy this directory with
-`../README.md` when adopting the model in another GitHub repository.
+These scripts enforce the reusable operating guide beside them in
+`../README.md`. Adopting repositories mount the whole package at
+`docs/ai-team/` with `git subtree` rather than copying it by hand — see "Where
+this directory lives, and why" in the guide.
 
 Most scripts are repository-independent and resolve the current GitHub
-repository through `gh`. `project-orient.sh` is the deliberate exception: it is
-the local hook for source pins, assembly checks, and project commands. Replace
-or remove it when copying the package.
+repository through `gh`. The project hook is the deliberate exception: it is
+local source pins, assembly checks, and project commands, and it lives outside
+this mount entirely — at `.ai-team/project-orient.sh` in the adopting
+repository's own root, copied from `../templates/project-orient.sh` — so it is
+never part of what `git subtree pull` touches.
 
-The scheduled blocked-task workflow remains under `.github/workflows/` because
-GitHub owns its trigger and permissions; its implementation and tests live here
-with the board contract they enforce.
+The package ships `templates/mechanisms.yml`,
+`templates/blocked-by-sweep.yml`, and `templates/independent-review.yml` for
+adopters to copy into their own `.github/workflows/` directory at mount time.
+GitHub owns the triggers and permissions there: the mechanism workflow runs
+the mounted suite unfiltered on pull requests, the schedule-only sweep is the
+only job granted `issues: write`, and the independent-review workflow reads
+the trusted default-branch grammar. The implementation and its tests live
+here, with the board contract they enforce.
 
 `blocked_by_sweep.py` is a Python entry point, not a shell command. Run it as
 `python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
@@ -64,15 +73,22 @@ thread without hiding anything that can bind you.
 
 ## Running the mechanism tests
 
+Run them from the repository root. In this repository the scripts sit at
+`scripts/`; in an adopting repository they sit at `docs/ai-team/scripts/`.
+
 ```bash
-# Linux / macOS
+# Linux / macOS — here
+python3 -m unittest discover -s scripts -p 'test_*.py'
+
+# Linux / macOS — in an adopting repository
 python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 
 # Windows (PowerShell or Git Bash — the harness resolves Git for Windows' Bash;
 # use `python` because `python3` may be the Store alias that exits immediately)
-python -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
+python -m unittest discover -s scripts -p 'test_*.py'
 ```
 
 They are hermetic — stubbed `gh`, a `git` shim for the origin-identity answer,
-and local bare repositories instead of the network — and run in CI as part of
-the `quality` job, so a gate or sweep regression fails a required check.
+and local bare repositories instead of the network. Every adopting repository
+should run them as a required check, so that a gate or sweep regression fails
+before it reaches a merge.
