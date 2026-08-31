@@ -305,14 +305,22 @@ it('stages a verified plaintext artifact without overwriting output', function (
     });
 
     try {
-        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+        $this->artisan('blb:db:backup:stage', [
+            'artifact' => $artifact,
+            'manifest' => $manifest,
+            'output' => $output,
+        ])
             ->expectsOutputToContain('Backup staged without connecting to a database.')
             ->assertSuccessful();
 
         expect(file_get_contents($output))->toBe('verified backup bytes')
             ->and($queries)->toBe([]);
 
-        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+        $this->artisan('blb:db:backup:stage', [
+            'artifact' => $artifact,
+            'manifest' => $manifest,
+            'output' => $output,
+        ])
             ->expectsOutputToContain('refusing to overwrite')
             ->assertFailed();
         expect(file_get_contents($output))->toBe('verified backup bytes');
@@ -334,7 +342,11 @@ it('preserves a destination created while staging is in progress', function (): 
     });
 
     try {
-        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+        $this->artisan('blb:db:backup:stage', [
+            'artifact' => $artifact,
+            'manifest' => $manifest,
+            'output' => $output,
+        ])
             ->expectsOutputToContain('refusing to overwrite')
             ->assertFailed();
 
@@ -361,7 +373,11 @@ it('cleans its private staging directory when decryption fails', function (): vo
     app(EncryptionModeRegistry::class)->register('failing-test', fn (array $_config): EncryptionMode => $mode);
 
     try {
-        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+        $this->artisan('blb:db:backup:stage', [
+            'artifact' => $artifact,
+            'manifest' => $manifest,
+            'output' => $output,
+        ])
             ->expectsOutputToContain('simulated decryption failure')
             ->assertFailed();
 
@@ -381,7 +397,11 @@ it('refuses to stage an artifact whose manifest hash does not match', function (
     extract($files);
 
     try {
-        $this->artisan("blb:db:backup:stage {$artifact} {$manifest} {$output}")
+        $this->artisan('blb:db:backup:stage', [
+            'artifact' => $artifact,
+            'manifest' => $manifest,
+            'output' => $output,
+        ])
             ->expectsOutputToContain('Artifact SHA-256 does not match')
             ->assertFailed();
 
