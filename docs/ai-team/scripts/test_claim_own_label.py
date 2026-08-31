@@ -1,6 +1,7 @@
 import json
 import os
 import stat
+import subprocess
 import tempfile
 import textwrap
 import unittest
