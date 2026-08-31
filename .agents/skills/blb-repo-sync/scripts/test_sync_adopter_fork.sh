@@ -184,35 +184,46 @@ mkdir -p "$section"
 read -r origin_bare upstream_bare < <(build_fixture "$section")
 work="$section/work"
 fresh_checkout "$work" "$origin_bare" "$upstream_bare"
-before_local=$(cd "$work" && git_c rev-parse master)
 
+# The racer's commit is made (not pushed) before the hook even exists, so its
+# SHA is known independently of anything the script under test does. An
+# equality check against a SHA read only from the same bare origin the
+# script pushed to (#450 review, codex-gpt-5) cannot distinguish "origin is
+# exactly the racer's commit" from "the script itself recovered and pushed
+# something that happens to match" — this SHA is the control.
 racer="$section/racer-push"
 git_c clone -q "$origin_bare" "$racer" >/dev/null 2>&1
+echo "raced in mid-run" > "$racer/racer.txt"
+(cd "$racer" && git_c add racer.txt && git_c commit -qm "someone else: landed mid-run") >/dev/null
+racer_sha=$(cd "$racer" && git_c rev-parse HEAD)
+
+# Hermetic regardless of the host's own git config (#450 review, codex-gpt-5:
+# a developer- or system-level core.hooksPath would otherwise silently make
+# git skip the hook this test installs below, into $work's own .git/hooks).
+git_c -C "$work" config core.hooksPath "$(cd "$work" && git_c rev-parse --absolute-git-dir)/hooks"
 
 hooks_dir=$(cd "$work" && git_c rev-parse --absolute-git-dir)/hooks
 mkdir -p "$hooks_dir"
 cat > "$hooks_dir/pre-push" <<HOOK
 #!/usr/bin/env bash
 set -eu
-# One-shot: land the racer's commit on origin, then remove this hook so it
-# never fires again (including on the deliberate re-run later in this test).
+# One-shot: push the racer's already-made commit to origin, then remove this
+# hook so it never fires again (including on the deliberate re-run later).
 rm -- "\$0"
-echo "raced in mid-run" > "$racer/racer.txt"
-git -C "$racer" -c user.name=test -c user.email=test@example.invalid add racer.txt
-git -C "$racer" -c user.name=test -c user.email=test@example.invalid commit -qm "someone else: landed mid-run"
-git -C "$racer" -c user.name=test -c user.email=test@example.invalid push -q origin master
+git -C "$racer" push -q origin master
 HOOK
 chmod +x "$hooks_dir/pre-push"
 
 out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rc=$?
-raced_origin_tip=$(git_c --git-dir="$origin_bare" rev-parse master)
+origin_tip_after_rejection=$(git_c --git-dir="$origin_bare" rev-parse master)
+local_after_rejection=$(cd "$work" && git_c rev-parse master)
 
 report $([ "$rc" -eq 3 ] && echo 0 || echo 1) "the raced push exits 3"
 printf '%s\n' "$out" | grep -q "push rejected" && report 0 "reports the push as rejected" || report 1 "reports the push as rejected"
 printf '%s\n' "$out" | grep -qE -- '--force|force-with-lease' && report 1 "no --force flag mentioned as a recovery path" || report 0 "no --force flag mentioned as a recovery path"
-after_local=$(cd "$work" && git_c rev-parse master)
-report $([ "$after_local" = "$raced_origin_tip" ] && echo 0 || echo 1) "local master lands exactly on the raced origin tip, not just off of its own merge"
+report $([ "$origin_tip_after_rejection" = "$racer_sha" ] && echo 0 || echo 1) "origin sits at exactly the racer's independently-known commit right after the rejection — not something the script itself pushed"
+report $([ "$local_after_rejection" = "$racer_sha" ] && echo 0 || echo 1) "local master is reset to exactly the racer's commit right after the rejection, before any rerun"
 
 rerun_out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rerun_rc=$?
