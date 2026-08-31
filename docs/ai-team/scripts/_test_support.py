@@ -5,6 +5,59 @@ from pathlib import Path
 from typing import Any, Sequence
 
 
+def git_test_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        }
+    )
+
+    return env
+
+
+def seed_git_checkout(base: Path, env: dict[str, str] | None = None) -> tuple[Path, Path]:
+    child_env = env or git_test_env()
+
+    bare = base / "canonical.git"
+    subprocess.run(["git", "init", "-q", "--bare", str(bare)], check=True)
+    subprocess.run(
+        ["git", "--git-dir", str(bare), "symbolic-ref", "HEAD", "refs/heads/main"],
+        check=True,
+        env=child_env,
+    )
+
+    seed = base / "seed"
+    subprocess.run(["git", "init", "-q", "-b", "main", str(seed)], check=True, env=child_env)
+    (seed / "README").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "."], cwd=seed, check=True, env=child_env)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=seed, check=True, env=child_env)
+    subprocess.run(["git", "remote", "add", "origin", str(bare)], cwd=seed, check=True, env=child_env)
+    subprocess.run(["git", "push", "-q", "-u", "origin", "main"], cwd=seed, check=True, env=child_env)
+
+    clone = base / "checkout"
+    subprocess.run(["git", "clone", "-q", str(bare), str(clone)], check=True, env=child_env)
+
+    return bare, clone
+
+
+def make_executable(path: Path) -> None:
+    path.chmod(path.stat().st_mode | 0o100)
+
+
+def copy_executable_scripts(source_dir: Path, target_dir: Path, names: Sequence[str]) -> None:
+    target_dir.mkdir()
+
+    for name in names:
+        source = source_dir / name
+        destination = target_dir / name
+        shutil.copy2(source, destination)
+        make_executable(destination)
+
+
 def _git_root() -> Path | None:
     """Return the installation root for the Git executable on PATH."""
     git = shutil.which("git")

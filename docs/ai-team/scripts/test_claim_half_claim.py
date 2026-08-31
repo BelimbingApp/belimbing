@@ -1,13 +1,11 @@
 import json
-import os
 import stat
-import subprocess
 import tempfile
 import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import git_test_env, seed_git_checkout, run_with_bash_path
 
 SCRIPT = Path(__file__).with_name("claim.sh")
 
@@ -26,22 +24,7 @@ class ClaimHalfClaimTest(unittest.TestCase):
         base = Path(self.dir.name)
         env = self.git_env()
 
-        self.bare = base / "canonical.git"
-        subprocess.run(["git", "init", "-q", "--bare", str(self.bare)], check=True)
-        subprocess.run(
-            ["git", "--git-dir", str(self.bare), "symbolic-ref", "HEAD", "refs/heads/main"],
-            check=True, env=env,
-        )
-        seed = base / "seed"
-        subprocess.run(["git", "init", "-q", "-b", "main", str(seed)], check=True, env=env)
-        (seed / "README").write_text("base\n", encoding="utf-8")
-        subprocess.run(["git", "add", "."], cwd=seed, check=True, env=env)
-        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=seed, check=True, env=env)
-        subprocess.run(["git", "remote", "add", "origin", str(self.bare)], cwd=seed, check=True, env=env)
-        subprocess.run(["git", "push", "-q", "-u", "origin", "main"], cwd=seed, check=True, env=env)
-
-        self.clone = base / "checkout"
-        subprocess.run(["git", "clone", "-q", str(self.bare), str(self.clone)], check=True, env=env)
+        self.bare, self.clone = seed_git_checkout(base, env)
 
         self.bin = base / "bin"
         self.bin.mkdir()
@@ -83,12 +66,7 @@ class ClaimHalfClaimTest(unittest.TestCase):
         self.edits = self.bin / "edits"
 
     def git_env(self):
-        env = os.environ.copy()
-        env.update({
-            "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
-            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
-        })
-        return env
+        return git_test_env()
 
     def run_claim(self, *, agent="opus-5", pr_list="[]", issue_labels=("task:ready",),
                   pr_readback="", issue_readback="",

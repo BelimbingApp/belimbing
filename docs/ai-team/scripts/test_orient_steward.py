@@ -1,5 +1,4 @@
 import os
-import shutil
 import stat
 import subprocess
 import tempfile
@@ -7,7 +6,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import bash_path, run_with_bash_path
+from _test_support import bash_path, copy_executable_scripts, run_with_bash_path
 
 
 ORIENT = Path(__file__).with_name("orient.sh")
@@ -29,12 +28,7 @@ class OrientStewardMechanismTest(unittest.TestCase):
         base = Path(self.dir.name)
         self.base = base
         self.scripts = base / "scripts"
-        self.scripts.mkdir()
-        for name in SCRIPT_NAMES:
-            source = ORIENT.with_name(name)
-            destination = self.scripts / name
-            shutil.copy2(source, destination)
-            destination.chmod(destination.stat().st_mode | stat.S_IXUSR)
+        copy_executable_scripts(ORIENT.parent, self.scripts, SCRIPT_NAMES)
 
         self.bin = base / "bin"
         self.bin.mkdir()

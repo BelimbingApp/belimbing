@@ -163,7 +163,7 @@ class DecideTestCase(unittest.TestCase):
             args += ["--owner-delegation", owner_delegation]
         return self.run_decide(*args, agent=agent)
 
-    def last_decision_body(self) -> str:
+    def _last_decision_body(self) -> str:
         for c in reversed(self.comments_now()):
             if "**Type:** decision" in c["body"]:
                 return c["body"]
@@ -283,7 +283,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Resolution:** majority", body)
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=2", body)
@@ -307,7 +307,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Chosen:** right", body)
         self.assertIn("right=3", body)
         self.assertNotIn("left=", body)  # a's stale "left" vote must not linger
@@ -328,7 +328,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         # The malformed "a" post must not count for either option.
         self.assertIn("right=3", body)
         self.assertNotIn("left=", body)
@@ -375,7 +375,7 @@ class TallyAndCloseTest(DecideTestCase):
             rationale="right matches the architecture doc", authority_effect="none",
         )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Resolution:** tie", body)
         self.assertIn("**Chosen:** right", body)
         self.assertIn("**Tie-Break:** right matches the architecture doc", body)
@@ -410,7 +410,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=3", body)
         self.assertNotIn("right=", body)
@@ -459,7 +459,7 @@ class TallyAndCloseTest(DecideTestCase):
         self.vote(10, "d", "left", agent="b")
         result2 = self.close(10, "d", agent="a")
         self.assertEqual(result2.returncode, 0, result2.stderr)
-        self.assertIn("**Chosen:** left", self.last_decision_body())
+        self.assertIn("**Chosen:** left", self._last_decision_body())
 
     def test_deadline_expiry_with_missing_voters_does_not_stall(self):
         self.set_roster(["p", "a", "b", "c"])  # 3+ active agents: need 3 distinct votes
@@ -482,7 +482,7 @@ class TallyAndCloseTest(DecideTestCase):
             authority_effect="none",
         )
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Resolution:** expired", body)
         self.assertIn("**Chosen:** left", body)
         self.assertIn("not met by the deadline", body)
@@ -536,7 +536,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "vote-id", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Did-Not-Vote:** e", body)
 
     def test_the_decision_record_says_none_reached_everyone(self):
@@ -548,7 +548,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Did-Not-Vote:** none", body)
 
     def test_the_decision_record_carries_every_required_field(self):
@@ -560,7 +560,7 @@ class TallyAndCloseTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p", owner="a")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         for field in (
             "**Decision:** d",
             "**Chosen:**",
@@ -650,7 +650,7 @@ class MalformedDecisionTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("**Chosen:** left", self.last_decision_body())
+        self.assertIn("**Chosen:** left", self._last_decision_body())
 
     def test_a_malformed_decision_comment_does_not_hide_the_round_from_status(self):
         self.set_roster(["p", "a"])
@@ -973,7 +973,7 @@ class MalformedDecisionTest(DecideTestCase):
             authority_effect="none",
         )
         self.assertEqual(close.returncode, 0, close.stderr)
-        self.assertIn("**Resolution:** expired", self.last_decision_body())
+        self.assertIn("**Resolution:** expired", self._last_decision_body())
 
     def test_a_padded_sentinel_cannot_masquerade_as_a_majority_close(self):
         # opus-5's #436 review: extra whitespace padding around the
@@ -1057,7 +1057,7 @@ class OwnerDelegationTest(DecideTestCase):
             owner_delegation="https://github.com/BelimbingApp/belimbing/issues/380#issuecomment-1",
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Owner-Delegation:**", body)
         self.assertIn("issuecomment-1", body)
 
@@ -1139,7 +1139,7 @@ class AcknowledgementTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Did-Not-Vote:** none", body)
         self.assertIn("**Unacknowledged:** none", body)
 
@@ -1154,7 +1154,7 @@ class AcknowledgementTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("**Did-Not-Vote:** c", body)
         self.assertIn("**Unacknowledged:** none", body)
 
@@ -1181,7 +1181,7 @@ class RecordGrammarTest(DecideTestCase):
             10, "d", agent="a", decision="left", rationale="tie-break reason",
             authority_effect="none",
         )
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         for line_start in (
             "**Decision:**", "**Chosen:**", "**Tally:**", "**Quorum:**",
             "**Deciding-Agent:**", "**Implementation-Owner:**", "**Revisit-If:**",
@@ -1215,7 +1215,7 @@ class CarriageReturnTest(DecideTestCase):
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
-        body = self.last_decision_body()
+        body = self._last_decision_body()
         self.assertIn("left=3", body)
         self.assertIn("**Did-Not-Vote:** none", body)
 

@@ -20,8 +20,10 @@ from urllib.request import Request, urlopen
 BLOCKED_LABEL = "task:blocked"
 MARKER_INFIX = "-blocked-by-sweep:"
 READY_LABEL = "task:ready"
+ISSUE_REF_RE = r"#\d+"
+ISSUE_REF_LIST_RE = rf"{ISSUE_REF_RE}(?:[ \t]*,[ \t]*{ISSUE_REF_RE})*"
 BLOCKED_BY_RE = re.compile(
-    r"(?i)(?<![\w-])Blocked-By:[ \t]*(#[0-9]+(?:[ \t]*,[ \t]*#[0-9]+)*)(?=[ \t]*(?:[.;]|$))"
+    rf"(?i)(?<![\w-])Blocked-By:[ \t]*({ISSUE_REF_LIST_RE})(?=[ \t]*(?:[.;]|$))"
 )
 # Only prose can declare a dependency. This module owns that boundary for the
 # whole package (#3): an adopter that reads issue or PR prose for its own gate
@@ -30,7 +32,7 @@ BLOCKED_BY_RE = re.compile(
 # become the exploitable one.
 OPENING_FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
 CLOSING_FENCE_RE = re.compile(r"^(`{3,}|~{3,})[ \t]*$")
-INDENTED_CODE_RE = re.compile(r"^( {4}|[ ]*\t)")
+INDENTED_CODE_RE = re.compile(r"^( {4}| *\t)")
 INLINE_COMMENT_RE = re.compile(r"<!--.*?-->")
 
 __all__ = ["safe_lines", "parse_blockers", "transition_for", "sweep"]

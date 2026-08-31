@@ -131,7 +131,7 @@ class HoldTestCase(unittest.TestCase):
     def seed_pr_labels(self, labels: list[str]) -> None:
         self.pr_labels.write_text(json.dumps(labels), encoding="utf-8")
 
-    def pr_labels_now(self) -> list[str]:
+    def _pr_labels_now(self) -> list[str]:
         return json.loads(self.pr_labels.read_text(encoding="utf-8"))
 
     def run_hold(
@@ -184,7 +184,7 @@ class HoldReviewTest(HoldTestCase):
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertIn("label create hold:review:sol", log)
         self.assertIn("pr edit 7 --repo example/canonical --add-label hold:review:sol", log)
-        self.assertIn("hold:review:sol", self.pr_labels_now())
+        self.assertIn("hold:review:sol", self._pr_labels_now())
 
     def test_add_does_not_recreate_an_existing_label(self):
         self.existing_labels.write_text('[{"name": "hold:review:sol"}]', encoding="utf-8")
@@ -201,7 +201,7 @@ class HoldReviewTest(HoldTestCase):
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertIn("pr edit 7 --repo example/canonical --remove-label hold:review:sol", log)
         self.assertNotIn("hold:review:luna", log)
-        self.assertNotIn("hold:review:sol", self.pr_labels_now())
+        self.assertNotIn("hold:review:sol", self._pr_labels_now())
 
     def test_different_agents_touch_different_labels(self):
         sol_result = self.run_hold("review", "add", "7", agent="sol")
@@ -252,7 +252,7 @@ class HoldStewardTransferTest(HoldTestCase):
         )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("--discharge verifiable", result.stderr)
-        self.assertIn("hold:review:luna", self.pr_labels_now())
+        self.assertIn("hold:review:luna", self._pr_labels_now())
 
     def test_judgment_finding_is_refused_without_comment_or_label_mutation(self):
         self.seed_pr_labels(["hold:review:luna"])
@@ -265,7 +265,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("judgment finding", result.stderr)
         self.assertFalse(self.gh_log.exists())
-        self.assertIn("hold:review:luna", self.pr_labels_now())
+        self.assertIn("hold:review:luna", self._pr_labels_now())
 
     def test_steward_clear_refuses_an_unknown_discharge_classification(self):
         self.seed_pr_labels(["hold:review:luna"])
@@ -278,7 +278,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("must be verifiable or judgment", result.stderr)
         self.assertFalse(self.gh_log.exists())
-        self.assertIn("hold:review:luna", self.pr_labels_now())
+        self.assertIn("hold:review:luna", self._pr_labels_now())
 
     def test_discharge_classification_without_steward_is_refused(self):
         self.seed_pr_labels(["hold:review:opus-5"])
@@ -289,7 +289,7 @@ class HoldStewardTransferTest(HoldTestCase):
         )
         self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
         self.assertIn("--steward, --discharge verifiable, and --reason", result.stderr)
-        self.assertIn("hold:review:opus-5", self.pr_labels_now())
+        self.assertIn("hold:review:opus-5", self._pr_labels_now())
 
     def test_verifiable_clear_records_its_classification(self):
         self.seed_pr_labels(["hold:review:luna"])
@@ -302,7 +302,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         comment = self.comment_body.read_text(encoding="utf-8")
         self.assertIn("Discharge classification: verifiable", comment)
-        self.assertNotIn("hold:review:luna", self.pr_labels_now())
+        self.assertNotIn("hold:review:luna", self._pr_labels_now())
 
     def test_steward_clear_removes_the_named_holders_label_and_records_evidence(self):
         self.seed_pr_labels(["hold:review:luna"])
@@ -323,7 +323,7 @@ class HoldStewardTransferTest(HoldTestCase):
         self.assertIn("luna", comment)
         self.assertIn("Discharge classification: verifiable", comment)
         self.assertIn("pushed fix at abc1234", comment)
-        self.assertNotIn("hold:review:luna", self.pr_labels_now())
+        self.assertNotIn("hold:review:luna", self._pr_labels_now())
 
     def test_steward_clear_never_touches_a_different_holders_label(self):
         self.seed_pr_labels(["hold:review:luna", "hold:review:sol"])
@@ -336,7 +336,7 @@ class HoldStewardTransferTest(HoldTestCase):
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertNotIn("hold:review:opus-5", log)
         self.assertNotIn("remove-label hold:review:sol", log)
-        self.assertIn("hold:review:sol", self.pr_labels_now())
+        self.assertIn("hold:review:sol", self._pr_labels_now())
 
     def test_steward_flag_requires_a_reason(self):
         result = self.run_hold(
@@ -379,7 +379,7 @@ class HoldStewardTransferTest(HoldTestCase):
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertIn("remove-label hold:review:opus-5", log)
         self.assertNotIn("pr comment", log)
-        self.assertIn("hold:review:luna", self.pr_labels_now())
+        self.assertIn("hold:review:luna", self._pr_labels_now())
 
 
 class HoldRemovalVerificationTest(HoldTestCase):
@@ -402,7 +402,7 @@ class HoldRemovalVerificationTest(HoldTestCase):
         self.assertNotIn("steward-cleared", result.stdout)
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertNotIn("pr comment", log)
-        self.assertIn("hold:review:kiat-luna", self.pr_labels_now())
+        self.assertIn("hold:review:kiat-luna", self._pr_labels_now())
 
     def test_a_removal_that_silently_does_not_take_is_reported_as_a_failure(self):
         # gh pr edit --remove-label can exit 0 without the label actually
@@ -439,7 +439,7 @@ class HoldRemovalVerificationTest(HoldTestCase):
             comment_fails=True,
         )
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("hold:review:luna", self.pr_labels_now())
+        self.assertIn("hold:review:luna", self._pr_labels_now())
         log = self.gh_log.read_text(encoding="utf-8")
         self.assertNotIn("remove-label", log)
 
@@ -487,7 +487,7 @@ class HoldLegacyClearTest(HoldTestCase):
         comment = self.comment_body.read_text(encoding="utf-8")
         self.assertIn("hold:review", comment)
         self.assertIn("superseded by #418", comment)
-        self.assertNotIn("hold:review", self.pr_labels_now())
+        self.assertNotIn("hold:review", self._pr_labels_now())
 
     def test_legacy_requires_a_reason(self):
         result = self.run_hold("review", "clear", "7", "--legacy", agent="fable")
@@ -507,7 +507,7 @@ class HoldLegacyClearTest(HoldTestCase):
             "review", "clear", "7", "--legacy", "--reason", "discharged", agent="fable",
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("hold:review:sol", self.pr_labels_now())
+        self.assertIn("hold:review:sol", self._pr_labels_now())
 
 
 if __name__ == "__main__":
