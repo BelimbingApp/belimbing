@@ -465,13 +465,17 @@ API keys are sensitive and should not be stored in workspace files (plaintext on
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `id` | ULID | Primary key |
-| `company_id` | FK | Owning company |
+| `id` | bigint, auto-increment | Primary key |
+| `company_id` | bigint, indexed (not FK) | Owning company |
 | `name` | string | Unique key within company (e.g. `openai`, `anthropic`, `google`, `ollama-local`) |
+| `family` | string | `llm` or `image`; defaults to `llm` |
 | `display_name` | string | Human-readable label (e.g. "OpenAI GPT", "Local Ollama") |
 | `base_url` | string | API endpoint (e.g. `https://api.openai.com/v1`) |
-| `api_key` | encrypted | Provider API key (Laravel encrypted cast) |
+| `auth_type` | string | e.g. `api_key`, `oauth`; defaults to `api_key` |
+| `credentials` | encrypted (`encrypted:array` cast) | API key and other secrets, keyed by name (e.g. `api_key`) |
+| `connection_config` | JSON | Provider-specific connection settings |
 | `is_active` | boolean | Whether available for agent assignment |
+| `priority` | unsigned smallint | Ordering among a company's active providers; `0` means unprioritized |
 | `created_by_user_id` | FK (user) | Who configured this provider |
 | `timestamps` | | |
 
