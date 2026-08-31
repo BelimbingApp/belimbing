@@ -53,10 +53,17 @@ return new class extends Migration
     /**
      * The old `created_by` values are employee ids (per `AiProvider::createdBy()`'s
      * former `belongsTo(Employee::class, ...)`). Translate each to that
-     * employee's linked user where one exists; a provider whose creator has
-     * no linked user loses attribution the same way a fresh NULL write would
-     * have — not a new loss, the one this migration exists to stop causing
-     * going forward.
+     * employee's linked user where exactly one exists.
+     *
+     * `users.employee_id` is nullable and foreign-keyed but not unique, so
+     * more than one user can point at the same employee. Reviewed on this
+     * PR (steward, #453): picking one of several candidates via
+     * `pluck('id', 'employee_id')` — last row wins, in whatever order the
+     * database returns, no ORDER BY — would silently assign attribution to
+     * an arbitrary user, the same failure shape this migration exists to
+     * end. An ambiguous employee id is left unresolved instead: the provider
+     * loses attribution the same way a fresh NULL write already would, and
+     * up() reports the count so it is not a silent guess.
      *
      * @return array<int, int> provider id => user id
      */
@@ -70,19 +77,36 @@ return new class extends Migration
             return [];
         }
 
-        $userIdsByEmployeeId = DB::table('users')
-            ->whereIn('employee_id', $providers->unique()->values())
+        $employeeIds = $providers->unique()->values();
+
+        $userCountsByEmployeeId = DB::table('users')
+            ->whereIn('employee_id', $employeeIds)
             ->whereNotNull('employee_id')
+            ->selectRaw('employee_id, count(*) as user_count')
+            ->groupBy('employee_id')
+            ->pluck('user_count', 'employee_id');
+
+        $singleUserIdsByEmployeeId = DB::table('users')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereNotNull('employee_id')
+            ->whereIn('employee_id', $userCountsByEmployeeId->filter(fn (int $count): bool => $count === 1)->keys())
             ->pluck('id', 'employee_id');
 
         $assignments = [];
+        $ambiguous = 0;
 
         foreach ($providers as $providerId => $employeeId) {
-            $userId = $userIdsByEmployeeId->get($employeeId);
+            $userId = $singleUserIdsByEmployeeId->get($employeeId);
 
             if ($userId !== null) {
                 $assignments[(int) $providerId] = (int) $userId;
+            } elseif (($userCountsByEmployeeId->get($employeeId) ?? 0) > 1) {
+                $ambiguous++;
             }
+        }
+
+        if ($ambiguous > 0) {
+            fwrite(STDERR, "ai_providers.created_by backfill: {$ambiguous} provider(s) had a creator employee linked to more than one user; left created_by_user_id NULL for those rather than guessing.\n");
         }
 
         return $assignments;
