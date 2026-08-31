@@ -472,7 +472,7 @@ API keys are sensitive and should not be stored in workspace files (plaintext on
 | `base_url` | string | API endpoint (e.g. `https://api.openai.com/v1`) |
 | `api_key` | encrypted | Provider API key (Laravel encrypted cast) |
 | `is_active` | boolean | Whether available for agent assignment |
-| `created_by` | FK (employee) | Who configured this provider |
+| `created_by_user_id` | FK (user) | Who configured this provider |
 | `timestamps` | | |
 
 **Design rationale:**

@@ -5,6 +5,8 @@ use App\Core\Employee\Models\Employee;
 use App\Core\User\Models\User;
 use Illuminate\Support\Facades\DB;
 
+const AI_PROVIDER_BACKFILL_TEST_BASE_URL = 'https://example.invalid';
+
 /**
  * Exercises the 0200_02_01_000018 migration's backfill directly, restoring
  * the pre-migration schema, seeding data, and re-running it — the schema is
@@ -41,7 +43,7 @@ it('leaves created_by_user_id null when an employee has more than one linked use
         'name' => 'ambiguous',
         'family' => 'llm',
         'display_name' => 'Ambiguous',
-        'base_url' => 'https://example.invalid',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
         'auth_type' => 'api_key',
         'is_active' => true,
         'priority' => 0,
@@ -55,7 +57,7 @@ it('leaves created_by_user_id null when an employee has more than one linked use
         'name' => 'unambiguous',
         'family' => 'llm',
         'display_name' => 'Unambiguous',
-        'base_url' => 'https://example.invalid',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
         'auth_type' => 'api_key',
         'is_active' => true,
         'priority' => 0,
@@ -69,7 +71,7 @@ it('leaves created_by_user_id null when an employee has more than one linked use
         'name' => 'orphaned',
         'family' => 'llm',
         'display_name' => 'Orphaned',
-        'base_url' => 'https://example.invalid',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
         'auth_type' => 'api_key',
         'is_active' => true,
         'priority' => 0,
@@ -115,11 +117,76 @@ it('never backfills across a company boundary when a stale created_by numericall
         'name' => 'cross-company',
         'family' => 'llm',
         'display_name' => 'Cross Company',
-        'base_url' => 'https://example.invalid',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
         'auth_type' => 'api_key',
         'is_active' => true,
         'priority' => 0,
         'created_by' => $employeeB->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $migration->up();
+
+    expect(DB::table('ai_providers')->where('id', $providerId)->value('created_by_user_id'))->toBeNull();
+});
+
+it('resolves a linked user whose own company_id is null through the employee fallback, within the provider\'s company', function (): void {
+    // codex-gpt-5, #453: User::getCompanyId() supports users.company_id ===
+    // null, falling back to the linked employee's company — a state
+    // tests/Feature/Core/User/UserTest.php already protects. Requiring an
+    // exact users.company_id match in the backfill join rejected that
+    // supported state outright, losing resolvable attribution for a user
+    // created exactly this way under the legacy write path.
+    $migration = aiProviderCreatedByMigration();
+    $migration->down();
+
+    $company = Company::factory()->create();
+    $employee = Employee::factory()->create(['company_id' => $company->id]);
+    $user = User::factory()->create(['company_id' => null, 'employee_id' => $employee->id]);
+
+    $providerId = DB::table('ai_providers')->insertGetId([
+        'company_id' => $company->id,
+        'name' => 'null-company-user',
+        'family' => 'llm',
+        'display_name' => 'Null Company User',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
+        'auth_type' => 'api_key',
+        'is_active' => true,
+        'priority' => 0,
+        'created_by' => $employee->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $migration->up();
+
+    expect(DB::table('ai_providers')->where('id', $providerId)->value('created_by_user_id'))->toBe($user->id);
+});
+
+it('still excludes a user whose own company_id genuinely differs from the provider\'s', function (): void {
+    // The other half of the same join fix: null resolves through the
+    // employee fallback, but a *non-null*, different company_id is the real
+    // cross-company case and must still be excluded, not accidentally
+    // accepted by a fix aimed at the null case.
+    $migration = aiProviderCreatedByMigration();
+    $migration->down();
+
+    $company = Company::factory()->create();
+    $otherCompany = Company::factory()->create();
+    $employee = Employee::factory()->create(['company_id' => $company->id]);
+    User::factory()->create(['company_id' => $otherCompany->id, 'employee_id' => $employee->id]);
+
+    $providerId = DB::table('ai_providers')->insertGetId([
+        'company_id' => $company->id,
+        'name' => 'mismatched-company-user',
+        'family' => 'llm',
+        'display_name' => 'Mismatched Company User',
+        'base_url' => AI_PROVIDER_BACKFILL_TEST_BASE_URL,
+        'auth_type' => 'api_key',
+        'is_active' => true,
+        'priority' => 0,
+        'created_by' => $employee->id,
         'created_at' => now(),
         'updated_at' => now(),
     ]);

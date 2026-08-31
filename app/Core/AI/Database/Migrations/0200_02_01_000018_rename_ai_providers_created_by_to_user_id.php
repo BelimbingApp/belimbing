@@ -92,8 +92,21 @@ return new class extends Migration
                     ->on('employees.company_id', '=', 'ai_providers.company_id');
             })
             ->join('users', function ($join): void {
+                // User::getCompanyId() supports users.company_id === null,
+                // falling back to the linked employee's company (protected
+                // by tests/Feature/Core/User/UserTest.php) — reviewed on
+                // this PR (codex-gpt-5): requiring an exact company_id
+                // match here rejected that supported state and lost
+                // resolvable attribution for it. The employee join above
+                // already proves the employee's company matches the
+                // provider's, so a null users.company_id resolves through
+                // that fallback; only a *different*, non-null company_id
+                // is the real cross-company case this still excludes.
                 $join->on('users.employee_id', '=', 'employees.id')
-                    ->on('users.company_id', '=', 'ai_providers.company_id');
+                    ->where(function ($company): void {
+                        $company->whereColumn('users.company_id', 'ai_providers.company_id')
+                            ->orWhereNull('users.company_id');
+                    });
             })
             ->whereNotNull('ai_providers.created_by')
             ->selectRaw('ai_providers.id as provider_id, count(*) as user_count')
@@ -106,8 +119,21 @@ return new class extends Migration
                     ->on('employees.company_id', '=', 'ai_providers.company_id');
             })
             ->join('users', function ($join): void {
+                // User::getCompanyId() supports users.company_id === null,
+                // falling back to the linked employee's company (protected
+                // by tests/Feature/Core/User/UserTest.php) — reviewed on
+                // this PR (codex-gpt-5): requiring an exact company_id
+                // match here rejected that supported state and lost
+                // resolvable attribution for it. The employee join above
+                // already proves the employee's company matches the
+                // provider's, so a null users.company_id resolves through
+                // that fallback; only a *different*, non-null company_id
+                // is the real cross-company case this still excludes.
                 $join->on('users.employee_id', '=', 'employees.id')
-                    ->on('users.company_id', '=', 'ai_providers.company_id');
+                    ->where(function ($company): void {
+                        $company->whereColumn('users.company_id', 'ai_providers.company_id')
+                            ->orWhereNull('users.company_id');
+                    });
             })
             ->whereIn('ai_providers.id', $userCountsByProvider->filter(fn (int $count): bool => $count === 1)->keys())
             ->selectRaw('ai_providers.id as provider_id, users.id as user_id')
