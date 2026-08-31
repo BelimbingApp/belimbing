@@ -165,7 +165,7 @@ class HoldTestCase(unittest.TestCase):
             del env["HOLD_TEST_LOOKUP_FAIL_ON_CALL"]
         env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
         return run_with_bash_path(
-            ["bash", str(SCRIPT), *args],
+            ["bash", bash_path(SCRIPT), *args],
             stub_directory=self.bin,
             cwd=self.cwd,
             env=env,

@@ -162,11 +162,11 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         env = self.git_env()
         env["CLAIM_TEST_GH_LOG"] = bash_path(self.gh_log)
         env["CLAIM_AGENT"] = "composer"
-        env["CLAIM_WORKTREE"] = str(worktree)
+        env["CLAIM_WORKTREE"] = bash_path(worktree)
         if resume_branch:
             env["CLAIM_BRANCH"] = resume_branch
         return run_with_bash_path(
-            ["bash", str(SCRIPT), "42"],
+            ["bash", bash_path(SCRIPT), "42"],
             stub_directory=self.bin,
             cwd=self.clone,
             env=env,
@@ -200,7 +200,7 @@ class ClaimMultiRemoteTest(unittest.TestCase):
         worktree = Path(self.dir.name) / "wt-fresh"
         result = self.run_claim(worktree=worktree)
         self.assert_claim_success(result)
-        self.assertIn(f"worktree: {worktree}", result.stdout)
+        self.assertIn(f"worktree: {bash_path(worktree)}", result.stdout)
         self.assertIn("root checkout left on main", result.stdout)
         self.assertEqual(self.git_out(["rev-parse", "--abbrev-ref", "HEAD"]), "main")
         self.assertRegex(self.gh_log.read_text(encoding="utf-8"), r"pr create .*--head agent/composer-issue-42")

@@ -7,7 +7,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import bash_path, run_with_bash_path
 
 
 class OrientHalfClaimTest(unittest.TestCase):
@@ -87,7 +87,7 @@ class OrientHalfClaimTest(unittest.TestCase):
             PATH=f"{self.bin}{os.pathsep}{env.get('PATH', '')}",
         )
         return run_with_bash_path(
-            ["bash", str(self.scripts / "orient.sh")],
+            ["bash", bash_path(self.scripts / "orient.sh")],
             stub_directory=self.bin, cwd=self.base, env=env,
             capture_output=True, text=True, check=False,
         )

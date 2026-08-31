@@ -92,7 +92,7 @@ class ReadyHandoffTest(unittest.TestCase):
             del env["READY_ISSUE"]
         env["PATH"] = f"{self.bin}{os.pathsep}{env.get('PATH', '')}"
         return run_with_bash_path(
-            ["bash", str(SCRIPT), "99"],
+            ["bash", bash_path(SCRIPT), "99"],
             stub_directory=self.bin,
             cwd=self.cwd,
             env=env,

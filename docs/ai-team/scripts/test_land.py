@@ -100,7 +100,7 @@ class LandMechanismTest(unittest.TestCase):
         else:
             env.pop("LAND_TEST_ATTRIBUTION", None)
         return run_with_bash_path(
-            ["bash", str(self.scripts / "land.sh"), "42", "a" * 40],
+            ["bash", bash_path(self.scripts / "land.sh"), "42", "a" * 40],
             stub_directory=self.cwd / "bin",
             cwd=self.cwd,
             env=env,
@@ -184,7 +184,7 @@ class LabelHygieneMechanismTest(unittest.TestCase):
                 PATH=f"{base}{os.pathsep}{env.get('PATH', '')}",
             )
             result = run_with_bash_path(
-                ["bash", str(HYGIENE), "example/canonical"],
+                ["bash", bash_path(HYGIENE), "example/canonical"],
                 stub_directory=base,
                 cwd=base,
                 env=env,

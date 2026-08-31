@@ -84,7 +84,7 @@ class OrientStewardMechanismTest(unittest.TestCase):
             PATH=f"{self.bin}{os.pathsep}{env.get('PATH', '')}",
         )
         return run_with_bash_path(
-            ["bash", str(self.scripts / "orient.sh")],
+            ["bash", bash_path(self.scripts / "orient.sh")],
             stub_directory=self.bin,
             cwd=self.base,
             env=env,

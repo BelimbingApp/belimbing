@@ -7,7 +7,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import bash_path, run_with_bash_path
 
 SCRIPT = Path(__file__).with_name("claim.sh")
 
@@ -104,14 +104,14 @@ class ClaimHalfClaimTest(unittest.TestCase):
         env["CLAIM_TEST_PR_LIST"] = pr_list
         env["CLAIM_TEST_PR_READBACK"] = pr_readback
         env["CLAIM_TEST_ISSUE_READBACK"] = issue_readback
-        env["CLAIM_TEST_EDITS"] = str(self.edits)
+        env["CLAIM_TEST_EDITS"] = bash_path(self.edits)
         # Independent switches: the mixed state — one lookup failing while the
         # other succeeds and is empty — is the invariant the split branch
         # exists for, and a single switch could not express it (#18 review).
         env["CLAIM_TEST_PR_READBACK_FAILS"] = "1" if pr_readback_fails else "0"
         env["CLAIM_TEST_ISSUE_READBACK_FAILS"] = "1" if issue_readback_fails else "0"
         return run_with_bash_path(
-            ["bash", str(SCRIPT), "42"],
+            ["bash", bash_path(SCRIPT), "42"],
             stub_directory=self.bin,
             env=env, cwd=self.clone, text=True, capture_output=True, check=False,
         )
