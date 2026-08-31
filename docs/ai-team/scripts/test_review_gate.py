@@ -1,6 +1,8 @@
 import json
 import os
+import shutil
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -78,6 +80,140 @@ class ReviewGateTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
+
+    def test_production_path_streams_large_dependabot_payloads_instead_of_argv(self):
+        identity_sentinel = "REVIEW_GATE_IDENTITY_ARGV_SENTINEL"
+        review_sentinel = "REVIEW_GATE_REVIEWS_ARGV_SENTINEL"
+        identity = self.dependabot_identity()
+        identity["head"]["sha"] = SHA
+        identity["labels"] = []
+        identity["title"] = "Bump laravel/framework"
+        identity["body"] = identity_sentinel + ("x" * 60_000)
+        identity_json = json.dumps(identity)
+        self.assertGreater(len(identity_json.encode("utf-8")), 50 * 1024)
+
+        review = self.review()
+        review["body"] = f"{review['body']}\n\n{review_sentinel}"
+
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = Path(raw_directory)
+            identity_fixture = directory / "identity.json"
+            reviews_fixture = directory / "reviews.json"
+            identity_fixture.write_text(identity_json, encoding="utf-8")
+            reviews_fixture.write_text(json.dumps([review]), encoding="utf-8")
+
+            real_jq = shutil.which("jq")
+            self.assertIsNotNone(real_jq, "jq is required to exercise review_gate.sh")
+
+            env = os.environ.copy()
+            env.pop("REVIEW_GATE_INPUT", None)
+            env["REVIEW_GATE_TEST_IDENTITY"] = bash_path(identity_fixture)
+            env["REVIEW_GATE_TEST_REVIEWS"] = bash_path(reviews_fixture)
+            env["REVIEW_GATE_TEST_REAL_JQ"] = bash_path(Path(real_jq))
+            production_stubs = textwrap.dedent(
+                f"""\
+                gh() {{
+                  if [ "$1 $2" = "repo view" ]; then
+                    printf '%s\\n' 'example/canonical'
+                  elif [ "$1 $2" = "api repos/example/canonical/pulls/462" ]; then
+                    cat "$REVIEW_GATE_TEST_IDENTITY"
+                  elif [ "$1 $2" = "api repos/example/canonical/pulls/462/reviews" ]; then
+                    cat "$REVIEW_GATE_TEST_REVIEWS"
+                  else
+                    printf 'unexpected gh call: %s\\n' "$*" >&2
+                    return 96
+                  fi
+                }}
+                jq() {{
+                  local argument
+                  for argument in "$@"; do
+                    case "$argument" in
+                      *{identity_sentinel}*|*{review_sentinel}*)
+                        printf 'GitHub JSON leaked into jq argv\\n' >&2
+                        return 97
+                        ;;
+                    esac
+                  done
+                  "$REVIEW_GATE_TEST_REAL_JQ" "$@"
+                }}
+                export -f gh jq
+                exec bash "$@"
+                """
+            )
+            result = run_with_bash_path(
+                [
+                    "bash",
+                    "-c",
+                    production_stubs,
+                    "review-gate-production-test",
+                    bash_path(SCRIPT),
+                    "462",
+                    SHA,
+                ],
+                stub_directory=directory,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("independent exact-head acceptance from reviewer", result.stdout)
+
+    def test_production_path_cleans_first_temp_when_second_allocation_fails(self):
+        with tempfile.TemporaryDirectory() as raw_directory:
+            directory = Path(raw_directory)
+            first_temp = directory / "first-review-input.json"
+            allocation_state = directory / "mktemp-called"
+            env = os.environ.copy()
+            env.pop("REVIEW_GATE_INPUT", None)
+            env["REVIEW_GATE_TEST_FIRST_TEMP"] = bash_path(first_temp)
+            env["REVIEW_GATE_TEST_MKTEMP_STATE"] = bash_path(allocation_state)
+            allocation_stubs = textwrap.dedent(
+                """\
+                gh() {
+                  if [ "$1 $2" = "repo view" ]; then
+                    printf '%s\n' 'example/canonical'
+                  else
+                    return 96
+                  fi
+                }
+                mktemp() {
+                  if [ ! -e "$REVIEW_GATE_TEST_MKTEMP_STATE" ]; then
+                    : > "$REVIEW_GATE_TEST_MKTEMP_STATE"
+                    : > "$REVIEW_GATE_TEST_FIRST_TEMP"
+                    printf '%s\n' "$REVIEW_GATE_TEST_FIRST_TEMP"
+                    return 0
+                  fi
+                  return 1
+                }
+                export -f gh mktemp
+                exec bash "$@"
+                """
+            )
+            result = run_with_bash_path(
+                [
+                    "bash",
+                    "-c",
+                    allocation_stubs,
+                    "review-gate-allocation-test",
+                    bash_path(SCRIPT),
+                    "462",
+                    SHA,
+                ],
+                stub_directory=directory,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+            self.assertIn(
+                "ERROR: cannot allocate temporary PR identity input",
+                result.stderr,
+            )
+            self.assertFalse(first_temp.exists(), "first allocated temp must be removed")
 
     def test_native_approval_still_requires_a_from_marker(self):
         result = self.run_gate([

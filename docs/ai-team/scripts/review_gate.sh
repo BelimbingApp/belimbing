@@ -30,6 +30,15 @@ source "$here/_trusted_author.sh"
 
 input="${REVIEW_GATE_INPUT:-}"
 cleanup_input=""
+cleanup_identity=""
+cleanup_reviews=""
+
+cleanup() {
+  [[ -z "$cleanup_input" ]] || rm -f -- "$cleanup_input"
+  [[ -z "$cleanup_identity" ]] || rm -f -- "$cleanup_identity"
+  [[ -z "$cleanup_reviews" ]] || rm -f -- "$cleanup_reviews"
+}
+trap cleanup EXIT
 
 if [[ -z "$input" ]]; then
   pr="${1:-}"
@@ -43,11 +52,32 @@ if [[ -z "$input" ]]; then
     echo "ERROR: cannot resolve this repository through gh" >&2
     exit 2
   }
-  identity=$(gh api "repos/$repo/pulls/$pr" 2>/dev/null) || {
+  # REST pull payloads routinely exceed Windows/MSYS process argument limits.
+  # Keep GitHub JSON file-backed all the way into jq; never reintroduce it via
+  # --argjson or command arguments.
+  input=$(mktemp) || {
+    echo "ERROR: cannot allocate temporary review input" >&2
+    exit 2
+  }
+  cleanup_input="$input"
+
+  identity_file=$(mktemp) || {
+    echo "ERROR: cannot allocate temporary PR identity input" >&2
+    exit 2
+  }
+  cleanup_identity="$identity_file"
+
+  reviews_file=$(mktemp) || {
+    echo "ERROR: cannot allocate temporary reviews input" >&2
+    exit 2
+  }
+  cleanup_reviews="$reviews_file"
+
+  gh api "repos/$repo/pulls/$pr" >"$identity_file" 2>/dev/null || {
     echo "ERROR: cannot read immutable PR identity for #$pr from $repo" >&2
     exit 2
   }
-  head_sha=$(jq -r '.head.sha // ""' <<<"$identity")
+  head_sha=$(jq -r '.head.sha // ""' "$identity_file")
   if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
     echo "ERROR: current PR head is missing or malformed for #$pr" >&2
     exit 2
@@ -59,20 +89,24 @@ if [[ -z "$input" ]]; then
     echo "ERROR: reviewed SHA must be a full 40-character lowercase SHA" >&2
     exit 2
   fi
-  reviews=$(gh api "repos/$repo/pulls/$pr/reviews" --paginate 2>/dev/null \
-    | jq -s 'add // []' 2>/dev/null) || {
+  gh api "repos/$repo/pulls/$pr/reviews" --paginate 2>/dev/null \
+    | jq -s 'add // []' >"$reviews_file" 2>/dev/null || {
     echo "ERROR: cannot read reviews for PR #$pr from $repo" >&2
     exit 2
   }
-  input=$(mktemp)
-  cleanup_input="$input"
-  trap 'rm -f "$cleanup_input"' EXIT
   jq -n --arg reviewed "$reviewed" \
     --arg head_sha "$head_sha" \
-    --argjson labels "$(jq -c '.labels // []' <<<"$identity")" \
-    --argjson identity "$identity" \
-    --argjson reviews "$reviews" \
-    '{reviewed: $reviewed, head_sha: $head_sha, labels: $labels, identity: $identity, reviews: $reviews}' >"$input"
+    --slurpfile identity "$identity_file" \
+    --slurpfile reviews "$reviews_file" \
+    '($identity[0] // {}) as $pr
+     | {reviewed: $reviewed,
+        head_sha: $head_sha,
+        labels: ($pr.labels // []),
+        identity: $pr,
+        reviews: ($reviews[0] // [])}' >"$input" || {
+    echo "ERROR: GitHub returned malformed review data for PR #$pr" >&2
+    exit 2
+  }
 fi
 
 identity_json=$(jq -c '.identity // {}' "$input" 2>/dev/null || printf '{}')
