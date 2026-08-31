@@ -10,13 +10,20 @@
 #   scripts/review_gate.sh <pr-number> [<reviewed-full-sha>]
 #   REVIEW_GATE_INPUT=<fixture.json> scripts/review_gate.sh
 #
-# Fixture input has `reviewed`, `labels`, and `reviews` fields. `labels` may be
-# an array of label names or GitHub label objects; `reviews` uses the API shape.
+# Fixture input has `reviewed`, `head_sha`, `labels`, `identity`, and `reviews`
+# fields. `labels` may be an array of label names or GitHub label objects;
+# `identity` is the REST pull-request shape and `reviews` uses the GitHub API
+# shape.
 # Exit 0 means an independent acceptance exists and no independent
 # changes-required verdict supersedes it. Exit 1 is a review failure; exit 2 is
 # an invocation or GitHub-read failure.
 
 set -euo pipefail
+
+here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=docs/ai-team/scripts/_trusted_author.sh
+# shellcheck disable=SC1091
+source "$here/_trusted_author.sh"
 
 input="${REVIEW_GATE_INPUT:-}"
 cleanup_input=""
@@ -33,12 +40,17 @@ if [[ -z "$input" ]]; then
     echo "ERROR: cannot resolve this repository through gh" >&2
     exit 2
   }
-  pr_json=$(gh pr view "$pr" --repo "$repo" --json headRefOid,labels 2>/dev/null) || {
-    echo "ERROR: cannot read PR #$pr from $repo" >&2
+  identity=$(gh api "repos/$repo/pulls/$pr" 2>/dev/null) || {
+    echo "ERROR: cannot read immutable PR identity for #$pr from $repo" >&2
     exit 2
   }
+  head_sha=$(jq -r '.head.sha // ""' <<<"$identity")
+  if [[ ! "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "ERROR: current PR head is missing or malformed for #$pr" >&2
+    exit 2
+  fi
   if [[ -z "$reviewed" ]]; then
-    reviewed=$(jq -r '.headRefOid // ""' <<<"$pr_json")
+    reviewed="$head_sha"
   fi
   if [[ ! "$reviewed" =~ ^[0-9a-f]{40}$ ]]; then
     echo "ERROR: reviewed SHA must be a full 40-character lowercase SHA" >&2
@@ -53,12 +65,17 @@ if [[ -z "$input" ]]; then
   cleanup_input="$input"
   trap 'rm -f "$cleanup_input"' EXIT
   jq -n --arg reviewed "$reviewed" \
-    --argjson labels "$(jq -c '.labels // []' <<<"$pr_json")" \
+    --arg head_sha "$head_sha" \
+    --argjson labels "$(jq -c '.labels // []' <<<"$identity")" \
+    --argjson identity "$identity" \
     --argjson reviews "$reviews" \
-    '{reviewed: $reviewed, labels: $labels, reviews: $reviews}' >"$input"
+    '{reviewed: $reviewed, head_sha: $head_sha, labels: $labels, identity: $identity, reviews: $reviews}' >"$input"
 fi
 
-result=$(jq -r '
+identity_json=$(jq -c '.identity // {}' "$input" 2>/dev/null || printf '{}')
+automated_author=$(ai_team_trusted_automated_author_lane "$identity_json")
+
+result=$(jq -r --arg automated_author "$automated_author" '
   def label_names:
     if (.labels | type) != "array" then []
     elif (.labels | length) == 0 then []
@@ -88,10 +105,14 @@ result=$(jq -r '
   . as $input
   | (label_names) as $labels
   | ([$labels[] | select(startswith("agent:")) | ltrimstr("agent:")] | unique) as $authors
-  | if ($authors | length) != 1 then
+  | if ($input.head_sha // "") != $input.reviewed then
+      ["FAIL: reviewed SHA is not the current PR head; re-review the new head"]
+    elif $automated_author != "" and ($authors | length) != 0 then
+      ["FAIL: trusted automated author \($automated_author) must not carry agent:<id> labels"]
+    elif $automated_author == "" and ($authors | length) != 1 then
       ["FAIL: expected exactly one agent:<id> author lane, found \($authors | length)"]
     else
-      ($authors[0]) as $author
+      (if $automated_author != "" then $automated_author else $authors[0] end) as $author
       | [$input.reviews[]
          | select(.commit_id == $input.reviewed)
          | . + {agent: from_agent, verdict: review_verdict}

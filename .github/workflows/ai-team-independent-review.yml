@@ -2,6 +2,8 @@ name: independent review
 
 # Copy this file into an adopting repository at .github/workflows/. It checks
 # out the trusted default-branch grammar, not the untrusted pull-request copy.
+# That grammar fetches immutable REST author/head identity; never classify a PR
+# from github.actor, which is the reviewer on review-triggered runs.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]

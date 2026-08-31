@@ -12,6 +12,7 @@ from _test_support import bash_path, run_with_bash_path
 
 SCRIPT = Path(__file__).with_name("land.sh")
 LANE = Path(__file__).with_name("_lane_issue.sh")
+TRUSTED_AUTHOR = Path(__file__).with_name("_trusted_author.sh")
 HYGIENE = Path(__file__).with_name("label_hygiene.sh")
 
 
@@ -23,7 +24,7 @@ class LandMechanismTest(unittest.TestCase):
         base = Path(self.dir.name)
         self.scripts = base / "scripts"
         self.scripts.mkdir()
-        for path in (SCRIPT, LANE):
+        for path in (SCRIPT, LANE, TRUSTED_AUTHOR):
             destination = self.scripts / path.name
             destination.write_bytes(path.read_bytes())
             destination.chmod(destination.stat().st_mode | stat.S_IXUSR)
@@ -60,11 +61,22 @@ class LandMechanismTest(unittest.TestCase):
                       --arg state "${LAND_TEST_STATE:-OPEN}" \\
                       --arg sha "${LAND_TEST_MERGE_SHA:-}" \\
                       --arg attr "${LAND_TEST_ATTRIBUTION:-}" \\
-                      '{number:42,title:"Fix lane (#42)",body:"Closes #42",headRefName:"agent/author-issue-42",labels:[{name:"agent:author"},{name:"task:review"}],isDraft:false,state:$state,mergeCommit:(if $state == "MERGED" then {oid:$sha} else null end),comments:(if $attr == "" then [] else [{body:$attr}] end)}'
+                      --arg title "$LAND_TEST_TITLE" \\
+                      --arg body "$LAND_TEST_BODY" \\
+                      --arg branch "$LAND_TEST_BRANCH" \\
+                      --argjson labels "$LAND_TEST_LABELS" \\
+                      '{number:42,title:$title,body:$body,headRefName:$branch,labels:$labels,isDraft:false,state:$state,mergeCommit:(if $state == "MERGED" then {oid:$sha} else null end),comments:(if $attr == "" then [] else [{body:$attr}] end)}'
+                    ;;
+                  "api repos/example/canonical/pulls/42")
+                    printf '%s\\n' "$LAND_TEST_IDENTITY"
                     ;;
                   "api -X")
                     if [ "${3:-}" = "PUT" ]; then
-                      printf '{"merged":true,"sha":"%s"}\\n' "${LAND_TEST_MERGE_SHA:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+                      if [[ " $* " == *" -f sha=$LAND_TEST_REVIEWED "* ]]; then
+                        printf '{"merged":true,"sha":"%s"}\\n' "${LAND_TEST_MERGE_SHA:-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}"
+                      else
+                        printf '{"merged":false,"message":"head changed"}\\n'
+                      fi
                     fi
                     ;;
                   "pr comment"|"pr edit"|"issue edit")
@@ -84,7 +96,15 @@ class LandMechanismTest(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def run_land(self, *, gate_status: str = "0", state: str = "OPEN", attributed: bool = False):
+    def run_land(
+        self,
+        *,
+        gate_status: str = "0",
+        state: str = "OPEN",
+        attributed: bool = False,
+        trusted_bot: bool = False,
+        reviewed: str = "a" * 40,
+    ):
         env = os.environ.copy()
         env.update(
             LAND_AGENT="kiat-luna",
@@ -93,14 +113,42 @@ class LandMechanismTest(unittest.TestCase):
             LAND_TEST_GATE_STATUS=gate_status,
             LAND_TEST_STATE=state,
             LAND_TEST_MERGE_SHA="b" * 40,
+            LAND_TEST_REVIEWED=reviewed.lower(),
             PATH=f"{self.cwd / 'bin'}{os.pathsep}{env.get('PATH', '')}",
         )
+        if trusted_bot:
+            env.update(
+                LAND_TEST_TITLE="Bump Alpine.js from 3.16.2 to 3.16.3",
+                LAND_TEST_BODY="Generated dependency update.",
+                LAND_TEST_BRANCH="dependabot/npm_and_yarn/alpinejs-3.16.3",
+                LAND_TEST_LABELS=json.dumps([{"name": "dependencies"}]),
+                LAND_TEST_IDENTITY=json.dumps({
+                    "user": {"id": 49699333, "login": "dependabot[bot]", "type": "Bot"},
+                    "head": {"repo": {"id": 100}},
+                    "base": {"repo": {"id": 100}},
+                }),
+            )
+        else:
+            env.update(
+                LAND_TEST_TITLE="Fix lane (#42)",
+                LAND_TEST_BODY="Closes #42",
+                LAND_TEST_BRANCH="agent/author-issue-42",
+                LAND_TEST_LABELS=json.dumps([
+                    {"name": "agent:author"},
+                    {"name": "task:review"},
+                ]),
+                LAND_TEST_IDENTITY=json.dumps({
+                    "user": {"id": 1, "login": "human-author", "type": "User"},
+                    "head": {"repo": {"id": 100}},
+                    "base": {"repo": {"id": 100}},
+                }),
+            )
         if attributed:
             env["LAND_TEST_ATTRIBUTION"] = "**From:** kiat-luna — merged at " + "b" * 40
         else:
             env.pop("LAND_TEST_ATTRIBUTION", None)
         return run_with_bash_path(
-            ["bash", str(self.scripts / "land.sh"), "42", "a" * 40],
+            ["bash", str(self.scripts / "land.sh"), "42", reviewed],
             stub_directory=self.cwd / "bin",
             cwd=self.cwd,
             env=env,
@@ -125,6 +173,7 @@ class LandMechanismTest(unittest.TestCase):
         self.assertIn("42 " + "a" * 40, gate_log)
         gh_log = self.gh_log.read_text(encoding="utf-8")
         self.assertIn("api -X PUT repos/example/canonical/pulls/42/merge", gh_log)
+        self.assertIn("-f sha=" + "a" * 40, gh_log)
         self.assertIn("pr edit 42", gh_log)
         self.assertIn("issue edit 42", gh_log)
         self.assertIn("--add-label task:done", gh_log)
@@ -137,6 +186,39 @@ class LandMechanismTest(unittest.TestCase):
         self.assertNotIn("-X PUT", gh_log)
         self.assertIn("pr edit 42", gh_log)
         self.assertIn("issue edit 42", gh_log)
+        self.assertNotIn("pr comment 42", gh_log)
+
+    def test_reviewed_sha_is_normalized_and_bound_to_the_merge_request(self):
+        result = self.run_land(reviewed="A" * 40)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        gate_log = self.gate_log.read_text(encoding="utf-8")
+        self.assertIn("42 " + "a" * 40, gate_log)
+        gh_log = self.gh_log.read_text(encoding="utf-8")
+        self.assertIn("-f sha=" + "a" * 40, gh_log)
+
+    def test_trusted_dependabot_lane_merges_without_fabricating_an_issue(self):
+        result = self.run_land(trusted_bot=True)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("trusted automated lane", result.stdout)
+        gh_log = self.gh_log.read_text(encoding="utf-8")
+        self.assertIn("api -X PUT repos/example/canonical/pulls/42/merge", gh_log)
+        self.assertIn("-f sha=" + "a" * 40, gh_log)
+        self.assertIn("pr edit 42", gh_log)
+        self.assertIn("--add-label task:done", gh_log)
+        self.assertNotIn("issue edit", gh_log)
+        self.assertIn("pr comment 42", gh_log)
+
+    def test_trusted_dependabot_merged_rerun_recovers_without_an_issue(self):
+        result = self.run_land(state="MERGED", attributed=True, trusted_bot=True)
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("already merged; retrying terminalization", result.stdout)
+        gh_log = self.gh_log.read_text(encoding="utf-8")
+        self.assertNotIn("-X PUT", gh_log)
+        self.assertIn("pr edit 42", gh_log)
+        self.assertNotIn("issue edit", gh_log)
         self.assertNotIn("pr comment 42", gh_log)
 
 

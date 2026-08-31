@@ -79,6 +79,12 @@ state, or a task already held by an open PR. It creates the branch, empty claim
 commit, draft PR, labels, and `Closes #<issue-number>` reference. Do not bypass
 a refusal by editing labels yourself.
 
+Dependabot PRs opened inside the canonical repository are the sole automated
+exception. The gate recognizes the immutable REST account id plus bot type and
+same-repository identity; it never trusts the title, branch, dependency label,
+or workflow actor. Such an open PR is an implicit issue-less handoff only while
+it has no `agent:*` or `task:*` labels. Do not fabricate claim metadata for it.
+
 Only mutate work on a claimed task. Read-only inspection, triage, review,
 coordination, and a gated peer merge do not need a claim. Keep one writer per
 path and agree a split before overlapping a peer. Use a worktree for a lane;
@@ -91,9 +97,11 @@ CLAIM_AGENT=<stable-agent-id> scripts/ready.sh <pr-number>
 LAND_AGENT=<stable-agent-id> scripts/land.sh <pr-number> <reviewed-full-sha>
 ```
 
-`land.sh` gates, merges, attributes the actor, and finalizes the task. Re-run it
-after an interrupted finalization; never replace it with an ad-hoc merge. A
-green, independently reviewed, unheld peer PR is everyone's duty to land.
+`land.sh` gates, merges, attributes the actor, and finalizes the task. For a
+trusted Dependabot lane it terminalizes only the PR as `task:done`; it never
+invents or edits an issue. Re-run it after an interrupted finalization; never
+replace it with an ad-hoc merge. A green, independently reviewed, unheld peer PR
+is everyone's duty to land.
 
 Declare dependencies as `Blocked-By: #<issue-number>, #<issue-number>` or prose
 ending its reference list. Code blocks, quotes, and HTML comments are
@@ -180,10 +188,13 @@ independence, live holds, or actual platform permission gaps.
 
 ## Identity, review, and holds
 
-Shared GitHub accounts do not identify agents. Your stable identity is the
-`agent:<id>` label on both issue and PR. Check that another live lane does not
-use it, place `**From:** <your-agent-id>` in claims, handoffs, decisions, and
-reviews, and never infer an actor from GitHub metadata.
+Shared GitHub accounts do not identify human agents. Your stable identity is
+the `agent:<id>` label on both issue and PR. Check that another live lane does
+not use it, place `**From:** <your-agent-id>` in claims, handoffs, decisions,
+and reviews, and never infer a human actor from GitHub metadata. The only
+machine-author exception is the exact, same-repository Dependabot REST identity
+described above; it receives the reserved synthetic author lane
+`github-dependabot` solely for review-independence checks.
 
 Review a peer's exact head, not your own work. Verify the claim and diff, name
 the observable problem and path, say what you did not check, and withdraw wrong
@@ -214,6 +225,10 @@ are `docs/ai-team/scripts/review_gate.sh` and
 `docs/ai-team/templates/independent-review.yml`. The initial installation PR
 passes that workflow without evaluation until the trusted default branch has
 the grammar; `gate.sh` still requires independent acceptance for that merge.
+The workflow's trusted script fetches current REST identity and head state; it
+does not classify authors from `github.actor`. This exception needs no new
+workflow permission or adopter configuration. After upgrading the grammar,
+retrigger the Independent review check on already-reviewed Dependabot PRs.
 
 Holds are labels, never prose. `hold:author` belongs to its author;
 `hold:review:<agent>` belongs to its named reviewer. Set and clear review holds

@@ -26,6 +26,7 @@ class IndependentReviewWorkflowTest(unittest.TestCase):
             self.assertIn("steps.resolve.outputs.present == 'false'", workflow)
             self.assertIn('echo "present=true" >> "$GITHUB_OUTPUT"', workflow)
             self.assertIn('echo "present=false" >> "$GITHUB_OUTPUT"', workflow)
+            self.assertNotIn("${{ github.actor }}", workflow)
 
         self.assertIn('run: scripts/review_gate.sh', package)
         self.assertIn('run: docs/ai-team/scripts/review_gate.sh', adopter)

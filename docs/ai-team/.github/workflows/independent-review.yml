@@ -2,7 +2,8 @@ name: independent review
 
 # This check deliberately checks out the trusted default-branch copy of the
 # grammar. A PR cannot weaken review_gate.sh in the same change that the check
-# evaluates.
+# evaluates. The grammar fetches immutable REST author/head identity; never
+# classify a PR from github.actor, which is the reviewer on review-triggered runs.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]

@@ -31,6 +31,16 @@ merges through the REST endpoint only when the gate passes, moves the PR and its
 issue to `task:done`, and records the acting agent. A rerun after a transient
 post-merge failure retries terminalization without attempting a second merge.
 
+`review_gate.sh`, `gate.sh`, and `land.sh` share one fail-closed trusted-author
+predicate for same-repository Dependabot PRs. It is anchored to Dependabot's
+immutable REST account id and corroborates the bot type and login; display
+metadata, branch names, labels, and `github.actor` never grant the exception.
+An open trusted PR must have no `agent:*` or `task:*` labels, still needs a
+distinct exact-head acceptance, and remains subject to holds and every ordinary
+check. It is issue-less; landing adds `task:done` only to the PR. Adopters need
+only update the mounted package—permissions and workflow configuration stay the
+same—and should retrigger Independent review for accepted bot PRs after update.
+
 `label_hygiene.sh` is called by `orient.sh` and also accepts a repository name
 directly. It reports open task-label contradictions and non-terminal labels on
 issues closed within `AI_TEAM_CLOSED_HYGIENE_DAYS` (30 by default).
