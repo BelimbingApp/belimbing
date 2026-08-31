@@ -44,13 +44,18 @@ integrate=0
 # as a hang on `--stable-branch` with nothing after it). Every valued option
 # checks arity before shifting, instead of shifting first and hoping.
 require_value() {
-  if [ "$#" -lt 2 ]; then
-    echo "sync-adopter-fork.sh: $1 requires a value" >&2
+  local argument_count="$#"
+  local option_name="$1"
+
+  if [[ "$argument_count" -lt 2 ]]; then
+    echo "sync-adopter-fork.sh: $option_name requires a value" >&2
     exit 1
   fi
+
+  return 0
 }
 
-while [ $# -gt 0 ]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --stable-branch) require_value "$@"; stable_branch="$2"; shift 2 ;;
     --origin-remote) require_value "$@"; origin_remote="$2"; shift 2 ;;
@@ -62,7 +67,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ -z "$stable_branch" ]; then
+if [[ -z "$stable_branch" ]]; then
   echo "sync-adopter-fork.sh: --stable-branch is required" >&2
   exit 1
 fi
@@ -72,12 +77,12 @@ ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || { echo "not a git checkout"
 cd "$ROOT" || exit 1
 
 current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-if [ "$current_branch" != "$stable_branch" ]; then
+if [[ "$current_branch" != "$stable_branch" ]]; then
   echo "refusing: checked out '$current_branch', not the stated stable branch '$stable_branch' — check out $stable_branch first, this script never switches branches for you" >&2
   exit 1
 fi
 
-if [ "$stable_branch" = "$upstream_branch" ] && [ "$origin_remote" = "$upstream_remote" ]; then
+if [[ "$stable_branch" == "$upstream_branch" ]] && [[ "$origin_remote" == "$upstream_remote" ]]; then
   echo "note: stable branch equals the upstream branch on the same remote — this is the main-only case; use the plain pull/rebase workflow in SKILL.md instead of this script" >&2
   exit 1
 fi
@@ -103,7 +108,7 @@ upstream_only=$(printf '%s' "$counts" | awk '{print $2}')
 echo "  $origin_ref has $adopter_only commit(s) not on $upstream_ref"
 echo "  $upstream_ref has $upstream_only commit(s) not on $origin_ref"
 
-if [ "$integrate" -eq 0 ]; then
+if [[ "$integrate" -eq 0 ]]; then
   echo
   echo "report only (pass --integrate to merge and push)"
   exit 0
@@ -112,19 +117,19 @@ fi
 echo
 echo "== preflight =="
 
-if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
+if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
   echo "refusing: working tree is not clean" >&2
   exit 1
 fi
 
 local_sha=$(git rev-parse "$stable_branch")
 origin_sha=$(git rev-parse "$origin_ref")
-if [ "$local_sha" != "$origin_sha" ]; then
+if [[ "$local_sha" != "$origin_sha" ]]; then
   echo "refusing: local $stable_branch ($local_sha) is not $origin_ref ($origin_sha) — sync local to origin first, this script never resets a branch for you" >&2
   exit 1
 fi
 
-if [ "$upstream_only" = "0" ]; then
+if [[ "$upstream_only" == "0" ]]; then
   echo "nothing to integrate: $origin_ref already contains $upstream_ref"
   exit 0
 fi

@@ -20,22 +20,44 @@ pass=0
 fail=0
 
 report() {
-  if [ "$1" -eq 0 ]; then
+  local status="$1"
+  local label="$2"
+
+  if [[ "$status" -eq 0 ]]; then
     pass=$((pass + 1))
-    echo "  ok      $2"
+    echo "  ok      $label"
   else
     fail=$((fail + 1))
-    echo "  FAIL    $2"
+    echo "  FAIL    $label"
   fi
+
+  return 0
 }
 
 git_c() {
   git -c user.name="test" -c user.email="test@example.invalid" "$@"
+  return $?
 }
 
 sandbox=$(mktemp -d)
-cleanup() { rm -rf "$sandbox"; }
+cleanup() {
+  rm -rf "$sandbox"
+  return $?
+}
 trap cleanup EXIT
+
+status_equal() {
+  local expected="$1"
+  local actual="$2"
+
+  if [[ "$expected" == "$actual" ]]; then
+    echo 0
+  else
+    echo 1
+  fi
+
+  return 0
+}
 
 # Builds a fresh origin.git (branch master) + upstream.git (branch main) pair
 # under $1, with origin carrying two adopter-only commits and upstream
@@ -80,13 +102,15 @@ build_fixture() {
   ) >/dev/null
 
   echo "$origin_bare $upstream_bare"
+  return 0
 }
 
 fresh_checkout() {
   local dir="$1" origin_bare="$2" upstream_bare="$3"
   rm -rf "$dir"
-  git_c clone -q "$origin_bare" "$dir" >/dev/null 2>&1
+  git_c clone -q "$origin_bare" "$dir" >/dev/null 2>&1 || return $?
   (cd "$dir" && git_c remote add upstream "$upstream_bare" && git_c checkout -q master)
+  return $?
 }
 
 echo "== report-only mode makes no changes =="
@@ -102,7 +126,7 @@ report "$rc" "report-only exits 0"
 printf '%s\n' "$out" | grep -q "2 commit(s) not on" && report 0 "reports adopter-only count" || report 1 "reports adopter-only count"
 printf '%s\n' "$out" | grep -q "not pushing\|report only" && report 0 "declines to integrate without --integrate" || report 1 "declines to integrate without --integrate"
 after_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
-report $([ "$before_origin" = "$after_origin" ] && echo 0 || echo 1) "origin/master untouched by report-only run"
+report "$(status_equal "$before_origin" "$after_origin")" "origin/master untouched by report-only run"
 
 echo
 echo "== --integrate performs a clean non-conflicting merge and pushes =="
@@ -119,8 +143,8 @@ report "$rc" "integrate exits 0 on a clean merge"
 (cd "$work" && git_c log --oneline | grep -q "framework: v3") && report 0 "upstream commit v3 is incorporated" || report 1 "upstream commit v3 is incorporated"
 pushed=$(git_c --git-dir="$origin_bare" rev-parse master)
 local_head=$(cd "$work" && git_c rev-parse master)
-report $([ "$pushed" = "$local_head" ] && echo 0 || echo 1) "origin/master advanced to the merge result"
-(cd "$work" && [ -z "$(git_c status --porcelain)" ]) && report 0 "tree clean after integration" || report 1 "tree clean after integration"
+report "$(status_equal "$pushed" "$local_head")" "origin/master advanced to the merge result"
+(cd "$work" && [[ -z "$(git_c status --porcelain)" ]]) && report 0 "tree clean after integration" || report 1 "tree clean after integration"
 
 echo
 echo "== a real conflict aborts cleanly, no partial merge, no push =="
@@ -138,11 +162,11 @@ fresh_checkout "$work" "$origin_bare" "$upstream_bare"
 before_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
 out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rc=$?
-report $([ "$rc" -eq 2 ] && echo 0 || echo 1) "conflict exits 2"
+report "$(status_equal 2 "$rc")" "conflict exits 2"
 (cd "$work" && git_c status --porcelain | grep -qv '^??') && report 1 "tree left clean after aborted merge" || report 0 "tree left clean after aborted merge"
-(cd "$work" && [ ! -f .git/MERGE_HEAD ]) && report 0 "no merge left in progress" || report 1 "no merge left in progress"
+(cd "$work" && [[ ! -f .git/MERGE_HEAD ]]) && report 0 "no merge left in progress" || report 1 "no merge left in progress"
 after_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
-report $([ "$before_origin" = "$after_origin" ] && echo 0 || echo 1) "origin/master untouched after aborted conflict (never pushed)"
+report "$(status_equal "$before_origin" "$after_origin")" "origin/master untouched after aborted conflict (never pushed)"
 
 echo
 echo "== origin already moved before the run starts is refused at preflight =="
@@ -157,7 +181,7 @@ git_c clone -q "$origin_bare" "$other" >/dev/null 2>&1
 (cd "$other" && echo "someone else's change" > racer.txt && git_c add racer.txt && git_c commit -qm "someone else: concurrent commit" && git_c push -q origin master) >/dev/null
 out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rc=$?
-report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "refuses when local isn't in sync with origin before integrating (exit 1)"
+report "$(status_equal 1 "$rc")" "refuses when local isn't in sync with origin before integrating (exit 1)"
 printf '%s\n' "$out" | grep -qi "force" && report 1 "script never mentions --force as a recovery path" || report 0 "script never mentions --force as a recovery path"
 grep 'git push' "$SCRIPT" | grep -qE -- '--force|-f\b|force-with-lease' && report 1 "no git push invocation carries a force flag" || report 0 "no git push invocation carries a force flag"
 
@@ -219,20 +243,20 @@ rc=$?
 origin_tip_after_rejection=$(git_c --git-dir="$origin_bare" rev-parse master)
 local_after_rejection=$(cd "$work" && git_c rev-parse master)
 
-report $([ "$rc" -eq 3 ] && echo 0 || echo 1) "the raced push exits 3"
+report "$(status_equal 3 "$rc")" "the raced push exits 3"
 printf '%s\n' "$out" | grep -q "push rejected" && report 0 "reports the push as rejected" || report 1 "reports the push as rejected"
 printf '%s\n' "$out" | grep -qE -- '--force|force-with-lease' && report 1 "no --force flag mentioned as a recovery path" || report 0 "no --force flag mentioned as a recovery path"
-report $([ "$origin_tip_after_rejection" = "$racer_sha" ] && echo 0 || echo 1) "origin sits at exactly the racer's independently-known commit right after the rejection — not something the script itself pushed"
-report $([ "$local_after_rejection" = "$racer_sha" ] && echo 0 || echo 1) "local master is reset to exactly the racer's commit right after the rejection, before any rerun"
+report "$(status_equal "$origin_tip_after_rejection" "$racer_sha")" "origin sits at exactly the racer's independently-known commit right after the rejection — not something the script itself pushed"
+report "$(status_equal "$local_after_rejection" "$racer_sha")" "local master is reset to exactly the racer's commit right after the rejection, before any rerun"
 
 rerun_out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rerun_rc=$?
-report $([ "$rerun_rc" -eq 0 ] && echo 0 || echo 1) "re-running as advised succeeds instead of hitting the preflight refusal"
+report "$(status_equal 0 "$rerun_rc")" "re-running as advised succeeds instead of hitting the preflight refusal"
 (cd "$work" && git_c log --oneline | grep -q "someone else: landed mid-run") && report 0 "the re-run's merge includes the commit that raced in" || report 1 "the re-run's merge includes the commit that raced in"
 (cd "$work" && git_c log --oneline | grep -q "framework: v3") && report 0 "the re-run's merge still includes the original upstream commits" || report 1 "the re-run's merge still includes the original upstream commits"
 final_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
 final_local=$(cd "$work" && git_c rev-parse master)
-report $([ "$final_origin" = "$final_local" ] && echo 0 || echo 1) "origin only ever advances from a successful push — the re-run's own push, not the earlier rejected one"
+report "$(status_equal "$final_origin" "$final_local")" "origin only ever advances from a successful push — the re-run's own push, not the earlier rejected one"
 
 echo
 echo "== wrong current branch is refused before touching anything =="
@@ -244,7 +268,7 @@ fresh_checkout "$work" "$origin_bare" "$upstream_bare"
 (cd "$work" && git_c checkout -q -b some-other-branch)
 out=$(cd "$work" && bash "$SCRIPT" --stable-branch master 2>&1)
 rc=$?
-report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "refuses to run when checked-out branch isn't the stated stable branch"
+report "$(status_equal 1 "$rc")" "refuses to run when checked-out branch isn't the stated stable branch"
 
 echo
 echo "== every valued option with no value fails fast instead of hanging =="
@@ -261,11 +285,11 @@ mkdir -p "$plain"
 for flag in --stable-branch --origin-remote --upstream-remote --upstream-branch -C; do
   out=$(cd "$plain" && timeout 5 bash "$SCRIPT" "$flag" 2>&1)
   rc=$?
-  report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "'$flag' with no following value exits 1, not a timeout (124) or a hang"
+  report "$(status_equal 1 "$rc")" "'$flag' with no following value exits 1, not a timeout (124) or a hang"
   printf '%s\n' "$out" | grep -q "requires a value" && report 0 "'$flag': explains which option was missing its value" || report 1 "'$flag': explains which option was missing its value"
 done
 
 echo
 echo "-------------------------------------------"
 echo "passed: $pass  failed: $fail"
-[ "$fail" -eq 0 ]
+[[ "$fail" -eq 0 ]]
