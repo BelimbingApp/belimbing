@@ -145,13 +145,13 @@ after_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
 report $([ "$before_origin" = "$after_origin" ] && echo 0 || echo 1) "origin/master untouched after aborted conflict (never pushed)"
 
 echo
-echo "== a concurrent push on origin is refused, never force-pushed =="
-section="$sandbox/race"
+echo "== origin already moved before the run starts is refused at preflight =="
+section="$sandbox/stale-before-start"
 mkdir -p "$section"
 read -r origin_bare upstream_bare < <(build_fixture "$section")
 work="$section/work"
 fresh_checkout "$work" "$origin_bare" "$upstream_bare"
-# Simulate someone else pushing to origin/master after our clone.
+# Simulate someone else pushing to origin/master before our clone's own fetch.
 other="$section/other-push"
 git_c clone -q "$origin_bare" "$other" >/dev/null 2>&1
 (cd "$other" && echo "someone else's change" > racer.txt && git_c add racer.txt && git_c commit -qm "someone else: concurrent commit" && git_c push -q origin master) >/dev/null
@@ -160,6 +160,53 @@ rc=$?
 report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "refuses when local isn't in sync with origin before integrating (exit 1)"
 printf '%s\n' "$out" | grep -qi "force" && report 1 "script never mentions --force as a recovery path" || report 0 "script never mentions --force as a recovery path"
 grep 'git push' "$SCRIPT" | grep -qE -- '--force|-f\b|force-with-lease' && report 1 "no git push invocation carries a force flag" || report 0 "no git push invocation carries a force flag"
+
+echo
+echo "== origin moves mid-run, after this script's own fetch: push fails, local un-pushed merge is undone, a re-run then succeeds =="
+# The section above races before the script's own fetch, so the preflight
+# (comparing against what that fetch just saw) correctly refuses before ever
+# reaching the merge or the push — it never exercises push rejection itself.
+# #450 review (codex-gpt-5): the real race is a push landing on origin AFTER
+# this script's fetch but BEFORE its own push — preflight passes (its
+# comparison is against the already-fetched, now-stale ref), the merge
+# succeeds locally, and only the final push discovers the race. Local git
+# operations complete in low milliseconds, too fast to land this reliably by
+# timing a background process — landed instead through the script's
+# test-only SYNC_ADOPTER_FORK_TEST_HOOK, which runs synchronously right
+# after the fetches and before anything else, so the race lands in the exact
+# window every time rather than most of the time.
+section="$sandbox/race-after-fetch"
+mkdir -p "$section"
+read -r origin_bare upstream_bare < <(build_fixture "$section")
+work="$section/work"
+fresh_checkout "$work" "$origin_bare" "$upstream_bare"
+before_local=$(cd "$work" && git_c rev-parse master)
+
+racer="$section/racer-push"
+git_c clone -q "$origin_bare" "$racer" >/dev/null 2>&1
+racer_script="$section/racer.sh"
+cat > "$racer_script" <<RACER
+#!/usr/bin/env bash
+set -eu
+echo "raced in mid-run" > "$racer/racer.txt"
+git -C "$racer" -c user.name=test -c user.email=test@example.invalid add racer.txt
+git -C "$racer" -c user.name=test -c user.email=test@example.invalid commit -qm "someone else: landed mid-run"
+git -C "$racer" -c user.name=test -c user.email=test@example.invalid push -q origin master
+RACER
+
+out=$(cd "$work" && SYNC_ADOPTER_FORK_TEST_HOOK="bash '$racer_script'" bash "$SCRIPT" --stable-branch master --integrate 2>&1)
+rc=$?
+
+report $([ "$rc" -eq 3 ] && echo 0 || echo 1) "the raced push exits 3"
+printf '%s\n' "$out" | grep -qE -- '--force|force-with-lease' && report 1 "no --force flag mentioned as a recovery path" || report 0 "no --force flag mentioned as a recovery path"
+after_local=$(cd "$work" && git_c rev-parse master)
+report $([ "$before_local" != "$after_local" ] && echo 0 || echo 1) "local master no longer sits on the run's own un-pushed merge"
+
+rerun_out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
+rerun_rc=$?
+report $([ "$rerun_rc" -eq 0 ] && echo 0 || echo 1) "re-running as advised succeeds instead of hitting the preflight refusal"
+(cd "$work" && git_c log --oneline | grep -q "someone else: landed mid-run") && report 0 "the re-run's merge includes the commit that raced in" || report 1 "the re-run's merge includes the commit that raced in"
+(cd "$work" && git_c log --oneline | grep -q "framework: v3") && report 0 "the re-run's merge still includes the original upstream commits" || report 1 "the re-run's merge still includes the original upstream commits"
 
 echo
 echo "== wrong current branch is refused before touching anything =="
@@ -172,6 +219,22 @@ fresh_checkout "$work" "$origin_bare" "$upstream_bare"
 out=$(cd "$work" && bash "$SCRIPT" --stable-branch master 2>&1)
 rc=$?
 report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "refuses to run when checked-out branch isn't the stated stable branch"
+
+echo
+echo "== a valued option with no value fails fast instead of hanging =="
+# #450 review (codex-gpt-5): `${2:-}` + `shift 2` with no $2 left `shift`
+# failing under set -u without set -e, so $# never decreased and the parser
+# re-matched forever. Bounded with `timeout` so a real regression here fails
+# this test instead of hanging the whole suite.
+section="$sandbox/missing-value"
+mkdir -p "$section"
+read -r origin_bare upstream_bare < <(build_fixture "$section")
+work="$section/work"
+fresh_checkout "$work" "$origin_bare" "$upstream_bare"
+out=$(cd "$work" && timeout 5 bash "$SCRIPT" --stable-branch 2>&1)
+rc=$?
+report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "a valued option with no following value exits 1, not a timeout (124) or a hang"
+printf '%s\n' "$out" | grep -q "requires a value" && report 0 "explains which option was missing its value" || report 1 "explains which option was missing its value"
 
 echo
 echo "-------------------------------------------"

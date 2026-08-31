@@ -37,14 +37,27 @@ upstream_remote="upstream"
 upstream_branch="main"
 integrate=0
 
+# A valued option with no following argument left `shift 2` failing silently
+# under `set -u` without `set -e` (deliberate elsewhere in this script, for
+# the merge-conflict-abort path below) — $# never decreased, so the loop
+# re-matched the same option forever (#450 review, codex-gpt-5: reproduced
+# as a hang on `--stable-branch` with nothing after it). Every valued option
+# checks arity before shifting, instead of shifting first and hoping.
+require_value() {
+  if [ "$#" -lt 2 ]; then
+    echo "sync-adopter-fork.sh: $1 requires a value" >&2
+    exit 1
+  fi
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
-    --stable-branch) stable_branch="${2:-}"; shift 2 ;;
-    --origin-remote) origin_remote="${2:-}"; shift 2 ;;
-    --upstream-remote) upstream_remote="${2:-}"; shift 2 ;;
-    --upstream-branch) upstream_branch="${2:-}"; shift 2 ;;
+    --stable-branch) require_value "$@"; stable_branch="$2"; shift 2 ;;
+    --origin-remote) require_value "$@"; origin_remote="$2"; shift 2 ;;
+    --upstream-remote) require_value "$@"; upstream_remote="$2"; shift 2 ;;
+    --upstream-branch) require_value "$@"; upstream_branch="$2"; shift 2 ;;
     --integrate) integrate=1; shift ;;
-    -C) repo_path="${2:-}"; shift 2 ;;
+    -C) require_value "$@"; repo_path="$2"; shift 2 ;;
     *) echo "sync-adopter-fork.sh: unrecognized argument '$1'" >&2; exit 1 ;;
   esac
 done
@@ -96,6 +109,16 @@ if [ "$integrate" -eq 0 ]; then
   exit 0
 fi
 
+# Test-only hook: run an arbitrary command right after the fetches above and
+# before anything else, so a test can land a real concurrent push in the
+# exact window a live race would — local git operations complete in low
+# milliseconds, too fast for a timing-based test to land a race reliably any
+# other way. Unset in every real invocation; never documented as a stable
+# interface.
+if [ -n "${SYNC_ADOPTER_FORK_TEST_HOOK:-}" ]; then
+  eval "$SYNC_ADOPTER_FORK_TEST_HOOK"
+fi
+
 echo
 echo "== preflight =="
 
@@ -140,7 +163,21 @@ fi
 
 if ! git push "$origin_remote" "$stable_branch:$stable_branch" 2>&1; then
   echo "push rejected — $origin_remote/$stable_branch moved since the fetch above (someone else pushed concurrently)." >&2
-  echo "not retrying with force. Re-run this script: it will fetch again and merge onto the new tip." >&2
+  echo "not retrying with force." >&2
+  # A bare re-run would otherwise hit the in-sync-with-origin preflight and
+  # refuse twice over (#450 review, codex-gpt-5: reproduced both ways).
+  # Resetting to $local_sha — where this run started — undoes the un-pushed
+  # merge, but origin has since moved *past* that point too, so local would
+  # still not match it: fetch the tip that just rejected the push, and land
+  # local exactly there, so a re-run's preflight sees a clean, in-sync
+  # branch and does the real work instead of refusing again.
+  if git fetch "$origin_remote" "$stable_branch" 2>&1; then
+    git reset --hard "$origin_ref"
+    echo "local $stable_branch reset to $origin_ref's new tip (undid this run's un-pushed merge). Re-run this script: it will merge onto the tip that just rejected this push." >&2
+  else
+    git reset --hard "$local_sha"
+    echo "could not re-fetch $origin_ref; local $stable_branch reset back to $local_sha (undid this run's un-pushed merge) instead. Re-run this script." >&2
+  fi
   exit 3
 fi
 
