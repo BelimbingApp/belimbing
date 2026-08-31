@@ -96,9 +96,9 @@ class Index extends Component
         $this->runUpstreamSyncAction(fn (): array => $sync->refreshMirror(Auth::user()));
     }
 
-    public function cutReleaseCandidate(UpstreamSyncService $sync): void
+    public function prepareIntegration(UpstreamSyncService $sync): void
     {
-        $this->runUpstreamSyncAction(fn (): array => $sync->cutReleaseCandidate(Auth::user()));
+        $this->runUpstreamSyncAction(fn (): array => $sync->prepareIntegration(Auth::user()));
     }
 
     /**
