@@ -2,7 +2,7 @@
 
 **Document Type:** Architecture Specification
 **Purpose:** Define the architectural standards for database migrations, seeding, and schema conventions in Belimbing.
-**Last Updated:** 2026-08-06
+**Last Updated:** 2026-08-31
 
 ## Overview
 
@@ -47,6 +47,7 @@ Migration filenames use the timestamp prefix to encode execution order. The year
 | `0300` | Operation Domain | Operation Modules. |
 | `0310` | Commerce Domain | Commerce Modules. |
 | `0320` | People Domain | People Modules that depend on Core employee/company foundations. |
+| `0330` | PeopleConnector Domain | Provider-neutral People integration and connector-owned Skill and Training Modules. |
 | `2026+` | Extensions | Deployment-owned Extension Modules using real calendar years. |
 
 ### Manifest Dependency Ordering
@@ -77,7 +78,7 @@ Table names use owner, module, and entity names to prevent ownership conflicts. 
 | :--- | :--- | :--- |
 | Base modules | `base_{module}_{entity}` | `base_database_tables`, `base_authz_roles` |
 | Core modules | `{entity}` or `{module}_{entity}` when needed for clarity; no `core_` prefix | `companies`, `users`, `employees`, `geonames_countries` |
-| Optional Domain Modules | `{domain}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets` |
+| Optional Domain Modules | `{domain}_{module}_{entity}` | `commerce_inventory_items`, `operation_it_tickets`, `people_connector_skill_assessments` |
 | Extension Modules | `{extension}_{module}_{entity}` | `sbg_quality_ncr_ext` |
 
 `entity` is the table-row noun represented by the table. It is not a filesystem layer. Existing tables that predate the finalized domain convention should be renamed during initialization rather than documented as exceptions.
@@ -229,16 +230,27 @@ When introducing a new People module, choose the tier first based on dependency 
 | `0320_02_07_*` | Recruitment | Producer | Company, Employee, User, Settings, Workflow |
 | `0320_02_09_*` | Onboarding | Producer | Company, Employee, User, Settings, Recruitment, Workflow |
 | `0320_02_11_*` | Performance | Producer | Company, Employee, User, Settings, Workflow |
-| `0320_02_13_*` | Training | Producer | Company, Employee, User, Settings |
 | `0320_02_15_*` | Disciplinary | Producer | Company, Employee, User, Settings, Workflow |
 | `0320_03_01_*` | Payroll | Consumer | Company, Employee, User, Settings, **Leave, Claim, Attendance**, Workflow |
-| `0320_03_03_*` | Report | Consumer | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance, Recruitment, Onboarding, Performance, Training, Disciplinary |
+| `0320_03_03_*` | Report | Consumer | Company, Employee, User, Settings, Payroll, Leave, Claim, Attendance, Recruitment, Onboarding, Performance, Disciplinary |
 
 Self-service is **not** a module in BLB. Every People module exposes its own employee, manager, HR/Finance, and admin surfaces inside one Livewire workbench, gated by capabilities. The iPayroll "ESS/MSS" portal pattern was a workaround for admin-first products; BLB is authz-gated from the start, so adding a user and granting the right capability is the self-service mechanism.
 
 Payroll is a consumer of Leave/Claim/Attendance facts via the Payroll-owned `PayrollContributionIntake` contract (see `docs/plans/people/10_payroll-intake-dependency-inversion.md`). Producer modules must not import Payroll models; only Payroll's intake DTO and status query are part of the public contract.
 
 The registry table is the dependency graph. Do not duplicate module dependencies in a separate diagram; update the table when ownership, prefix, dependency direction, or tier assignment changes.
+
+### PeopleConnector
+
+`0330` is reserved for the separate optional `PeopleConnector` Domain mounted at `app/Domains/PeopleConnector/`. Its tables use the `people_connector_{module}_{entity}` owner prefix. The Connector Module is the anti-corruption boundary around the selected HR provider; Skill and Training own supplemental records and never use provider-table or Core Employee foreign keys. Provider identities are tenant-scoped external references with provenance.
+
+| Prefix | Module | Role | Dependencies |
+|--------|--------|------|--------------|
+| `0330_01_01_*` | Connector | Foundation | Base Database, Base Settings, Base Integration, Base Tenancy, Core Company, Core User |
+| `0330_02_01_*` | Skill | Supplemental capability | Connector |
+| `0330_02_03_*` | Training | Supplemental capability | Connector, Skill |
+
+The stable Module IDs are `people-connector/connector`, `people-connector/skill`, and `people-connector/training`. Connector deliberately has no hard dependency on `people/*` or `core/employee`: a same-installation `blb-people` adapter and a remote-provider adapter implement the same provider-neutral port, while connector-owned projections retain only the approved external references and snapshots. The manifest graph must preserve `Connector → Skill → Training` migration order.
 
 ### Extensions (2026+)
 
