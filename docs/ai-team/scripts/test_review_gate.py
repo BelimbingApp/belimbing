@@ -50,9 +50,21 @@ class ReviewGateTest(unittest.TestCase):
                 check=False,
             )
 
-    def review(self, agent="reviewer", state="COMMENTED", body=None, commit_id=SHA, at="2026-01-01T00:00:00Z"):
+    def review(
+        self,
+        agent="reviewer",
+        state="COMMENTED",
+        body=None,
+        commit_id=SHA,
+        at="2026-01-01T00:00:00Z",
+        head_marker=None,
+        bind_head=True,
+    ):
         if body is None:
             body = f"**From:** {agent}\n\n**Verdict:** accept"
+        if bind_head and "**HEAD reviewed:**" not in body:
+            marker = commit_id if head_marker is None else head_marker
+            body = f"{body}\n\n**HEAD reviewed:** `{marker}`"
         return {
             "id": 1,
             "state": state,
@@ -85,6 +97,38 @@ class ReviewGateTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_current_api_commit_id_cannot_rewrite_a_stale_explicit_head_binding(self):
+        result = self.run_gate([
+            self.review(commit_id=SHA, head_marker=STALE_SHA),
+        ])
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("**HEAD reviewed:** must name exact head", result.stdout)
+
+    def test_later_unbound_review_revokes_an_earlier_bound_acceptance(self):
+        result = self.run_gate([
+            self.review(at="2026-01-01T00:00:00Z"),
+            self.review(
+                commit_id=SHA,
+                head_marker=STALE_SHA,
+                at="2026-01-01T00:01:00Z",
+            ),
+        ])
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("**HEAD reviewed:** must name exact head", result.stdout)
+
+    def test_missing_explicit_head_binding_is_not_an_acceptance(self):
+        result = self.run_gate([
+            self.review(commit_id=SHA, bind_head=False),
+        ])
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("**HEAD reviewed:** must name exact head", result.stdout)
 
     def test_moved_head_refuses_a_stale_review_event(self):
         result = self.run_gate([self.review()], head_sha=STALE_SHA)

@@ -13,7 +13,10 @@
 # Fixture input has `reviewed`, `head_sha`, `labels`, `identity`, and `reviews`
 # fields. `labels` may be an array of label names or GitHub label objects;
 # `identity` is the REST pull-request shape and `reviews` uses the GitHub API
-# shape.
+# shape. Every attributable review must name the reviewed full SHA in a
+# `**HEAD reviewed:**` marker. GitHub's review `commit_id` remains required as
+# corroboration, but is insufficient by itself because a Dependabot rebase can
+# rewrite that field on an older review to the replacement head.
 # Exit 0 means an independent acceptance exists and no independent
 # changes-required verdict supersedes it. Exit 1 is a review failure; exit 2 is
 # an invocation or GitHub-read failure.
@@ -87,6 +90,11 @@ result=$(jq -r --arg automated_author "$automated_author" '
        | capture("^\\*\\*From:\\*\\*[[:space:]]*(?<agent>[a-z0-9]+(?:[._-][a-z0-9]+)*)(?:[[:space:]]|$)"; "i").agent
        | ascii_downcase)] | unique) as $agents
     | if ($agents | length) == 1 then $agents[0] else "" end;
+  def reviewed_head:
+    ([((.body // "") | split("\n")[]
+       | capture("^\\*\\*HEAD reviewed:\\*\\*[[:space:]]*`?(?<sha>[0-9a-f]{40})`?[[:space:]]*$"; "i").sha
+       | ascii_downcase)] | unique) as $heads
+    | if ($heads | length) == 1 then $heads[0] else "" end;
   def explicit_verdicts:
     [((.body // "") | split("\n")[]
        | capture("^\\*\\*Verdict:\\*\\*[[:space:]]*(?<verdict>accept(?: with follow-up)?|changes required)[[:space:]]*$"; "i").verdict
@@ -115,16 +123,17 @@ result=$(jq -r --arg automated_author "$automated_author" '
       (if $automated_author != "" then $automated_author else $authors[0] end) as $author
       | [$input.reviews[]
          | select(.commit_id == $input.reviewed)
-         | . + {agent: from_agent, verdict: review_verdict}
+         | . + {agent: from_agent, verdict: review_verdict, reviewed_head: reviewed_head}
          | select(.agent != "")]
         | sort_by(.agent, .submitted_at, .id)
         | group_by(.agent)
         | map(last) as $latest
-      | ([$latest[] | select(.agent != $author and .verdict == "accept") | .agent] | unique | join(", ")) as $accepted
-      | ([$latest[] | select(.agent != $author and .verdict == "changes required") | .agent] | unique | join(", ")) as $blocking
+      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "accept") | .agent] | unique | join(", ")) as $accepted
+      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "changes required") | .agent] | unique | join(", ")) as $blocking
       | ([$latest[] | select(.agent != $author and .verdict == "") | .agent] | unique) as $malformed
+      | ([$latest[] | select(.agent != $author and .reviewed_head != $input.reviewed) | .agent] | unique) as $unbound
       | [if $accepted == "" then
-           "FAIL: no independent exact-head acceptance; require **From:** <reviewer> plus APPROVED or **Verdict:** accept"
+           "FAIL: no independent exact-head acceptance; require **From:** <reviewer>, **HEAD reviewed:** `<full-sha>`, and APPROVED or **Verdict:** accept"
          else
            "PASS: independent exact-head acceptance from \($accepted)"
          end,
@@ -133,6 +142,7 @@ result=$(jq -r --arg automated_author "$automated_author" '
          else
            "FAIL: independent exact-head changes required by \($blocking)"
          end]
+        + [$unbound[] | "WARN: a review marker from \(.) was rejected because **HEAD reviewed:** must name exact head \($input.reviewed)"]
         + [$malformed[] | "WARN: a review marker from \(.) was seen at \($input.reviewed[0:8]) but rejected for format — **Verdict:** must stand alone on its own line (accept / accept with follow-up / changes required)"]
     end
   | .[]

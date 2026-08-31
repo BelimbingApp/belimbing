@@ -205,20 +205,25 @@ checked.
 Post a verdict as a PR review, not an issue comment:
 
 ```bash
-gh pr review <pr-number> --comment --body "$(printf '**From:** <your-agent-id>\n\n**Verdict:** accept\n')"
+reviewed_head=$(gh pr view <pr-number> --json headRefOid --jq .headRefOid)
+gh pr review <pr-number> --comment --body "$(printf '**From:** <your-agent-id>\n\n**HEAD reviewed:** %s\n\n**Verdict:** accept\n' "$reviewed_head")"
 ```
 
-`**Verdict:**` is alone on its line and is `accept`, `accept with follow-up`, or
-`changes required`. A shared account may record it as `COMMENTED`; the exact
-`From` marker and lane label establish independence. Run `gate.sh` after posting
-to verify it registered. Use `accept with follow-up` only for genuinely separate
+`**HEAD reviewed:**` is alone on its line and names the exact 40-character SHA
+you inspected. It is mandatory even for a native approval. `**Verdict:**` is
+also alone on its line and is `accept`, `accept with follow-up`, or `changes
+required`. A shared account may record it as `COMMENTED`; the exact `From`
+marker and lane label establish independence. Run `gate.sh` after posting to
+verify it registered. Use `accept with follow-up` only for genuinely separate
 work; otherwise request the fix in the same PR.
 
 `scripts/review_gate.sh` is the canonical review grammar here, and `gate.sh`
-uses it. It counts only the newest review on the exact head from a stable
-`From` identity distinct from the single author lane; a newer `changes required`
-verdict revokes that reviewer's earlier acceptance. To make the same rule a
-required GitHub check in an adopter, copy
+uses it. It counts only the newest review whose API `commit_id` and explicit
+`HEAD reviewed` marker both name the exact head, from a stable `From` identity
+distinct from the single author lane; a newer review revokes that reviewer's
+earlier acceptance. The explicit marker is durable proof: GitHub may rewrite an
+older Dependabot review's API `commit_id` when the bot rebases it. To make the
+same rule a required GitHub check in an adopter, copy
 `templates/independent-review.yml` to `.github/workflows/independent-review.yml`
 and require its `Independent review` check. In an adopter mount, those paths
 are `docs/ai-team/scripts/review_gate.sh` and
@@ -228,7 +233,8 @@ the grammar; `gate.sh` still requires independent acceptance for that merge.
 The workflow's trusted script fetches current REST identity and head state; it
 does not classify authors from `github.actor`. This exception needs no new
 workflow permission or adopter configuration. After upgrading the grammar,
-retrigger the Independent review check on already-reviewed Dependabot PRs.
+repost any marker-less review and retrigger the Independent review check on
+already-reviewed Dependabot PRs.
 
 Holds are labels, never prose. `hold:author` belongs to its author;
 `hold:review:<agent>` belongs to its named reviewer. Set and clear review holds

@@ -176,6 +176,7 @@ class GateMechanismTest(unittest.TestCase):
         title: str | None = None,
         identity: dict[str, object] | None = None,
         review_gate_body: str | None = None,
+        bind_review_heads: bool = True,
     ) -> subprocess.CompletedProcess[str]:
         base = Path(self.dir.name)
         checkout = base / "checkout"
@@ -231,7 +232,17 @@ class GateMechanismTest(unittest.TestCase):
                 "commit_id": effective_head,
                 "submitted_at": "2026-01-01T00:00:00Z",
             }]
-        env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
+        effective_reviews = json.loads(json.dumps(reviews))
+        if bind_review_heads:
+            for review in effective_reviews:
+                body_value = review.get("body")
+                body_text = body_value if isinstance(body_value, str) else ""
+                if "**HEAD reviewed:**" not in body_text:
+                    marker = review.get("commit_id", effective_head)
+                    review["body"] = (
+                        f"{body_text}\n\n**HEAD reviewed:** `{marker}`"
+                    )
+        env["GATE_TEST_REVIEWS"] = json.dumps(effective_reviews)
         env["GATE_TEST_ISSUE_COMMENTS"] = json.dumps(issue_comments if issue_comments is not None else [])
         if check_runs is None:
             check_runs = [{
@@ -635,6 +646,46 @@ class GateMechanismTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1)
         self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_current_api_commit_id_cannot_rewrite_a_stale_explicit_head_binding(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": (
+                    "**From:** reviewer\n\n"
+                    f"**HEAD reviewed:** `{self.main_sha}`"
+                ),
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("**HEAD reviewed:** must name exact head", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
+
+    def test_missing_explicit_head_binding_fails_the_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            reviews=[{
+                "id": 1,
+                "state": "APPROVED",
+                "body": "**From:** reviewer",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+            }],
+            bind_review_heads=False,
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+        self.assertIn("**HEAD reviewed:** must name exact head", result.stdout)
+        self.assertIn("GATE: FAIL", result.stdout)
 
     def test_shared_account_comment_with_explicit_acceptance_passes(self):
         result = self.run_gate(

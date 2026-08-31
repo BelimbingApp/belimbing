@@ -37,9 +37,16 @@ immutable REST account id and corroborates the bot type and login; display
 metadata, branch names, labels, and `github.actor` never grant the exception.
 An open trusted PR must have no `agent:*` or `task:*` labels, still needs a
 distinct exact-head acceptance, and remains subject to holds and every ordinary
-check. It is issue-less; landing adds `task:done` only to the PR. Adopters need
-only update the mounted package—permissions and workflow configuration stay the
-same—and should retrigger Independent review for accepted bot PRs after update.
+check. The canonical review body must contain one `**From:** <reviewer>` line
+and one `**HEAD reviewed:** <full-sha>` line; an approval or standalone
+`**Verdict:** accept` supplies the verdict. Both that explicit marker and the
+GitHub API `commit_id` must equal the current head. The marker is decisive
+because GitHub can rewrite an older Dependabot review's `commit_id` during a
+rebase while its body still names the old head. The lane is issue-less; landing
+adds `task:done` only to the PR. Adopters need only update the mounted
+package—permissions and workflow configuration stay the same—but must repost
+marker-less reviews and retrigger Independent review for accepted bot PRs after
+update.
 
 `label_hygiene.sh` is called by `orient.sh` and also accepts a repository name
 directly. It reports open task-label contradictions and non-terminal labels on
