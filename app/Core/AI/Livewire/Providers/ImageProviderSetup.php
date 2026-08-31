@@ -132,7 +132,7 @@ class ImageProviderSetup extends Component
             $companyId,
             $this->providerKey,
             $attributes,
-            Auth::user()?->employee?->id,
+            Auth::id(),
         );
 
         $this->show = false;

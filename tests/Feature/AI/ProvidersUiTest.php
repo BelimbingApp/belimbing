@@ -91,7 +91,7 @@ test('edit provider advanced settings can be saved and reset (global)', function
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $user->employee_id,
+        'created_by_user_id' => $user->id,
     ]);
 
     $this->actingAs($user);
@@ -307,6 +307,6 @@ function createAiProvidersTestProvider(User $user, string $apiKey): AiProvider
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $user->employee_id,
+        'created_by_user_id' => $user->id,
     ]);
 }

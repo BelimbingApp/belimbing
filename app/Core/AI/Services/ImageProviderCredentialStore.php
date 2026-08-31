@@ -68,7 +68,7 @@ final class ImageProviderCredentialStore implements ImageProviderCredentialStore
             'auth_type' => AuthType::ApiKey,
             'is_active' => true,
             'priority' => 0,
-            'created_by' => $createdBy,
+            'created_by_user_id' => $createdBy,
             'credentials' => [],
             'connection_config' => [],
         ], $attributes));

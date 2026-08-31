@@ -2285,3 +2285,21 @@ test('the failure banner keeps the general guidance for non-auth failures', func
         ->assertSee('Public GitHub repositories do not need a token')
         ->assertDontSee('These software sources need credentials');
 });
+
+test('a terminal progress poll finishes the run itself rather than deferring to the marker', function (): void {
+    $user = createAdminUser();
+    fakeDeploymentUpdateProcesses();
+    Http::fake();
+
+    // The poll that sees a terminal status clears its own timer, and
+    // scheduleStatusRefresh is what finishRun starts — so between the two there is
+    // no timer left watching. Deferring to the injected marker means a missed
+    // handoff freezes the page on a stale render with neither a reload nor the
+    // stall notice that would otherwise offer one.
+    $this->actingAs($user)
+        ->get(route('admin.system.software.updates.index'))
+        ->assertOk()
+        ->assertSee('this.finishRun({ status: run.status, runId: run.run_id, refresh: true });', false);
+
+    Http::assertSentCount(0);
+});
