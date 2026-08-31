@@ -53,17 +53,25 @@ return new class extends Migration
     /**
      * The old `created_by` values are employee ids (per `AiProvider::createdBy()`'s
      * former `belongsTo(Employee::class, ...)`). Translate each to that
-     * employee's linked user where exactly one exists.
+     * employee's linked user where exactly one exists, within the
+     * provider's own company.
+     *
+     * `created_by` was unconstrained (no FK), so a stale or corrupt value on
+     * a Company A provider can numerically match a Company B employee id —
+     * reviewed on this PR (codex-gpt-5): reproduced with two companies,
+     * where resolving `created_by` globally backfilled a Company A
+     * provider's `created_by_user_id` to a Company B user, a cross-tenant
+     * attribution the rename must not create. Every candidate employee and
+     * user is required to share the provider's own `company_id`.
      *
      * `users.employee_id` is nullable and foreign-keyed but not unique, so
-     * more than one user can point at the same employee. Reviewed on this
-     * PR (steward, #453): picking one of several candidates via
-     * `pluck('id', 'employee_id')` — last row wins, in whatever order the
-     * database returns, no ORDER BY — would silently assign attribution to
-     * an arbitrary user, the same failure shape this migration exists to
-     * end. An ambiguous employee id is left unresolved instead: the provider
-     * loses attribution the same way a fresh NULL write already would, and
-     * up() reports the count so it is not a silent guess.
+     * more than one same-company user can point at the same employee
+     * (steward review, #453): picking one via `pluck` — last row wins, no
+     * ORDER BY — would silently assign attribution to an arbitrary user,
+     * the same failure shape this migration exists to end. An ambiguous
+     * employee id is left unresolved instead: the provider loses
+     * attribution the same way a fresh NULL write already would, and up()
+     * reports the count so it is not a silent guess.
      *
      * @return array<int, int> provider id => user id
      */
@@ -71,42 +79,55 @@ return new class extends Migration
     {
         $providers = DB::table('ai_providers')
             ->whereNotNull('created_by')
-            ->pluck('created_by', 'id');
+            ->get(['id', 'company_id', 'created_by']);
 
         if ($providers->isEmpty()) {
             return [];
         }
 
-        $employeeIds = $providers->unique()->values();
+        $userCountsByProvider = DB::table('ai_providers')
+            ->join('employees', function ($join): void {
+                $join->on('employees.id', '=', 'ai_providers.created_by')
+                    ->on('employees.company_id', '=', 'ai_providers.company_id');
+            })
+            ->join('users', function ($join): void {
+                $join->on('users.employee_id', '=', 'employees.id')
+                    ->on('users.company_id', '=', 'ai_providers.company_id');
+            })
+            ->whereNotNull('ai_providers.created_by')
+            ->selectRaw('ai_providers.id as provider_id, count(*) as user_count')
+            ->groupBy('ai_providers.id')
+            ->pluck('user_count', 'provider_id');
 
-        $userCountsByEmployeeId = DB::table('users')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereNotNull('employee_id')
-            ->selectRaw('employee_id, count(*) as user_count')
-            ->groupBy('employee_id')
-            ->pluck('user_count', 'employee_id');
-
-        $singleUserIdsByEmployeeId = DB::table('users')
-            ->whereIn('employee_id', $employeeIds)
-            ->whereNotNull('employee_id')
-            ->whereIn('employee_id', $userCountsByEmployeeId->filter(fn (int $count): bool => $count === 1)->keys())
-            ->pluck('id', 'employee_id');
+        $singleUserIdsByProvider = DB::table('ai_providers')
+            ->join('employees', function ($join): void {
+                $join->on('employees.id', '=', 'ai_providers.created_by')
+                    ->on('employees.company_id', '=', 'ai_providers.company_id');
+            })
+            ->join('users', function ($join): void {
+                $join->on('users.employee_id', '=', 'employees.id')
+                    ->on('users.company_id', '=', 'ai_providers.company_id');
+            })
+            ->whereIn('ai_providers.id', $userCountsByProvider->filter(fn (int $count): bool => $count === 1)->keys())
+            ->selectRaw('ai_providers.id as provider_id, users.id as user_id')
+            ->pluck('user_id', 'provider_id');
 
         $assignments = [];
         $ambiguous = 0;
 
-        foreach ($providers as $providerId => $employeeId) {
-            $userId = $singleUserIdsByEmployeeId->get($employeeId);
+        foreach ($providers as $provider) {
+            $providerId = (int) $provider->id;
+            $userId = $singleUserIdsByProvider->get($providerId);
 
             if ($userId !== null) {
-                $assignments[(int) $providerId] = (int) $userId;
-            } elseif (($userCountsByEmployeeId->get($employeeId) ?? 0) > 1) {
+                $assignments[$providerId] = (int) $userId;
+            } elseif (($userCountsByProvider->get($providerId) ?? 0) > 1) {
                 $ambiguous++;
             }
         }
 
         if ($ambiguous > 0) {
-            fwrite(STDERR, "ai_providers.created_by backfill: {$ambiguous} provider(s) had a creator employee linked to more than one user; left created_by_user_id NULL for those rather than guessing.\n");
+            fwrite(STDERR, "ai_providers.created_by backfill: {$ambiguous} provider(s) had a creator employee linked to more than one same-company user; left created_by_user_id NULL for those rather than guessing.\n");
         }
 
         return $assignments;

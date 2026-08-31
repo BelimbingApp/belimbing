@@ -90,3 +90,41 @@ it('leaves created_by_user_id null when an employee has more than one linked use
     // that neither was picked, not that they don't exist.
     expect($firstUser->id)->not->toBe($secondUser->id);
 });
+
+it('never backfills across a company boundary when a stale created_by numerically matches another company\'s employee', function (): void {
+    // codex-gpt-5, #453: created_by was unconstrained (no FK), so a stale
+    // Company A provider row can carry a created_by value that happens to
+    // equal a Company B employee's id. Resolving purely by employee_id,
+    // ignoring company, backfilled that provider's created_by_user_id to
+    // the Company B user — a cross-tenant attribution. Reproduced directly:
+    // company B's employee is deliberately given the same numeric id company
+    // A's stale created_by value points at.
+    $migration = aiProviderCreatedByMigration();
+    $migration->down();
+
+    $companyA = Company::factory()->create();
+    $companyB = Company::factory()->create();
+
+    $employeeB = Employee::factory()->create(['company_id' => $companyB->id]);
+    User::factory()->create(['company_id' => $companyB->id, 'employee_id' => $employeeB->id]);
+
+    // Company A has no employee at all — created_by is a dangling id that
+    // only resolves to something if company is ignored.
+    $providerId = DB::table('ai_providers')->insertGetId([
+        'company_id' => $companyA->id,
+        'name' => 'cross-company',
+        'family' => 'llm',
+        'display_name' => 'Cross Company',
+        'base_url' => 'https://example.invalid',
+        'auth_type' => 'api_key',
+        'is_active' => true,
+        'priority' => 0,
+        'created_by' => $employeeB->id,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $migration->up();
+
+    expect(DB::table('ai_providers')->where('id', $providerId)->value('created_by_user_id'))->toBeNull();
+});
