@@ -180,6 +180,18 @@ final class UpstreamSyncService
             return $this->failure((string) __('Could not fetch origin/:stable and :remote/:branch.', ['stable' => self::STABLE_BRANCH, 'remote' => $identity['remote'], 'branch' => $branch]), $fetched->message());
         }
 
+        // The pin is the exact SHA read at resolveUpstreamHead(), not whatever
+        // :branch points to after fetching — a fetch reads the branch's
+        // current tip, not the pinned commit by name. A plain fast-forward
+        // still contains the pin as an ancestor and this succeeds; only a
+        // force-push that discards the pinned commit before the fetch lands
+        // makes it unreachable, and that must fail truthfully rather than
+        // silently merge whatever object happened to come back the same
+        // length (codex-gpt-5's P2 on #458).
+        if (! $repo->run(['cat-file', '-e', $upstreamSha.'^{commit}'])->ok) {
+            return $this->failure((string) __('The pinned upstream commit :sha is unavailable after fetching :remote/:branch — it may have been rewritten upstream (force-pushed away). Re-run to pin the current head.', ['sha' => substr($upstreamSha, 0, 7), 'remote' => $identity['remote'], 'branch' => $branch]));
+        }
+
         $stableSha = $repo->output(['rev-parse', 'refs/remotes/origin/'.self::STABLE_BRANCH]);
 
         if ($stableSha === null) {

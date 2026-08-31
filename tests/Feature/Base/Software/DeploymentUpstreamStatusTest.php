@@ -43,16 +43,18 @@ function fakeUpstreamGit(
     ?string $upstreamError = null,
     string $localBranch = 'master',
     ?string $localSha = null,
+    ?string $stableSha = null,
 ): void {
     $upstreamBranch = $configuredBranch ?? $defaultBranch;
     $localSha ??= UPSTREAM_LOCAL_SHA;
+    $stableSha ??= UPSTREAM_LOCAL_SHA;
     $mirrorSha = match ($mirror) {
         'current' => UPSTREAM_HEAD_SHA,
         'absent', 'fail' => null,
         default => $mirror,
     };
 
-    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha) {
+    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha, $stableSha) {
         $command = gitCommandWithoutConfig($process->command);
 
         $result = match ($command) {
@@ -75,7 +77,7 @@ function fakeUpstreamGit(
             // Stable head: origin/master, the branch the checkout tracks.
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => $originError !== null
                 ? Process::result(errorOutput: $originError, exitCode: 128)
-                : Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
+                : Process::result($stableSha."\trefs/heads/master"),
             // Mirror head: origin/<upstream branch>, tri-state.
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.$upstreamBranch] => match ($mirror) {
                 'absent' => Process::result('', exitCode: 2),
@@ -94,10 +96,10 @@ function fakeUpstreamGit(
             ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.($mirrorSha ?? '')] => $mirrorCounts !== null
                 ? Process::result($mirrorCounts[0]."\t".$mirrorCounts[1])
                 : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
-            // Stable vs the vetted-upstream basis: rev-list <basis>...<stable>.
-            // The basis is the mirror when it resolved, otherwise the live
-            // upstream head (#455's mirror-optional fallback).
-            ['git', 'rev-list', '--left-right', '--count', ($mirrorSha ?? UPSTREAM_HEAD_SHA).'...'.UPSTREAM_LOCAL_SHA] => $stableCounts !== null
+            // Stable vs the live upstream head: rev-list <upstream>...<stable>.
+            // Always the live head, never the mirror — a present-but-stale
+            // mirror must never become the comparison basis (#455/#458).
+            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.$stableSha] => $stableCounts !== null
                 ? Process::result($stableCounts[0]."\t".$stableCounts[1])
                 : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
             default => null,
@@ -264,13 +266,28 @@ test('an unreadable origin leaves the stable relationship unknown, never substit
         ->and($upstream['stable']['reason'])->toContain('stable head could not be read');
 });
 
-test('a stable head equal to the mirror is contained without a rev-list call', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_LOCAL_SHA, mirrorCounts: [1, 0], stableCounts: null);
+test('a stable head equal to the live upstream head is contained without a rev-list call', function (): void {
+    fakeUpstreamGit(stableSha: UPSTREAM_HEAD_SHA, stableCounts: null);
 
     $upstream = platformUpstream();
 
     expect($upstream['stable']['state'])->toBe('contained')
         ->and($upstream['stable']['missing'])->toBe(0);
+});
+
+test('a present-but-stale mirror never shadows stable being behind the live upstream head', function (): void {
+    // codex-gpt-5's P2 on #458: the mirror is optional, informational
+    // compatibility state (#455) — it must never become the Stable
+    // comparison basis, even when it exists. A mirror pinned to an older
+    // vetted commit must not make a stale Stable read as "contained" just
+    // because Stable happens to match that old mirror.
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: [3, 0]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('behind')
+        ->and($upstream['stable']['state'])->toBe('behind')
+        ->and($upstream['stable']['missing'])->toBe(3);
 });
 
 test('the stable comparison is pinned to origin/master even when the checkout sits on another branch', function (): void {

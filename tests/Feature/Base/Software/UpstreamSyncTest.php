@@ -53,8 +53,9 @@ function fakeSyncGit(
     bool $pushStaleInfo = false,
     bool $proposalLookupFails = false,
     bool $mirrorLookupFails = false,
+    bool $pinnedObjectUnavailable = false,
 ): void {
-    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $proposalExists, $integrationConflicts, $pushRejected, $pushStaleInfo, $proposalLookupFails, $mirrorLookupFails) {
+    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $proposalExists, $integrationConflicts, $pushRejected, $pushStaleInfo, $proposalLookupFails, $mirrorLookupFails, $pinnedObjectUnavailable) {
         $command = gitCommandWithoutConfig($process->command);
 
         if (($command[1] ?? null) === 'push') {
@@ -92,6 +93,9 @@ function fakeSyncGit(
             },
             ['git', 'merge-base', '--is-ancestor', (string) $mirrorSha, SYNC_UPSTREAM_SHA] => $mirrorDiverged
                 ? Process::result('', exitCode: 1)
+                : Process::result(''),
+            ['git', 'cat-file', '-e', SYNC_UPSTREAM_SHA.'^{commit}'] => $pinnedObjectUnavailable
+                ? Process::result(errorOutput: 'fatal: Not a valid object name '.SYNC_UPSTREAM_SHA.'^{commit}', exitCode: 1)
                 : Process::result(''),
             ['git', 'rev-parse', 'refs/remotes/origin/master'] => Process::result(SYNC_STABLE_SHA),
             ['git', 'merge-tree', '--write-tree', '--name-only', SYNC_STABLE_SHA, SYNC_UPSTREAM_SHA] => $integrationConflicts
@@ -156,6 +160,36 @@ test('a clean integration prepares the proposal in the object database and pushe
     expect($result['ok'])->toBeTrue()
         ->and($result['message'])->toContain('Open the pull request')
         ->and($ran)->toHaveKey('push origin '.SYNC_PROPOSAL_SHA.':refs/heads/'.SYNC_PROPOSAL_BRANCH.' --force-with-lease=refs/heads/'.SYNC_PROPOSAL_BRANCH.':');
+});
+
+test('the merge uses the pinned SHA even if the upstream branch has since moved to a descendant', function (): void {
+    // The fetch reads whatever :branch currently points to, which may already
+    // be ahead of the SHA pinned at resolveUpstreamHead() time. A descendant
+    // still contains the pin as an ancestor, so the reachability proof
+    // succeeds and the merge proceeds against the originally pinned commit —
+    // not silently against the branch's newer tip (codex-gpt-5's P2 on #458).
+    $ran = [];
+    fakeSyncGit($ran);
+
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
+
+    expect($result['ok'])->toBeTrue()
+        ->and($ran)->toHaveKey('push origin '.SYNC_PROPOSAL_SHA.':refs/heads/'.SYNC_PROPOSAL_BRANCH.' --force-with-lease=refs/heads/'.SYNC_PROPOSAL_BRANCH.':');
+});
+
+test('a pinned upstream commit unavailable after fetch is refused, not silently merged against a stray object', function (): void {
+    // If the pinned commit is force-pushed away upstream before the fetch
+    // lands, it will not be reachable afterward. Refuse truthfully instead of
+    // proceeding into a generic merge-tree failure (codex-gpt-5's P2 on #458).
+    $ran = [];
+    fakeSyncGit($ran, pinnedObjectUnavailable: true);
+
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('unavailable after fetching')
+        ->and($result['message'])->toContain('may have been rewritten upstream')
+        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 
 test('a proposal branch appearing between preflight and push is refused by the push lease, not fast-forwarded', function (): void {
