@@ -163,11 +163,12 @@ test('migration dependency ordering ignores helper php files Laravel would not m
     try {
         $command = runMigrationDiscovery();
 
+        $normalize = static fn (string $path): string => str_replace('\\', '/', $path);
         $paths = (function (): array {
             return $this->migrator->paths();
         })->call($command);
 
-        expect($paths)->toContain($dependent.MIGRATION_MIGRATIONS_SUFFIX);
+        expect(array_map($normalize, $paths))->toContain($normalize($dependent.MIGRATION_MIGRATIONS_SUFFIX));
     } finally {
         File::deleteDirectory(base_path(MIGRATION_EXTENSION_ROOT.$owner));
     }
@@ -188,10 +189,12 @@ test('migration discovery rejects duplicate migration names before Laravel colla
     try {
         runMigrationDiscovery();
     } catch (ModuleManifestException $exception) {
-        expect($exception->getMessage())
+        $message = str_replace('\\', '/', $exception->getMessage());
+
+        expect($message)
             ->toContain('Duplicate migration name 2026_01_01_000000_create_duplicate_table')
-            ->toContain($first)
-            ->toContain($second);
+            ->toContain(str_replace('\\', '/', $first))
+            ->toContain(str_replace('\\', '/', $second));
 
         return;
     } finally {
