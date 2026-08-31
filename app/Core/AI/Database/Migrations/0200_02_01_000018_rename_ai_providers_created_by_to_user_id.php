@@ -17,6 +17,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        $this->lockBackfillInputs();
         $assignments = $this->preflightAssignments();
 
         Schema::table('ai_providers', function (Blueprint $table): void {
@@ -131,5 +132,23 @@ return new class extends Migration
         }
 
         return $assignments;
+    }
+
+    /**
+     * The preflight snapshot (provider rows, candidate counts, candidate
+     * ids) is several separate SELECTs, not one atomic read — reviewed on
+     * this PR (codex-gpt-5): without a lock, a provider insert/update, or
+     * an employee/user affiliation change, committed between those reads
+     * can be missed or go stale before `created_by` is dropped. Matches the
+     * lock this package already takes for the same reason elsewhere (e.g.
+     * `0200_01_05_000002_add_tenant_to_addresses.php`).
+     */
+    private function lockBackfillInputs(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        DB::statement('LOCK TABLE ai_providers, employees, users IN SHARE ROW EXCLUSIVE MODE');
     }
 };
