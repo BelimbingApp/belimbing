@@ -27,7 +27,7 @@ test('openai codex oauth callback persists credentials and marks provider connec
         ],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $user->employee_id,
+        'created_by_user_id' => $user->id,
     ]);
 
     $state = 'state-123';

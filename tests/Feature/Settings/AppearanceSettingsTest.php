@@ -94,7 +94,7 @@ it('keeps last-used AI model hints with the user rather than an employee scope',
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => null,
+        'created_by_user_id' => null,
     ]);
     AiProviderModel::query()->create([
         'ai_provider_id' => $provider->getKey(),

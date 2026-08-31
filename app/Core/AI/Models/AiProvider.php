@@ -4,7 +4,7 @@ namespace App\Core\AI\Models;
 
 use App\Core\AI\Enums\AuthType;
 use App\Core\Company\Models\Company;
-use App\Core\Employee\Models\Employee;
+use App\Core\User\Models\User;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,7 +35,7 @@ class AiProvider extends Model
         'connection_config',
         'is_active',
         'priority',
-        'created_by',
+        'created_by_user_id',
     ];
 
     /**
@@ -74,11 +74,11 @@ class AiProvider extends Model
     }
 
     /**
-     * Get the employee who created this provider.
+     * Get the user who created this provider.
      */
     public function createdBy(): BelongsTo
     {
-        return $this->belongsTo(Employee::class, 'created_by');
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     /**

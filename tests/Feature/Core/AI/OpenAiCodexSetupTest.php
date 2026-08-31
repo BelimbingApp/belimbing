@@ -351,7 +351,7 @@ function createOpenAiCodexProvider(User $user, array $authState): AiProvider
         ],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $user->employee_id,
+        'created_by_user_id' => $user->id,
     ]);
 }
 

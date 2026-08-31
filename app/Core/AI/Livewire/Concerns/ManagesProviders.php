@@ -146,7 +146,7 @@ trait ManagesProviders
             $data['family'] = AiProvider::FAMILY_LLM;
             $data['credentials'] = ['api_key' => $this->providerApiKey];
             $data['connection_config'] = [];
-            $data['created_by'] = auth()->user()->employee?->id;
+            $data['created_by_user_id'] = auth()->user()->id;
             $provider = AiProvider::query()->create($data);
             $provider->assignNextPriority();
             $this->notify(__('Provider connected.'));

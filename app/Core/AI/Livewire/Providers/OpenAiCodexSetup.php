@@ -191,7 +191,7 @@ final class OpenAiCodexSetup extends ProviderSetup
             'family' => AiProvider::FAMILY_LLM,
             'display_name' => $this->displayName,
             'is_active' => true,
-            'created_by' => Auth::user()?->employee?->id,
+            'created_by_user_id' => Auth::id(),
         ]));
 
         $provider->assignNextPriority();

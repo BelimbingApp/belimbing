@@ -29,7 +29,7 @@ function createModelNotificationProvider(): AiProviderModel
         'connection_config' => [],
         'is_active' => true,
         'priority' => 1,
-        'created_by' => $employee->id,
+        'created_by_user_id' => $user->id,
     ]);
 
     return AiProviderModel::query()->create([
