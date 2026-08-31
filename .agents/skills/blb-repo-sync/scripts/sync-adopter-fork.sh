@@ -109,16 +109,6 @@ if [ "$integrate" -eq 0 ]; then
   exit 0
 fi
 
-# Test-only hook: run an arbitrary command right after the fetches above and
-# before anything else, so a test can land a real concurrent push in the
-# exact window a live race would — local git operations complete in low
-# milliseconds, too fast for a timing-based test to land a race reliably any
-# other way. Unset in every real invocation; never documented as a stable
-# interface.
-if [ -n "${SYNC_ADOPTER_FORK_TEST_HOOK:-}" ]; then
-  eval "$SYNC_ADOPTER_FORK_TEST_HOOK"
-fi
-
 echo
 echo "== preflight =="
 

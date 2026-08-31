@@ -169,12 +169,16 @@ echo "== origin moves mid-run, after this script's own fetch: push fails, local 
 # #450 review (codex-gpt-5): the real race is a push landing on origin AFTER
 # this script's fetch but BEFORE its own push — preflight passes (its
 # comparison is against the already-fetched, now-stale ref), the merge
-# succeeds locally, and only the final push discovers the race. Local git
-# operations complete in low milliseconds, too fast to land this reliably by
-# timing a background process — landed instead through the script's
-# test-only SYNC_ADOPTER_FORK_TEST_HOOK, which runs synchronously right
-# after the fetches and before anything else, so the race lands in the exact
-# window every time rather than most of the time.
+# succeeds locally, and only the final push discovers the race.
+#
+# An earlier version of this test landed the race through a test-only
+# SYNC_ADOPTER_FORK_TEST_HOOK env var that the production script would eval —
+# a second review round (codex-gpt-5) correctly rejected that: a Git-mutating
+# maintenance script should not carry an undocumented command-execution path
+# just to make a test deterministic. Landed instead through a one-shot git
+# `pre-push` hook installed only in this test's own throwaway checkout: git
+# runs it immediately before sending the real push, so it races in the exact
+# window every time, with nothing added to the script under test.
 section="$sandbox/race-after-fetch"
 mkdir -p "$section"
 read -r origin_bare upstream_bare < <(build_fixture "$section")
@@ -184,29 +188,40 @@ before_local=$(cd "$work" && git_c rev-parse master)
 
 racer="$section/racer-push"
 git_c clone -q "$origin_bare" "$racer" >/dev/null 2>&1
-racer_script="$section/racer.sh"
-cat > "$racer_script" <<RACER
+
+hooks_dir=$(cd "$work" && git_c rev-parse --absolute-git-dir)/hooks
+mkdir -p "$hooks_dir"
+cat > "$hooks_dir/pre-push" <<HOOK
 #!/usr/bin/env bash
 set -eu
+# One-shot: land the racer's commit on origin, then remove this hook so it
+# never fires again (including on the deliberate re-run later in this test).
+rm -- "\$0"
 echo "raced in mid-run" > "$racer/racer.txt"
 git -C "$racer" -c user.name=test -c user.email=test@example.invalid add racer.txt
 git -C "$racer" -c user.name=test -c user.email=test@example.invalid commit -qm "someone else: landed mid-run"
 git -C "$racer" -c user.name=test -c user.email=test@example.invalid push -q origin master
-RACER
+HOOK
+chmod +x "$hooks_dir/pre-push"
 
-out=$(cd "$work" && SYNC_ADOPTER_FORK_TEST_HOOK="bash '$racer_script'" bash "$SCRIPT" --stable-branch master --integrate 2>&1)
+out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rc=$?
+raced_origin_tip=$(git_c --git-dir="$origin_bare" rev-parse master)
 
 report $([ "$rc" -eq 3 ] && echo 0 || echo 1) "the raced push exits 3"
+printf '%s\n' "$out" | grep -q "push rejected" && report 0 "reports the push as rejected" || report 1 "reports the push as rejected"
 printf '%s\n' "$out" | grep -qE -- '--force|force-with-lease' && report 1 "no --force flag mentioned as a recovery path" || report 0 "no --force flag mentioned as a recovery path"
 after_local=$(cd "$work" && git_c rev-parse master)
-report $([ "$before_local" != "$after_local" ] && echo 0 || echo 1) "local master no longer sits on the run's own un-pushed merge"
+report $([ "$after_local" = "$raced_origin_tip" ] && echo 0 || echo 1) "local master lands exactly on the raced origin tip, not just off of its own merge"
 
 rerun_out=$(cd "$work" && bash "$SCRIPT" --stable-branch master --integrate 2>&1)
 rerun_rc=$?
 report $([ "$rerun_rc" -eq 0 ] && echo 0 || echo 1) "re-running as advised succeeds instead of hitting the preflight refusal"
 (cd "$work" && git_c log --oneline | grep -q "someone else: landed mid-run") && report 0 "the re-run's merge includes the commit that raced in" || report 1 "the re-run's merge includes the commit that raced in"
 (cd "$work" && git_c log --oneline | grep -q "framework: v3") && report 0 "the re-run's merge still includes the original upstream commits" || report 1 "the re-run's merge still includes the original upstream commits"
+final_origin=$(git_c --git-dir="$origin_bare" rev-parse master)
+final_local=$(cd "$work" && git_c rev-parse master)
+report $([ "$final_origin" = "$final_local" ] && echo 0 || echo 1) "origin only ever advances from a successful push — the re-run's own push, not the earlier rejected one"
 
 echo
 echo "== wrong current branch is refused before touching anything =="
@@ -221,20 +236,23 @@ rc=$?
 report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "refuses to run when checked-out branch isn't the stated stable branch"
 
 echo
-echo "== a valued option with no value fails fast instead of hanging =="
+echo "== every valued option with no value fails fast instead of hanging =="
 # #450 review (codex-gpt-5): `${2:-}` + `shift 2` with no $2 left `shift`
 # failing under set -u without set -e, so $# never decreased and the parser
-# re-matched forever. Bounded with `timeout` so a real regression here fails
-# this test instead of hanging the whole suite.
-section="$sandbox/missing-value"
-mkdir -p "$section"
-read -r origin_bare upstream_bare < <(build_fixture "$section")
-work="$section/work"
-fresh_checkout "$work" "$origin_bare" "$upstream_bare"
-out=$(cd "$work" && timeout 5 bash "$SCRIPT" --stable-branch 2>&1)
-rc=$?
-report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "a valued option with no following value exits 1, not a timeout (124) or a hang"
-printf '%s\n' "$out" | grep -q "requires a value" && report 0 "explains which option was missing its value" || report 1 "explains which option was missing its value"
+# re-matched forever. Each valued option wires its own require_value() call
+# independently, so each is its own regression, not one shared code path —
+# table-driven rather than spot-checking just --stable-branch. Bounded with
+# `timeout` so a real regression here fails this test instead of hanging the
+# whole suite. The arity check runs before any git operation, so no fixture
+# checkout is needed — a plain directory is enough.
+plain="$sandbox/missing-value"
+mkdir -p "$plain"
+for flag in --stable-branch --origin-remote --upstream-remote --upstream-branch -C; do
+  out=$(cd "$plain" && timeout 5 bash "$SCRIPT" "$flag" 2>&1)
+  rc=$?
+  report $([ "$rc" -eq 1 ] && echo 0 || echo 1) "'$flag' with no following value exits 1, not a timeout (124) or a hang"
+  printf '%s\n' "$out" | grep -q "requires a value" && report 0 "'$flag': explains which option was missing its value" || report 1 "'$flag': explains which option was missing its value"
+done
 
 echo
 echo "-------------------------------------------"
