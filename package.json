@@ -9,7 +9,7 @@
     },
     "dependencies": {
         "@tailwindcss/vite": "^4.3.3",
-        "alpinejs": "^3.16.2",
+        "alpinejs": "^3.16.3",
         "autoprefixer": "^10.5.4",
         "concurrently": "^10.0.5",
         "laravel-vite-plugin": "^3.2.0",
