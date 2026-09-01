@@ -3,8 +3,60 @@ set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
-bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh
+bash -n scripts/ci/changed-authorable-php.sh scripts/ci/extension-conformance.sh scripts/ci/mount-guard.sh
 python3 -m json.tool scripts/ci/domain-repos.json >/dev/null
+
+# mount-guard.sh: a direct edit under docs/ai-team/ must be refused; the
+# subtree-pull commit shape (and its merge) must pass; unrelated changes must
+# never even inspect the mount. Built in an isolated fixture repo so this
+# never touches the real docs/ai-team/ mount or its history (#475).
+mount_guard_fixture=$(mktemp -d)
+trap 'rm -rf "$mount_guard_fixture"' EXIT
+(
+    cd "$mount_guard_fixture"
+    git init -q
+    git config user.name test
+    git config user.email test@example.invalid
+    mkdir -p docs/ai-team
+    echo 'root file' > README.md
+    git add -A && git commit -qm 'initial'
+    base=$(git rev-parse HEAD)
+
+    git checkout -q -b pull-branch
+    echo 'mounted content' > docs/ai-team/README.md
+    git add -A
+    git commit -qm "Squashed 'docs/ai-team/' changes from abc123..def456"
+    git checkout -q -
+    git merge --no-ff -q pull-branch -m 'chore: pull ai-team package-mount into docs/ai-team'
+    pull_head=$(git rev-parse HEAD)
+
+    if ! bash "$root/scripts/ci/mount-guard.sh" "$base" "$pull_head" >/dev/null; then
+        echo 'mount-guard.sh refused a legitimate subtree pull' >&2; exit 1
+    fi
+
+    git checkout -q -b direct-edit-branch "$base"
+    mkdir -p docs/ai-team
+    echo 'hand-edited by an agent' >> docs/ai-team/README.md
+    git add -A
+    git commit -qm 'feat: implement something directly in the mount'
+    edit_head=$(git rev-parse HEAD)
+
+    if bash "$root/scripts/ci/mount-guard.sh" "$base" "$edit_head" >/dev/null 2>&1; then
+        echo 'mount-guard.sh accepted a direct edit under docs/ai-team/' >&2; exit 1
+    fi
+
+    git checkout -q -b unrelated-branch "$base"
+    echo 'app change' > app.php
+    git add -A
+    git commit -qm 'feat: unrelated change'
+    unrelated_head=$(git rev-parse HEAD)
+
+    if ! bash "$root/scripts/ci/mount-guard.sh" "$base" "$unrelated_head" >/dev/null; then
+        echo 'mount-guard.sh flagged a range with no docs/ai-team/ changes' >&2; exit 1
+    fi
+)
+rm -rf "$mount_guard_fixture"
+trap - EXIT
 
 if command -v php >/dev/null; then
     php scripts/ci/domain-ci.php validate
