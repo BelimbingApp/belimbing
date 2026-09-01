@@ -30,12 +30,28 @@ is_pull_merge_commit() {
     is_squash_commit "$second_parent"
 }
 
+# A merge commit only *introduces* a mount change when the mount differs from
+# EVERY parent. A branch-refresh merge ("Merge branch 'main' into <topic>")
+# shows main's legitimate pulls in its first-parent diff but matches its main
+# parent exactly — first contact with a refreshed Dependabot PR (#462) proved
+# the first-parent-only diff refuses exactly that innocent shape.
+merge_introduces_mount_change() {
+    local commit="$1" parent
+    for parent in $(git log -1 --format=%P "$commit"); do
+        git diff --name-only "$parent" "$commit" -- 'docs/ai-team/' 2>/dev/null | grep -q . || return 1
+    done
+    return 0
+}
+
 offenders=()
 while IFS= read -r commit; do
     [[ -n "$commit" ]] || continue
     git diff --name-only "$commit^" "$commit" -- 'docs/ai-team/' 2>/dev/null | grep -q . || continue
     is_squash_commit "$commit" && continue
     is_pull_merge_commit "$commit" && continue
+    if [[ "$(git log -1 --format=%P "$commit" | wc -w)" -ge 2 ]] && ! merge_introduces_mount_change "$commit"; then
+        continue
+    fi
     offenders+=("$commit $(git log -1 --format=%s "$commit")")
 done < <(git rev-list "$base..$head")
 

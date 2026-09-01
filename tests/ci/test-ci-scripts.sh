@@ -45,6 +45,37 @@ trap 'rm -rf "$mount_guard_fixture"' EXIT
         echo 'mount-guard.sh accepted a direct edit under docs/ai-team/' >&2; exit 1
     fi
 
+    # A topic branch refreshed by merging main (which carries a legitimate
+    # pull) must pass: the refresh merge's first-parent diff shows the mount,
+    # but the merge introduces nothing — it matches its main parent exactly.
+    # First contact (#462, a refreshed Dependabot PR) hit exactly this.
+    git checkout -q -b refreshed-topic "$base"
+    echo 'lockfile change' > composer.fake
+    git add -A
+    git commit -qm 'chore(deps): bump something'
+    git merge --no-ff -q "$pull_head" -m "Merge branch 'main' into refreshed-topic"
+    refreshed_head=$(git rev-parse HEAD)
+
+    if ! bash "$root/scripts/ci/mount-guard.sh" "$pull_head" "$refreshed_head" >/dev/null; then
+        echo 'mount-guard.sh refused an innocent branch-refresh merge' >&2; exit 1
+    fi
+
+    # A refresh-shaped merge that ALSO sneaks its own mount edit must still be
+    # refused: the edit differs from every parent, so the merge introduces it.
+    git checkout -q -b poisoned-refresh "$base"
+    echo 'lockfile change' > composer.fake
+    git add -A
+    git commit -qm 'chore(deps): bump something'
+    git merge --no-ff -q --no-commit "$pull_head" >/dev/null 2>&1 || true
+    echo 'smuggled edit' >> docs/ai-team/README.md
+    git add -A
+    git commit -qm "Merge branch 'main' into poisoned-refresh"
+    poisoned_head=$(git rev-parse HEAD)
+
+    if bash "$root/scripts/ci/mount-guard.sh" "$pull_head" "$poisoned_head" >/dev/null 2>&1; then
+        echo 'mount-guard.sh accepted a merge that smuggled a mount edit' >&2; exit 1
+    fi
+
     git checkout -q -b unrelated-branch "$base"
     echo 'app change' > app.php
     git add -A
