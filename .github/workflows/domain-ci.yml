@@ -65,7 +65,31 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     environment: Testing
+    # Tests run on Postgres, matching .env.example and production, per the
+    # ci-database-driver decision on BelimbingApp/blb-people#52 (see #484).
+    # Real environment variables take precedence over phpunit.xml <env>
+    # defaults, so the job-level DB_* values below are what Pest sees.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: blb_test
+          POSTGRES_USER: blb
+          POSTGRES_PASSWORD: blb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U blb"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
     env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: blb_test
+      DB_USERNAME: blb
+      DB_PASSWORD: blb
       DOMAIN_ID: ${{ inputs.domain-id }}
       LEGACY_DOMAIN_PATH: ${{ inputs.domain-path }}
       LEGACY_SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
@@ -137,7 +161,7 @@ jobs:
         uses: shivammathur/setup-php@v2 # NOSONAR — well-known community PHP action; tag pinning is acceptable for internal projects
         with:
           php-version: ${{ inputs.php-version }}
-          extensions: pdo_sqlite, sqlite3
+          extensions: pdo_pgsql, pgsql
           tools: composer:v2
           coverage: xdebug
 
@@ -158,10 +182,12 @@ jobs:
 
       - name: Configure Database for Testing
         run: |
-          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=sqlite/' .env
-          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=:memory:/' .env
-          sed -i 's/value="pgsql"/value="sqlite"/' phpunit.xml
-          sed -i 's/value="blb"/value=":memory:"/' phpunit.xml
+          sed -i 's/^DB_CONNECTION=.*/DB_CONNECTION=pgsql/' .env
+          sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/' .env
+          sed -i 's/^DB_PORT=.*/DB_PORT=5432/' .env
+          sed -i 's/^DB_DATABASE=.*/DB_DATABASE=blb_test/' .env
+          sed -i 's/^DB_USERNAME=.*/DB_USERNAME=blb/' .env
+          sed -i 's/^DB_PASSWORD=.*/DB_PASSWORD=blb/' .env
 
       - name: Generate Application Key
         run: php artisan key:generate
