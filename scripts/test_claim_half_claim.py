@@ -7,7 +7,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import bash_path, run_with_bash_path
 
 SCRIPT = Path(__file__).with_name("claim.sh")
 
@@ -87,6 +87,7 @@ class ClaimHalfClaimTest(unittest.TestCase):
         env.update({
             "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
             "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t",
+            "AI_TEAM_TEST_ORIGIN_REPO": "example/canonical",
         })
         return env
 
@@ -104,14 +105,14 @@ class ClaimHalfClaimTest(unittest.TestCase):
         env["CLAIM_TEST_PR_LIST"] = pr_list
         env["CLAIM_TEST_PR_READBACK"] = pr_readback
         env["CLAIM_TEST_ISSUE_READBACK"] = issue_readback
-        env["CLAIM_TEST_EDITS"] = str(self.edits)
+        env["CLAIM_TEST_EDITS"] = bash_path(self.edits)
         # Independent switches: the mixed state — one lookup failing while the
         # other succeeds and is empty — is the invariant the split branch
         # exists for, and a single switch could not express it (#18 review).
         env["CLAIM_TEST_PR_READBACK_FAILS"] = "1" if pr_readback_fails else "0"
         env["CLAIM_TEST_ISSUE_READBACK_FAILS"] = "1" if issue_readback_fails else "0"
         return run_with_bash_path(
-            ["bash", str(SCRIPT), "42"],
+            ["bash", bash_path(SCRIPT), "42"],
             stub_directory=self.bin,
             env=env, cwd=self.clone, text=True, capture_output=True, check=False,
         )
@@ -202,7 +203,10 @@ class ClaimHalfClaimTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("HALF-CLAIM", result.stderr)
         self.assertIn(f"PR #99 agent:opus-5", result.stderr)
-        self.assertIn("issue #42 task:active", result.stderr)
+        self.assertIn(
+            "issue #42 task state must be exactly task:active (read: none)",
+            result.stderr,
+        )
         self.assertNotIn("could not read back", result.stderr)
 
     def test_one_unreadable_side_does_not_hide_a_missing_label_on_the_other(self):
@@ -216,7 +220,10 @@ class ClaimHalfClaimTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn("issue #42 agent:opus-5", result.stderr)
-        self.assertIn("issue #42 task:active", result.stderr)
+        self.assertIn(
+            "issue #42 task state must be exactly task:active (read: none)",
+            result.stderr,
+        )
         self.assertNotIn("PR #99 agent:opus-5", result.stderr)
         self.assertIn("could not read back the labels for PR #99", result.stderr)
 
