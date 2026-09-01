@@ -6,7 +6,9 @@ These scripts enforce the reusable operating guide beside them in
 this directory lives, and why" in the guide.
 
 Most scripts are repository-independent and resolve the current GitHub
-repository through `gh`. The project hook is the deliberate exception: it is
+repository from `origin`, not from ambient `gh` state (#445/#37) — a checkout
+whose `gh` resolves elsewhere still targets `origin`'s repository. The project
+hook is the deliberate exception: it is
 local source pins, assembly checks, and project commands, and it lives outside
 this mount entirely — at `.ai-team/project-orient.sh` in the adopting
 repository's own root, copied from `../templates/project-orient.sh` — so it is
@@ -17,9 +19,31 @@ The package ships `templates/mechanisms.yml`,
 adopters to copy into their own `.github/workflows/` directory at mount time.
 GitHub owns the triggers and permissions there: the mechanism workflow runs
 the mounted suite unfiltered on pull requests, the schedule-only sweep is the
-only job granted `issues: write`, and the independent-review workflow reads
-the trusted default-branch grammar. The implementation and its tests live
-here, with the board contract they enforce.
+only job granted `issues: write`, and the `pull_request_target`-only
+independent-review workflow fetches the grammar through the Contents API at the
+exact trusted `github.workflow_sha`. It does not check out repository code and
+fails if the canonical grammar path is absent or malformed. The implementation
+and its tests live here, with the board contract they enforce.
+
+Because review events are not trusted triggers, submit or update the review and
+then rerun the latest failed `Independent review` run for the current head; a
+label transition also starts a new target run. For a fresh install, land the
+mount and workflow together before requiring the check. For an existing
+adopter, retain a fail-closed precursor against whichever trusted grammar path
+it already has (or stage a standalone grammar at a custom trusted path) until
+the transition pull request has both installed the mounted grammar at
+`docs/ai-team/scripts/review_gate.sh` and copied
+`docs/ai-team/templates/independent-review.yml` into the adopter's root
+workflow directory. A 404 is never a successful installation signal.
+
+The package also ships `templates/activate.sh` and
+`templates/package-refresh.conf`. Copy both to the adopter-owned `.ai-team/`
+directory and enter through `.ai-team/activate.sh`; it updates the mount in an
+isolated PR before handing off to `docs/ai-team/scripts/orient.sh`. The
+operating guide's “Activate and refresh the mount” section is mandatory for a
+legacy first migration: old claim clients do not participate in the new
+remote-ref mutex, so the owner must establish the documented exclusive window
+rather than treating the acknowledgement variable as a lock.
 
 `blocked_by_sweep.py` is a Python entry point, not a shell command. Run it as
 `python3 docs/ai-team/scripts/blocked_by_sweep.py` (the workflow supplies the
@@ -74,18 +98,21 @@ thread without hiding anything that can bind you.
 ## Running the mechanism tests
 
 Run them from the repository root. In this repository the scripts sit at
-`scripts/`; in an adopting repository they sit at `docs/ai-team/scripts/`.
+`package/scripts/`; in an adopting repository they sit at `docs/ai-team/scripts/`.
 
 ```bash
 # Linux / macOS — here
-python3 -m unittest discover -s scripts -p 'test_*.py'
+python3 -m unittest discover -s package/scripts -p 'test_*.py'
 
 # Linux / macOS — in an adopting repository
 python3 -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 
 # Windows (PowerShell or Git Bash — the harness resolves Git for Windows' Bash;
 # use `python` because `python3` may be the Store alias that exits immediately)
-python -m unittest discover -s scripts -p 'test_*.py'
+# — here
+python -m unittest discover -s package/scripts -p 'test_*.py'
+# — in an adopting repository
+python -m unittest discover -s docs/ai-team/scripts -p 'test_*.py'
 ```
 
 They are hermetic — stubbed `gh`, a `git` shim for the origin-identity answer,
