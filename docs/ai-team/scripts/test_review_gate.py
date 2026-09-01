@@ -14,7 +14,9 @@ SHA = "a" * 40
 STALE_SHA = "b" * 40
 
 
-class ReviewGateTest(unittest.TestCase):
+class GateHarness(unittest.TestCase):
+    """Fixture-mode helpers shared by every gate test class."""
+
     def run_gate(
         self,
         reviews,
@@ -61,6 +63,7 @@ class ReviewGateTest(unittest.TestCase):
         at="2026-01-01T00:00:00Z",
         head_marker=None,
         bind_head=True,
+        user=None,
     ):
         if body is None:
             body = f"**From:** {agent}\n\n**Verdict:** accept"
@@ -73,8 +76,13 @@ class ReviewGateTest(unittest.TestCase):
             "body": body,
             "commit_id": commit_id,
             "submitted_at": at,
+            "user": user
+            if user is not None
+            else {"id": 900, "login": "agent-account", "type": "User"},
         }
 
+
+class ReviewGateTest(GateHarness):
     def run_standalone_gate(self, *, fixture=False, repository="example/canonical"):
         """Run a copy that has neither `_default_branch.sh` nor a checkout."""
         with tempfile.TemporaryDirectory() as directory:
@@ -161,7 +169,7 @@ esac
     def run_live_gate_with_argv_guard(
         self,
         review_body_size=50_000,
-        jq_arg_limit=4_096,
+        jq_arg_limit=5_120,
         *,
         malformed_reviews=False,
         interrupt_on_review_parse=False,
@@ -172,6 +180,11 @@ esac
         Windows rejects a large review payload before jq starts. The shim gives
         Linux the same bounded-argument contract, so this regression fails on
         the old `--argjson reviews "$reviews"` implementation everywhere.
+
+        The bound is on unbounded GitHub data reaching argv, not on the filter
+        text, which is a fixed reviewed constant a few kilobytes long. The
+        default review payload here is 50,000 bytes and still trips the shim by
+        an order of magnitude.
         """
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -639,6 +652,36 @@ printf 'signal-exit=%s\n' "$rc"
             "head": {"repo": {"id": head_repo_id}},
             "base": {"repo": {"id": base_repo_id}},
         }
+
+
+class UnattributedApprovalTest(GateHarness):
+    """An approval the gate ignores must be named, never silently dropped.
+
+    #55 reported this from belimbing#462: the owner approved at the exact head
+    with an empty body and the check produced no output about it at all. The
+    approval not counting is the design working; its being invisible was not.
+    """
+
+    def approval(self, **kwargs):
+        """A bare UI approval — no body, no markers."""
+        return self.review(state="APPROVED", body="", bind_head=False, **kwargs)
+
+    def test_marker_less_approval_is_named_not_silent(self):
+        result = self.run_gate([self.approval(
+            user={"id": 4242, "login": "owner-account", "type": "User"})])
+        self.assertEqual(result.returncode, 1)
+        self.assertIn(
+            "WARN: an APPROVED review from owner-account was ignored", result.stdout
+        )
+        self.assertIn("no independent exact-head acceptance", result.stdout)
+
+    def test_a_marked_acceptance_still_clears_alongside_one(self):
+        result = self.run_gate([
+            self.approval(user={"id": 4242, "login": "owner-account", "type": "User"}),
+            self.review(agent="reviewer", state="APPROVED"),
+        ])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("acceptance from reviewer", result.stdout)
 
 
 if __name__ == "__main__":

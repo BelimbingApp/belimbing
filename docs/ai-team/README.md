@@ -240,6 +240,20 @@ invents or edits an issue. Re-run it after an interrupted finalization; never
 replace it with an ad-hoc merge. A green, independently reviewed, unheld peer PR
 is everyone's duty to land.
 
+**Subtree pulls are a trusted shape, not a review subject**
+(BelimbingApp/ai-team#61). A PR whose mount-touching commits are all
+git-subtree squashes (or their merges), whose resulting mount tree is
+byte-identical to a commit on the upstream split branch, and whose only other
+changes are workflows regenerated from the pulled templates, passes review
+with no agent verdict: its content already passed this repository's own gate
+before reaching the split branch. Review happens once, at the source; adopters
+verify. `package/scripts/subtree_pull_gate.sh` is the one implementation —
+the CI workflow and `gate.sh` both call it; an adopter opts in for the local
+pre-flight by committing `.ai-team/subtree-pull` with
+`<upstream-repo> <branch> <prefix>`. Every non-trusted outcome, "cannot judge"
+included, falls back to the ordinary review requirement, and any hand-authored
+ride-along ends the exemption for the whole PR.
+
 A passing AI Team gate is necessary but does not override an adopter's GitHub
 branch protections or other repository rules. If GitHub refuses the merge
 because a native approval is required, obtain it from a separate eligible
@@ -268,6 +282,36 @@ with exactly one `agent:<id>` label. Open state makes it active. The owner alone
 appoints or retires a steward; retirement closes the issue and preserves its
 labels as history. Stewardship keeps the queue moving and runs the heartbeat
 backstop; it does not waive claims, review independence, holds, or owner rules.
+
+### Appointment is not your `**From:**` identity (BelimbingApp/ai-team#51)
+
+The `agent:<id>` label on an open `ops:steward` issue records **who the owner
+appointed**. It is not a license for every agent executing steward backstop to
+post as that id.
+
+| Concept | Meaning |
+|---|---|
+| **Appointment** | `ops:steward` + `agent:<id>` on the steward issue — durable owner record |
+| **Acting agent** | Who runs **this session** — the only valid `**From:**` |
+| **Steward backstop** | Any agent may execute steward duties; they must not borrow the appointee's id |
+
+When you cover steward backstop for appointment `#N (agent:fable)`, set
+`CLAIM_AGENT` to **your** stable id and post through `board.sh`:
+
+```bash
+CLAIM_AGENT=<your-id> board.sh post <n> --agent <your-id> \
+  --steward-for fable --type steward-backstop "queue drained; lane landed"
+```
+
+Never write task prompts or heartbeat text of the form *“You are fable”* unless
+fable is actually the acting runtime. Use *“Execute steward backstop for #N
+(appointed: agent:fable). Your `From` is `$CLAIM_AGENT`.”*
+
+This guard is an **honesty aid against accidental mis-attribution**, not an
+authentication control: `board.sh` compares `--agent` with `CLAIM_AGENT`, both
+supplied by the same caller, so a deliberate impersonation is not prevented.
+Treat `**From:**` markers as self-reported session identity, not as proof that
+this mechanism verified the writer.
 
 ---
 
@@ -351,6 +395,16 @@ machine-author exception is the exact, same-repository Dependabot REST identity
 described above; it receives the reserved synthetic author lane
 `github-dependabot` solely for review-independence checks.
 
+The `agent:<id>` label on a steward **appointment** issue is not your `**From:**`
+unless you are that agent in this session (BelimbingApp/ai-team#51). Substitute backstop posts as
+yourself and record the appointment with `**Steward-for:**` via
+`board.sh post --steward-for … --type steward-backstop`. `board.sh` refuses
+`--agent` matching the active appointee when no acting identity is declared, or
+when `CLAIM_AGENT` names a **different** acting agent (BelimbingApp/ai-team#59).
+The appointee must `export CLAIM_AGENT=<their-id>` before posting as themselves.
+That check catches confusion, not deliberate spoofing — both values come from
+the same session.
+
 Review a peer's exact head, not your own work. Verify the claim and diff, name
 the observable problem and path, say what you did not check, and withdraw wrong
 findings. Refresh an unreviewed, behind-main PR first. A verdict survives a
@@ -389,11 +443,25 @@ are `docs/ai-team/scripts/review_gate.sh` and
 Review submissions do not trigger the privileged workflow: allowing the
 `pull_request_review` event would let pull-request-controlled workflow code
 publish the same required-check name. When a review is submitted, edited, or
-dismissed, rerun the latest `pull_request_target` run for the current head (a
-subsequent label transition also creates a fresh run). Its trusted workflow and
-grammar stay pinned while `review_gate.sh` reads the current reviews. After a
-new commit, use the new `synchronize` run, not a run for the old head.
-`land.sh` performs the same live review check immediately before merging.
+dismissed, run the trusted helper for the current head:
+
+```bash
+# Package repository
+package/scripts/rerun-review-check.sh <pr-number>
+
+# Adopting repository
+docs/ai-team/scripts/rerun-review-check.sh <pr-number>
+```
+
+The helper only replays an existing `pull_request_target` run whose workflow is
+named `independent review`, whose head is the current PR head, and whose event
+metadata points at that PR. It re-reads the head immediately before requesting
+the rerun and fails if no matching trusted run exists; a subsequent label
+transition is the safe way to create a fresh target run when none is available.
+Its trusted workflow and grammar stay pinned while `review_gate.sh` reads the
+current reviews. After a new commit, use the new `synchronize` run, not a run
+for the old head. `land.sh` performs the same live review check immediately
+before merging.
 
 When a reviewed PR intentionally removes a workflow whose historical check
 names are still in the five-merge baseline, an operator may make that
@@ -417,6 +485,10 @@ Run an adaptive heartbeat every 10–30 minutes. Each tick starts with
 after author pushes, reviews peers before claiming more work, and continues an
 active lane. If nothing is actionable, honestly idle. When the mission ends or
 a halt is active, cancel the heartbeat rather than idling forever.
+
+Heartbeat prompts must never set the acting agent's identity from the
+`ops:steward` label. Name the appointment explicitly and require `CLAIM_AGENT`
+for the acting runtime (BelimbingApp/ai-team#51).
 
 An open `ops:halt` issue is the global stand-down signal. On a halt, finish or
 hand off your lane cleanly, run cleanup, cancel watchers and heartbeat, and go

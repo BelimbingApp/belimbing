@@ -17,6 +17,10 @@
 # mounted copy has the helper and always treats origin as authoritative; an
 # inherited override cannot split review reads from gate.sh's repository.
 #
+# An APPROVED review naming no agent is dropped before any verdict is
+# computed, so it is named in a WARN: an approval that does not count must
+# never be silent, or its author cannot learn why the gate ignored them.
+#
 # Fixture input has `reviewed`, `head_sha`, `labels`, `identity`, and `reviews`
 # fields. `labels` may be an array of label names or GitHub label objects;
 # `identity` is the REST pull-request shape and `reviews` uses the GitHub API
@@ -192,17 +196,25 @@ result=$(jq -r --arg automated_author "$automated_author" '
       ["FAIL: expected exactly one agent:<id> author lane, found \($authors | length)"]
     else
       (if $automated_author != "" then $automated_author else $authors[0] end) as $author
-      | [$input.reviews[]
-         | select(.commit_id == $input.reviewed)
+      | [$input.reviews[] | select(.commit_id == $input.reviewed)] as $at_head
+      | [$at_head[]
          | . + {agent: from_agent, verdict: review_verdict, reviewed_head: reviewed_head}
          | select(.agent != "")]
         | sort_by(.agent, .submitted_at, .id)
         | group_by(.agent)
         | map(last) as $latest
-      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "accept") | .agent] | unique | join(", ")) as $accepted
-      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "changes required") | .agent] | unique | join(", ")) as $blocking
+      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "accept") | .agent]
+         | unique | join(", ")) as $accepted
+      | ([$latest[] | select(.agent != $author and .reviewed_head == $input.reviewed and .verdict == "changes required") | .agent]
+         | unique | join(", ")) as $blocking
       | ([$latest[] | select(.agent != $author and .verdict == "") | .agent] | unique) as $malformed
       | ([$latest[] | select(.agent != $author and .reviewed_head != $input.reviewed) | .agent] | unique) as $unbound
+      | ([$at_head[]
+          | select(.state == "APPROVED")
+          | . + {agent: from_agent}
+          | select(.agent == "")
+          | (.user.login? // "an unidentified account")]
+         | unique) as $unattributed
       | [if $accepted == "" then
            "FAIL: no independent exact-head acceptance; require **From:** <reviewer>, **HEAD reviewed:** `<full-sha>`, and APPROVED or **Verdict:** accept"
          else
@@ -213,6 +225,7 @@ result=$(jq -r --arg automated_author "$automated_author" '
          else
            "FAIL: independent exact-head changes required by \($blocking)"
          end]
+        + [$unattributed[] | "WARN: an APPROVED review from \(.) was ignored: it carries no **From:** marker"]
         + [$unbound[] | "WARN: a review marker from \(.) was rejected because **HEAD reviewed:** must name exact head \($input.reviewed)"]
         + [$malformed[] | "WARN: a review marker from \(.) was seen at \($input.reviewed[0:8]) but rejected for format — **Verdict:** must stand alone on its own line (accept / accept with follow-up / changes required)"]
     end

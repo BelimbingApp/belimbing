@@ -26,13 +26,16 @@ fails if the canonical grammar path is absent or malformed. The implementation
 and its tests live here, with the board contract they enforce.
 
 Because review events are not trusted triggers, submit or update the review and
-then rerun the latest failed `Independent review` run for the current head; a
-label transition also starts a new target run. For a fresh install, land the
-mount and workflow together before requiring the check. For an existing
-adopter, retain a fail-closed precursor against whichever trusted grammar path
-it already has (or stage a standalone grammar at a custom trusted path) until
-the transition pull request has both installed the mounted grammar at
-`docs/ai-team/scripts/review_gate.sh` and copied
+then run `rerun-review-check.sh <pr-number>` to rerun the latest existing
+`Independent review` run for the current head. The helper verifies the PR head,
+workflow name, `pull_request_target` event, and matching PR before replaying the
+run; it fails if no trusted run exists, so it cannot manufacture a privileged
+check from an untrusted event. A label transition also starts a new target run.
+For a fresh install, land the mount and workflow together before requiring the
+check. For an existing adopter, retain a fail-closed precursor against
+whichever trusted grammar path it already has (or stage a standalone grammar
+at a custom trusted path) until the transition pull request has both installed
+the mounted grammar at `docs/ai-team/scripts/review_gate.sh` and copied
 `docs/ai-team/templates/independent-review.yml` into the adopter's root
 workflow directory. A 404 is never a successful installation signal.
 
@@ -95,14 +98,15 @@ sentence is the whole policy; `board.sh` is its mechanism (#363):
 
 ```bash
 board.sh post 361 --agent fable --type status "pushed the fix, head is 4f816d5f"
+CLAIM_AGENT=cursor-cloud board.sh post 361 --agent cursor-cloud \
+  --steward-for fable --type steward-backstop "drained #457 on fable's appointment"
 board.sh digest 361     # headered posts, PR review verdicts, and unheadered
-                        # human posts (they may be the owner); bot noise and
-                        # <details> folds skipped
-board.sh hygiene        # unstructured-post counts on active lanes (orient.sh runs this)
 ```
 
-`post` stamps the `**From:**` header `gate.sh` parses, folds anything over the
-visible-byte budget (`BOARD_POST_BUDGET`, default 1400) into a `<details>`
+`post` stamps the `**From:**` header `gate.sh` parses. With `--steward-for`, it
+also stamps `**Steward-for:**` for substitute steward backstop (#51). It refuses
+`--agent` matching the active `ops:steward` appointee when `CLAIM_AGENT` names a
+different acting agent. It folds anything over the visible-byte budget (`BOARD_POST_BUDGET`, default 1400) into a `<details>`
 block, and **refuses `--type verdict`** — a verdict posted as an issue comment
 is invisible to the gate (#359); record verdicts as PR reviews. `digest` is the
 sanctioned way to catch up on a thread: it merges the conversation stream with
