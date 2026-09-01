@@ -8,7 +8,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
-from _test_support import run_with_bash_path
+from _test_support import bash_path, run_with_bash_path
 
 SCRIPT = Path(__file__).with_name("decide.sh")
 
@@ -93,10 +93,10 @@ class DecideTestCase(unittest.TestCase):
 
     def env(self, extra=None):
         e = os.environ.copy()
-        e["DECIDE_TEST_COMMENTS"] = str(self.comments)
-        e["DECIDE_TEST_COUNTER"] = str(self.counter)
-        e["DECIDE_TEST_ROSTER"] = str(self.roster)
-        e["DECIDE_TEST_LOG"] = str(self.log)
+        e["DECIDE_TEST_COMMENTS"] = bash_path(self.comments)
+        e["DECIDE_TEST_COUNTER"] = bash_path(self.counter)
+        e["DECIDE_TEST_ROSTER"] = bash_path(self.roster)
+        e["DECIDE_TEST_LOG"] = bash_path(self.log)
         e["DECIDE_REPO"] = "example/canonical"
         e.update(extra or {})
         return e
@@ -108,7 +108,7 @@ class DecideTestCase(unittest.TestCase):
         env = self.env(extra_env)
         env["CLAIM_AGENT"] = agent
         return run_with_bash_path(
-            ["bash", str(SCRIPT), *args],
+            ["bash", bash_path(SCRIPT), *args],
             stub_directory=self.bin,
             cwd=self.base,
             env=env,
@@ -383,11 +383,11 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("tied", body)
 
     def test_off_roster_votes_cannot_fabricate_quorum(self):
-        # terra's #436 P1: the roster>=3 branch compared a bare vote count
-        # to 3 with no roster check at all — three identities that can post
-        # a comment but hold no live lane (no open PR / agent:* issue)
-        # could vote and close the round themselves.
-        self.set_roster(["p", "a", "b"])  # only p, a, b are active
+        # #33 keeps the fabricated-quorum defense after moving eligibility to
+        # the immutable proposal snapshot: x, y, and z were not active when
+        # the round opened, so their structurally valid votes still cannot
+        # make the decision.
+        self.set_roster(["p", "a", "b"])
         self.propose(10, "d", "left,right", "left", agent="p")
         self.vote(10, "d", "left", agent="x")  # x, y, z are NOT on the roster
         self.vote(10, "d", "left", agent="y")
@@ -398,15 +398,16 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("not yet decidable", result.stderr)
         self.assertEqual(len(self.comments_now()), 4)  # proposal + 3 votes, no decision written
 
-    def test_off_roster_votes_cannot_shift_a_majority_even_with_quorum(self):
+    def test_post_snapshot_vote_cannot_shift_a_majority_even_when_currently_active(self):
         self.set_roster(["p", "a", "b", "c"])
         self.propose(10, "d", "left,right", "left", agent="p")
+        self.set_roster(["p", "a", "b", "c", "x"])  # x joins after Notify is fixed
         self.vote(10, "d", "left", agent="a")
         self.vote(10, "d", "left", agent="b")
         self.vote(10, "d", "left", agent="c")  # 3 roster votes: clean quorum + majority for left
-        self.vote(10, "d", "right", agent="x")  # off-roster: must not touch the tally
-        self.vote(10, "d", "right", agent="y")
-        self.vote(10, "d", "right", agent="z")
+        late_vote = self.vote(10, "d", "right", agent="x")
+        self.assertEqual(late_vote.returncode, 0, late_vote.stderr)
+        self.assertIn("not in this proposal's immutable Notify roster", late_vote.stderr)
 
         result = self.close(10, "d", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -414,6 +415,7 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("**Chosen:** left", body)
         self.assertIn("left=3", body)
         self.assertNotIn("right=", body)
+        self.assertIn("**Filtered:** x (not in snapshot)", body)
 
     def test_close_refuses_an_authority_effect_of_self_on_the_tie_break_path(self):
         # #436 review: the self-interest carve-out had no mechanism — a
@@ -520,24 +522,34 @@ class TallyAndCloseTest(DecideTestCase):
         self.assertIn("overrides a clear quorum majority", result.stderr)
         self.assertEqual(len(self.comments_now()), 4)  # proposal + 3 votes, no decision posted
 
-    def test_the_decision_record_names_active_agents_who_never_voted(self):
-        # The roster shrinks between propose (p,a,b,c,d) and close (p,a,b,c)
-        # if d's PR/issue closes in between — d never got the chance to
-        # vote and close() correctly can't require a vote from someone no
-        # longer active, but the record should still say d never weighed in
-        # on the round it was snapshotted into.
+    def test_a_snapshotted_vote_counts_after_the_voters_lane_lands(self):
+        # #33: e was active and snapshotted at proposal time, then their lane
+        # landed before their vote. Their vote must still count in status,
+        # quorum, and tally; only identities absent from Notify are filtered.
         self.set_roster(["p", "a", "b", "c", "e"])
         self.propose(10, "vote-id", "left,right", "left", agent="p")
         self.set_roster(["p", "a", "b", "c"])  # e's lane closed after the snapshot
         self.vote(10, "vote-id", "left", agent="p")
         self.vote(10, "vote-id", "left", agent="a")
         self.vote(10, "vote-id", "left", agent="b")
-        self.vote(10, "vote-id", "right", agent="c")
+        self.vote(10, "vote-id", "left", agent="c")
+        off_roster_vote = self.vote(10, "vote-id", "right", agent="e")
+        self.assertEqual(off_roster_vote.returncode, 0, off_roster_vote.stderr)
+        self.assertNotIn("filtered", off_roster_vote.stderr)
+
+        status = self.run_decide("status", "10", "--id", "vote-id")
+        self.assertEqual(status.returncode, 0, status.stderr)
+        self.assertIn("5/3 vote(s)", status.stdout)
+        self.assertIn("**Filtered:** none", status.stdout)
 
         result = self.close(10, "vote-id", agent="p")
         self.assertEqual(result.returncode, 0, result.stderr)
         body = self.last_decision_body()
-        self.assertIn("**Did-Not-Vote:** e", body)
+        self.assertIn("left=4", body)
+        self.assertIn("right=1", body)
+        self.assertIn("**Filtered:** none", body)
+        self.assertIn("**Did-Not-Vote:** none", body)
+        self.assertIn("**Unacknowledged:** none", body)
 
     def test_the_decision_record_says_none_reached_everyone(self):
         self.set_roster(["p", "a", "b"])
@@ -614,7 +626,7 @@ class VerdictSeparationTest(DecideTestCase):
         env["CLAIM_AGENT"] = "p"
         board = SCRIPT.with_name("board.sh")
         proc = run_with_bash_path(
-            ["bash", str(board), "post", "10", "--agent", "p", "--type", "verdict", "accept"],
+            ["bash", bash_path(board), "post", "10", "--agent", "p", "--type", "verdict", "accept"],
             stub_directory=self.bin,
             cwd=self.base,
             env=env,
@@ -1185,7 +1197,7 @@ class RecordGrammarTest(DecideTestCase):
         for line_start in (
             "**Decision:**", "**Chosen:**", "**Tally:**", "**Quorum:**",
             "**Deciding-Agent:**", "**Implementation-Owner:**", "**Revisit-If:**",
-            "**Tie-Break:**", "**Authority-Effect:**", "**Did-Not-Vote:**", "**Unacknowledged:**",
+            "**Tie-Break:**", "**Authority-Effect:**", "**Did-Not-Vote:**", "**Filtered:**", "**Unacknowledged:**",
         ):
             matches = [line for line in body.splitlines() if line.startswith(line_start)]
             self.assertEqual(len(matches), 1, f"expected exactly one line starting with {line_start!r} in:\n{body}")
@@ -1354,6 +1366,23 @@ class DurableDecisionEligibilityTest(DecideTestCase):
 
 
 class StatusTest(DecideTestCase):
+    def test_status_falls_back_to_the_proposer_for_a_pre_snapshot_proposal(self):
+        # Notify was added after early decision records existed. A status read
+        # of one of those records must use the same proposer fallback as
+        # close(), rather than treating the empty field as a zero-voter round.
+        self.set_roster(["p"])
+        self.seed_comment(
+            "**From:** p\n\n**Type:** proposal\n\n**Decision:** legacy\n"
+            "**Options:** left,right\n**Recommend:** left\n"
+            "**Deadline:** 2030-01-01T00:00:00Z\n\nWhich way?\n"
+        )
+        self.vote(10, "legacy", "left", agent="p")
+
+        result = self.run_decide("status", "10", "--id", "legacy")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("1/1 vote(s)", result.stdout)
+        self.assertIn("**Filtered:** none", result.stdout)
+
     def test_status_lists_an_open_proposal_and_hides_a_closed_one(self):
         self.set_roster(["p", "a"])
         self.propose(10, "open-one", "x,y", "x", agent="p")

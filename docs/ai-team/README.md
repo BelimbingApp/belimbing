@@ -12,17 +12,21 @@ The board is the durable record. Use direct agent messaging when the runtime
 offers it for fast coordination, but record every durable claim, hold, decision,
 appointment, halt, and blocker on its owning Issue or pull request.
 
-This package's scripts live at `scripts/`. An adopter mounts the package at
-`docs/ai-team/`, where the same scripts are at `docs/ai-team/scripts/`. For
-project-specific orientation, copy `templates/project-orient.sh` to the
-adopter-owned `.ai-team/project-orient.sh`; it sits outside the mount, so
-package updates do not overwrite it.
+This repository's own scripts live at `package/scripts/`. A `package-split`
+workflow republishes `package/` as the standalone `package-mount` branch on
+every push to `main` — an adopter mounts *that* branch, not `main`, so this
+repository's own root-level CI, hook, and `AGENTS.md` never enter the mount.
+In an adopter, the mounted scripts are at `docs/ai-team/scripts/`. For
+project-specific orientation, copy `package/templates/project-orient.sh` (from the
+mount, so `docs/ai-team/templates/project-orient.sh`) to the adopter-owned
+`.ai-team/project-orient.sh`; it sits outside the mount, so package updates do
+not overwrite it.
 
 Mount the package with:
 
 ```bash
 git subtree add --prefix=docs/ai-team \
-  https://github.com/BelimbingApp/ai-team.git main --squash
+  https://github.com/BelimbingApp/ai-team.git package-mount --squash
 ```
 
 At the same mount-time change, copy the adopter-owned workflow templates into
@@ -40,8 +44,132 @@ The mechanism workflow runs the mounted suite on every pull request and on
 pushes to `main`; if the adopter uses another default branch, change that one
 branch in the copied template. The sweep workflow runs on its schedule or
 manual dispatch and is the only job granted `issues: write`. The independent
-review workflow reads the trusted default-branch grammar and is the check to
-require for the review rule.
+review workflow is a `pull_request_target` check: it downloads the mounted
+grammar through the Contents API from the exact trusted commit that supplied
+the workflow, without checking out pull-request code. `Independent review` is
+the check to require for the review rule.
+
+A fresh adopter lands the mount and copied workflow together, then requires
+the check after that trusted commit is on the default branch. The installation
+pull request has no copy of this new workflow on its trusted base yet, so
+`gate.sh` still supplies the independent-review proof for that first merge.
+There is no successful "grammar missing" mode in the installed workflow: a
+missing path or failed API response is a failed check.
+
+An existing adopter must keep a continuous trusted gate during migration. Do
+not land the final workflow copied from
+`docs/ai-team/templates/independent-review.yml` while its canonical
+`docs/ai-team/scripts/review_gate.sh` grammar is absent from the trusted
+workflow commit. If necessary, first land a precursor workflow that fetches
+the adopter's existing trusted grammar path (or stage the standalone grammar)
+at `github.workflow_sha`. The next pull request can replace the mount and copy
+the final template together; the precursor gates that transition, and the
+final template becomes usable as soon as the commit containing both files
+reaches the default branch. Never turn a 404 into a green bootstrap check.
+
+An adopter that mounted before `package-mount` existed still pulls from
+`main` at its current prefix. Point the same command at the new branch
+instead of the old one:
+
+```bash
+git subtree pull --prefix=docs/ai-team \
+  https://github.com/BelimbingApp/ai-team.git package-mount --squash
+```
+
+This is a normal pull, not a delete-and-re-add: `git subtree` merges onto
+whatever is already at the prefix, so this one run both drops this
+repository's own root-level files that a `main`-sourced mount carried and
+picks up the current `scripts/`/`templates/`/`LICENSE` layout. It needs
+doing exactly once, on whichever pull first points at `package-mount`; every
+pull after that is routine again.
+
+### Activate and refresh the mount
+
+After the initial mount, install the adopter-owned activation entry point in
+the same owner-reviewed change:
+
+```bash
+mkdir -p .ai-team
+cp docs/ai-team/templates/activate.sh .ai-team/activate.sh
+cp docs/ai-team/templates/package-refresh.conf .ai-team/package-refresh.conf
+chmod +x .ai-team/activate.sh
+```
+
+Commit these files with the mount, have that adopter-owned change reviewed and
+merged, then pull a clean default branch that exactly matches `origin` before
+the first activation. Activation deliberately refuses an uncommitted install,
+a feature branch, or a behind/diverged default checkout.
+
+Review the plain `source=` and `ref=` values in
+`.ai-team/package-refresh.conf`, then start team sessions with
+`.ai-team/activate.sh` instead of calling `docs/ai-team/scripts/orient.sh`
+directly. Activation resolves the approved ref to an immutable revision. If
+the mount is behind, it creates one isolated draft `ai-team/package-refresh`
+PR, verifies the exact mounted tree and full mechanism suite away from the
+caller's checkout, and pauses onboarding until that PR merges and the updated
+default branch is pulled. It never changes adopter-owned paths outside
+`docs/ai-team/`.
+
+The activation identity needs permission to create/update the reserved
+`ai-team/package-refresh` and `ai-team/activation-mutex` refs, delete those
+exact refs after verified cleanup, create/edit PRs, and create/apply labels.
+Branch or token policy may grant that narrowly to an owner-controlled bot;
+missing push, delete, PR, or label permission is a hard failure, never a
+reason to bypass review protection.
+
+Current `activate.sh` and `claim.sh` clients share the short remote
+`ai-team/activation-mutex` compare-and-swap lease. A normal claim holds it only
+until its branch, PR, and labels are visible; activation holds it until the
+durable refresh branch and draft PR are visible. The refresh branch then
+remains the claim barrier through merge. Two current clients therefore cannot
+cross the claim/refresh boundary together, and concurrent activations observe
+the same refresh lane.
+
+A legacy `claim.sh` that predates this protocol does **not** observe either
+lease. The first migration has no technical mutual-exclusion guarantee, so
+activation fails closed by default. The repository owner must perform this
+one exclusive boundary:
+
+1. Stop every legacy claim/activation process and verify that no
+   `task:active`/`task:review` issue and no open PR exists.
+2. If the old mount does not contain the templates, copy them from one exact,
+   owner-reviewed `package-mount` revision instead of from a moving checkout:
+
+   ```bash
+   package_source=https://github.com/BelimbingApp/ai-team.git
+   package_revision=<owner-reviewed-full-package-mount-sha>
+   git fetch --no-tags "$package_source" "$package_revision"
+   mkdir -p .ai-team
+   git show "$package_revision:templates/activate.sh" > .ai-team/activate.sh
+   git show "$package_revision:templates/package-refresh.conf" > .ai-team/package-refresh.conf
+   chmod +x .ai-team/activate.sh
+   ```
+
+   Commit, review, and merge both adopter-owned files; then pull the clean,
+   up-to-date default branch. Run the one bootstrap as an explicit owner
+   attestation:
+
+   ```bash
+   AI_TEAM_EXCLUSIVE_FIRST_REFRESH=1 .ai-team/activate.sh
+   ```
+
+3. Keep every legacy client stopped while the refresh PR is built and
+   reviewed. Merge it, update/pull the adopter's default branch, and only then
+   resume sessions with the newly mounted clients.
+
+`AI_TEAM_EXCLUSIVE_FIRST_REFRESH=1` cannot stop an old process; it records that
+the owner already established this external exclusion. Never set it merely to
+bypass the refusal.
+
+Recovery is exact and owner-guided. First prove that no activation or claim is
+running and inspect the reported immutable SHA. Recover a validated stale
+short lease with `AI_TEAM_RECOVER_MUTEX_SHA=<exact-sha> .ai-team/activate.sh`
+(or pass the same variable to the intended `claim.sh` command). Resume a
+validated pending/failed/verified refresh with
+`AI_TEAM_RECOVER_REFRESH_SHA=<exact-sha> .ai-team/activate.sh`. Both scripts
+use that SHA as a deletion/update lease; they never steal an unknown,
+malformed, or concurrently changed ref. Do not delete either fixed branch by
+name as a shortcut.
 
 Its intended permanent home is `.agents/skills/ai-team/`, where compatible
 agent runtimes discover skills. It remains at `docs/ai-team/` until Claude Code
@@ -56,10 +184,10 @@ Orient before acting:
 
 ```bash
 # Package repository
-scripts/orient.sh
+package/scripts/orient.sh
 
 # Adopting repository
-docs/ai-team/scripts/orient.sh
+.ai-team/activate.sh
 ```
 
 It reports a halt first, then `main`, lanes, holds, claimable work, blockers,
@@ -69,7 +197,11 @@ or unqueued task without asking permission.
 Claim by opening a draft PR **before** changing task-owned files:
 
 ```bash
-CLAIM_AGENT=<stable-agent-id> scripts/claim.sh <issue-number>
+# Package repository
+CLAIM_AGENT=<stable-agent-id> package/scripts/claim.sh <issue-number>
+
+# Adopting repository
+CLAIM_AGENT=<stable-agent-id> docs/ai-team/scripts/claim.sh <issue-number>
 ```
 
 `claim.sh` is the collision boundary. It accepts an unowned `task:ready` issue,
@@ -87,19 +219,37 @@ refresh it from `main` before requesting review.
 Hand off with the script so the closing reference remains intact:
 
 ```bash
-CLAIM_AGENT=<stable-agent-id> scripts/ready.sh <pr-number>
-LAND_AGENT=<stable-agent-id> scripts/land.sh <pr-number> <reviewed-full-sha>
+# Package repository
+CLAIM_AGENT=<stable-agent-id> package/scripts/ready.sh <pr-number>
+LAND_AGENT=<stable-agent-id> package/scripts/land.sh <pr-number> <reviewed-full-sha>
+
+# Adopting repository
+CLAIM_AGENT=<stable-agent-id> docs/ai-team/scripts/ready.sh <pr-number>
+LAND_AGENT=<stable-agent-id> docs/ai-team/scripts/land.sh <pr-number> <reviewed-full-sha>
 ```
 
 `land.sh` gates, merges, attributes the actor, and finalizes the task. Re-run it
 after an interrupted finalization; never replace it with an ad-hoc merge. A
 green, independently reviewed, unheld peer PR is everyone's duty to land.
 
+A passing AI Team gate is necessary but does not override an adopter's GitHub
+branch protections or other repository rules. If GitHub refuses the merge
+because a native approval is required, obtain it from a separate eligible
+reviewer or automation; only that repository's owner can intentionally change
+the external rule. Do not treat a shared-account AI Team verdict as a native
+approval or weaken the gate to work around the refusal. When it can read a
+native-approval rule, `gate.sh` warns before landing if the required number of
+native `APPROVED` reviews is not visible; that warning preserves the AI Team
+gate's own verdict while making the external prerequisite explicit. The package
+does not choose an adopter's branch protections: retaining or changing a native
+approval requirement is an owner-controlled policy decision, not a substitute
+for an independently reviewed AI Team lane.
+
 Declare dependencies as `Blocked-By: #<issue-number>, #<issue-number>` or prose
 ending its reference list. Code blocks, quotes, and HTML comments are
-documentation, not declarations. `scripts/blocked_by_sweep.py` owns parsing
-through `safe_lines` and `parse_blockers`; adopters import it instead of
-maintaining another parser.
+documentation, not declarations. `blocked_by_sweep.py` (`package/scripts/` here,
+`docs/ai-team/scripts/` in an adopter) owns parsing through `safe_lines` and
+`parse_blockers`; adopters import it instead of maintaining another parser.
 
 ---
 
@@ -151,15 +301,20 @@ observed behaviour. State the reasoning in proposals and votes; a vote cannot
 repeal an explicit constraint.
 
 `**From:**` is the voter identity; GitHub account metadata is not. Latest valid
-vote wins, and only active lane owners count. A deadline is at most one
-heartbeat (30 minutes). Quorum is three attributable voters when at least three
-agents are active, otherwise every active agent. A clear majority closes; a tie
-or expired quorum uses the active steward's available-tally tie-break (or the
-lane owner if no steward is reachable).
+vote wins. The proposal's immutable `**Notify:**` snapshot determines which
+votes count and supplies the round's quorum: three attributable voters when it
+contains at least three agents, otherwise every snapshotted agent. This keeps an
+agent enfranchised if their lane lands mid-round, while an identity absent when
+the round opened cannot enter it later. Only a currently active lane owner may
+close. A deadline is at most one heartbeat (30 minutes). A clear majority
+closes; a tie or expired quorum uses the active steward's available-tally
+tie-break (or the lane owner if no steward is reachable).
 
 Every closing record includes `**Resolution:** majority|tie|expired`, choice,
 tally, minority votes, deciding agent, implementation owner, and revisit
-condition. `**Did-Not-Vote:**` means a snapshotted agent did not vote;
+condition. `**Filtered:**` names votes excluded because their authors were not
+in that proposal's immutable `**Notify:**` snapshot, without silently losing
+their record. `**Did-Not-Vote:**` means a snapshotted agent did not vote;
 `**Unacknowledged:**` means the proposer recorded neither a vote nor delivery
 through `decide.sh notify`. Silence does not acknowledge anyone.
 
@@ -203,17 +358,30 @@ gh pr review <pr-number> --comment --body "$(printf '**From:** <your-agent-id>\n
 to verify it registered. Use `accept with follow-up` only for genuinely separate
 work; otherwise request the fix in the same PR.
 
-`scripts/review_gate.sh` is the canonical review grammar here, and `gate.sh`
-uses it. It counts only the newest review on the exact head from a stable
-`From` identity distinct from the single author lane; a newer `changes required`
-verdict revokes that reviewer's earlier acceptance. To make the same rule a
-required GitHub check in an adopter, copy
-`templates/independent-review.yml` to `.github/workflows/independent-review.yml`
+`package/scripts/review_gate.sh` is the canonical review grammar here, and
+`gate.sh` uses it. It counts only the newest review on the exact head from a
+stable `From` identity distinct from the single author lane; a newer `changes
+required` verdict revokes that reviewer's earlier acceptance. To make the same
+rule a required GitHub check in an adopter, copy
+`package/templates/independent-review.yml` to `.github/workflows/independent-review.yml`
 and require its `Independent review` check. In an adopter mount, those paths
 are `docs/ai-team/scripts/review_gate.sh` and
-`docs/ai-team/templates/independent-review.yml`. The initial installation PR
-passes that workflow without evaluation until the trusted default branch has
-the grammar; `gate.sh` still requires independent acceptance for that merge.
+`docs/ai-team/templates/independent-review.yml`.
+
+Review submissions do not trigger the privileged workflow: allowing the
+`pull_request_review` event would let pull-request-controlled workflow code
+publish the same required-check name. When a review is submitted, edited, or
+dismissed, rerun the latest `pull_request_target` run for the current head (a
+subsequent label transition also creates a fresh run). Its trusted workflow and
+grammar stay pinned while `review_gate.sh` reads the current reviews. After a
+new commit, use the new `synchronize` run, not a run for the old head.
+`land.sh` performs the same live review check immediately before merging.
+
+When a reviewed PR intentionally removes a workflow whose historical check
+names are still in the five-merge baseline, an operator may make that
+exception explicit with `GATE_ALLOW_MISSING_CHECKS`, a comma-separated list of
+the exact check names. `gate.sh` prints every waived name as a warning; the
+override is never implicit and should be recorded in the PR or landing log.
 
 Holds are labels, never prose. `hold:author` belongs to its author;
 `hold:review:<agent>` belongs to its named reviewer. Set and clear review holds
@@ -240,8 +408,8 @@ After merge, explicitly delete your remote branch and clean up:
 
 ```bash
 # Package repository
-scripts/cleanup.sh
-scripts/cleanup.sh --yes
+package/scripts/cleanup.sh
+package/scripts/cleanup.sh --yes
 
 # Adopting repository
 docs/ai-team/scripts/cleanup.sh
@@ -260,8 +428,8 @@ ship in the current lane.
 | Tasks and state | GitHub Issues with `agent:<id>` and `task:*` labels |
 | Claims, handoffs, blockers, and review findings | The owning issue or PR |
 | Holds | `hold:author`, `hold:review:<agent>`, and `hold.sh` |
-| Mechanisms | `scripts/` here; `docs/ai-team/scripts/` in an adopter |
-| Project hook | `.ai-team/project-orient.sh`, copied from `templates/project-orient.sh` |
+| Mechanisms | `package/scripts/` here; `docs/ai-team/scripts/` in an adopter |
+| Project hook | `.ai-team/project-orient.sh`, copied from `package/templates/project-orient.sh` |
 | Halt | An open `ops:halt` issue, shown first by `orient.sh` |
 | Active steward | One open `ops:steward` issue with one `agent:<id>` label |
 | Product and architecture decisions | `decide.sh propose`, vote, and close on the owning issue |

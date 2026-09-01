@@ -54,6 +54,9 @@ GH_STUB = textwrap.dedent(
       "api repos/$GATE_TEST_CANONICAL/commits/"*)
         [ -n "$GATE_TEST_RESOLVE" ] && printf '%s\\n' "$GATE_TEST_RESOLVE"
         ;;
+      "api repos/$GATE_TEST_CANONICAL/rules/branches/"*)
+        printf '%s\\n' "$GATE_TEST_BRANCH_RULES"
+        ;;
       "api repos/$GATE_TEST_CANONICAL/git/refs/heads/"*)
         printf '%s\\n' "$GATE_TEST_HEAD"
         ;;
@@ -157,6 +160,8 @@ class GateMechanismTest(unittest.TestCase):
         branch: str | None = None,
         title: str | None = None,
         review_gate_body: str | None = None,
+        branch_rules: list[dict[str, object]] | None = None,
+        allow_missing_checks: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         base = Path(self.dir.name)
         checkout = base / "checkout"
@@ -201,6 +206,7 @@ class GateMechanismTest(unittest.TestCase):
                 "body": "**From:** reviewer",
                 "commit_id": effective_head,
                 "submitted_at": "2026-01-01T00:00:00Z",
+                "user": {"login": "reviewer"},
             }]
         env["GATE_TEST_REVIEWS"] = json.dumps(reviews)
         env["GATE_TEST_ISSUE_COMMENTS"] = json.dumps(issue_comments if issue_comments is not None else [])
@@ -233,6 +239,11 @@ class GateMechanismTest(unittest.TestCase):
         env["GATE_TEST_BASELINE_CHECK_RUNS"] = json.dumps({
             head: {"check_runs": runs} for head, runs in baseline_check_runs_by_head.items()
         })
+        env["GATE_TEST_BRANCH_RULES"] = json.dumps(
+            [] if branch_rules is None else branch_rules
+        )
+        if allow_missing_checks is not None:
+            env["GATE_ALLOW_MISSING_CHECKS"] = allow_missing_checks
 
         script = SCRIPT
         if review_gate_body is not None:
@@ -283,6 +294,110 @@ class GateMechanismTest(unittest.TestCase):
             self.assertEqual(result.returncode, 0, (origin, result.stdout, result.stderr))
             self.assertIn("GATE: PASS", result.stdout)
             self.assertIn("PR head is the reviewed SHA", result.stdout)
+
+    def test_missing_native_approval_warns_without_reclassifying_ai_team_gate(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            branch_rules=[{
+                "type": "pull_request",
+                "parameters": {"required_approving_review_count": 1},
+            }],
+            reviews=[{
+                "id": 1,
+                "state": "COMMENTED",
+                "body": "**From:** reviewer\n\n**Verdict:** accept",
+                "commit_id": self.head_sha,
+                "submitted_at": "2026-01-01T00:00:00Z",
+                "user": {"login": "reviewer"},
+            }],
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("WARN", result.stdout)
+        self.assertIn("GitHub requires 1 native approval(s)", result.stdout)
+        self.assertIn("only 0 distinct current APPROVED reviewer(s) are visible", result.stdout)
+        self.assertIn("separate eligible native reviewer or automation", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_present_native_approval_is_reported_without_a_warning(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            branch_rules=[{
+                "type": "pull_request",
+                "parameters": {"required_approving_review_count": 1},
+            }],
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(
+            "GitHub native approval preflight: requires 1, 1 distinct current APPROVED reviewer(s) visible",
+            result.stdout,
+        )
+        self.assertIn("GitHub still decides eligibility and freshness", result.stdout)
+        self.assertNotIn("only 0 distinct current APPROVED reviewer(s) are visible", result.stdout)
+
+    def test_duplicate_approvals_from_one_reviewer_do_not_satisfy_the_count(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            branch_rules=[{
+                "type": "pull_request",
+                "parameters": {"required_approving_review_count": 2},
+            }],
+            reviews=[
+                {
+                    "id": 1,
+                    "state": "APPROVED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "user": {"login": "reviewer"},
+                },
+                {
+                    "id": 2,
+                    "state": "APPROVED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-02T00:00:00Z",
+                    "user": {"login": "reviewer"},
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("requires 2 native approval(s)", result.stdout)
+        self.assertIn("only 1 distinct current APPROVED reviewer(s) are visible", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_later_nonapproval_supersedes_an_earlier_approval_for_the_preflight(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            branch_rules=[{
+                "type": "pull_request",
+                "parameters": {"required_approving_review_count": 1},
+            }],
+            reviews=[
+                {
+                    "id": 1,
+                    "state": "APPROVED",
+                    "body": "**From:** reviewer\n\n**Verdict:** accept",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-01T00:00:00Z",
+                    "user": {"login": "reviewer"},
+                },
+                {
+                    "id": 2,
+                    "state": "CHANGES_REQUESTED",
+                    "body": "**From:** reviewer\n\n**Verdict:** changes required",
+                    "commit_id": self.head_sha,
+                    "submitted_at": "2026-01-02T00:00:00Z",
+                    "user": {"login": "reviewer"},
+                },
+            ],
+        )
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertIn("requires 1 native approval(s)", result.stdout)
+        self.assertIn("only 0 distinct current APPROVED reviewer(s) are visible", result.stdout)
 
     def test_latest_success_supersedes_a_cancelled_run_with_the_same_name(self):
         result = self.run_gate(
@@ -475,6 +590,28 @@ class GateMechanismTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
         self.assertIn("1 distinct checks", result.stdout)
         self.assertNotIn("path-filtered", result.stdout)
+        self.assertIn("GATE: PASS", result.stdout)
+
+    def test_operator_override_allows_intentionally_removed_checks(self):
+        result = self.run_gate(
+            origin=CANONICAL_HTTPS,
+            reviewed=self.head_sha,
+            check_runs=[{
+                "name": "ci",
+                "status": "completed",
+                "conclusion": "success",
+                "started_at": "1",
+                "completed_at": "2",
+            }],
+            merged_heads=["merged-pr-head-1"],
+            baseline_check_runs_by_head={"merged-pr-head-1": [
+                {"name": "ci", "status": "completed", "conclusion": "success"},
+                {"name": "removed workflow", "status": "completed", "conclusion": "success"},
+            ]},
+            allow_missing_checks="removed workflow",
+        )
+        self.assertEqual(result.returncode, 0, (result.stdout, result.stderr))
+        self.assertIn("operator override allows missing checks: removed workflow", result.stdout)
         self.assertIn("GATE: PASS", result.stdout)
 
     def test_first_pull_request_bootstraps_from_passing_reviewed_sha(self):
