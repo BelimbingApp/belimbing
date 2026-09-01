@@ -240,6 +240,20 @@ invents or edits an issue. Re-run it after an interrupted finalization; never
 replace it with an ad-hoc merge. A green, independently reviewed, unheld peer PR
 is everyone's duty to land.
 
+**Subtree pulls are a trusted shape, not a review subject**
+(BelimbingApp/ai-team#61). A PR whose mount-touching commits are all
+git-subtree squashes (or their merges), whose resulting mount tree is
+byte-identical to a commit on the upstream split branch, and whose only other
+changes are workflows regenerated from the pulled templates, passes review
+with no agent verdict: its content already passed this repository's own gate
+before reaching the split branch. Review happens once, at the source; adopters
+verify. `package/scripts/subtree_pull_gate.sh` is the one implementation —
+the CI workflow and `gate.sh` both call it; an adopter opts in for the local
+pre-flight by committing `.ai-team/subtree-pull` with
+`<upstream-repo> <branch> <prefix>`. Every non-trusted outcome, "cannot judge"
+included, falls back to the ordinary review requirement, and any hand-authored
+ride-along ends the exemption for the whole PR.
+
 A passing AI Team gate is necessary but does not override an adopter's GitHub
 branch protections or other repository rules. If GitHub refuses the merge
 because a native approval is required, obtain it from a separate eligible
@@ -425,40 +439,6 @@ rule a required GitHub check in an adopter, copy
 and require its `Independent review` check. In an adopter mount, those paths
 are `docs/ai-team/scripts/review_gate.sh` and
 `docs/ai-team/templates/independent-review.yml`.
-
-### Human principals
-
-The marker grammar exists because agents share one GitHub account, so an API
-approval cannot name who reviewed. That reasoning stops at an account no agent
-ever speaks through. Such an account is a **human principal**: its `APPROVED`
-review on the exact head counts as one independent acceptance with no body
-markers, and its `CHANGES_REQUESTED` blocks. Nothing else about the gate moves.
-
-The allow-list is empty by default, so this changes nothing until an adopter
-opts in. Entries are `<numeric-id>:<login>`, separated by whitespace or commas,
-`#` starting a comment. The numeric id is the trust anchor and the login only
-corroborates it, the same shape `_trusted_author.sh` uses. Find an id with
-`gh api users/<login> --jq .id`.
-
-Configure it in the adopter-owned file `.ai-team/principals`, outside the
-mount, and in `AI_TEAM_HUMAN_PRINCIPALS` in the workflow so CI reaches the same
-verdict as a local `gate.sh` pre-flight:
-
-```
-# .ai-team/principals — accounts no agent ever posts through
-1234567:the-owner
-```
-
-List only accounts that **no agent ever posts through**. An account a lane
-speaks through is not a principal, however human its name looks — listing one
-lets that lane clear its own work.
-
-Two limits are deliberate. A principal cannot clear a pull request it authored.
-And the exception is withheld entirely on a trusted automated author's pull
-request, where a rebase can rewrite an older review's API `commit_id` onto the
-replacement head: a marker-less approval has nothing else binding it to what
-was read, and `_trusted_author.sh` already gives those pull requests a lane
-that ordinary marked reviews can clear.
 
 Review submissions do not trigger the privileged workflow: allowing the
 `pull_request_review` event would let pull-request-controlled workflow code
