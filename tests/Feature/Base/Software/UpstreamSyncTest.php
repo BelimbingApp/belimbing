@@ -276,5 +276,5 @@ test('the sync actions run end to end through the page when the gate is open', f
         ->assertDontSee('Refresh mirror')
         ->call('prepareIntegration');
 
-    expect(implode(' ', array_keys($ran)))->toContain('push origin');
+    expect($ran)->toHaveKey('push origin '.SYNC_PROPOSAL_SHA.':refs/heads/'.SYNC_PROPOSAL_BRANCH.' --force-with-lease=refs/heads/'.SYNC_PROPOSAL_BRANCH.':');
 });

@@ -731,10 +731,14 @@
                                 <div class="text-sm font-medium text-ink">{{ __('Checkout') }}</div>
                                 <div class="text-xs text-muted">{{ __('Is this working copy current?') }}</div>
                             </td>
-                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">{{ $s['branch'] }} &harr; origin/{{ $stableBranch }}</td>
+                            <td class="px-table-cell-x py-table-cell-y align-top font-mono text-xs text-muted">{{ $s['branch'] ?? '—' }} &harr; origin/{{ $stableBranch }}</td>
                             <td class="px-table-cell-x py-table-cell-y align-top" colspan="2">
                                 @if ($u['checkout']['state'] === 'unknown')
-                                    <x-ui.badge variant="warning">{{ __('origin unreadable') }}</x-ui.badge>
+                                    {{-- 'unknown' has several causes (auth, unfetched objects, an
+                                         absent stable branch, an unreadable HEAD); the badge stays
+                                         generic and the reason line names the actual one, so an
+                                         operator is never sent debugging auth over a missing fetch. --}}
+                                    <x-ui.badge variant="warning">{{ __('Cannot compare') }}</x-ui.badge>
                                     <div class="mt-0.5 text-xs text-muted">{{ $u['checkout']['reason'] }}</div>
                                 @else
                                     <x-ui.ahead-behind

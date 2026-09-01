@@ -340,7 +340,8 @@ test('an origin auth failure greys the origin lanes while the upstream head stay
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        ->assertSee('origin unreadable')
+        ->assertSee('Cannot compare')
+        ->assertSee('stable head could not be read')
         ->assertSee('needs origin')
         ->assertSee('reachable')
         ->assertSee(substr(UPSTREAM_HEAD_SHA, 0, 7));
