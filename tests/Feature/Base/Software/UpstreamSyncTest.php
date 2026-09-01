@@ -16,7 +16,8 @@ const SYNC_UPSTREAM_SHA = 'cafebabecafebabecafebabecafebabecafebabe';
 const SYNC_OLD_MIRROR_SHA = 'a11ce000a11ce000a11ce000a11ce000a11ce000';
 const SYNC_STABLE_SHA = 'beefbeefbeefbeefbeefbeefbeefbeefbeefbeef';
 const SYNC_TREE_OID = 'facefeedfacefeedfacefeedfacefeedfacefeed';
-const SYNC_RC_SHA = 'ba5eba11ba5eba11ba5eba11ba5eba11ba5eba11';
+const SYNC_PROPOSAL_SHA = 'ba5eba11ba5eba11ba5eba11ba5eba11ba5eba11';
+const SYNC_PROPOSAL_BRANCH = 'upstream-sync-cafebab';
 
 beforeEach(function (): void {
     Cache::flush();
@@ -34,9 +35,10 @@ function syncIncapableUser(): User
 /**
  * One fixture for the whole sync matrix. Domain axis: mirror absent /
  * fast-forwardable / diverged, integration clean / conflicting. Environment
- * axis: no upstream remote, rc already existing, push rejected — plus the gate
- * states handled in the tests themselves. $ran records every mutating command
- * so refusals can assert nothing was pushed.
+ * axis: no upstream remote, a proposal branch already existing for this
+ * upstream SHA, push rejected — plus the gate states handled in the tests
+ * themselves. $ran records every mutating command so refusals can assert
+ * nothing was pushed.
  *
  * @param  array<string, bool>  $ran
  */
@@ -45,21 +47,22 @@ function fakeSyncGit(
     bool $hasUpstreamRemote = true,
     ?string $mirrorSha = null,
     bool $mirrorDiverged = false,
-    bool $rcExists = false,
+    bool $proposalExists = false,
     bool $integrationConflicts = false,
     bool $pushRejected = false,
     bool $pushStaleInfo = false,
-    bool $rcLookupFails = false,
+    bool $proposalLookupFails = false,
     bool $mirrorLookupFails = false,
+    bool $pinnedObjectUnavailable = false,
 ): void {
-    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $rcExists, $integrationConflicts, $pushRejected, $pushStaleInfo, $rcLookupFails, $mirrorLookupFails) {
+    Process::fake(function ($process) use (&$ran, $hasUpstreamRemote, $mirrorSha, $mirrorDiverged, $proposalExists, $integrationConflicts, $pushRejected, $pushStaleInfo, $proposalLookupFails, $mirrorLookupFails, $pinnedObjectUnavailable) {
         $command = gitCommandWithoutConfig($process->command);
 
         if (($command[1] ?? null) === 'push') {
             $ran['push '.implode(' ', array_slice($command, 2))] = true;
 
             return match (true) {
-                $pushStaleInfo => Process::result(errorOutput: ' ! [rejected]        rc (stale info)', exitCode: 1),
+                $pushStaleInfo => Process::result(errorOutput: ' ! [rejected]        '.SYNC_PROPOSAL_BRANCH.' (stale info)', exitCode: 1),
                 $pushRejected => Process::result(errorOutput: 'remote: permission denied', exitCode: 1),
                 default => Process::result(''),
             };
@@ -83,20 +86,22 @@ function fakeSyncGit(
                 $mirrorSha !== null => Process::result($mirrorSha."\trefs/heads/main"),
                 default => Process::result('', exitCode: 2),
             },
-            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/rc'] => match (true) {
-                $rcLookupFails => Process::result(errorOutput: 'fatal: unable to access: could not resolve host', exitCode: 128),
-                $rcExists => Process::result(SYNC_RC_SHA."\trefs/heads/rc"),
+            ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.SYNC_PROPOSAL_BRANCH] => match (true) {
+                $proposalLookupFails => Process::result(errorOutput: 'fatal: unable to access: could not resolve host', exitCode: 128),
+                $proposalExists => Process::result(SYNC_PROPOSAL_SHA."\trefs/heads/".SYNC_PROPOSAL_BRANCH),
                 default => Process::result('', exitCode: 2),
             },
             ['git', 'merge-base', '--is-ancestor', (string) $mirrorSha, SYNC_UPSTREAM_SHA] => $mirrorDiverged
                 ? Process::result('', exitCode: 1)
                 : Process::result(''),
+            ['git', 'cat-file', '-e', SYNC_UPSTREAM_SHA.'^{commit}'] => $pinnedObjectUnavailable
+                ? Process::result(errorOutput: 'fatal: Not a valid object name '.SYNC_UPSTREAM_SHA.'^{commit}', exitCode: 1)
+                : Process::result(''),
             ['git', 'rev-parse', 'refs/remotes/origin/master'] => Process::result(SYNC_STABLE_SHA),
-            ['git', 'rev-parse', 'refs/remotes/origin/main'] => Process::result(SYNC_UPSTREAM_SHA),
             ['git', 'merge-tree', '--write-tree', '--name-only', SYNC_STABLE_SHA, SYNC_UPSTREAM_SHA] => $integrationConflicts
                 ? Process::result(SYNC_TREE_OID."\napp/Base/Foundation/Kernel.php\nconfig/app.php\n\nAuto-merging config/app.php\nCONFLICT (content): Merge conflict in config/app.php", exitCode: 1)
                 : Process::result(SYNC_TREE_OID),
-            ['git', 'commit-tree', SYNC_TREE_OID, '-p', SYNC_STABLE_SHA, '-p', SYNC_UPSTREAM_SHA, '-m', 'rc: integrate upstream/main into master'] => Process::result(SYNC_RC_SHA),
+            ['git', 'commit-tree', SYNC_TREE_OID, '-p', SYNC_STABLE_SHA, '-p', SYNC_UPSTREAM_SHA, '-m', 'upstream-sync: integrate upstream/main@cafebab into master'] => Process::result(SYNC_PROPOSAL_SHA),
             default => Process::result(),
         };
     });
@@ -146,32 +151,62 @@ test('a diverged mirror is refused with the condition named, and nothing is push
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 
-test('a clean integration cuts rc in the object database and pushes it', function (): void {
+test('a clean integration prepares the proposal in the object database and pushes it', function (): void {
     $ran = [];
     fakeSyncGit($ran);
 
-    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeTrue()
         ->and($result['message'])->toContain('Open the pull request')
-        ->and($ran)->toHaveKey('push origin '.SYNC_RC_SHA.':refs/heads/rc --force-with-lease=refs/heads/rc:');
+        ->and($ran)->toHaveKey('push origin '.SYNC_PROPOSAL_SHA.':refs/heads/'.SYNC_PROPOSAL_BRANCH.' --force-with-lease=refs/heads/'.SYNC_PROPOSAL_BRANCH.':');
 });
 
-test('an rc appearing between preflight and push is refused by the push lease, not fast-forwarded', function (): void {
+test('the merge uses the pinned SHA even if the upstream branch has since moved to a descendant', function (): void {
+    // The fetch reads whatever :branch currently points to, which may already
+    // be ahead of the SHA pinned at resolveUpstreamHead() time. A descendant
+    // still contains the pin as an ancestor, so the reachability proof
+    // succeeds and the merge proceeds against the originally pinned commit —
+    // not silently against the branch's newer tip (codex-gpt-5's P2 on #458).
+    $ran = [];
+    fakeSyncGit($ran);
+
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
+
+    expect($result['ok'])->toBeTrue()
+        ->and($ran)->toHaveKey('push origin '.SYNC_PROPOSAL_SHA.':refs/heads/'.SYNC_PROPOSAL_BRANCH.' --force-with-lease=refs/heads/'.SYNC_PROPOSAL_BRANCH.':');
+});
+
+test('a pinned upstream commit unavailable after fetch is refused, not silently merged against a stray object', function (): void {
+    // If the pinned commit is force-pushed away upstream before the fetch
+    // lands, it will not be reachable afterward. Refuse truthfully instead of
+    // proceeding into a generic merge-tree failure (codex-gpt-5's P2 on #458).
+    $ran = [];
+    fakeSyncGit($ran, pinnedObjectUnavailable: true);
+
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
+
+    expect($result['ok'])->toBeFalse()
+        ->and($result['message'])->toContain('unavailable after fetching')
+        ->and($result['message'])->toContain('may have been rewritten upstream')
+        ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
+});
+
+test('a proposal branch appearing between preflight and push is refused by the push lease, not fast-forwarded', function (): void {
     $ran = [];
     fakeSyncGit($ran, pushRejected: true, pushStaleInfo: true);
 
-    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeFalse()
-        ->and($result['message'])->toContain('appeared on origin while this cut was being prepared');
+        ->and($result['message'])->toContain('appeared while this proposal was being prepared');
 });
 
 test('a conflicting integration aborts, names the files, and pushes nothing', function (): void {
     $ran = [];
     fakeSyncGit($ran, integrationConflicts: true);
 
-    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeFalse()
         ->and($result['message'])->toContain('app/Base/Foundation/Kernel.php')
@@ -180,22 +215,22 @@ test('a conflicting integration aborts, names the files, and pushes nothing', fu
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 
-test('an existing rc from a previous round refuses the cut (per-cycle policy)', function (): void {
+test('an existing proposal branch for the same upstream commit refuses preparation', function (): void {
     $ran = [];
-    fakeSyncGit($ran, rcExists: true);
+    fakeSyncGit($ran, proposalExists: true);
 
-    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeFalse()
         ->and($result['message'])->toContain('already exists')
         ->and(array_filter($ran, fn ($v, $k) => str_starts_with($k, 'push'), ARRAY_FILTER_USE_BOTH))->toBe([]);
 });
 
-test('a failed rc lookup refuses the cut instead of reading failure as absence', function (): void {
+test('a failed proposal-branch lookup refuses preparation instead of reading failure as absence', function (): void {
     $ran = [];
-    fakeSyncGit($ran, rcLookupFails: true);
+    fakeSyncGit($ran, proposalLookupFails: true);
 
-    $result = app(UpstreamSyncService::class)->cutReleaseCandidate(createAdminUser());
+    $result = app(UpstreamSyncService::class)->prepareIntegration(createAdminUser());
 
     expect($result['ok'])->toBeFalse()
         ->and($result['message'])->toContain('Could not determine')
@@ -235,7 +270,7 @@ test('a checkout with no upstream remote states that, for both actions', functio
     $user = createAdminUser();
 
     expect($service->refreshMirror($user)['message'])->toContain('no upstream remote')
-        ->and($service->cutReleaseCandidate($user)['message'])->toContain('no upstream remote')
+        ->and($service->prepareIntegration($user)['message'])->toContain('no upstream remote')
         ->and($ran)->toBe([]);
 });
 
@@ -259,11 +294,11 @@ test('the gate stops both actions in production and without the capability, befo
 
     app()->instance('env', 'production');
     expect(fn () => $service->refreshMirror($admin))->toThrow(AuthorizationException::class);
-    expect(fn () => $service->cutReleaseCandidate($admin))->toThrow(AuthorizationException::class);
+    expect(fn () => $service->prepareIntegration($admin))->toThrow(AuthorizationException::class);
 
     app()->instance('env', 'local');
     expect(fn () => $service->refreshMirror($incapable))->toThrow(AuthorizationException::class);
-    expect(fn () => $service->cutReleaseCandidate($incapable))->toThrow(AuthorizationException::class);
+    expect(fn () => $service->prepareIntegration($incapable))->toThrow(AuthorizationException::class);
 
     expect($ran)->toBe([]);
 });
@@ -295,7 +330,7 @@ test('the sync actions run end to end through the page when the gate is open', f
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
         ->assertSee('Refresh mirror')
-        ->assertSee('Cut release candidate')
+        ->assertSee('Create integration proposal')
         ->call('refreshMirror');
 
     expect($ran)->toHaveKey('push origin '.SYNC_UPSTREAM_SHA.':refs/heads/main');

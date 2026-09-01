@@ -184,7 +184,7 @@ class SoftwareSourceRepository
             'branch' => $branch,
             'head' => $head,
             'mirror' => $this->mirrorRelationship($repo, $identity['remote'], $head['sha'] ?? null, $mirror),
-            'stable' => $this->stableRelationship($repo, $mirror, $stable),
+            'stable' => $this->stableRelationship($repo, $stable, $head['sha'] ?? null),
             'error' => $error,
             'error_detail' => $detail ?? ($mirror[0] === 'error' ? $mirror[2] : null),
         ];
@@ -237,34 +237,37 @@ class SoftwareSourceRepository
     }
 
     /**
-     * Relationship 2: origin/master stable vs the mirror — contained (no RC
-     * needed) / behind (mirror commits stable lacks, the "updates available"
-     * count; the fork's own commits are information, not divergence) /
-     * unknown with a reason.
+     * Relationship 2: origin/master stable vs the live upstream head —
+     * contained (no integration needed) / behind (commits stable lacks, the
+     * "updates available" count; the fork's own commits are information, not
+     * divergence) / unknown with a reason.
      *
-     * @param  array{0: 'present'|'absent'|'error', 1: string|null, 2: string|null}  $mirror
+     * Always compares against the live upstream head, never the mirror
+     * (#455/#458 codex-gpt-5's P2): the mirror is optional, informational
+     * compatibility state — a present-but-stale mirror must never become the
+     * comparison basis, or "Up to date" can read true while stable is
+     * actually missing upstream commits the mirror has not caught up to.
+     *
      * @param  array{0: 'present'|'absent'|'error', 1: string|null, 2: string|null}  $stable
      * @return array{state: string, missing: int|null, fork_own: int|null, reason: string|null}
      */
-    private function stableRelationship(GitRepository $repo, array $mirror, array $stable): array
+    private function stableRelationship(GitRepository $repo, array $stable, ?string $upstreamSha): array
     {
         $out = ['state' => 'unknown', 'missing' => null, 'fork_own' => null, 'reason' => null];
 
-        if ($mirror[0] === 'absent') {
-            $out['reason'] = (string) __('No mirror branch exists yet — refresh the mirror to create it, then compare.');
-        } elseif ($mirror[1] === null) {
-            $out['reason'] = (string) __('The mirror head is unavailable, so the stable branch cannot be compared.');
+        if ($upstreamSha === null) {
+            $out['reason'] = (string) __('The upstream head could not be read, so the stable branch cannot be compared.');
         } elseif ($stable[1] === null) {
-            $out['reason'] = (string) __('The stable head could not be read from origin, so the stable-to-mirror relationship is unknown.');
-        } elseif ($mirror[1] === $stable[1]) {
+            $out['reason'] = (string) __('The stable head could not be read from origin, so the stable-to-upstream relationship is unknown.');
+        } elseif ($upstreamSha === $stable[1]) {
             $out['state'] = 'contained';
             $out['missing'] = 0;
             $out['fork_own'] = 0;
         } else {
-            // base = mirror, tip = stable: `behind` counts mirror commits the
-            // stable branch lacks — the "updates available" number an RC cut
-            // would integrate — and `ahead` the fork's own commits.
-            $counts = $repo->aheadBehindBetween((string) $mirror[1], (string) $stable[1]);
+            // base = the live upstream head, tip = stable: `behind` counts
+            // commits stable lacks — the "updates available" number an
+            // integration would bring in — and `ahead` the fork's own commits.
+            $counts = $repo->aheadBehindBetween($upstreamSha, (string) $stable[1]);
 
             if ($counts === null) {
                 $out['reason'] = (string) __('Commits are not in this checkout yet — fetch origin to compare histories.');
