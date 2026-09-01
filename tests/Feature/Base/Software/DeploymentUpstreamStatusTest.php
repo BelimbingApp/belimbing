@@ -43,16 +43,18 @@ function fakeUpstreamGit(
     ?string $upstreamError = null,
     string $localBranch = 'master',
     ?string $localSha = null,
+    ?string $stableSha = null,
 ): void {
     $upstreamBranch = $configuredBranch ?? $defaultBranch;
     $localSha ??= UPSTREAM_LOCAL_SHA;
+    $stableSha ??= UPSTREAM_LOCAL_SHA;
     $mirrorSha = match ($mirror) {
         'current' => UPSTREAM_HEAD_SHA,
         'absent', 'fail' => null,
         default => $mirror,
     };
 
-    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha) {
+    Process::fake(function ($process) use ($remote, $configuredRemote, $configuredBranch, $defaultBranch, $mirror, $mirrorSha, $mirrorCounts, $stableCounts, $originError, $upstreamError, $upstreamBranch, $localBranch, $localSha, $stableSha) {
         $command = gitCommandWithoutConfig($process->command);
 
         $result = match ($command) {
@@ -75,7 +77,7 @@ function fakeUpstreamGit(
             // Stable head: origin/master, the branch the checkout tracks.
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/master'] => $originError !== null
                 ? Process::result(errorOutput: $originError, exitCode: 128)
-                : Process::result(UPSTREAM_LOCAL_SHA."\trefs/heads/master"),
+                : Process::result($stableSha."\trefs/heads/master"),
             // Mirror head: origin/<upstream branch>, tri-state.
             ['git', 'ls-remote', '--exit-code', 'origin', 'refs/heads/'.$upstreamBranch] => match ($mirror) {
                 'absent' => Process::result('', exitCode: 2),
@@ -94,8 +96,10 @@ function fakeUpstreamGit(
             ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.($mirrorSha ?? '')] => $mirrorCounts !== null
                 ? Process::result($mirrorCounts[0]."\t".$mirrorCounts[1])
                 : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
-            // Stable vs mirror counts: rev-list <mirror>...<stable>.
-            ['git', 'rev-list', '--left-right', '--count', ($mirrorSha ?? '').'...'.UPSTREAM_LOCAL_SHA] => $stableCounts !== null
+            // Stable vs the live upstream head: rev-list <upstream>...<stable>.
+            // Always the live head, never the mirror — a present-but-stale
+            // mirror must never become the comparison basis (#455/#458).
+            ['git', 'rev-list', '--left-right', '--count', UPSTREAM_HEAD_SHA.'...'.$stableSha] => $stableCounts !== null
                 ? Process::result($stableCounts[0]."\t".$stableCounts[1])
                 : Process::result(errorOutput: 'fatal: bad revision', exitCode: 128),
             default => null,
@@ -159,9 +163,30 @@ test('an absent mirror branch is an explicit missing state, not an error', funct
     $upstream = platformUpstream();
 
     expect($upstream['mirror']['state'])->toBe('missing')
-        ->and($upstream['error'])->toBeNull()
-        ->and($upstream['stable']['state'])->toBe('unknown')
-        ->and($upstream['stable']['reason'])->toContain('No mirror branch exists yet');
+        ->and($upstream['error'])->toBeNull();
+});
+
+test('an absent mirror falls back to comparing stable directly against the live upstream head', function (): void {
+    // #455: the mirror is optional. With no mirror branch, the stable
+    // comparison must not refuse — it compares origin/master against the
+    // upstream head fetched independently of any mirror.
+    fakeUpstreamGit(mirror: 'absent', stableCounts: [5, 2]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('missing')
+        ->and($upstream['stable']['state'])->toBe('behind')
+        ->and($upstream['stable']['missing'])->toBe(5)
+        ->and($upstream['stable']['fork_own'])->toBe(2);
+});
+
+test('a stable head equal to the live upstream head is contained when the mirror is absent', function (): void {
+    fakeUpstreamGit(mirror: 'absent', stableCounts: [0, 0]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['stable']['state'])->toBe('contained')
+        ->and($upstream['stable']['missing'])->toBe(0);
 });
 
 test('mirror count states follow the rev-list geometry', function (array $counts, string $state, int $behind, int $ahead): void {
@@ -183,8 +208,18 @@ test('a failed mirror lookup is unknown with a reason, never treated as absent',
     $upstream = platformUpstream();
 
     expect($upstream['mirror']['state'])->toBe('unknown')
-        ->and($upstream['mirror']['reason'])->toContain('Could not determine')
-        ->and($upstream['stable']['state'])->toBe('unknown');
+        ->and($upstream['mirror']['reason'])->toContain('Could not determine');
+});
+
+test('an unreadable mirror still falls back to comparing stable against the upstream head', function (): void {
+    // The mirror lookup and the origin/master lookup are independent calls
+    // (#455): a mirror probe failure must not block the stable comparison
+    // when the upstream head itself resolved fine.
+    fakeUpstreamGit(mirror: 'fail', stableCounts: [0, 0]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['stable']['state'])->toBe('contained');
 });
 
 test('unfetched mirror objects are unknown with a fetch reason', function (): void {
@@ -231,13 +266,28 @@ test('an unreadable origin leaves the stable relationship unknown, never substit
         ->and($upstream['stable']['reason'])->toContain('stable head could not be read');
 });
 
-test('a stable head equal to the mirror is contained without a rev-list call', function (): void {
-    fakeUpstreamGit(mirror: UPSTREAM_LOCAL_SHA, mirrorCounts: [1, 0], stableCounts: null);
+test('a stable head equal to the live upstream head is contained without a rev-list call', function (): void {
+    fakeUpstreamGit(stableSha: UPSTREAM_HEAD_SHA, stableCounts: null);
 
     $upstream = platformUpstream();
 
     expect($upstream['stable']['state'])->toBe('contained')
         ->and($upstream['stable']['missing'])->toBe(0);
+});
+
+test('a present-but-stale mirror never shadows stable being behind the live upstream head', function (): void {
+    // codex-gpt-5's P2 on #458: the mirror is optional, informational
+    // compatibility state (#455) — it must never become the Stable
+    // comparison basis, even when it exists. A mirror pinned to an older
+    // vetted commit must not make a stale Stable read as "contained" just
+    // because Stable happens to match that old mirror.
+    fakeUpstreamGit(mirror: UPSTREAM_MIRROR_SHA, mirrorCounts: [4, 0], stableCounts: [3, 0]);
+
+    $upstream = platformUpstream();
+
+    expect($upstream['mirror']['state'])->toBe('behind')
+        ->and($upstream['stable']['state'])->toBe('behind')
+        ->and($upstream['stable']['missing'])->toBe(3);
 });
 
 test('the stable comparison is pinned to origin/master even when the checkout sits on another branch', function (): void {
@@ -299,12 +349,12 @@ test('the page shows both transitions and plain Up to date only when both are se
         ->assertSee('Mirror')
         ->assertSee('Current with the framework')
         ->assertSee('Stable')
-        ->assertSee('Has every mirrored update')
+        ->assertSee('Has every upstream update')
         ->assertSee('Up to date')
         ->assertDontSee('Fork up to date');
 });
 
-test('pending updates suppress plain Up to date and name the release-candidate action', function (): void {
+test('pending updates suppress plain Up to date and name the integration-proposal action', function (): void {
     fakeUpstreamGit(mirror: 'current', stableCounts: [5, 2]);
 
     $user = createAdminUser();
@@ -313,19 +363,20 @@ test('pending updates suppress plain Up to date and name the release-candidate a
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
         ->assertSee('updates available')
-        ->assertSee('cut a release candidate')
+        ->assertSee('prepare an integration proposal')
         ->assertSee('Fork up to date')
         ->assertDontSeeHtml('>Up to date<');
 });
 
-test('a missing mirror renders as its own state on the page', function (): void {
-    fakeUpstreamGit(mirror: 'absent');
+test('a missing mirror renders as an optional state that does not block Up to date', function (): void {
+    fakeUpstreamGit(mirror: 'absent', stableCounts: [0, 0]);
 
     $user = createAdminUser();
     $this->actingAs($user);
 
     Livewire::test(Index::class)
         ->call('loadLatestStatus')
-        ->assertSee('Not created yet')
-        ->assertSee('No mirror branch exists yet');
+        ->assertSee('Not created (optional)')
+        ->assertSee('Up to date')
+        ->assertDontSee('Fork up to date');
 });
