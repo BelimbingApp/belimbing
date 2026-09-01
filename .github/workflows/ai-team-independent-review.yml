@@ -6,6 +6,12 @@ name: independent review
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled, unlabeled]
+  # Deliberate deviation from the pulled template (desktop-luna's P1 on #474):
+  # without this trigger a posted review never re-runs the check, so an accept
+  # leaves it stuck at its pre-review failure until an unrelated event fires.
+  # Remove when the upstream template restores it (BelimbingApp/ai-team#54).
+  pull_request_review:
+    types: [submitted, edited, dismissed]
 
 permissions:
   contents: read
