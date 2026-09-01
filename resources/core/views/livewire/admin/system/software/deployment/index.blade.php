@@ -638,15 +638,16 @@
                                         <span class="font-mono">{{ $s['upstream']['head']['short'] }}</span>
                                     @endif
                                 </div>
-                                {{-- The release flow's two transitions, shown as themselves (#374):
-                                     upstream -> mirror, then mirror -> stable. Readable without Git
-                                     knowledge: each line names the step and states its condition. --}}
+                                {{-- The mirror is now optional, informational compatibility state
+                                     (#455): stable is compared directly against the live upstream
+                                     head when no mirror branch exists, so this line never gates
+                                     anything below it. --}}
                                 <div class="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span class="text-xs text-muted">{{ __('Mirror') }}</span>
                                     @if ($s['upstream']['mirror']['state'] === 'current')
                                         <x-ui.badge variant="success" :title="__('origin\'s mirror branch matches the framework head exactly.')">{{ __('Current with the framework') }}</x-ui.badge>
                                     @elseif ($s['upstream']['mirror']['state'] === 'missing')
-                                        <x-ui.badge variant="info" :title="__('The mirror branch has never been created on origin; refreshing the mirror creates it.')">{{ __('Not created yet') }}</x-ui.badge>
+                                        <x-ui.badge variant="info" :title="__('The mirror branch has never been created on origin. It is optional — stable is compared directly against the framework upstream below.')">{{ __('Not created (optional)') }}</x-ui.badge>
                                     @elseif ($s['upstream']['mirror']['state'] === 'behind')
                                         <x-ui.badge variant="warning" :title="__('The framework has new commits the mirror does not; a mirror refresh fast-forwards cleanly.')">{{ trans_choice('{1} :count framework commit behind — refresh fast-forwards|[2,*] :count framework commits behind — refresh fast-forwards', (int) $s['upstream']['mirror']['behind'], ['count' => $s['upstream']['mirror']['behind']]) }}</x-ui.badge>
                                     @elseif ($s['upstream']['mirror']['state'] === 'diverged')
@@ -658,9 +659,9 @@
                                 <div class="mt-1 flex flex-wrap items-center gap-1.5">
                                     <span class="text-xs text-muted">{{ __('Stable') }}</span>
                                     @if ($s['upstream']['stable']['state'] === 'contained')
-                                        <x-ui.badge variant="success" :title="__('Every mirrored framework commit is already in the stable branch; no release candidate is needed.')">{{ __('Has every mirrored update') }}</x-ui.badge>
+                                        <x-ui.badge variant="success" :title="__('Every vetted upstream commit is already in the stable branch; no integration proposal is needed.')">{{ __('Has every upstream update') }}</x-ui.badge>
                                     @elseif ($s['upstream']['stable']['state'] === 'behind')
-                                        <x-ui.badge variant="warning" :title="__('The mirror holds framework updates the stable branch has not integrated; cutting a release candidate starts that integration.')">{{ trans_choice('{1} :count update available — cut a release candidate to integrate it|[2,*] :count updates available — cut a release candidate to integrate them', (int) $s['upstream']['stable']['missing'], ['count' => $s['upstream']['stable']['missing']]) }}</x-ui.badge>
+                                        <x-ui.badge variant="warning" :title="__('Upstream has updates the stable branch has not integrated; preparing an integration proposal starts that integration.')">{{ trans_choice('{1} :count update available — prepare an integration proposal|[2,*] :count updates available — prepare an integration proposal', (int) $s['upstream']['stable']['missing'], ['count' => $s['upstream']['stable']['missing']]) }}</x-ui.badge>
                                         @if (($s['upstream']['stable']['fork_own'] ?? 0) > 0)
                                             <span class="text-xs text-muted">{{ trans_choice('{1} (:count commit of this deployment\'s own)|[2,*] (:count commits of this deployment\'s own)', (int) $s['upstream']['stable']['fork_own'], ['count' => $s['upstream']['stable']['fork_own']]) }}</span>
                                         @endif
@@ -680,16 +681,18 @@
                                 @if ($upstreamSyncState['available'])
                                     <div class="mt-1 text-xs text-muted">{{ __('Upstream synchronization is available because APP_ENV is :environment and your account has permission.', ['environment' => $upstreamSyncState['environment']]) }}</div>
                                     {{-- Buttons are convenience; the boundary is UpstreamSyncGate::authorize()
-                                         inside each action (#339). Stops at the rc push: the PR is a human
-                                         click in GitHub. --}}
+                                         inside each action (#339). Stops at the proposal push: the PR is a
+                                         human click in GitHub. Refresh mirror stays available as an optional
+                                         compatibility action (#455) — it is no longer required before
+                                         preparing an integration proposal. --}}
                                     <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="refreshMirror" wire:loading.attr="disabled" wire:target="refreshMirror" :title="__('Fast-forward origin\'s mirror branch from the framework upstream; refused if the mirror has diverged.')">
+                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="refreshMirror" wire:loading.attr="disabled" wire:target="refreshMirror" :title="__('Fast-forward origin\'s optional mirror branch from the framework upstream; refused if the mirror has diverged.')">
                                             <span wire:loading.remove wire:target="refreshMirror">{{ __('Refresh mirror') }}</span>
                                             <span wire:loading wire:target="refreshMirror">{{ __('Refreshing…') }}</span>
                                         </x-ui.button>
-                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="cutReleaseCandidate" wire:loading.attr="disabled" wire:target="cutReleaseCandidate" :title="__('Create rc = master + mirror in the object database (the checkout is never touched) and push it; the pull request is then opened by a person in GitHub.')">
-                                            <span wire:loading.remove wire:target="cutReleaseCandidate">{{ __('Cut release candidate') }}</span>
-                                            <span wire:loading wire:target="cutReleaseCandidate">{{ __('Cutting…') }}</span>
+                                        <x-ui.button type="button" size="sm" variant="secondary" wire:click="prepareIntegration" wire:loading.attr="disabled" wire:target="prepareIntegration" :title="__('Create upstream-sync-<sha> = master + the pinned upstream commit in the object database (the checkout is never touched) and push it; the pull request is then opened by a person in GitHub.')">
+                                            <span wire:loading.remove wire:target="prepareIntegration">{{ __('Create integration proposal') }}</span>
+                                            <span wire:loading wire:target="prepareIntegration">{{ __('Preparing…') }}</span>
                                         </x-ui.button>
                                     </div>
                                 @else
@@ -740,13 +743,15 @@
                                 <x-ui.badge variant="info">{{ __('Checking') }}</x-ui.badge>
                             @elseif ($s['error'] === null && ! $latestStatusLoaded && ($maintenanceActive || $updateInProgress))
                                 <span class="text-xs text-muted">—</span>
-                            @elseif ($s['update_state'] === 'up_to_date' && (($s['upstream'] ?? null) === null || ($s['upstream']['mirror']['state'] === 'current' && $s['upstream']['stable']['state'] === 'contained')))
+                            @elseif ($s['update_state'] === 'up_to_date' && (($s['upstream'] ?? null) === null || $s['upstream']['stable']['state'] === 'contained'))
                                 <x-ui.badge variant="success">{{ __('Up to date') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'up_to_date')
                                 {{-- Matching origin alone must not read as plainly current when the
-                                     release flow has pending or unknown steps: plain "Up to date"
-                                     requires mirror current AND stable contained (#344/#374). --}}
-                                <x-ui.badge variant="warning" :title="__('The deployment matches its own remote, but the framework release flow has steps pending or unknown — see the Mirror and Stable lines.')">{{ __('Fork up to date') }}</x-ui.badge>
+                                     stable branch has not integrated every vetted upstream commit:
+                                     plain "Up to date" requires stable contained (#344/#374/#455).
+                                     The mirror line is informational only since #455 — it no longer
+                                     gates this badge. --}}
+                                <x-ui.badge variant="warning" :title="__('The deployment matches its own remote, but the stable branch has not integrated every upstream commit yet — see the Stable line.')">{{ __('Fork up to date') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'ahead')
                                 <x-ui.badge variant="info" :title="__('Local HEAD already contains the remote branch head.')">{{ __('Ahead of remote') }}</x-ui.badge>
                             @elseif ($s['update_state'] === 'behind' && $s['working_tree']['ahead'] > 0)
