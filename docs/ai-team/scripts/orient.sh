@@ -22,7 +22,7 @@ source "$SCRIPT_DIR/_default_branch.sh"
 BASE=$(ai_team_default_branch)
 # Exported so the project hook (#8) can use the branch orient.sh already
 # resolved instead of re-sourcing _default_branch.sh — a hook copied out to
-# .ai-team/ at the repository root has no relative path back to scripts/.
+# .ai-team/ at the repository root has no relative path back to package/scripts/.
 export AI_TEAM_DEFAULT_BRANCH="$BASE"
 
 # A halt must reach every agent regardless of tool, so it lives on the board and
@@ -30,10 +30,10 @@ export AI_TEAM_DEFAULT_BRANCH="$BASE"
 # labelled `ops:halt` means the team stands down; it is set and cleared by the
 # owner, or the steward on the owner's word. Printed first so a stand-down that
 # went out on one tool's private channel is not missed by agents on another.
-if ! REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null); then
+if ! REPO=$(ai_team_origin_repo) || [ -z "$REPO" ]; then
   echo "== operations =="
   echo "  *** HALT STATUS UNKNOWN — STAND DOWN ***"
-  echo "  Cannot resolve this repository through gh; do not claim new work."
+  echo "  Cannot resolve this repository from origin; do not claim new work."
   exit 2
 fi
 
