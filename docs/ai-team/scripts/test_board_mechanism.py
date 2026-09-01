@@ -147,6 +147,157 @@ class BoardMechanismTest(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn("agent id required", result.stderr)
 
+    def test_post_refuses_impersonating_steward_appointee(self):
+        # #51: ops:steward appointment names an owner; a substitute must not
+        # stamp **From:** as the appointee when CLAIM_AGENT is someone else.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "status", "queue drained"],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("refusing", result.stderr)
+            self.assertIn("steward-backstop", result.stderr)
+            self.assertFalse((directory / "captured-body").exists())
+
+    def test_post_refuses_appointee_without_claim_agent(self):
+        # #51 / Copilot: omitting CLAIM_AGENT must not bypass the appointee guard.
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            env = {k: v for k, v in os.environ.items()}
+            env.pop("CLAIM_AGENT", None)
+            env.pop("BOARD_AGENT", None)
+            env["BOARD_TEST_CAPTURE"] = bash_path(directory / "captured-body")
+            env["BOARD_TEST_FIXTURE"] = bash_path(directory / "fixture.json")
+            env["BOARD_TEST_STEWARD_APPOINTEE"] = "fable"
+            env["BOARD_TEST_STEWARD_ISSUE"] = "468"
+            result = run_with_bash_path(
+                ["bash", bash_path(SCRIPT), "post", "42", "--agent", "fable", "--type", "status", "hello"],
+                stub_directory=directory,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("unset", result.stderr)
+            self.assertFalse((directory / "captured-body").exists())
+
+    def test_post_steward_appointment_empty_when_ambiguous(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--steward-for", "sol",
+                    "--type", "steward-backstop",
+                    "wrong appointee",
+                ],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                    "BOARD_TEST_STEWARD_AMBIGUOUS": "1",
+                },
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("no unique active ops:steward appointment", result.stderr)
+
+    def test_post_steward_backstop_stamps_steward_for_header(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--steward-for", "fable",
+                    "--type", "steward-backstop",
+                    "drained #457 on fable's appointment",
+                ],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body = (directory / "captured-body").read_text(encoding="utf-8")
+            match = GATE_FROM_REGEX.match(body.splitlines()[0])
+            self.assertIsNotNone(match)
+            self.assertEqual(match.group("agent"), "composer-2.5")
+            self.assertIn("**Steward-for:** fable (#468)", body)
+            self.assertIn("**Type:** steward-backstop", body)
+            self.assertIn("drained #457 on fable's appointment", body)
+
+    def test_post_steward_backstop_requires_steward_for_flag(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--type", "steward-backstop",
+                    "missing --steward-for",
+                ],
+                directory,
+                env_extra={"CLAIM_AGENT": "composer-2.5"},
+            )
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("requires --steward-for", result.stderr)
+
+    def test_post_allows_appointee_when_acting_as_self(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                ["post", "42", "--agent", "fable", "--type", "status", "heartbeat ok"],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "fable",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            body = (directory / "captured-body").read_text(encoding="utf-8")
+            self.assertRegex(body.splitlines()[0], r"^\*\*From:\*\* fable")
+
+    def test_post_refuses_steward_for_mismatch(self):
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            gh_capture_stub(directory)
+            result = self.run_board(
+                [
+                    "post", "42",
+                    "--agent", "composer-2.5",
+                    "--steward-for", "sol",
+                    "--type", "steward-backstop",
+                    "wrong appointee",
+                ],
+                directory,
+                env_extra={
+                    "CLAIM_AGENT": "composer-2.5",
+                    "BOARD_TEST_STEWARD_APPOINTEE": "fable",
+                    "BOARD_TEST_STEWARD_ISSUE": "468",
+                },
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertIn("does not match active appointee fable", result.stderr)
+
     # ---- digest ----
 
     def digest_fixture(self) -> str:
